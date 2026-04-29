@@ -314,8 +314,8 @@ async function getLatestSnapshotsMap(tenantId) {
         kd.code AS kpi_code,
         kd.name AS kpi_name,
         ROW_NUMBER() OVER (
-          PARTITION BY ks.kpi_id, COALESCE(NULLIF(NULLIF(ks.standard_code, '') AS standard_code, ''), 'GLOBAL')
-          ORDER BY ks.period_start DESC, ks.calculated_at DESC
+          PARTITION BY ks.kpi_id, COALESCE(NULLIF(ks.standard_code, ''), 'GLOBAL')
+          ORDER BY ks.calculated_at DESC NULLS LAST, ks.period_start DESC NULLS LAST
         ) AS rn
       FROM kpi_snapshots ks
       JOIN kpi_definitions kd ON kd.id = ks.kpi_id
@@ -327,7 +327,7 @@ async function getLatestSnapshotsMap(tenantId) {
       kpi_id,
       kpi_code,
       kpi_name,
-      standard_code,
+      NULLIF(standard_code, '') AS standard_code,
       period_type,
       period_start,
       period_end,
@@ -337,11 +337,13 @@ async function getLatestSnapshotsMap(tenantId) {
       status_color,
       direction,
       target_value,
+      calculated_from,
       calculated_at,
-      breakdown_json
+      breakdown_json,
+      source_trace_json
     FROM ranked
     WHERE rn = 1
-    ORDER BY kpi_code, standard_code NULLS FIRST
+    ORDER BY kpi_code, standard_code NULLS FIRST, calculated_at DESC NULLS LAST
     `,
     [tenantId]
   );
@@ -356,21 +358,12 @@ async function getLatestSnapshotsMap(tenantId) {
 
     existing.snapshots.push(row);
 
-    if (!existing.latest) {
+    if (
+      !existing.latest ||
+      new Date(row.calculated_at || 0).getTime() >
+        new Date(existing.latest.calculated_at || 0).getTime()
+    ) {
       existing.latest = row;
-    } else {
-      const currentIsGlobal = !row.standard_code;
-      const existingIsGlobal = !existing.latest.standard_code;
-
-      if (currentIsGlobal && !existingIsGlobal) {
-        existing.latest = row;
-      } else if (
-        currentIsGlobal === existingIsGlobal &&
-        new Date(row.calculated_at).getTime() >
-          new Date(existing.latest.calculated_at).getTime()
-      ) {
-        existing.latest = row;
-      }
     }
 
     map.set(row.kpi_id, existing);
@@ -378,6 +371,7 @@ async function getLatestSnapshotsMap(tenantId) {
 
   return map;
 }
+
 
 async function getPreviousSnapshot(tenantId, kpiId, currentCalculatedAt) {
   const { rows } = await db.query(
@@ -1021,7 +1015,29 @@ async function getAdminListByTenant(req, res) {
       [tenantId]
     );
 
-    return res.json(rows);
+    const latestMap = await getLatestSnapshotsMap(tenantId);
+
+    const enrichedRows = rows.map((row) => {
+      const latestInfo = latestMap.get(row.id) || { latest: null, snapshots: [] };
+      const latest = latestInfo.latest;
+
+      return {
+        ...row,
+        is_health_kpi: isHealthKpiCode(row.code),
+        latest_value: latest?.value ?? null,
+        latest_status_color: latest?.status_color ?? null,
+        latest_standard_code: latest?.standard_code ?? null,
+        latest_period_start: latest?.period_start ?? null,
+        latest_period_end: latest?.period_end ?? null,
+        latest_calculated_at: latest?.calculated_at ?? row.last_calculated_at ?? null,
+        latest_calculated_from: latest?.calculated_from ?? null,
+        latest_snapshot: latest,
+        latest_snapshots: latestInfo.snapshots || [],
+        has_multiple_snapshots: (latestInfo.snapshots || []).length > 1
+      };
+    });
+
+    return res.json(enrichedRows);
   } catch (err) {
     console.error('GET KPI ADMIN LIST ERROR:', err);
     return res.status(500).json({ error: 'Error obteniendo administración KPI' });
