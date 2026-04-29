@@ -1000,6 +1000,250 @@ router.post('/tenants', auth, uploadLogo.single('logo'), async (req, res) => {
   }
 });
 
+// =====================================================
+// PUT /api/admin-saas/tenants/:tenant_id/logo
+// Actualizar logo de empresa existente
+// =====================================================
+router.put('/tenants/:tenant_id/logo', auth, uploadLogo.single('logo'), async (req, res) => {
+  try {
+    const { tenant_id } = req.params;
+
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para modificar esta empresa',
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se recibió archivo de logo',
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE tenants
+      SET
+        logo = $1,
+        logo_url = NULL
+      WHERE id = $2::uuid
+      RETURNING
+        id,
+        name,
+        rut,
+        address,
+        business,
+        branches,
+        logo,
+        logo_url,
+        created_at
+      `,
+      [req.file.filename, tenant_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Empresa no encontrada',
+      });
+    }
+
+    try {
+      await pool.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::text,
+          NULL::uuid,
+          $5::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          'tenant.logo.updated',
+          tenant_id,
+          'tenant',
+          JSON.stringify({
+            logo: req.file.filename,
+            source: 'admin_saas',
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event tenant.logo.updated:', auditError.message);
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        ...result.rows[0],
+        tenant_id: result.rows[0].id,
+        tenant_name: result.rows[0].name,
+        logo_url: `/uploads/logos/${req.file.filename}`,
+      },
+    });
+  } catch (error) {
+    console.error('ERROR UPDATE TENANT LOGO:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando logo de empresa',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// PUT /api/admin-saas/tenants/:tenant_id
+// Actualizar datos básicos de empresa existente
+// =====================================================
+router.put('/tenants/:tenant_id', auth, async (req, res) => {
+  try {
+    const { tenant_id } = req.params;
+
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para modificar esta empresa',
+      });
+    }
+
+    const {
+      name,
+      rut,
+      address = '',
+      business = '',
+      branches = '',
+    } = req.body || {};
+
+    const cleanName = String(name || '').trim();
+    const cleanRut = String(rut || '').trim();
+
+    if (!cleanName || !cleanRut) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Nombre y RUT son obligatorios',
+      });
+    }
+
+    const duplicate = await pool.query(
+      `
+      SELECT id, name, rut
+      FROM tenants
+      WHERE id <> $1::uuid
+        AND (
+          lower(name) = lower($2::text)
+          OR lower(rut) = lower($3::text)
+        )
+      LIMIT 1
+      `,
+      [tenant_id, cleanName, cleanRut]
+    );
+
+    if (duplicate.rowCount > 0) {
+      return res.status(409).json({
+        ok: false,
+        error: 'Ya existe otra empresa con ese nombre o RUT',
+        detail: duplicate.rows[0],
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE tenants
+      SET
+        name = $1,
+        rut = $2,
+        address = $3,
+        business = $4,
+        branches = $5
+      WHERE id = $6::uuid
+      RETURNING
+        id,
+        name,
+        rut,
+        address,
+        business,
+        branches,
+        logo,
+        logo_url,
+        created_at
+      `,
+      [
+        cleanName,
+        cleanRut,
+        String(address || '').trim(),
+        String(business || '').trim(),
+        String(branches || '').trim(),
+        tenant_id,
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Empresa no encontrada',
+      });
+    }
+
+    try {
+      await pool.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::text,
+          NULL::uuid,
+          $5::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          'tenant.updated',
+          tenant_id,
+          'tenant',
+          JSON.stringify({
+            name: cleanName,
+            rut: cleanRut,
+            source: 'admin_saas',
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event tenant.updated:', auditError.message);
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        ...result.rows[0],
+        tenant_id: result.rows[0].id,
+        tenant_name: result.rows[0].name,
+      },
+    });
+  } catch (error) {
+    console.error('ERROR UPDATE TENANT ADMIN SAAS:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando empresa',
+      detail: error.message,
+    });
+  }
+});
 
 // =====================================================
 // GET /api/admin-saas/tenants/:tenant_id

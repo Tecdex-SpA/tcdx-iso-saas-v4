@@ -1554,26 +1554,19 @@ async function uploadSelectedTenantLogo(file: File) {
 
       const authToken = token || localStorage.getItem('token') || '';
 
-      const fd = new FormData();
-      fd.append('name', name);
-      fd.append('rut', rut);
-      fd.append('address', tenantEditForm.address || '');
-      fd.append('business', tenantEditForm.business || '');
-      fd.append('branches', tenantEditForm.branches || '');
-
-      /*
-        IMPORTANTE:
-        No adjuntamos el logo aquí.
-        El logo se sube después usando el endpoint específico:
-        PUT /api/admin-saas/tenants/:tenant_id/logo
-      */
-
       const res = await fetch(`${API_URL}/api/admin-saas/tenants/${selectedTenantId}`, {
         method: 'PUT',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
-        body: fd,
+        body: JSON.stringify({
+          name,
+          rut,
+          address: tenantEditForm.address || '',
+          business: tenantEditForm.business || '',
+          branches: tenantEditForm.branches || '',
+        }),
       });
 
       const json = await res.json().catch(() => null);
