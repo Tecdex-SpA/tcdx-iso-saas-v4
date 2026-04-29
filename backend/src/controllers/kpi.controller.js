@@ -535,19 +535,7 @@ async function computeAutomaticLikeValue(client, tenantId, kpiCode, periodStart,
       };
     }
 
-    case KPI_CODES.CONFORMING_AUDITS: {
-      const totalRes = await client.query(
-        `
-        SELECT COUNT(*)::int AS total
-        FROM audits
-        WHERE tenant_id = $1
-          AND start_date BETWEEN $2 AND $3
-        `,
-        [tenantId, periodStart, periodEnd]
-      );
-
-      const denominator = Number(totalRes.rows[0]?.total || 0);
-
+        case KPI_CODES.CONFORMING_AUDITS: {
       const resultColumn = await findFirstExistingColumn(client, 'audits', [
         'result',
         'audit_result',
@@ -560,14 +548,45 @@ async function computeAutomaticLikeValue(client, tenantId, kpiCode, periodStart,
         return {
           value: null,
           numerator: null,
-          denominator,
+          denominator: null,
           breakdown: {
-            conformes: null,
-            total: denominator,
-            reason: 'La tabla audits no tiene columna de resultado/conclusión para medir auditorías conformes'
+            reason:
+              'La tabla audits no tiene columna de resultado/conclusión para medir auditorías conformes',
           }
         };
       }
+
+      const finalizedStatuses = [
+        'finalizada',
+        'finalizado',
+        'cerrada',
+        'cerrado',
+        'completed',
+        'complete',
+        'closed',
+        'done',
+        'finished'
+      ];
+
+      const excludedStatuses = [
+        'en ejecucion',
+        'en ejecución',
+        'ejecucion',
+        'ejecución',
+        'in_progress',
+        'in progress',
+        'en progreso',
+        'planificada',
+        'planificado',
+        'scheduled',
+        'programada',
+        'programado',
+        'pendiente',
+        'pending',
+        'cancelada',
+        'cancelado',
+        'cancelled'
+      ];
 
       const conformingValues = [
         'conforme',
@@ -575,8 +594,41 @@ async function computeAutomaticLikeValue(client, tenantId, kpiCode, periodStart,
         'compliant',
         'passed',
         'pass',
-        'ok'
+        'ok',
+        'aprobada',
+        'aprobado',
+        'sin hallazgos críticos',
+        'sin hallazgos criticos'
       ];
+
+      const nonConformingValues = [
+        'no conforme',
+        'no_conforme',
+        'non_compliant',
+        'failed',
+        'fail',
+        'rechazada',
+        'rechazado',
+        'con hallazgos',
+        'con no conformidades'
+      ];
+
+      const totalEligibleRes = await client.query(
+        `
+        SELECT COUNT(*)::int AS total
+        FROM audits
+        WHERE tenant_id = $1
+          AND start_date BETWEEN $2 AND $3
+          AND (
+            LOWER(COALESCE(status, '')) = ANY($4::text[])
+            OR (
+              end_date IS NOT NULL
+              AND LOWER(COALESCE(status, '')) <> ALL($5::text[])
+            )
+          )
+        `,
+        [tenantId, periodStart, periodEnd, finalizedStatuses, excludedStatuses]
+      );
 
       const conformingRes = await client.query(
         `
@@ -584,21 +636,101 @@ async function computeAutomaticLikeValue(client, tenantId, kpiCode, periodStart,
         FROM audits
         WHERE tenant_id = $1
           AND start_date BETWEEN $2 AND $3
-          AND LOWER(COALESCE(${resultColumn}::text, '')) = ANY($4::text[])
+          AND (
+            LOWER(COALESCE(status, '')) = ANY($4::text[])
+            OR (
+              end_date IS NOT NULL
+              AND LOWER(COALESCE(status, '')) <> ALL($5::text[])
+            )
+          )
+          AND LOWER(COALESCE(${resultColumn}::text, '')) = ANY($6::text[])
         `,
-        [tenantId, periodStart, periodEnd, conformingValues]
+        [
+          tenantId,
+          periodStart,
+          periodEnd,
+          finalizedStatuses,
+          excludedStatuses,
+          conformingValues
+        ]
       );
 
+      const classifiedRes = await client.query(
+        `
+        SELECT COUNT(*)::int AS total
+        FROM audits
+        WHERE tenant_id = $1
+          AND start_date BETWEEN $2 AND $3
+          AND (
+            LOWER(COALESCE(status, '')) = ANY($4::text[])
+            OR (
+              end_date IS NOT NULL
+              AND LOWER(COALESCE(status, '')) <> ALL($5::text[])
+            )
+          )
+          AND (
+            LOWER(COALESCE(${resultColumn}::text, '')) = ANY($6::text[])
+            OR LOWER(COALESCE(${resultColumn}::text, '')) = ANY($7::text[])
+          )
+        `,
+        [
+          tenantId,
+          periodStart,
+          periodEnd,
+          finalizedStatuses,
+          excludedStatuses,
+          conformingValues,
+          nonConformingValues
+        ]
+      );
+
+      const denominator = Number(totalEligibleRes.rows[0]?.total || 0);
       const numerator = Number(conformingRes.rows[0]?.total || 0);
+      const classified = Number(classifiedRes.rows[0]?.total || 0);
+      const pendingClassification = Math.max(denominator - classified, 0);
+
+      if (denominator <= 0) {
+        return {
+          value: null,
+          numerator: null,
+          denominator: 0,
+          breakdown: {
+            conformes: 0,
+            total_finalizadas: 0,
+            pendientes_clasificacion: 0,
+            excluded_reason:
+              'No existen auditorías finalizadas/cerradas en el periodo. Auditorías en ejecución o planificadas no afectan este KPI.',
+            result_column_used: resultColumn
+          }
+        };
+      }
+
+      if (pendingClassification > 0 && classified === 0) {
+        return {
+          value: null,
+          numerator: null,
+          denominator,
+          breakdown: {
+            conformes: numerator,
+            total_finalizadas: denominator,
+            pendientes_clasificacion: pendingClassification,
+            reason:
+              'Existen auditorías finalizadas sin resultado de conformidad cargado',
+            result_column_used: resultColumn
+          }
+        };
+      }
 
       return {
-        value: denominator > 0 ? (numerator / denominator) * 100 : null,
+        value: (numerator / denominator) * 100,
         numerator,
         denominator,
         breakdown: {
           conformes: numerator,
-          total: denominator,
-          result_column_used: resultColumn
+          total_finalizadas: denominator,
+          pendientes_clasificacion: pendingClassification,
+          result_column_used: resultColumn,
+          excluded_statuses: excludedStatuses
         }
       };
     }
