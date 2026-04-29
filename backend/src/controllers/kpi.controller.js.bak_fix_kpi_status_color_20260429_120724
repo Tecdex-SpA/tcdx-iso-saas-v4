@@ -149,62 +149,45 @@ function riskLevelToNumber(level) {
   return null;
 }
 
-function kpiStatusHasNumber(v) {
-  if (v === null || v === undefined || v === '') return false;
-  return Number.isFinite(Number(v));
-}
-
-function kpiStatusNumberOrNull(v) {
-  return kpiStatusHasNumber(v) ? Number(v) : null;
-}
-
-function kpiValueInRange(value, min, max) {
-  const val = kpiStatusNumberOrNull(value);
-  const nMin = kpiStatusNumberOrNull(min);
-  const nMax = kpiStatusNumberOrNull(max);
-
-  if (val === null || nMin === null || nMax === null) return false;
-
-  return val >= nMin && val <= nMax;
-}
-
-function getStatusColor(direction, value, thresholdRow = {}, targetValue = null) {
-  if (!kpiStatusHasNumber(value)) return 'gray';
+function getStatusColor(direction, value, thresholdRow) {
+  if (value === null || value === undefined) return 'gray';
+  if (!thresholdRow) return 'gray';
 
   const val = Number(value);
-  const dir = String(direction || '').trim();
 
-  if (dir === 'higher_is_better') {
-    if (kpiValueInRange(val, thresholdRow?.green_min, thresholdRow?.green_max)) return 'green';
-    if (kpiValueInRange(val, thresholdRow?.yellow_min, thresholdRow?.yellow_max)) return 'yellow';
-    if (kpiValueInRange(val, thresholdRow?.red_min, thresholdRow?.red_max)) return 'red';
+  if (direction === 'higher_is_better') {
+    if (
+      thresholdRow.green_min !== null &&
+      thresholdRow.green_max !== null &&
+      val >= Number(thresholdRow.green_min) &&
+      val <= Number(thresholdRow.green_max)
+    ) return 'green';
 
-    const target = kpiStatusNumberOrNull(targetValue);
-    if (target !== null) {
-      if (val >= target) return 'green';
-      if (val >= target * 0.7) return 'yellow';
-      return 'red';
-    }
+    if (
+      thresholdRow.yellow_min !== null &&
+      thresholdRow.yellow_max !== null &&
+      val >= Number(thresholdRow.yellow_min) &&
+      val <= Number(thresholdRow.yellow_max)
+    ) return 'yellow';
 
-    if (val >= 85) return 'green';
-    if (val >= 60) return 'yellow';
     return 'red';
   }
 
-  if (dir === 'lower_is_better') {
-    if (kpiValueInRange(val, thresholdRow?.green_min, thresholdRow?.green_max)) return 'green';
-    if (kpiValueInRange(val, thresholdRow?.yellow_min, thresholdRow?.yellow_max)) return 'yellow';
-    if (kpiValueInRange(val, thresholdRow?.red_min, thresholdRow?.red_max)) return 'red';
+  if (direction === 'lower_is_better') {
+    if (
+      thresholdRow.green_min !== null &&
+      thresholdRow.green_max !== null &&
+      val >= Number(thresholdRow.green_min) &&
+      val <= Number(thresholdRow.green_max)
+    ) return 'green';
 
-    const target = kpiStatusNumberOrNull(targetValue);
-    if (target !== null) {
-      if (val <= target) return 'green';
-      if (val <= target * 1.5) return 'yellow';
-      return 'red';
-    }
+    if (
+      thresholdRow.yellow_min !== null &&
+      thresholdRow.yellow_max !== null &&
+      val >= Number(thresholdRow.yellow_min) &&
+      val <= Number(thresholdRow.yellow_max)
+    ) return 'yellow';
 
-    if (val <= 10) return 'green';
-    if (val <= 30) return 'yellow';
     return 'red';
   }
 
@@ -314,7 +297,7 @@ async function getLatestSnapshotsMap(tenantId) {
         kd.code AS kpi_code,
         kd.name AS kpi_name,
         ROW_NUMBER() OVER (
-          PARTITION BY ks.kpi_id, COALESCE(NULLIF(NULLIF(ks.standard_code, '') AS standard_code, ''), 'GLOBAL')
+          PARTITION BY ks.kpi_id, COALESCE(ks.standard_code, 'GLOBAL')
           ORDER BY ks.period_start DESC, ks.calculated_at DESC
         ) AS rn
       FROM kpi_snapshots ks
@@ -1393,171 +1376,6 @@ async function upsertTenantKpiSetting(req, res) {
   }
 }
 
-
-function manualSnapshotNumberOrNull(v) {
-  if (v === null || v === undefined || v === '') return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function manualSnapshotJsonObject(value) {
-  if (!value) return {};
-  if (typeof value === 'object' && !Array.isArray(value)) return value;
-
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-    } catch {
-      return {};
-    }
-  }
-
-  return {};
-}
-
-async function createSnapshotFromManualKpiValue(req, manualRow) {
-  if (!manualRow || !manualRow.kpi_id || !manualRow.tenant_id) return null;
-
-  const kpiRes = await db.query(
-    `
-    SELECT
-      kd.id,
-      kd.code,
-      kd.name,
-      kd.direction,
-      kd.target_value,
-      kt.green_min,
-      kt.green_max,
-      kt.yellow_min,
-      kt.yellow_max,
-      kt.red_min,
-      kt.red_max
-    FROM kpi_definitions kd
-    LEFT JOIN LATERAL (
-      SELECT
-        ktx.green_min,
-        ktx.green_max,
-        ktx.yellow_min,
-        ktx.yellow_max,
-        ktx.red_min,
-        ktx.red_max
-      FROM kpi_thresholds ktx
-      WHERE ktx.kpi_id = kd.id
-        AND (
-          ktx.direction::text = kd.direction::text
-          OR ktx.direction IS NULL
-        )
-      ORDER BY ktx.updated_at DESC NULLS LAST, ktx.created_at DESC NULLS LAST
-      LIMIT 1
-    ) kt ON TRUE
-    WHERE kd.id = $1
-    LIMIT 1
-    `,
-    [manualRow.kpi_id]
-  );
-
-  if (!kpiRes.rows.length) return null;
-
-  const kpi = kpiRes.rows[0];
-
-  const thresholdRow = {
-    green_min: kpi.green_min,
-    green_max: kpi.green_max,
-    yellow_min: kpi.yellow_min,
-    yellow_max: kpi.yellow_max,
-    red_min: kpi.red_min,
-    red_max: kpi.red_max
-  };
-
-  const direction = String(kpi.direction || '').trim();
-  const targetValue = manualSnapshotNumberOrNull(kpi.target_value);
-  const manualValue = manualSnapshotNumberOrNull(manualRow.value);
-
-  const statusColor = getStatusColor(
-    direction,
-    manualValue,
-    thresholdRow,
-    targetValue
-  );
-
-  const sourceTrace = {
-    source: 'manual_input',
-    manual_value_id: manualRow.id || null,
-    kpi_code: kpi.code || null,
-    standard_code: manualRow.standard_code || null,
-    period_type: manualRow.period_type || null,
-    notes: manualRow.notes || null,
-    entered_by:
-      req?.user?.id ||
-      req?.user?.user_id ||
-      req?.user?.userId ||
-      req?.user?.sub ||
-      null,
-    entered_at: new Date().toISOString()
-  };
-
-  const snapshotRes = await db.query(
-    `
-    INSERT INTO kpi_snapshots (
-      tenant_id,
-      kpi_id,
-      standard_code,
-      period_type,
-      period_start,
-      period_end,
-      value,
-      numerator_value,
-      denominator_value,
-      status_color,
-      direction,
-      target_value,
-      calculated_from,
-      breakdown_json,
-      source_trace_json,
-      calculated_at
-    )
-    VALUES (
-      $1,
-      $2,
-      NULLIF($3, ''),
-      $4,
-      $5,
-      $6,
-      $7,
-      $8,
-      $9,
-      $10,
-      $11,
-      $12,
-      'manual_input',
-      $13::jsonb,
-      $14::jsonb,
-      NOW()
-    )
-    RETURNING *
-    `,
-    [
-      manualRow.tenant_id,
-      manualRow.kpi_id,
-      manualRow.standard_code || null,
-      manualRow.period_type,
-      manualRow.period_start,
-      manualRow.period_end,
-      manualValue,
-      manualSnapshotNumberOrNull(manualRow.numerator_value),
-      manualSnapshotNumberOrNull(manualRow.denominator_value),
-      statusColor,
-      direction,
-      targetValue,
-      JSON.stringify(manualSnapshotJsonObject(manualRow.dimension_data)),
-      JSON.stringify(sourceTrace)
-    ]
-  );
-
-  return snapshotRes.rows[0] || null;
-}
-
 async function saveManualValue(req, res) {
   try {
     const {
@@ -1628,24 +1446,7 @@ async function saveManualValue(req, res) {
 
     const { rows } = await db.query(query, values);
 
-    const manualRow = rows[0];
-
-    let snapshotRow = null;
-    let snapshotError = null;
-
-    try {
-      snapshotRow = await createSnapshotFromManualKpiValue(req, manualRow);
-    } catch (snapshotErr) {
-      snapshotError = snapshotErr?.message || 'No se pudo crear snapshot manual';
-      console.error('ERROR CREATE MANUAL KPI SNAPSHOT:', snapshotErr);
-    }
-
-    return res.json({
-      ...manualRow,
-      ok: true,
-      snapshot: snapshotRow,
-      snapshot_error: snapshotError
-    });
+    return res.json(rows[0]);
   } catch (err) {
     console.error('SAVE KPI MANUAL VALUE ERROR:', err);
     return res.status(500).json({ error: 'Error guardando valor manual KPI' });

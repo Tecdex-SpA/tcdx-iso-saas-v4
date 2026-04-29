@@ -655,10 +655,7 @@ export default function AdministrarKpisPage() {
   };
 
   const saveManualValue = async (item: KpiAdminItem) => {
-    if (!token || !user?.tenant_id) {
-      alert('No hay sesión activa para guardar el valor manual.');
-      return;
-    }
+    if (!token || !user?.tenant_id) return;
 
     if (isHealthKpi(item)) {
       alert('Los KPIs de salud se calculan automáticamente desde Health.');
@@ -674,93 +671,29 @@ export default function AdministrarKpisPage() {
     const year = now.getFullYear();
     const month = now.getMonth();
 
-    const frequency = item.override_frequency || item.frequency || 'mensual';
-
     let periodStart = new Date(year, month, 1);
     let periodEnd = new Date(year, month + 1, 0);
 
-    if (frequency === 'trimestral') {
+    if ((item.override_frequency || item.frequency) === 'trimestral') {
       const startMonth = Math.floor(month / 3) * 3;
       periodStart = new Date(year, startMonth, 1);
       periodEnd = new Date(year, startMonth + 3, 0);
     }
 
-    if (frequency === 'semestral') {
+    if ((item.override_frequency || item.frequency) === 'semestral') {
       const startMonth = month < 6 ? 0 : 6;
       periodStart = new Date(year, startMonth, 1);
       periodEnd = new Date(year, startMonth + 6, 0);
     }
 
-    if (frequency === 'anual') {
+    if ((item.override_frequency || item.frequency) === 'anual') {
       periodStart = new Date(year, 0, 1);
       periodEnd = new Date(year, 11, 31);
     }
 
-    const standards = Array.isArray(item.applicable_standards)
-      ? item.applicable_standards.filter(Boolean)
-      : [];
+    const value = window.prompt(`Valor manual para ${item.name}`, '');
 
-    let standardCode: string | null = standards[0] || null;
-
-    if (standards.length > 1) {
-      const selectedStandard = window.prompt(
-        `Este KPI aplica a varias normas.\n\nOpciones: ${standards.join(', ')}\n\nEscribe la norma para guardar el valor manual:`,
-        standardCode || ''
-      );
-
-      if (selectedStandard === null) return;
-
-      standardCode = selectedStandard.trim() || null;
-
-      if (standardCode && !standards.includes(standardCode)) {
-        alert(`Norma no válida. Debe ser una de estas opciones: ${standards.join(', ')}`);
-        return;
-      }
-    }
-
-    if (standards.length === 0) {
-      const selectedGlobal = window.prompt(
-        'Este KPI no tiene norma específica.\n\nDeja vacío para guardar como KPI global o escribe una norma si corresponde:',
-        ''
-      );
-
-      if (selectedGlobal === null) return;
-
-      standardCode = selectedGlobal.trim() || null;
-    }
-
-    const valueInput = window.prompt(
-      `Valor manual para ${item.code} - ${item.name}\n\nPeriodo: ${frequency}\nNorma: ${standardCode || 'GLOBAL'}\n\nIngresa el valor numérico:`,
-      ''
-    );
-
-    if (valueInput === null) return;
-
-    const normalizedValue = valueInput.trim().replace(',', '.');
-    const numericValue = Number(normalizedValue);
-
-    if (!Number.isFinite(numericValue)) {
-      alert('El valor ingresado no es válido. Debe ser numérico, por ejemplo: 97, 80.5 o 0.');
-      return;
-    }
-
-    const notes = window.prompt(
-      'Comentario para este valor manual:',
-      'Carga manual desde Administración KPI'
-    );
-
-    if (notes === null) return;
-
-    const ok = window.confirm(
-      `Confirmar guardado de valor manual\n\n` +
-        `KPI: ${item.code} - ${item.name}\n` +
-        `Valor: ${numericValue}\n` +
-        `Norma: ${standardCode || 'GLOBAL'}\n` +
-        `Periodo: ${periodStart.toISOString().slice(0, 10)} a ${periodEnd.toISOString().slice(0, 10)}\n\n` +
-        `¿Guardar este valor y actualizar el snapshot KPI?`
-    );
-
-    if (!ok) return;
+    if (value === null) return;
 
     try {
       setSaving(`manual-${item.id}`);
@@ -774,31 +707,22 @@ export default function AdministrarKpisPage() {
         body: JSON.stringify({
           tenant_id: user.tenant_id,
           kpi_id: item.id,
-          standard_code: standardCode,
-          period_type: frequency,
+          standard_code: item.applicable_standards?.[0] || null,
+          period_type: item.override_frequency || item.frequency,
           period_start: periodStart.toISOString().slice(0, 10),
           period_end: periodEnd.toISOString().slice(0, 10),
-          value: numericValue,
-          notes
+          value
         })
       });
 
-      const json = await res.json().catch(() => ({}));
+      const json = await res.json();
 
       if (!res.ok) {
         alert(json.error || 'Error guardando valor manual');
         return;
       }
 
-      await refresh();
-
-      if (json.snapshot?.id) {
-        alert('Valor manual guardado correctamente y snapshot KPI actualizado.');
-      } else if (json.snapshot_error) {
-        alert(`Valor manual guardado, pero no se pudo actualizar el snapshot: ${json.snapshot_error}`);
-      } else {
-        alert('Valor manual guardado correctamente. Recarga el dashboard KPI para verificar el resultado.');
-      }
+      alert('Valor manual guardado correctamente');
     } catch (err) {
       console.error('ERROR SAVE KPI MANUAL VALUE:', err);
       alert('Error guardando valor manual');
@@ -1439,7 +1363,7 @@ export default function AdministrarKpisPage() {
                               disabled={saving === `manual-${item.id}`}
                               className="rounded-xl bg-amber-500 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-60"
                             >
-                              {saving === `manual-${item.id}` ? 'Guardando...' : 'Guardar valor manual'}
+                              {saving === `manual-${item.id}` ? 'Guardando...' : 'Cargar valor manual'}
                             </button>
                           )}
                         </>
