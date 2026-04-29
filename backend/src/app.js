@@ -38,6 +38,7 @@ const aiFeedbackRoutes = require('./routes/ai-feedback.routes');
 const aiExternalLookupRoutes = require('./routes/ai-external-lookup.routes');
 const aiTracesRoutes = require('./routes/ai-traces.routes');
 const quotesRoutes = require('./routes/quotes.routes');
+const objectivesRoutes = require('./routes/objectives.routes');
 
 const app = express();
 
@@ -86,6 +87,7 @@ app.use('/api/lifecycle', lifecycleRoutes);
 /* KPI: compatibilidad con ambas rutas */
 app.use('/api/kpi', kpiRoutes);
 app.use('/api/kpis', kpiRoutes);
+app.use('/api/objectives', objectivesRoutes);
 
 app.get('/', (req, res) => {
   res.send('API funcionando 🚀');

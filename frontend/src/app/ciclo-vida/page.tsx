@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import ObjectivesPanel from '@/components/objectives/ObjectivesPanel';
 
 type StageDef = {
   code: string;
@@ -257,7 +258,8 @@ export default function CicloVidaPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [requestReason, setRequestReason] = useState<string>('');
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
-  const [topPanelCollapsed, setTopPanelCollapsed] = useState(false);
+  const [topPanelCollapsed, setTopPanelCollapsed] = useState(true);
+  const [activeView, setActiveView] = useState<'lifecycle' | 'objectives'>('lifecycle');
 
   const isAuditor = userRole === 'auditor';
 
@@ -727,6 +729,34 @@ export default function CicloVidaPage() {
                   Vista ejecutiva multinorma por operación, con salud, madurez, cobertura
                   de evidencia y validación de transiciones por auditor.
                 </p>
+
+                <div className="mt-5 inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('lifecycle')}
+                    className={[
+                      'rounded-xl px-4 py-2 text-sm font-semibold transition',
+                      activeView === 'lifecycle'
+                        ? 'bg-slate-900 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100',
+                    ].join(' ')}
+                  >
+                    Vista Ciclo de Vida
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('objectives')}
+                    className={[
+                      'rounded-xl px-4 py-2 text-sm font-semibold transition',
+                      activeView === 'objectives'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100',
+                    ].join(' ')}
+                  >
+                    Vista Objetivos
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-start justify-end">
@@ -750,7 +780,7 @@ export default function CicloVidaPage() {
               </div>
             </div>
 
-            {!topPanelCollapsed && (
+            {activeView === 'lifecycle' && !topPanelCollapsed && (
               <>
                 <div className="grid min-w-[320px] grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <SummaryTopCard
@@ -888,13 +918,23 @@ export default function CicloVidaPage() {
           </div>
         ) : null}
 
-        {loading ? (
+        {activeView === 'objectives' ? (
+          <ObjectivesPanel
+            tenantId={tenantId}
+            standards={activeStandards.map((item) => ({
+              code: item.code,
+              name: item.name || item.code,
+            }))}
+          />
+        ) : null}
+
+        {activeView === 'lifecycle' && loading ? (
           <div className="rounded-[30px] border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
             Cargando tablero de ciclo de vida...
           </div>
         ) : null}
 
-        {!loading && filteredBoard ? (
+        {activeView === 'lifecycle' && !loading && filteredBoard ? (
           <div
             className={`grid grid-cols-1 gap-6 ${
               rightPanelCollapsed ? 'xl:grid-cols-[1fr_64px]' : 'xl:grid-cols-[1fr_430px]'
