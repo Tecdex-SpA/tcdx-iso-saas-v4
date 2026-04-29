@@ -390,8 +390,162 @@ async function getPreviousSnapshot(tenantId, kpiId, currentCalculatedAt) {
   return rows[0] || null;
 }
 
-async function computeAutomaticLikeValue(client, tenantId, kpiCode, periodStart, periodEnd) {
+async function computeAutomaticLikeValue(client, tenantId, kpiCode, periodStart, periodEnd, standardCode = null) {
   switch (kpiCode) {
+
+    case KPI_CODES.OBJECTIVES: {
+      /*
+        KPI-01 - Cumplimiento de Objetivos
+
+        Fórmula:
+        (objetivos_cumplidos / objetivos_totales) * 100
+
+        Reglas:
+        - Solo considera objetivos activos.
+        - Si no hay objetivos para el tenant/periodo/norma: Sin dato.
+        - Los objetivos cancelados no cuentan.
+        - Un objetivo se considera cumplido si:
+          a) status está en cumplido/completado/cerrado/achieved, o
+          b) progress_percent >= 100, o
+          c) actual_value >= target_value cuando target_value > 0.
+      */
+
+      const tableExistsRes = await client.query(
+        `SELECT to_regclass('public.management_objectives') AS table_name`
+      );
+
+      if (!tableExistsRes.rows[0]?.table_name) {
+        return {
+          value: null,
+          numerator: null,
+          denominator: null,
+          breakdown: {
+            reason:
+              'No existe tabla management_objectives para calcular KPI-01',
+          },
+        };
+      }
+
+      const res = await client.query(
+        `
+        SELECT
+          COUNT(*) FILTER (
+            WHERE is_active = true
+              AND LOWER(COALESCE(status, '')) NOT IN (
+                'cancelado',
+                'cancelada',
+                'cancelled'
+              )
+          )::int AS total,
+
+          COUNT(*) FILTER (
+            WHERE is_active = true
+              AND LOWER(COALESCE(status, '')) NOT IN (
+                'cancelado',
+                'cancelada',
+                'cancelled'
+              )
+              AND (
+                LOWER(COALESCE(status, '')) IN (
+                  'cumplido',
+                  'cumplida',
+                  'completado',
+                  'completada',
+                  'cerrado',
+                  'cerrada',
+                  'completed',
+                  'achieved',
+                  'done'
+                )
+                OR COALESCE(progress_percent, 0) >= 100
+                OR (
+                  target_value IS NOT NULL
+                  AND target_value > 0
+                  AND actual_value IS NOT NULL
+                  AND actual_value >= target_value
+                )
+              )
+          )::int AS completed,
+
+          AVG(
+            COALESCE(
+              progress_percent,
+              CASE
+                WHEN target_value IS NOT NULL
+                 AND target_value > 0
+                 AND actual_value IS NOT NULL
+                THEN LEAST(100, GREATEST(0, (actual_value / target_value) * 100))
+                ELSE NULL
+              END
+            )
+          ) FILTER (
+            WHERE is_active = true
+              AND LOWER(COALESCE(status, '')) NOT IN (
+                'cancelado',
+                'cancelada',
+                'cancelled'
+              )
+          ) AS avg_progress
+        FROM management_objectives
+        WHERE tenant_id = $1
+          AND (
+            $4::text IS NULL
+            OR standard_code IS NULL
+            OR standard_code = $4::text
+          )
+          AND (
+            period_start IS NULL
+            OR period_end IS NULL
+            OR (
+              period_start <= $3::date
+              AND period_end >= $2::date
+            )
+          )
+        `,
+        [tenantId, periodStart, periodEnd, standardCode]
+      );
+
+      const total = Number(res.rows[0]?.total || 0);
+      const completed = Number(res.rows[0]?.completed || 0);
+      const avgProgress =
+        res.rows[0]?.avg_progress === null ||
+        res.rows[0]?.avg_progress === undefined
+          ? null
+          : Number(res.rows[0].avg_progress);
+
+      if (total <= 0) {
+        return {
+          value: null,
+          numerator: null,
+          denominator: 0,
+          breakdown: {
+            objetivos_totales: 0,
+            objetivos_cumplidos: 0,
+            avance_promedio: null,
+            standard_code: standardCode,
+            reason:
+              'No existen objetivos activos para este tenant/periodo/norma. KPI-01 queda sin dato porque no hay universo evaluable.',
+          },
+        };
+      }
+
+      return {
+        value: (completed / total) * 100,
+        numerator: completed,
+        denominator: total,
+        breakdown: {
+          objetivos_totales: total,
+          objetivos_cumplidos: completed,
+          objetivos_pendientes: Math.max(total - completed, 0),
+          avance_promedio:
+            avgProgress === null ? null : Math.round(avgProgress * 100) / 100,
+          standard_code: standardCode,
+          criterio:
+            'Cumplimiento de objetivos activos del sistema de gestión',
+        },
+      };
+    }
+
     case KPI_CODES.NCR_INDEX: {
       const ncRes = await client.query(
         `
@@ -859,9 +1013,9 @@ async function computeAutomaticLikeValue(client, tenantId, kpiCode, periodStart,
     default:
       return { value: null, numerator: null, denominator: null, breakdown: {} };
   }
-}
+  }
 
-async function computeValueForDefinition(client, tenantId, kpiDef) {
+async function computeValueForDefinition(client, tenantId, kpiDef, standardCode = null) {
   const periodType = kpiDef.override_frequency || kpiDef.frequency || 'mensual';
   const { start, end } = parsePeriod(periodType);
   const periodStart = toDateOnly(start);
@@ -910,12 +1064,13 @@ async function computeValueForDefinition(client, tenantId, kpiDef) {
     };
   }
 
-  const automatic = await computeAutomaticLikeValue(
+   const automatic = await computeAutomaticLikeValue(
     client,
     tenantId,
     kpiCode,
     periodStart,
-    periodEnd
+    periodEnd,
+    standardCode
   );
 
   return {
@@ -984,8 +1139,7 @@ async function recalculateTenantKpis(req, res) {
         continue;
       }
 
-      const calc = await computeValueForDefinition(client, tenantId, def);
-      const thresholdRow = {
+            const thresholdRow = {
         green_min: def.green_min,
         green_max: def.green_max,
         yellow_min: def.yellow_min,
@@ -999,7 +1153,6 @@ async function recalculateTenantKpis(req, res) {
         def.override_target_value !== null && def.override_target_value !== undefined
           ? Number(def.override_target_value)
           : numericOrNull(def.target_value);
-      const statusColor = getStatusColor(direction, calc.value, thresholdRow);
 
       const applicableStandards = Array.isArray(def.applicable_standards)
         ? def.applicable_standards.filter(Boolean)
@@ -1008,6 +1161,8 @@ async function recalculateTenantKpis(req, res) {
       const standardsToUse = applicableStandards.length ? applicableStandards : [null];
 
       for (const standardCode of standardsToUse) {
+        const calc = await computeValueForDefinition(client, tenantId, def, standardCode);
+        const statusColor = getStatusColor(direction, calc.value, thresholdRow, targetValue);
         const insertRes = await client.query(
           `
           INSERT INTO kpi_snapshots (
