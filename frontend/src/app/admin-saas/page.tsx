@@ -1390,6 +1390,59 @@ export default function AdminSaasPage() {
     }
   }
 
+async function uploadSelectedTenantLogo(file: File) {
+  if (!selectedTenantId || !file) {
+    alert('Debes seleccionar una empresa y un archivo de logo.');
+    return;
+  }
+
+  if (!canManageAdminSaas) {
+    alert('No tienes permisos para modificar el logo de esta empresa.');
+    return;
+  }
+
+  try {
+    setSavingKey('tenant-logo');
+    setError('');
+
+    const authToken = token || localStorage.getItem('token') || '';
+
+    const formData = new FormData();
+    formData.append('logo', file);
+
+    const res = await fetch(
+      `${API_URL}/api/admin-saas/tenants/${selectedTenantId}/logo`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: formData,
+      }
+    );
+
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : {};
+
+    if (!res.ok || json.ok === false) {
+      throw new Error(json.error || 'Error subiendo logo');
+    }
+
+    setTenantEditLogo(null);
+
+    await loadTenants();
+    await loadTenantDetail(selectedTenantId);
+
+    alert('Logo actualizado correctamente. Recarga la página si el header no cambia de inmediato.');
+  } catch (err: any) {
+    const msg = err.message || 'Error actualizando logo de empresa';
+    setError(msg);
+    alert(msg);
+  } finally {
+    setSavingKey('');
+  }
+}
+
 
   async function createTenant() {
     if (!canManageAdminSaas) return;
@@ -1481,7 +1534,7 @@ export default function AdminSaasPage() {
   }
 
 
-  async function updateTenant() {
+    async function updateTenant() {
     if (!selectedTenantId || !canManageAdminSaas) return;
 
     const name = String(tenantEditForm.name || '').trim();
@@ -1508,9 +1561,12 @@ export default function AdminSaasPage() {
       fd.append('business', tenantEditForm.business || '');
       fd.append('branches', tenantEditForm.branches || '');
 
-      if (tenantEditLogo) {
-        fd.append('logo', tenantEditLogo);
-      }
+      /*
+        IMPORTANTE:
+        No adjuntamos el logo aquí.
+        El logo se sube después usando el endpoint específico:
+        PUT /api/admin-saas/tenants/:tenant_id/logo
+      */
 
       const res = await fetch(`${API_URL}/api/admin-saas/tenants/${selectedTenantId}`, {
         method: 'PUT',
@@ -1526,12 +1582,19 @@ export default function AdminSaasPage() {
         throw new Error(json?.error || 'Error actualizando empresa');
       }
 
-      setTenantEditLogo(null);
+      if (tenantEditLogo) {
+        await uploadSelectedTenantLogo(tenantEditLogo);
+        return;
+      }
 
       await loadTenants();
       await loadTenantDetail(selectedTenantId);
+
+      alert('Empresa actualizada correctamente.');
     } catch (err: any) {
-      setError(err.message || 'Error actualizando empresa');
+      const msg = err.message || 'Error actualizando empresa';
+      setError(msg);
+      alert(msg);
     } finally {
       setSavingKey('');
     }
