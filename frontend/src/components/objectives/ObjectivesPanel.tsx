@@ -222,6 +222,45 @@ export default function ObjectivesPanel({
     setShowForm(true);
   };
 
+  const recalculateKpisAfterObjectiveChange = async () => {
+    if (!tenantId) {
+      return {
+        ok: false,
+        message: 'No existe tenant_id para recalcular KPI-01.',
+      };
+    }
+
+    try {
+      setSaving('recalculate-kpi01');
+
+      const res = await fetch(`${API_URL}/api/kpis/recalculate/${tenantId}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        return {
+          ok: false,
+          message: json.error || json.detail || 'No se pudo recalcular KPI-01.',
+        };
+      }
+
+      return {
+        ok: true,
+        message: 'KPI-01 actualizado correctamente.',
+      };
+    } catch (err: any) {
+      return {
+        ok: false,
+        message: err.message || 'Error recalculando KPI-01.',
+      };
+    }
+  };
+
   const saveObjective = async () => {
     if (!tenantId) return;
 
@@ -273,9 +312,16 @@ export default function ObjectivesPanel({
         throw new Error(json.error || 'Error guardando objetivo');
       }
 
+      const recalcResult = await recalculateKpisAfterObjectiveChange();
+
       await loadData();
       resetForm();
-      alert('Objetivo guardado correctamente. Recuerda recalcular KPIs para actualizar KPI-01.');
+
+      if (recalcResult.ok) {
+        alert('Objetivo guardado correctamente y KPI-01 actualizado.');
+      } else {
+        alert(`Objetivo guardado correctamente, pero no se pudo recalcular KPI-01: ${recalcResult.message}`);
+      }
     } catch (err: any) {
       setError(err.message || 'Error guardando objetivo');
       alert(err.message || 'Error guardando objetivo');
@@ -304,8 +350,15 @@ export default function ObjectivesPanel({
         throw new Error(json.error || 'Error eliminando objetivo');
       }
 
+      const recalcResult = await recalculateKpisAfterObjectiveChange();
+
       await loadData();
-      alert('Objetivo cancelado correctamente. Recuerda recalcular KPIs.');
+
+      if (recalcResult.ok) {
+        alert('Objetivo cancelado correctamente y KPI-01 actualizado.');
+      } else {
+        alert(`Objetivo cancelado correctamente, pero no se pudo recalcular KPI-01: ${recalcResult.message}`);
+      }
     } catch (err: any) {
       alert(err.message || 'Error eliminando objetivo');
     } finally {
