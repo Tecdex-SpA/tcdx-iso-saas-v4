@@ -499,39 +499,127 @@ async function computeAutomaticLikeValue(client, tenantId, kpiCode, periodStart,
       };
     }
 
-    case KPI_CODES.RISK_TREATMENT: {
+        case KPI_CODES.RISK_TREATMENT: {
+      /*
+        KPI-07 - Cobertura de Tratamiento de Riesgos
+
+        Concepto correcto:
+        - No mide solo riesgos creados en el periodo.
+        - Mide la foto actual del tenant:
+          riesgos existentes vs riesgos con plan de tratamiento activo asociado.
+
+        Reglas:
+        - Si no hay riesgos registrados: Sin dato, porque no hay universo evaluable.
+        - Si hay riesgos y ningún plan asociado: 0%, estado rojo.
+        - Si hay riesgos tratados: porcentaje real de cobertura.
+        - Planes cancelados no cuentan como tratamiento activo.
+      */
+
+      const actionPlanColumns = await getTableColumns(client, 'action_plans');
+
+      const linkConditions = [];
+
+      if (actionPlanColumns.has('asset_id')) {
+        linkConditions.push('ap.asset_id = a.id');
+      }
+
+      if (actionPlanColumns.has('risk_id')) {
+        linkConditions.push('ap.risk_id = ar.id');
+      }
+
+      if (
+        actionPlanColumns.has('source_type') &&
+        actionPlanColumns.has('source_id')
+      ) {
+        linkConditions.push(`
+          (
+            LOWER(COALESCE(ap.source_type, '')) = 'risk'
+            AND (
+              ap.source_id::text = ar.id::text
+              OR ap.source_id::text = a.id::text
+            )
+          )
+        `);
+      }
+
+      if (linkConditions.length === 0) {
+        return {
+          value: null,
+          numerator: null,
+          denominator: null,
+          breakdown: {
+            reason:
+              'No existen columnas de vínculo entre action_plans y riesgos/activos para calcular cobertura de tratamiento',
+            checked_columns: Array.from(actionPlanColumns),
+          },
+        };
+      }
+
       const totalRisksRes = await client.query(
         `
-        SELECT COUNT(*)::int AS total
+        SELECT COUNT(DISTINCT ar.id)::int AS total
         FROM asset_risks ar
-        JOIN assets a ON a.id = ar.asset_id
+        JOIN assets a
+          ON a.id = ar.asset_id
         WHERE a.tenant_id = $1
-          AND ar.created_at::date BETWEEN $2 AND $3
         `,
-        [tenantId, periodStart, periodEnd]
+        [tenantId]
       );
 
       const treatedRisksRes = await client.query(
         `
         SELECT COUNT(DISTINCT ar.id)::int AS total
         FROM asset_risks ar
-        JOIN assets a ON a.id = ar.asset_id
-        JOIN action_plans ap ON ap.asset_id = a.id
+        JOIN assets a
+          ON a.id = ar.asset_id
         WHERE a.tenant_id = $1
-          AND ar.created_at::date BETWEEN $2 AND $3
-          AND ap.created_at::date BETWEEN $2 AND $3
+          AND EXISTS (
+            SELECT 1
+            FROM action_plans ap
+            WHERE ap.tenant_id = $1
+              AND LOWER(COALESCE(ap.status, '')) NOT IN (
+                'cancelado',
+                'cancelada',
+                'cancelled'
+              )
+              AND (
+                ${linkConditions.join('\n                OR ')}
+              )
+          )
         `,
-        [tenantId, periodStart, periodEnd]
+        [tenantId]
       );
 
-      const numerator = Number(treatedRisksRes.rows[0]?.total || 0);
       const denominator = Number(totalRisksRes.rows[0]?.total || 0);
+      const numerator = Number(treatedRisksRes.rows[0]?.total || 0);
+
+      if (denominator <= 0) {
+        return {
+          value: null,
+          numerator: null,
+          denominator: 0,
+          breakdown: {
+            riesgos_identificados: 0,
+            riesgos_tratados: 0,
+            reason:
+              'No existen riesgos registrados para este tenant. KPI-07 queda sin dato porque no hay universo evaluable.',
+          },
+        };
+      }
 
       return {
-        value: denominator > 0 ? (numerator / denominator) * 100 : null,
+        value: (numerator / denominator) * 100,
         numerator,
         denominator,
-        breakdown: { tratados: numerator, identificados: denominator }
+        breakdown: {
+          riesgos_identificados: denominator,
+          riesgos_tratados: numerator,
+          riesgos_sin_tratamiento: Math.max(denominator - numerator, 0),
+          criterio:
+            'Cobertura actual de riesgos con al menos un plan de acción activo asociado',
+          excluded_plan_statuses: ['cancelado', 'cancelada', 'cancelled'],
+          link_conditions_used: linkConditions,
+        },
       };
     }
 
