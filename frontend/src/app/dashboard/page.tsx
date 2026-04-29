@@ -88,6 +88,8 @@ type KpiDashboardResponse = {
     yellow: number;
     red: number;
     gray: number;
+    measured_kpis?: number;
+    data_coverage_pct?: number;
     health_kpis?: number;
   };
   items?: KpiDashboardItem[];
@@ -128,14 +130,16 @@ function buildTrend(value?: number | null, delta?: number | null) {
 function calculateExecutiveScore(summary?: KpiDashboardResponse['summary']) {
   if (!summary) return 0;
 
-  const total = summary.total_kpis || 1;
+  const green = Number(summary.green || 0);
+  const yellow = Number(summary.yellow || 0);
+  const red = Number(summary.red || 0);
+
+  const measuredTotal = green + yellow + red;
+
+  if (measuredTotal <= 0) return 0;
 
   return Math.round(
-    ((((summary.green || 0) * 1 +
-      (summary.yellow || 0) * 0.6 +
-      (summary.red || 0) * 0.2) /
-      total) *
-      100)
+    (((green * 1) + (yellow * 0.6) + (red * 0.2)) / measuredTotal) * 100
   );
 }
 
@@ -280,15 +284,27 @@ function normalizeKpiDashboardResponse(payload: any): KpiDashboardResponse {
     return !color || color === 'gray';
   }).length;
 
+  const finalGreen = Number(payload?.summary?.green ?? green);
+  const finalYellow = Number(payload?.summary?.yellow ?? yellow);
+  const finalRed = Number(payload?.summary?.red ?? red);
+  const finalGray = Number(payload?.summary?.gray ?? gray);
+  const finalTotal = Number(payload?.summary?.total_kpis ?? items.length);
+  const measuredKpis = finalGreen + finalYellow + finalRed;
+
   return {
-    summary: payload?.summary || {
-      total_kpis: items.length,
-      green,
-      yellow,
-      red,
-      gray,
-      health_kpis: items.filter((item: KpiDashboardItem) => item.is_health_kpi)
-        .length,
+    summary: {
+      ...(payload?.summary || {}),
+      total_kpis: finalTotal,
+      green: finalGreen,
+      yellow: finalYellow,
+      red: finalRed,
+      gray: finalGray,
+      measured_kpis: measuredKpis,
+      data_coverage_pct:
+        finalTotal > 0 ? Math.round((measuredKpis / finalTotal) * 100) : 0,
+      health_kpis:
+        payload?.summary?.health_kpis ??
+        items.filter((item: KpiDashboardItem) => item.is_health_kpi).length,
     },
     items,
   };
