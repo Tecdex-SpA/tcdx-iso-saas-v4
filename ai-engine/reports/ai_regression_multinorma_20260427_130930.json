@@ -1,0 +1,311 @@
+{
+  "ok": false,
+  "started_at": "2026-04-27T13:09:28",
+  "finished_at": "2026-04-27T13:09:30",
+  "url": "http://127.0.0.1:8001/api/ai/suggest/finding-analysis",
+  "total_cases": 10,
+  "failures": 9,
+  "results": [
+    {
+      "case": "ISO27001 - Revisión de accesos privilegiados",
+      "ok": false,
+      "error": null,
+      "expected_problem": "access_review_missing",
+      "actual_problem": null,
+      "expected_domain": "access_management",
+      "actual_domain": null,
+      "engine": "tcdx_scenario_guided_v1",
+      "domain_knowledge": null,
+      "domain_playbook_used": null,
+      "domain_evidence_used": null,
+      "domain_closure_used": null,
+      "summary": "El hallazgo indica falta de revisión de privilegios. Debe verificarse que cada acceso elevado sea necesario, aprobado y trazable.",
+      "expected_deliverables": [
+        "matriz de accesos privilegiados",
+        "export de usuarios/roles",
+        "acta de revisión",
+        "registro de accesos removidos o ajustados",
+        "aprobación del dueño del sistema"
+      ],
+      "closure_conditions": [
+        "privilegios revisados",
+        "accesos excesivos corregidos",
+        "aprobación registrada",
+        "revisión periódica definida"
+      ]
+    },
+    {
+      "case": "ISO9001 - Proveedor crítico sin evaluación",
+      "ok": false,
+      "error": null,
+      "expected_problem": "supplier_without_evaluation",
+      "actual_problem": null,
+      "expected_domain": "supplier_management",
+      "actual_domain": null,
+      "engine": "tcdx_scenario_guided_v1",
+      "domain_knowledge": null,
+      "domain_playbook_used": null,
+      "domain_evidence_used": null,
+      "domain_closure_used": null,
+      "summary": "El hallazgo indica falta de control sobre proveedor crítico.",
+      "expected_deliverables": [
+        "matriz de proveedores críticos",
+        "criterios de evaluación",
+        "evaluación vigente",
+        "resultado de desempeño",
+        "aprobación de continuidad",
+        "acciones por brechas"
+      ],
+      "closure_conditions": [
+        "proveedor evaluado",
+        "criterios aplicados",
+        "resultado documentado",
+        "continuidad aprobada",
+        "acciones definidas"
+      ]
+    },
+    {
+      "case": "ISO17025 - Calibración vencida",
+      "ok": false,
+      "error": null,
+      "expected_problem": "expired_evidence",
+      "actual_problem": null,
+      "expected_domain": "calibration_metrological_traceability",
+      "actual_domain": null,
+      "engine": "tcdx_scenario_guided_v1",
+      "domain_knowledge": null,
+      "domain_playbook_used": null,
+      "domain_evidence_used": null,
+      "domain_closure_used": null,
+      "summary": "El hallazgo afecta la confiabilidad metrológica de resultados, mediciones o ensayos.",
+      "expected_deliverables": [
+        "certificado de calibración vigente",
+        "inventario de equipos actualizado",
+        "programa de calibración",
+        "evaluación de impacto",
+        "registro de bloqueo o liberación",
+        "acción correctiva"
+      ],
+      "closure_conditions": [
+        "calibración vigente",
+        "trazabilidad demostrada",
+        "impacto evaluado",
+        "estado actualizado",
+        "acciones aplicadas"
+      ]
+    },
+    {
+      "case": "ISO14001 - Permiso ambiental vencido",
+      "ok": false,
+      "error": null,
+      "expected_problem": "expired_evidence",
+      "actual_problem": null,
+      "expected_domain": "environmental_management",
+      "actual_domain": null,
+      "engine": "tcdx_scenario_guided_v1",
+      "domain_knowledge": null,
+      "domain_playbook_used": null,
+      "domain_evidence_used": null,
+      "domain_closure_used": null,
+      "summary": "El hallazgo corresponde a incumplimiento o debilidad de cumplimiento ambiental documentado.",
+      "expected_deliverables": [
+        "permiso ambiental vigente",
+        "matriz legal ambiental actualizada",
+        "evaluación de cumplimiento",
+        "plan de regularización",
+        "evidencia de trámite o renovación",
+        "aprobación del responsable ambiental"
+      ],
+      "closure_conditions": [
+        "requisito identificado",
+        "vigencia validada",
+        "matriz actualizada",
+        "acción definida",
+        "evidencia vigente o regularización trazable"
+      ]
+    },
+    {
+      "case": "ISO22000 - Control de inocuidad no ejecutado",
+      "ok": false,
+      "error": null,
+      "expected_problem": "control_not_executed",
+      "actual_problem": null,
+      "expected_domain": "food_safety",
+      "actual_domain": null,
+      "engine": "tcdx_scenario_guided_v1",
+      "domain_knowledge": null,
+      "domain_playbook_used": null,
+      "domain_evidence_used": null,
+      "domain_closure_used": null,
+      "summary": "El hallazgo afecta directamente el control operacional de inocuidad.",
+      "expected_deliverables": [
+        "registro de monitoreo",
+        "criterio o límite crítico",
+        "resultado de control",
+        "registro de desviaciones",
+        "acción correctiva",
+        "verificación posterior",
+        "trazabilidad del lote"
+      ],
+      "closure_conditions": [
+        "monitoreo ejecutado",
+        "resultado documentado",
+        "desviaciones tratadas",
+        "producto/lote evaluado",
+        "verificación registrada"
+      ]
+    },
+    {
+      "case": "ISO50001 - KPI energético deteriorado",
+      "ok": false,
+      "error": null,
+      "expected_problem": "kpi_deteriorated",
+      "actual_problem": null,
+      "expected_domain": "energy_asset_performance",
+      "actual_domain": null,
+      "engine": "tcdx_scenario_guided_v1",
+      "domain_knowledge": null,
+      "domain_playbook_used": null,
+      "domain_evidence_used": null,
+      "domain_closure_used": null,
+      "summary": "El hallazgo indica que la organización está tratando síntomas y no la causa real.",
+      "expected_deliverables": [
+        "registro de NC",
+        "análisis de causa raíz",
+        "corrección inmediata",
+        "acción correctiva",
+        "criterio de eficacia",
+        "evidencia de implementación"
+      ],
+      "closure_conditions": [
+        "causa raíz definida",
+        "acción correctiva ejecutada",
+        "evidencia cargada",
+        "eficacia validada"
+      ]
+    },
+    {
+      "case": "ISO20000-1 - SLA deteriorado",
+      "ok": false,
+      "error": null,
+      "expected_problem": "kpi_deteriorated",
+      "actual_problem": null,
+      "expected_domain": "service_level_management",
+      "actual_domain": null,
+      "engine": "tcdx_scenario_guided_v1",
+      "domain_knowledge": null,
+      "domain_playbook_used": null,
+      "domain_evidence_used": null,
+      "domain_closure_used": null,
+      "summary": "El hallazgo corresponde a deterioro operacional de servicio, no a un simple valor KPI.",
+      "expected_deliverables": [
+        "definición de SLA",
+        "reporte de cumplimiento",
+        "base de tickets/eventos",
+        "análisis de causa",
+        "plan de mejora",
+        "seguimiento posterior"
+      ],
+      "closure_conditions": [
+        "brecha calculada",
+        "causa identificada",
+        "acción definida",
+        "responsable asignado",
+        "resultado posterior medido"
+      ]
+    },
+    {
+      "case": "ISO27701 - Riesgo de privacidad sin tratamiento",
+      "ok": false,
+      "error": null,
+      "expected_problem": "risk_without_treatment",
+      "actual_problem": null,
+      "expected_domain": "privacy_personal_data",
+      "actual_domain": null,
+      "engine": "tcdx_scenario_guided_v1",
+      "domain_knowledge": null,
+      "domain_playbook_used": null,
+      "domain_evidence_used": null,
+      "domain_closure_used": null,
+      "summary": "El hallazgo indica debilidad en gobierno de privacidad y trazabilidad del tratamiento.",
+      "expected_deliverables": [
+        "registro de tratamiento",
+        "finalidad documentada",
+        "responsable asignado",
+        "evaluación de riesgo",
+        "controles de privacidad",
+        "procedimiento de derechos de titulares"
+      ],
+      "closure_conditions": [
+        "tratamiento identificado",
+        "finalidad definida",
+        "responsable asignado",
+        "riesgo evaluado",
+        "controles documentados"
+      ]
+    },
+    {
+      "case": "ISO45001 - Simulacro de emergencia no evidenciado",
+      "ok": true,
+      "error": null,
+      "expected_problem": "procedure_not_implemented",
+      "actual_problem": "procedure_not_implemented",
+      "expected_domain": "emergency_preparedness",
+      "actual_domain": "emergency_preparedness",
+      "engine": "tcdx_guided_solution_v2_domain_aware",
+      "domain_knowledge": true,
+      "domain_playbook_used": false,
+      "domain_evidence_used": true,
+      "domain_closure_used": false,
+      "summary": "Ejecutar simulacro de emergencia, registrar participantes, resultados, brechas y acciones de mejora para proteger la seguridad y salud de las personas.",
+      "expected_deliverables": [
+        "plan de emergencia vigente",
+        "programa de simulacros",
+        "registro de simulacro",
+        "lista de participantes",
+        "resultado del ejercicio",
+        "brechas detectadas",
+        "acciones correctivas",
+        "comunicación posterior"
+      ],
+      "closure_conditions": [
+        "simulacro ejecutado",
+        "participantes registrados",
+        "resultado documentado",
+        "brechas tratadas",
+        "próxima prueba definida",
+        "acción definida",
+        "responsable asignado"
+      ]
+    },
+    {
+      "case": "ISO37301 - Obligación legal sin evidencia",
+      "ok": false,
+      "error": null,
+      "expected_problem": "expired_evidence",
+      "actual_problem": null,
+      "expected_domain": "legal_regulatory_compliance",
+      "actual_domain": null,
+      "engine": "tcdx_scenario_guided_v1",
+      "domain_knowledge": null,
+      "domain_playbook_used": null,
+      "domain_evidence_used": null,
+      "domain_closure_used": null,
+      "summary": "El hallazgo indica cierre administrativo sin demostración real.",
+      "expected_deliverables": [
+        "evidencia de ejecución",
+        "registro de resultado",
+        "validación de responsable",
+        "evidencia de eficacia",
+        "aprobación de cierre"
+      ],
+      "closure_conditions": [
+        "acción ejecutada",
+        "evidencia objetiva",
+        "resultado validado",
+        "eficacia comprobada",
+        "cierre aprobado"
+      ]
+    }
+  ]
+}

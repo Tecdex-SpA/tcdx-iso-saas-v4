@@ -1,0 +1,312 @@
+import json
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import text
+from app.core.db import engine
+from app.services.finding_scenario_detector import detect_finding_scenario
+
+
+def _safe_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _safe_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    if isinstance(value, tuple):
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        except Exception:
+            return [value.strip()]
+
+    return []
+
+
+def _load_trusted_sources(
+    standard_code: Optional[str] = None,
+    domain_code: Optional[str] = None,
+    source_profile: Optional[str] = None,
+    limit: int = 8,
+) -> List[Dict[str, Any]]:
+    conditions = ["is_active = TRUE"]
+    params = {
+        "standard_code": standard_code,
+        "domain_code": domain_code,
+        "source_profile": source_profile,
+        "limit": max(1, min(int(limit or 8), 20)),
+    }
+
+    if standard_code:
+        conditions.append(
+            """
+            (
+              applicable_standards = '[]'::jsonb
+              OR applicable_standards ? :standard_code
+            )
+            """
+        )
+
+    if domain_code:
+        conditions.append(
+            """
+            (
+              applicable_domains = '[]'::jsonb
+              OR applicable_domains ? :domain_code
+            )
+            """
+        )
+
+    # source_profile todavía es una etiqueta de escenario.
+    # Aquí no filtramos duro por perfil, para no dejar fuentes fuera.
+    sql = f"""
+      SELECT
+        source_code,
+        source_name,
+        source_type,
+        base_url,
+        allowed_domains,
+        applicable_domains,
+        applicable_standards,
+        description,
+        trust_level,
+        metadata
+      FROM ai_core.trusted_external_sources
+      WHERE {' AND '.join(conditions)}
+      ORDER BY
+        CASE trust_level
+          WHEN 'high' THEN 1
+          WHEN 'medium' THEN 2
+          ELSE 3
+        END,
+        source_code
+      LIMIT :limit
+    """
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(sql), params).mappings().all()
+
+    sources = []
+
+    for row in rows:
+        sources.append({
+            "source_code": row.get("source_code"),
+            "source_name": row.get("source_name"),
+            "source_type": row.get("source_type"),
+            "base_url": row.get("base_url"),
+            "allowed_domains": _safe_list(row.get("allowed_domains")),
+            "applicable_domains": _safe_list(row.get("applicable_domains")),
+            "applicable_standards": _safe_list(row.get("applicable_standards")),
+            "description": row.get("description"),
+            "trust_level": row.get("trust_level"),
+            "metadata": row.get("metadata") or {},
+        })
+
+    return sources
+
+
+def _build_queries(payload: Dict[str, Any], scenario: Dict[str, Any]) -> List[str]:
+    title = _safe_text(payload.get("title"))
+    description = _safe_text(payload.get("description"))
+    standard_code = _safe_text(
+        payload.get("standard_code") or payload.get("iso_code") or payload.get("iso")
+    )
+
+    scenario_name = _safe_text(scenario.get("scenario_name"))
+    domain_code = _safe_text(scenario.get("domain_code"))
+    problem_type_code = _safe_text(scenario.get("problem_type_code"))
+    external_profile = _safe_text(scenario.get("external_source_profile"))
+
+    base_terms = [
+        scenario_name,
+        domain_code.replace("_", " "),
+        problem_type_code.replace("_", " "),
+        title,
+    ]
+
+    queries = []
+
+    if standard_code and scenario_name:
+        queries.append(f"{standard_code} {scenario_name} guidance")
+
+    if scenario_name:
+        queries.append(f"{scenario_name} remediation evidence closure criteria")
+
+    if external_profile:
+        queries.append(f"{external_profile.replace('_', ' ')} {scenario_name}")
+
+    if title:
+        queries.append(f"{title} remediation best practices")
+
+    if description:
+        short_desc = " ".join(description.split()[:18])
+        queries.append(f"{short_desc} technical guidance")
+
+    # Limpieza y deduplicación
+    clean = []
+    seen = set()
+
+    for q in queries:
+        q = " ".join(str(q).split()).strip()
+        key = q.lower()
+
+        if q and key not in seen:
+            clean.append(q)
+            seen.add(key)
+
+    return clean[:5]
+
+
+def _log_external_lookup(
+    tenant_id: Optional[str],
+    standard_code: Optional[str],
+    domain_code: Optional[str],
+    problem_type_code: Optional[str],
+    scenario_code: Optional[str],
+    query_text: str,
+    lookup_reason: Optional[str],
+    sources_requested: List[Dict[str, Any]],
+    result_summary: str,
+    metadata: Dict[str, Any],
+) -> Optional[str]:
+    sql = """
+      INSERT INTO ai_core.external_lookup_logs (
+        tenant_id,
+        standard_code,
+        domain_code,
+        problem_type_code,
+        scenario_code,
+        query_text,
+        lookup_reason,
+        sources_requested,
+        sources_used,
+        result_summary,
+        response_used,
+        quality_score,
+        metadata
+      )
+      VALUES (
+        NULLIF(:tenant_id, '')::uuid,
+        :standard_code,
+        :domain_code,
+        :problem_type_code,
+        :scenario_code,
+        :query_text,
+        :lookup_reason,
+        CAST(:sources_requested AS jsonb),
+        '[]'::jsonb,
+        :result_summary,
+        FALSE,
+        NULL,
+        CAST(:metadata AS jsonb)
+      )
+      RETURNING id::text
+    """
+
+    params = {
+        "tenant_id": tenant_id or "",
+        "standard_code": standard_code,
+        "domain_code": domain_code,
+        "problem_type_code": problem_type_code,
+        "scenario_code": scenario_code,
+        "query_text": query_text,
+        "lookup_reason": lookup_reason,
+        "sources_requested": json.dumps(sources_requested, ensure_ascii=False),
+        "result_summary": result_summary,
+        "metadata": json.dumps(metadata or {}, ensure_ascii=False),
+    }
+
+    with engine.begin() as conn:
+        row = conn.execute(text(sql), params).mappings().first()
+
+    return row.get("id") if row else None
+
+
+def build_external_lookup_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
+    scenario_detection = detect_finding_scenario(payload)
+
+    standard_code = _safe_text(
+        payload.get("standard_code") or payload.get("iso_code") or payload.get("iso")
+    )
+    tenant_id = _safe_text(payload.get("tenant_id"))
+
+    if not scenario_detection.get("detected"):
+        return {
+            "ok": True,
+            "external_lookup_ready": False,
+            "reason": "No se detectó un escenario suficientemente confiable para sugerir búsqueda externa.",
+            "scenario_detection": scenario_detection,
+            "sources": [],
+            "queries": [],
+        }
+
+    scenario = scenario_detection.get("scenario") or {}
+
+    requires_external_lookup = bool(scenario.get("requires_external_lookup"))
+    domain_code = _safe_text(scenario.get("domain_code"))
+    problem_type_code = _safe_text(scenario.get("problem_type_code"))
+    scenario_code = _safe_text(scenario.get("scenario_code"))
+    source_profile = _safe_text(scenario.get("external_source_profile"))
+    lookup_reason = _safe_text(scenario.get("external_lookup_reason"))
+
+    sources = _load_trusted_sources(
+        standard_code=standard_code,
+        domain_code=domain_code,
+        source_profile=source_profile,
+        limit=8,
+    )
+
+    queries = _build_queries(payload, scenario)
+
+    result_summary = (
+        "Plan de búsqueda externa generado. "
+        "Aún no ejecuta consulta a internet; selecciona fuentes confiables y consultas sugeridas."
+    )
+
+    log_id = _log_external_lookup(
+        tenant_id=tenant_id,
+        standard_code=standard_code,
+        domain_code=domain_code,
+        problem_type_code=problem_type_code,
+        scenario_code=scenario_code,
+        query_text=queries[0] if queries else _safe_text(payload.get("title")),
+        lookup_reason=lookup_reason,
+        sources_requested=sources,
+        result_summary=result_summary,
+        metadata={
+            "mode": "lookup_plan_only",
+            "requires_external_lookup": requires_external_lookup,
+            "source_profile": source_profile,
+        },
+    )
+
+    return {
+        "ok": True,
+        "external_lookup_ready": True,
+        "mode": "lookup_plan_only",
+        "executed_web_search": False,
+        "log_id": log_id,
+        "requires_external_lookup": requires_external_lookup,
+        "lookup_reason": lookup_reason,
+        "source_profile": source_profile,
+        "scenario": {
+            "scenario_code": scenario_code,
+            "scenario_name": scenario.get("scenario_name"),
+            "domain_code": domain_code,
+            "problem_type_code": problem_type_code,
+            "score": scenario.get("score"),
+        },
+        "queries": queries,
+        "sources": sources,
+        "note": (
+            "Este paso prepara una búsqueda externa controlada. "
+            "La ejecución real contra Google/Bing/SerpAPI se activará en el siguiente paso con API key."
+        ),
+    }

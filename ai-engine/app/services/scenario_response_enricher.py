@@ -1,0 +1,209 @@
+from typing import Any, Dict, List
+
+from app.services.finding_scenario_detector import detect_finding_scenario
+from app.services.supervised_feedback_cases import load_useful_feedback_cases
+
+
+def _as_dict(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+
+    if hasattr(value, "dict"):
+        return value.dict()
+
+    return {}
+
+
+def _as_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return value
+
+    if value is None:
+        return []
+
+    return [value]
+
+
+def _first_text(items: List[Any]) -> str:
+    for item in items:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            return text
+    return ""
+
+
+def _build_action_plan_steps(solution_steps: List[Any]) -> List[Dict[str, Any]]:
+    steps = []
+
+    for index, item in enumerate(solution_steps, start=1):
+        text = str(item or "").strip()
+        if not text:
+            continue
+
+        steps.append({
+            "step": index,
+            "title": text[:90],
+            "description": text,
+            "owner_role": "Responsable del control / dueño del proceso",
+            "target_days": 15 if index <= 3 else 30,
+        })
+
+    return steps
+
+
+def _build_guided_from_scenario(scenario: Dict[str, Any]) -> Dict[str, Any]:
+    solution_steps = _as_list(scenario.get("solution_steps"))
+    expected_evidence = _as_list(scenario.get("expected_evidence"))
+    minimum_evidence_content = _as_list(scenario.get("minimum_evidence_content"))
+    invalid_evidence = _as_list(scenario.get("invalid_evidence"))
+    closure_conditions = _as_list(scenario.get("closure_conditions"))
+
+    return {
+        "engine": "tcdx_scenario_guided_v1",
+        "scenario": {
+            "scenario_code": scenario.get("scenario_code"),
+            "scenario_name": scenario.get("scenario_name"),
+            "scenario_description": scenario.get("scenario_description"),
+            "score": scenario.get("score"),
+            "matched_keywords": scenario.get("matched_keywords") or [],
+        },
+        "domain": {
+            "domain_code": scenario.get("domain_code"),
+            "domain_name": scenario.get("domain_name"),
+        },
+        "problem": {
+            "problem_type_code": scenario.get("problem_type_code"),
+            "problem_type_name": scenario.get("problem_type_name"),
+        },
+        "solution": {
+            "solution_summary": scenario.get("solution_summary"),
+            "next_best_action": _first_text(solution_steps),
+            "solution_steps": solution_steps,
+            "expected_deliverables": expected_evidence,
+            "minimum_content": minimum_evidence_content,
+            "invalid_evidence": invalid_evidence,
+            "closure_conditions": closure_conditions,
+            "health_impact": scenario.get("health_impact"),
+            "kpi_impact": scenario.get("kpi_impact"),
+        },
+        "context_summary": scenario.get("diagnosis_guidance"),
+        "knowledge_sources": {
+            "internal_scenario": scenario.get("scenario_code"),
+            "requires_external_lookup": scenario.get("requires_external_lookup"),
+            "external_lookup_reason": scenario.get("external_lookup_reason"),
+            "external_source_profile": scenario.get("external_source_profile"),
+        },
+    }
+
+
+def enrich_ai_response_with_scenario(
+    payload: Dict[str, Any],
+    response: Any,
+    mode: str = "finding_analysis",
+) -> Dict[str, Any]:
+    result = _as_dict(response)
+
+    if not result:
+        result = {}
+
+    scenario_detection = detect_finding_scenario(payload)
+
+    result["scenario_detection"] = {
+        "detected": scenario_detection.get("detected", False),
+        "threshold": scenario_detection.get("threshold"),
+        "best_candidate": scenario_detection.get("best_candidate"),
+        "alternatives": scenario_detection.get("alternatives", []),
+    }
+
+    if not scenario_detection.get("detected"):
+        return result
+
+    scenario = scenario_detection.get("scenario") or {}
+    guided = _build_guided_from_scenario(scenario)
+
+    supervised_cases = load_useful_feedback_cases(
+        tenant_id=payload.get("tenant_id"),
+        standard_code=(
+            payload.get("standard_code")
+            or payload.get("iso_code")
+            or payload.get("iso")
+        ),
+        domain_code=scenario.get("domain_code"),
+        problem_type_code=scenario.get("problem_type_code"),
+        scenario_code=scenario.get("scenario_code"),
+        limit=3,
+    )
+
+    guided.setdefault("knowledge_sources", {})
+    guided["knowledge_sources"]["supervised_feedback"] = {
+        "cases_found": supervised_cases.get("cases_found", 0),
+        "case_ids": [
+            case.get("id")
+            for case in supervised_cases.get("cases", [])
+            if case.get("id")
+        ],
+    }
+
+    if supervised_cases.get("cases_found", 0) > 0:
+        guided["previous_accepted_cases"] = supervised_cases.get("cases", [])
+
+    solution = guided["solution"]
+    solution_steps = solution.get("solution_steps") or []
+    closure_conditions = solution.get("closure_conditions") or []
+    expected_deliverables = solution.get("expected_deliverables") or []
+    minimum_content = solution.get("minimum_content") or []
+    invalid_evidence = solution.get("invalid_evidence") or []
+
+    # Campos top-level para compatibilidad con frontend actual.
+    result["structured_guided"] = guided
+    result["supervised_feedback"] = supervised_cases
+    result["scenario_code"] = scenario.get("scenario_code")
+    result["domain_code"] = scenario.get("domain_code")
+    result["problem_type_code"] = scenario.get("problem_type_code")
+    result["solution_summary"] = scenario.get("solution_summary")
+    result["next_best_action"] = solution.get("next_best_action")
+    result["expected_deliverables"] = expected_deliverables
+    result["minimum_content"] = minimum_content
+    result["invalid_evidence"] = invalid_evidence
+    result["closure_conditions"] = closure_conditions
+    result["health_impact"] = scenario.get("health_impact")
+    result["kpi_impact"] = scenario.get("kpi_impact")
+
+    # También dentro de ai, porque el frontend busca en varias formas.
+    ai_block = _as_dict(result.get("ai"))
+    ai_block["structured_guided"] = guided
+    ai_block["supervised_feedback"] = supervised_cases
+    ai_block["scenario_code"] = scenario.get("scenario_code")
+    ai_block["domain_code"] = scenario.get("domain_code")
+    ai_block["problem_type_code"] = scenario.get("problem_type_code")
+    ai_block["solution_summary"] = scenario.get("solution_summary")
+    ai_block["next_best_action"] = solution.get("next_best_action")
+    ai_block["expected_deliverables"] = expected_deliverables
+    ai_block["minimum_content"] = minimum_content
+    ai_block["invalid_evidence"] = invalid_evidence
+    ai_block["closure_conditions"] = closure_conditions
+    ai_block["health_impact"] = scenario.get("health_impact")
+    ai_block["kpi_impact"] = scenario.get("kpi_impact")
+    result["ai"] = ai_block
+
+    if mode == "finding_analysis":
+        result["summary"] = scenario.get("diagnosis_guidance") or result.get("summary")
+        result["impact"] = scenario.get("health_impact") or result.get("impact")
+        result["recommended_actions"] = solution_steps or result.get("recommended_actions", [])
+        result["priority"] = result.get("priority") or "alta"
+        result["confidence"] = max(float(result.get("confidence") or 0.75), 0.85)
+
+    if mode == "action_plan":
+        result["objective"] = scenario.get("solution_summary") or result.get("objective")
+        result["immediate_actions"] = solution_steps[:4] or result.get("immediate_actions", [])
+        result["action_plan"] = _build_action_plan_steps(solution_steps) or result.get("action_plan", [])
+        result["success_criteria"] = closure_conditions or result.get("success_criteria", [])
+        result["priority"] = result.get("priority") or "alta"
+        result["confidence"] = max(float(result.get("confidence") or 0.75), 0.85)
+
+    return result

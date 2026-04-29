@@ -1,0 +1,4663 @@
+const express = require('express');
+const router = express.Router();
+const pool = require('../config/db');
+const auth = require('../middleware/auth');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+
+
+const logoUploadDir = path.join(__dirname, '..', '..', 'uploads', 'logos');
+fs.mkdirSync(logoUploadDir, { recursive: true });
+
+const logoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, logoUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const safeName = String(file.originalname || 'logo')
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .slice(-120);
+
+    cb(null, `${Date.now()}-${safeName}`);
+  },
+});
+
+const uploadLogo = multer({
+  storage: logoStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+});
+
+function getUserId(user) {
+  return user?.user_id || user?.userId || user?.id || null;
+}
+
+function getUserEmail(user) {
+  return user?.email || null;
+}
+
+function normalizeRole(role) {
+  return String(role || '').toLowerCase();
+}
+
+function isPlatformRole(role) {
+  return ['superadmin', 'platform_admin'].includes(normalizeRole(role));
+}
+
+async function getCurrentDbUser(req) {
+  const userId = getUserId(req.user);
+  const email = getUserEmail(req.user);
+
+  if (userId) {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        email,
+        full_name,
+        role,
+        tenant_id
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    if (result.rowCount > 0) return result.rows[0];
+  }
+
+  if (email) {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        email,
+        full_name,
+        role,
+        tenant_id
+      FROM users
+      WHERE email = $1
+      LIMIT 1
+      `,
+      [email]
+    );
+
+    if (result.rowCount > 0) return result.rows[0];
+  }
+
+  return null;
+}
+
+async function userHasPermission(userId, permissionKey) {
+  if (!userId || !permissionKey) return false;
+
+  const result = await pool.query(
+    `SELECT user_has_permission($1::uuid, $2::text) AS allowed`,
+    [userId, permissionKey]
+  );
+
+  return result.rows[0]?.allowed === true;
+}
+
+async function getAdminContext(req) {
+  const user = await getCurrentDbUser(req);
+
+  if (!user) {
+    return {
+      user: null,
+      role: '',
+      isPlatform: false,
+      isDealer: false,
+      canViewAdminSaas: false,
+      canManageAdminSaas: false,
+    };
+  }
+
+  const role = normalizeRole(user.role);
+  const isPlatform = isPlatformRole(role);
+  const isDealer = role === 'dealer';
+
+  const [canViewAdminSaas, canManageAdminSaas] = await Promise.all([
+    userHasPermission(user.id, 'admin_saas.view'),
+    userHasPermission(user.id, 'admin_saas.manage'),
+  ]);
+
+  return {
+    user,
+    role,
+    isPlatform,
+    isDealer,
+    canViewAdminSaas,
+    canManageAdminSaas,
+  };
+}
+
+async function requireAdminSaasView(req, res, options = {}) {
+  const ctx = await getAdminContext(req);
+  const allowDealer = options.allowDealer === true;
+
+  if (!ctx.user) {
+    res.status(401).json({
+      ok: false,
+      error: 'Usuario no encontrado',
+    });
+    return null;
+  }
+
+  if (ctx.isPlatform || ctx.canViewAdminSaas) {
+    return ctx;
+  }
+
+  if (allowDealer && ctx.isDealer) {
+    return ctx;
+  }
+
+  res.status(403).json({
+    ok: false,
+    error: 'No autorizado para ver Administración SaaS',
+  });
+
+  return null;
+}
+
+async function requireAdminSaasManage(req, res) {
+  const ctx = await getAdminContext(req);
+
+  if (!ctx.user) {
+    res.status(401).json({
+      ok: false,
+      error: 'Usuario no encontrado',
+    });
+    return null;
+  }
+
+  if (ctx.isPlatform || ctx.canManageAdminSaas) {
+    return ctx;
+  }
+
+  res.status(403).json({
+    ok: false,
+    error: 'No autorizado para administrar SaaS',
+  });
+
+  return null;
+}
+
+async function requireDealerOrPlatform(req, res) {
+  const ctx = await getAdminContext(req);
+
+  if (!ctx.user) {
+    res.status(401).json({
+      ok: false,
+      error: 'Usuario no encontrado',
+    });
+    return null;
+  }
+
+  if (ctx.isPlatform || ctx.isDealer) {
+    return ctx;
+  }
+
+  res.status(403).json({
+    ok: false,
+    error: 'No autorizado para acceder al portal Dealer',
+  });
+
+  return null;
+}
+
+async function ensureTenantVisibility(ctx, tenantId) {
+  if (!ctx?.user || !tenantId) return false;
+
+  if (ctx.isPlatform || ctx.canViewAdminSaas) return true;
+
+  if (ctx.isDealer) {
+    const result = await pool.query(
+      `
+      SELECT 1
+      FROM dealer_tenants
+      WHERE dealer_user_id = $1
+        AND tenant_id = $2
+        AND status = 'active'
+      LIMIT 1
+      `,
+      [ctx.user.id, tenantId]
+    );
+
+    return result.rowCount > 0;
+  }
+
+  return false;
+}
+
+async function getTenantModule(tenantId, moduleKey, client = pool) {
+  const result = await client.query(
+    `
+    SELECT
+      tenant_id,
+      tenant_name,
+      module_key,
+      module_name,
+      module_description,
+      sort_order,
+      is_enabled,
+      enabled_at,
+      disabled_at,
+      notes,
+      metadata
+    FROM v_tenant_modules
+    WHERE tenant_id = $1::uuid
+      AND module_key = $2::text
+    LIMIT 1
+    `,
+    [tenantId, moduleKey]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function getTenantStandard(tenantId, standardCode, client = pool) {
+  const result = await client.query(
+    `
+    SELECT
+      ts.tenant_id,
+      t.name AS tenant_name,
+      ts.standard_code AS code,
+      COALESCE(s.name, ts.standard_code) AS name,
+      TRUE AS is_active,
+      COUNT(DISTINCT tc.id)::int AS tenant_controls
+    FROM tenant_standards ts
+    JOIN tenants t
+      ON t.id = ts.tenant_id
+    LEFT JOIN standards s
+      ON s.code = ts.standard_code
+    LEFT JOIN controls_catalog cc
+      ON cc.iso = ts.standard_code
+    LEFT JOIN tenant_controls tc
+      ON tc.tenant_id = ts.tenant_id
+     AND tc.control_id = cc.id
+    WHERE ts.tenant_id = $1::uuid
+      AND ts.standard_code = $2::text
+    GROUP BY
+      ts.tenant_id,
+      t.name,
+      ts.standard_code,
+      s.name
+    LIMIT 1
+    `,
+    [tenantId, standardCode]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function getTenantDetail(tenantId) {
+  const [
+    tenantResult,
+    summaryResult,
+    contractResult,
+    standardsResult,
+    modulesResult,
+    usersResult,
+    dealersResult,
+  ] = await Promise.all([
+    pool.query(
+      `
+      SELECT *
+      FROM tenants
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [tenantId]
+    ),
+
+    pool.query(
+      `
+      SELECT *
+      FROM v_tenant_governance_summary
+      WHERE tenant_id = $1::uuid
+      LIMIT 1
+      `,
+      [tenantId]
+    ),
+
+    pool.query(
+      `
+      SELECT
+        id,
+        tenant_id,
+        plan_key,
+        contract_status,
+        started_at,
+        ends_at,
+        billing_notes,
+        commercial_owner_user_id,
+        metadata,
+        created_at,
+        updated_at
+      FROM tenant_contracts
+      WHERE tenant_id = $1::uuid
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [tenantId]
+    ),
+
+    pool.query(
+      `
+      SELECT
+        ts.tenant_id,
+        ts.standard_code AS code,
+        COALESCE(s.name, ts.standard_code) AS name,
+        TRUE AS is_active,
+        COUNT(DISTINCT tc.id)::int AS tenant_controls
+      FROM tenant_standards ts
+      LEFT JOIN standards s
+        ON s.code = ts.standard_code
+      LEFT JOIN controls_catalog cc
+        ON cc.iso = ts.standard_code
+       
+      LEFT JOIN tenant_controls tc
+        ON tc.tenant_id = ts.tenant_id
+       AND tc.control_id = cc.id
+      WHERE ts.tenant_id = $1::uuid
+      GROUP BY
+        ts.tenant_id,
+        ts.standard_code,
+        s.name,
+        ts.standard_code
+      ORDER BY ts.standard_code
+      `,
+      [tenantId]
+    ),
+
+    pool.query(
+      `
+      SELECT
+        tenant_id,
+        tenant_name,
+        module_key,
+        module_name,
+        module_description,
+        sort_order,
+        is_enabled,
+        enabled_at,
+        disabled_at,
+        notes,
+        metadata
+      FROM v_tenant_modules
+      WHERE tenant_id = $1::uuid
+      ORDER BY sort_order, module_key
+      `,
+      [tenantId]
+    ),
+
+    pool.query(
+      `
+      SELECT
+        id,
+        email,
+        full_name,
+        role,
+        tenant_id,
+        TRUE AS is_active,
+        created_at
+      FROM users
+      WHERE tenant_id = $1::uuid
+      ORDER BY created_at DESC, email
+      `,
+      [tenantId]
+    ),
+
+    pool.query(
+      `
+      SELECT
+        vdt.id AS id,
+        NULL::uuid AS dealer_user_id,
+        NULL::text AS dealer_email,
+        NULL::text AS dealer_name,
+        vdt.tenant_id,
+        t.name AS tenant_name,
+        FALSE AS can_view_admin_saas,
+        FALSE AS can_manage_modules,
+        FALSE AS can_manage_standards,
+        TRUE AS can_view_contract,
+        TRUE AS can_request_changes,
+        FALSE AS can_view_sensitive_evidence,
+        'active'::text AS status,
+        NULL::timestamp AS assigned_at,
+        NULL::timestamp AS revoked_at
+      FROM v_dealer_tenants vdt
+      LEFT JOIN tenants t
+        ON t.id = vdt.tenant_id
+      WHERE vdt.tenant_id = $1::uuid
+      ORDER BY t.name
+      `,
+      [tenantId]
+    ),
+  ]);
+
+  return {
+    tenant: tenantResult.rows[0] || null,
+    summary: summaryResult.rows[0] || null,
+    contract: contractResult.rows[0] || null,
+    standards: standardsResult.rows,
+    modules: modulesResult.rows,
+    users: usersResult.rows,
+    dealers: dealersResult.rows,
+  };
+}
+
+async function initializeTenantControlsForStandard(client, tenantId, standardCode) {
+  const result = await client.query(
+    `
+    INSERT INTO tenant_controls (
+      tenant_id,
+      control_id
+    )
+    SELECT
+      $1::uuid AS tenant_id,
+      cc.id AS control_id
+    FROM controls_catalog cc
+    WHERE cc.iso = $2::text
+      
+      AND NOT EXISTS (
+        SELECT 1
+        FROM tenant_controls tc
+        WHERE tc.tenant_id = $1::uuid
+          AND tc.control_id = cc.id
+      )
+    RETURNING id
+    `,
+    [tenantId, standardCode]
+  );
+
+  return result.rowCount;
+}
+
+async function cleanupInactiveStandardOperationalData(client, tenantId, standardCode) {
+  const dimensionDelete = await client.query(
+    `
+    DELETE FROM kpi_snapshot_dimensions ksd
+    USING kpi_snapshots ks
+    WHERE ksd.snapshot_id = ks.id
+      AND ks.tenant_id = $1::uuid
+      AND ks.standard_code = $2::text
+    `,
+    [tenantId, standardCode]
+  );
+
+  const snapshotDelete = await client.query(
+    `
+    DELETE FROM kpi_snapshots
+    WHERE tenant_id = $1::uuid
+      AND standard_code = $2::text
+    `,
+    [tenantId, standardCode]
+  );
+
+  const healthDelete = await client.query(
+    `
+    DELETE FROM control_health_scores
+    WHERE tenant_id = $1::uuid
+      AND standard_code = $2::text
+    `,
+    [tenantId, standardCode]
+  );
+
+  return {
+    deleted_snapshot_dimensions: dimensionDelete.rowCount,
+    deleted_snapshots: snapshotDelete.rowCount,
+    deleted_health_scores: healthDelete.rowCount,
+  };
+}
+
+async function refreshTenantHealth(client, tenantId) {
+  const result = await client.query(
+    `
+    SELECT refresh_tenant_control_health($1::uuid) AS ok
+    `,
+    [tenantId]
+  );
+
+  return result.rows[0] || { ok: false };
+}
+
+// =====================================================
+// GET /api/admin-saas/overview
+// =====================================================
+router.get('/overview', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res, { allowDealer: true });
+    if (!ctx) return;
+
+    const [summaryResult, contractsResult, modulesResult, standardsResult] =
+      await Promise.all([
+        pool.query(
+          `
+          SELECT *
+          FROM v_admin_saas_summary
+          LIMIT 1
+          `
+        ),
+        pool.query(
+          `
+          SELECT *
+          FROM v_tenant_contract_overview
+          ORDER BY tenant_name
+          `
+        ),
+        pool.query(
+          `
+          SELECT *
+          FROM v_tenant_modules
+          ORDER BY tenant_name, sort_order, module_key
+          `
+        ),
+        pool.query(
+          `
+          SELECT
+            ts.tenant_id,
+            t.name AS tenant_name,
+            ts.standard_code AS code,
+            COALESCE(s.name, ts.standard_code) AS name,
+            TRUE AS is_active,
+            COUNT(DISTINCT tc.id)::int AS tenant_controls,
+            COUNT(DISTINCT chs.id)::int AS health_records
+          FROM tenant_standards ts
+          JOIN tenants t
+            ON t.id = ts.tenant_id
+          LEFT JOIN standards s
+            ON s.code = ts.standard_code
+          LEFT JOIN controls_catalog cc
+            ON cc.iso = ts.standard_code
+           
+          LEFT JOIN tenant_controls tc
+            ON tc.tenant_id = ts.tenant_id
+           AND tc.control_id = cc.id
+          LEFT JOIN control_health_scores chs
+            ON chs.tenant_id = ts.tenant_id
+           AND chs.standard_code = ts.standard_code
+          GROUP BY
+            ts.tenant_id,
+            t.name,
+            ts.standard_code,
+            s.name,
+            ts.standard_code
+          ORDER BY t.name, ts.standard_code
+          `
+        ),
+      ]);
+
+    return res.json({
+      ok: true,
+      scope: {
+        user_id: ctx.user.id,
+        role: ctx.role,
+        is_platform: ctx.isPlatform,
+        is_dealer: ctx.isDealer,
+      },
+      summary: summaryResult.rows[0] || null,
+      contracts: contractsResult.rows,
+      modules: modulesResult.rows,
+      standards: standardsResult.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET ADMIN SAAS OVERVIEW:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo overview de Administración SaaS',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// GET /api/admin-saas/dealer/tenants
+// =====================================================
+router.get('/dealer/tenants', auth, async (req, res) => {
+  try {
+    const ctx = await requireDealerOrPlatform(req, res);
+    if (!ctx) return;
+
+    let query = `
+      SELECT
+        dealer_user_id,
+        dealer_email,
+        dealer_name,
+        tenant_id,
+        tenant_name,
+        can_view_admin_saas,
+        can_manage_modules,
+        can_manage_standards,
+        can_view_contract,
+        can_request_changes,
+        can_view_sensitive_evidence,
+        status,
+        assigned_at,
+        revoked_at
+      FROM v_dealer_tenants
+    `;
+    const params = [];
+
+    if (!ctx.isPlatform) {
+      query += `
+        WHERE dealer_user_id = $1::uuid
+          AND status = 'active'
+      `;
+      params.push(ctx.user.id);
+    }
+
+    query += `
+      ORDER BY tenant_name
+    `;
+
+    const result = await pool.query(query, params);
+
+    return res.json({
+      ok: true,
+      scope: {
+        user_id: ctx.user.id,
+        role: ctx.role,
+        is_platform: ctx.isPlatform,
+        is_dealer: ctx.isDealer,
+      },
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET DEALER TENANTS:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo empresas del dealer',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// GET /api/admin-saas/tenants
+// Lista empresas para Administración SaaS.
+// No depende de columnas antiguas de v_tenant_governance_summary.
+// =====================================================
+router.get('/tenants', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res, { allowDealer: true });
+    if (!ctx) return;
+
+    const search = String(req.query.search || '').trim();
+
+    const params = [];
+    const where = [];
+
+    if (ctx.isDealer && !ctx.isPlatform && !ctx.canViewAdminSaas) {
+      params.push(ctx.user.id);
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM dealer_tenants dt
+          WHERE dt.tenant_id = t.id
+            AND dt.dealer_user_id = $${params.length}::uuid
+            AND dt.status = 'active'
+        )
+      `);
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      where.push(`
+        (
+          t.name ILIKE $${params.length}
+          OR COALESCE(t.rut, '') ILIKE $${params.length}
+          OR COALESCE(t.business, '') ILIKE $${params.length}
+        )
+      `);
+    }
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    const query = `
+      SELECT
+        t.id AS tenant_id,
+        t.name AS tenant_name,
+        t.rut,
+        t.business,
+        t.address,
+        t.branches,
+        t.logo,
+        t.logo_url,
+        t.created_at,
+
+        COALESCE(std.active_standards, 0)::int AS active_standards,
+        COALESCE(std.inactive_standards, 0)::int AS inactive_standards,
+
+        COALESCE(mods.enabled_modules, 0)::int AS enabled_modules,
+        COALESCE(mods.disabled_modules, 0)::int AS disabled_modules,
+
+        COALESCE(users_count.active_users_count, 0)::int AS active_users_count,
+        COALESCE(dealers_count.dealer_count, 0)::int AS dealer_count,
+
+        contract.plan_key,
+        contract.contract_status,
+        contract.started_at,
+        contract.ends_at,
+
+        NULL::timestamp AS last_admin_event_at
+      FROM tenants t
+
+      LEFT JOIN (
+        SELECT
+          tenant_id,
+          COUNT(*)::int AS active_standards,
+          0::int AS inactive_standards
+        FROM tenant_standards
+        GROUP BY tenant_id
+      ) std
+        ON std.tenant_id = t.id
+
+      LEFT JOIN (
+        SELECT
+          tenant_id,
+          COUNT(*) FILTER (WHERE is_enabled = TRUE)::int AS enabled_modules,
+          COUNT(*) FILTER (WHERE is_enabled IS NOT TRUE)::int AS disabled_modules
+        FROM v_tenant_modules
+        GROUP BY tenant_id
+      ) mods
+        ON mods.tenant_id = t.id
+
+      LEFT JOIN (
+        SELECT
+          tenant_id,
+          COUNT(*)::int AS active_users_count
+        FROM users
+        WHERE tenant_id IS NOT NULL
+        GROUP BY tenant_id
+      ) users_count
+        ON users_count.tenant_id = t.id
+
+      LEFT JOIN (
+        SELECT
+          tenant_id,
+          COUNT(*) FILTER (WHERE status = 'active')::int AS dealer_count
+        FROM dealer_tenants
+        GROUP BY tenant_id
+      ) dealers_count
+        ON dealers_count.tenant_id = t.id
+
+      LEFT JOIN LATERAL (
+        SELECT
+          tc.plan_key,
+          tc.contract_status,
+          tc.started_at,
+          tc.ends_at
+        FROM tenant_contracts tc
+        WHERE tc.tenant_id = t.id
+        ORDER BY tc.created_at DESC
+        LIMIT 1
+      ) contract ON TRUE
+
+      ${whereSql}
+      ORDER BY t.created_at DESC NULLS LAST, t.name ASC
+    `;
+
+    const result = await pool.query(query, params);
+
+    return res.json({
+      ok: true,
+      scope: {
+        user_id: ctx.user.id,
+        role: ctx.role,
+        is_platform: ctx.isPlatform,
+        is_dealer: ctx.isDealer,
+      },
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET TENANTS ADMIN SAAS:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo empresas',
+      detail: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// POST /api/admin-saas/tenants
+// Crear empresa desde Administración SaaS.
+// Versión blindada: confirma persistencia real luego del COMMIT.
+// =====================================================
+router.post('/tenants', auth, uploadLogo.single('logo'), async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const {
+      name,
+      rut,
+      address = '',
+      business = '',
+      branches = '',
+    } = req.body || {};
+
+    const cleanName = String(name || '').trim();
+    const cleanRut = String(rut || '').trim();
+
+    if (!cleanName || !cleanRut) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Nombre y RUT son obligatorios',
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const exists = await client.query(
+      `
+      SELECT id, name, rut
+      FROM tenants
+      WHERE lower(name) = lower($1::text)
+         OR lower(rut) = lower($2::text)
+      LIMIT 1
+      `,
+      [cleanName, cleanRut]
+    );
+
+    if (exists.rowCount > 0) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        ok: false,
+        error: 'Ya existe una empresa con ese nombre o RUT',
+        detail: exists.rows[0],
+      });
+    }
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO tenants (
+        name,
+        rut,
+        address,
+        business,
+        branches,
+        logo,
+        created_at
+      )
+      VALUES (
+        $1::text,
+        $2::text,
+        $3::text,
+        $4::text,
+        $5::text,
+        $6::text,
+        now()
+      )
+      RETURNING *
+      `,
+      [
+        cleanName,
+        cleanRut,
+        String(address || '').trim(),
+        String(business || '').trim(),
+        String(branches || '').trim(),
+        req.file ? req.file.filename : null,
+      ]
+    );
+
+    const insertedTenant = insertResult.rows[0];
+
+    try {
+      await client.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::text,
+          NULL::uuid,
+          $5::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          'tenant.created',
+          insertedTenant.id,
+          'tenant',
+          JSON.stringify({
+            name: insertedTenant.name,
+            rut: insertedTenant.rut,
+            source: 'admin_saas',
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event tenant.created:', auditError.message);
+    }
+
+    await client.query('COMMIT');
+
+    const verifyResult = await pool.query(
+      `
+      SELECT *
+      FROM tenants
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [insertedTenant.id]
+    );
+
+    const verifiedTenant = verifyResult.rows[0] || null;
+
+    if (!verifiedTenant) {
+      console.error('TENANT CREATE PERSISTENCE MISMATCH:', {
+        inserted: insertedTenant,
+      });
+
+      return res.status(500).json({
+        ok: false,
+        error: 'La empresa fue creada por el endpoint, pero no se confirmó persistencia real en BD',
+        detail: 'tenant_create_persistence_mismatch',
+        inserted_tenant_id: insertedTenant.id,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        ...verifiedTenant,
+        tenant_id: verifiedTenant.id,
+        tenant_name: verifiedTenant.name,
+      },
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR CREATE TENANT ADMIN SAAS:', error);
+
+    if (error.code === '23505') {
+      return res.status(409).json({
+        ok: false,
+        error: 'Ya existe una empresa con esos datos',
+        detail: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error creando empresa desde Administración SaaS',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+// =====================================================
+// GET /api/admin-saas/tenants/:tenant_id
+// =====================================================
+router.get('/tenants/:tenant_id', auth, async (req, res) => {
+  try {
+    const { tenant_id } = req.params;
+    const ctx = await requireAdminSaasView(req, res, { allowDealer: true });
+    if (!ctx) return;
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para ver esta empresa',
+      });
+    }
+
+    const detail = await getTenantDetail(tenant_id);
+
+    if (!detail.tenant) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Empresa no encontrada',
+      });
+    }
+
+    return res.json({
+      ok: true,
+      scope: {
+        user_id: ctx.user.id,
+        role: ctx.role,
+        is_platform: ctx.isPlatform,
+        is_dealer: ctx.isDealer,
+      },
+      data: detail,
+    });
+  } catch (error) {
+    console.error('ERROR GET TENANT DETAIL:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo detalle de empresa',
+      detail: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// GET /api/admin-saas/dealers
+// Lista usuarios dealer/partner.
+// =====================================================
+router.get('/dealers', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const result = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.email,
+        u.full_name,
+        u.role,
+        COALESCE(dt.active_tenants, 0)::int AS active_tenants
+      FROM users u
+      LEFT JOIN (
+        SELECT
+          dealer_user_id,
+          COUNT(*) FILTER (WHERE status = 'active')::int AS active_tenants
+        FROM dealer_tenants
+        GROUP BY dealer_user_id
+      ) dt
+        ON dt.dealer_user_id = u.id
+      WHERE lower(COALESCE(u.role, '')) = 'dealer'
+      ORDER BY u.email
+      `
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET ADMIN SAAS DEALERS:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo dealers',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// GET /api/admin-saas/audit-log
+// Bitácora administrativa. Si la tabla aún no existe, devuelve [].
+// =====================================================
+router.get('/audit-log', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res, { allowDealer: true });
+    if (!ctx) return;
+
+    const tenantId = req.query.tenant_id || null;
+    const limit = Math.min(Number(req.query.limit || 50), 200);
+
+    const exists = await pool.query(
+      `SELECT to_regclass('public.admin_audit_log')::text AS table_name`
+    );
+
+    if (!exists.rows[0]?.table_name) {
+      return res.json({
+        ok: true,
+        data: [],
+      });
+    }
+
+    const params = [];
+    const conditions = ['1 = 1'];
+
+    if (tenantId) {
+      params.push(tenantId);
+      conditions.push(`tenant_id = $${params.length}::uuid`);
+    }
+
+    params.push(limit);
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM admin_audit_log
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC
+      LIMIT $${params.length}
+      `,
+      params
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET ADMIN SAAS AUDIT LOG:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo bitácora administrativa',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// GET /api/admin-saas/dealer/requests
+// Solicitudes dealer. Si la tabla aún no existe, devuelve [].
+// =====================================================
+router.get('/dealer/requests', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res, { allowDealer: true });
+    if (!ctx) return;
+
+    const tenantId = req.query.tenant_id || null;
+    const limit = Math.min(Number(req.query.limit || 50), 200);
+
+    const exists = await pool.query(
+      `SELECT to_regclass('public.dealer_requests')::text AS table_name`
+    );
+
+    if (!exists.rows[0]?.table_name) {
+      return res.json({
+        ok: true,
+        data: [],
+      });
+    }
+
+    const params = [];
+    const conditions = ['1 = 1'];
+
+    if (tenantId) {
+      params.push(tenantId);
+      conditions.push(`tenant_id = $${params.length}::uuid`);
+    }
+
+    params.push(limit);
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM dealer_requests
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC
+      LIMIT $${params.length}
+      `,
+      params
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET ADMIN SAAS DEALER REQUESTS:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo solicitudes dealer',
+      detail: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// GET /api/admin-saas/modules
+// =====================================================
+router.get('/modules', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const result = await pool.query(
+      `
+      SELECT
+        module_key,
+        display_name,
+        description,
+        sort_order,
+        is_active,
+        metadata,
+        created_at,
+        updated_at
+      FROM saas_modules
+      ORDER BY sort_order, module_key
+      `
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET SAAS MODULES:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo módulos SaaS',
+      detail: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// PUT /api/admin-saas/tenants/:tenant_id/modules/:module_key
+// Activa/desactiva módulo SaaS respetando límite contractual.
+// =====================================================
+router.put('/tenants/:tenant_id/modules/:module_key', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id, module_key } = req.params;
+    const isEnabled = Boolean(req.body?.is_enabled);
+    const notes = req.body?.notes || null;
+    const metadata = req.body?.metadata && typeof req.body.metadata === 'object'
+      ? req.body.metadata
+      : {};
+
+    await client.query('BEGIN');
+
+    const tenantResult = await client.query(
+      `SELECT id, name FROM tenants WHERE id = $1::uuid LIMIT 1`,
+      [tenant_id]
+    );
+
+    if (tenantResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'Empresa no encontrada',
+      });
+    }
+
+    const moduleResult = await client.query(
+      `
+      SELECT module_key, display_name
+      FROM saas_modules
+      WHERE module_key = $1::text
+        AND is_active = TRUE
+      LIMIT 1
+      `,
+      [module_key]
+    );
+
+    if (moduleResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'Módulo no encontrado o inactivo',
+      });
+    }
+
+    if (isEnabled) {
+      const contractResult = await client.query(
+        `
+        SELECT
+          id,
+          plan_key,
+          max_premium_modules
+        FROM tenant_contracts
+        WHERE tenant_id = $1::uuid
+        ORDER BY created_at DESC NULLS LAST
+        LIMIT 1
+        `,
+        [tenant_id]
+      );
+
+      const contract = contractResult.rows[0] || null;
+      const maxPremiumModules = contract?.max_premium_modules;
+
+      if (maxPremiumModules !== null && maxPremiumModules !== undefined) {
+        const enabledCountResult = await client.query(
+          `
+          SELECT COUNT(*)::int AS enabled_count
+          FROM tenant_module_settings
+          WHERE tenant_id = $1::uuid
+            AND module_key <> $2::text
+            AND COALESCE(is_enabled, FALSE) = TRUE
+          `,
+          [tenant_id, module_key]
+        );
+
+        const enabledCount = Number(enabledCountResult.rows[0]?.enabled_count || 0);
+
+        if (enabledCount >= Number(maxPremiumModules)) {
+          await client.query('ROLLBACK');
+
+          return res.status(409).json({
+            ok: false,
+            code: 'CONTRACT_MODULE_LIMIT_EXCEEDED',
+            error: `No se puede habilitar este módulo. El contrato permite máximo ${maxPremiumModules} módulo(s) premium activo(s).`,
+            detail: {
+              enabled_modules: enabledCount,
+              max_premium_modules: Number(maxPremiumModules),
+              module_key,
+            },
+          });
+        }
+      }
+    }
+
+    const result = await client.query(
+      `
+      INSERT INTO tenant_module_settings (
+        tenant_id,
+        module_key,
+        is_enabled,
+        enabled_at,
+        disabled_at,
+        notes,
+        metadata
+      )
+      VALUES (
+        $1::uuid,
+        $2::text,
+        $3::boolean,
+        CASE WHEN $3::boolean = TRUE THEN now() ELSE NULL END,
+        CASE WHEN $3::boolean = FALSE THEN now() ELSE NULL END,
+        $4::text,
+        $5::jsonb
+      )
+      ON CONFLICT (tenant_id, module_key)
+      DO UPDATE SET
+        is_enabled = EXCLUDED.is_enabled,
+        enabled_at = CASE WHEN EXCLUDED.is_enabled = TRUE THEN now() ELSE tenant_module_settings.enabled_at END,
+        disabled_at = CASE WHEN EXCLUDED.is_enabled = FALSE THEN now() ELSE NULL END,
+        notes = EXCLUDED.notes,
+        metadata = COALESCE(tenant_module_settings.metadata, '{}'::jsonb) || EXCLUDED.metadata
+      RETURNING *
+      `,
+      [
+        tenant_id,
+        module_key,
+        isEnabled,
+        notes,
+        JSON.stringify({
+          ...metadata,
+          updated_by: ctx.user.id,
+          updated_from: 'admin_saas',
+        }),
+      ]
+    );
+
+    try {
+      await client.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::text,
+          NULL::uuid,
+          $5::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          isEnabled ? 'tenant_module.enabled' : 'tenant_module.disabled',
+          tenant_id,
+          'tenant_module',
+          JSON.stringify({
+            module_key,
+            is_enabled: isEnabled,
+            source: 'admin_saas',
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event tenant_module:', auditError.message);
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR UPDATE TENANT MODULE:', error);
+
+    const msg = String(error.message || '');
+
+    if (msg.includes('No puedes activar más módulos')) {
+      return res.status(409).json({
+        ok: false,
+        code: 'CONTRACT_MODULE_LIMIT_EXCEEDED',
+        error: msg,
+      });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando módulo del tenant',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+// =====================================================
+// PUT /api/admin-saas/tenants/:tenant_id/standards/:standard_code
+// =====================================================
+router.put('/tenants/:tenant_id/standards/:standard_code', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id, standard_code } = req.params;
+    const {
+      is_active,
+      initialize_controls = false,
+      refresh_health = false,
+    } = req.body;
+
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({
+        ok: false,
+        error: 'is_active debe ser boolean',
+      });
+    }
+
+    const standardCode = String(standard_code || '').trim().toUpperCase();
+
+    await client.query('BEGIN');
+
+    const existing = await client.query(
+      `
+      SELECT tenant_id, standard_code, is_active
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND standard_code = $2::text
+      LIMIT 1
+      `,
+      [tenant_id, standardCode]
+    );
+
+    if (existing.rowCount > 0) {
+      await client.query(
+        `
+        UPDATE tenant_standards
+        SET is_active = $3::boolean
+        WHERE tenant_id = $1::uuid
+          AND standard_code = $2::text
+        `,
+        [tenant_id, standardCode, is_active]
+      );
+    } else {
+      await client.query(
+        `
+        INSERT INTO tenant_standards (
+          tenant_id,
+          standard_code,
+          is_active
+        )
+        VALUES ($1::uuid, $2::text, $3::boolean)
+        `,
+        [tenant_id, standardCode, is_active]
+      );
+    }
+
+    let initializedControls = 0;
+    let cleanup = null;
+    let refresh = null;
+
+    if (is_active === true && initialize_controls === true) {
+      initializedControls = await initializeTenantControlsForStandard(
+        client,
+        tenant_id,
+        standardCode
+      );
+    }
+
+    if (is_active === false) {
+      cleanup = await cleanupInactiveStandardOperationalData(
+        client,
+        tenant_id,
+        standardCode
+      );
+    }
+
+    if (refresh_health === true) {
+      refresh = await refreshTenantHealth(client, tenant_id);
+    }
+
+    const newStandard = await getTenantStandard(tenant_id, standardCode, client);
+
+    await client.query(
+      `
+      SELECT log_admin_audit_event(
+        $1::uuid,
+        $2::text,
+        $3::uuid,
+        $4::text,
+        NULL::uuid,
+        $5::jsonb
+      )
+      `,
+      [
+        ctx.user.id,
+        'tenant_standard.updated',
+        tenant_id,
+        standardCode,
+        JSON.stringify({
+          is_active,
+          initialize_controls,
+          refresh_health,
+          initialized_controls: initializedControls,
+          cleanup,
+        }),
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      data: newStandard,
+      initialized_controls: initializedControls,
+      cleanup,
+      refresh,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('ERROR UPDATE TENANT STANDARD:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando norma del tenant',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+// =====================================================
+// POST /api/admin-saas/tenants/:tenant_id/standards/:standard_code/initialize-controls
+// Inicializa controles faltantes para una norma activa.
+// No duplica controles existentes.
+// =====================================================
+
+// =====================================================
+// FIX_OPERATION_ID_INITIALIZE_CONTROLS
+// POST /api/admin-saas/tenants/:tenant_id/standards/:standard_code/initialize-controls
+// Inicializa controles faltantes usando operation_id obligatorio.
+// No duplica controles existentes por tenant/control/operation.
+// =====================================================
+router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id, standard_code } = req.params;
+
+    await client.query('BEGIN');
+
+    const tenantResult = await client.query(
+      `
+      SELECT id, name
+      FROM tenants
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    if (tenantResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'Empresa no encontrada',
+      });
+    }
+
+    const standardState = await client.query(
+      `
+      SELECT
+        tenant_id,
+        standard_code,
+        is_active,
+        COALESCE(
+          lifecycle_status,
+          CASE WHEN COALESCE(is_active, FALSE) = TRUE THEN 'active' ELSE 'paused' END
+        ) AS lifecycle_status
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND standard_code = $2::text
+      LIMIT 1
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const state = standardState.rows[0] || null;
+
+    if (!state || state.lifecycle_status !== 'active' || state.is_active !== true) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        ok: false,
+        code: 'STANDARD_NOT_ACTIVE',
+        error: 'No se pueden inicializar controles porque la norma no está activa. Primero debes contratar/reactivar la norma.',
+        detail: {
+          standard_code,
+          lifecycle_status: state?.lifecycle_status || 'not_contracted',
+          is_active: state?.is_active || false,
+        },
+      });
+    }
+
+    const catalogCountResult = await client.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM controls_catalog
+      WHERE iso = $1::text
+      `,
+      [standard_code]
+    );
+
+    const catalogCount = Number(catalogCountResult.rows[0]?.total || 0);
+
+    if (catalogCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'No existen controles en controls_catalog para esta norma',
+        detail: { standard_code },
+      });
+    }
+
+    // 1) Buscar operaciones activas asociadas a esta norma.
+    let operationsResult = await client.query(
+      `
+      SELECT
+        o.id AS operation_id,
+        o.name AS operation_name,
+        o.sort_order
+      FROM tenant_standard_operations tso
+      JOIN tenant_operations o
+        ON o.id = tso.operation_id
+      WHERE tso.tenant_id = $1::uuid
+        AND tso.standard_code = $2::text
+        AND COALESCE(tso.is_active, TRUE) = TRUE
+        AND COALESCE(o.is_active, TRUE) = TRUE
+      ORDER BY o.sort_order, o.name
+      `,
+      [tenant_id, standard_code]
+    );
+
+    // 2) Si la norma no tiene operación asociada, usar o crear Operación principal.
+    if (operationsResult.rowCount === 0) {
+      let defaultOperationResult = await client.query(
+        `
+        SELECT id AS operation_id, name AS operation_name, sort_order
+        FROM tenant_operations
+        WHERE tenant_id = $1::uuid
+          AND COALESCE(is_active, TRUE) = TRUE
+        ORDER BY is_default DESC, sort_order ASC, created_at ASC
+        LIMIT 1
+        `,
+        [tenant_id]
+      );
+
+      let operation = defaultOperationResult.rows[0] || null;
+
+      if (!operation) {
+        const createdOperation = await client.query(
+          `
+          INSERT INTO tenant_operations (
+            tenant_id,
+            code,
+            name,
+            description,
+            operation_type,
+            is_active,
+            is_default,
+            sort_order,
+            metadata,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            $1::uuid,
+            'principal',
+            'Operación principal',
+            'Operación principal creada automáticamente para inicializar controles de norma.',
+            'principal',
+            TRUE,
+            TRUE,
+            1,
+            $2::jsonb,
+            now(),
+            now()
+          )
+          RETURNING id AS operation_id, name AS operation_name, sort_order
+          `,
+          [
+            tenant_id,
+            JSON.stringify({
+              source: 'admin_saas_initialize_controls',
+              created_for_standard: standard_code,
+            }),
+          ]
+        );
+
+        operation = createdOperation.rows[0];
+      }
+
+      await client.query(
+        `
+        INSERT INTO tenant_standard_operations (
+          tenant_id,
+          standard_code,
+          operation_id,
+          is_active,
+          notes,
+          created_at,
+          updated_at
+        )
+        SELECT
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          TRUE,
+          'Operación vinculada automáticamente al inicializar controles',
+          now(),
+          now()
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM tenant_standard_operations
+          WHERE tenant_id = $1::uuid
+            AND standard_code = $2::text
+            AND operation_id = $3::uuid
+        )
+        `,
+        [tenant_id, standard_code, operation.operation_id]
+      );
+
+      operationsResult = await client.query(
+        `
+        SELECT
+          o.id AS operation_id,
+          o.name AS operation_name,
+          o.sort_order
+        FROM tenant_standard_operations tso
+        JOIN tenant_operations o
+          ON o.id = tso.operation_id
+        WHERE tso.tenant_id = $1::uuid
+          AND tso.standard_code = $2::text
+          AND COALESCE(tso.is_active, TRUE) = TRUE
+          AND COALESCE(o.is_active, TRUE) = TRUE
+        ORDER BY o.sort_order, o.name
+        `,
+        [tenant_id, standard_code]
+      );
+    }
+
+    const operationsCount = operationsResult.rowCount;
+
+    if (operationsCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        ok: false,
+        error: 'No fue posible determinar una operación activa para inicializar controles.',
+        detail: { tenant_id, standard_code },
+      });
+    }
+
+    const existingBeforeResult = await client.query(
+      `
+      SELECT COUNT(tc.id)::int AS total
+      FROM tenant_controls tc
+      JOIN controls_catalog cc
+        ON cc.id = tc.control_id
+      WHERE tc.tenant_id = $1::uuid
+        AND cc.iso = $2::text
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const existingBefore = Number(existingBeforeResult.rows[0]?.total || 0);
+
+    const insertResult = await client.query(
+      `
+      WITH active_operations AS (
+        SELECT
+          o.id AS operation_id
+        FROM tenant_standard_operations tso
+        JOIN tenant_operations o
+          ON o.id = tso.operation_id
+        WHERE tso.tenant_id = $1::uuid
+          AND tso.standard_code = $2::text
+          AND COALESCE(tso.is_active, TRUE) = TRUE
+          AND COALESCE(o.is_active, TRUE) = TRUE
+      )
+      INSERT INTO tenant_controls (
+        tenant_id,
+        control_id,
+        operation_id,
+        status,
+        score,
+        health_status,
+        applicability,
+        priority,
+        notes,
+        metadata,
+        created_at,
+        updated_at
+      )
+      SELECT
+        $1::uuid AS tenant_id,
+        cc.id AS control_id,
+        ao.operation_id,
+        'pendiente' AS status,
+        0 AS score,
+        'deteriorado' AS health_status,
+        'aplicable' AS applicability,
+        'media' AS priority,
+        'Control inicializado desde Administración SaaS' AS notes,
+        jsonb_build_object(
+          'source', 'admin_saas_initialize_controls',
+          'standard_code', $2::text
+        ) AS metadata,
+        now() AS created_at,
+        now() AS updated_at
+      FROM controls_catalog cc
+      CROSS JOIN active_operations ao
+      WHERE cc.iso = $2::text
+        AND NOT EXISTS (
+          SELECT 1
+          FROM tenant_controls tc
+          WHERE tc.tenant_id = $1::uuid
+            AND tc.control_id = cc.id
+            AND tc.operation_id = ao.operation_id
+        )
+      RETURNING id
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const createdCount = insertResult.rowCount || 0;
+
+    const existingAfterResult = await client.query(
+      `
+      SELECT COUNT(tc.id)::int AS total
+      FROM tenant_controls tc
+      JOIN controls_catalog cc
+        ON cc.id = tc.control_id
+      WHERE tc.tenant_id = $1::uuid
+        AND cc.iso = $2::text
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const existingAfter = Number(existingAfterResult.rows[0]?.total || 0);
+
+    try {
+      await client.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::text,
+          NULL::uuid,
+          $5::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          'tenant_standard.controls_initialized',
+          tenant_id,
+          'tenant_standard',
+          JSON.stringify({
+            standard_code,
+            catalog_controls: catalogCount,
+            operations_count: operationsCount,
+            existing_before: existingBefore,
+            created_controls: createdCount,
+            existing_after: existingAfter,
+            source: req.body?.source || 'admin_saas',
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event initialize-controls:', auditError.message);
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      data: {
+        tenant_id,
+        standard_code,
+        catalog_controls: catalogCount,
+        operations_count: operationsCount,
+        existing_before: existingBefore,
+        created_controls: createdCount,
+        existing_after: existingAfter,
+        message:
+          createdCount > 0
+            ? `Controles inicializados correctamente: ${createdCount} creado(s).`
+            : 'La norma ya tenía todos sus controles inicializados para sus operaciones activas. No se duplicaron controles.',
+      },
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR INITIALIZE TENANT STANDARD CONTROLS FIXED:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error inicializando controles de la norma',
+      detail: error.message,
+      code: error.code || null,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id, standard_code } = req.params;
+
+    await client.query('BEGIN');
+
+    const tenantResult = await client.query(
+      `
+      SELECT id, name
+      FROM tenants
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    if (tenantResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'Empresa no encontrada',
+      });
+    }
+
+    const standardState = await client.query(
+      `
+      SELECT
+        tenant_id,
+        standard_code,
+        is_active,
+        COALESCE(
+          lifecycle_status,
+          CASE WHEN COALESCE(is_active, FALSE) = TRUE THEN 'active' ELSE 'paused' END
+        ) AS lifecycle_status
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND standard_code = $2::text
+      LIMIT 1
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const state = standardState.rows[0] || null;
+
+    if (!state || state.lifecycle_status !== 'active' || state.is_active !== true) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        ok: false,
+        code: 'STANDARD_NOT_ACTIVE',
+        error: 'No se pueden inicializar controles porque la norma no está activa. Primero debes contratar/reactivar la norma.',
+        detail: {
+          standard_code,
+          lifecycle_status: state?.lifecycle_status || 'not_contracted',
+          is_active: state?.is_active || false,
+        },
+      });
+    }
+
+    const catalogCountResult = await client.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM controls_catalog
+      WHERE iso = $1::text
+      `,
+      [standard_code]
+    );
+
+    const catalogCount = Number(catalogCountResult.rows[0]?.total || 0);
+
+    if (catalogCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'No existen controles en controls_catalog para esta norma',
+        detail: {
+          standard_code,
+        },
+      });
+    }
+
+    const existingResult = await client.query(
+      `
+      SELECT COUNT(tc.id)::int AS total
+      FROM tenant_controls tc
+      JOIN controls_catalog cc
+        ON cc.id = tc.control_id
+      WHERE tc.tenant_id = $1::uuid
+        AND cc.iso = $2::text
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const existingBefore = Number(existingResult.rows[0]?.total || 0);
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO tenant_controls (
+        tenant_id,
+        control_id,
+        status,
+        score,
+        health_status,
+        applicability,
+        priority,
+        created_at,
+        updated_at
+      )
+      SELECT
+        $1::uuid AS tenant_id,
+        cc.id AS control_id,
+        'pendiente' AS status,
+        0 AS score,
+        'deteriorado' AS health_status,
+        'aplicable' AS applicability,
+        'media' AS priority,
+        now() AS created_at,
+        now() AS updated_at
+      FROM controls_catalog cc
+      WHERE cc.iso = $2::text
+        AND NOT EXISTS (
+          SELECT 1
+          FROM tenant_controls tc
+          WHERE tc.tenant_id = $1::uuid
+            AND tc.control_id = cc.id
+        )
+      RETURNING id
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const createdCount = insertResult.rowCount || 0;
+
+    const existingAfterResult = await client.query(
+      `
+      SELECT COUNT(tc.id)::int AS total
+      FROM tenant_controls tc
+      JOIN controls_catalog cc
+        ON cc.id = tc.control_id
+      WHERE tc.tenant_id = $1::uuid
+        AND cc.iso = $2::text
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const existingAfter = Number(existingAfterResult.rows[0]?.total || 0);
+
+    try {
+      await client.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::text,
+          NULL::uuid,
+          $5::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          'tenant_standard.controls_initialized',
+          tenant_id,
+          'tenant_standard',
+          JSON.stringify({
+            standard_code,
+            catalog_controls: catalogCount,
+            existing_before: existingBefore,
+            created_controls: createdCount,
+            existing_after: existingAfter,
+            source: req.body?.source || 'admin_saas',
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event initialize-controls:', auditError.message);
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      data: {
+        tenant_id,
+        standard_code,
+        catalog_controls: catalogCount,
+        existing_before: existingBefore,
+        created_controls: createdCount,
+        existing_after: existingAfter,
+        message:
+          createdCount > 0
+            ? `Controles inicializados correctamente: ${createdCount} creado(s).`
+            : 'La norma ya tenía todos sus controles inicializados. No se duplicaron controles.',
+      },
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR INITIALIZE TENANT STANDARD CONTROLS:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error inicializando controles de la norma',
+      detail: error.message,
+      code: error.code || null,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+// =====================================================
+// POST /api/admin-saas/tenants/:tenant_id/refresh-health
+// =====================================================
+router.post('/tenants/:tenant_id/refresh-health', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+
+    await client.query('BEGIN');
+
+    const refresh = await refreshTenantHealth(client, tenant_id);
+
+    await client.query(
+      `
+      SELECT log_admin_audit_event(
+        $1::uuid,
+        $2::text,
+        $3::uuid,
+        NULL::text,
+        NULL::uuid,
+        $4::jsonb
+      )
+      `,
+      [
+        ctx.user.id,
+        'tenant.refresh_health',
+        tenant_id,
+        JSON.stringify({ refresh }),
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      refresh,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('ERROR REFRESH TENANT HEALTH:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error refrescando health del tenant',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+// =====================================================
+// GET /api/admin-saas/external-lookup/quotas
+// Administración de cuotas mensuales de búsqueda externa.
+// =====================================================
+router.get('/external-lookup/quotas', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const result = await pool.query(
+      `
+      WITH default_quota AS (
+        SELECT monthly_limit
+        FROM ai_core.external_lookup_quotas
+        WHERE is_default = TRUE
+          AND is_active = TRUE
+        LIMIT 1
+      ),
+      current_usage AS (
+        SELECT
+          tenant_id,
+          used_count,
+          last_lookup_at
+        FROM ai_core.v_external_lookup_usage_monthly
+        WHERE usage_month = date_trunc('month', now())::date
+      )
+      SELECT
+        t.id AS tenant_id,
+        t.name AS tenant_name,
+        t.rut,
+        COALESCE(q.monthly_limit, (SELECT monthly_limit FROM default_quota), 100)::int AS monthly_limit,
+        COALESCE(q.is_active, TRUE) AS quota_active,
+        q.notes,
+        q.metadata,
+        COALESCE(u.used_count, 0)::int AS used_count,
+        GREATEST(
+          COALESCE(q.monthly_limit, (SELECT monthly_limit FROM default_quota), 100)
+          - COALESCE(u.used_count, 0),
+          0
+        )::int AS remaining,
+        u.last_lookup_at
+      FROM tenants t
+      LEFT JOIN ai_core.external_lookup_quotas q
+        ON q.tenant_id = t.id
+      LEFT JOIN current_usage u
+        ON u.tenant_id = t.id
+      ORDER BY t.name
+      `
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET EXTERNAL LOOKUP QUOTAS:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo cuotas de búsqueda externa',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// PUT /api/admin-saas/tenants/:tenant_id/external-lookup/quota
+// Actualiza cuota mensual de búsqueda externa por tenant.
+// Versión blindada: confirma persistencia real luego del COMMIT.
+// =====================================================
+router.put('/tenants/:tenant_id/external-lookup/quota', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+    const monthlyLimit = Number(req.body?.monthly_limit);
+    const quotaActive =
+      req.body?.quota_active === undefined ? true : Boolean(req.body.quota_active);
+    const notes = req.body?.notes || null;
+    const metadata = req.body?.metadata && typeof req.body.metadata === 'object'
+      ? req.body.metadata
+      : {};
+
+    if (!Number.isFinite(monthlyLimit) || monthlyLimit < 0 || monthlyLimit > 100000) {
+      return res.status(400).json({
+        ok: false,
+        error: 'monthly_limit debe ser un número entre 0 y 100000',
+      });
+    }
+
+    const cleanLimit = Math.floor(monthlyLimit);
+
+    await client.query('BEGIN');
+
+    const tenantExists = await client.query(
+      `SELECT id, name FROM tenants WHERE id = $1::uuid LIMIT 1`,
+      [tenant_id]
+    );
+
+    if (tenantExists.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'Tenant no encontrado',
+      });
+    }
+
+    const oldQuotaResult = await client.query(
+      `
+      SELECT *
+      FROM ai_core.external_lookup_quotas
+      WHERE tenant_id = $1::uuid
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    const oldQuota = oldQuotaResult.rows[0] || null;
+
+    const writeResult = await client.query(
+      `
+      INSERT INTO ai_core.external_lookup_quotas (
+        tenant_id,
+        monthly_limit,
+        is_default,
+        is_active,
+        notes,
+        metadata,
+        updated_at
+      )
+      VALUES (
+        $1::uuid,
+        $2::int,
+        FALSE,
+        $3::boolean,
+        $4::text,
+        $5::jsonb,
+        now()
+      )
+      ON CONFLICT (tenant_id) WHERE tenant_id IS NOT NULL
+      DO UPDATE SET
+        monthly_limit = EXCLUDED.monthly_limit,
+        is_active = EXCLUDED.is_active,
+        notes = EXCLUDED.notes,
+        metadata = EXCLUDED.metadata,
+        updated_at = now()
+      RETURNING *
+      `,
+      [
+        tenant_id,
+        cleanLimit,
+        quotaActive,
+        notes,
+        JSON.stringify({
+          ...metadata,
+          updated_by: ctx.user.id,
+          updated_from: 'admin_saas',
+        }),
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    const verifyResult = await pool.query(
+      `
+      SELECT *
+      FROM ai_core.external_lookup_quotas
+      WHERE tenant_id = $1::uuid
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    const verified = verifyResult.rows[0] || null;
+
+    if (!verified || Number(verified.monthly_limit) !== cleanLimit) {
+      console.error('QUOTA PERSISTENCE MISMATCH:', {
+        tenant_id,
+        expected: cleanLimit,
+        write_returned: writeResult.rows[0],
+        verified,
+      });
+
+      return res.status(500).json({
+        ok: false,
+        error: 'La cuota fue actualizada por el endpoint, pero no se confirmó persistencia real en BD',
+        detail: 'quota_persistence_mismatch',
+        expected_monthly_limit: cleanLimit,
+        verified_monthly_limit: verified?.monthly_limit ?? null,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: verified,
+      audit: {
+        old_monthly_limit: oldQuota?.monthly_limit ?? null,
+        new_monthly_limit: verified.monthly_limit,
+        old_is_active: oldQuota?.is_active ?? null,
+        new_is_active: verified.is_active,
+      },
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR UPDATE EXTERNAL LOOKUP QUOTA:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando cuota de búsqueda externa',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// =====================================================
+// GET /api/admin-saas/tenants/:tenant_id/external-lookup/logs
+// Logs de búsqueda externa por tenant.
+// =====================================================
+router.get('/tenants/:tenant_id/external-lookup/logs', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+    const limit = Math.min(Number(req.query.limit || 30), 100);
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para ver logs de esta empresa',
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        tenant_id,
+        standard_code,
+        domain_code,
+        problem_type_code,
+        scenario_code,
+        query_text,
+        lookup_reason,
+        response_used,
+        quality_score,
+        jsonb_array_length(COALESCE(sources_used, '[]'::jsonb)) AS sources_used_count,
+        result_summary,
+        metadata,
+        created_at
+      FROM ai_core.external_lookup_logs
+      WHERE tenant_id = $1::uuid
+      ORDER BY created_at DESC
+      LIMIT $2::int
+      `,
+      [tenant_id, limit]
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET EXTERNAL LOOKUP LOGS:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo logs de búsqueda externa',
+      detail: error.message,
+    });
+  }
+});
+
+
+
+// =====================================================
+// GET /api/admin-saas/tenants/:tenant_id/external-lookup/quota-audit
+// Auditoría de cambios de cuota de búsqueda externa.
+// =====================================================
+router.get('/tenants/:tenant_id/external-lookup/quota-audit', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+    const limit = Math.min(Number(req.query.limit || 30), 100);
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para ver auditoría de esta empresa',
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        a.id,
+        a.tenant_id,
+        a.changed_by_user_id,
+        u.email AS changed_by_email,
+        u.full_name AS changed_by_name,
+        a.old_monthly_limit,
+        a.new_monthly_limit,
+        a.old_is_active,
+        a.new_is_active,
+        a.old_notes,
+        a.new_notes,
+        a.change_reason,
+        a.source,
+        a.metadata,
+        a.created_at
+      FROM ai_core.external_lookup_quota_audit a
+      LEFT JOIN users u
+        ON u.id = a.changed_by_user_id
+      WHERE a.tenant_id = $1::uuid
+      ORDER BY a.created_at DESC
+      LIMIT $2::int
+      `,
+      [tenant_id, limit]
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET EXTERNAL LOOKUP QUOTA AUDIT:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo auditoría de cuota externa',
+      detail: error.message,
+    });
+  }
+});
+
+
+
+function normalizeBillingMonth(value) {
+  const raw = String(value || '').trim();
+
+  if (/^\d{4}-\d{2}$/.test(raw)) {
+    return `${raw}-01`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return `${raw.slice(0, 7)}-01`;
+  }
+
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+
+  return `${year}-${month}-01`;
+}
+
+async function getPriceMap(client = pool) {
+  const result = await client.query(
+    `
+    SELECT
+      id,
+      item_type,
+      item_key,
+      item_name,
+      item_description,
+      currency,
+      unit_price,
+      billing_frequency,
+      is_active,
+      metadata
+    FROM saas_price_catalog
+    WHERE is_active = TRUE
+    ORDER BY item_type, item_key
+    `
+  );
+
+  const map = {};
+
+  for (const row of result.rows) {
+    map[`${row.item_type}:${row.item_key}`] = row;
+  }
+
+  return {
+    rows: result.rows,
+    map,
+  };
+}
+
+function money(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
+async function recalculateTenantPrebilling(client, tenantId, billingMonth, actorUserId = null) {
+  const contextResult = await client.query(
+    `
+    SELECT *
+    FROM v_saas_prebilling_tenant_context
+    WHERE tenant_id = $1::uuid
+    LIMIT 1
+    `,
+    [tenantId]
+  );
+
+  const context = contextResult.rows[0];
+
+  if (!context) {
+    throw new Error('Tenant no encontrado en contexto de prefacturación');
+  }
+
+  const { map } = await getPriceMap(client);
+
+  const planKey = context.plan_key || 'demo';
+  const planPrice =
+    map[`plan_base:${planKey}`] ||
+    map['plan_base:demo'] ||
+    null;
+
+  const standardPrice = map['standard:standard_active'] || null;
+  const modulePrice = map['module:premium_module'] || null;
+  const usagePrice =
+    map['usage:external_lookup_overage'] ||
+    map['ai_external_lookup:extra_query'] ||
+    { unit_price: 100, currency: 'CLP' };
+
+  const prebillingResult = await client.query(
+    `
+    INSERT INTO saas_monthly_prebilling (
+      tenant_id,
+      billing_month,
+      status,
+      currency,
+      plan_key,
+      contract_status,
+      notes,
+      metadata,
+      updated_at
+    )
+    VALUES (
+      $1::uuid,
+      $2::date,
+      'draft',
+      'CLP',
+      $3::text,
+      $4::text,
+      'Prefactura generada automáticamente desde Administración SaaS',
+      $5::jsonb,
+      now()
+    )
+    ON CONFLICT (tenant_id, billing_month)
+    DO UPDATE SET
+      plan_key = EXCLUDED.plan_key,
+      contract_status = EXCLUDED.contract_status,
+      metadata = saas_monthly_prebilling.metadata || EXCLUDED.metadata,
+      updated_at = now()
+    RETURNING *
+    `,
+    [
+      tenantId,
+      billingMonth,
+      planKey,
+      context.contract_status || null,
+      JSON.stringify({
+        source: 'admin_saas_recalculate',
+        tenant_name: context.tenant_name,
+        active_standards: context.active_standards,
+        enabled_modules: context.enabled_modules,
+        external_lookup_monthly_limit: context.external_lookup_monthly_limit,
+        external_lookup_used_month: context.external_lookup_used_month,
+        recalculated_by: actorUserId,
+      }),
+    ]
+  );
+
+  const prebilling = prebillingResult.rows[0];
+
+  await client.query(
+    `
+    DELETE FROM saas_monthly_prebilling_lines
+    WHERE prebilling_id = $1::uuid
+      AND is_manual = FALSE
+    `,
+    [prebilling.id]
+  );
+
+  const lines = [];
+
+  if (planPrice) {
+    lines.push({
+      line_type: 'plan_base',
+      line_key: planKey,
+      line_name: planPrice.item_name || `Plan ${planKey}`,
+      line_description: planPrice.item_description || 'Plan base contratado',
+      quantity: 1,
+      unit_price: money(planPrice.unit_price),
+      is_billable: true,
+      is_discount: false,
+      metadata: {
+        source: 'price_catalog',
+        price_catalog_id: planPrice.id,
+      },
+    });
+  }
+
+  if (standardPrice && Number(context.active_standards || 0) > 0) {
+    lines.push({
+      line_type: 'standard',
+      line_key: 'standard_active',
+      line_name: 'Normas ISO activas',
+      line_description: 'Cargo referencial por normas ISO activas/contratadas del tenant',
+      quantity: Number(context.active_standards || 0),
+      unit_price: money(standardPrice.unit_price),
+      is_billable: true,
+      is_discount: false,
+      metadata: {
+        source: 'tenant_standards',
+        price_catalog_id: standardPrice.id,
+      },
+    });
+  }
+
+  if (modulePrice && Number(context.enabled_modules || 0) > 0) {
+    lines.push({
+      line_type: 'module',
+      line_key: 'premium_module',
+      line_name: 'Módulos SaaS habilitados',
+      line_description: 'Cargo referencial por módulos SaaS habilitados',
+      quantity: Number(context.enabled_modules || 0),
+      unit_price: money(modulePrice.unit_price),
+      is_billable: true,
+      is_discount: false,
+      metadata: {
+        source: 'v_tenant_modules',
+        price_catalog_id: modulePrice.id,
+      },
+    });
+  }
+
+  const overage = Math.max(
+    Number(context.external_lookup_used_month || 0) -
+      Number(context.external_lookup_monthly_limit || 0),
+    0
+  );
+
+  if (usagePrice && overage > 0) {
+    lines.push({
+      line_type: 'usage',
+      line_key: 'external_lookup_overage',
+      line_name: 'Búsquedas externas IA adicionales',
+      line_description: 'Uso adicional de respaldo externo IA sobre cuota mensual',
+      quantity: overage,
+      unit_price: money(usagePrice.unit_price),
+      is_billable: true,
+      is_discount: false,
+      metadata: {
+        source: 'external_lookup_usage',
+        price_catalog_id: usagePrice.id,
+        monthly_limit: context.external_lookup_monthly_limit,
+        used_month: context.external_lookup_used_month,
+      },
+    });
+  }
+
+  lines.push({
+    line_type: 'ai_external_lookup',
+    line_key: 'external_lookup_quota',
+    line_name: 'Cuota mensual respaldo externo IA',
+    line_description: 'Paquete mensual de 100 consultas. Se cobra completo aunque el cliente use menos consultas.',
+    quantity: Math.ceil(Number(context.external_lookup_monthly_limit || 0) / 100),
+    unit_price: 4990,
+    subtotal_amount:
+      Math.ceil(Number(context.external_lookup_monthly_limit || 0) / 100) * 4990,
+    is_manual: false,
+    is_discount: false,
+    is_billable: Number(context.external_lookup_monthly_limit || 0) > 0,
+    metadata: {
+      source: 'external_lookup_quotas',
+      billing_model: 'fixed_package_100',
+      package_size: 100,
+      package_price_clp: 4990,
+      contracted_queries: Number(context.external_lookup_monthly_limit || 0),
+      used_month: context.external_lookup_used_month,
+      remaining_month: context.external_lookup_remaining_month,
+    },
+  });
+
+  for (const line of lines) {
+    const subtotal = money(Number(line.quantity || 0) * Number(line.unit_price || 0));
+
+    await client.query(
+      `
+      INSERT INTO saas_monthly_prebilling_lines (
+        prebilling_id,
+        tenant_id,
+        billing_month,
+        line_type,
+        line_key,
+        line_name,
+        line_description,
+        quantity,
+        unit_price,
+        subtotal_amount,
+        is_manual,
+        is_discount,
+        is_billable,
+        metadata
+      )
+      VALUES (
+        $1::uuid,
+        $2::uuid,
+        $3::date,
+        $4::text,
+        $5::text,
+        $6::text,
+        $7::text,
+        $8::numeric,
+        $9::numeric,
+        $10::numeric,
+        FALSE,
+        $11::boolean,
+        $12::boolean,
+        $13::jsonb
+      )
+      `,
+      [
+        prebilling.id,
+        tenantId,
+        billingMonth,
+        line.line_type,
+        line.line_key,
+        line.line_name,
+        line.line_description,
+        line.quantity,
+        line.unit_price,
+        subtotal,
+        line.is_discount,
+        line.is_billable,
+        JSON.stringify(line.metadata || {}),
+      ]
+    );
+  }
+
+  const totalsResult = await client.query(
+    `
+    SELECT
+      COALESCE(SUM(CASE
+        WHEN is_billable = TRUE AND is_discount = FALSE THEN subtotal_amount
+        ELSE 0
+      END), 0)::numeric AS subtotal_amount,
+
+      ABS(COALESCE(SUM(CASE
+        WHEN is_billable = TRUE AND is_discount = TRUE THEN subtotal_amount
+        ELSE 0
+      END), 0))::numeric AS discount_amount,
+
+      COALESCE(SUM(CASE
+        WHEN is_billable = TRUE AND line_type IN ('module', 'usage', 'additional') THEN subtotal_amount
+        ELSE 0
+      END), 0)::numeric AS additional_amount,
+
+      COALESCE(SUM(CASE
+        WHEN is_billable = TRUE THEN subtotal_amount
+        ELSE 0
+      END), 0)::numeric AS total_amount
+    FROM saas_monthly_prebilling_lines
+    WHERE prebilling_id = $1::uuid
+    `,
+    [prebilling.id]
+  );
+
+  const totals = totalsResult.rows[0] || {};
+
+  const updatedResult = await client.query(
+    `
+    UPDATE saas_monthly_prebilling
+    SET
+      subtotal_amount = $2::numeric,
+      discount_amount = $3::numeric,
+      additional_amount = $4::numeric,
+      tax_amount = 0,
+      total_amount = $5::numeric,
+      updated_at = now()
+    WHERE id = $1::uuid
+    RETURNING *
+    `,
+    [
+      prebilling.id,
+      money(totals.subtotal_amount),
+      money(totals.discount_amount),
+      money(totals.additional_amount),
+      money(totals.total_amount),
+    ]
+  );
+
+  const linesResult = await client.query(
+    `
+    SELECT *
+    FROM saas_monthly_prebilling_lines
+    WHERE prebilling_id = $1::uuid
+    ORDER BY
+      CASE line_type
+        WHEN 'plan_base' THEN 1
+        WHEN 'standard' THEN 2
+        WHEN 'module' THEN 3
+        WHEN 'usage' THEN 4
+        WHEN 'quota_info' THEN 5
+        ELSE 10
+      END,
+      created_at
+    `,
+    [prebilling.id]
+  );
+
+  return {
+    prebilling: updatedResult.rows[0],
+    lines: linesResult.rows,
+    context,
+  };
+}
+
+// =====================================================
+// GET /api/admin-saas/prebilling/prices
+// Catálogo de precios SaaS.
+// =====================================================
+router.get('/prebilling/prices', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM saas_price_catalog
+      ORDER BY item_type, item_key
+      `
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET SAAS PRICE CATALOG:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo catálogo de precios SaaS',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// GET /api/admin-saas/tenants/:tenant_id/prebilling/current
+// Obtiene prefactura mensual del tenant.
+// =====================================================
+router.get('/tenants/:tenant_id/prebilling/current', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+    const billingMonth = normalizeBillingMonth(req.query.month);
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para ver prefacturación de esta empresa',
+      });
+    }
+
+    const prebillingResult = await pool.query(
+      `
+      SELECT *
+      FROM saas_monthly_prebilling
+      WHERE tenant_id = $1::uuid
+        AND billing_month = $2::date
+      LIMIT 1
+      `,
+      [tenant_id, billingMonth]
+    );
+
+    const contextResult = await pool.query(
+      `
+      SELECT *
+      FROM v_saas_prebilling_tenant_context
+      WHERE tenant_id = $1::uuid
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    const prebilling = prebillingResult.rows[0] || null;
+
+    let lines = [];
+
+    if (prebilling) {
+      const linesResult = await pool.query(
+        `
+        SELECT *
+        FROM saas_monthly_prebilling_lines
+        WHERE prebilling_id = $1::uuid
+        ORDER BY created_at
+        `,
+        [prebilling.id]
+      );
+
+      lines = linesResult.rows;
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        billing_month: billingMonth,
+        prebilling,
+        lines,
+        context: contextResult.rows[0] || null,
+      },
+    });
+  } catch (error) {
+    console.error('ERROR GET CURRENT PREBILLING:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo prefacturación mensual',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// POST /api/admin-saas/tenants/:tenant_id/prebilling/recalculate
+// Recalcula prefactura mensual del tenant.
+// =====================================================
+router.post('/tenants/:tenant_id/prebilling/recalculate', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+    const billingMonth = normalizeBillingMonth(req.body?.month || req.query.month);
+
+    await client.query('BEGIN');
+
+    const result = await recalculateTenantPrebilling(
+      client,
+      tenant_id,
+      billingMonth,
+      ctx.user.id
+    );
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      data: {
+        billing_month: billingMonth,
+        ...result,
+      },
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR RECALCULATE PREBILLING:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error recalculando prefacturación mensual',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// =====================================================
+// PUT /api/admin-saas/prebilling/:prebilling_id/status
+// Cambia estado de prefactura.
+// =====================================================
+router.put('/prebilling/:prebilling_id/status', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { prebilling_id } = req.params;
+    const status = String(req.body?.status || '').trim();
+
+    const allowedStatuses = ['draft', 'reviewed', 'crm_ready', 'exported', 'cancelled'];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        ok: false,
+        error: `Estado inválido. Estados permitidos: ${allowedStatuses.join(', ')}`,
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE saas_monthly_prebilling
+      SET
+        status = $2::text,
+        reviewed_by_user_id = CASE
+          WHEN $2::text IN ('reviewed', 'crm_ready') THEN $3::uuid
+          ELSE reviewed_by_user_id
+        END,
+        reviewed_at = CASE
+          WHEN $2::text IN ('reviewed', 'crm_ready') THEN now()
+          ELSE reviewed_at
+        END,
+        updated_at = now()
+      WHERE id = $1::uuid
+      RETURNING *
+      `,
+      [prebilling_id, status, ctx.user.id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Prefactura no encontrada',
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('ERROR UPDATE PREBILLING STATUS:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando estado de prefactura',
+      detail: error.message,
+    });
+  }
+});
+
+
+
+
+// =====================================================
+// GET /api/admin-saas/tenants/:tenant_id/standards/catalog
+// Catálogo de normas y estado contratado para un tenant.
+// =====================================================
+router.get('/tenants/:tenant_id/standards/catalog', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para ver normas de esta empresa',
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        s.code AS standard_code,
+        COALESCE(s.name, s.code) AS standard_name,
+
+        CASE
+          WHEN ts.tenant_id IS NOT NULL
+           AND COALESCE(
+             ts.lifecycle_status,
+             CASE WHEN COALESCE(ts.is_active, FALSE) = TRUE THEN 'active' ELSE 'paused' END
+           ) IN ('active', 'paused')
+          THEN TRUE
+          ELSE FALSE
+        END AS is_contracted,
+
+        CASE
+          WHEN COALESCE(
+            ts.lifecycle_status,
+            CASE WHEN COALESCE(ts.is_active, FALSE) = TRUE THEN 'active' ELSE 'paused' END
+          ) = 'active'
+          THEN TRUE
+          ELSE FALSE
+        END AS is_active,
+
+        COALESCE(
+          ts.lifecycle_status,
+          CASE
+            WHEN ts.tenant_id IS NULL THEN 'not_contracted'
+            WHEN COALESCE(ts.is_active, FALSE) = TRUE THEN 'active'
+            ELSE 'paused'
+          END
+        ) AS lifecycle_status,
+
+        ts.contracted_at,
+        ts.deactivated_at,
+        ts.paused_at,
+        ts.permanently_deactivated_at,
+        ts.updated_at,
+
+        COALESCE(ctrl.controls_count, 0)::int AS catalog_controls_count,
+        COALESCE(tctrl.tenant_controls_count, 0)::int AS tenant_controls_count
+
+      FROM standards s
+
+      LEFT JOIN tenant_standards ts
+        ON ts.standard_code = s.code
+       AND ts.tenant_id = $1::uuid
+
+      LEFT JOIN (
+        SELECT
+          iso AS standard_code,
+          COUNT(*)::int AS controls_count
+        FROM controls_catalog
+        GROUP BY iso
+      ) ctrl
+        ON ctrl.standard_code = s.code
+
+      LEFT JOIN (
+        SELECT
+          cc.iso AS standard_code,
+          COUNT(tc.id)::int AS tenant_controls_count
+        FROM tenant_controls tc
+        JOIN controls_catalog cc
+          ON cc.id = tc.control_id
+        WHERE tc.tenant_id = $1::uuid
+        GROUP BY cc.iso
+      ) tctrl
+        ON tctrl.standard_code = s.code
+
+      ORDER BY s.code
+      `,
+      [tenant_id]
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET TENANT STANDARDS CATALOG:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo catálogo de normas contratables',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// PUT /api/admin-saas/tenants/:tenant_id/standards/:standard_code/contract
+// Activa, pausa o desactiva una norma para un tenant.
+// Reglas:
+// - No se puede activar más normas que max_active_standards del contrato.
+// - No se puede desactivar directamente una norma activa.
+// - Para desactivar definitivamente, primero debe estar pausada.
+// =====================================================
+router.put('/tenants/:tenant_id/standards/:standard_code/contract', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id, standard_code } = req.params;
+
+    const requestedAction = String(req.body?.action || '').trim();
+    const isActiveBody =
+      req.body?.is_active === undefined ? true : Boolean(req.body.is_active);
+
+    const action = requestedAction || (isActiveBody ? 'activate' : 'pause');
+    const notes = req.body?.notes || null;
+
+    const allowedActions = ['activate', 'pause', 'deactivate'];
+
+    if (!allowedActions.includes(action)) {
+      return res.status(400).json({
+        ok: false,
+        error: `Acción inválida. Permitidas: ${allowedActions.join(', ')}`,
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const tenantResult = await client.query(
+      `SELECT id, name FROM tenants WHERE id = $1::uuid LIMIT 1`,
+      [tenant_id]
+    );
+
+    if (tenantResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Tenant no encontrado' });
+    }
+
+    const standardResult = await client.query(
+      `SELECT code, name FROM standards WHERE code = $1::text LIMIT 1`,
+      [standard_code]
+    );
+
+    if (standardResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Norma no encontrada en catálogo standards' });
+    }
+
+    const currentResult = await client.query(
+      `
+      SELECT *
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND standard_code = $2::text
+      LIMIT 1
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const current = currentResult.rows[0] || null;
+    const currentLifecycle = current?.lifecycle_status || (current?.is_active ? 'active' : 'paused');
+
+    const contractResult = await client.query(
+      `
+      SELECT *
+      FROM tenant_contracts
+      WHERE tenant_id = $1::uuid
+      ORDER BY created_at DESC NULLS LAST
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    const contract = contractResult.rows[0] || null;
+    const maxActiveStandards = contract?.max_active_standards;
+
+    if (action === 'activate' && maxActiveStandards !== null && maxActiveStandards !== undefined) {
+      const activeCountResult = await client.query(
+        `
+        SELECT COUNT(*)::int AS active_count
+        FROM tenant_standards
+        WHERE tenant_id = $1::uuid
+          AND standard_code <> $2::text
+          AND COALESCE(is_active, TRUE) = TRUE
+          AND COALESCE(lifecycle_status, 'active') = 'active'
+        `,
+        [tenant_id, standard_code]
+      );
+
+      const activeCount = Number(activeCountResult.rows[0]?.active_count || 0);
+
+      if (activeCount >= Number(maxActiveStandards)) {
+        await client.query('ROLLBACK');
+
+        return res.status(409).json({
+          ok: false,
+          error: `No puedes activar más normas. El contrato permite máximo ${maxActiveStandards} norma(s) activas.`,
+          detail: {
+            active_count: activeCount,
+            max_active_standards: Number(maxActiveStandards),
+          },
+        });
+      }
+    }
+
+    if (action === 'deactivate' && currentLifecycle !== 'paused') {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        ok: false,
+        error: 'Para desactivar definitivamente una norma, primero debe estar pausada.',
+        detail: {
+          current_lifecycle_status: currentLifecycle,
+        },
+      });
+    }
+
+    const newLifecycle =
+      action === 'activate' ? 'active' :
+      action === 'pause' ? 'paused' :
+      'deactivated';
+
+    const newIsActive = newLifecycle === 'active';
+
+    const result = await client.query(
+      `
+      INSERT INTO tenant_standards (
+        tenant_id,
+        standard_code,
+        is_active,
+        lifecycle_status,
+        contracted_at,
+        deactivated_at,
+        paused_at,
+        permanently_deactivated_at,
+        updated_at
+      )
+      VALUES (
+        $1::uuid,
+        $2::text,
+        $3::boolean,
+        $4::text,
+        CASE WHEN $4::text = 'active' THEN now() ELSE NULL END,
+        CASE WHEN $4::text IN ('paused', 'deactivated') THEN now() ELSE NULL END,
+        CASE WHEN $4::text = 'paused' THEN now() ELSE NULL END,
+        CASE WHEN $4::text = 'deactivated' THEN now() ELSE NULL END,
+        now()
+      )
+      ON CONFLICT (tenant_id, standard_code)
+      DO UPDATE SET
+        is_active = EXCLUDED.is_active,
+        lifecycle_status = EXCLUDED.lifecycle_status,
+        contracted_at = CASE
+          WHEN EXCLUDED.lifecycle_status = 'active'
+          THEN COALESCE(tenant_standards.contracted_at, now())
+          ELSE tenant_standards.contracted_at
+        END,
+        deactivated_at = CASE
+          WHEN EXCLUDED.lifecycle_status IN ('paused', 'deactivated') THEN now()
+          ELSE NULL
+        END,
+        paused_at = CASE
+          WHEN EXCLUDED.lifecycle_status = 'paused' THEN now()
+          ELSE tenant_standards.paused_at
+        END,
+        permanently_deactivated_at = CASE
+          WHEN EXCLUDED.lifecycle_status = 'deactivated' THEN now()
+          ELSE tenant_standards.permanently_deactivated_at
+        END,
+        updated_at = now()
+      RETURNING *
+      `,
+      [tenant_id, standard_code, newIsActive, newLifecycle]
+    );
+
+    const updated = result.rows[0];
+
+    await client.query(
+      `
+      INSERT INTO tenant_standard_audit (
+        tenant_id,
+        standard_code,
+        action,
+        old_is_active,
+        new_is_active,
+        changed_by_user_id,
+        notes,
+        metadata
+      )
+      VALUES (
+        $1::uuid,
+        $2::text,
+        $3::text,
+        $4::boolean,
+        $5::boolean,
+        $6::uuid,
+        $7::text,
+        $8::jsonb
+      )
+      `,
+      [
+        tenant_id,
+        standard_code,
+        `standard.${action}`,
+        current?.is_active ?? null,
+        updated.is_active,
+        ctx.user.id,
+        notes,
+        JSON.stringify({
+          tenant_name: tenantResult.rows[0].name,
+          standard_name: standardResult.rows[0].name,
+          old_lifecycle_status: currentLifecycle,
+          new_lifecycle_status: newLifecycle,
+          max_active_standards: maxActiveStandards ?? null,
+          source: 'admin_saas',
+        }),
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      data: updated,
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR CONTRACT TENANT STANDARD:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando norma contratada',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// =====================================================
+router.put('/tenants/:tenant_id/standards/:standard_code/contract', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id, standard_code } = req.params;
+    const isActive = req.body?.is_active === undefined
+      ? true
+      : Boolean(req.body.is_active);
+
+    const notes = req.body?.notes || null;
+
+    await client.query('BEGIN');
+
+    const tenantResult = await client.query(
+      `SELECT id, name FROM tenants WHERE id = $1::uuid LIMIT 1`,
+      [tenant_id]
+    );
+
+    if (tenantResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'Tenant no encontrado',
+      });
+    }
+
+    const standardResult = await client.query(
+      `SELECT code, name FROM standards WHERE code = $1::text LIMIT 1`,
+      [standard_code]
+    );
+
+    if (standardResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'Norma no encontrada en catálogo standards',
+      });
+    }
+
+    const currentResult = await client.query(
+      `
+      SELECT *
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND standard_code = $2::text
+      LIMIT 1
+      `,
+      [tenant_id, standard_code]
+    );
+
+    const current = currentResult.rows[0] || null;
+
+    const result = await client.query(
+      `
+      INSERT INTO tenant_standards (
+        tenant_id,
+        standard_code,
+        is_active,
+        contracted_at,
+        deactivated_at,
+        updated_at
+      )
+      VALUES (
+        $1::uuid,
+        $2::text,
+        $3::boolean,
+        CASE WHEN $3::boolean = TRUE THEN now() ELSE NULL END,
+        CASE WHEN $3::boolean = FALSE THEN now() ELSE NULL END,
+        now()
+      )
+      ON CONFLICT (tenant_id, standard_code)
+      DO UPDATE SET
+        is_active = EXCLUDED.is_active,
+        contracted_at = CASE
+          WHEN EXCLUDED.is_active = TRUE
+          THEN COALESCE(tenant_standards.contracted_at, now())
+          ELSE tenant_standards.contracted_at
+        END,
+        deactivated_at = CASE
+          WHEN EXCLUDED.is_active = FALSE THEN now()
+          ELSE NULL
+        END,
+        updated_at = now()
+      RETURNING *
+      `,
+      [tenant_id, standard_code, isActive]
+    );
+
+    const updated = result.rows[0];
+
+    await client.query(
+      `
+      INSERT INTO tenant_standard_audit (
+        tenant_id,
+        standard_code,
+        action,
+        old_is_active,
+        new_is_active,
+        changed_by_user_id,
+        notes,
+        metadata
+      )
+      VALUES (
+        $1::uuid,
+        $2::text,
+        $3::text,
+        $4::boolean,
+        $5::boolean,
+        $6::uuid,
+        $7::text,
+        $8::jsonb
+      )
+      `,
+      [
+        tenant_id,
+        standard_code,
+        isActive ? 'standard.contracted' : 'standard.deactivated',
+        current?.is_active ?? null,
+        updated.is_active,
+        ctx.user.id,
+        notes,
+        JSON.stringify({
+          tenant_name: tenantResult.rows[0].name,
+          standard_name: standardResult.rows[0].name,
+          source: 'admin_saas',
+        }),
+      ]
+    );
+
+    try {
+      await client.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::text,
+          NULL::uuid,
+          $5::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          isActive ? 'tenant_standard.contracted' : 'tenant_standard.deactivated',
+          tenant_id,
+          'tenant_standard',
+          JSON.stringify({
+            standard_code,
+            old_is_active: current?.is_active ?? null,
+            new_is_active: updated.is_active,
+            notes,
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event tenant_standard:', auditError.message);
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      data: updated,
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR CONTRACT TENANT STANDARD:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando norma contratada',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+
+// =====================================================
+// GET /api/admin-saas/tenants/:tenant_id/contract
+// Obtiene contrato SaaS vigente / último contrato de la empresa.
+// =====================================================
+router.get('/tenants/:tenant_id/contract', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para ver contrato de esta empresa',
+      });
+    }
+
+    const tenantResult = await pool.query(
+      `
+      SELECT id, name, rut
+      FROM tenants
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    if (tenantResult.rowCount === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Empresa no encontrada',
+      });
+    }
+
+    const contractResult = await pool.query(
+      `
+      SELECT *
+      FROM tenant_contracts
+      WHERE tenant_id = $1::uuid
+      ORDER BY created_at DESC NULLS LAST
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    return res.json({
+      ok: true,
+      data: {
+        tenant: tenantResult.rows[0],
+        contract: contractResult.rows[0] || null,
+      },
+    });
+  } catch (error) {
+    console.error('ERROR GET TENANT CONTRACT:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo contrato SaaS',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// PUT /api/admin-saas/tenants/:tenant_id/contract
+// Crea o actualiza contrato SaaS vigente de la empresa.
+// =====================================================
+router.put('/tenants/:tenant_id/contract', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+
+    const planKey = String(req.body?.plan_key || 'demo').trim();
+    const contractStatus = String(req.body?.contract_status || 'trial').trim();
+
+    const startedAt = req.body?.started_at || null;
+    const endsAt = req.body?.ends_at || null;
+
+    const billingCurrency = String(req.body?.billing_currency || 'CLP').trim();
+    const commercialNotes = req.body?.commercial_notes || null;
+    const crmReference = req.body?.crm_reference || null;
+
+    const maxActiveStandards =
+      req.body?.max_active_standards === undefined || req.body?.max_active_standards === null || req.body?.max_active_standards === ''
+        ? null
+        : Number(req.body.max_active_standards);
+
+    const maxPremiumModules =
+      req.body?.max_premium_modules === undefined || req.body?.max_premium_modules === null || req.body?.max_premium_modules === ''
+        ? null
+        : Number(req.body.max_premium_modules);
+
+    const externalLookupQuota =
+      req.body?.external_lookup_quota === undefined || req.body?.external_lookup_quota === null || req.body?.external_lookup_quota === ''
+        ? null
+        : Number(req.body.external_lookup_quota);
+
+    if (maxActiveStandards !== null && (!Number.isFinite(maxActiveStandards) || maxActiveStandards < 0)) {
+      return res.status(400).json({ ok: false, error: 'max_active_standards debe ser número mayor o igual a 0' });
+    }
+
+    if (maxPremiumModules !== null && (!Number.isFinite(maxPremiumModules) || maxPremiumModules < 0)) {
+      return res.status(400).json({ ok: false, error: 'max_premium_modules debe ser número mayor o igual a 0' });
+    }
+
+    if (externalLookupQuota !== null && (!Number.isFinite(externalLookupQuota) || externalLookupQuota < 0)) {
+      return res.status(400).json({ ok: false, error: 'external_lookup_quota debe ser número mayor o igual a 0' });
+    }
+
+    const metadata =
+      req.body?.metadata && typeof req.body.metadata === 'object'
+        ? req.body.metadata
+        : {};
+
+    const allowedPlans = ['demo', 'pyme', 'empresa', 'enterprise'];
+    const allowedStatuses = ['trial', 'active', 'suspended', 'cancelled'];
+
+    if (!allowedPlans.includes(planKey)) {
+      return res.status(400).json({
+        ok: false,
+        error: `Plan inválido. Permitidos: ${allowedPlans.join(', ')}`,
+      });
+    }
+
+    if (!allowedStatuses.includes(contractStatus)) {
+      return res.status(400).json({
+        ok: false,
+        error: `Estado inválido. Permitidos: ${allowedStatuses.join(', ')}`,
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const tenantResult = await client.query(
+      `
+      SELECT id, name, rut
+      FROM tenants
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    if (tenantResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+
+      return res.status(404).json({
+        ok: false,
+        error: 'Empresa no encontrada',
+      });
+    }
+
+    const currentResult = await client.query(
+      `
+      SELECT *
+      FROM tenant_contracts
+      WHERE tenant_id = $1::uuid
+      ORDER BY created_at DESC NULLS LAST
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    const current = currentResult.rows[0] || null;
+
+    let result;
+
+    if (current) {
+      result = await client.query(
+        `
+        UPDATE tenant_contracts
+        SET
+          plan_key = $2::text,
+          contract_status = $3::text,
+          started_at = NULLIF($4::text, '')::date,
+          ends_at = NULLIF($5::text, '')::date,
+          billing_currency = $6::text,
+          commercial_notes = $7::text,
+          crm_reference = $8::text,
+          max_active_standards = $9::int,
+          max_premium_modules = $10::int,
+          external_lookup_quota = $11::int,
+          metadata = COALESCE(metadata, '{}'::jsonb) || $12::jsonb,
+          updated_at = now()
+        WHERE id = $1::uuid
+        RETURNING *
+        `,
+        [
+          current.id,
+          planKey,
+          contractStatus,
+          startedAt,
+          endsAt,
+          billingCurrency,
+          commercialNotes,
+          crmReference,
+          maxActiveStandards,
+          maxPremiumModules,
+          externalLookupQuota,
+          JSON.stringify({
+            ...metadata,
+            updated_by: ctx.user.id,
+            updated_from: 'admin_saas',
+          }),
+        ]
+      );
+    } else {
+      result = await client.query(
+        `
+        INSERT INTO tenant_contracts (
+          tenant_id,
+          plan_key,
+          contract_status,
+          started_at,
+          ends_at,
+          billing_currency,
+          commercial_notes,
+          crm_reference,
+          max_active_standards,
+          max_premium_modules,
+          external_lookup_quota,
+          metadata,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1::uuid,
+          $2::text,
+          $3::text,
+          NULLIF($4::text, '')::date,
+          NULLIF($5::text, '')::date,
+          $6::text,
+          $7::text,
+          $8::text,
+          $9::int,
+          $10::int,
+          $11::int,
+          $12::jsonb,
+          now(),
+          now()
+        )
+        RETURNING *
+        `,
+        [
+          tenant_id,
+          planKey,
+          contractStatus,
+          startedAt,
+          endsAt,
+          billingCurrency,
+          commercialNotes,
+          crmReference,
+          maxActiveStandards,
+          maxPremiumModules,
+          externalLookupQuota,
+          JSON.stringify({
+            ...metadata,
+            created_by: ctx.user.id,
+            updated_by: ctx.user.id,
+            updated_from: 'admin_saas',
+          }),
+        ]
+      );
+    }
+
+    const updated = result.rows[0];
+
+    try {
+      await client.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::text,
+          $5::uuid,
+          $6::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          current ? 'tenant_contract.updated' : 'tenant_contract.created',
+          tenant_id,
+          'tenant_contract',
+          updated.id,
+          JSON.stringify({
+            old: current
+              ? {
+                  plan_key: current.plan_key,
+                  contract_status: current.contract_status,
+                  started_at: current.started_at,
+                  ends_at: current.ends_at,
+                  commercial_notes: current.commercial_notes,
+                  crm_reference: current.crm_reference,
+                }
+              : null,
+            new: {
+              plan_key: updated.plan_key,
+              contract_status: updated.contract_status,
+              started_at: updated.started_at,
+              ends_at: updated.ends_at,
+              commercial_notes: updated.commercial_notes,
+              crm_reference: updated.crm_reference,
+            },
+            source: 'admin_saas',
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event tenant_contract:', auditError.message);
+    }
+
+    await client.query('COMMIT');
+
+    const verify = await pool.query(
+      `
+      SELECT *
+      FROM tenant_contracts
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [updated.id]
+    );
+
+    return res.json({
+      ok: true,
+      data: verify.rows[0] || updated,
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR UPSERT TENANT CONTRACT:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error guardando contrato SaaS',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+
+// =====================================================
+// PUT /api/admin-saas/prebilling/prices/:price_id
+// Actualiza un ítem del catálogo de precios SaaS.
+// =====================================================
+router.put('/prebilling/prices/:price_id', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { price_id } = req.params;
+
+    const unitPrice = Number(req.body?.unit_price);
+    const itemName = String(req.body?.item_name || '').trim();
+    const itemDescription = req.body?.item_description || null;
+    const isActive =
+      req.body?.is_active === undefined ? true : Boolean(req.body.is_active);
+
+    if (!itemName) {
+      return res.status(400).json({
+        ok: false,
+        error: 'item_name es obligatorio',
+      });
+    }
+
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'unit_price debe ser un número mayor o igual a 0',
+      });
+    }
+
+    const current = await pool.query(
+      `
+      SELECT *
+      FROM saas_price_catalog
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [price_id]
+    );
+
+    if (current.rowCount === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Ítem de precio no encontrado',
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE saas_price_catalog
+      SET
+        item_name = $2::text,
+        item_description = $3::text,
+        unit_price = $4::numeric,
+        is_active = $5::boolean,
+        metadata = COALESCE(metadata, '{}'::jsonb) || $6::jsonb,
+        updated_at = now()
+      WHERE id = $1::uuid
+      RETURNING *
+      `,
+      [
+        price_id,
+        itemName,
+        itemDescription,
+        Math.round(unitPrice),
+        isActive,
+        JSON.stringify({
+          updated_by: ctx.user.id,
+          updated_from: 'admin_saas',
+          pricing_admin: true,
+        }),
+      ]
+    );
+
+    try {
+      await pool.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          NULL::uuid,
+          $3::text,
+          $4::uuid,
+          $5::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          'saas_price_catalog.updated',
+          'saas_price_catalog',
+          price_id,
+          JSON.stringify({
+            old: current.rows[0],
+            new: result.rows[0],
+            source: 'admin_saas',
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event price_catalog:', auditError.message);
+    }
+
+    return res.json({
+      ok: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('ERROR UPDATE SAAS PRICE CATALOG:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando catálogo de precios SaaS',
+      detail: error.message,
+    });
+  }
+});
+
+
+
+
+function getDealerPortalUserId(req) {
+  return req.user?.id || req.user?.user_id || req.user?.userId || null;
+}
+
+function getDealerPortalRole(req) {
+  return String(req.user?.role || '').toLowerCase();
+}
+
+function isDealerPortalPlatform(req) {
+  const role = getDealerPortalRole(req);
+
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'admin_global',
+    'global_admin',
+  ].includes(role);
+}
+
+function isDealerPortalDealer(req) {
+  return getDealerPortalRole(req) === 'dealer';
+}
+
+function canAccessDealerPortal(req) {
+  return isDealerPortalDealer(req) || isDealerPortalPlatform(req);
+}
+
+// =====================================================
+// GET /api/admin-saas/dealer/my-tenants
+// Empresas asignadas al dealer.
+// =====================================================
+router.get('/dealer/my-tenants', auth, async (req, res) => {
+  try {
+    if (!canAccessDealerPortal(req)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para portal dealer',
+      });
+    }
+
+    const userId = getDealerPortalUserId(req);
+    const isPlatform = isDealerPortalPlatform(req);
+
+    const result = await pool.query(
+      `
+      SELECT
+        dt.*,
+        t.id AS tenant_id,
+        t.name AS tenant_name,
+        t.rut,
+        t.business,
+        t.address,
+        t.branches,
+        t.logo,
+        t.logo_url
+      FROM dealer_tenants dt
+      JOIN tenants t
+        ON t.id = dt.tenant_id
+      WHERE
+        (
+          $2::boolean = TRUE
+          OR dt.dealer_user_id = $1::uuid
+        )
+        AND COALESCE(dt.status, 'active') = 'active'
+      ORDER BY t.name ASC
+      `,
+      [userId, isPlatform]
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET DEALER MY TENANTS:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo empresas asignadas al dealer',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// GET /api/admin-saas/dealer/requests
+// Solicitudes del dealer.
+// Si la tabla dealer_requests no existe, responde vacío.
+// =====================================================
+router.get('/dealer/requests', auth, async (req, res) => {
+  try {
+    if (!canAccessDealerPortal(req)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para portal dealer',
+      });
+    }
+
+    const exists = await pool.query(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'dealer_requests'
+      ) AS exists
+      `
+    );
+
+    if (!exists.rows[0]?.exists) {
+      return res.json({
+        ok: true,
+        data: [],
+        warning: 'dealer_requests table does not exist',
+      });
+    }
+
+    const userId = getDealerPortalUserId(req);
+    const isPlatform = isDealerPortalPlatform(req);
+
+    const result = await pool.query(
+      `
+      SELECT
+        dr.*,
+        t.name AS tenant_name,
+        t.rut AS tenant_rut,
+        t.business AS tenant_business
+      FROM dealer_requests dr
+      LEFT JOIN tenants t
+        ON t.id = dr.tenant_id
+      WHERE
+        (
+          $2::boolean = TRUE
+          OR dr.dealer_user_id = $1::uuid
+        )
+      ORDER BY dr.created_at DESC NULLS LAST
+      LIMIT 100
+      `,
+      [userId, isPlatform]
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('ERROR GET DEALER REQUESTS:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo solicitudes dealer',
+      detail: error.message,
+    });
+  }
+});
+
+
+
+
+// =====================================================
+// GET /api/admin-saas/tenants/:tenant_id/modules/catalog
+// Catálogo de módulos del tenant + límite contractual.
+// =====================================================
+router.get('/tenants/:tenant_id/modules/catalog', auth, async (req, res) => {
+  try {
+    const ctx = await requireAdminSaasView(req, res);
+    if (!ctx) return;
+
+    const { tenant_id } = req.params;
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para ver módulos de esta empresa',
+      });
+    }
+
+    const contractResult = await pool.query(
+      `
+      SELECT
+        id,
+        plan_key,
+        contract_status,
+        max_premium_modules
+      FROM tenant_contracts
+      WHERE tenant_id = $1::uuid
+      ORDER BY created_at DESC NULLS LAST
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    const contract = contractResult.rows[0] || null;
+    const maxPremiumModules = contract?.max_premium_modules;
+
+    const modulesResult = await pool.query(
+      `
+      SELECT
+        tenant_id,
+        tenant_name,
+        module_key,
+        module_name,
+        module_description,
+        sort_order,
+        is_enabled,
+        enabled_at,
+        disabled_at,
+        notes,
+        metadata
+      FROM v_tenant_modules
+      WHERE tenant_id = $1::uuid
+      ORDER BY sort_order, module_key
+      `,
+      [tenant_id]
+    );
+
+    const enabledCount = modulesResult.rows.filter((row) => row.is_enabled === true).length;
+
+    const rows = modulesResult.rows.map((row) => ({
+      ...row,
+      can_enable:
+        row.is_enabled === true ||
+        maxPremiumModules === null ||
+        maxPremiumModules === undefined ||
+        enabledCount < Number(maxPremiumModules),
+    }));
+
+    return res.json({
+      ok: true,
+      data: {
+        contract: contract || null,
+        max_premium_modules: maxPremiumModules,
+        enabled_modules_count: enabledCount,
+        modules: rows,
+      },
+    });
+  } catch (error) {
+    console.error('ERROR GET TENANT MODULES CATALOG:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo módulos del tenant',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// PUT /api/admin-saas/tenants/:tenant_id/modules/:module_key/contract-toggle
+// Activa/desactiva módulo respetando max_premium_modules.
+// =====================================================
+router.put('/tenants/:tenant_id/modules/:module_key/contract-toggle', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const { tenant_id, module_key } = req.params;
+    const isEnabled = Boolean(req.body?.is_enabled);
+    const notes = req.body?.notes || null;
+    const metadata = req.body?.metadata && typeof req.body.metadata === 'object'
+      ? req.body.metadata
+      : {};
+
+    await client.query('BEGIN');
+
+    const moduleResult = await client.query(
+      `
+      SELECT module_key, display_name
+      FROM saas_modules
+      WHERE module_key = $1::text
+        AND is_active = TRUE
+      LIMIT 1
+      `,
+      [module_key]
+    );
+
+    if (moduleResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        ok: false,
+        error: 'Módulo no encontrado o inactivo',
+      });
+    }
+
+    const contractResult = await client.query(
+      `
+      SELECT
+        id,
+        plan_key,
+        contract_status,
+        max_premium_modules
+      FROM tenant_contracts
+      WHERE tenant_id = $1::uuid
+      ORDER BY created_at DESC NULLS LAST
+      LIMIT 1
+      `,
+      [tenant_id]
+    );
+
+    const contract = contractResult.rows[0] || null;
+    const maxPremiumModules = contract?.max_premium_modules;
+
+    if (isEnabled && maxPremiumModules !== null && maxPremiumModules !== undefined) {
+      const enabledCountResult = await client.query(
+        `
+        SELECT COUNT(*)::int AS enabled_count
+        FROM v_tenant_modules
+        WHERE tenant_id = $1::uuid
+          AND module_key <> $2::text
+          AND is_enabled = TRUE
+        `,
+        [tenant_id, module_key]
+      );
+
+      const enabledCount = Number(enabledCountResult.rows[0]?.enabled_count || 0);
+
+      if (enabledCount >= Number(maxPremiumModules)) {
+        await client.query('ROLLBACK');
+
+        return res.status(409).json({
+          ok: false,
+          code: 'CONTRACT_MODULE_LIMIT_EXCEEDED',
+          error: `No se puede habilitar este módulo. El contrato permite máximo ${maxPremiumModules} módulo(s) premium activo(s).`,
+          detail: {
+            enabled_modules: enabledCount,
+            max_premium_modules: Number(maxPremiumModules),
+            module_key,
+          },
+        });
+      }
+    }
+
+    const result = await client.query(
+      `
+      INSERT INTO tenant_module_settings (
+        tenant_id,
+        module_key,
+        is_enabled,
+        enabled_at,
+        disabled_at,
+        notes,
+        metadata
+      )
+      VALUES (
+        $1::uuid,
+        $2::text,
+        $3::boolean,
+        CASE WHEN $3::boolean = TRUE THEN now() ELSE NULL END,
+        CASE WHEN $3::boolean = FALSE THEN now() ELSE NULL END,
+        $4::text,
+        $5::jsonb
+      )
+      ON CONFLICT (tenant_id, module_key)
+      DO UPDATE SET
+        is_enabled = EXCLUDED.is_enabled,
+        enabled_at = CASE WHEN EXCLUDED.is_enabled = TRUE THEN now() ELSE tenant_module_settings.enabled_at END,
+        disabled_at = CASE WHEN EXCLUDED.is_enabled = FALSE THEN now() ELSE NULL END,
+        notes = EXCLUDED.notes,
+        metadata = COALESCE(tenant_module_settings.metadata, '{}'::jsonb) || EXCLUDED.metadata
+      RETURNING *
+      `,
+      [
+        tenant_id,
+        module_key,
+        isEnabled,
+        notes,
+        JSON.stringify({
+          ...metadata,
+          updated_by: ctx.user.id,
+          updated_from: 'admin_saas',
+          contract_limit_checked: true,
+        }),
+      ]
+    );
+
+    try {
+      await client.query(
+        `
+        SELECT log_admin_audit_event(
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::text,
+          NULL::uuid,
+          $5::jsonb
+        )
+        `,
+        [
+          ctx.user.id,
+          isEnabled ? 'tenant_module.enabled' : 'tenant_module.disabled',
+          tenant_id,
+          'tenant_module',
+          JSON.stringify({
+            module_key,
+            is_enabled: isEnabled,
+            max_premium_modules: maxPremiumModules ?? null,
+            source: 'admin_saas',
+          }),
+        ]
+      );
+    } catch (auditError) {
+      console.warn('WARN log_admin_audit_event tenant_module:', auditError.message);
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error('ERROR CONTRACT TOGGLE TENANT MODULE:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando módulo del tenant',
+      detail: error.message,
+      code: error.code || null,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+module.exports = router;

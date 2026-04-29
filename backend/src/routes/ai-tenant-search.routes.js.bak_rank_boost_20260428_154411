@@ -1,0 +1,449 @@
+const express = require('express');
+const router = express.Router();
+const pool = require('../config/db');
+const auth = require('../middleware/auth');
+
+function normalizeRole(role) {
+  return String(role || '').toLowerCase();
+}
+
+function isPlatformRole(role) {
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'global_admin',
+    'admin_global',
+    'owner',
+  ].includes(normalizeRole(role));
+}
+
+function getUserTenantId(user) {
+  return user?.tenant_id || user?.tenantId || null;
+}
+
+function getUserId(user) {
+  return user?.id || user?.user_id || user?.userId || null;
+}
+
+function cleanQuery(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 500);
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s./:-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function quoteIdent(name) {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(String(name || ''))) {
+    throw new Error(`Identificador SQL inválido: ${name}`);
+  }
+
+  return `"${name}"`;
+}
+
+async function getColumns(client, tableName, schema = 'public') {
+  const result = await client.query(
+    `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = $1
+      AND table_name = $2
+    ORDER BY ordinal_position
+    `,
+    [schema, tableName]
+  );
+
+  return new Set(result.rows.map((row) => row.column_name));
+}
+
+async function tableExists(client, tableName, schema = 'public') {
+  const result = await client.query(
+    `
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = $1
+      AND table_name = $2
+    LIMIT 1
+    `,
+    [schema, tableName]
+  );
+
+  return result.rowCount > 0;
+}
+
+function existingColumns(cols, candidates) {
+  return candidates.filter((candidate) => cols.has(candidate));
+}
+
+function textExpr(alias, cols, candidates, fallback = "''") {
+  const existing = existingColumns(cols, candidates);
+
+  if (existing.length === 0) return fallback;
+
+  return `COALESCE(${existing.map((column) => `${alias}.${quoteIdent(column)}::text`).join(', ')}, ${fallback})`;
+}
+
+function metadataExpr(alias, cols) {
+  if (cols.has('metadata')) return `COALESCE(${alias}."metadata", '{}'::jsonb)`;
+  if (cols.has('metadata_json')) return `COALESCE(${alias}."metadata_json", '{}'::jsonb)`;
+  if (cols.has('raw_json')) return `COALESCE(${alias}."raw_json", '{}'::jsonb)`;
+  return `'{}'::jsonb`;
+}
+
+function updatedAtExpr(alias, cols) {
+  if (cols.has('updated_at')) return `${alias}."updated_at"`;
+  if (cols.has('created_at')) return `${alias}."created_at"`;
+  return `NULL::timestamp`;
+}
+
+function buildConcatExpr(parts) {
+  const safeParts = parts.filter(Boolean);
+
+  if (safeParts.length === 0) return "''";
+
+  return `concat_ws(' ', ${safeParts.join(', ')})`;
+}
+
+function buildRankExpr(searchDocExpr) {
+  return `
+    (
+      CASE
+        WHEN unaccent(lower(${searchDocExpr})) = unaccent(lower($2)) THEN 50
+        WHEN unaccent(lower(${searchDocExpr})) ILIKE unaccent(lower($2)) || '%' THEN 25
+        WHEN unaccent(lower(${searchDocExpr})) ILIKE '%' || unaccent(lower($2)) || '%' THEN 12
+        ELSE 0
+      END
+      +
+      COALESCE(similarity(unaccent(lower(${searchDocExpr})), unaccent(lower($2))), 0) * 10
+    )
+  `;
+}
+
+async function runQuery(client, label, sql, params) {
+  try {
+    const result = await client.query(sql, params);
+    return result.rows;
+  } catch (error) {
+    console.warn(`WARN tenant internal search source skipped: ${label}:`, error.message);
+    return [];
+  }
+}
+
+async function searchTenantControls(client, tenantId, q, perSourceLimit) {
+  const hasTenantControls = await tableExists(client, 'tenant_controls');
+  const hasCatalog = await tableExists(client, 'controls_catalog');
+
+  if (!hasTenantControls || !hasCatalog) return [];
+
+  const tcCols = await getColumns(client, 'tenant_controls');
+  const ccCols = await getColumns(client, 'controls_catalog');
+
+  if (!tcCols.has('tenant_id') || !tcCols.has('control_id') || !ccCols.has('id')) {
+    return [];
+  }
+
+  const standardExpr = textExpr('cc', ccCols, ['iso', 'standard_code', 'norma_key', 'norma']);
+  const controlRefExpr = textExpr('cc', ccCols, ['clause', 'clausula', 'clausula_o_control', 'control_code', 'code', 'number']);
+  const titleExpr = textExpr('cc', ccCols, ['title', 'titulo', 'name', 'control_name', 'display_name']);
+  const descExpr = textExpr('cc', ccCols, ['description', 'descripcion', 'descripcion_resumen', 'control_description', 'objective']);
+  const statusExpr = textExpr('tc', tcCols, ['status', 'health_status', 'applicability']);
+  const notesExpr = textExpr('tc', tcCols, ['notes']);
+  const scoreExpr = tcCols.has('score') ? `COALESCE(tc."score", 0)::numeric` : `0::numeric`;
+  const updatedExpr = updatedAtExpr('tc', tcCols);
+  const metadata = metadataExpr('tc', tcCols);
+
+  const searchDoc = buildConcatExpr([
+    standardExpr,
+    controlRefExpr,
+    titleExpr,
+    descExpr,
+    statusExpr,
+    notesExpr,
+  ]);
+
+  const rankExpr = buildRankExpr(searchDoc);
+
+  const sql = `
+    SELECT
+      'tenant_controls'::text AS source_table,
+      'tenant_control'::text AS entity_type,
+      tc."id"::text AS entity_id,
+      ${standardExpr} AS standard_code,
+      ${controlRefExpr} AS control_ref,
+      ${titleExpr} AS title,
+      ${descExpr} AS summary,
+      ${statusExpr} AS status,
+      ${scoreExpr} AS score,
+      ${metadata} AS metadata,
+      ${updatedExpr} AS updated_at,
+      ${rankExpr} AS rank_score
+    FROM tenant_controls tc
+    JOIN controls_catalog cc
+      ON cc."id" = tc."control_id"
+    WHERE tc."tenant_id" = $1::uuid
+      AND (
+        COALESCE($2, '') = ''
+        OR unaccent(lower(${searchDoc})) ILIKE '%' || unaccent(lower($2)) || '%'
+        OR similarity(unaccent(lower(${searchDoc})), unaccent(lower($2))) > 0.04
+      )
+    ORDER BY rank_score DESC, updated_at DESC NULLS LAST
+    LIMIT $3
+  `;
+
+  return runQuery(client, 'tenant_controls', sql, [tenantId, q, perSourceLimit]);
+}
+
+async function searchDynamicTenantTable(client, config, tenantId, q, perSourceLimit) {
+  const exists = await tableExists(client, config.table);
+  if (!exists) return [];
+
+  const cols = await getColumns(client, config.table);
+
+  const tenantCol = existingColumns(cols, config.tenantColumns || ['tenant_id'])[0];
+  const idCol = existingColumns(cols, config.idColumns || ['id'])[0];
+
+  if (!tenantCol || !idCol) return [];
+
+  const alias = 'x';
+
+  const standardExpr = textExpr(alias, cols, config.standardColumns || ['standard_code', 'iso', 'iso_code', 'norma']);
+  const controlExpr = textExpr(alias, cols, config.controlColumns || ['clause', 'control_ref', 'control_code', 'control_id', 'tenant_control_id']);
+  const titleExpr = textExpr(alias, cols, config.titleColumns || ['title', 'titulo', 'name', 'filename', 'file_name', 'subject']);
+  const summaryExpr = textExpr(alias, cols, config.summaryColumns || ['description', 'descripcion', 'summary', 'content', 'notes', 'detail', 'finding_description']);
+  const statusExpr = textExpr(alias, cols, config.statusColumns || ['status', 'state', 'severity', 'priority']);
+  const updatedExpr = updatedAtExpr(alias, cols);
+  const metadata = metadataExpr(alias, cols);
+
+  const searchDoc = buildConcatExpr([
+    standardExpr,
+    controlExpr,
+    titleExpr,
+    summaryExpr,
+    statusExpr,
+    metadata,
+  ]);
+
+  const rankExpr = buildRankExpr(searchDoc);
+
+  const sql = `
+    SELECT
+      ${`'${config.table.replace(/'/g, "''")}'`}::text AS source_table,
+      ${`'${config.entityType.replace(/'/g, "''")}'`}::text AS entity_type,
+      ${alias}.${quoteIdent(idCol)}::text AS entity_id,
+      ${standardExpr} AS standard_code,
+      ${controlExpr} AS control_ref,
+      ${titleExpr} AS title,
+      ${summaryExpr} AS summary,
+      ${statusExpr} AS status,
+      0::numeric AS score,
+      ${metadata} AS metadata,
+      ${updatedExpr} AS updated_at,
+      ${rankExpr} AS rank_score
+    FROM ${quoteIdent(config.table)} ${alias}
+    WHERE ${alias}.${quoteIdent(tenantCol)} = $1::uuid
+      AND (
+        COALESCE($2, '') = ''
+        OR unaccent(lower(${searchDoc})) ILIKE '%' || unaccent(lower($2)) || '%'
+        OR similarity(unaccent(lower(${searchDoc})), unaccent(lower($2))) > 0.04
+      )
+    ORDER BY rank_score DESC, updated_at DESC NULLS LAST
+    LIMIT $3
+  `;
+
+  return runQuery(client, config.table, sql, [tenantId, q, perSourceLimit]);
+}
+
+async function tenantInternalSearch({ tenantId, q, limit = 30 }) {
+  const client = await pool.connect();
+
+  try {
+    const perSourceLimit = Math.max(5, Math.min(Number(limit || 30), 50));
+    const cleanQ = cleanQuery(q);
+
+    const sources = [];
+
+    const controls = await searchTenantControls(client, tenantId, cleanQ, perSourceLimit);
+    sources.push(...controls);
+
+    const dynamicConfigs = [
+      {
+        table: 'evidence_knowledge_chunks',
+        entityType: 'evidence_chunk',
+        titleColumns: ['chunk_type', 'clause', 'standard_code'],
+        summaryColumns: ['content'],
+        standardColumns: ['standard_code'],
+        controlColumns: ['clause', 'control_id', 'tenant_control_id'],
+      },
+      {
+        table: 'evidences',
+        entityType: 'evidence',
+        titleColumns: ['title', 'filename', 'file_name', 'description'],
+        summaryColumns: ['description', 'notes', 'file_url', 'file_path'],
+        standardColumns: ['standard_code', 'iso', 'iso_code'],
+        controlColumns: ['control_id', 'tenant_control_id', 'clause'],
+      },
+      {
+        table: 'findings',
+        entityType: 'finding',
+        titleColumns: ['title', 'titulo', 'name'],
+        summaryColumns: ['description', 'descripcion', 'finding_description', 'notes'],
+        standardColumns: ['standard_code', 'iso', 'iso_code'],
+        controlColumns: ['control_id', 'tenant_control_id', 'clause'],
+      },
+      {
+        table: 'tenant_nonconformities',
+        entityType: 'nonconformity',
+        titleColumns: ['title', 'titulo', 'name'],
+        summaryColumns: ['description', 'descripcion', 'evidence', 'notes', 'control_description'],
+        standardColumns: ['standard_code', 'iso', 'iso_code'],
+        controlColumns: ['control_id', 'tenant_control_id', 'clause'],
+      },
+      {
+        table: 'action_plans',
+        entityType: 'action_plan',
+        titleColumns: ['title', 'titulo', 'name'],
+        summaryColumns: ['description', 'descripcion', 'actions', 'notes'],
+        standardColumns: ['standard_code', 'iso', 'iso_code'],
+        controlColumns: ['control_id', 'tenant_control_id', 'clause'],
+      },
+      {
+        table: 'assets',
+        entityType: 'asset',
+        titleColumns: ['name', 'asset_name', 'title'],
+        summaryColumns: ['description', 'descripcion', 'notes', 'owner', 'location'],
+        standardColumns: ['standard_code', 'iso', 'iso_code'],
+      },
+      {
+        table: 'asset_risks',
+        entityType: 'asset_risk',
+        titleColumns: ['title', 'name', 'risk_name'],
+        summaryColumns: ['description', 'risk_description', 'impact', 'probability', 'notes'],
+        standardColumns: ['standard_code', 'iso', 'iso_code'],
+      },
+      {
+        table: 'audits',
+        entityType: 'audit',
+        titleColumns: ['title', 'name', 'audit_name'],
+        summaryColumns: ['description', 'scope', 'notes', 'conclusion'],
+        standardColumns: ['standard_code', 'iso', 'iso_code'],
+      },
+    ];
+
+    for (const config of dynamicConfigs) {
+      const rows = await searchDynamicTenantTable(
+        client,
+        config,
+        tenantId,
+        cleanQ,
+        perSourceLimit
+      );
+
+      sources.push(...rows);
+    }
+
+    const sorted = sources
+      .map((row) => ({
+        source_table: row.source_table,
+        entity_type: row.entity_type,
+        entity_id: row.entity_id,
+        standard_code: row.standard_code || null,
+        control_ref: row.control_ref || null,
+        title: row.title || row.entity_type,
+        summary: row.summary || '',
+        status: row.status || null,
+        score: Number(row.score || 0),
+        rank_score: Number(row.rank_score || 0),
+        metadata: row.metadata || {},
+        updated_at: row.updated_at || null,
+      }))
+      .sort((a, b) => b.rank_score - a.rank_score)
+      .slice(0, Math.max(1, Math.min(Number(limit || 30), 100)));
+
+    const strongHits = sorted.filter((row) => Number(row.rank_score || 0) >= 12).length;
+    const mediumHits = sorted.filter((row) => Number(row.rank_score || 0) >= 5).length;
+
+    let confidence_hint = 'baja';
+    if (strongHits >= 3) confidence_hint = 'alta';
+    else if (mediumHits >= 3 || strongHits >= 1) confidence_hint = 'media';
+
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      query: cleanQ,
+      normalized_query: normalizeText(cleanQ),
+      total: sorted.length,
+      strong_hits: strongHits,
+      medium_hits: mediumHits,
+      confidence_hint,
+      data: sorted,
+    };
+  } finally {
+    client.release();
+  }
+}
+
+async function handleSearch(req, res) {
+  try {
+    const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
+    const isPlatform = isPlatformRole(role);
+
+    const requestedTenantId =
+      req.query?.tenant_id ||
+      req.body?.tenant_id ||
+      getUserTenantId(req.user);
+
+    if (!requestedTenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'tenant_id requerido para búsqueda interna del tenant',
+      });
+    }
+
+    if (!isPlatform && String(requestedTenantId) !== String(getUserTenantId(req.user))) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No tienes permiso para buscar en este tenant',
+      });
+    }
+
+    const q = cleanQuery(req.query?.q || req.body?.q || req.body?.question || '');
+    const limit = Number(req.query?.limit || req.body?.limit || 30);
+
+    const result = await tenantInternalSearch({
+      tenantId: requestedTenantId,
+      q,
+      limit,
+    });
+
+    return res.json({
+      ...result,
+      requested_by: getUserId(req.user),
+      source_level: 'tenant_internal',
+      source_label: 'Información interna de la empresa',
+    });
+  } catch (error) {
+    console.error('ERROR TENANT INTERNAL SEARCH:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error ejecutando búsqueda interna del tenant',
+      detail: error.message,
+    });
+  }
+}
+
+router.get('/', auth, handleSearch);
+router.post('/', auth, handleSearch);
+
+module.exports = router;

@@ -1,0 +1,407 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const router = express.Router();
+const pool = require('../config/db');
+
+// =====================================================
+// Auth local para feedback IA
+// =====================================================
+function authenticateFeedback(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || '';
+
+    if (!authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Token requerido',
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '').trim();
+
+    const secret =
+      process.env.JWT_SECRET ||
+      process.env.JWT_SECRET_KEY ||
+      process.env.SECRET_KEY ||
+      process.env.TOKEN_SECRET;
+
+    if (!secret) {
+      return res.status(500).json({
+        ok: false,
+        error: 'JWT_SECRET no configurado en backend',
+      });
+    }
+
+    req.user = jwt.verify(token, secret);
+    next();
+  } catch (error) {
+    console.error('Error autenticando feedback IA:', error.message);
+
+    return res.status(401).json({
+      ok: false,
+      error: 'Token inválido o expirado',
+    });
+  }
+}
+
+function getUserRole(user) {
+  return String(
+    user?.role ||
+      user?.user_role ||
+      user?.userRole ||
+      user?.profile ||
+      ''
+  ).toLowerCase();
+}
+
+function isSuperAdmin(user) {
+  const role = getUserRole(user);
+
+  return [
+    'superadmin',
+    'super_admin',
+    'admin_global',
+    'global_admin',
+    'platform_admin',
+    'owner',
+  ].includes(role);
+}
+
+function getUserId(user) {
+  return user?.user_id || user?.userId || user?.userID || user?.id || null;
+}
+
+function getTenantId(user) {
+  return (
+    user?.tenant_id ||
+    user?.tenantId ||
+    user?.tenant ||
+    user?.company_id ||
+    user?.companyId ||
+    null
+  );
+}
+
+function cleanUuid(value) {
+  if (!value) return null;
+
+  const text = String(value).trim();
+
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      text
+    )
+  ) {
+    return text;
+  }
+
+  return null;
+}
+
+function cleanText(value, fallback = null) {
+  if (value === undefined || value === null) return fallback;
+
+  const text = String(value).trim();
+  return text || fallback;
+}
+
+function cleanRating(value) {
+  const text = cleanText(value, null);
+
+  if (!text) return null;
+
+  const allowed = [
+    'util',
+    'muy_util',
+    'no_util',
+    'incorrecta',
+    'aplicada',
+    'corregida',
+    'parcial',
+  ];
+
+  return allowed.includes(text) ? text : 'parcial';
+}
+
+function normalizeBoolean(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'boolean') return value;
+
+  const text = String(value).toLowerCase().trim();
+
+  if (['true', '1', 'yes', 'si', 'sí'].includes(text)) return true;
+  if (['false', '0', 'no'].includes(text)) return false;
+
+  return null;
+}
+
+// =====================================================
+// Aplicar auth a todo /ai-feedback
+// =====================================================
+router.use(authenticateFeedback);
+
+// =====================================================
+// POST /ai-feedback
+// Guarda feedback supervisado de una respuesta IA
+// =====================================================
+router.post('/', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const user = req.user || {};
+    const superAdmin = isSuperAdmin(user);
+
+    const tokenTenantId = getTenantId(user);
+    const requestedTenantId = cleanUuid(body.tenant_id);
+    const finalTenantId = superAdmin
+      ? requestedTenantId || tokenTenantId
+      : tokenTenantId;
+
+    if (!finalTenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'tenant_id requerido',
+      });
+    }
+
+    if (
+      !superAdmin &&
+      requestedTenantId &&
+      String(requestedTenantId) !== String(tokenTenantId)
+    ) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para registrar feedback en otro tenant',
+      });
+    }
+
+    const sourceEntityType = cleanText(body.source_entity_type);
+    const sourceEntityId = cleanUuid(body.source_entity_id);
+
+    if (!sourceEntityType) {
+      return res.status(400).json({
+        ok: false,
+        error: 'source_entity_type requerido',
+      });
+    }
+
+    const aiResponse =
+      body.ai_response && typeof body.ai_response === 'object'
+        ? body.ai_response
+        : {};
+
+    const correctedResponse =
+      body.user_corrected_response &&
+      typeof body.user_corrected_response === 'object'
+        ? body.user_corrected_response
+        : {};
+
+    const metadata =
+      body.metadata && typeof body.metadata === 'object' ? body.metadata : {};
+
+    const userRating = cleanRating(body.user_rating);
+
+    const wasUseful =
+      normalizeBoolean(body.was_useful) ??
+      (userRating ? ['util', 'muy_util', 'aplicada', 'corregida'].includes(userRating) : null);
+
+    const wasApplied =
+      normalizeBoolean(body.was_applied) ??
+      (userRating ? userRating === 'aplicada' : false);
+
+    const wasCorrected =
+      normalizeBoolean(body.was_corrected) ??
+      (userRating ? userRating === 'corregida' : false);
+
+    const insert = await pool.query(
+      `
+      INSERT INTO ai_core.ai_response_feedback (
+        tenant_id,
+        user_id,
+        source_entity_type,
+        source_entity_id,
+        standard_code,
+        domain_code,
+        problem_type_code,
+        scenario_code,
+        ai_response,
+        user_rating,
+        user_comment,
+        user_corrected_response,
+        was_useful,
+        was_applied,
+        was_corrected,
+        metadata
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9::jsonb,
+        $10,
+        $11,
+        $12::jsonb,
+        $13,
+        $14,
+        $15,
+        $16::jsonb
+      )
+      RETURNING *
+      `,
+      [
+        finalTenantId,
+        cleanUuid(getUserId(user)),
+        sourceEntityType,
+        sourceEntityId,
+        cleanText(body.standard_code),
+        cleanText(body.domain_code),
+        cleanText(body.problem_type_code),
+        cleanText(body.scenario_code),
+        JSON.stringify(aiResponse),
+        userRating,
+        cleanText(body.user_comment),
+        JSON.stringify(correctedResponse),
+        wasUseful,
+        Boolean(wasApplied),
+        Boolean(wasCorrected),
+        JSON.stringify(metadata),
+      ]
+    );
+
+    return res.json({
+      ok: true,
+      data: insert.rows[0],
+    });
+  } catch (error) {
+    console.error('Error guardando feedback IA:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error guardando feedback IA',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// GET /ai-feedback/entity/:entityType/:entityId
+// Lista feedback asociado a una entidad
+// =====================================================
+router.get('/entity/:entityType/:entityId', async (req, res) => {
+  try {
+    const user = req.user || {};
+    const superAdmin = isSuperAdmin(user);
+    const tenantId = getTenantId(user);
+
+    if (!superAdmin && !tenantId) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Usuario sin tenant_id asociado',
+      });
+    }
+
+    const entityType = cleanText(req.params.entityType);
+    const entityId = cleanUuid(req.params.entityId);
+
+    if (!entityType || !entityId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'entityType y entityId válidos son requeridos',
+      });
+    }
+
+    const params = [entityType, entityId];
+    let query = `
+      SELECT *
+      FROM ai_core.ai_response_feedback
+      WHERE source_entity_type = $1
+        AND source_entity_id = $2
+    `;
+
+    if (!superAdmin) {
+      params.push(tenantId);
+      query += ` AND tenant_id = $${params.length}`;
+    }
+
+    query += `
+      ORDER BY created_at DESC
+      LIMIT 50
+    `;
+
+    const result = await pool.query(query, params);
+
+    return res.json({
+      ok: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('Error obteniendo feedback IA:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo feedback IA',
+      detail: error.message,
+    });
+  }
+});
+
+// =====================================================
+// GET /ai-feedback/stats
+// Estadísticas básicas para aprendizaje supervisado
+// =====================================================
+router.get('/stats', async (req, res) => {
+  try {
+    const user = req.user || {};
+    const superAdmin = isSuperAdmin(user);
+    const tenantId = getTenantId(user);
+
+    if (!superAdmin && !tenantId) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Usuario sin tenant_id asociado',
+      });
+    }
+
+    const params = [];
+    let where = `WHERE 1 = 1`;
+
+    if (!superAdmin) {
+      params.push(tenantId);
+      where += ` AND tenant_id = $${params.length}`;
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        COUNT(*)::int AS total_feedback,
+        COUNT(*) FILTER (WHERE was_useful = true)::int AS useful_count,
+        COUNT(*) FILTER (WHERE was_useful = false)::int AS not_useful_count,
+        COUNT(*) FILTER (WHERE was_applied = true)::int AS applied_count,
+        COUNT(*) FILTER (WHERE was_corrected = true)::int AS corrected_count,
+        COUNT(DISTINCT scenario_code)::int AS scenarios_with_feedback
+      FROM ai_core.ai_response_feedback
+      ${where}
+      `,
+      params
+    );
+
+    return res.json({
+      ok: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error obteniendo estadísticas feedback IA:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo estadísticas feedback IA',
+      detail: error.message,
+    });
+  }
+});
+
+module.exports = router;

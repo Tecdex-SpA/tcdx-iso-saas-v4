@@ -1,0 +1,2007 @@
+const express = require('express');
+const router = express.Router();
+const pool = require('../config/db');
+const auth = require('../middleware/auth');
+
+const AI_ENGINE_URL =
+  process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
+
+const AI_INTERNAL_TOKEN =
+  process.env.AI_INTERNAL_TOKEN || 'tecdex_ai_internal_2026';
+
+function getUserTenantId(user) {
+  return (
+    user?.tenant_id ||
+    user?.tenantId ||
+    user?.tenant ||
+    user?.company_id ||
+    user?.companyId ||
+    null
+  );
+}
+
+function getUserId(user) {
+  return user?.id || user?.user_id || user?.userId || null;
+}
+
+function normalizeRole(role) {
+  return String(role || '').toLowerCase();
+}
+
+function isPlatformRole(role) {
+  const normalized = normalizeRole(role);
+
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'admin_global',
+    'global_admin',
+    'owner',
+  ].includes(normalized);
+}
+
+function resolveTenantId(req) {
+  const role = normalizeRole(
+    req.user?.role || req.user?.user_role || req.user?.userRole
+  );
+
+  const tokenTenantId = getUserTenantId(req.user);
+  const queryTenantId = req.query?.tenant_id ? String(req.query.tenant_id) : null;
+  const bodyTenantId = req.body?.tenant_id ? String(req.body.tenant_id) : null;
+
+  if (isPlatformRole(role)) {
+    return bodyTenantId || queryTenantId || tokenTenantId;
+  }
+
+  return tokenTenantId;
+}
+
+function normalizePriority(value) {
+  const raw = String(value || '').toLowerCase().trim();
+
+  if (['alta', 'high', 'critical', 'critica', 'crítica'].includes(raw)) {
+    return 'alta';
+  }
+
+  if (['baja', 'low'].includes(raw)) {
+    return 'baja';
+  }
+
+  return 'media';
+}
+
+function buildFindingAiAppendBlock(aiPayload) {
+  const lines = [
+    '---',
+    `IA Compliance (${new Date().toISOString()})`,
+    aiPayload?.summary ? `Resumen: ${aiPayload.summary}` : '',
+    aiPayload?.impact ? `Impacto: ${aiPayload.impact}` : '',
+    aiPayload?.priority ? `Prioridad sugerida: ${aiPayload.priority}` : '',
+    Array.isArray(aiPayload?.recommended_actions) && aiPayload.recommended_actions.length
+      ? `Acciones sugeridas: ${aiPayload.recommended_actions.join(' | ')}`
+      : '',
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
+function buildActionPlanAiAppendBlock(aiPayload) {
+  const planLines = Array.isArray(aiPayload?.action_plan)
+    ? aiPayload.action_plan.map(
+        (step) =>
+          `Paso ${step.step}: ${step.title} (${step.owner_role}, ${step.target_days} días) - ${step.description}`
+      )
+    : [];
+
+  const lines = [
+    '---',
+    `IA Compliance (${new Date().toISOString()})`,
+    aiPayload?.objective ? `Objetivo sugerido: ${aiPayload.objective}` : '',
+    Array.isArray(aiPayload?.immediate_actions) && aiPayload.immediate_actions.length
+      ? `Acciones inmediatas: ${aiPayload.immediate_actions.join(' | ')}`
+      : '',
+    planLines.length ? `Plan sugerido: ${planLines.join(' || ')}` : '',
+    Array.isArray(aiPayload?.success_criteria) && aiPayload.success_criteria.length
+      ? `Criterios de cierre: ${aiPayload.success_criteria.join(' | ')}`
+      : '',
+    aiPayload?.priority ? `Prioridad sugerida IA: ${aiPayload.priority}` : '',
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
+function buildNonconformityActionPlanDescription(aiPayload) {
+  return [
+    aiPayload?.statement ? `Redacción propuesta: ${aiPayload.statement}` : '',
+    aiPayload?.objective_evidence
+      ? `Evidencia objetiva: ${aiPayload.objective_evidence}`
+      : '',
+    aiPayload?.risk_statement ? `Riesgo / impacto: ${aiPayload.risk_statement}` : '',
+    aiPayload?.immediate_correction
+      ? `Corrección inmediata: ${aiPayload.immediate_correction}`
+      : '',
+    aiPayload?.corrective_action
+      ? `Acción correctiva sugerida: ${aiPayload.corrective_action}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function parseAiBlocks(text) {
+  const raw = String(text || '');
+
+  if (!raw.trim()) {
+    return {
+      prefix: '',
+      blocks: [],
+    };
+  }
+
+  const marker = /---\nIA Compliance \([^)]+\)\n/g;
+  const matches = [...raw.matchAll(marker)];
+
+  if (!matches.length) {
+    return {
+      prefix: raw.trim(),
+      blocks: [],
+    };
+  }
+
+  const firstIndex = matches[0].index ?? 0;
+  const prefix = raw.slice(0, firstIndex).trim();
+
+  const blocks = matches.map((match, index) => {
+    const start = match.index ?? 0;
+    const end =
+      index + 1 < matches.length
+        ? matches[index + 1].index ?? raw.length
+        : raw.length;
+
+    return raw.slice(start, end).trim();
+  });
+
+  return {
+    prefix,
+    blocks,
+  };
+}
+
+function classifyAiBlock(block) {
+  const raw = String(block || '').toLowerCase();
+
+  if (
+    raw.includes('objetivo sugerido:') ||
+    raw.includes('acciones inmediatas:') ||
+    raw.includes('plan sugerido:')
+  ) {
+    return 'action_plan';
+  }
+
+  if (raw.includes('resumen:') && raw.includes('impacto:')) {
+    return 'finding_analysis';
+  }
+
+  return 'generic';
+}
+
+function upsertAiBlock(currentText, nextBlock, mode) {
+  const { prefix, blocks } = parseAiBlocks(currentText);
+  const keptBlocks = blocks.filter((block) => classifyAiBlock(block) !== mode);
+
+  return [prefix, ...keptBlocks, String(nextBlock || '').trim()]
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
+}
+
+function buildNonconformityDerivedTitle({
+  clause = null,
+  controlDescription = null,
+  category = null,
+}) {
+  if (clause && controlDescription) {
+    return `No conformidad cláusula ${clause} - ${controlDescription}`;
+  }
+
+  if (controlDescription) {
+    return `No conformidad - ${controlDescription}`;
+  }
+
+  if (clause) {
+    return `No conformidad cláusula ${clause}`;
+  }
+
+  if (category) {
+    return `No conformidad - ${category}`;
+  }
+
+  return 'No conformidad';
+}
+
+function buildNonconformityAiPayload(tenantId, source = {}, overrides = {}) {
+  const clause = overrides.clause || source.clause || null;
+  const category = overrides.category || source.category || null;
+  const controlDescription =
+    overrides.control_description || source.control_description || null;
+
+  const title =
+    overrides.title ||
+    overrides.nc_title ||
+    source.title ||
+    buildNonconformityDerivedTitle({
+      clause,
+      controlDescription,
+      category,
+    });
+
+  const description =
+    overrides.description ||
+    overrides.nc_description ||
+    source.description ||
+    controlDescription ||
+    category ||
+    title;
+
+  return {
+    tenant_id: tenantId,
+    nonconformity_id: overrides.nonconformity_id || source.id || null,
+    iso_code: overrides.iso_code || source.iso_code || source.iso || null,
+    title,
+    description,
+    severity: overrides.severity || source.severity || 'media',
+    clause,
+    category,
+    control_description: controlDescription,
+    tenant_control_id:
+      overrides.tenant_control_id || source.tenant_control_id || null,
+    status: overrides.status || source.status || null,
+    detected_at: source.detected_at || null,
+    resolved_at: source.resolved_at || null,
+  };
+}
+
+function normalizeProgress(value, currentValue = 0, nextStatus = '') {
+  const current = Math.max(0, Math.min(100, Number(currentValue) || 0));
+
+  if (value === null || value === undefined || value === '') {
+    if (nextStatus === 'completado') return 100;
+    if (nextStatus === 'en progreso' && current < 25) return 25;
+    return current;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return current;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
+async function getLatestActionPlanProgress(client, actionPlanId) {
+  const result = await client.query(
+    `
+    SELECT progress_percent
+    FROM action_plan_updates
+    WHERE action_plan_id = $1::uuid
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [actionPlanId]
+  );
+
+  return Number(result.rows[0]?.progress_percent || 0);
+}
+
+async function insertActionPlanUpdate(client, payload) {
+  const {
+    actionPlanId,
+    tenantId,
+    comment,
+    progressPercent,
+    statusAfter,
+    blockedReason = null,
+    createdBy = null,
+  } = payload;
+
+  await client.query(
+    `
+    INSERT INTO action_plan_updates (
+      action_plan_id,
+      tenant_id,
+      comment,
+      progress_percent,
+      status_after,
+      blocked_reason,
+      created_by
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `,
+    [
+      actionPlanId,
+      tenantId,
+      comment,
+      progressPercent,
+      statusAfter,
+      blockedReason,
+      createdBy,
+    ]
+  );
+}
+
+async function callAiEngine(path, payload) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+
+  try {
+    const res = await fetch(`${AI_ENGINE_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-AI-Token': AI_INTERNAL_TOKEN,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    const text = await res.text();
+
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      throw new Error(`Respuesta inválida desde AI Engine. HTTP ${res.status}`);
+    }
+
+    if (!res.ok || !json || json.ok === false) {
+      throw new Error(
+        json?.detail || json?.error || 'Error llamando AI Engine'
+      );
+    }
+
+    return json;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function getTenantName(tenantId) {
+  const result = await pool.query(
+    `
+    SELECT name
+    FROM tenants
+    WHERE id = $1::uuid
+    LIMIT 1
+    `,
+    [tenantId]
+  );
+
+  return result.rows[0]?.name || 'Cliente';
+}
+
+async function getActiveStandards(tenantId) {
+  const result = await pool.query(
+    `
+    SELECT standard_code
+    FROM tenant_standards
+    WHERE tenant_id = $1::uuid
+      AND is_active = TRUE
+    ORDER BY standard_code
+    `,
+    [tenantId]
+  );
+
+  return result.rows.map((row) => row.standard_code).filter(Boolean);
+}
+
+async function getHealthSummaryStats(tenantId) {
+  const result = await pool.query(
+    `
+    WITH active_standards AS (
+      SELECT standard_code
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND is_active = TRUE
+    ),
+    latest_health AS (
+      SELECT DISTINCT ON (chs.tenant_control_id)
+        chs.tenant_control_id,
+        chs.standard_code,
+        COALESCE(chs.health_score, 0) AS health_score,
+        COALESCE(chs.pending_evidence_count, 0) AS pending_evidence_count,
+        CASE
+          WHEN COALESCE(chs.health_score, 0) < 50 THEN 'deteriorado'
+          WHEN COALESCE(chs.health_score, 0) < 80 THEN 'atencion'
+          ELSE 'saludable'
+        END AS derived_health_status,
+        chs.calculated_at
+      FROM control_health_scores chs
+      INNER JOIN active_standards ast
+        ON ast.standard_code = chs.standard_code
+      WHERE chs.tenant_id = $1::uuid
+      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+    ),
+    critical_findings AS (
+      SELECT COUNT(*)::int AS total
+      FROM findings f
+      INNER JOIN active_standards ast
+        ON ast.standard_code = f.iso_code
+      WHERE f.tenant_id = $1::uuid
+        AND LOWER(COALESCE(f.severity, '')) IN ('critical', 'critico', 'crítico')
+        AND LOWER(COALESCE(f.status, 'open')) NOT IN ('closed', 'cerrado', 'cerrada', 'resuelto', 'resuelta')
+    )
+    SELECT
+      COUNT(*)::int AS controls_total,
+      SUM(CASE WHEN derived_health_status = 'atencion' THEN 1 ELSE 0 END)::int AS controls_warning,
+      SUM(CASE WHEN derived_health_status = 'deteriorado' THEN 1 ELSE 0 END)::int AS controls_critical,
+      SUM(pending_evidence_count)::int AS evidences_pending,
+      (SELECT total FROM critical_findings) AS findings_critical
+    FROM latest_health
+    `,
+    [tenantId]
+  );
+
+  const row = result.rows[0] || {};
+
+  return {
+    controls_total: Number(row.controls_total || 0),
+    controls_warning: Number(row.controls_warning || 0),
+    controls_critical: Number(row.controls_critical || 0),
+    evidences_pending: Number(row.evidences_pending || 0),
+    findings_critical: Number(row.findings_critical || 0),
+  };
+}
+
+async function getWeakestStandards(tenantId) {
+  const result = await pool.query(
+    `
+    WITH active_standards AS (
+      SELECT standard_code
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND is_active = TRUE
+    ),
+    latest_health AS (
+      SELECT DISTINCT ON (chs.tenant_control_id)
+        chs.tenant_control_id,
+        chs.standard_code,
+        COALESCE(chs.health_score, 0) AS health_score,
+        chs.calculated_at
+      FROM control_health_scores chs
+      INNER JOIN active_standards ast
+        ON ast.standard_code = chs.standard_code
+      WHERE chs.tenant_id = $1::uuid
+      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+    )
+    SELECT
+      standard_code,
+      ROUND(AVG(health_score)::numeric, 1) AS score
+    FROM latest_health
+    GROUP BY standard_code
+    ORDER BY score ASC, standard_code ASC
+    LIMIT 3
+    `,
+    [tenantId]
+  );
+
+  return result.rows.map((row) => `${row.standard_code} (${row.score}%)`);
+}
+
+async function getOpenFindingsList(tenantId) {
+  const result = await pool.query(
+    `
+    WITH active_standards AS (
+      SELECT standard_code
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND is_active = TRUE
+    )
+    SELECT
+      f.id,
+      f.iso_code,
+      f.title,
+      f.description,
+      f.severity,
+      f.status,
+      f.owner,
+      f.due_date,
+      f.created_at
+    FROM findings f
+    INNER JOIN active_standards ast
+      ON ast.standard_code = f.iso_code
+    WHERE f.tenant_id = $1::uuid
+      AND LOWER(COALESCE(f.status, 'open')) NOT IN ('closed', 'cerrado', 'cerrada', 'resuelto', 'resuelta')
+    ORDER BY f.created_at DESC
+    LIMIT 20
+    `,
+    [tenantId]
+  );
+
+  return result.rows;
+}
+
+async function getFindingById(tenantId, findingId) {
+  const result = await pool.query(
+    `
+    WITH active_standards AS (
+      SELECT standard_code
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND is_active = TRUE
+    )
+    SELECT
+      f.id,
+      f.iso_code,
+      f.title,
+      f.description,
+      f.severity,
+      f.status,
+      f.owner,
+      f.due_date,
+      f.created_at
+    FROM findings f
+    INNER JOIN active_standards ast
+      ON ast.standard_code = f.iso_code
+    WHERE f.tenant_id = $1::uuid
+      AND f.id = $2::uuid
+    LIMIT 1
+    `,
+    [tenantId, findingId]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function getNonconformityById(tenantId, nonconformityId) {
+  const result = await pool.query(
+    `
+    WITH active_standards AS (
+      SELECT standard_code
+      FROM tenant_standards
+      WHERE tenant_id = $1::uuid
+        AND is_active = TRUE
+    )
+    SELECT
+      tnc.id,
+      tnc.tenant_id,
+      tnc.control_id,
+      tnc.nonconformity_id,
+      COALESCE(tnc.control_description, cc.description, ncc.description) AS control_description,
+      COALESCE(cc.iso, ncc.iso) AS iso_code,
+      COALESCE(cc.clause, ncc.clause) AS clause,
+      COALESCE(
+        cc.category,
+        CASE
+          WHEN ncc.clause IS NOT NULL THEN 'Cláusula ' || ncc.clause
+          ELSE NULL
+        END
+      ) AS category,
+      tnc.status,
+      tnc.detected_at,
+      tnc.resolved_at
+    FROM tenant_nonconformities tnc
+    LEFT JOIN controls_catalog cc
+      ON cc.id = tnc.control_id
+    LEFT JOIN nonconformities_catalog ncc
+      ON ncc.id = tnc.nonconformity_id
+    INNER JOIN active_standards ast
+      ON ast.standard_code = COALESCE(cc.iso, ncc.iso)
+    WHERE tnc.tenant_id = $1::uuid
+      AND tnc.id = $2::uuid
+    LIMIT 1
+    `,
+    [tenantId, nonconformityId]
+  );
+
+  const row = result.rows[0] || null;
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    title: buildNonconformityDerivedTitle({
+      clause: row.clause,
+      controlDescription: row.control_description,
+      category: row.category,
+    }),
+    description:
+      row.control_description ||
+      row.category ||
+      'No conformidad detectada',
+    severity: 'media',
+  };
+}
+
+async function getActionPlanById(tenantId, actionPlanId) {
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      tenant_id,
+      iso_code,
+      title,
+      description,
+      priority,
+      status,
+      owner,
+      due_date,
+      source_type,
+      finding_id,
+      nonconformity_id,
+      tenant_control_id,
+      created_at,
+      updated_at
+    FROM action_plans
+    WHERE tenant_id = $1::uuid
+      AND id = $2::uuid
+    LIMIT 1
+    `,
+    [tenantId, actionPlanId]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function getReusableNonconformityActionPlan(
+  tenantId,
+  nonconformityId,
+  tenantControlId = null
+) {
+  if (!nonconformityId) {
+    return null;
+  }
+
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      tenant_id,
+      iso_code,
+      title,
+      description,
+      priority,
+      status,
+      owner,
+      due_date,
+      source_type,
+      nonconformity_id,
+      tenant_control_id,
+      created_at,
+      updated_at
+    FROM action_plans
+    WHERE tenant_id = $1::uuid
+      AND nonconformity_id = $2::uuid
+      AND source_type = 'nonconformity'
+      AND (
+        $3::uuid IS NULL
+        OR tenant_control_id = $3::uuid
+      )
+      AND LOWER(COALESCE(status, 'abierto')) NOT IN (
+        'completado',
+        'closed',
+        'cerrado',
+        'cerrada',
+        'resuelto',
+        'resuelta'
+      )
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+    LIMIT 1
+    `,
+    [tenantId, nonconformityId, tenantControlId || null]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function savePromptLog({
+  tenantId,
+  promptType,
+  sourceModule,
+  sourceEntityType = null,
+  sourceEntityId = null,
+  requestPayload = {},
+  responsePayload = {},
+  status = 'ok',
+  errorMessage = null,
+  createdBy = null,
+}) {
+  await pool.query(
+    `
+    INSERT INTO ai_prompt_logs (
+      tenant_id,
+      prompt_type,
+      source_module,
+      source_entity_type,
+      source_entity_id,
+      request_payload,
+      response_payload,
+      status,
+      error_message,
+      created_by
+    )
+    VALUES (
+      $1::uuid,
+      $2,
+      $3,
+      $4,
+      $5::uuid,
+      $6::jsonb,
+      $7::jsonb,
+      $8,
+      $9,
+      $10::uuid
+    )
+    `,
+    [
+      tenantId,
+      promptType,
+      sourceModule,
+      sourceEntityType,
+      sourceEntityId,
+      JSON.stringify(requestPayload || {}),
+      JSON.stringify(responsePayload || {}),
+      status,
+      errorMessage,
+      createdBy,
+    ]
+  );
+}
+
+async function saveSuggestionDraft({
+  tenantId,
+  suggestionType,
+  sourceModule,
+  sourceEntityType = null,
+  sourceEntityId = null,
+  title = null,
+  inputPayload = {},
+  outputPayload = {},
+  confidence = null,
+  createdBy = null,
+}) {
+  const result = await pool.query(
+    `
+    INSERT INTO ai_suggestions (
+      tenant_id,
+      suggestion_type,
+      source_module,
+      source_entity_type,
+      source_entity_id,
+      title,
+      input_payload,
+      output_payload,
+      confidence,
+      created_by
+    )
+    VALUES (
+      $1::uuid,
+      $2,
+      $3,
+      $4,
+      $5::uuid,
+      $6,
+      $7::jsonb,
+      $8::jsonb,
+      $9,
+      $10::uuid
+    )
+    RETURNING *
+    `,
+    [
+      tenantId,
+      suggestionType,
+      sourceModule,
+      sourceEntityType,
+      sourceEntityId,
+      title,
+      JSON.stringify(inputPayload || {}),
+      JSON.stringify(outputPayload || {}),
+      confidence,
+      createdBy,
+    ]
+  );
+
+  return result.rows[0];
+}
+
+async function listSuggestionDrafts(tenantId, suggestionType = null) {
+  if (suggestionType) {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        tenant_id,
+        suggestion_type,
+        source_module,
+        source_entity_type,
+        source_entity_id,
+        title,
+        input_payload,
+        output_payload,
+        confidence,
+        status,
+        created_by,
+        applied_by,
+        applied_at,
+        created_at,
+        updated_at
+      FROM ai_suggestions
+      WHERE tenant_id = $1::uuid
+        AND suggestion_type = $2
+      ORDER BY created_at DESC
+      LIMIT 50
+      `,
+      [tenantId, suggestionType]
+    );
+
+    return result.rows;
+  }
+
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      tenant_id,
+      suggestion_type,
+      source_module,
+      source_entity_type,
+      source_entity_id,
+      title,
+      input_payload,
+      output_payload,
+      confidence,
+      status,
+      created_by,
+      applied_by,
+      applied_at,
+      created_at,
+      updated_at
+    FROM ai_suggestions
+    WHERE tenant_id = $1::uuid
+    ORDER BY created_at DESC
+    LIMIT 50
+    `,
+    [tenantId]
+  );
+
+  return result.rows;
+}
+
+async function markSuggestionApplied(suggestionId, userId) {
+  const result = await pool.query(
+    `
+    UPDATE ai_suggestions
+    SET
+      status = 'applied',
+      applied_by = $2::uuid,
+      applied_at = NOW(),
+      updated_at = NOW()
+    WHERE id = $1::uuid
+    RETURNING *
+    `,
+    [suggestionId, userId]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
+  const payload = suggestion.output_payload || {};
+  const input = suggestion.input_payload || {};
+
+  const title =
+    input.title ||
+    payload.objective ||
+    'Plan de acción generado por IA';
+
+  const description = [
+    payload.objective ? `Objetivo: ${payload.objective}` : '',
+    Array.isArray(payload.immediate_actions) && payload.immediate_actions.length
+      ? `Acciones inmediatas: ${payload.immediate_actions.join(' | ')}`
+      : '',
+    Array.isArray(payload.success_criteria) && payload.success_criteria.length
+      ? `Criterios de cierre: ${payload.success_criteria.join(' | ')}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const sourceType = 'ai_suggestion';
+  const priority = normalizePriority(payload.priority);
+  const status = 'draft';
+
+  const result = await pool.query(
+    `
+    INSERT INTO action_plans (
+      tenant_id,
+      iso_code,
+      title,
+      description,
+      source_type,
+      priority,
+      status,
+      owner,
+      finding_id,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      $1::uuid,
+      $2,
+      $3,
+      $4,
+      $5,
+      $6,
+      $7,
+      NULL,
+      $8::uuid,
+      NOW(),
+      NOW()
+    )
+    RETURNING *
+    `,
+    [
+      tenantId,
+      input.iso_code || null,
+      title,
+      description,
+      sourceType,
+      priority,
+      status,
+      input.finding_id || null,
+    ]
+  );
+
+  return result.rows[0];
+}
+
+router.get('/engine-health', auth, async (_req, res) => {
+  try {
+    const healthRes = await fetch(`${AI_ENGINE_URL}/health`);
+    const text = await healthRes.text();
+
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      return res.status(502).json({
+        ok: false,
+        error: 'Respuesta inválida desde AI Engine /health',
+        raw: text,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: json,
+    });
+  } catch (error) {
+    console.error('ERROR AI ENGINE HEALTH:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'No fue posible conectar con AI Engine',
+      detail: error.message,
+    });
+  }
+});
+
+router.get('/health-summary', auth, async (req, res) => {
+  try {
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se pudo determinar tenant_id para IA Compliance',
+      });
+    }
+
+    const tenantName = await getTenantName(tenantId);
+    const standards = await getActiveStandards(tenantId);
+    const stats = await getHealthSummaryStats(tenantId);
+
+    const aiPayload = {
+      tenant_id: tenantId,
+      tenant_name: tenantName,
+      standards,
+      controls_total: stats.controls_total,
+      controls_warning: stats.controls_warning,
+      controls_critical: stats.controls_critical,
+      evidences_pending: stats.evidences_pending,
+      findings_critical: stats.findings_critical,
+    };
+
+    const aiResponse = await callAiEngine(
+      '/api/ai/suggest/health-summary',
+      aiPayload
+    );
+
+    await savePromptLog({
+      tenantId,
+      promptType: 'health_summary',
+      sourceModule: 'ia_compliance',
+      sourceEntityType: 'tenant',
+      sourceEntityId: tenantId,
+      requestPayload: aiPayload,
+      responsePayload: aiResponse,
+      status: 'ok',
+      createdBy: userId,
+    });
+
+    return res.json({
+      ok: true,
+      context: aiPayload,
+      ai: aiResponse,
+    });
+  } catch (error) {
+    console.error('ERROR AI COMPLIANCE HEALTH SUMMARY:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error generando resumen IA de cumplimiento',
+      detail: error.message,
+    });
+  }
+});
+
+router.get('/findings', auth, async (req, res) => {
+  try {
+    const tenantId = resolveTenantId(req);
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se pudo determinar tenant_id',
+      });
+    }
+
+    const rows = await getOpenFindingsList(tenantId);
+
+    return res.json({
+      ok: true,
+      data: rows,
+    });
+  } catch (error) {
+    console.error('ERROR AI COMPLIANCE FINDINGS:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error cargando hallazgos para IA Compliance',
+      detail: error.message,
+    });
+  }
+});
+
+router.post('/finding-analysis', auth, async (req, res) => {
+  try {
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+    const findingId = String(req.body?.finding_id || '');
+
+    if (!tenantId || !findingId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'tenant_id o finding_id no informado',
+      });
+    }
+
+    const finding = await getFindingById(tenantId, findingId);
+
+    if (!finding) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Hallazgo no encontrado en el tenant',
+      });
+    }
+
+    const aiPayload = {
+      tenant_id: tenantId,
+      finding_id: finding.id,
+      iso_code: finding.iso_code,
+      title: finding.title,
+      description: finding.description || '',
+      severity: finding.severity || 'media',
+      status: finding.status || 'open',
+      owner: finding.owner || null,
+      due_date: finding.due_date || null,
+    };
+
+    const aiResponse = await callAiEngine(
+      '/api/ai/suggest/finding-analysis',
+      aiPayload
+    );
+
+    await savePromptLog({
+      tenantId,
+      promptType: 'finding_analysis',
+      sourceModule: 'ia_compliance',
+      sourceEntityType: 'finding',
+      sourceEntityId: finding.id,
+      requestPayload: aiPayload,
+      responsePayload: aiResponse,
+      status: 'ok',
+      createdBy: userId,
+    });
+
+    return res.json({
+      ok: true,
+      context: aiPayload,
+      ai: aiResponse,
+    });
+  } catch (error) {
+    console.error('ERROR AI COMPLIANCE FINDING ANALYSIS:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error analizando hallazgo con IA',
+      detail: error.message,
+    });
+  }
+});
+
+router.post('/nonconformity-draft', auth, async (req, res) => {
+  try {
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+    const nonconformityId = req.body?.nonconformity_id
+      ? String(req.body.nonconformity_id)
+      : null;
+
+    let aiPayload = null;
+    let sourceEntityType = 'manual_input';
+    let sourceEntityId = null;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se pudo determinar tenant_id',
+      });
+    }
+
+    if (nonconformityId) {
+      const nonconformity = await getNonconformityById(
+        tenantId,
+        nonconformityId
+      );
+
+      if (!nonconformity) {
+        return res.status(404).json({
+          ok: false,
+          error: 'No conformidad no encontrada en el tenant',
+        });
+      }
+
+      aiPayload = buildNonconformityAiPayload(tenantId, nonconformity, req.body || {});
+      sourceEntityType = 'nonconformity';
+      sourceEntityId = nonconformity.id;
+    } else {
+      aiPayload = buildNonconformityAiPayload(tenantId, {}, req.body || {});
+    }
+
+    if (!aiPayload.iso_code || !aiPayload.title || !aiPayload.description) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Faltan datos para redactar la no conformidad',
+      });
+    }
+
+    const aiResponse = await callAiEngine(
+      '/api/ai/suggest/nonconformity-draft',
+      aiPayload
+    );
+
+    await savePromptLog({
+      tenantId,
+      promptType: 'nonconformity_draft',
+      sourceModule: 'ia_compliance',
+      sourceEntityType,
+      sourceEntityId,
+      requestPayload: aiPayload,
+      responsePayload: aiResponse,
+      status: 'ok',
+      createdBy: userId,
+    });
+
+    return res.json({
+      ok: true,
+      context: aiPayload,
+      ai: aiResponse,
+    });
+  } catch (error) {
+    console.error('ERROR AI COMPLIANCE NONCONFORMITY DRAFT:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error generando borrador de no conformidad',
+      detail: error.message,
+    });
+  }
+});
+
+router.post('/action-plan-suggestion', auth, async (req, res) => {
+  try {
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+    const findingId = String(req.body?.finding_id || '');
+
+    if (!tenantId || !findingId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Falta finding_id para sugerir plan de acción',
+      });
+    }
+
+    const finding = await getFindingById(tenantId, findingId);
+
+    if (!finding) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Hallazgo no encontrado en el tenant',
+      });
+    }
+
+    const aiPayload = {
+      tenant_id: tenantId,
+      finding_id: finding.id,
+      iso_code: finding.iso_code,
+      title: finding.title,
+      description: finding.description || '',
+      severity: finding.severity || 'media',
+      status: finding.status || 'open',
+    };
+
+    const aiResponse = await callAiEngine(
+      '/api/ai/suggest/action-plan',
+      aiPayload
+    );
+
+    await savePromptLog({
+      tenantId,
+      promptType: 'action_plan_suggestion',
+      sourceModule: 'ia_compliance',
+      sourceEntityType: 'finding',
+      sourceEntityId: finding.id,
+      requestPayload: aiPayload,
+      responsePayload: aiResponse,
+      status: 'ok',
+      createdBy: userId,
+    });
+
+    return res.json({
+      ok: true,
+      context: aiPayload,
+      ai: aiResponse,
+    });
+  } catch (error) {
+    console.error('ERROR AI COMPLIANCE ACTION PLAN:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error generando plan de acción con IA',
+      detail: error.message,
+    });
+  }
+});
+
+router.get('/executive-brief', auth, async (req, res) => {
+  try {
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se pudo determinar tenant_id',
+      });
+    }
+
+    const tenantName = await getTenantName(tenantId);
+    const standards = await getActiveStandards(tenantId);
+    const stats = await getHealthSummaryStats(tenantId);
+    const weakestStandards = await getWeakestStandards(tenantId);
+
+    const aiPayload = {
+      tenant_id: tenantId,
+      tenant_name: tenantName,
+      period: String(req.query?.period || 'Periodo actual'),
+      standards,
+      controls_total: stats.controls_total,
+      controls_warning: stats.controls_warning,
+      controls_critical: stats.controls_critical,
+      evidences_pending: stats.evidences_pending,
+      findings_critical: stats.findings_critical,
+      weakest_standards: weakestStandards,
+    };
+
+    const aiResponse = await callAiEngine(
+      '/api/ai/suggest/executive-brief',
+      aiPayload
+    );
+
+    await savePromptLog({
+      tenantId,
+      promptType: 'executive_brief',
+      sourceModule: 'ia_compliance',
+      sourceEntityType: 'tenant',
+      sourceEntityId: tenantId,
+      requestPayload: aiPayload,
+      responsePayload: aiResponse,
+      status: 'ok',
+      createdBy: userId,
+    });
+
+    return res.json({
+      ok: true,
+      context: aiPayload,
+      ai: aiResponse,
+    });
+  } catch (error) {
+    console.error('ERROR AI COMPLIANCE EXECUTIVE BRIEF:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error generando resumen gerencial con IA',
+      detail: error.message,
+    });
+  }
+});
+
+router.get('/suggestions', auth, async (req, res) => {
+  try {
+    const tenantId = resolveTenantId(req);
+    const suggestionType = req.query?.suggestion_type
+      ? String(req.query.suggestion_type)
+      : null;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se pudo determinar tenant_id',
+      });
+    }
+
+    const rows = await listSuggestionDrafts(tenantId, suggestionType);
+
+    return res.json({
+      ok: true,
+      data: rows,
+    });
+  } catch (error) {
+    console.error('ERROR AI SUGGESTIONS LIST:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error listando sugerencias IA',
+      detail: error.message,
+    });
+  }
+});
+
+router.post('/suggestions/save', auth, async (req, res) => {
+  try {
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+
+    const {
+      suggestion_type,
+      source_module,
+      source_entity_type,
+      source_entity_id,
+      title,
+      input_payload,
+      output_payload,
+      confidence,
+    } = req.body || {};
+
+    if (!tenantId || !suggestion_type || !source_module || !output_payload) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Faltan datos para guardar sugerencia IA',
+      });
+    }
+
+    const row = await saveSuggestionDraft({
+      tenantId,
+      suggestionType: suggestion_type,
+      sourceModule: source_module,
+      sourceEntityType: source_entity_type || null,
+      sourceEntityId: source_entity_id || null,
+      title: title || null,
+      inputPayload: input_payload || {},
+      outputPayload: output_payload || {},
+      confidence: confidence || null,
+      createdBy: userId,
+    });
+
+    return res.json({
+      ok: true,
+      data: row,
+    });
+  } catch (error) {
+    console.error('ERROR SAVE AI SUGGESTION:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error guardando sugerencia IA',
+      detail: error.message,
+    });
+  }
+});
+
+router.post('/suggestions/:id/apply', auth, async (req, res) => {
+  try {
+    const suggestionId = String(req.params.id || '');
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+    const applyMode = String(req.body?.apply_mode || 'mark_only');
+
+    if (!tenantId || !suggestionId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Falta suggestionId o tenantId',
+      });
+    }
+
+    const suggestionRes = await pool.query(
+      `
+      SELECT *
+      FROM ai_suggestions
+      WHERE id = $1::uuid
+        AND tenant_id = $2::uuid
+      LIMIT 1
+      `,
+      [suggestionId, tenantId]
+    );
+
+    const suggestion = suggestionRes.rows[0];
+
+    if (!suggestion) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Sugerencia IA no encontrada',
+      });
+    }
+
+    let appliedArtifact = null;
+
+    if (
+      applyMode === 'create_action_plan_draft' &&
+      suggestion.suggestion_type === 'action_plan_suggestion'
+    ) {
+      appliedArtifact = await createDraftActionPlanFromSuggestion(
+        tenantId,
+        suggestion
+      );
+    }
+
+    const updated = await markSuggestionApplied(suggestionId, userId);
+
+    return res.json({
+      ok: true,
+      data: updated,
+      applied_artifact: appliedArtifact,
+    });
+  } catch (error) {
+    console.error('ERROR APPLY AI SUGGESTION:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error aplicando sugerencia IA',
+      detail: error.message,
+    });
+  }
+});
+
+/*
+ * NUEVOS ENDPOINTS PARA APLICACIÓN DIRECTA EN MÓDULOS
+ */
+
+router.post('/apply/finding-analysis-to-finding', auth, async (req, res) => {
+  try {
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+    const findingId = String(req.body?.finding_id || '');
+    let aiResult = req.body?.ai_result || null;
+
+    if (!tenantId || !findingId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Falta finding_id o tenant_id',
+      });
+    }
+
+    const finding = await getFindingById(tenantId, findingId);
+
+    if (!finding) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Hallazgo no encontrado',
+      });
+    }
+
+    if (!aiResult) {
+      const aiPayload = {
+        tenant_id: tenantId,
+        finding_id: finding.id,
+        iso_code: finding.iso_code,
+        title: finding.title,
+        description: finding.description || '',
+        severity: finding.severity || 'media',
+        status: finding.status || 'open',
+        owner: finding.owner || null,
+        due_date: finding.due_date || null,
+      };
+
+      const aiResponse = await callAiEngine(
+        '/api/ai/suggest/finding-analysis',
+        aiPayload
+      );
+
+      aiResult = aiResponse;
+    }
+
+    const aiData = aiResult?.ai || aiResult;
+    if (!aiData?.summary) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se recibió análisis IA válido',
+      });
+    }
+
+    const appendBlock = buildFindingAiAppendBlock(aiData);
+    const nextDescription = upsertAiBlock(
+      finding.description || '',
+      appendBlock,
+      'finding_analysis'
+    );
+
+    const updateRes = await pool.query(
+      `
+      UPDATE findings
+      SET
+        description = $2,
+        updated_at = NOW()
+      WHERE id = $1::uuid
+        AND tenant_id = $3::uuid
+      RETURNING *
+      `,
+      [finding.id, nextDescription, tenantId]
+    );
+
+    await savePromptLog({
+      tenantId,
+      promptType: 'finding_analysis_apply_direct',
+      sourceModule: 'ia_compliance_apply',
+      sourceEntityType: 'finding',
+      sourceEntityId: finding.id,
+      requestPayload: req.body || {},
+      responsePayload: aiData,
+      status: 'ok',
+      createdBy: userId,
+    });
+
+    return res.json({
+      ok: true,
+      data: updateRes.rows[0],
+      applied_text: appendBlock,
+    });
+  } catch (error) {
+    console.error('ERROR APPLY FINDING ANALYSIS DIRECT:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error aplicando análisis IA al hallazgo',
+      detail: error.message,
+    });
+  }
+});
+
+router.post('/apply/action-plan-suggestion-to-plan', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+    const actionPlanId = String(req.body?.action_plan_id || '');
+    const findingId = req.body?.finding_id ? String(req.body.finding_id) : null;
+    let aiResult = req.body?.ai_result || null;
+
+    if (!tenantId || !actionPlanId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Falta action_plan_id o tenant_id',
+      });
+    }
+
+    const actionPlan = await getActionPlanById(tenantId, actionPlanId);
+
+    if (!actionPlan) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Plan de acción no encontrado',
+      });
+    }
+
+    if (!aiResult) {
+      const effectiveFindingId = findingId || actionPlan.finding_id;
+
+      if (!effectiveFindingId) {
+        return res.status(400).json({
+          ok: false,
+          error: 'No se encontró finding_id para generar plan IA',
+        });
+      }
+
+      const finding = await getFindingById(tenantId, effectiveFindingId);
+
+      if (!finding) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Hallazgo origen no encontrado',
+        });
+      }
+
+      const aiPayload = {
+        tenant_id: tenantId,
+        finding_id: finding.id,
+        iso_code: finding.iso_code,
+        title: finding.title,
+        description: finding.description || '',
+        severity: finding.severity || 'media',
+        status: finding.status || 'open',
+      };
+
+      const aiResponse = await callAiEngine(
+        '/api/ai/suggest/action-plan',
+        aiPayload
+      );
+
+      aiResult = aiResponse;
+    }
+
+    const aiData = aiResult?.ai || aiResult;
+    if (!aiData?.objective) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se recibió plan IA válido',
+      });
+    }
+
+    const appendBlock = buildActionPlanAiAppendBlock(aiData);
+    const nextDescription = upsertAiBlock(
+      actionPlan.description || '',
+      appendBlock,
+      'action_plan'
+    );
+
+    const nextPriority = normalizePriority(aiData.priority);
+    const nextStatus =
+      actionPlan.status === 'abierto' ? 'en progreso' : actionPlan.status;
+
+    const currentProgress = await getLatestActionPlanProgress(client, actionPlan.id);
+    const nextProgress = normalizeProgress(null, currentProgress, nextStatus);
+
+    await client.query('BEGIN');
+
+    const updateRes = await client.query(
+      `
+      UPDATE action_plans
+      SET
+        description = $2,
+        priority = $3,
+        status = $4,
+        updated_at = NOW()
+      WHERE id = $1::uuid
+        AND tenant_id = $5::uuid
+      RETURNING *
+      `,
+      [actionPlan.id, nextDescription, nextPriority, nextStatus, tenantId]
+    );
+
+    await insertActionPlanUpdate(client, {
+      actionPlanId: actionPlan.id,
+      tenantId,
+      comment: 'Plan actualizado con sugerencia IA.',
+      progressPercent: nextProgress,
+      statusAfter: nextStatus,
+      blockedReason: null,
+      createdBy: userId,
+    });
+
+    await client.query('COMMIT');
+
+    await savePromptLog({
+      tenantId,
+      promptType: 'action_plan_apply_direct',
+      sourceModule: 'ia_compliance_apply',
+      sourceEntityType: 'action_plan',
+      sourceEntityId: actionPlan.id,
+      requestPayload: req.body || {},
+      responsePayload: aiData,
+      status: 'ok',
+      createdBy: userId,
+    });
+
+    return res.json({
+      ok: true,
+      data: updateRes.rows[0],
+      applied_text: appendBlock,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('ERROR APPLY ACTION PLAN DIRECT:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error aplicando plan IA al plan de acción',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const tenantId = resolveTenantId(req);
+    const userId = getUserId(req.user);
+
+    const {
+      nonconformity_id,
+      iso_code,
+      nc_title,
+      nc_description,
+      tenant_control_id,
+      owner,
+      due_date,
+    } = req.body || {};
+
+    let aiResult = req.body?.ai_result || null;
+    let effectivePayload = null;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se pudo determinar tenant_id',
+      });
+    }
+
+    if (!aiResult) {
+      if (nonconformity_id) {
+        const nonconformity = await getNonconformityById(
+          tenantId,
+          String(nonconformity_id)
+        );
+
+        if (!nonconformity) {
+          return res.status(404).json({
+            ok: false,
+            error: 'No conformidad no encontrada en el tenant',
+          });
+        }
+
+        effectivePayload = buildNonconformityAiPayload(tenantId, nonconformity, {
+          ...req.body,
+          title: nc_title || undefined,
+          description: nc_description || undefined,
+        });
+      } else {
+        effectivePayload = buildNonconformityAiPayload(tenantId, {}, {
+          ...req.body,
+          title: nc_title || undefined,
+          description: nc_description || undefined,
+        });
+      }
+
+      if (
+        !effectivePayload.iso_code ||
+        !effectivePayload.title ||
+        !effectivePayload.description
+      ) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Faltan datos para crear acción desde borrador IA de NC',
+        });
+      }
+
+      const aiResponse = await callAiEngine(
+        '/api/ai/suggest/nonconformity-draft',
+        effectivePayload
+      );
+
+      aiResult = aiResponse;
+    } else {
+      effectivePayload = buildNonconformityAiPayload(tenantId, {}, {
+        ...req.body,
+        title: nc_title || undefined,
+        description: nc_description || undefined,
+      });
+    }
+
+    const aiData = aiResult?.ai || aiResult;
+    if (!aiData?.corrective_action && !aiData?.statement) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se recibió borrador IA válido para la no conformidad',
+      });
+    }
+
+    const finalIsoCode = effectivePayload?.iso_code || iso_code || null;
+    const finalTenantControlId =
+      effectivePayload?.tenant_control_id || tenant_control_id || null;
+
+    if (!finalIsoCode) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se pudo determinar iso_code para crear la acción',
+      });
+    }
+
+    const title =
+      aiData?.draft_title ||
+      effectivePayload?.title ||
+      'Plan de acción derivado de no conformidad';
+
+    const description = buildNonconformityActionPlanDescription(aiData);
+    const priority = normalizePriority('media');
+
+    const reusablePlan = await getReusableNonconformityActionPlan(
+      tenantId,
+      nonconformity_id || null,
+      finalTenantControlId || null
+    );
+
+    let savedRow = null;
+
+    await client.query('BEGIN');
+
+    if (reusablePlan) {
+      const updateRes = await client.query(
+        `
+        UPDATE action_plans
+        SET
+          iso_code = $2,
+          title = $3,
+          description = $4,
+          priority = $5,
+          owner = $6,
+          due_date = $7,
+          tenant_control_id = $8::uuid,
+          updated_at = NOW()
+        WHERE id = $1::uuid
+          AND tenant_id = $9::uuid
+        RETURNING *
+        `,
+        [
+          reusablePlan.id,
+          finalIsoCode,
+          title,
+          description,
+          priority,
+          owner || null,
+          due_date || null,
+          finalTenantControlId || null,
+          tenantId,
+        ]
+      );
+
+      savedRow = updateRes.rows[0];
+
+      const currentProgress = await getLatestActionPlanProgress(client, reusablePlan.id);
+      const nextProgress = normalizeProgress(
+        null,
+        currentProgress,
+        savedRow.status || 'abierto'
+      );
+
+      await insertActionPlanUpdate(client, {
+        actionPlanId: reusablePlan.id,
+        tenantId,
+        comment: 'Plan actualizado desde borrador IA de no conformidad.',
+        progressPercent: nextProgress,
+        statusAfter: savedRow.status || 'abierto',
+        blockedReason: null,
+        createdBy: userId,
+      });
+    } else {
+      const insertRes = await client.query(
+        `
+        INSERT INTO action_plans (
+          tenant_id,
+          iso_code,
+          title,
+          description,
+          source_type,
+          priority,
+          status,
+          owner,
+          due_date,
+          nonconformity_id,
+          tenant_control_id,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1::uuid,
+          $2,
+          $3,
+          $4,
+          'nonconformity',
+          $5,
+          'abierto',
+          $6,
+          $7,
+          $8::uuid,
+          $9::uuid,
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+        `,
+        [
+          tenantId,
+          finalIsoCode,
+          title,
+          description,
+          priority,
+          owner || null,
+          due_date || null,
+          nonconformity_id || null,
+          finalTenantControlId || null,
+        ]
+      );
+
+      savedRow = insertRes.rows[0];
+
+      await insertActionPlanUpdate(client, {
+        actionPlanId: savedRow.id,
+        tenantId,
+        comment: 'Plan creado desde borrador IA de no conformidad.',
+        progressPercent: 0,
+        statusAfter: 'abierto',
+        blockedReason: null,
+        createdBy: userId,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    await savePromptLog({
+      tenantId,
+      promptType: 'nonconformity_to_action_plan_apply_direct',
+      sourceModule: 'ia_compliance_apply',
+      sourceEntityType: nonconformity_id ? 'nonconformity' : 'manual_input',
+      sourceEntityId: nonconformity_id || null,
+      requestPayload: effectivePayload || req.body || {},
+      responsePayload: aiData,
+      status: 'ok',
+      createdBy: userId,
+    });
+
+    return res.json({
+      ok: true,
+      data: savedRow,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('ERROR APPLY NC DRAFT TO ACTION PLAN:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error creando acción desde borrador IA de no conformidad',
+      detail: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = router;

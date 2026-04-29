@@ -1,0 +1,406 @@
+const express = require('express');
+const router = express.Router();
+const pool = require('../config/db');
+const auth = require('../middleware/auth');
+
+const { tenantInternalSearch } = require('./ai-tenant-search.routes');
+
+function normalizeRole(role) {
+  return String(role || '').toLowerCase();
+}
+
+function isPlatformRole(role) {
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'global_admin',
+    'admin_global',
+    'owner',
+  ].includes(normalizeRole(role));
+}
+
+function getUserId(user) {
+  return user?.id || user?.user_id || user?.userId || null;
+}
+
+function getUserTenantId(user) {
+  return user?.tenant_id || user?.tenantId || null;
+}
+
+function resolveTenantId(req) {
+  return (
+    req.body?.tenant_id ||
+    req.query?.tenant_id ||
+    getUserTenantId(req.user) ||
+    null
+  );
+}
+
+function cleanQuestion(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 2000);
+}
+
+function detectQuestionIntent(question) {
+  const q = String(question || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (/\b(evidencia|evidencias|registro|registros|documento|documentos|respaldo)\b/.test(q)) {
+    return 'evidence_recommendation';
+  }
+
+  if (/\b(no conformidad|no conformidades|nc|incumplimiento)\b/.test(q)) {
+    return 'nonconformity_guidance';
+  }
+
+  if (/\b(hallazgo|hallazgos|observacion|brecha)\b/.test(q)) {
+    return 'finding_analysis';
+  }
+
+  if (/\b(riesgo|riesgos|amenaza|vulnerabilidad|impacto|probabilidad)\b/.test(q)) {
+    return 'risk_guidance';
+  }
+
+  if (/\b(control|controles|clausula|requisito|cumplimiento)\b/.test(q)) {
+    return 'control_guidance';
+  }
+
+  return 'general_compliance_guidance';
+}
+
+function confidenceToScore(confidence) {
+  if (confidence === 'alta') return 85;
+  if (confidence === 'media') return 60;
+  return 35;
+}
+
+function buildSuggestedEvidence(intent, topHits) {
+  const evidence = [];
+
+  if (intent === 'evidence_recommendation' || intent === 'control_guidance') {
+    evidence.push(
+      'Procedimiento o política vigente relacionada con el control.',
+      'Registro de ejecución o revisión del control.',
+      'Evidencia de aprobación, responsable y fecha.',
+      'Captura, reporte o documento que demuestre operación real.',
+      'Historial de seguimiento, revisión o mejora cuando aplique.'
+    );
+  }
+
+  if (intent === 'nonconformity_guidance' || intent === 'finding_analysis') {
+    evidence.push(
+      'Descripción del hallazgo o no conformidad.',
+      'Evidencia objetiva asociada.',
+      'Análisis de causa.',
+      'Plan de acción correctiva.',
+      'Registro de cierre y verificación de eficacia.'
+    );
+  }
+
+  if (intent === 'risk_guidance') {
+    evidence.push(
+      'Matriz de riesgos actualizada.',
+      'Criterio de impacto y probabilidad.',
+      'Tratamiento de riesgo definido.',
+      'Responsable y fecha objetivo.',
+      'Evidencia de seguimiento del riesgo.'
+    );
+  }
+
+  for (const hit of topHits.slice(0, 3)) {
+    if (hit?.title) {
+      evidence.push(`Evidencia relacionada con: ${hit.title}`);
+    }
+  }
+
+  return Array.from(new Set(evidence)).slice(0, 10);
+}
+
+function buildNextSteps(intent, confidence, topHits) {
+  const steps = [];
+
+  if (topHits.length > 0) {
+    steps.push('Revisar los resultados internos encontrados y confirmar si corresponden al caso consultado.');
+  }
+
+  if (intent === 'evidence_recommendation') {
+    steps.push('Cargar evidencia documental contra el control correspondiente.');
+    steps.push('Asignar responsable y fecha de revisión.');
+  } else if (intent === 'nonconformity_guidance') {
+    steps.push('Vincular la no conformidad al control afectado.');
+    steps.push('Registrar causa raíz, acción correctiva y verificación de eficacia.');
+  } else if (intent === 'finding_analysis') {
+    steps.push('Clasificar el hallazgo por severidad e impacto.');
+    steps.push('Definir si corresponde crear no conformidad o plan de acción.');
+  } else if (intent === 'risk_guidance') {
+    steps.push('Actualizar evaluación de riesgo y tratamiento asociado.');
+    steps.push('Registrar seguimiento hasta cierre o aceptación formal.');
+  } else {
+    steps.push('Revisar el control, evidencia y estado operacional relacionado.');
+  }
+
+  if (confidence === 'baja') {
+    steps.push('Solicitar revisión humana porque la información interna encontrada es limitada.');
+  }
+
+  return steps;
+}
+
+function buildAnswerFromTenantSearch(question, tenantSearch) {
+  const hits = Array.isArray(tenantSearch?.data) ? tenantSearch.data : [];
+  const topHits = hits.slice(0, 5);
+  const confidence = tenantSearch?.confidence_hint || 'baja';
+  const intent = detectQuestionIntent(question);
+
+  const sourceLevel =
+    confidence === 'alta' || confidence === 'media'
+      ? 'tenant_internal'
+      : 'best_effort';
+
+  const sourceLabel =
+    sourceLevel === 'tenant_internal'
+      ? 'Información interna de la empresa'
+      : 'Mejor esfuerzo controlado con información interna limitada';
+
+  const hitLines = topHits.map((hit, index) => {
+    const standard = hit.standard_code ? ` (${hit.standard_code})` : '';
+    const status = hit.status ? ` Estado: ${hit.status}.` : '';
+    return `${index + 1}. ${hit.title || hit.entity_type}${standard}.${status}`;
+  });
+
+  const executiveSummary =
+    hits.length > 0
+      ? `Se encontraron ${hits.length} coincidencias internas relacionadas con la consulta. La respuesta se basa primero en información propia de la empresa.`
+      : 'No se encontraron coincidencias internas fuertes, por lo que se entrega una respuesta de mejor esfuerzo con próximos pasos recomendados.';
+
+  const analysis =
+    hitLines.length > 0
+      ? `Resultados internos más relevantes:\n${hitLines.join('\n')}`
+      : 'No hay suficientes registros internos relacionados directamente con la consulta.';
+
+  let recommendation = 'Revisar la información interna encontrada, validar su vigencia y completar evidencia o acciones pendientes.';
+
+  if (intent === 'evidence_recommendation') {
+    recommendation = 'Preparar evidencia objetiva que demuestre diseño, implementación, operación y revisión del control consultado.';
+  }
+
+  if (intent === 'nonconformity_guidance') {
+    recommendation = 'Gestionar la no conformidad con causa raíz, acción correctiva, responsable, fecha objetivo y verificación de eficacia.';
+  }
+
+  if (intent === 'finding_analysis') {
+    recommendation = 'Analizar el hallazgo, clasificar severidad, vincularlo al control afectado y decidir si corresponde plan de acción o no conformidad.';
+  }
+
+  if (intent === 'risk_guidance') {
+    recommendation = 'Actualizar la evaluación de riesgos, definir tratamiento y dejar trazabilidad del seguimiento.';
+  }
+
+  return {
+    executive_summary: executiveSummary,
+    analysis,
+    recommendation,
+    suggested_evidence: buildSuggestedEvidence(intent, topHits),
+    next_steps: buildNextSteps(intent, confidence, topHits),
+    risk_if_not_addressed:
+      'Si no se gestiona este punto, puede mantenerse una brecha de cumplimiento, falta de trazabilidad y exposición ante auditorías internas o externas.',
+    confidence,
+    confidence_score: confidenceToScore(confidence),
+    source_level: sourceLevel,
+    source_label: sourceLabel,
+    used_external_lookup: false,
+    used_anonymized_benchmark: false,
+    used_tenant_internal: hits.length > 0,
+    must_review_by_human: confidence === 'baja',
+    top_internal_results: topHits,
+  };
+}
+
+async function saveTrace({
+  tenantId,
+  userId,
+  question,
+  intent,
+  answer,
+  tenantSearch,
+}) {
+  const result = await pool.query(
+    `
+    INSERT INTO ai_core.ai_response_traces (
+      tenant_id,
+      user_id,
+      question,
+      normalized_question,
+      intent,
+      source_level,
+      source_label,
+      confidence,
+      confidence_score,
+      tenant_hits,
+      knowledge_hits,
+      benchmark_hits,
+      external_hits,
+      used_tenant_internal,
+      used_tcdx_knowledge,
+      used_anonymized_benchmark,
+      used_external_lookup,
+      must_review_by_human,
+      final_strategy,
+      answer_summary,
+      answer_json,
+      sources_json,
+      trace_json,
+      metadata
+    )
+    VALUES (
+      $1::uuid,
+      NULLIF($2::text, '')::uuid,
+      $3::text,
+      lower($3::text),
+      $4::text,
+      $5::text,
+      $6::text,
+      $7::text,
+      $8::numeric,
+      $9::int,
+      0,
+      0,
+      0,
+      $10::boolean,
+      false,
+      false,
+      false,
+      $11::boolean,
+      $12::text,
+      $13::text,
+      $14::jsonb,
+      $15::jsonb,
+      $16::jsonb,
+      $17::jsonb
+    )
+    RETURNING id, created_at
+    `,
+    [
+      tenantId,
+      userId || '',
+      question,
+      intent,
+      answer.source_level,
+      answer.source_label,
+      answer.confidence,
+      answer.confidence_score,
+      Number(tenantSearch?.total || 0),
+      answer.used_tenant_internal === true,
+      answer.must_review_by_human === true,
+      'tenant_internal_first',
+      answer.executive_summary,
+      JSON.stringify(answer),
+      JSON.stringify(answer.top_internal_results || []),
+      JSON.stringify({
+        tenant_search: {
+          total: tenantSearch?.total || 0,
+          strong_hits: tenantSearch?.strong_hits || 0,
+          medium_hits: tenantSearch?.medium_hits || 0,
+          top_rank: tenantSearch?.top_rank || 0,
+          confidence_hint: tenantSearch?.confidence_hint || 'baja',
+          detected_standards: tenantSearch?.detected_standards || [],
+          detected_intent: tenantSearch?.detected_intent || {},
+        },
+      }),
+      JSON.stringify({
+        created_from: 'ai_answer_route',
+        phase: 'IA-03B',
+      }),
+    ]
+  );
+
+  return result.rows[0];
+}
+
+// =====================================================
+// POST /api/ai-compliance/answer
+// Primera versión de respuesta IA: busca primero en información interna del tenant.
+// =====================================================
+router.post('/', auth, async (req, res) => {
+  try {
+    const question = cleanQuestion(req.body?.question || req.body?.q || '');
+
+    if (!question) {
+      return res.status(400).json({
+        ok: false,
+        error: 'question es obligatorio',
+      });
+    }
+
+    const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
+    const isPlatform = isPlatformRole(role);
+    const userTenantId = getUserTenantId(req.user);
+    const tenantId = resolveTenantId(req);
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'tenant_id es obligatorio o debe venir en el token',
+      });
+    }
+
+    if (!isPlatform && String(tenantId) !== String(userTenantId)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No tienes permiso para consultar este tenant',
+      });
+    }
+
+    const intent = detectQuestionIntent(question);
+
+    const tenantSearch = await tenantInternalSearch({
+      tenantId,
+      q: question,
+      limit: Number(req.body?.limit || 12),
+    });
+
+    const answer = buildAnswerFromTenantSearch(question, tenantSearch);
+
+    const trace = await saveTrace({
+      tenantId,
+      userId: getUserId(req.user),
+      question,
+      intent,
+      answer,
+      tenantSearch,
+    });
+
+    return res.json({
+      ok: true,
+      tenant_id: tenantId,
+      question,
+      answer,
+      trace: {
+        id: trace.id,
+        created_at: trace.created_at,
+      },
+      search_trace: {
+        source_order: ['tenant_internal'],
+        tenant_hits: tenantSearch.total,
+        confidence_hint: tenantSearch.confidence_hint,
+        top_rank: tenantSearch.top_rank,
+        fallback_pending: answer.source_level === 'best_effort',
+      },
+    });
+  } catch (error) {
+    console.error('ERROR AI ANSWER:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error generando respuesta IA',
+      detail: error.message,
+    });
+  }
+});
+
+module.exports = router;
