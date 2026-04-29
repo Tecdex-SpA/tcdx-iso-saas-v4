@@ -735,6 +735,24 @@ export default function DashboardPage() {
 
   const scoreKpiGlobal = calculateExecutiveScore(kpiSummary);
 
+  const measuredKpis = Number(
+    kpiSummary?.measured_kpis ??
+      ((kpiSummary?.green || 0) +
+        (kpiSummary?.yellow || 0) +
+        (kpiSummary?.red || 0))
+  );
+
+  const totalKpis = Number(kpiSummary?.total_kpis || kpiItems.length || 0);
+  const pendingKpis = Number(kpiSummary?.gray || 0);
+
+  const kpiCoveragePct =
+    Number(kpiSummary?.data_coverage_pct) ||
+    (totalKpis > 0 ? Math.round((measuredKpis / totalKpis) * 100) : 0);
+
+  const kpiCoverageTone =
+    kpiCoveragePct >= 90 ? 'green' : kpiCoveragePct >= 70 ? 'amber' : 'red';
+
+
   const healthMainKpi = useMemo(() => {
     return healthKpiItems.find((item) => item.code === 'KPI-HLT-001') || null;
   }, [healthKpiItems]);
@@ -1313,7 +1331,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-5">
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-6">
                   <TopCard
                     title="Score KPI Global"
                     value={`${scoreKpiGlobal}%`}
@@ -1322,6 +1340,16 @@ export default function DashboardPage() {
                     change={`${kpiSummary?.green || 0} verdes`}
                     changeHint="estado actual"
                     icon={<span>📊</span>}
+                  />
+
+                  <TopCard
+                    title="Cobertura KPI"
+                    value={`${kpiCoveragePct}%`}
+                    subtitle={`${measuredKpis}/${totalKpis} KPIs medidos`}
+                    accent={kpiCoverageTone}
+                    change={`${pendingKpis} sin dato`}
+                    changeHint="madurez de datos"
+                    icon={<span>📈</span>}
                   />
 
                   <TopCard
