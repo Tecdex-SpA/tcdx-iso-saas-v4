@@ -36,16 +36,22 @@ skip() {
 
 extract_json_value() {
   local key="$1"
-  python3 - "$key" <<'PY'
-import json, sys
+
+  python3 -c '
+import json
+import sys
+
 key = sys.argv[1]
+raw = sys.stdin.read()
+
 try:
-    data = json.load(sys.stdin)
+    data = json.loads(raw)
 except Exception:
     print("")
     raise SystemExit(0)
 
 value = data
+
 for part in key.split("."):
     if isinstance(value, dict):
         value = value.get(part)
@@ -53,8 +59,11 @@ for part in key.split("."):
         value = None
         break
 
-print(value or "")
-PY
+if value is None:
+    print("")
+else:
+    print(value)
+' "$key"
 }
 
 login() {

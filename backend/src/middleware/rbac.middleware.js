@@ -130,7 +130,7 @@ const API_RULES = [
   {
     prefix: '/api/reports',
     read: [...TENANT_READ_ROLES, 'dealer'],
-    write: ['admin', 'tenant_admin', 'auditor'],
+    write: ['admin', 'tenant_admin', 'auditor', 'dealer'],
   },
 
   // Usuarios / SaaS / plataforma

@@ -117,7 +117,7 @@ function getCategoryBadgeClass(category: string) {
 function getStatusLabel(status?: string) {
   const raw = String(status || '').toLowerCase();
 
-  if (['completed', 'completado', 'generado', 'success', 'ok'].includes(raw)) {
+  if (['completed', 'completado', 'generado', 'generated', 'success', 'ok'].includes(raw)) {
     return 'Generado';
   }
 
@@ -135,7 +135,7 @@ function getStatusLabel(status?: string) {
 function getStatusClass(status?: string) {
   const raw = String(status || '').toLowerCase();
 
-  if (['completed', 'completado', 'generado', 'success', 'ok'].includes(raw)) {
+  if (['completed', 'completado', 'generado', 'generated', 'success', 'ok'].includes(raw)) {
     return 'bg-emerald-50 text-emerald-700 border-emerald-200';
   }
 
@@ -660,6 +660,8 @@ export default function ExportesPage() {
                 'rounded-2xl px-4 py-3 text-sm font-bold transition',
                 activeTab === 'generate'
                   ? 'bg-[#0B2F4F] text-white'
+                  : isReadOnlyReports
+                  ? 'cursor-not-allowed text-slate-300'
                   : 'text-slate-600 hover:bg-slate-100',
               ].join(' ')}
             >
