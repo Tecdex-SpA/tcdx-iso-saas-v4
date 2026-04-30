@@ -79,19 +79,33 @@ http_code() {
   local method="$1"
   local path="$2"
   local token="$3"
-  local body="${4:-{}}"
+  local body="${4:-}"
+
+  # Para pruebas RBAC no necesitamos body.
+  # Si body viene vacío o {}, omitimos Content-Type y -d para que express.json()
+  # no devuelva 400 antes de que responda RBAC.
+  if [[ "$body" == "{}" ]]; then
+    body=""
+  fi
 
   if [[ "$method" == "GET" ]]; then
     curl -sS -o /tmp/rbac_body.txt -w "%{http_code}" \
       "$API$path" \
       -H "Authorization: Bearer $token"
   else
-    curl -sS -o /tmp/rbac_body.txt -w "%{http_code}" \
-      -X "$method" \
-      "$API$path" \
-      -H "Authorization: Bearer $token" \
-      -H "Content-Type: application/json" \
-      -d "$body"
+    if [[ -n "$body" ]]; then
+      curl -sS -o /tmp/rbac_body.txt -w "%{http_code}" \
+        -X "$method" \
+        "$API$path" \
+        -H "Authorization: Bearer $token" \
+        -H "Content-Type: application/json" \
+        --data-raw "$body"
+    else
+      curl -sS -o /tmp/rbac_body.txt -w "%{http_code}" \
+        -X "$method" \
+        "$API$path" \
+        -H "Authorization: Bearer $token"
+    fi
   fi
 }
 
