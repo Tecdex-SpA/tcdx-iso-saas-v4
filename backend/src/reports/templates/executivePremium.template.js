@@ -663,7 +663,8 @@ function renderAuditSummaryPage(data) {
         </div>
       ` : `
         <div class="emptyBox" style="margin-top:4mm;">
-          IA Auditor aún no registra ejecuciones para este tenant.
+          <strong>Última ejecución IA Auditor:</strong>
+          Sin ejecución registrada para este tenant.
         </div>
       `}
     `, 'wideCard')}
