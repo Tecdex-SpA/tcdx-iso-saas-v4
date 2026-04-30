@@ -186,10 +186,13 @@ function AuditoriasPageContent() {
     currentRole === 'readonly' ||
     currentRole === 'ejecutivo';
 
-  const isReadOnly = currentRole === 'auditor' || isViewer;
+  const isOperativo = currentRole === 'operativo';
+
+  const isReadOnly = isViewer || isOperativo;
+
   const readOnlyMessage = isViewer
     ? 'Tu usuario es solo lectura. Puedes revisar auditorías, pero no crear ni modificar registros.'
-    : 'Tu usuario tiene acceso de solo lectura en esta vista.';
+    : 'Tu usuario operativo puede revisar auditorías y sus acciones asociadas, pero no crear ni modificar auditorías.';
 
   const tenantId = resolveTenantId(user);
 
