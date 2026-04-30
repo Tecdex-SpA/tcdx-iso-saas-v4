@@ -684,6 +684,296 @@ router.get('/exports', auth, async (req, res) => {
   }
 });
 
+
+// =====================================================
+// CICLO DE VIDA EN REPORTES PREMIUM
+// Agrega una página de trazabilidad auditable al PDF.
+// =====================================================
+function escapeReportHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function formatReportDateTime(value) {
+  if (!value) return '-';
+
+  try {
+    return new Intl.DateTimeFormat('es-CL', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(value));
+  } catch {
+    return String(value || '-');
+  }
+}
+
+function lifecycleStageName(code) {
+  const map = {
+    diagnostico: 'Diagnóstico',
+    diseno_planificacion: 'Diseño / Planificación',
+    implementacion: 'Implementación',
+    verificacion_auditoria: 'Verificación / Auditoría',
+    certificacion: 'Certificación',
+    mejora_continua: 'Mejora Continua',
+    suspendida_fuera_alcance: 'Suspendida / Fuera de alcance',
+  };
+
+  return map[String(code || '').toLowerCase()] || code || 'Sin etapa';
+}
+
+function lifecycleStatusLabel(value) {
+  const raw = String(value || '').toLowerCase();
+
+  if (raw.includes('rechaz')) return 'Rechazado';
+  if (raw.includes('reject')) return 'Rechazado';
+  if (raw.includes('confirm')) return 'Confirmado';
+  if (raw.includes('aprobad')) return 'Aprobado';
+  if (raw.includes('aprob')) return 'Aprobado';
+
+  return value || 'Pendiente';
+}
+
+function quoteLifecycleIdentifier(value) {
+  return `"${String(value || '').replace(/"/g, '""')}"`;
+}
+
+async function getLifecycleHistoryTableForReports() {
+  const candidates = [
+    'standard_lifecycle_stage_requests',
+    'tenant_lifecycle_stage_requests',
+    'lifecycle_stage_requests',
+    'standard_lifecycle_requests',
+  ];
+
+  const result = await pool.query(
+    `
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = ANY($1)
+    ORDER BY array_position($1, table_name)
+    LIMIT 1
+    `,
+    [candidates]
+  );
+
+  return result.rows[0]?.table_name || null;
+}
+
+async function getLifecycleTableColumnsForReports(tableName) {
+  const result = await pool.query(
+    `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = $1
+    `,
+    [tableName]
+  );
+
+  return new Set(result.rows.map((row) => row.column_name));
+}
+
+function lifecycleColumnExpr(columns, candidates, fallbackSql) {
+  const found = candidates.find((column) => columns.has(column));
+  return found ? `r.${quoteLifecycleIdentifier(found)}` : fallbackSql;
+}
+
+async function getLifecycleHistoryForReport(tenantId, limit = 12) {
+  try {
+    const tableName = await getLifecycleHistoryTableForReports();
+
+    if (!tableName) {
+      return [];
+    }
+
+    const columns = await getLifecycleTableColumnsForReports(tableName);
+    const tableRef = quoteLifecycleIdentifier(tableName);
+
+    const tenantExpr = lifecycleColumnExpr(columns, ['tenant_id'], '$1::uuid');
+    const standardExpr = lifecycleColumnExpr(columns, ['standard_code', 'iso', 'iso_code'], 'NULL');
+    const operationExpr = lifecycleColumnExpr(columns, ['operation_id'], 'NULL');
+    const fromStageExpr = lifecycleColumnExpr(columns, ['from_stage_code', 'from_stage'], 'NULL');
+    const toStageExpr = lifecycleColumnExpr(columns, ['to_stage_code', 'to_stage', 'pending_stage_code'], 'NULL');
+    const statusExpr = lifecycleColumnExpr(columns, ['request_status', 'status'], "'pendiente'");
+    const reasonExpr = lifecycleColumnExpr(columns, ['request_reason', 'reason', 'comment'], 'NULL');
+    const requestedAtExpr = lifecycleColumnExpr(columns, ['requested_at', 'created_at'], 'NULL');
+    const reviewedAtExpr = lifecycleColumnExpr(columns, ['reviewed_at', 'updated_at'], 'NULL');
+    const reviewCommentExpr = lifecycleColumnExpr(columns, ['review_comment', 'review_notes'], 'NULL');
+    const requestedByExpr = lifecycleColumnExpr(columns, ['requested_by', 'created_by', 'user_id'], 'NULL');
+    const reviewedByExpr = lifecycleColumnExpr(columns, ['reviewed_by', 'updated_by'], 'NULL');
+
+    const safeLimit = Math.min(Math.max(Number(limit || 12), 1), 30);
+
+    const sql = `
+      SELECT
+        ${standardExpr}::text AS standard_code,
+        ${operationExpr}::text AS operation_id,
+        op.name AS operation_name,
+        ${fromStageExpr}::text AS from_stage_code,
+        ${toStageExpr}::text AS to_stage_code,
+        ${statusExpr}::text AS request_status,
+        ${reasonExpr}::text AS request_reason,
+        ${requestedAtExpr} AS requested_at,
+        ${reviewedAtExpr} AS reviewed_at,
+        ${reviewCommentExpr}::text AS review_comment,
+        COALESCE(ru.full_name, ru.name, ru.email) AS requested_by_name,
+        COALESCE(vu.full_name, vu.name, vu.email) AS reviewed_by_name
+      FROM ${tableRef} r
+      LEFT JOIN tenant_operations op
+        ON op.id::text = ${operationExpr}::text
+       AND op.tenant_id::text = ${tenantExpr}::text
+      LEFT JOIN users ru
+        ON ru.id::text = ${requestedByExpr}::text
+      LEFT JOIN users vu
+        ON vu.id::text = ${reviewedByExpr}::text
+      WHERE ${tenantExpr} = $1::uuid
+      ORDER BY COALESCE(${requestedAtExpr}, ${reviewedAtExpr}) DESC NULLS LAST
+      LIMIT ${safeLimit}
+    `;
+
+    const result = await pool.query(sql, [tenantId]);
+
+    return result.rows.map((row) => ({
+      ...row,
+      from_stage_name: lifecycleStageName(row.from_stage_code),
+      to_stage_name: lifecycleStageName(row.to_stage_code),
+      request_status_label: lifecycleStatusLabel(row.request_status),
+    }));
+  } catch (error) {
+    console.error('REPORT LIFECYCLE HISTORY ERROR:', error.message);
+    return [];
+  }
+}
+
+function renderLifecycleHistoryReportPage(reportData) {
+  const tenantName = reportData?.tenant?.name || 'Cliente';
+  const rows = Array.isArray(reportData?.lifecycle_history)
+    ? reportData.lifecycle_history
+    : [];
+
+  const rowsHtml = rows.length
+    ? rows
+        .map((row) => {
+          const status = String(row.request_status || '').toLowerCase();
+          const badgeColor = status.includes('rechaz') || status.includes('reject')
+            ? '#b91c1c'
+            : status.includes('confirm') || status.includes('aprobad') || status.includes('aprob')
+            ? '#047857'
+            : '#b45309';
+
+          return `
+            <tr>
+              <td>${escapeReportHtml(formatReportDateTime(row.requested_at || row.reviewed_at))}</td>
+              <td><strong>${escapeReportHtml(row.standard_code || '-')}</strong></td>
+              <td>${escapeReportHtml(row.operation_name || row.operation_id || '-')}</td>
+              <td>
+                <div><strong>${escapeReportHtml(row.from_stage_name || row.from_stage_code || 'Sin etapa')}</strong></div>
+                <div style="font-size:10px;color:#64748b;margin:2px 0;">hacia</div>
+                <div><strong>${escapeReportHtml(row.to_stage_name || row.to_stage_code || 'Sin etapa')}</strong></div>
+              </td>
+              <td>
+                <span style="display:inline-block;border:1px solid ${badgeColor};color:${badgeColor};border-radius:999px;padding:4px 8px;font-size:10px;font-weight:700;">
+                  ${escapeReportHtml(row.request_status_label || row.request_status || 'Pendiente')}
+                </span>
+              </td>
+              <td>${escapeReportHtml(row.requested_by_name || 'No informado')}</td>
+              <td>${escapeReportHtml(row.reviewed_by_name || 'Pendiente')}</td>
+              <td>
+                <div>${escapeReportHtml(row.request_reason || 'Sin motivo informado')}</div>
+                ${
+                  row.review_comment
+                    ? `<div style="margin-top:4px;color:#64748b;font-size:10px;">${escapeReportHtml(row.review_comment)}</div>`
+                    : ''
+                }
+              </td>
+            </tr>
+          `;
+        })
+        .join('')
+    : `
+      <tr>
+        <td colspan="8" style="padding:18px;color:#64748b;text-align:center;">
+          No existen movimientos de ciclo de vida registrados para este tenant.
+        </td>
+      </tr>
+    `;
+
+  return `
+    <section style="page-break-before:always;width:216mm;min-height:279mm;box-sizing:border-box;background:#ffffff;padding:14mm 12mm;font-family:Arial, Helvetica, sans-serif;color:#0f172a;">
+      <div style="border-bottom:1px solid #e2e8f0;padding-bottom:12px;margin-bottom:18px;display:flex;justify-content:space-between;gap:16px;align-items:flex-start;">
+        <div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.18em;color:#64748b;font-weight:700;">TCDX by Tecdex</div>
+          <h1 style="font-size:24px;line-height:1.1;margin:8px 0 4px;font-weight:800;color:#0B2F4F;">Trazabilidad del Ciclo de Vida</h1>
+          <div style="font-size:12px;color:#475569;">Historial auditable de movimientos, aprobaciones y rechazos.</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#64748b;font-weight:700;">Cliente</div>
+          <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:4px;">${escapeReportHtml(tenantName)}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+        <div style="border:1px solid #e2e8f0;border-radius:14px;padding:12px;background:#f8fafc;">
+          <div style="font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Movimientos incluidos</div>
+          <div style="font-size:24px;font-weight:800;color:#0B2F4F;margin-top:4px;">${rows.length}</div>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-radius:14px;padding:12px;background:#f8fafc;">
+          <div style="font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Uso auditor</div>
+          <div style="font-size:13px;font-weight:700;color:#0f172a;margin-top:6px;">Evidencia de trazabilidad</div>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-radius:14px;padding:12px;background:#f8fafc;">
+          <div style="font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Cobertura</div>
+          <div style="font-size:13px;font-weight:700;color:#0f172a;margin-top:6px;">Últimos movimientos registrados</div>
+        </div>
+      </div>
+
+      <div style="border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;font-size:10.5px;">
+          <thead>
+            <tr style="background:#f1f5f9;color:#334155;text-align:left;">
+              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Fecha</th>
+              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Norma</th>
+              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Operación</th>
+              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Movimiento</th>
+              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Estado</th>
+              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Solicitado por</th>
+              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Revisado por</th>
+              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Motivo / comentario</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:16px;border-top:1px solid #e2e8f0;padding-top:10px;font-size:10px;color:#64748b;display:flex;justify-content:space-between;gap:12px;">
+        <div>Documento confidencial. Uso restringido al cliente y equipo autorizado.</div>
+        <div>Página adicional de trazabilidad</div>
+      </div>
+    </section>
+  `;
+}
+
+function injectLifecycleHistoryIntoReportHtml(html, reportData) {
+  const page = renderLifecycleHistoryReportPage(reportData);
+
+  if (String(html || '').includes('</body>')) {
+    return String(html).replace('</body>', `${page}</body>`);
+  }
+
+  return `${html || ''}${page}`;
+}
+
+
 // =====================================================
 // POST /api/reports/generate
 // Genera PDF premium según tipo de reporte y perfil.
@@ -767,7 +1057,10 @@ router.post('/generate', auth, async (req, res) => {
       requesterRole: role,
     });
 
-    const html = renderExecutivePremiumTemplate(reportData);
+    reportData.lifecycle_history = await getLifecycleHistoryForReport(targetTenantId);
+
+    const baseHtml = renderExecutivePremiumTemplate(reportData);
+    const html = injectLifecycleHistoryIntoReportHtml(baseHtml, reportData);
 
     const reportTitle = buildReportTitle(reportType, report_type_code, period);
     const tenantFolder = path.join(
