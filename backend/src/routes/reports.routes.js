@@ -303,6 +303,21 @@ async function generatePdfFromHtml(html, outputPath) {
 
     await page.emulateMediaType('screen');
 
+    await page.evaluate(() => {
+      const removeSmallestBlockContaining = (label) => {
+        const nodes = Array.from(document.querySelectorAll('section, article, div'));
+        const matches = nodes
+          .filter((node) => (node.innerText || '').includes(label))
+          .sort((a, b) => (a.innerText || '').length - (b.innerText || '').length);
+
+        if (matches[0]) {
+          matches[0].remove();
+        }
+      };
+
+      removeSmallestBlockContaining('Foco ejecutivo asistido por IA');
+    });
+
     await page.evaluate(async () => {
       if (document.fonts && document.fonts.ready) {
         try {
@@ -1006,8 +1021,16 @@ function renderPremiumExtraHeader(reportData, title, subtitle = '') {
 function renderPremiumExtraFooter(pageLabel = 'Página adicional') {
   return `
     <div class="tcdxExtraFooter">
-      <div>Documento confidencial. Uso restringido al cliente y equipo autorizado.</div>
-      <div>${escapeReportHtml(pageLabel)}</div>
+      <div>
+        <strong>Documento confidencial.</strong>
+        <span> Uso restringido al cliente y equipo autorizado.</span>
+      </div>
+      <div class="tcdxExtraFooterCenter">
+        ${escapeReportHtml(pageLabel)}
+      </div>
+      <div class="tcdxExtraFooterRight">
+        Página __TCDX_EXTRA_PAGE__ de __TCDX_TOTAL_PAGES__
+      </div>
     </div>
   `;
 }
@@ -1034,6 +1057,7 @@ function injectPremiumPdfQualityStyles(html) {
         width: 216mm !important;
         height: 279mm !important;
         min-height: 279mm !important;
+        max-height: 279mm !important;
         box-sizing: border-box !important;
         page-break-after: always !important;
         break-after: page !important;
@@ -1049,34 +1073,45 @@ function injectPremiumPdfQualityStyles(html) {
       }
 
       .header,
-      .tcdxExtraHeader {
+      .tcdxExtraHeader,
+      .footer,
+      .tcdxExtraFooter {
         background: #0B2F4F !important;
         color: #ffffff !important;
-        border-bottom: none !important;
       }
 
       .header {
-        min-height: 27mm !important;
-        height: 27mm !important;
+        height: 26mm !important;
+        min-height: 26mm !important;
+        max-height: 26mm !important;
         box-sizing: border-box !important;
-        padding-top: 5mm !important;
-        padding-bottom: 4mm !important;
+        padding: 5mm 10mm 4mm !important;
+        border-bottom: none !important;
       }
 
+      .footer {
+        height: 16mm !important;
+        min-height: 16mm !important;
+        max-height: 16mm !important;
+        box-sizing: border-box !important;
+        padding: 3.5mm 10mm !important;
+        border-top: none !important;
+      }
+
+      .footer *,
+      .footerMuted,
+      .pageNumber,
       .documentTitle,
-      .headerCenter h1,
-      .tcdxExtraHeaderCenter h1 {
+      .documentDate {
         color: #ffffff !important;
       }
 
-      .documentDate,
-      .tcdxExtraHeaderCenter p {
-        color: #cbd5e1 !important;
-      }
-
-      .tcdxExtraKicker {
-        color: #dbeafe !important;
-        letter-spacing: 0.08em !important;
+      .pageContent {
+        box-sizing: border-box !important;
+        height: 237mm !important;
+        max-height: 237mm !important;
+        overflow: hidden !important;
+        padding: 7mm 10mm 5mm !important;
       }
 
       .logoHolder,
@@ -1084,15 +1119,18 @@ function injectPremiumPdfQualityStyles(html) {
       .clientLogo {
         background: #ffffff !important;
         border-radius: 12px !important;
-        padding: 5px 8px !important;
+        padding: 4px 8px !important;
         box-sizing: border-box !important;
+        overflow: hidden !important;
       }
 
       .logoHolder img,
       .brandLogo img,
-      .clientLogo img {
+      .clientLogo img,
+      .tcdxExtraLogoLeft img,
+      .tcdxExtraLogoRight img {
         max-width: 42mm !important;
-        max-height: 17mm !important;
+        max-height: 16mm !important;
         object-fit: contain !important;
       }
 
@@ -1101,43 +1139,18 @@ function injectPremiumPdfQualityStyles(html) {
         color: #0B2F4F !important;
       }
 
-      .pageContent {
-        box-sizing: border-box !important;
-        max-height: 235mm !important;
-        overflow: hidden !important;
-        padding-bottom: 5mm !important;
-      }
-
-      .footer {
-        background: #0B2F4F !important;
-        color: #ffffff !important;
-        min-height: 16mm !important;
-        height: 16mm !important;
-        box-sizing: border-box !important;
-        border-top: none !important;
-      }
-
-      .footer *,
-      .footerMuted,
-      .pageNumber {
-        color: #ffffff !important;
-      }
-
       .sectionCard,
       .compact,
       .kpiCard,
       .recommendation,
+      .metricLine,
       tr {
         break-inside: avoid !important;
         page-break-inside: avoid !important;
       }
 
-      table {
-        border-collapse: collapse !important;
-      }
-
-      img {
-        image-rendering: auto;
+      .kpiCard {
+        min-height: 28mm !important;
       }
 
       .tcdxExtraPage {
@@ -1147,13 +1160,15 @@ function injectPremiumPdfQualityStyles(html) {
       }
 
       .tcdxExtraHeader {
-        height: 27mm;
+        height: 26mm;
+        min-height: 26mm;
+        max-height: 26mm;
         box-sizing: border-box;
         display: grid;
-        grid-template-columns: 46mm 1fr 46mm;
-        gap: 8mm;
+        grid-template-columns: 45mm 1fr 45mm;
+        gap: 7mm;
         align-items: center;
-        padding: 5mm 11mm 4mm;
+        padding: 5mm 10mm 4mm;
       }
 
       .tcdxExtraHeaderCenter {
@@ -1161,21 +1176,32 @@ function injectPremiumPdfQualityStyles(html) {
       }
 
       .tcdxExtraHeaderCenter h1 {
-        margin: 2mm 0 1mm;
-        font-size: 19px;
-        line-height: 1.08;
+        margin: 1mm 0 1mm;
+        color: #ffffff !important;
+        font-size: 18px;
+        line-height: 1.05;
         font-weight: 800;
       }
 
       .tcdxExtraHeaderCenter p {
         margin: 0;
+        color: #dbeafe !important;
         font-size: 10.5px;
       }
 
+      .tcdxExtraKicker {
+        color: #bfdbfe !important;
+        font-size: 8.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-weight: 800;
+      }
+
       .tcdxExtraContent {
-        height: 236mm;
+        height: 237mm;
+        max-height: 237mm;
         box-sizing: border-box;
-        padding: 7mm 11mm 5mm;
+        padding: 7mm 10mm 5mm;
         overflow: hidden;
       }
 
@@ -1185,59 +1211,49 @@ function injectPremiumPdfQualityStyles(html) {
         right: 0;
         bottom: 0;
         height: 16mm;
+        min-height: 16mm;
+        max-height: 16mm;
         box-sizing: border-box;
-        background: #0B2F4F;
-        color: #ffffff;
-        padding: 4mm 11mm;
-        display: flex;
-        justify-content: space-between;
+        padding: 3.5mm 10mm;
+        display: grid;
+        grid-template-columns: 1.2fr 1fr 0.65fr;
+        gap: 6mm;
         align-items: center;
-        gap: 8mm;
-        font-size: 9.5px;
+        color: #ffffff;
+        font-size: 9.3px;
       }
 
-      .tcdxExtraTableWrap {
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        overflow: hidden;
+      .tcdxExtraFooterCenter {
+        text-align: center;
+        color: #dbeafe;
       }
 
-      .tcdxExtraTable {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 9.2px;
-      }
-
-      .tcdxExtraTable th {
-        background: #f1f5f9;
-        color: #334155;
-        text-align: left;
-        padding: 6px;
-        border-bottom: 1px solid #e2e8f0;
-      }
-
-      .tcdxExtraTable td {
-        padding: 6px;
-        border-bottom: 1px solid #f1f5f9;
-        vertical-align: top;
+      .tcdxExtraFooterRight {
+        text-align: right;
+        font-weight: 700;
       }
 
       .tcdxExtraKpiGrid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
-        margin-bottom: 14px;
+        gap: 9px;
+        margin-bottom: 12px;
+      }
+
+      .tcdxExtraMiniCard,
+      .tcdxAiBox {
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        background: #ffffff;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
       }
 
       .tcdxExtraMiniCard {
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
         padding: 11px;
-        background: #f8fafc;
       }
 
       .tcdxExtraMiniCardLabel {
-        font-size: 9px;
+        font-size: 8.8px;
         text-transform: uppercase;
         color: #64748b;
         font-weight: 800;
@@ -1251,16 +1267,39 @@ function injectPremiumPdfQualityStyles(html) {
         margin-top: 4px;
       }
 
+      .tcdxExtraTableWrap {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        overflow: hidden;
+      }
+
+      .tcdxExtraTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 8.8px;
+      }
+
+      .tcdxExtraTable th {
+        background: #f1f5f9;
+        color: #334155;
+        text-align: left;
+        padding: 5px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .tcdxExtraTable td {
+        padding: 5px;
+        border-bottom: 1px solid #f1f5f9;
+        vertical-align: top;
+      }
+
       .tcdxAiGrid {
         display: grid;
-        grid-template-columns: 1.05fr 0.95fr;
+        grid-template-columns: 1fr 1fr;
         gap: 12px;
       }
 
       .tcdxAiBox {
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        background: #ffffff;
         padding: 13px;
       }
 
@@ -1273,8 +1312,8 @@ function injectPremiumPdfQualityStyles(html) {
 
       .tcdxAiBox p,
       .tcdxAiBox li {
-        font-size: 11px;
-        line-height: 1.45;
+        font-size: 10.8px;
+        line-height: 1.42;
         color: #334155;
       }
 
@@ -1598,9 +1637,19 @@ function normalizePremiumPageCount(html) {
 
   if (!total) return raw;
 
-  return raw.replace(/Página\s+(\d+)\s+de\s+\d+/g, (_match, page) => {
+  let out = raw.replace(/Página\s+(\d+)\s+de\s+\d+/g, (_match, page) => {
     return `Página ${page} de ${total}`;
   });
+
+  let currentExtraPage = reportPages + 1;
+
+  out = out.replace(/Página __TCDX_EXTRA_PAGE__ de __TCDX_TOTAL_PAGES__/g, () => {
+    const label = `Página ${currentExtraPage} de ${total}`;
+    currentExtraPage += 1;
+    return label;
+  });
+
+  return out;
 }
 
 

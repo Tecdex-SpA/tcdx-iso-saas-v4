@@ -7,6 +7,12 @@ import { getUserFromToken } from '@/utils/auth';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
+const SERVICE_LOGO_SRC =
+  process.env.NEXT_PUBLIC_TCDX_LOGO_URL || '/logo.png';
+
+const POWERED_BY_LOGO_SRC =
+  process.env.NEXT_PUBLIC_TECDX_POWERED_LOGO_URL || '/tecdex.png';
+
 type SidebarProps = {
   collapsed?: boolean;
   onToggle?: () => void;
@@ -595,7 +601,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       <div className={`mb-5 flex h-16 items-center ${collapsed ? 'justify-center' : 'justify-start pl-1'}`}>
         <img
-          src="/logo.png"
+          src={SERVICE_LOGO_SRC}
           alt="Logo"
           className={collapsed ? 'h-10 w-10 object-contain' : 'h-auto w-28 scale-150 object-contain origin-left'}
         />
@@ -704,7 +710,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       <div className={['mt-4 border-t border-white/10 pt-4', collapsed ? 'flex justify-center' : ''].join(' ')}>
         {collapsed ? (
           <div title="Powered by Tecdex" className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5">
-            <img src="/logo.png" alt="Tecdex" className="h-7 w-7 object-contain" />
+            <img src={SERVICE_LOGO_SRC} alt="Tecdex" className="h-7 w-7 object-contain" />
           </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
@@ -712,7 +718,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               Powered by
             </p>
             <div className="flex items-center gap-3">
-              <img src="/tecdex.png" alt="Tecdex" className="h-12 w-auto object-contain" />
+              <img src={POWERED_BY_LOGO_SRC} alt="Tecdex" className="h-12 w-auto object-contain" />
             </div>
           </div>
         )}

@@ -41,10 +41,40 @@ type NotificationItem = {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
+const SERVICE_LOGO_SRC =
+  process.env.NEXT_PUBLIC_TCDX_LOGO_URL || '/logo.png';
+
+function resolveAssetUrl(value?: string | null, fallback = SERVICE_LOGO_SRC) {
+  const raw = String(value || '').trim();
+
+  if (!raw) return fallback;
+
+  if (
+    raw.startsWith('http://') ||
+    raw.startsWith('https://') ||
+    raw.startsWith('data:') ||
+    raw.startsWith('/')
+  ) {
+    return raw;
+  }
+
+  return `${API_URL}/uploads/logos/${raw}`;
+}
+
+function resolveTenantLogo(tenant: any) {
+  return (
+    tenant?.report_logo_url ||
+    tenant?.logo_url ||
+    tenant?.brand_logo_url ||
+    tenant?.logo ||
+    null
+  );
+}
+
 export default function Header() {
   const [user, setUser] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
-  const [logo, setLogo] = useState<string>('/logo.png');
+  const [logo, setLogo] = useState<string>(SERVICE_LOGO_SRC);
 
   const [open, setOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -93,9 +123,9 @@ export default function Header() {
         .then((res) => res.json())
         .then((t) => {
           setTenant(t);
-          if (t?.logo) {
-            setLogo(`${API_URL}/uploads/logos/${t.logo}`);
-          }
+
+          const tenantLogo = resolveTenantLogo(t);
+          setLogo(resolveAssetUrl(tenantLogo, SERVICE_LOGO_SRC));
         })
         .catch(console.error);
 
@@ -389,7 +419,7 @@ export default function Header() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/6 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-            <img src={logo} className="h-8 object-contain" alt="logo" />
+            <img src={logo} className="h-8 max-w-[120px] object-contain" alt="logo" onError={() => setLogo(SERVICE_LOGO_SRC)} />
             <div className="hidden min-w-0 lg:block">
               <div className="truncate text-sm font-semibold tracking-[0.01em] text-white">
                 TCDX Compliance 3.0
