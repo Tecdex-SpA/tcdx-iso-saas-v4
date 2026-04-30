@@ -684,19 +684,19 @@ def build_assessment(payload: Dict[str, Any], extraction: Dict[str, Any]) -> Dic
         "simulacro", "revisión", "revision"
     ])
     if contains_any(combined_text, [
-        "sin fecha", "no tiene fecha", "sin vigencia", "no indica vigencia",
+        "sin fecha", "ni fecha", "no tiene fecha", "sin vigencia", "no indica vigencia",
         "sin revision", "sin revisión", "no indica revision", "no indica revisión"
     ]):
         has_date_signal = False
 
     if contains_any(combined_text, [
-        "sin responsable", "no tiene responsable", "sin aprobador",
+        "sin responsable", "ni responsable", "no tiene responsable", "sin aprobador", "ni aprobador",
         "no indica responsable", "no indica aprobador", "sin dueño", "sin dueno"
     ]):
         has_owner_signal = False
 
     if contains_any(combined_text, [
-        "sin resultado", "no tiene resultado", "sin evidencia de ejecucion",
+        "sin resultado", "ni resultado", "no tiene resultado", "sin evidencia de ejecucion",
         "sin evidencia de ejecución", "no demuestra ejecucion", "no demuestra ejecución",
         "sin verificacion", "sin verificación"
     ]):
