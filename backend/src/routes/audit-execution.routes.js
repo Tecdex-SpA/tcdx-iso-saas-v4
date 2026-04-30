@@ -182,6 +182,7 @@ async function seedChecklistIfEmpty(audit) {
   const safeCode = `CASE WHEN ${rawCode} IS NOT NULL AND ${uuidLikeSql(rawCode)} THEN NULL ELSE ${rawCode} END`;
   const rawTitle = `NULLIF(COALESCE(${tcTitleExpr}::text, ${ccTitleExpr}::text), '')`;
   const rawClause = `NULLIF(COALESCE(${tcClauseExpr}::text, ${ccClauseExpr}::text), '')`;
+  const safeClause = `CASE WHEN ${rawClause} IS NOT NULL AND ${uuidLikeSql(rawClause)} THEN NULL ELSE ${rawClause} END`;
 
   const sql = `
     INSERT INTO audit_control_reviews (
@@ -199,8 +200,8 @@ async function seedChecklistIfEmpty(audit) {
       tc.tenant_id,
       tc.id,
       ${safeCode} AS control_code,
-      COALESCE(${rawTitle}, ${rawClause}, 'Control sin nombre') AS control_title,
-      COALESCE(${rawClause}, ${safeCode}, '-') AS clause,
+      COALESCE(${rawTitle}, ${safeClause}, 'Control sin nombre') AS control_title,
+      COALESCE(${safeClause}, ${safeCode}, '-') AS clause,
       ${tcStatusExpr}::text AS initial_status,
       ${tcHealthExpr}::text AS initial_health_status
     FROM tenant_controls tc
@@ -208,7 +209,7 @@ async function seedChecklistIfEmpty(audit) {
     WHERE tc.tenant_id = $1::uuid
       ${standardWhere}
     ORDER BY
-      COALESCE(${rawClause}, ''),
+      COALESCE(${safeClause}, ''),
       COALESCE(${safeCode}, ''),
       COALESCE(${rawTitle}, '')
     LIMIT 250

@@ -1323,12 +1323,28 @@ function AuditoriasPageContent() {
                         </div>
 
                         <div className="mt-5 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => goToAuditChecklist(audit)}
+                            className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100"
+                          >
+                            Abrir checklist
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => goToAuditAi(audit)}
+                            className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-bold text-violet-700 transition hover:bg-violet-100"
+                          >
+                            IA Auditor
+                          </button>
+
                           {!isReadOnly && normalizedStatus === 'pendiente' && (
                             <button
                               onClick={() => startAudit(audit.id)}
                               className="rounded-2xl bg-yellow-500 px-4 py-3 text-sm font-semibold text-white"
                             >
-                              Iniciar auditoría
+                              Iniciar
                             </button>
                           )}
 
@@ -1357,17 +1373,6 @@ function AuditoriasPageContent() {
                             </>
                           )}
 
-                          {hasReport && (
-                            <a
-                              href={`${API_URL}/uploads/${audit.report_file}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                            >
-                              Ver informe
-                            </a>
-                          )}
-
                           {!isReadOnly && (
                             <>
                               <button
@@ -1377,24 +1382,6 @@ function AuditoriasPageContent() {
                               >
                                 {actionLoading === `finding-${audit.id}` ? 'Creando...' : 'Crear hallazgo'}
                               </button>
-                    <button
-                      type="button"
-                      onClick={() => goToAuditChecklist(audit)}
-                      className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100"
-                    >
-                      Abrir checklist
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => goToAuditAi(audit)}
-                      className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-bold text-violet-700 transition hover:bg-violet-100"
-                    >
-                      IA Auditor
-                    </button>
-
-
-
-
 
                               <button
                                 onClick={() => createFindingFromAudit(audit, 'no conformidad')}
@@ -1412,6 +1399,17 @@ function AuditoriasPageContent() {
                                 {actionLoading === `action-${audit.id}` ? 'Creando...' : 'Crear acción'}
                               </button>
                             </>
+                          )}
+
+                          {hasReport && (
+                            <a
+                              href={`${API_URL}/uploads/${audit.report_file}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              Ver informe
+                            </a>
                           )}
 
                           <button

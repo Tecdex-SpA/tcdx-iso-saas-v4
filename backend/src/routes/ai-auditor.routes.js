@@ -181,12 +181,107 @@ async function getRelations(audit) {
       (SELECT COUNT(*)::int FROM action_plans WHERE tenant_id = $1::uuid AND audit_id = $2::uuid) AS actions_count,
       (SELECT COUNT(*)::int FROM evidences WHERE tenant_id = $1::uuid) AS tenant_evidences_count,
       (SELECT COUNT(*)::int FROM findings WHERE tenant_id = $1::uuid AND COALESCE(status, '') NOT IN ('cerrado','closed','completado')) AS open_findings_count,
-      (SELECT COUNT(*)::int FROM action_plans WHERE tenant_id = $1::uuid AND COALESCE(status, '') NOT IN ('cerrado','closed','completado')) AS open_actions_count
+      (SELECT COUNT(*)::int FROM action_plans WHERE tenant_id = $1::uuid AND COALESCE(status, '') NOT IN ('cerrado','closed','completado')) AS open_actions_count,
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id', f.id,
+            'title', f.title,
+            'description', f.description,
+            'finding_type', f.finding_type,
+            'severity', f.severity,
+            'status', f.status,
+            'tenant_control_id', f.tenant_control_id,
+            'created_at', f.created_at
+          )
+          ORDER BY f.created_at DESC NULLS LAST
+        )
+        FROM findings f
+        WHERE f.tenant_id = $1::uuid
+          AND f.audit_id = $2::uuid
+        LIMIT 30
+      ), '[]'::jsonb) AS audit_findings,
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id', ap.id,
+            'title', ap.title,
+            'description', ap.description,
+            'priority', ap.priority,
+            'status', ap.status,
+            'tenant_control_id', ap.tenant_control_id,
+            'created_at', ap.created_at
+          )
+          ORDER BY ap.created_at DESC NULLS LAST
+        )
+        FROM action_plans ap
+        WHERE ap.tenant_id = $1::uuid
+          AND ap.audit_id = $2::uuid
+        LIMIT 30
+      ), '[]'::jsonb) AS audit_actions
     `,
     [audit.tenant_id, audit.id]
   );
 
   return result.rows[0] || {};
+}
+
+function normalizeResult(value) {
+  return String(value || 'pendiente').toLowerCase().trim();
+}
+
+function visibleControlName(item) {
+  return (
+    safeText(item.control_title) ||
+    safeText(item.control_code) ||
+    (safeText(item.clause) ? `Cláusula ${safeText(item.clause)}` : '') ||
+    'Control sin nombre'
+  );
+}
+
+function isOpenStatus(status) {
+  const normalized = String(status || '').toLowerCase().trim();
+  return !['cerrado', 'closed', 'completado', 'completada', 'resuelto', 'resolved'].includes(normalized);
+}
+
+function buildDuplicatedOrUnresolvedFindings(auditFindings = []) {
+  const open = auditFindings.filter((item) => isOpenStatus(item.status));
+  const seen = new Map();
+  const duplicates = [];
+
+  for (const item of auditFindings) {
+    const key = `${String(item.title || '').trim().toLowerCase()}|${String(
+      item.tenant_control_id || ''
+    )}`;
+
+    if (!key.trim()) continue;
+
+    if (seen.has(key)) {
+      duplicates.push({
+        id: item.id,
+        duplicated_with: seen.get(key),
+        title: item.title,
+        status: item.status,
+        tenant_control_id: item.tenant_control_id,
+      });
+    } else {
+      seen.set(key, item.id);
+    }
+  }
+
+  return {
+    unresolved_count: open.length,
+    duplicates_count: duplicates.length,
+    unresolved: open.slice(0, 8).map((item) => ({
+      id: item.id,
+      title: item.title,
+      finding_type: item.finding_type,
+      severity: item.severity,
+      status: item.status,
+      tenant_control_id: item.tenant_control_id,
+    })),
+    duplicates: duplicates.slice(0, 6),
+  };
 }
 
 function classifyControlRisk(item, evidenceCount) {
@@ -246,12 +341,12 @@ function classifyControlRisk(item, evidenceCount) {
 
 function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
   const total = checklist.length;
-  const conformes = checklist.filter((item) => item.result === 'conforme').length;
-  const noConformes = checklist.filter((item) => item.result === 'no_conforme').length;
-  const observaciones = checklist.filter((item) => item.result === 'observacion').length;
-  const sinEvidencia = checklist.filter((item) => item.result === 'sin_evidencia').length;
-  const pendientes = checklist.filter((item) => !item.result || item.result === 'pendiente').length;
-  const noAplica = checklist.filter((item) => item.result === 'no_aplica').length;
+  const conformes = checklist.filter((item) => normalizeResult(item.result) === 'conforme').length;
+  const noConformes = checklist.filter((item) => normalizeResult(item.result) === 'no_conforme').length;
+  const observaciones = checklist.filter((item) => normalizeResult(item.result) === 'observacion').length;
+  const sinEvidencia = checklist.filter((item) => normalizeResult(item.result) === 'sin_evidencia').length;
+  const pendientes = checklist.filter((item) => normalizeResult(item.result) === 'pendiente').length;
+  const noAplica = checklist.filter((item) => normalizeResult(item.result) === 'no_aplica').length;
 
   const reviewed = total - pendientes;
   const reviewedPct = pct(reviewed, total);
@@ -269,6 +364,8 @@ function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
         control_title: item.control_title,
         clause: item.clause,
         result: item.result,
+        initial_status: item.initial_status,
+        initial_health_status: item.initial_health_status,
         notes: item.notes,
         evidence_count: evidenceCount,
         ...risk,
@@ -286,14 +383,19 @@ function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
 
   const readinessScore = Math.max(0, Math.min(100, Math.round(100 - penalties)));
 
-  const suggestions = [];
+  const recommendedFindings = [];
+  const recommendedActions = [];
+  const recommendedEvidenceRequests = [];
+  const governanceWarnings = [];
 
   criticalControls.forEach((item) => {
-    if (item.result === 'no_conforme') {
-      suggestions.push({
+    const controlName = visibleControlName(item);
+
+    if (normalizeResult(item.result) === 'no_conforme') {
+      recommendedFindings.push({
         type: 'hallazgo',
         priority: 'alta',
-        title: `Formalizar no conformidad en ${item.control_title || item.control_code || 'control'}`,
+        title: `Formalizar no conformidad en ${controlName}`,
         why: `El control presenta resultado no conforme y riesgo ${item.risk_level}.`,
         recommended_record: 'finding',
         recommended_next_step:
@@ -302,11 +404,11 @@ function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
         tenant_control_id: item.tenant_control_id,
         standard_code: audit.iso,
       });
-    } else if (item.result === 'sin_evidencia') {
-      suggestions.push({
+    } else if (normalizeResult(item.result) === 'sin_evidencia') {
+      recommendedEvidenceRequests.push({
         type: 'evidencia',
         priority: 'alta',
-        title: `Regularizar evidencia en ${item.control_title || item.control_code || 'control'}`,
+        title: `Regularizar evidencia en ${controlName}`,
         why: 'El control no cuenta con evidencia suficiente para sostener conformidad.',
         recommended_record: 'evidence_or_action',
         recommended_next_step:
@@ -315,11 +417,11 @@ function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
         tenant_control_id: item.tenant_control_id,
         standard_code: audit.iso,
       });
-    } else if (item.result === 'observacion') {
-      suggestions.push({
+    } else if (normalizeResult(item.result) === 'observacion') {
+      recommendedActions.push({
         type: 'mejora',
         priority: 'media',
-        title: `Gestionar observación en ${item.control_title || item.control_code || 'control'}`,
+        title: `Gestionar observación en ${controlName}`,
         why: 'Existe observación que puede transformarse en brecha si no se trata.',
         recommended_record: 'action_plan',
         recommended_next_step:
@@ -331,8 +433,34 @@ function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
     }
   });
 
+  const evidenceGaps = checklist
+    .map((item) => {
+      const evidenceCount = evidenceStats.by_control?.[String(item.tenant_control_id)] || 0;
+      const result = normalizeResult(item.result);
+
+      return {
+        control_review_id: item.id,
+        tenant_control_id: item.tenant_control_id,
+        control_code: item.control_code,
+        control_title: item.control_title,
+        clause: item.clause,
+        result,
+        evidence_count: evidenceCount,
+        reason:
+          result === 'sin_evidencia'
+            ? 'Resultado marcado sin evidencia'
+            : 'Sin evidencia vinculada al control',
+      };
+    })
+    .filter((item) => {
+      if (item.result === 'no_aplica') return false;
+      if (item.result === 'sin_evidencia') return true;
+      return Number(item.evidence_count || 0) === 0 && ['pendiente', 'observacion', 'no_conforme'].includes(item.result);
+    })
+    .slice(0, 15);
+
   if (pendientes > 0) {
-    suggestions.push({
+    governanceWarnings.push({
       type: 'gobierno',
       priority: 'media',
       title: 'Completar checklist antes del cierre formal',
@@ -344,24 +472,61 @@ function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
     });
   }
 
-  if (!suggestions.length) {
-    suggestions.push({
-      type: 'positivo',
-      priority: 'baja',
-      title: 'Auditoría sin brechas críticas detectadas',
-      why: 'No se detectaron no conformidades ni brechas relevantes en el checklist actual.',
-      recommended_record: 'monitoring',
-      recommended_next_step:
-        'Mantener evidencia actualizada y programar seguimiento periódico.',
+  if (noConformes > 0 && Number(relations.findings_count || 0) === 0) {
+    governanceWarnings.push({
+      type: 'gobierno',
+      priority: 'alta',
+      title: 'No conformidades sin hallazgo formal asociado',
+      why: 'El checklist contiene resultados no conformes, pero esta auditoría aún no registra hallazgos vinculados.',
+      recommended_record: 'finding',
+      recommended_next_step: 'Revisar con el auditor responsable qué resultados deben formalizarse como hallazgo o no conformidad.',
       standard_code: audit.iso,
     });
   }
+
+  if ((noConformes + sinEvidencia + observaciones) > 0 && Number(relations.actions_count || 0) === 0) {
+    governanceWarnings.push({
+      type: 'gobierno',
+      priority: 'media',
+      title: 'Brechas detectadas sin plan de acción asociado',
+      why: 'Existen resultados que requieren tratamiento y aún no hay acciones vinculadas a la auditoría.',
+      recommended_record: 'action_plan',
+      recommended_next_step: 'Definir acciones correctivas o preventivas para las brechas priorizadas.',
+      standard_code: audit.iso,
+    });
+  }
+
+  const duplicatedOrUnresolvedFindings = buildDuplicatedOrUnresolvedFindings(
+    Array.isArray(relations.audit_findings) ? relations.audit_findings : []
+  );
+
+  if (duplicatedOrUnresolvedFindings.duplicates_count > 0) {
+    governanceWarnings.push({
+      type: 'gobierno',
+      priority: 'media',
+      title: 'Posibles hallazgos duplicados',
+      why: `Se detectaron ${duplicatedOrUnresolvedFindings.duplicates_count} coincidencias por título/control dentro de la auditoría.`,
+      recommended_record: 'finding_review',
+      recommended_next_step: 'Consolidar duplicados antes de emitir conclusiones ejecutivas.',
+      standard_code: audit.iso,
+    });
+  }
+
+  const suggestedNextSteps = [
+    pendientes > 0 ? `Completar ${pendientes} controles pendientes antes del cierre.` : null,
+    evidenceGaps.length > 0 ? `Solicitar o cargar evidencia para ${evidenceGaps.length} controles priorizados.` : null,
+    noConformes > 0 ? 'Formalizar las no conformidades confirmadas con aprobación humana.' : null,
+    governanceWarnings.length > 0 ? 'Resolver advertencias de gobierno antes de cerrar o presentar el informe.' : null,
+    Number(relations.actions_count || 0) > 0 ? 'Revisar avance de acciones asociadas a esta auditoría.' : null,
+  ].filter(Boolean);
 
   const executiveSummary = [
     `La auditoría ${audit.iso} presenta un score de preparación de ${readinessScore}%.`,
     `Se han revisado ${reviewed} de ${total} controles (${reviewedPct}%).`,
     `El nivel de conformidad observado es ${conformityPct}%, con ${noConformes} no conformidades, ${observaciones} observaciones y ${sinEvidencia} controles sin evidencia suficiente.`,
-    `La recomendación principal es priorizar ${criticalControls.length} controles críticos antes del cierre formal de la auditoría.`,
+    criticalControls.length
+      ? `La recomendación principal es priorizar ${criticalControls.length} controles críticos antes del cierre formal de la auditoría.`
+      : 'No se detectan controles críticos con la información actualmente registrada.',
   ].join(' ');
 
   const diagnosis = {
@@ -383,15 +548,49 @@ function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
     open_actions_count: Number(relations.open_actions_count || 0),
   };
 
+  const suggestions = [
+    ...recommendedFindings,
+    ...recommendedActions,
+    ...recommendedEvidenceRequests,
+    ...governanceWarnings,
+  ];
+
   return {
     version: 'ai-auditor-v2-contextual',
     executive_summary: executiveSummary,
+    readiness_score: readinessScore,
+    reviewed_percent: reviewedPct,
+    conformity_percent: conformityPct,
     diagnosis,
     critical_controls: criticalControls,
-    suggestions: suggestions.slice(0, 14),
+    evidence_gaps: evidenceGaps,
+    duplicated_or_unresolved_findings: duplicatedOrUnresolvedFindings,
+    recommended_findings: recommendedFindings.slice(0, 8),
+    recommended_actions: recommendedActions.slice(0, 8),
+    recommended_evidence_requests: recommendedEvidenceRequests.slice(0, 8),
+    governance_warnings: governanceWarnings.slice(0, 8),
+    suggested_next_steps: suggestedNextSteps.length
+      ? suggestedNextSteps
+      : ['Mantener evidencia actualizada y programar seguimiento periódico.'],
+    suggestions: suggestions.length
+      ? suggestions.slice(0, 18)
+      : [
+          {
+            type: 'positivo',
+            priority: 'baja',
+            title: 'Auditoría sin brechas críticas detectadas',
+            why: 'No se detectaron no conformidades ni brechas relevantes en el checklist actual.',
+            recommended_record: 'monitoring',
+            recommended_next_step:
+              'Mantener evidencia actualizada y programar seguimiento periódico.',
+            standard_code: audit.iso,
+          },
+        ],
     human_approval_required: true,
     recommended_use:
       'Usar este análisis como apoyo del auditor humano. No crea hallazgos ni planes automáticamente.',
+    human_approval_note:
+      'IA Auditor no reemplaza al auditor humano; sus sugerencias requieren aprobación antes de convertirse en hallazgos, acciones o solicitudes formales.',
   };
 }
 

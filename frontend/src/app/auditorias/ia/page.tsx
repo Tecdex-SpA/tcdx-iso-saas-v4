@@ -26,6 +26,51 @@ function priorityTone(priority?: string) {
   return 'border-slate-200 bg-slate-50 text-slate-700';
 }
 
+function arrayOf(value: any) {
+  return Array.isArray(value) ? value : [];
+}
+
+function RecommendationGroup({
+  title,
+  items,
+  empty,
+}: {
+  title: string;
+  items: any[];
+  empty: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <h3 className="text-sm font-black uppercase tracking-[0.12em] text-slate-700">
+        {title}
+      </h3>
+
+      <div className="mt-4 space-y-3">
+        {items.map((item: any, idx: number) => (
+          <div key={idx} className={`rounded-2xl border p-4 ${priorityTone(item.priority)}`}>
+            <div className="text-xs font-bold uppercase tracking-[0.12em]">
+              {item.priority || 'prioridad'} · {item.recommended_record || item.type || 'sugerencia'}
+            </div>
+            <h4 className="mt-2 font-bold">{item.title}</h4>
+            <p className="mt-2 text-sm leading-6">{item.why}</p>
+            {item.recommended_next_step && (
+              <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-semibold">
+                Próximo paso: {item.recommended_next_step}
+              </p>
+            )}
+          </div>
+        ))}
+
+        {items.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+            {empty}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AuditoriasIaPage() {
   return (
     <Suspense
@@ -129,10 +174,14 @@ function AuditoriasIaContent() {
 
   const analysis = result?.analysis || result?.data?.suggestions_json || null;
   const diagnosis = analysis?.diagnosis || {};
-  const suggestions = Array.isArray(analysis?.suggestions) ? analysis.suggestions : [];
-  const criticalControls = Array.isArray(analysis?.critical_controls)
-    ? analysis.critical_controls
-    : [];
+  const criticalControls = arrayOf(analysis?.critical_controls);
+  const evidenceGaps = arrayOf(analysis?.evidence_gaps);
+  const recommendedFindings = arrayOf(analysis?.recommended_findings);
+  const recommendedActions = arrayOf(analysis?.recommended_actions);
+  const recommendedEvidenceRequests = arrayOf(analysis?.recommended_evidence_requests);
+  const governanceWarnings = arrayOf(analysis?.governance_warnings);
+  const suggestedNextSteps = arrayOf(analysis?.suggested_next_steps);
+  const unresolvedFindings = analysis?.duplicated_or_unresolved_findings || {};
 
   const checklistStats = useMemo(() => {
     const rows = context?.checklist || [];
@@ -174,6 +223,10 @@ function AuditoriasIaContent() {
                 hallazgos, acciones asociadas, estado de revisión y brechas. Las recomendaciones no crean
                 registros automáticamente; deben ser aprobadas por un usuario autorizado.
               </p>
+
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                IA Auditor no reemplaza al auditor humano; sus sugerencias requieren aprobación.
+              </div>
 
               {context?.audit && (
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -226,6 +279,10 @@ function AuditoriasIaContent() {
                   <p className="mt-3 max-w-5xl text-sm leading-6 text-slate-600">
                     {analysis.executive_summary}
                   </p>
+                  <p className="mt-3 max-w-5xl rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                    {analysis.human_approval_note ||
+                      'IA Auditor no reemplaza al auditor humano; sus sugerencias requieren aprobación antes de convertirse en registros formales.'}
+                  </p>
                 </div>
 
                 <div className={`rounded-3xl border px-6 py-5 text-center ${scoreTone(Number(diagnosis.readiness_score || 0))}`}>
@@ -239,28 +296,75 @@ function AuditoriasIaContent() {
                 <Metric label="Conformidad" value={`${diagnosis.conformity_percent || 0}%`} />
                 <Metric label="Evidencias" value={diagnosis.evidence_count || 0} />
                 <Metric label="Controles críticos" value={criticalControls.length} />
+                <Metric label="Brechas evidencia" value={evidenceGaps.length} />
+                <Metric label="Hallazgos abiertos" value={unresolvedFindings.unresolved_count || 0} />
+                <Metric label="Acciones abiertas" value={diagnosis.open_actions_count || 0} />
               </div>
             </section>
 
             <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-slate-900">Recomendaciones accionables</h2>
+              <h2 className="text-xl font-bold text-slate-900">Acciones sugeridas</h2>
 
               <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {suggestions.map((item: any, idx: number) => (
-                  <div key={idx} className={`rounded-2xl border p-4 ${priorityTone(item.priority)}`}>
-                    <div className="text-xs font-bold uppercase tracking-[0.12em]">
-                      {item.type} · {item.priority || 'prioridad'}
+                <RecommendationGroup
+                  title="Hallazgos sugeridos"
+                  items={recommendedFindings}
+                  empty="No hay hallazgos sugeridos con la evidencia actual."
+                />
+                <RecommendationGroup
+                  title="Acciones correctivas sugeridas"
+                  items={recommendedActions}
+                  empty="No hay acciones correctivas sugeridas con la evidencia actual."
+                />
+                <RecommendationGroup
+                  title="Evidencias sugeridas"
+                  items={recommendedEvidenceRequests}
+                  empty="No hay solicitudes de evidencia sugeridas con la evidencia actual."
+                />
+                <RecommendationGroup
+                  title="Advertencias de gobierno"
+                  items={governanceWarnings}
+                  empty="No hay advertencias de gobierno relevantes para esta ejecución."
+                />
+              </div>
+            </section>
+
+            <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-bold text-slate-900">Brechas de evidencia</h2>
+                <div className="mt-5 space-y-3">
+                  {evidenceGaps.slice(0, 8).map((item: any) => (
+                    <div key={item.control_review_id} className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+                      <div className="font-bold">
+                        {item.control_title || item.control_code || 'Control sin nombre'}
+                      </div>
+                      <div className="mt-1 text-xs font-semibold">
+                        {item.clause ? `Cláusula ${item.clause}` : 'Sin código visible'} · {item.reason}
+                      </div>
                     </div>
-                    <h3 className="mt-2 font-bold">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-6">{item.why}</p>
-                    <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-semibold">
-                      Próximo paso: {item.recommended_next_step}
-                    </p>
-                    <p className="mt-2 text-xs font-semibold">
-                      Registro sugerido: {item.recommended_record}
-                    </p>
-                  </div>
-                ))}
+                  ))}
+                  {evidenceGaps.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                      No se detectaron brechas de evidencia prioritarias.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-bold text-slate-900">Siguientes pasos</h2>
+                <div className="mt-5 space-y-3">
+                  {suggestedNextSteps.map((item: string, idx: number) => (
+                    <div key={idx} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                      {item}
+                    </div>
+                  ))}
+                  {suggestedNextSteps.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                      Mantener evidencia actualizada y seguimiento periódico.
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
 

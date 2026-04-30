@@ -386,6 +386,35 @@ function table(headers, rows, emptyMessage = 'Sin datos disponibles') {
   `;
 }
 
+function asObject(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+function getAiAuditorAnalysis(run) {
+  return asObject(run?.suggestions_json);
+}
+
+function aiRecommendationTitles(items, fallbackKey = 'title') {
+  return asArray(items)
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      return item?.[fallbackKey] || item?.recommended_next_step || item?.why || '';
+    })
+    .filter(Boolean);
+}
+
 function statusBadge(value) {
   const raw = asString(value).toLowerCase();
   let cls = 'badge badgeNeutral';
@@ -511,6 +540,17 @@ function renderAuditSummaryPage(data) {
   const execution = data.audit_execution_summary || {};
   const reviews = execution.reviews || {};
   const latestAiRun = execution.latest_ai_auditor_run || null;
+  const aiAnalysis = getAiAuditorAnalysis(latestAiRun);
+  const aiDiagnosis = aiAnalysis.diagnosis || {};
+  const aiCriticalControls = asArray(aiAnalysis.critical_controls).slice(0, 5);
+  const aiEvidenceGaps = asArray(aiAnalysis.evidence_gaps).slice(0, 5);
+  const aiRecommendations = [
+    ...aiRecommendationTitles(aiAnalysis.recommended_findings),
+    ...aiRecommendationTitles(aiAnalysis.recommended_actions),
+    ...aiRecommendationTitles(aiAnalysis.recommended_evidence_requests),
+    ...aiRecommendationTitles(aiAnalysis.governance_warnings),
+    ...aiRecommendationTitles(aiAnalysis.suggested_next_steps),
+  ].slice(0, 8);
 
   const rows = recent.map((row) => `
     <tr>
@@ -573,8 +613,53 @@ function renderAuditSummaryPage(data) {
 
       ${latestAiRun ? `
         <div class="emptyBox" style="margin-top:4mm;">
-          <strong>Última lectura IA Auditor:</strong>
-          ${escapeHtml(cleanText(latestAiRun.summary || 'Sin resumen IA disponible', 260))}
+          <strong>Última ejecución IA Auditor:</strong>
+          ${escapeHtml(formatDateTimeEs(latestAiRun.created_at))}
+        </div>
+
+        <div class="metricGrid three" style="margin-top:4mm;">
+          ${miniMetric(
+            'Score preparación',
+            fmtPercent(aiAnalysis.readiness_score ?? aiDiagnosis.readiness_score),
+            latestAiRun.standard_code || 'IA Auditor'
+          )}
+          ${miniMetric(
+            'Revisión checklist',
+            fmtPercent(aiAnalysis.reviewed_percent ?? aiDiagnosis.reviewed_percent),
+            'Controles revisados'
+          )}
+          ${miniMetric(
+            'Conformidad',
+            fmtPercent(aiAnalysis.conformity_percent ?? aiDiagnosis.conformity_percent),
+            'Sin reemplazar criterio humano'
+          )}
+        </div>
+
+        <p class="bodyText" style="margin-top:4mm;">
+          ${escapeHtml(cleanText(aiAnalysis.executive_summary || latestAiRun.summary || 'Sin resumen IA disponible', 420))}
+        </p>
+
+        <div class="twoCol" style="margin-top:4mm;">
+          ${card('Controles críticos priorizados', bulletList(
+            aiCriticalControls.map((item) =>
+              `${item.control_title || item.control_code || 'Control'}: ${item.result || 'sin resultado'} (${item.risk_level || 'riesgo'} ${item.risk_score || 0})`
+            )
+          ))}
+
+          ${card('Brechas de evidencia', bulletList(
+            aiEvidenceGaps.map((item) =>
+              `${item.control_title || item.control_code || 'Control'}: ${item.reason || 'requiere evidencia'}`
+            )
+          ))}
+        </div>
+
+        ${card('Recomendaciones ejecutivas IA Auditor', bulletList(aiRecommendations), 'wideCard')}
+
+        <div class="emptyBox" style="margin-top:4mm;">
+          ${escapeHtml(
+            aiAnalysis.human_approval_note ||
+              'IA Auditor no reemplaza al auditor humano; sus sugerencias requieren aprobación antes de convertirse en hallazgos, acciones o solicitudes formales.'
+          )}
         </div>
       ` : `
         <div class="emptyBox" style="margin-top:4mm;">
