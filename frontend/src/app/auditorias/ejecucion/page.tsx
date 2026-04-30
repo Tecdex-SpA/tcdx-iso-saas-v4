@@ -33,6 +33,40 @@ function statusClass(value?: string) {
   return 'border-slate-200 bg-white text-slate-700';
 }
 
+function isUuidLike(value?: string | null) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(value || '').trim()
+  );
+}
+
+function friendlyControlTitle(row: ReviewRow) {
+  const title = String(row.control_title || '').trim();
+  const code = String(row.control_code || '').trim();
+  const clause = String(row.clause || '').trim();
+
+  if (title && !isUuidLike(title)) return title;
+  if (code && !isUuidLike(code)) return code;
+  if (clause && clause !== '-' && !isUuidLike(clause)) return `Cláusula ${clause}`;
+
+  return 'Control sin nombre';
+}
+
+function friendlyControlMeta(row: ReviewRow) {
+  const parts: string[] = [];
+  const code = String(row.control_code || '').trim();
+  const clause = String(row.clause || '').trim();
+
+  if (clause && clause !== '-' && !isUuidLike(clause)) {
+    parts.push(`Cláusula ${clause}`);
+  }
+
+  if (code && !isUuidLike(code) && code !== clause) {
+    parts.push(`Código ${code}`);
+  }
+
+  return parts.length ? parts.join(' · ') : 'Sin código visible';
+}
+
 export default function AuditExecutionPage() {
   return (
     <Suspense fallback={<AppLayout><div className="p-6">Cargando ejecución de auditoría...</div></AppLayout>}>
@@ -203,8 +237,15 @@ function AuditExecutionContent() {
                     <tr key={row.id} className="border-b align-top">
                       <td className="px-3 py-3 font-semibold text-slate-700">{row.clause || '-'}</td>
                       <td className="px-3 py-3">
-                        <div className="font-bold text-slate-900">{row.control_code || '-'}</div>
-                        <div className="mt-1 max-w-xl text-xs text-slate-500">{row.control_title || 'Control sin título'}</div>
+                        <div className="font-bold text-slate-900">{friendlyControlTitle(row)}</div>
+                        <div className="mt-1 max-w-xl text-xs font-semibold text-indigo-600">
+                          {friendlyControlMeta(row)}
+                        </div>
+                        {row.initial_health_status && (
+                          <div className="mt-1 text-[11px] text-slate-400">
+                            Salud inicial: {row.initial_health_status}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-3 text-xs text-slate-600">
                         <div>{row.initial_status || '-'}</div>

@@ -84,6 +84,38 @@ function colExpr(alias, columns, candidates, fallbackSql) {
   return found ? `${alias}."${found}"` : fallbackSql;
 }
 
+async function findControlCatalogTable() {
+  const candidates = [
+    'controls_catalog',
+    'controls',
+    'iso_controls',
+    'control_catalog',
+    'iso_control_catalog',
+  ];
+
+  const result = await pool.query(
+    `
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = ANY($1)
+    ORDER BY array_position($1, table_name)
+    LIMIT 1
+    `,
+    [candidates]
+  );
+
+  return result.rows[0]?.table_name || null;
+}
+
+function quoteIdent(value) {
+  return `"${String(value || '').replace(/"/g, '""')}"`;
+}
+
+function uuidLikeSql(expr) {
+  return `${expr} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'`;
+}
+
 async function seedChecklistIfEmpty(audit) {
   const existing = await pool.query(
     `
@@ -99,25 +131,31 @@ async function seedChecklistIfEmpty(audit) {
   }
 
   const tcCols = await getColumns('tenant_controls');
-  const hasCatalog = await tableExists('controls_catalog');
-  const ccCols = hasCatalog ? await getColumns('controls_catalog') : new Set();
+  const catalogTable = await findControlCatalogTable();
+  const hasCatalog = Boolean(catalogTable);
+  const ccCols = hasCatalog ? await getColumns(catalogTable) : new Set();
 
-  const tcStandardExpr = colExpr('tc', tcCols, ['standard_code', 'iso', 'iso_code'], 'NULL');
-  const tcTitleExpr = colExpr('tc', tcCols, ['title', 'name', 'control_title'], 'NULL');
+  const tcTitleExpr = colExpr('tc', tcCols, ['title', 'name', 'control_title', 'description'], 'NULL');
   const tcCodeExpr = colExpr('tc', tcCols, ['control_code', 'code'], 'NULL');
-  const tcClauseExpr = colExpr('tc', tcCols, ['clause', 'clause_code'], 'NULL');
+  const tcClauseExpr = colExpr('tc', tcCols, ['clause', 'clause_code', 'iso_clause'], 'NULL');
   const tcStatusExpr = colExpr('tc', tcCols, ['status'], 'NULL');
   const tcHealthExpr = colExpr('tc', tcCols, ['health_status'], 'NULL');
-  const tcControlIdExpr = colExpr('tc', tcCols, ['control_id'], 'NULL');
 
-  const ccStandardExpr = hasCatalog ? colExpr('cc', ccCols, ['standard_code', 'iso', 'iso_code'], 'NULL') : 'NULL';
-  const ccTitleExpr = hasCatalog ? colExpr('cc', ccCols, ['title', 'name', 'control_title', 'description'], 'NULL') : 'NULL';
-  const ccCodeExpr = hasCatalog ? colExpr('cc', ccCols, ['control_code', 'code'], 'NULL') : 'NULL';
-  const ccClauseExpr = hasCatalog ? colExpr('cc', ccCols, ['clause', 'clause_code'], 'NULL') : 'NULL';
+  const ccTitleExpr = hasCatalog
+    ? colExpr('cc', ccCols, ['title', 'name', 'control_title', 'description'], 'NULL')
+    : 'NULL';
+
+  const ccCodeExpr = hasCatalog
+    ? colExpr('cc', ccCols, ['control_code', 'code'], 'NULL')
+    : 'NULL';
+
+  const ccClauseExpr = hasCatalog
+    ? colExpr('cc', ccCols, ['clause', 'clause_code', 'iso_clause'], 'NULL')
+    : 'NULL';
 
   const joinCatalog =
     hasCatalog && tcCols.has('control_id')
-      ? `LEFT JOIN controls_catalog cc ON cc.id::text = tc.control_id::text`
+      ? `LEFT JOIN ${quoteIdent(catalogTable)} cc ON cc.id::text = tc.control_id::text`
       : '';
 
   const standardWhereParts = [];
@@ -136,6 +174,15 @@ async function seedChecklistIfEmpty(audit) {
     ? `AND (${standardWhereParts.join(' OR ')})`
     : '';
 
+  // Importante:
+  // - control_code NO debe caer a tc.id, porque eso muestra UUID al usuario.
+  // - si el código real parece UUID, se guarda NULL.
+  // - control_title debe ser el nombre visible del control.
+  const rawCode = `NULLIF(COALESCE(${tcCodeExpr}::text, ${ccCodeExpr}::text), '')`;
+  const safeCode = `CASE WHEN ${rawCode} IS NOT NULL AND ${uuidLikeSql(rawCode)} THEN NULL ELSE ${rawCode} END`;
+  const rawTitle = `NULLIF(COALESCE(${tcTitleExpr}::text, ${ccTitleExpr}::text), '')`;
+  const rawClause = `NULLIF(COALESCE(${tcClauseExpr}::text, ${ccClauseExpr}::text), '')`;
+
   const sql = `
     INSERT INTO audit_control_reviews (
       audit_id,
@@ -151,16 +198,19 @@ async function seedChecklistIfEmpty(audit) {
       $3::uuid AS audit_id,
       tc.tenant_id,
       tc.id,
-      COALESCE(${tcCodeExpr}::text, ${ccCodeExpr}::text, tc.id::text) AS control_code,
-      COALESCE(${tcTitleExpr}::text, ${ccTitleExpr}::text, 'Control sin título') AS control_title,
-      COALESCE(${tcClauseExpr}::text, ${ccClauseExpr}::text, '-') AS clause,
+      ${safeCode} AS control_code,
+      COALESCE(${rawTitle}, ${rawClause}, 'Control sin nombre') AS control_title,
+      COALESCE(${rawClause}, ${safeCode}, '-') AS clause,
       ${tcStatusExpr}::text AS initial_status,
       ${tcHealthExpr}::text AS initial_health_status
     FROM tenant_controls tc
     ${joinCatalog}
     WHERE tc.tenant_id = $1::uuid
       ${standardWhere}
-    ORDER BY COALESCE(${tcClauseExpr}::text, ${ccClauseExpr}::text, ''), COALESCE(${tcCodeExpr}::text, ${ccCodeExpr}::text, tc.id::text)
+    ORDER BY
+      COALESCE(${rawClause}, ''),
+      COALESCE(${safeCode}, ''),
+      COALESCE(${rawTitle}, '')
     LIMIT 250
     ON CONFLICT (audit_id, tenant_control_id)
     WHERE tenant_control_id IS NOT NULL
