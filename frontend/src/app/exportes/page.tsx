@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { getUserRoleFromToken } from '@/utils/auth';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -205,6 +206,18 @@ export default function ExportesPage() {
   const [period, setPeriod] = useState(getDefaultPeriod());
   const [activeTab, setActiveTab] = useState<'generate' | 'history'>('generate');
 
+  const currentRole = getUserRoleFromToken();
+
+  const isReadOnlyReports =
+    currentRole === 'viewer' ||
+    currentRole === 'operativo' ||
+    currentRole === 'cliente' ||
+    currentRole === 'client' ||
+    currentRole === 'solo_lectura' ||
+    currentRole === 'read_only' ||
+    currentRole === 'readonly' ||
+    currentRole === 'ejecutivo';
+
   const [exportsHistory, setExportsHistory] = useState<ReportExport[]>([]);
 
   const [filterType, setFilterType] = useState('');
@@ -390,6 +403,13 @@ export default function ExportesPage() {
         if (loadedReports.length > 0) {
           setSelectedReportCode(loadedReports[0].code);
         }
+
+        if (
+          isReadOnlyReports ||
+          !loadedReports.some((report: ReportType) => report.can_generate)
+        ) {
+          setActiveTab('history');
+        }
       } catch (err: any) {
         console.error('ERROR LOAD EXPORTES:', err);
         setError(err.message || 'Error cargando exportes ejecutivos.');
@@ -415,6 +435,12 @@ export default function ExportesPage() {
   }, [orderedReportTypes, selectedReportCode]);
 
   const generateReport = async (reportTypeCode: string) => {
+    if (isReadOnlyReports) {
+      setError('Tu rol puede ver y descargar reportes generados, pero no generar nuevos informes.');
+      setActiveTab('history');
+      return;
+    }
+
     try {
       setGeneratingCode(reportTypeCode);
       setError('');
@@ -619,11 +645,17 @@ export default function ExportesPage() {
           </div>
         </section>
 
+        {isReadOnlyReports && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-700">
+            Modo solo lectura: tu rol puede revisar y descargar reportes generados, pero no generar nuevos informes.
+          </div>
+        )}
+
         <section className="rounded-3xl border border-slate-200 bg-white p-2 shadow-sm">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setActiveTab('generate')}
+              onClick={() => { if (!isReadOnlyReports) setActiveTab('generate'); }}
               className={[
                 'rounded-2xl px-4 py-3 text-sm font-bold transition',
                 activeTab === 'generate'
