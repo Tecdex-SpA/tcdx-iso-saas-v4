@@ -4,12 +4,71 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 
-const API_URL = 'http://192.168.100.120:3000';
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
 type TenantItem = {
   id: string;
   name: string;
 };
+
+type RoleOption = {
+  value: string;
+  label: string;
+};
+
+const ADMIN_ROLE_OPTIONS: RoleOption[] = [
+  { value: 'admin', label: 'Admin empresa' },
+  { value: 'auditor', label: 'Auditor' },
+  { value: 'operativo', label: 'Operativo' },
+  { value: 'viewer', label: 'Solo lectura / Ejecutivo' },
+];
+
+const SUPERADMIN_ROLE_OPTIONS: RoleOption[] = [
+  { value: 'superadmin', label: 'Superadmin' },
+  { value: 'dealer', label: 'Dealer' },
+  { value: 'admin', label: 'Admin empresa' },
+  { value: 'auditor', label: 'Auditor' },
+  { value: 'operativo', label: 'Operativo' },
+  { value: 'viewer', label: 'Solo lectura / Ejecutivo' },
+];
+
+function normalizeRole(role: any) {
+  return String(role || '').toLowerCase().trim();
+}
+
+function isSuperAdminRole(role: any) {
+  const normalized = normalizeRole(role);
+
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'admin_global',
+    'global_admin',
+    'owner',
+  ].includes(normalized);
+}
+
+function isAdminRole(role: any) {
+  const normalized = normalizeRole(role);
+
+  return [
+    'admin',
+    'tenant_admin', // compatibilidad temporal con tokens antiguos
+  ].includes(normalized);
+}
+
+function resolveTenantId(user: any) {
+  return (
+    user?.tenant_id ||
+    user?.tenantId ||
+    user?.tenant ||
+    user?.company_id ||
+    user?.companyId ||
+    ''
+  );
+}
 
 export default function UsuariosPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -29,8 +88,11 @@ export default function UsuariosPage() {
     role: 'auditor',
   });
 
-  const isSuperAdmin = user?.role === 'superadmin';
-  const isAdmin = user?.role === 'admin';
+  const normalizedRole = normalizeRole(user?.role);
+  const isSuperAdmin = isSuperAdminRole(normalizedRole);
+  const isAdmin = isAdminRole(normalizedRole);
+
+  const roleOptions = isSuperAdmin ? SUPERADMIN_ROLE_OPTIONS : ADMIN_ROLE_OPTIONS;
 
   const selectedTenant = useMemo(() => {
     return tenants.find((tenant) => tenant.id === selectedTenantId) || null;
@@ -43,8 +105,8 @@ export default function UsuariosPage() {
     setToken(authToken);
     setUser(u);
 
-    if (u?.role !== 'superadmin') {
-      setSelectedTenantId(u?.tenant_id || '');
+    if (!isSuperAdminRole(u?.role)) {
+      setSelectedTenantId(resolveTenantId(u));
     }
   }, []);
 
@@ -127,7 +189,7 @@ export default function UsuariosPage() {
             setSelectedTenantId(tenantRows[0].id);
           }
         } else {
-          const tenantId = user?.tenant_id || '';
+          const tenantId = resolveTenantId(user);
           setSelectedTenantId(tenantId);
           await loadUsers(token, tenantId);
         }
@@ -150,15 +212,20 @@ export default function UsuariosPage() {
   const createUser = async () => {
     if (!token) return;
 
-    const targetTenantId = isSuperAdmin ? selectedTenantId : user?.tenant_id;
+    const targetTenantId = isSuperAdmin ? selectedTenantId : resolveTenantId(user);
 
-    if (!targetTenantId) {
+    if (!targetTenantId && form.role !== 'dealer' && form.role !== 'superadmin') {
       alert('Primero selecciona una empresa.');
       return;
     }
 
     if (!form.name || !form.email || !form.password || !form.role) {
       alert('Completa todos los campos');
+      return;
+    }
+
+    if (!isSuperAdmin && ['superadmin', 'dealer'].includes(form.role)) {
+      alert('No tienes permisos para crear ese tipo de usuario.');
       return;
     }
 
@@ -197,6 +264,11 @@ export default function UsuariosPage() {
 
   const updateUser = async (row: any) => {
     if (!token) return;
+
+    if (!isSuperAdmin && ['superadmin', 'dealer'].includes(row.role)) {
+      alert('No tienes permisos para asignar ese rol.');
+      return;
+    }
 
     try {
       setSavingId(row.id);
@@ -261,12 +333,23 @@ export default function UsuariosPage() {
   return (
     <AppLayout>
       <div className="p-6 space-y-6">
-        <h1 className="text-2xl font-bold">Gestión de Usuarios</h1>
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Gestión de Usuarios</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Administra usuarios por empresa, manteniendo roles controlados para el SaaS.
+            </p>
+          </div>
+
+          <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600">
+            Rol actual: {user?.role || 'N/D'}
+          </div>
+        </div>
 
         <div className="bg-blue-50 p-4 rounded text-sm text-gray-700">
           {isSuperAdmin
-            ? 'Selecciona primero una empresa para listar y crear usuarios solo dentro de ese tenant.'
-            : 'Solo ves y administras usuarios de tu propia empresa.'}
+            ? 'Selecciona primero una empresa para listar y crear usuarios dentro de ese tenant. Los roles Superadmin y Dealer solo puede gestionarlos un Superadmin.'
+            : 'Solo ves y administras usuarios de tu propia empresa. No puedes crear Superadmin ni Dealer.'}
         </div>
 
         {isSuperAdmin && (
@@ -334,15 +417,16 @@ export default function UsuariosPage() {
             onChange={(e) => setForm({ ...form, role: e.target.value })}
             className="border p-2 rounded w-full"
           >
-            {!isSuperAdmin && <option value="admin">Admin</option>}
-            <option value="auditor">Auditor</option>
-            {isSuperAdmin && <option value="admin">Admin</option>}
-            {isSuperAdmin && <option value="superadmin">Superadmin</option>}
+            {roleOptions.map((option) => (
+              <option key={`create-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
 
           <button
             onClick={createUser}
-            disabled={isSuperAdmin && !selectedTenantId}
+            disabled={isSuperAdmin && !selectedTenantId && !['superadmin', 'dealer'].includes(form.role)}
             className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
           >
             Crear usuario
@@ -417,9 +501,11 @@ export default function UsuariosPage() {
                       }
                       className="border p-2 rounded w-full"
                     >
-                      {isSuperAdmin && <option value="superadmin">Superadmin</option>}
-                      <option value="admin">Admin</option>
-                      <option value="auditor">Auditor</option>
+                      {roleOptions.map((option) => (
+                        <option key={`${row.id}-${option.value}`} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
 

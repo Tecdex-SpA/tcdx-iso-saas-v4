@@ -4,8 +4,51 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 
-const isSuperAdmin = (req) => req.user?.role === 'superadmin';
-const isAdmin = (req) => req.user?.role === 'admin';
+function getUserRole(req) {
+  return String(
+    req.user?.role ||
+      req.user?.user_role ||
+      req.user?.userRole ||
+      ''
+  ).toLowerCase();
+}
+
+function getUserTenantId(req) {
+  return (
+    req.user?.tenant_id ||
+    req.user?.tenantId ||
+    req.user?.tenant ||
+    req.user?.company_id ||
+    req.user?.companyId ||
+    null
+  );
+}
+
+const isSuperAdmin = (req) => {
+  const role = getUserRole(req);
+
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'admin_global',
+    'global_admin',
+    'owner',
+  ].includes(role);
+};
+
+const isDealer = (req) => {
+  return getUserRole(req) === 'dealer';
+};
+
+const isAdmin = (req) => {
+  const role = getUserRole(req);
+
+  return [
+    'admin',
+    'tenant_admin',
+  ].includes(role);
+};
 
 const sanitizeUser = (row) => ({
   id: row.id,
@@ -21,12 +64,31 @@ const sanitizeUser = (row) => ({
   created_at: row.created_at
 });
 
-const allowedRolesForAdmin = ['admin', 'auditor'];
-const allowedRolesForSuperAdmin = ['superadmin', 'admin', 'auditor'];
+const allowedRolesForAdmin = [
+  'admin',
+  'auditor',
+  'operativo',
+  'viewer',
+];
+
+const allowedRolesForSuperAdmin = [
+  'superadmin',
+  'dealer',
+  'admin',
+  'auditor',
+  'operativo',
+  'viewer',
+];
 
 const canManageTenant = (req, tenantId) => {
   if (isSuperAdmin(req)) return true;
-  if (isAdmin(req) && req.user?.tenant_id === tenantId) return true;
+
+  const userTenantId = getUserTenantId(req);
+
+  if (isAdmin(req) && userTenantId && String(userTenantId) === String(tenantId)) {
+    return true;
+  }
+
   return false;
 };
 
@@ -89,7 +151,7 @@ router.get('/', auth, async (req, res) => {
         WHERE u.tenant_id = $1::uuid
         ORDER BY u.created_at DESC
         `,
-        [req.user.tenant_id]
+        [getUserTenantId(req)]
       );
     } else {
       return res.status(403).json({ error: 'No autorizado' });
