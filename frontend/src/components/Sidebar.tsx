@@ -198,8 +198,19 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     normalizedRole === 'admin_global' ||
     normalizedRole === 'global_admin';
 
-  const isAdmin = normalizedRole === 'admin' || normalizedRole === 'tenant_admin';
+   const isAdmin = normalizedRole === 'admin' || normalizedRole === 'tenant_admin';
   const isAuditor = normalizedRole === 'auditor';
+
+  const isClientReadOnly =
+    normalizedRole === 'cliente' ||
+    normalizedRole === 'client' ||
+    normalizedRole === 'viewer' ||
+    normalizedRole === 'read_only' ||
+    normalizedRole === 'readonly' ||
+    normalizedRole === 'solo_lectura' ||
+    normalizedRole === 'ejecutivo';
+
+  const canManageTenant = isAdmin || isAuditor || isPlatformAdmin;
 
   const soaStandards = ['ISO27001', 'ISO/IEC27701', 'ISO/IEC27017', 'ISO/IEC27018'];
   const hasActiveStandards = standards.length > 0;
@@ -284,7 +295,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/administrar-kpis',
         label: 'Administración de KPI',
-        show: hasModule('kpis'),
+        show: canManageTenant && hasModule('kpis'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M3 3v18h18" />
@@ -295,14 +306,14 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     ];
 
     return items.filter((item) => item.show);
-  }, [hasModule, modulesLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasModule, modulesLoaded, canManageTenant]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const operationItems = useMemo(() => {
     const items = [
       {
         href: '/diagnostico',
         label: 'Diagnóstico',
-        show: true,
+        show: !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="8" />
@@ -313,7 +324,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/controles',
         label: 'Controles',
-        show: !isAuditor,
+        show: !isAuditor && !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M9 3H5a2 2 0 0 0-2 2v4" />
@@ -325,7 +336,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/matriz-riesgo',
         label: 'Matriz de Riesgo',
-        show: hasModule('risks'),
+        show: !isClientReadOnly && hasModule('risks'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M10.29 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.71-3.14l-8-14a2 2 0 0 0-3.42 0z" />
@@ -336,7 +347,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/activos',
         label: 'Activos',
-        show: hasModule('risks'),
+        show: !isClientReadOnly && hasModule('risks'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <ellipse cx="12" cy="5" rx="9" ry="3" />
@@ -347,7 +358,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/soa',
         label: 'SoA',
-        show: showSoA,
+        show: !isClientReadOnly && showSoA,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" />
@@ -357,7 +368,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/plan-accion',
         label: 'Plan de Acción',
-        show: true,
+        show: !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <rect x="8" y="2" width="8" height="4" rx="1" />
@@ -368,7 +379,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/no-conformidades',
         label: 'No Conformidades',
-        show: true,
+        show: !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10" />
@@ -392,7 +403,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/evidencias',
         label: 'Evidencias',
-        show: hasModule('evidences'),
+        show: !isClientReadOnly && hasModule('evidences'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M3 7h5l2 3h11v10H3z" />
@@ -402,7 +413,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/hallazgos',
         label: 'Hallazgos',
-        show: true,
+        show: !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M4 22V4" />
@@ -413,7 +424,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/ia-compliance',
         label: 'IA Compliance',
-        show: !isAuditor && hasModule('ai'),
+        show: !isAuditor && !isClientReadOnly && hasModule('ai'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <rect x="8" y="8" width="8" height="8" rx="2" />
@@ -427,7 +438,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     ];
 
     return items.filter((item) => item.show);
-  }, [hasModule, isAuditor, showSoA, modulesLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [hasModule, isAuditor, isClientReadOnly, showSoA, modulesLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const platformItems = [
 
