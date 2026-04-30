@@ -1843,6 +1843,30 @@ function injectLifecycleHistoryIntoReportHtml(html, reportData) {
 }
 
 
+
+async function getTenantBrandingForReport(tenantId) {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        name,
+        logo,
+        logo_url
+      FROM tenants
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [tenantId]
+    );
+
+    return result.rows[0] || {};
+  } catch (error) {
+    console.error('REPORT TENANT BRANDING ERROR:', error.message);
+    return {};
+  }
+}
+
 // =====================================================
 // POST /api/reports/generate
 // Genera PDF premium según tipo de reporte y perfil.
@@ -1929,13 +1953,16 @@ router.post('/generate', auth, async (req, res) => {
     reportData.lifecycle_history = await getLifecycleHistoryForReport(targetTenantId);
     reportData.ai_report_addendum = await buildAiReportAddendum(reportData);
 
-    const baseHtml = removeDuplicatedFirstPageAiFocus(
-      renderExecutivePremiumTemplate(reportData)
-    );
-    const withAiPage = injectAiReportAddendumIntoReportHtml(baseHtml, reportData);
-    const withLifecyclePage = injectLifecycleHistoryIntoReportHtml(withAiPage, reportData);
-    const withQualityStyles = injectPremiumPdfQualityStyles(withLifecyclePage);
-    const html = normalizePremiumPageCount(withQualityStyles);
+    const tenantBranding = await getTenantBrandingForReport(targetTenantId);
+
+    reportData.tenant = {
+      ...(tenantBranding || {}),
+      ...(reportData.tenant || {}),
+      logo: reportData.tenant?.logo || tenantBranding?.logo || null,
+      logo_url: reportData.tenant?.logo_url || tenantBranding?.logo_url || null,
+    };
+
+    const html = renderExecutivePremiumTemplate(reportData);
 
     const reportTitle = buildReportTitle(reportType, report_type_code, period);
     const tenantFolder = path.join(
