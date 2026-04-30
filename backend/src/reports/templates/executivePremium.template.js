@@ -444,7 +444,7 @@ function renderPage1(data) {
     </div>
 
     <div class="infoGrid">
-      ${card('Información del informe', `
+      ${card('Individualización del informe', `
         <div class="infoLine"><span>Empresa</span><strong>${escapeHtml(data.tenant?.name || 'Cliente')}</strong></div>
         <div class="infoLine"><span>Tipo de informe</span><strong>${escapeHtml(config.badge)}</strong></div>
         <div class="infoLine"><span>Normas activas</span><div class="pillWrap">${standardsHtml}</div></div>
