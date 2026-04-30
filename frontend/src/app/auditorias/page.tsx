@@ -883,6 +883,12 @@ function AuditoriasPageContent() {
                 Auditorías
               </h1>
 
+              {isReadOnly && (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                  Modo solo lectura: puedes revisar auditorías, hallazgos y planes asociados, pero no crear ni modificar registros desde esta vista.
+                </div>
+              )}
+
               <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
                 Programa auditorías, controla su avance, gestiona informe final y
                 convierte resultados en hallazgos y planes de acción trazables.
@@ -1279,7 +1285,7 @@ function AuditoriasPageContent() {
                             <>
                               <button
                                 onClick={() => createFindingFromAudit(audit, 'observacion')}
-                                disabled={actionLoading === `finding-${audit.id}`}
+                                disabled={isReadOnly || actionLoading === `finding-${audit.id}`}
                                 className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                               >
                                 {actionLoading === `finding-${audit.id}` ? 'Creando...' : 'Crear hallazgo'}
@@ -1287,7 +1293,7 @@ function AuditoriasPageContent() {
 
                               <button
                                 onClick={() => createFindingFromAudit(audit, 'no conformidad')}
-                                disabled={actionLoading === `finding-${audit.id}`}
+                                disabled={isReadOnly || actionLoading === `finding-${audit.id}`}
                                 className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                               >
                                 {actionLoading === `finding-${audit.id}` ? 'Creando...' : 'Crear NC'}
@@ -1295,7 +1301,7 @@ function AuditoriasPageContent() {
 
                               <button
                                 onClick={() => createActionFromAudit(audit)}
-                                disabled={actionLoading === `action-${audit.id}`}
+                                disabled={isReadOnly || actionLoading === `action-${audit.id}`}
                                 className="rounded-2xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                               >
                                 {actionLoading === `action-${audit.id}` ? 'Creando...' : 'Crear acción'}

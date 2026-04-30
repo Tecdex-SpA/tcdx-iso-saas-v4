@@ -263,6 +263,30 @@ export default function CicloVidaPage() {
 
   const isAuditor = userRole === 'auditor';
 
+  const isViewer =
+    userRole === 'viewer' ||
+    userRole === 'cliente' ||
+    userRole === 'client' ||
+    userRole === 'solo_lectura' ||
+    userRole === 'read_only' ||
+    userRole === 'readonly' ||
+    userRole === 'ejecutivo';
+
+  const canUseObjectives = !isViewer;
+  const canRequestLifecycleMove = !isViewer;
+
+  const canReviewLifecycleMove =
+    isAuditor ||
+    userRole === 'admin' ||
+    userRole === 'tenant_admin' ||
+    userRole === 'superadmin';
+
+  useEffect(() => {
+    if (!canUseObjectives && activeView === 'objectives') {
+      setActiveView('lifecycle');
+    }
+  }, [canUseObjectives, activeView]);
+
   async function fetchMe(currentToken: string): Promise<MeResponse | null> {
     try {
       const res = await fetch(`${API_URL}/api/me`, {
@@ -556,6 +580,11 @@ export default function CicloVidaPage() {
   }, [selectedPendingCard, selectedPendingDetail]);
 
   function handleDragStart(card: LifecycleCard) {
+    if (!canRequestLifecycleMove) {
+      setError('Tu rol es solo lectura y no puede solicitar cambios de etapa.');
+      return;
+    }
+
     setDragging({
       standard_code: card.standard_code,
       operation_id: card.operation_id,
@@ -579,6 +608,12 @@ export default function CicloVidaPage() {
     e.preventDefault();
 
     if (!dragging || !tenantId) return;
+
+    if (!canRequestLifecycleMove) {
+      setError('Tu rol es solo lectura y no puede solicitar cambios de etapa.');
+      setDragging(null);
+      return;
+    }
 
     setDropTarget(null);
 
@@ -636,6 +671,11 @@ export default function CicloVidaPage() {
 
   async function handleReviewRequest(action: 'confirmar' | 'rechazar') {
     if (!selectedPendingCard?.pending_request_row_id) return;
+
+    if (!canReviewLifecycleMove) {
+      setError('Tu rol no permite aprobar o rechazar cambios de etapa.');
+      return;
+    }
 
     try {
       setActionLoading(true);
@@ -746,7 +786,15 @@ export default function CicloVidaPage() {
 
                   <button
                     type="button"
-                    onClick={() => setActiveView('objectives')}
+                    disabled={!canUseObjectives}
+                    title={!canUseObjectives ? 'Tu rol no tiene acceso a la vista Objetivos.' : 'Ver objetivos'}
+                    onClick={() => {
+                      if (!canUseObjectives) {
+                        setError('Tu rol no tiene acceso a la vista Objetivos.');
+                        return;
+                      }
+                      setActiveView('objectives');
+                    }}
                     className={[
                       'rounded-xl px-4 py-2 text-sm font-semibold transition',
                       activeView === 'objectives'
@@ -872,6 +920,7 @@ export default function CicloVidaPage() {
                       Motivo del movimiento
                     </label>
                     <input
+                      disabled={!canRequestLifecycleMove}
                       value={requestReason}
                       onChange={(e) => setRequestReason(e.target.value)}
                       placeholder="Opcional para auditoría"
@@ -918,7 +967,7 @@ export default function CicloVidaPage() {
           </div>
         ) : null}
 
-        {activeView === 'objectives' ? (
+        {activeView === 'objectives' && canUseObjectives ? (
           <ObjectivesPanel
             tenantId={tenantId}
             standards={activeStandards.map((item) => ({

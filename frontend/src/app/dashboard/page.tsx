@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
 import {
   PieChart,
@@ -374,6 +374,19 @@ function formatKpiValue(value: number | string | null | undefined, unit?: string
 export default function DashboardPage() {
   const [activeView, setActiveView] = useState<'executive' | 'kpi'>('executive');
 
+  const currentRole = getUserRoleFromToken();
+
+  const canManageKpis = [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'admin_global',
+    'global_admin',
+    'owner',
+    'admin',
+    'tenant_admin',
+  ].includes(currentRole);
+
   const [controls, setControls] = useState<any[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [nextAudits, setNextAudits] = useState<AuditItem[]>([]);
@@ -489,6 +502,11 @@ export default function DashboardPage() {
   };
 
   const handleRecalculateKpis = async () => {
+    if (!canManageKpis) {
+      alert('Tu rol no permite recalcular KPIs. Esta acción está reservada para administradores.');
+      return;
+    }
+
     const token = localStorage.getItem('token');
     const user = getUserFromToken();
 
@@ -1323,7 +1341,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={handleRecalculateKpis}
-                      disabled={recalculatingKpis}
+                      disabled={recalculatingKpis || !canManageKpis}
                       className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
                     >
                       {recalculatingKpis ? 'Recalculando...' : 'Recalcular KPIs'}
