@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -47,6 +47,67 @@ def require_ai_token(
     provided = x_internal_token or x_ai_token
     if provided != configured:
         raise HTTPException(status_code=401, detail="Invalid AI token")
+
+
+@app.get("/")
+def root():
+    """
+    Endpoint raíz liviano para validar que el AI Engine está activo.
+    No expone estado interno, secretos ni conexión a base de datos.
+    """
+    return {
+        "ok": True,
+        "service": settings.APP_NAME,
+        "status": "running",
+    }
+
+
+@app.head("/")
+def root_head():
+    """
+    Permite validar con curl -I http://host:8001 sin recibir 404.
+    """
+    return Response(status_code=200)
+
+
+@app.get("/health")
+def health():
+    """
+    Health check público básico para balanceadores, monitoreo simple o curl.
+    """
+    return {
+        "ok": True,
+        "service": settings.APP_NAME,
+        "status": "running",
+    }
+
+
+@app.head("/health")
+def health_head():
+    return Response(status_code=200)
+
+
+@app.get("/health/deep")
+def health_deep(
+    x_ai_token: Optional[str] = Header(default=None),
+    x_internal_token: Optional[str] = Header(default=None),
+):
+    """
+    Health check profundo protegido por token interno.
+    Valida token y conexión a PostgreSQL sin exponer secretos.
+    """
+    require_ai_token(
+        x_ai_token=x_ai_token,
+        x_internal_token=x_internal_token,
+    )
+
+    return {
+        "ok": True,
+        "service": settings.APP_NAME,
+        "status": "running",
+        "db_ok": test_db_connection(),
+        "ai_token_configured": bool(get_configured_ai_token()),
+    }
 
 
 def safe_dict(value: Any) -> Dict[str, Any]:
