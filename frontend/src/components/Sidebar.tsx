@@ -217,6 +217,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     normalizedRole === 'ejecutivo';
 
   const canManageTenant = isAdmin || isAuditor || isPlatformAdmin;
+  const canUsePrebilling = isAdmin || isDealer;
 
   const soaStandards = ['ISO27001', 'ISO/IEC27701', 'ISO/IEC27017', 'ISO/IEC27018'];
   const hasActiveStandards = standards.length > 0;
@@ -309,10 +310,23 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           </svg>
         ),
       },
+      {
+        href: '/prefacturacion',
+        label: 'Prefacturación',
+        show: canUsePrebilling,
+        icon: (
+          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M4 4h16v16H4z" />
+            <path d="M8 8h8" />
+            <path d="M8 12h8" />
+            <path d="M8 16h5" />
+          </svg>
+        ),
+      },
     ];
 
     return items.filter((item) => item.show);
-  }, [hasModule, modulesLoaded, canManageTenant]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasModule, modulesLoaded, canManageTenant, canUsePrebilling]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const operationItems = useMemo(() => {
     const items = [
@@ -547,6 +561,18 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           <path d="M4 7h3" />
           <path d="M4 11h3" />
           <path d="M4 15h3" />
+        </svg>
+      ),
+    },
+    {
+      href: '/prefacturacion',
+      label: 'Prefacturación',
+      icon: (
+        <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M4 4h16v16H4z" />
+          <path d="M8 8h8" />
+          <path d="M8 12h8" />
+          <path d="M8 16h5" />
         </svg>
       ),
     },

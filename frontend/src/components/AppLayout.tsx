@@ -64,7 +64,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const routeRules = useMemo(() => {
     return {
       platformOnly: ['/admin-saas', '/empresas'],
-      dealerOnly: ['/dealer', '/cotizador'],
+      dealerOnly: ['/dealer', '/cotizador', '/prefacturacion'],
       adminOrPlatform: ['/usuarios'],
       moduleProtected: [
         {
@@ -236,6 +236,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         const operativeBlockedRoutes = [
           '/usuarios',
           '/administrar-kpis',
+          '/prefacturacion',
           '/admin-saas',
           '/empresas',
           '/dealer',
@@ -245,6 +246,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         const auditorBlockedRoutes = [
           '/usuarios',
           '/administrar-kpis',
+          '/prefacturacion',
           '/admin-saas',
           '/empresas',
           '/dealer',

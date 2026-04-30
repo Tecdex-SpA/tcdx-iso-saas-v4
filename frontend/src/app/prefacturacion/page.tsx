@@ -11,20 +11,33 @@ function resolveTenantId(user: any) {
   return user?.tenant_id || user?.tenantId || user?.tenant || '';
 }
 
+function resolveRole(user: any) {
+  return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
+}
+
+type DealerTenant = {
+  tenant_id: string;
+  tenant_name?: string;
+};
+
 export default function PrefacturacionPage() {
   const [token, setToken] = useState('');
   const [tenantId, setTenantId] = useState('');
+  const [role, setRole] = useState('');
+  const [dealerTenants, setDealerTenants] = useState<DealerTenant[]>([]);
   const [period, setPeriod] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     const t = localStorage.getItem('token') || '';
     const u = getUserFromToken();
     const tid = resolveTenantId(u);
+    const role = resolveRole(u);
 
     if (!t) {
       window.location.href = '/login';
@@ -33,7 +46,50 @@ export default function PrefacturacionPage() {
 
     setToken(t);
     setTenantId(tid);
+    setRole(role);
+
+    if (!tid && role !== 'dealer') {
+      setMessage(
+        'Prefacturación requiere un tenant seleccionado. Ingresa como administrador de empresa o dealer con acceso asignado.'
+      );
+    }
   }, []);
+
+  useEffect(() => {
+    const loadDealerTenants = async () => {
+      if (!token || role !== 'dealer') return;
+
+      try {
+        const res = await fetch(`${API_URL}/api/admin-saas/dealer/my-tenants`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || json?.ok === false) {
+          setMessage(json?.error || 'No fue posible cargar clientes asignados al dealer.');
+          return;
+        }
+
+        const rows: DealerTenant[] = json?.data || [];
+        setDealerTenants(rows);
+
+        if (!tenantId && rows.length > 0) {
+          setTenantId(rows[0].tenant_id);
+        }
+
+        if (rows.length === 0) {
+          setMessage('No tienes clientes asignados para consultar prefacturación.');
+        } else {
+          setMessage('');
+        }
+      } catch {
+        setMessage('No fue posible cargar clientes asignados al dealer.');
+      }
+    };
+
+    void loadDealerTenants();
+  }, [token, role, tenantId]);
 
   const load = async () => {
     if (!token || !tenantId) return;
@@ -108,6 +164,20 @@ export default function PrefacturacionPage() {
           </p>
 
           <div className="mt-6 flex flex-col gap-3 md:flex-row">
+            {role === 'dealer' && dealerTenants.length > 0 && (
+              <select
+                value={tenantId}
+                onChange={(e) => setTenantId(e.target.value)}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+              >
+                {dealerTenants.map((tenant) => (
+                  <option key={tenant.tenant_id} value={tenant.tenant_id}>
+                    {tenant.tenant_name || tenant.tenant_id}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <input
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
@@ -161,6 +231,12 @@ export default function PrefacturacionPage() {
               </p>
             </section>
           </>
+        )}
+
+        {!data && message && (
+          <section className="rounded-[30px] border border-amber-200 bg-amber-50 p-6 text-sm font-semibold text-amber-800">
+            {message}
+          </section>
         )}
       </div>
     </AppLayout>
