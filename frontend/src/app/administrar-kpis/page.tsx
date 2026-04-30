@@ -858,6 +858,19 @@ export default function AdministrarKpisPage() {
     };
   }, [data, filtered]);
 
+  const manualPendingKpis = useMemo(() => {
+    return data
+      .filter((item) => item.is_enabled)
+      .filter((item) => !isHealthKpi(item))
+      .filter((item) => ['manual', 'hibrido'].includes(String(item.kpi_type || '').toLowerCase()))
+      .filter((item) => {
+        const color = item.latest_status_color;
+        const value = item.latest_value;
+        return !color || color === 'gray' || value === null || value === undefined || value === '';
+      })
+      .slice(0, 8);
+  }, [data]);
+
   return (
     <AppLayout>
       <div className="p-6 bg-[#f5f7fb] min-h-screen space-y-6">
@@ -903,6 +916,64 @@ export default function AdministrarKpisPage() {
           <MetricCard title="Personalizados" value={stats.custom} />
           <MetricCard title="Filtrados" value={stats.filtered} />
         </div>
+
+        {manualPendingKpis.length > 0 && (
+          <section className="rounded-[28px] border border-amber-200 bg-amber-50/70 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  KPI manuales pendientes de carga
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Estos KPI están habilitados y requieren un valor manual o híbrido para dejar de aparecer como “Sin dato”.
+                </p>
+              </div>
+
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-700">
+                {manualPendingKpis.length} pendiente(s)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              {manualPendingKpis.map((item) => (
+                <div
+                  key={`manual-pending-${item.id}`}
+                  className="rounded-2xl border border-amber-200 bg-white p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white">
+                          {item.code}
+                        </span>
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                          {item.kpi_type}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 font-semibold text-slate-900">
+                        {item.custom_label || item.name}
+                      </div>
+
+                      <div className="mt-1 text-xs text-slate-500">
+                        {item.category} · {item.override_frequency || item.frequency}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => saveManualValue(item)}
+                      disabled={saving === `manual-${item.id}`}
+                      className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      {saving === `manual-${item.id}` ? 'Guardando...' : 'Cargar valor'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)] space-y-4">
           <div>

@@ -233,7 +233,7 @@ async function getKpiDefinitionsForTenant(tenantId) {
     `
     SELECT
       kd.*,
-      tks.is_enabled,
+      COALESCE(tks.is_enabled, true) AS is_enabled,
       tks.override_frequency,
       tks.override_target_value,
       tks.override_direction,
@@ -1131,7 +1131,8 @@ async function recalculateTenantKpis(req, res) {
       [tenantId]
     );
 
-    const defs = await getKpiDefinitionsForTenant(tenantId);
+    const defs = (await getKpiDefinitionsForTenant(tenantId))
+      .filter((def) => def.is_enabled !== false);
     const snapshotsCreated = [];
 
     for (const def of defs) {

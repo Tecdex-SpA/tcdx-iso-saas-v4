@@ -29,6 +29,9 @@ type ObjectiveItem = {
   notes?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
+  status_updated_at?: string | null;
 };
 
 type ObjectiveForm = {
@@ -386,7 +389,8 @@ export default function ObjectivesPanel({
 
             <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
               Define objetivos por norma, responsable, período y avance. Estos registros
-              alimentan el KPI-01 Cumplimiento de Objetivos.
+              alimentan el KPI-01 Cumplimiento de Objetivos. El sistema ajusta automáticamente
+              el estado si el avance llega a 100% o si la fecha de término venció.
             </p>
           </div>
 
@@ -508,7 +512,7 @@ export default function ObjectivesPanel({
             />
 
             <Select
-              label="Estado"
+              label="Estado sugerido"
               value={form.status}
               onChange={(v) => setForm({ ...form, status: v })}
               options={[
@@ -645,11 +649,15 @@ export default function ObjectivesPanel({
                   />
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
                   <SmallStat label="Responsable" value={item.owner || 'N/D'} />
                   <SmallStat label="Inicio" value={formatDate(item.period_start)} />
                   <SmallStat label="Fin" value={formatDate(item.period_end)} />
                   <SmallStat label="Meta" value={item.target_value ?? 'N/D'} />
+                  <SmallStat label="Creado" value={formatDate(item.created_at)} />
+                  <SmallStat label="Actualizado" value={formatDate(item.updated_at)} />
+                  <SmallStat label="Creado por" value={item.created_by_name || 'N/D'} />
+                  <SmallStat label="Actualizado por" value={item.updated_by_name || 'N/D'} />
                 </div>
 
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
