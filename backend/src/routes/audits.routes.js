@@ -30,6 +30,69 @@ function isSuperAdmin(user) {
   ].includes(normalizeRole(user));
 }
 
+function isTenantAdmin(user) {
+  return ['admin', 'tenant_admin'].includes(normalizeRole(user));
+}
+
+function isAuditor(user) {
+  return normalizeRole(user) === 'auditor';
+}
+
+function isOperativo(user) {
+  return normalizeRole(user) === 'operativo';
+}
+
+function isViewer(user) {
+  return [
+    'viewer',
+    'cliente',
+    'client',
+    'solo_lectura',
+    'read_only',
+    'readonly',
+    'ejecutivo',
+  ].includes(normalizeRole(user));
+}
+
+function canReadAudits(user) {
+  return (
+    isSuperAdmin(user) ||
+    isTenantAdmin(user) ||
+    isAuditor(user) ||
+    isOperativo(user) ||
+    isViewer(user)
+  );
+}
+
+function canManageAudits(user) {
+  return isSuperAdmin(user) || isTenantAdmin(user) || isAuditor(user);
+}
+
+function denyReadAudits(res) {
+  return res.status(403).json({
+    ok: false,
+    code: 'RBAC_DENIED',
+    error: 'No autorizado para consultar auditorías',
+  });
+}
+
+function denyManageAudits(res) {
+  return res.status(403).json({
+    ok: false,
+    code: 'RBAC_DENIED',
+    error: 'No autorizado para crear o modificar auditorías',
+  });
+}
+
+function normalizeAuditStatusForSql(status) {
+  const raw = String(status || '').toLowerCase().trim();
+
+  if (raw === 'completada') return 'completada';
+  if (raw === 'en_ejecucion' || raw === 'en ejecución') return 'en_ejecucion';
+  return 'pendiente';
+}
+
+
 function ensureTenantAccess(req, tenantId) {
   if (isSuperAdmin(req.user)) return true;
   return String(getUserTenantId(req.user)) === String(tenantId);
@@ -95,6 +158,10 @@ const upload = multer({ storage });
 // =============================
 router.post('/', auth, async (req, res) => {
   try {
+    if (!canManageAudits(req.user)) {
+      return denyManageAudits(res);
+    }
+
     const {
       tenant_id,
       iso,
@@ -165,6 +232,10 @@ router.post('/', auth, async (req, res) => {
 // =============================
 router.put('/start/:id', auth, async (req, res) => {
   try {
+    if (!canManageAudits(req.user)) {
+      return denyManageAudits(res);
+    }
+
     const current = await getAuditById(req.params.id);
 
     if (current.rowCount === 0) {
@@ -216,6 +287,10 @@ router.put('/start/:id', auth, async (req, res) => {
 // =============================
 router.post('/upload/:id', auth, upload.single('file'), async (req, res) => {
   try {
+    if (!canManageAudits(req.user)) {
+      return denyManageAudits(res);
+    }
+
     const current = await getAuditById(req.params.id);
 
     if (current.rowCount === 0) {
@@ -268,6 +343,10 @@ router.post('/upload/:id', auth, upload.single('file'), async (req, res) => {
 // =============================
 router.put('/complete/:id', auth, async (req, res) => {
   try {
+    if (!canManageAudits(req.user)) {
+      return denyManageAudits(res);
+    }
+
     const current = await getAuditById(req.params.id);
 
     if (current.rowCount === 0) {
@@ -314,12 +393,224 @@ router.put('/complete/:id', auth, async (req, res) => {
   }
 });
 
+
+// =============================
+// 📊 RESUMEN EJECUTIVO AUDITORÍAS
+// GET /api/audits/summary/:tenant_id
+// No deteriora KPI. Solo entrega lectura ejecutiva.
+// =============================
+router.get('/summary/:tenant_id', auth, async (req, res) => {
+  try {
+    if (!canReadAudits(req.user)) {
+      return denyReadAudits(res);
+    }
+
+    const { tenant_id } = req.params;
+    const { iso } = req.query || {};
+
+    if (!ensureTenantAccess(req, tenant_id)) {
+      return res.status(403).json({
+        ok: false,
+        code: 'RBAC_DENIED',
+        error: 'No autorizado para este tenant',
+      });
+    }
+
+    const params = [tenant_id];
+    let isoFilterSql = '';
+
+    if (iso) {
+      const activeStandard = await ensureOperationalStandard(tenant_id, String(iso));
+
+      if (activeStandard.rowCount === 0) {
+        return res.json({
+          ok: true,
+          tenant_id,
+          iso,
+          summary: {
+            total: 0,
+            pendientes: 0,
+            en_ejecucion: 0,
+            completadas: 0,
+            con_informe: 0,
+            sin_informe: 0,
+            hallazgos: 0,
+            acciones: 0,
+          },
+          next_audit: null,
+          recent_audits: [],
+        });
+      }
+
+      params.push(String(iso));
+      isoFilterSql = ` AND a.iso = $2 `;
+    }
+
+    const summaryResult = await pool.query(
+      `
+      WITH base AS (
+        SELECT
+          a.id,
+          a.tenant_id,
+          a.iso,
+          a.start_date,
+          a.end_date,
+          a.requester_name,
+          a.auditor_type,
+          a.auditor_name,
+          a.status,
+          a.report_file,
+          a.created_at,
+          normalize_status_for_audits(a.status) AS normalized_status
+        FROM audits a
+        JOIN tenant_standards ts
+          ON ts.tenant_id = a.tenant_id
+         AND ts.standard_code = a.iso
+         AND ts.is_active = TRUE
+        WHERE a.tenant_id = $1
+          ${isoFilterSql}
+          AND EXISTS (
+            SELECT 1
+            FROM tenant_standard_operations tso
+            JOIN tenant_operations op
+              ON op.id = tso.operation_id
+             AND op.tenant_id = tso.tenant_id
+             AND op.is_active = TRUE
+            WHERE tso.tenant_id = a.tenant_id
+              AND tso.standard_code = a.iso
+              AND tso.is_active = TRUE
+          )
+      )
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE normalized_status = 'pendiente')::int AS pendientes,
+        COUNT(*) FILTER (WHERE normalized_status = 'en_ejecucion')::int AS en_ejecucion,
+        COUNT(*) FILTER (WHERE normalized_status = 'completada')::int AS completadas,
+        COUNT(*) FILTER (WHERE report_file IS NOT NULL AND report_file <> '')::int AS con_informe,
+        COUNT(*) FILTER (WHERE report_file IS NULL OR report_file = '')::int AS sin_informe
+      FROM base
+      `,
+      params
+    );
+
+    const relationResult = await pool.query(
+      `
+      SELECT
+        (
+          SELECT COUNT(*)::int
+          FROM findings f
+          WHERE f.tenant_id = $1::uuid
+            AND f.audit_id IS NOT NULL
+            ${iso ? 'AND f.iso_code = $2' : ''}
+        ) AS hallazgos,
+        (
+          SELECT COUNT(*)::int
+          FROM action_plans ap
+          WHERE ap.tenant_id = $1::uuid
+            AND ap.audit_id IS NOT NULL
+            ${iso ? 'AND ap.iso_code = $2' : ''}
+        ) AS acciones
+      `,
+      params
+    );
+
+    const nextResult = await pool.query(
+      `
+      SELECT
+        a.*,
+        normalize_status_for_audits(a.status) AS normalized_status
+      FROM audits a
+      JOIN tenant_standards ts
+        ON ts.tenant_id = a.tenant_id
+       AND ts.standard_code = a.iso
+       AND ts.is_active = TRUE
+      WHERE a.tenant_id = $1
+        ${isoFilterSql}
+        AND normalize_status_for_audits(a.status) != 'completada'
+        AND EXISTS (
+          SELECT 1
+          FROM tenant_standard_operations tso
+          JOIN tenant_operations op
+            ON op.id = tso.operation_id
+           AND op.tenant_id = tso.tenant_id
+           AND op.is_active = TRUE
+          WHERE tso.tenant_id = a.tenant_id
+            AND tso.standard_code = a.iso
+            AND tso.is_active = TRUE
+        )
+      ORDER BY a.start_date ASC
+      LIMIT 1
+      `,
+      params
+    );
+
+    const recentResult = await pool.query(
+      `
+      SELECT
+        a.*,
+        normalize_status_for_audits(a.status) AS normalized_status
+      FROM audits a
+      JOIN tenant_standards ts
+        ON ts.tenant_id = a.tenant_id
+       AND ts.standard_code = a.iso
+       AND ts.is_active = TRUE
+      WHERE a.tenant_id = $1
+        ${isoFilterSql}
+        AND EXISTS (
+          SELECT 1
+          FROM tenant_standard_operations tso
+          JOIN tenant_operations op
+            ON op.id = tso.operation_id
+           AND op.tenant_id = tso.tenant_id
+           AND op.is_active = TRUE
+          WHERE tso.tenant_id = a.tenant_id
+            AND tso.standard_code = a.iso
+            AND tso.is_active = TRUE
+        )
+      ORDER BY a.start_date DESC, a.created_at DESC NULLS LAST
+      LIMIT 8
+      `,
+      params
+    );
+
+    const summary = {
+      ...(summaryResult.rows[0] || {}),
+      hallazgos: Number(relationResult.rows[0]?.hallazgos || 0),
+      acciones: Number(relationResult.rows[0]?.acciones || 0),
+    };
+
+    return res.json({
+      ok: true,
+      tenant_id,
+      iso: iso || null,
+      summary,
+      next_audit: nextResult.rows[0] || null,
+      recent_audits: recentResult.rows,
+      note:
+        'Las auditorías en ejecución son trazabilidad operativa y no deterioran KPI hasta existir resultado formal.',
+    });
+  } catch (err) {
+    console.error('ERROR GET AUDIT SUMMARY:', err);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo resumen ejecutivo de auditorías',
+      detail: err.message,
+    });
+  }
+});
+
+
 // =============================
 // 📅 PRÓXIMAS AUDITORÍAS POR ISO
 // solo alcance operativo real
 // =============================
 router.get('/next-all/:tenant_id', auth, async (req, res) => {
   try {
+    if (!canReadAudits(req.user)) {
+      return denyReadAudits(res);
+    }
+
     const { tenant_id } = req.params;
 
     if (!ensureTenantAccess(req, tenant_id)) {
@@ -405,6 +696,10 @@ router.get('/next-all/:tenant_id', auth, async (req, res) => {
 // =============================
 router.get('/next/:tenant_id', auth, async (req, res) => {
   try {
+    if (!canReadAudits(req.user)) {
+      return denyReadAudits(res);
+    }
+
     const { tenant_id } = req.params;
 
     if (!ensureTenantAccess(req, tenant_id)) {
@@ -454,6 +749,10 @@ router.get('/next/:tenant_id', auth, async (req, res) => {
 // =============================
 router.get('/:tenant_id', auth, async (req, res) => {
   try {
+    if (!canReadAudits(req.user)) {
+      return denyReadAudits(res);
+    }
+
     const { tenant_id } = req.params;
     const { iso } = req.query;
 
