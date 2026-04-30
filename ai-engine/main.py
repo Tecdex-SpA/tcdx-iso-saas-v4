@@ -683,6 +683,24 @@ def build_assessment(payload: Dict[str, Any], extraction: Dict[str, Any]) -> Dic
         "verificación", "verificacion", "eficacia", "seguimiento", "prueba",
         "simulacro", "revisión", "revision"
     ])
+    if contains_any(combined_text, [
+        "sin fecha", "no tiene fecha", "sin vigencia", "no indica vigencia",
+        "sin revision", "sin revisión", "no indica revision", "no indica revisión"
+    ]):
+        has_date_signal = False
+
+    if contains_any(combined_text, [
+        "sin responsable", "no tiene responsable", "sin aprobador",
+        "no indica responsable", "no indica aprobador", "sin dueño", "sin dueno"
+    ]):
+        has_owner_signal = False
+
+    if contains_any(combined_text, [
+        "sin resultado", "no tiene resultado", "sin evidencia de ejecucion",
+        "sin evidencia de ejecución", "no demuestra ejecucion", "no demuestra ejecución",
+        "sin verificacion", "sin verificación"
+    ]):
+        has_result_signal = False
     has_control_signal = bool(control_description and control_description.lower()[:28] in combined_text.lower()) or contains_any(
         combined_text,
         [term for term in [standard_code.lower(), clause.lower(), operation_name.lower()] if term]
