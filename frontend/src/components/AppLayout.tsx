@@ -185,7 +185,22 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           role === 'global_admin';
 
         const isDealer = role === 'dealer';
-        const isAdmin = role === 'admin';
+
+        const isAdmin =
+          role === 'admin' ||
+          role === 'tenant_admin';
+
+        const isAuditor = role === 'auditor';
+        const isOperativo = role === 'operativo';
+
+        const isViewer =
+          role === 'viewer' ||
+          role === 'cliente' ||
+          role === 'client' ||
+          role === 'solo_lectura' ||
+          role === 'read_only' ||
+          role === 'readonly' ||
+          role === 'ejecutivo';
 
         const homePath = getHomePathByRole(role);
 
@@ -206,6 +221,50 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         if (!isPlatform && !isAdmin && isRoute(routeRules.adminOrPlatform)) {
           window.location.href = homePath;
+          return;
+        }
+
+        const viewerAllowedRoutes = [
+          '/dashboard',
+          '/ciclo-vida',
+          '/health',
+          '/exportes',
+          '/perfil',
+        ];
+
+        const operativeBlockedRoutes = [
+          '/usuarios',
+          '/administrar-kpis',
+          '/auditorias',
+          '/admin-saas',
+          '/empresas',
+          '/dealer',
+          '/cotizador',
+        ];
+
+        const auditorBlockedRoutes = [
+          '/usuarios',
+          '/administrar-kpis',
+          '/admin-saas',
+          '/empresas',
+          '/dealer',
+          '/cotizador',
+          '/ia-compliance',
+          '/ia',
+        ];
+
+        if (isViewer && !isRoute(viewerAllowedRoutes)) {
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        if (isOperativo && isRoute(operativeBlockedRoutes)) {
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        if (isAuditor && isRoute(auditorBlockedRoutes)) {
+          window.location.href = '/dashboard';
           return;
         }
 
