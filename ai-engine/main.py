@@ -69,6 +69,19 @@ def to_text(value: Any) -> str:
     return str(value or "").strip()
 
 
+def normalize_for_match(value: Any) -> str:
+    return to_text(value).lower()
+
+
+def contains_any(text: str, terms: List[str]) -> bool:
+    haystack = normalize_for_match(text)
+    return any(term in haystack for term in terms)
+
+
+def clamp_score(value: float) -> float:
+    return max(0, min(100, round(value, 2)))
+
+
 def infer_file_type(file_name: Optional[str], mime_type: Optional[str]) -> str:
     name = to_text(file_name).lower()
     mime = to_text(mime_type).lower()
@@ -637,6 +650,12 @@ def build_assessment(payload: Dict[str, Any], extraction: Dict[str, Any]) -> Dic
     control_description = to_text(control.get("description"))
     operation_name = to_text(operation.get("operation_name"))
     extracted_text = to_text(extraction.get("raw_text"))
+    combined_text = "\n".join([
+        extracted_text,
+        to_text(evidence.get("description")),
+        control_description,
+        to_text(action_plan.get("title")) if (action_plan := safe_dict(payload.get("action_plan"))) else "",
+    ])
 
     has_real_file = bool(
         evidence.get("file_name")
@@ -649,6 +668,25 @@ def build_assessment(payload: Dict[str, Any], extraction: Dict[str, Any]) -> Dic
 
     evidence_coverage_pct = float(lifecycle.get("evidence_coverage_pct") or 0)
     avg_health_score = float(lifecycle.get("avg_health_score") or 0)
+    health_status = to_text(control.get("tenant_control_health_status") or lifecycle.get("health_status")).lower()
+
+    has_date_signal = contains_any(combined_text, [
+        "fecha", "vigencia", "vigente", "actualizado", "aprobado", "aprobada",
+        "revisado", "revisada", "2024", "2025", "2026"
+    ])
+    has_owner_signal = contains_any(combined_text, [
+        "responsable", "owner", "aprobador", "auditor", "gerente", "jefe",
+        "encargado", "ciso", "coordinador"
+    ])
+    has_result_signal = contains_any(combined_text, [
+        "resultado", "cumplimiento", "evidencia", "registro", "acta",
+        "verificación", "verificacion", "eficacia", "seguimiento", "prueba",
+        "simulacro", "revisión", "revision"
+    ])
+    has_control_signal = bool(control_description and control_description.lower()[:28] in combined_text.lower()) or contains_any(
+        combined_text,
+        [term for term in [standard_code.lower(), clause.lower(), operation_name.lower()] if term]
+    )
 
     pertinence_score = 55
     sufficiency_score = 35
@@ -688,20 +726,64 @@ def build_assessment(payload: Dict[str, Any], extraction: Dict[str, Any]) -> Dic
     if avg_health_score >= 80:
         compliance_impact_score += 5
 
-    pertinence_score = max(0, min(100, round(pertinence_score, 2)))
-    sufficiency_score = max(0, min(100, round(sufficiency_score, 2)))
-    freshness_score = max(0, min(100, round(freshness_score, 2)))
-    traceability_score = max(0, min(100, round(traceability_score, 2)))
-    consistency_score = max(0, min(100, round(consistency_score, 2)))
-    compliance_impact_score = max(0, min(100, round(compliance_impact_score, 2)))
+    if has_date_signal:
+        freshness_score += 12
+        traceability_score += 6
+    else:
+        freshness_score -= 12
+        sufficiency_score -= 6
+
+    if has_owner_signal:
+        traceability_score += 10
+        consistency_score += 5
+    else:
+        traceability_score -= 8
+
+    if has_result_signal:
+        sufficiency_score += 10
+        compliance_impact_score += 8
+    else:
+        sufficiency_score -= 8
+
+    if has_control_signal:
+        pertinence_score += 8
+        consistency_score += 8
+    else:
+        pertinence_score -= 10
+        consistency_score -= 5
+
+    if health_status in ("deteriorado", "critical", "red", "rojo"):
+        compliance_impact_score += 8
+    elif health_status in ("saludable", "healthy", "green", "verde"):
+        compliance_impact_score += 3
+
+    pertinence_score = clamp_score(pertinence_score)
+    sufficiency_score = clamp_score(sufficiency_score)
+    freshness_score = clamp_score(freshness_score)
+    traceability_score = clamp_score(traceability_score)
+    consistency_score = clamp_score(consistency_score)
+    compliance_impact_score = clamp_score(compliance_impact_score)
+
+    strong_evidence = (
+        has_real_file
+        and has_text
+        and has_date_signal
+        and has_owner_signal
+        and has_result_signal
+        and has_control_signal
+        and sufficiency_score >= 75
+        and traceability_score >= 70
+    )
+
+    usable_evidence = has_real_file and has_text and sufficiency_score >= 55 and traceability_score >= 55
 
     if status == "rechazada":
         validity_result = "no_valida"
         contribution_level = "bajo"
-    elif has_real_file and has_text and status == "aprobada":
+    elif strong_evidence and status == "aprobada":
         validity_result = "valida"
         contribution_level = "alto"
-    elif has_real_file and status in ("aprobada", "pendiente"):
+    elif usable_evidence and status in ("aprobada", "pendiente"):
         validity_result = "parcial"
         contribution_level = "medio"
     elif has_text:
@@ -722,6 +804,22 @@ def build_assessment(payload: Dict[str, Any], extraction: Dict[str, Any]) -> Dic
         risks.append("No fue posible extraer contenido documental suficiente del archivo.")
         next_steps.append("Reprocesar con un parser/OCR especializado o adjuntar una versión legible.")
 
+    if not has_date_signal:
+        risks.append("No se identificó claramente fecha, vigencia o revisión; puede debilitarse la trazabilidad en auditoría.")
+        next_steps.append("Complementar con fecha de emisión/revisión y periodo cubierto por la evidencia.")
+
+    if not has_owner_signal:
+        risks.append("No se identificó responsable o aprobador claro en la evidencia.")
+        next_steps.append("Agregar responsable, aprobador o dueño del control en la evidencia o sus metadatos.")
+
+    if not has_result_signal:
+        risks.append("No se observó resultado verificable de ejecución, revisión o eficacia del control.")
+        next_steps.append("Adjuntar registro de ejecución, resultado, revisión o prueba de eficacia.")
+
+    if not has_control_signal:
+        risks.append("La conexión explícita entre evidencia, norma, cláusula o control es limitada.")
+        next_steps.append("Vincular la evidencia al control correcto e incluir referencia de norma/cláusula.")
+
     if evidence_coverage_pct < 60:
         risks.append(f"La cobertura de evidencia del estándar sigue baja ({evidence_coverage_pct:.0f}%).")
         next_steps.append("Complementar con más evidencias del mismo control u operación.")
@@ -739,6 +837,40 @@ def build_assessment(payload: Dict[str, Any], extraction: Dict[str, Any]) -> Dic
 
     if not next_steps:
         next_steps.append("Mantener vigente la evidencia y revisar periódicamente su trazabilidad y suficiencia.")
+
+    evidence_gaps = []
+    if not has_real_file:
+        evidence_gaps.append("archivo_evidencia")
+    if not has_text:
+        evidence_gaps.append("contenido_legible")
+    if not has_date_signal:
+        evidence_gaps.append("fecha_vigencia_revision")
+    if not has_owner_signal:
+        evidence_gaps.append("responsable_aprobador")
+    if not has_result_signal:
+        evidence_gaps.append("resultado_verificable")
+    if not has_control_signal:
+        evidence_gaps.append("vinculo_control_norma")
+
+    recommended_evidence_requests = []
+    if "fecha_vigencia_revision" in evidence_gaps:
+        recommended_evidence_requests.append("Solicitar versión con fecha de emisión, revisión, vigencia o periodo auditado.")
+    if "responsable_aprobador" in evidence_gaps:
+        recommended_evidence_requests.append("Solicitar evidencia con responsable, aprobador o dueño del control.")
+    if "resultado_verificable" in evidence_gaps:
+        recommended_evidence_requests.append("Solicitar registro de ejecución con resultado, muestra revisada y conclusión.")
+    if "vinculo_control_norma" in evidence_gaps:
+        recommended_evidence_requests.append("Solicitar referencia explícita al control, cláusula o requisito aplicable.")
+    if not recommended_evidence_requests:
+        recommended_evidence_requests.append("Mantener evidencia complementaria de revisión periódica y eficacia.")
+
+    recommended_actions = []
+    if validity_result in ("debil", "parcial", "no_valida"):
+        recommended_actions.append("No cerrar el control automáticamente; dejarlo pendiente de revisión humana.")
+        recommended_actions.append("Crear o actualizar plan de acción para cerrar las brechas documentales detectadas.")
+    if health_status in ("deteriorado", "critical", "red", "rojo"):
+        recommended_actions.append("Priorizar este control antes de auditoría por su salud deteriorada.")
+    recommended_actions.append("Registrar decisión del auditor y criterio de aceptación o rechazo.")
 
     appears_complete = has_real_file and has_text
     appears_expired = False
@@ -765,7 +897,8 @@ def build_assessment(payload: Dict[str, Any], extraction: Dict[str, Any]) -> Dic
     )
 
     gap_summary = (
-        "La evidencia aún no cubre completamente la brecha documental del control."
+        "La evidencia aún no cubre completamente la brecha documental del control: "
+        + ", ".join(evidence_gaps)
         if validity_result in ("debil", "parcial")
         else "La evidencia cubre razonablemente el control, aunque puede fortalecerse con evidencia complementaria."
     )
@@ -811,6 +944,19 @@ def build_assessment(payload: Dict[str, Any], extraction: Dict[str, Any]) -> Dic
             "has_real_file": has_real_file,
             "status": status,
             "file_source": "inline_payload" if evidence.get("file_content_base64") else "remote_or_context",
+            "auditor_reasoning": {
+                "evidence_gaps": evidence_gaps,
+                "signals": {
+                    "has_date_signal": has_date_signal,
+                    "has_owner_signal": has_owner_signal,
+                    "has_result_signal": has_result_signal,
+                    "has_control_signal": has_control_signal,
+                    "control_health_status": health_status or None,
+                },
+                "recommended_evidence_requests": recommended_evidence_requests,
+                "recommended_actions": recommended_actions,
+                "human_approval_required": True,
+            },
         },
     }
 

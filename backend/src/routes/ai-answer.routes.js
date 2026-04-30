@@ -981,6 +981,166 @@ function buildAnswerFromExternalLookup(question, tenantSearch, knowledgeSearch, 
   };
 }
 
+function uniqueStrings(items, limit = 12) {
+  const out = [];
+  const seen = new Set();
+
+  for (const item of items || []) {
+    const value =
+      typeof item === 'string'
+        ? item.trim()
+        : item?.title || item?.summary || item?.requirement || item?.pattern_label || '';
+    const key = String(value || '').toLowerCase().trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+    if (out.length >= limit) break;
+  }
+
+  return out;
+}
+
+function detectSeniorAuditorFocus(question) {
+  const q = normalizeSearchForKnowledge(question);
+
+  return {
+    standard:
+      detectStandardsForKnowledge(question)[0] ||
+      (q.includes('27001') ? 'ISO27001' : q.includes('9001') ? 'ISO9001' : q.includes('22301') ? 'ISO22301' : null),
+    evidence: /\b(evidencia|registro|documento|respaldo|prueba|archivo)\b/.test(q),
+    audit: /\b(auditoria|auditoría|auditor|hallazgo|no conformidad|observacion|observación)\b/.test(q),
+    action: /\b(accion|acción|correctiva|plan|remediar|solucionar|cerrar)\b/.test(q),
+    risk: /\b(riesgo|impacto|critic|critico|crítico|brecha|vulnerabilidad)\b/.test(q),
+    continuity: detectTcdxKnowledgeTopic(question).continuity,
+  };
+}
+
+function buildSeniorEvidenceGaps(question, answer) {
+  const focus = detectSeniorAuditorFocus(question);
+  const gaps = [];
+  const evidence = Array.isArray(answer.suggested_evidence) ? answer.suggested_evidence : [];
+  const hasInternal = Number(answer.top_internal_results?.length || 0) > 0;
+
+  if (!hasInternal) {
+    gaps.push('No hay suficiente evidencia interna directamente asociada a la consulta.');
+  }
+
+  if (focus.evidence || focus.audit) {
+    gaps.push('Confirmar que la evidencia tenga fecha, responsable, alcance, resultado y aprobación.');
+    gaps.push('Verificar que la evidencia esté vinculada al control/cláusula correcta y al periodo auditado.');
+  }
+
+  if (focus.continuity) {
+    gaps.push('Validar RTO/RPO, escenarios de interrupción, prueba de continuidad y lecciones aprendidas.');
+  }
+
+  if (evidence.length === 0) {
+    gaps.push('Falta definir qué documentos o registros demostrarán cumplimiento objetivo.');
+  }
+
+  if (answer.confidence === 'baja') {
+    gaps.push('La respuesta requiere revisión humana porque la confianza de contexto es baja.');
+  }
+
+  return uniqueStrings(gaps, 8);
+}
+
+function buildSeniorRecommendedActions(question, answer) {
+  const focus = detectSeniorAuditorFocus(question);
+  const actions = [];
+
+  if (focus.audit) {
+    actions.push('Clasificar la brecha como observación, no conformidad o riesgo según severidad y evidencia disponible.');
+  }
+
+  if (focus.evidence) {
+    actions.push('Solicitar evidencia objetiva adicional antes de aceptar cierre del control.');
+  }
+
+  if (focus.action || answer.confidence === 'baja') {
+    actions.push('Crear o actualizar plan de acción con responsable, fecha objetivo, evidencia esperada y criterio de cierre.');
+  }
+
+  if (focus.risk) {
+    actions.push('Evaluar impacto, probabilidad y tratamiento; dejar trazabilidad de aceptación o mitigación.');
+  }
+
+  actions.push('Registrar decisión del auditor humano y fundamento de aceptación, rechazo o solicitud de complemento.');
+
+  return uniqueStrings([...(answer.next_steps || []), ...actions], 10);
+}
+
+function buildSeniorQuestions(question, answer) {
+  const focus = detectSeniorAuditorFocus(question);
+  const questions = [];
+
+  questions.push('¿La evidencia corresponde al periodo y alcance auditado?');
+  questions.push('¿Existe responsable/aprobador identificable y fecha de revisión?');
+
+  if (focus.continuity) {
+    questions.push('¿El plan fue probado y existen resultados, brechas y acciones posteriores?');
+    questions.push('¿Los RTO/RPO están definidos y validados contra procesos críticos?');
+  }
+
+  if (focus.audit || focus.evidence) {
+    questions.push('¿La evidencia demuestra ejecución real del control o solo diseño documental?');
+  }
+
+  if (answer.confidence === 'baja') {
+    questions.push('¿Qué dato interno adicional permitiría elevar la confianza del análisis?');
+  }
+
+  return uniqueStrings(questions, 8);
+}
+
+function enhanceAnswerWithSeniorAuditor(question, answer) {
+  const focus = detectSeniorAuditorFocus(question);
+  const evidenceGaps = buildSeniorEvidenceGaps(question, answer);
+  const recommendedActions = buildSeniorRecommendedActions(question, answer);
+  const reviewQuestions = buildSeniorQuestions(question, answer);
+  const suggestedFindings = [];
+
+  if (evidenceGaps.length > 0 && (focus.audit || focus.evidence || focus.risk)) {
+    suggestedFindings.push({
+      type: focus.risk ? 'riesgo' : 'observacion',
+      severity: answer.confidence === 'baja' ? 'media' : 'baja',
+      title: 'Brecha de evidencia o trazabilidad pendiente de validación',
+      rationale: evidenceGaps[0],
+      human_approval_required: true,
+    });
+  }
+
+  const seniorSummary = [
+    answer.executive_summary,
+    `Criterio auditor: la respuesta usa fuente ${answer.source_label || answer.source_level || 'no informada'} con confianza ${answer.confidence || 'no determinada'}.`,
+    evidenceGaps.length
+      ? `Brechas principales: ${evidenceGaps.slice(0, 3).join('; ')}.`
+      : 'No se observan brechas críticas con la información disponible.',
+  ].filter(Boolean).join(' ');
+
+  return {
+    ...answer,
+    executive_summary: seniorSummary,
+    senior_auditor_view: {
+      role: 'auditor_senior_iso_27001_9001_22301',
+      standard_focus: focus.standard,
+      diagnostic: seniorSummary,
+      evidence_gaps: evidenceGaps,
+      recommended_actions: recommendedActions,
+      review_questions: reviewQuestions,
+      suggested_findings: suggestedFindings,
+      approval_policy:
+        'La IA puede anticipar brechas y sugerir acciones, pero no aprueba, cierra ni crea registros críticos sin validación humana.',
+    },
+    evidence_gaps: evidenceGaps,
+    recommended_actions: recommendedActions,
+    auditor_review_questions: reviewQuestions,
+    suggested_findings: suggestedFindings,
+    human_approval_required: true,
+    must_review_by_human: true,
+  };
+}
+
 
 async function saveTrace({
   tenantId,
@@ -1292,6 +1452,8 @@ router.post('/', auth, async (req, res) => {
         );
       }
     }
+
+    answer = enhanceAnswerWithSeniorAuditor(question, answer);
 
     const sourceOrder = ['tenant_internal'];
 

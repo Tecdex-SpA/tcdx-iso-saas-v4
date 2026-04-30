@@ -44,7 +44,10 @@ const BACKEND_PUBLIC_URL = String(
 ).replace(/\/+$/, '');
 
 const OWN_AI_SHARED_SECRET = String(
-  process.env.OWN_AI_SHARED_SECRET || ''
+  process.env.OWN_AI_SHARED_SECRET ||
+    process.env.AI_INTERNAL_TOKEN ||
+    process.env.AI_TOKEN ||
+    ''
 ).trim();
 
 const OWN_AI_INLINE_FILE_MAX_BYTES = Number(
@@ -301,7 +304,15 @@ async function resolveEvidenceContext(client, evidenceId) {
 
 function resolveLocalUploadPath(context) {
   if (!context.file_path) return null;
-  return path.resolve(process.cwd(), 'uploads', context.file_path);
+  const safeName = path.basename(String(context.file_path || ''));
+  if (!safeName) return null;
+
+  const candidates = [
+    path.resolve(process.cwd(), 'uploads', 'evidences', safeName),
+    path.resolve(process.cwd(), 'uploads', safeName),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
 }
 
 function loadInlineFilePayload(context) {
@@ -365,11 +376,13 @@ function loadInlineFilePayload(context) {
 
 async function buildEvidencePayload(context, jobType, jobPayload = {}) {
   const metadata = safeObject(context.metadata);
-  const fileUrl = context.file_path
-    ? `${BACKEND_PUBLIC_URL}/uploads/${encodeURIComponent(context.file_path)}`
-    : null;
 
   const inlineFile = loadInlineFilePayload(context);
+  const fileUrl = inlineFile.has_inline_file
+    ? null
+    : context.file_path
+      ? `${BACKEND_PUBLIC_URL}/api/evidences/file/${context.id}`
+      : null;
   const forceFreshExtraction =
     Boolean(jobPayload?.force) && jobType === 'extract_document';
 
