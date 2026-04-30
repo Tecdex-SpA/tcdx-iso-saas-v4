@@ -45,10 +45,10 @@ const objectivesRoutes = require('./routes/objectives.routes');
 const app = express();
 
 app.use(cors());
-app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', express.json(), authRoutes);
 app.use('/api', auth, enforceApiAccess);
+app.use(express.json());
 app.use('/api/reports', reportsRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
