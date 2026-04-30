@@ -144,6 +144,26 @@ function normalizeAuditStatus(status?: string | null) {
   return 'pendiente';
 }
 
+async function openAuthorizedFile(url: string, token: string | null) {
+  if (!token) {
+    alert('Sesión no disponible. Inicia sesión nuevamente.');
+    return;
+  }
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    alert('No fue posible abrir el archivo.');
+    return;
+  }
+
+  const blobUrl = URL.createObjectURL(await res.blob());
+  window.open(blobUrl, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 export default function AuditoriasPage() {
   return (
     <Suspense
@@ -1402,14 +1422,15 @@ function AuditoriasPageContent() {
                           )}
 
                           {hasReport && (
-                            <a
-                              href={`${API_URL}/uploads/${audit.report_file}`}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openAuthorizedFile(`${API_URL}/api/audits/report/${audit.id}`, token)
+                              }
                               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                             >
                               Ver informe
-                            </a>
+                            </button>
                           )}
 
                           <button

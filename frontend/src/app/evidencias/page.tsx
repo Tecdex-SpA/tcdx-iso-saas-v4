@@ -10,6 +10,26 @@ const API_URL =
 
 const AI_AUTO_APPROVAL_THRESHOLD = 80;
 
+async function openAuthorizedFile(url: string, token: string | null) {
+  if (!token) {
+    alert('Sesión no disponible. Inicia sesión nuevamente.');
+    return;
+  }
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    alert('No fue posible abrir el archivo.');
+    return;
+  }
+
+  const blobUrl = URL.createObjectURL(await res.blob());
+  window.open(blobUrl, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 type EvidenceRow = {
   id: string;
   tenant_id?: string;
@@ -1386,14 +1406,15 @@ function EvidenciasPageContent() {
 
                 <div className="flex flex-wrap gap-2">
                   {e.file_path && (
-                    <a
-                      href={`${API_URL}/uploads/${e.file_path}`}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openAuthorizedFile(`${API_URL}/api/evidences/file/${e.id}`, token)
+                      }
                       className="inline-flex rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
                     >
                       Ver archivo
-                    </a>
+                    </button>
                   )}
 
                   {e.action_plan_id && (

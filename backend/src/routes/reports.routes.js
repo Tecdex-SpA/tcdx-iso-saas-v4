@@ -15,9 +15,6 @@ const {
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
 
-const AI_INTERNAL_TOKEN =
-  process.env.AI_INTERNAL_TOKEN || 'tecdex_ai_internal_2026';
-
 const CHROME_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
   process.env.CHROME_EXECUTABLE_PATH,
@@ -26,6 +23,16 @@ const CHROME_CANDIDATES = [
   '/usr/bin/google-chrome',
   '/usr/bin/google-chrome-stable',
 ].filter(Boolean);
+
+function getAiInternalToken() {
+  const token = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
+
+  if (!token) {
+    throw new Error('AI_INTERNAL_TOKEN no configurado');
+  }
+
+  return token;
+}
 
 function normalizeRole(role) {
   const raw = String(role || '')
@@ -1450,7 +1457,7 @@ async function buildAiReportAddendum(reportData) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-ai-token': AI_INTERNAL_TOKEN,
+        'x-ai-token': getAiInternalToken(),
       },
       body: JSON.stringify({
         tenant_id: reportData?.tenant?.id || reportData?.tenant_id || '',

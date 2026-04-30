@@ -8,6 +8,26 @@ import { getUserFromToken } from '@/utils/auth';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
+async function openAuthorizedFile(url: string, token: string | null) {
+  if (!token) {
+    alert('Sesión no disponible. Inicia sesión nuevamente.');
+    return;
+  }
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    alert('No fue posible abrir el archivo.');
+    return;
+  }
+
+  const blobUrl = URL.createObjectURL(await res.blob());
+  window.open(blobUrl, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 type ScopeStandard = {
   code: string;
   name?: string;
@@ -1821,14 +1841,18 @@ function ControlesPageContent() {
 
                                           {evidence.file_path && (
                                             <div>
-                                              <a
-                                                href={`${API_URL}/uploads/${evidence.file_path}`}
-                                                target="_blank"
-                                                rel="noreferrer"
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  openAuthorizedFile(
+                                                    `${API_URL}/api/evidences/file/${evidence.id}`,
+                                                    token
+                                                  )
+                                                }
                                                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                                               >
                                                 Ver archivo
-                                              </a>
+                                              </button>
                                             </div>
                                           )}
 

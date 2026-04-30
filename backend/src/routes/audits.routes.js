@@ -3,6 +3,9 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const multer = require('multer');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 function getUserTenantId(user) {
   return (
@@ -146,12 +149,64 @@ function normalizeStatus(value) {
 // =============================
 // 📁 STORAGE INFORME
 // =============================
+const auditReportDir = path.join(__dirname, '..', '..', 'uploads', 'audit-reports');
+fs.mkdirSync(auditReportDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
+  destination: (req, file, cb) => cb(null, auditReportDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(String(file.originalname || '')).toLowerCase();
+    cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
+  },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: Number(process.env.AUDIT_REPORT_UPLOAD_MAX_BYTES || 25 * 1024 * 1024),
+  },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(String(file.originalname || '')).toLowerCase();
+    const mime = String(file.mimetype || '').toLowerCase();
+    const allowedExtensions = new Set(['.pdf', '.doc', '.docx']);
+    const allowedMimes = new Set([
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ]);
+
+    if (allowedExtensions.has(ext) && allowedMimes.has(mime)) {
+      return cb(null, true);
+    }
+
+    return cb(new Error('Tipo de informe no permitido'));
+  },
+});
+
+function auditReportUpload(req, res, next) {
+  upload.single('file')(req, res, (err) => {
+    if (!err) return next();
+
+    const isSizeError = err.code === 'LIMIT_FILE_SIZE';
+    return res.status(400).json({
+      error: isSizeError
+        ? 'El informe excede el tamaño máximo permitido'
+        : 'Tipo de informe no permitido',
+    });
+  });
+}
+
+function resolveAuditReportPath(filePath) {
+  const safeName = path.basename(String(filePath || ''));
+  if (!safeName) return null;
+
+  const candidates = [
+    path.join(auditReportDir, safeName),
+    path.join(__dirname, '..', '..', 'uploads', safeName),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
 
 // =============================
 // 📥 CREAR AUDITORÍA
@@ -222,7 +277,6 @@ router.post('/', auth, async (req, res) => {
     console.error('ERROR CREATE AUDIT:', err);
     return res.status(500).json({
       error: 'Error creando auditoría',
-      detail: err.message,
     });
   }
 });
@@ -277,7 +331,6 @@ router.put('/start/:id', auth, async (req, res) => {
     console.error('ERROR START AUDIT:', err);
     return res.status(500).json({
       error: 'Error iniciando auditoría',
-      detail: err.message,
     });
   }
 });
@@ -285,7 +338,7 @@ router.put('/start/:id', auth, async (req, res) => {
 // =============================
 // 📎 SUBIR INFORME
 // =============================
-router.post('/upload/:id', auth, upload.single('file'), async (req, res) => {
+router.post('/upload/:id', auth, auditReportUpload, async (req, res) => {
   try {
     if (!canManageAudits(req.user)) {
       return denyManageAudits(res);
@@ -333,7 +386,6 @@ router.post('/upload/:id', auth, upload.single('file'), async (req, res) => {
     console.error('ERROR UPLOAD AUDIT REPORT:', err);
     return res.status(500).json({
       error: 'Error subiendo informe',
-      detail: err.message,
     });
   }
 });
@@ -388,7 +440,47 @@ router.put('/complete/:id', auth, async (req, res) => {
     console.error('ERROR COMPLETE AUDIT:', err);
     return res.status(500).json({
       error: 'Error completando auditoría',
-      detail: err.message,
+    });
+  }
+});
+
+// =============================
+// Descargar informe de auditoría con autorización tenant
+// =============================
+router.get('/report/:id', auth, async (req, res) => {
+  try {
+    const current = await getAuditById(req.params.id);
+
+    if (current.rowCount === 0) {
+      return res.status(404).json({ error: 'Auditoría no encontrada' });
+    }
+
+    const audit = current.rows[0];
+
+    if (!canReadAudits(req.user)) {
+      return denyReadAudits(res);
+    }
+
+    if (!ensureTenantAccess(req, audit.tenant_id)) {
+      return res.status(403).json({ error: 'No autorizado para este tenant' });
+    }
+
+    if (!audit.report_file) {
+      return res.status(404).json({ error: 'Informe no encontrado' });
+    }
+
+    const filePath = resolveAuditReportPath(audit.report_file);
+
+    if (!filePath) {
+      return res.status(404).json({ error: 'Archivo no disponible' });
+    }
+
+    res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error('ERROR DOWNLOAD AUDIT REPORT:', err);
+    return res.status(500).json({
+      error: 'Error descargando informe',
     });
   }
 });
@@ -595,7 +687,6 @@ router.get('/summary/:tenant_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo resumen ejecutivo de auditorías',
-      detail: err.message,
     });
   }
 });
@@ -684,7 +775,6 @@ router.get('/next-all/:tenant_id', auth, async (req, res) => {
       console.error('ERROR NEXT ALL AUDITS:', innerErr);
       return res.status(500).json({
         error: 'Error próximas auditorías',
-        detail: innerErr.message,
       });
     }
   }
@@ -738,7 +828,6 @@ router.get('/next/:tenant_id', auth, async (req, res) => {
     console.error('ERROR NEXT AUDIT:', err);
     return res.status(500).json({
       error: 'Error próxima auditoría',
-      detail: err.message,
     });
   }
 });
@@ -806,7 +895,6 @@ router.get('/:tenant_id', auth, async (req, res) => {
     console.error('ERROR GET AUDITS:', err);
     return res.status(500).json({
       error: 'Error obteniendo auditorías',
-      detail: err.message,
     });
   }
 });

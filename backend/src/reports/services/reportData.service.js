@@ -3,8 +3,15 @@ const pool = require('../../config/db');
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
 
-const AI_INTERNAL_TOKEN =
-  process.env.AI_INTERNAL_TOKEN || 'tecdex_ai_internal_2026';
+function getAiInternalToken() {
+  const token = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
+
+  if (!token) {
+    throw new Error('AI_INTERNAL_TOKEN no configurado');
+  }
+
+  return token;
+}
 
 async function safeQuery(sql, params = [], fallback = []) {
   try {
@@ -25,7 +32,7 @@ async function safeAiCall(path, payload = {}, fallback = null, timeoutMs = 18000
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-AI-Token': AI_INTERNAL_TOKEN,
+        'X-AI-Token': getAiInternalToken(),
       },
       body: JSON.stringify(payload || {}),
       signal: controller.signal,

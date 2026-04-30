@@ -6,7 +6,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://192.168.100.120:3000").rstrip("/")
-AI_INTERNAL_TOKEN = os.getenv("AI_INTERNAL_TOKEN", "tecdex_ai_internal_2026")
+AI_INTERNAL_TOKEN = os.getenv("AI_INTERNAL_TOKEN") or os.getenv("AI_TOKEN") or ""
 KNOWLEDGE_TIMEOUT = int(os.getenv("KNOWLEDGE_TIMEOUT", "15"))
 
 STOPWORDS_ES = {
@@ -44,6 +44,9 @@ STOPWORDS_ES = {
 
 
 def _post_json(url: str, payload: dict) -> dict:
+    if not AI_INTERNAL_TOKEN:
+        raise RuntimeError("AI_INTERNAL_TOKEN no configurado")
+
     body = json.dumps(payload).encode("utf-8")
     req = Request(
         url,

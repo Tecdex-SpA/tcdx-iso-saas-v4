@@ -3,6 +3,9 @@ const router = express.Router()
 const pool = require('../config/db')
 const auth = require('../middleware/auth')
 const multer = require('multer')
+const crypto = require('crypto')
+const fs = require('fs')
+const path = require('path')
 const {
   enqueueEvidenceAiJob,
   cancelActiveJobsForEvidence,
@@ -73,12 +76,75 @@ const canProcessAiJobs = (req) => {
 // =============================
 // STORAGE
 // =============================
+const evidenceUploadDir = path.join(__dirname, '..', '..', 'uploads', 'evidences')
+fs.mkdirSync(evidenceUploadDir, { recursive: true })
+
+const allowedEvidenceExtensions = new Set([
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.csv',
+  '.txt',
+  '.json',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp'
+])
+
+const allowedEvidenceMimes = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'text/plain',
+  'application/json',
+  'image/png',
+  'image/jpeg',
+  'image/webp'
+])
+
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, 'uploads/'),
-  filename: (_req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+  destination: (_req, _file, cb) => cb(null, evidenceUploadDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(String(file.originalname || '')).toLowerCase()
+    cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`)
+  }
 })
 
-const upload = multer({ storage })
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: Number(process.env.EVIDENCE_UPLOAD_MAX_BYTES || 25 * 1024 * 1024)
+  },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(String(file.originalname || '')).toLowerCase()
+    const mime = String(file.mimetype || '').toLowerCase()
+
+    if (allowedEvidenceExtensions.has(ext) && allowedEvidenceMimes.has(mime)) {
+      return cb(null, true)
+    }
+
+    return cb(new Error('Tipo de archivo no permitido para evidencia'))
+  }
+})
+
+function evidenceUpload(req, res, next) {
+  upload.single('file')(req, res, (err) => {
+    if (!err) return next()
+
+    const isSizeError = err.code === 'LIMIT_FILE_SIZE'
+    return res.status(400).json({
+      error: isSizeError
+        ? 'La evidencia excede el tamaño máximo permitido'
+        : 'Tipo de archivo no permitido para evidencia'
+    })
+  })
+}
 
 // =============================
 // Helpers
@@ -166,6 +232,19 @@ function isAiAutoApprovalEligible(row) {
     !appearsExpired &&
     acceptancePct >= AI_AUTO_APPROVAL_THRESHOLD
   )
+}
+
+function resolveEvidenceFilePath(filePath) {
+  const safeName = path.basename(String(filePath || ''))
+
+  if (!safeName) return null
+
+  const candidates = [
+    path.join(evidenceUploadDir, safeName),
+    path.join(__dirname, '..', '..', 'uploads', safeName)
+  ]
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null
 }
 
 function buildAiAutoApprovalPayload(row, acceptancePct) {
@@ -679,7 +758,7 @@ async function queueEvidencePipeline(
 // =============================
 // Subir evidencia
 // =============================
-router.post('/upload', auth, upload.single('file'), async (req, res) => {
+router.post('/upload', auth, evidenceUpload, async (req, res) => {
   const client = await pool.connect()
 
   try {
@@ -805,7 +884,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
     await client.query('ROLLBACK')
     console.error('UPLOAD ERROR:', err)
     return res.status(500).json({
-      error: err.message || 'Error upload'
+      error: 'Error subiendo evidencia'
     })
   } finally {
     client.release()
@@ -871,7 +950,7 @@ router.put('/validate/:id', auth, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK')
     console.error('ERROR VALIDATE EVIDENCE:', err)
-    return res.status(500).json({ error: 'Error validate', detail: err.message })
+    return res.status(500).json({ error: 'Error validando evidencia' })
   } finally {
     client.release()
   }
@@ -930,8 +1009,7 @@ router.post('/reprocess-ai/:id', auth, async (req, res) => {
     await client.query('ROLLBACK')
     console.error('ERROR REPROCESS EVIDENCE AI:', err)
     return res.status(500).json({
-      error: 'Error reprocesando evidencia en IA',
-      detail: err.message
+      error: 'Error reprocesando evidencia en IA'
     })
   } finally {
     client.release()
@@ -961,8 +1039,7 @@ router.post('/jobs/process-next', auth, async (req, res) => {
   } catch (err) {
     console.error('ERROR PROCESS EVIDENCE AI JOBS:', err)
     return res.status(500).json({
-      error: 'Error procesando jobs IA',
-      detail: err.message
+      error: 'Error procesando jobs IA'
     })
   }
 })
@@ -995,8 +1072,7 @@ router.get('/jobs/:tenant_id', auth, async (req, res) => {
   } catch (err) {
     console.error('ERROR LIST EVIDENCE AI JOBS:', err)
     return res.status(500).json({
-      error: 'Error listando jobs IA',
-      detail: err.message
+      error: 'Error listando jobs IA'
     })
   }
 })
@@ -1091,9 +1167,56 @@ router.put('/approve/:id', auth, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK')
     console.error('ERROR APPROVE EVIDENCE:', err)
-    return res.status(500).json({ error: 'Error approve', detail: err.message })
+    return res.status(500).json({ error: 'Error revisando evidencia' })
   } finally {
     client.release()
+  }
+})
+
+// =============================
+// Descargar archivo de evidencia con autorización tenant
+// =============================
+router.get('/file/:id', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT id, tenant_id, file_name, file_path, file_mime_type
+      FROM evidences
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [req.params.id]
+    )
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Evidencia no encontrada' })
+    }
+
+    const evidence = result.rows[0]
+
+    if (!ensureTenantAccess(req, evidence.tenant_id)) {
+      return res.status(403).json({ error: 'No autorizado para este tenant' })
+    }
+
+    const resolvedPath = resolveEvidenceFilePath(evidence.file_path)
+
+    if (!resolvedPath) {
+      return res.status(404).json({ error: 'Archivo de evidencia no encontrado' })
+    }
+
+    if (evidence.file_mime_type) {
+      res.setHeader('Content-Type', evidence.file_mime_type)
+    }
+
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${String(evidence.file_name || path.basename(resolvedPath)).replace(/"/g, '')}"`
+    )
+
+    return res.sendFile(resolvedPath)
+  } catch (err) {
+    console.error('ERROR DOWNLOAD EVIDENCE FILE:', err)
+    return res.status(500).json({ error: 'Error descargando evidencia' })
   }
 })
 
@@ -1338,8 +1461,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
     await client.query('ROLLBACK')
     console.error('GET ERROR:', err)
     return res.status(500).json({
-      error: 'Error evidences',
-      detail: err.message
+      error: 'Error listando evidencias'
     })
   } finally {
     client.release()

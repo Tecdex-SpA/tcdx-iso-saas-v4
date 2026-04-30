@@ -1,20 +1,26 @@
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from tempfile import NamedTemporaryFile
 import base64
 import csv
+import ipaddress
 import io
 import json
 import os
+import socket
 
 from app.routes.ai import router as ai_router
 from app.core.config import settings
 from app.core.db import test_db_connection
 
 app = FastAPI(title=settings.APP_NAME)
+
+MAX_REMOTE_FILE_BYTES = int(os.getenv("AI_REMOTE_FILE_MAX_BYTES", str(15 * 1024 * 1024)))
+ALLOWED_REMOTE_SCHEMES = {"http", "https"}
 
 
 # =========================================================
@@ -36,7 +42,7 @@ def require_ai_token(
 ) -> None:
     configured = get_configured_ai_token()
     if not configured:
-        return
+        raise HTTPException(status_code=503, detail="AI token not configured")
 
     provided = x_internal_token or x_ai_token
     if provided != configured:
@@ -84,9 +90,54 @@ def infer_file_type(file_name: Optional[str], mime_type: Optional[str]) -> str:
     return "binary"
 
 
+def validate_remote_file_url(file_url: str) -> Optional[str]:
+    parsed = urlparse(file_url)
+
+    if parsed.scheme.lower() not in ALLOWED_REMOTE_SCHEMES:
+        return "Esquema de URL no permitido"
+
+    host = parsed.hostname
+    if not host:
+        return "Host de URL inválido"
+
+    try:
+        addresses = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return "No fue posible resolver el host"
+
+    for address in addresses:
+        ip_text = address[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_text)
+        except ValueError:
+            return "Dirección IP inválida"
+
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return "Host de URL no permitido"
+
+    return None
+
+
 def fetch_remote_file(file_url: Optional[str], timeout_seconds: int = 15) -> Dict[str, Any]:
     if not file_url:
         return {"ok": False, "error": "No file_url provided", "content": b"", "content_type": None, "source": "none"}
+
+    validation_error = validate_remote_file_url(file_url)
+    if validation_error:
+        return {
+            "ok": False,
+            "error": validation_error,
+            "content": b"",
+            "content_type": None,
+            "source": "remote_download",
+        }
 
     try:
         request = Request(
@@ -94,7 +145,17 @@ def fetch_remote_file(file_url: Optional[str], timeout_seconds: int = 15) -> Dic
             headers={"User-Agent": "Tecdex-AI-Engine/1.0"},
         )
         with urlopen(request, timeout=timeout_seconds) as response:
-            content = response.read()
+            content = response.read(MAX_REMOTE_FILE_BYTES + 1)
+            if len(content) > MAX_REMOTE_FILE_BYTES:
+                return {
+                    "ok": False,
+                    "error": "Archivo remoto excede el tamaño máximo permitido",
+                    "content": b"",
+                    "content_type": response.headers.get("Content-Type"),
+                    "status": getattr(response, "status", 200),
+                    "source": "remote_download",
+                }
+
             return {
                 "ok": True,
                 "content": content,

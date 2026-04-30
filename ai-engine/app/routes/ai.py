@@ -90,6 +90,9 @@ class ExecutiveBriefRequest(BaseModel):
 
 
 def validate_internal_token(token: Optional[str]) -> None:
+    if not settings.AI_INTERNAL_TOKEN:
+        raise HTTPException(status_code=503, detail="AI token not configured")
+
     if token != settings.AI_INTERNAL_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized AI internal token")
 
@@ -182,7 +185,10 @@ async def internal_ai_context_diagnostic(
     No cambia salud/KPIs.
     Solo expone contexto y razonamiento técnico.
     """
-    expected_token = os.getenv("AI_INTERNAL_TOKEN", "tecdex_ai_internal_2026")
+    expected_token = os.getenv("AI_INTERNAL_TOKEN") or os.getenv("AI_TOKEN")
+
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="AI token not configured")
 
     if x_ai_token != expected_token:
         raise HTTPException(status_code=401, detail="Invalid AI token")
@@ -259,4 +265,3 @@ async def external_lookup_cache(
         return get_cached_external_lookup(payload_dict)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"external-lookup-cache error: {e}")
-

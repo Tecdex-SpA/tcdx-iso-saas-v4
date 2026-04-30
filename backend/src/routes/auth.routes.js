@@ -65,6 +65,13 @@ function buildSessionFromToken(token) {
 // =============================
 router.post('/register', async (req, res) => {
   try {
+    if (process.env.ENABLE_PUBLIC_REGISTER !== 'true') {
+      return res.status(403).json({
+        error: 'Registro público deshabilitado',
+        code: 'PUBLIC_REGISTER_DISABLED',
+      });
+    }
+
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     const tenant = req.body?.tenant || null;
@@ -78,7 +85,7 @@ router.post('/register', async (req, res) => {
     return res.json(user);
   } catch (err) {
     console.error('REGISTER ERROR:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Error registrando usuario' });
   }
 });
 
@@ -103,7 +110,7 @@ router.post('/login', async (req, res) => {
     return res.json(buildSessionFromToken(token));
   } catch (err) {
     console.error('LOGIN ERROR:', err);
-    return res.status(401).json({ error: err.message });
+    return res.status(401).json({ error: 'Credenciales inválidas' });
   }
 });
 

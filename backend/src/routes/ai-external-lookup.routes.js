@@ -89,10 +89,11 @@ function postJsonToAI(path, payload) {
       process.env.AI_ENGINE_PORT ||
       '8001';
 
-    const aiToken =
-      process.env.AI_INTERNAL_TOKEN ||
-      process.env.AI_TOKEN ||
-      'tecdex_ai_internal_2026';
+    const aiToken = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
+
+    if (!aiToken) {
+      return reject(new Error('AI_INTERNAL_TOKEN no configurado'));
+    }
 
     const body = JSON.stringify(payload || {});
 

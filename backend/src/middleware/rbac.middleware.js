@@ -146,13 +146,8 @@ const API_RULES = [
   },
   {
     prefix: '/api/tenants',
-    read: [...TENANT_READ_ROLES, 'admin', 'tenant_admin', 'auditor', 'operativo', 'viewer'],
-    write: ['superadmin', 'platform_admin', 'admin_global', 'global_admin'],
-  },
-  {
-    prefix: '/api/tenant',
     read: TENANT_READ_ROLES,
-    write: TENANT_ADMIN_ROLES,
+    write: ['superadmin', 'platform_admin', 'admin_global', 'global_admin'],
   },
 
   // Operación
@@ -165,6 +160,11 @@ const API_RULES = [
     prefix: '/api/diagnostic',
     read: TENANT_OPERATE_ROLES,
     write: ['admin', 'tenant_admin', 'operativo'],
+  },
+  {
+    prefix: '/api/policy',
+    read: TENANT_OPERATE_ROLES,
+    write: TENANT_ADMIN_ROLES,
   },
   {
     prefix: '/api/assets',
@@ -234,6 +234,11 @@ const API_RULES = [
     read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
     write: ['admin', 'tenant_admin', 'operativo'],
   },
+  {
+    prefix: '/api/ai-traces',
+    read: ['admin', 'tenant_admin', 'auditor'],
+    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+  },
 
   // Búsqueda / notificaciones
   {
@@ -291,11 +296,7 @@ function enforceApiAccess(req, res, next) {
   const rule = findRule(path);
 
   if (!rule) {
-    if (role === 'viewer') {
-      return deny(res, 'Rol viewer solo tiene acceso de lectura ejecutiva');
-    }
-
-    return next();
+    return deny(res, 'Ruta API sin regla RBAC explícita');
   }
 
   const allowedRoles = read ? rule.read : rule.write;

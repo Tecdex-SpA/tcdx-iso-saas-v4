@@ -18,6 +18,6 @@ class Settings:
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
-    AI_INTERNAL_TOKEN = os.getenv("AI_INTERNAL_TOKEN", "change-me")
+    AI_INTERNAL_TOKEN = os.getenv("AI_INTERNAL_TOKEN") or os.getenv("AI_TOKEN") or ""
 
 settings = Settings()

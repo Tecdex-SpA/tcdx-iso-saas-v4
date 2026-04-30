@@ -5,6 +5,32 @@ const auth = require('../middleware/auth');
 const roleAuth = require('../middleware/roleAuth');
 const multer = require('multer');
 
+function normalizeRole(user) {
+  return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
+}
+
+function getUserTenantId(user) {
+  return (
+    user?.tenant_id ||
+    user?.tenantId ||
+    user?.tenant ||
+    user?.company_id ||
+    user?.companyId ||
+    null
+  );
+}
+
+function isPlatform(user) {
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'admin_global',
+    'global_admin',
+    'owner',
+  ].includes(normalizeRole(user));
+}
+
 // 🔥 STORAGE SEGURO
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -45,6 +71,21 @@ function decorateTenantLogo(tenant) {
 // =============================
 router.get('/', auth, async (req, res) => {
   try {
+    if (!isPlatform(req.user)) {
+      const tenantId = getUserTenantId(req.user);
+
+      if (!tenantId) {
+        return res.status(403).json({ error: 'No autorizado para listar empresas' });
+      }
+
+      const currentTenant = await pool.query(
+        `SELECT * FROM tenants WHERE id = $1::uuid LIMIT 1`,
+        [tenantId]
+      );
+
+      return res.json(currentTenant.rows.map(decorateTenantLogo));
+    }
+
     const result = await pool.query(`SELECT * FROM tenants ORDER BY name`);
     res.json(result.rows.map(decorateTenantLogo));
   } catch (err) {
@@ -59,6 +100,10 @@ router.get('/', auth, async (req, res) => {
 // =============================
 router.get('/:id', auth, async (req, res) => {
   try {
+    if (!isPlatform(req.user) && String(getUserTenantId(req.user)) !== String(req.params.id)) {
+      return res.status(403).json({ error: 'No autorizado para esta empresa' });
+    }
+
     const result = await pool.query(
       `SELECT * FROM tenants WHERE id = $1`,
       [req.params.id]

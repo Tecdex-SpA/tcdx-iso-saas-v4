@@ -163,6 +163,7 @@ module.exports = async function auth(req, res, next) {
 
     const decoded = jwt.verify(token, secret);
 
+    req.token = token;
     req.user = decoded;
 
     const allowed = await validateTenantServiceStatus(req, res, decoded);
