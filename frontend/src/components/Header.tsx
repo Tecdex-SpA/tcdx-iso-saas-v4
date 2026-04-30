@@ -102,36 +102,6 @@ function buildTenantLogoCandidates(tenant: any) {
   return uniqueStrings(candidates);
 }
 
-const SERVICE_LOGO_SRC =
-  process.env.NEXT_PUBLIC_TCDX_LOGO_URL || '/logo.png';
-
-function resolveAssetUrl(value?: string | null, fallback = SERVICE_LOGO_SRC) {
-  const raw = String(value || '').trim();
-
-  if (!raw) return fallback;
-
-  if (
-    raw.startsWith('http://') ||
-    raw.startsWith('https://') ||
-    raw.startsWith('data:') ||
-    raw.startsWith('/')
-  ) {
-    return raw;
-  }
-
-  return `${API_URL}/uploads/logos/${raw}`;
-}
-
-function resolveTenantLogo(tenant: any) {
-  return (
-    tenant?.report_logo_url ||
-    tenant?.logo_url ||
-    tenant?.brand_logo_url ||
-    tenant?.logo ||
-    null
-  );
-}
-
 export default function Header() {
   const [user, setUser] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
