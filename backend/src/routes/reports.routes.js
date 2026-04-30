@@ -1845,6 +1845,55 @@ function injectLifecycleHistoryIntoReportHtml(html, reportData) {
 
 
 
+
+async function getAuditExecutionSummaryForReport(tenantId) {
+  try {
+    const reviewResult = await pool.query(
+      `
+      SELECT
+        COUNT(*)::int AS total_reviews,
+        COUNT(*) FILTER (WHERE result = 'pendiente')::int AS pendientes,
+        COUNT(*) FILTER (WHERE result = 'conforme')::int AS conformes,
+        COUNT(*) FILTER (WHERE result = 'observacion')::int AS observaciones,
+        COUNT(*) FILTER (WHERE result = 'no_conforme')::int AS no_conformes,
+        COUNT(*) FILTER (WHERE result = 'sin_evidencia')::int AS sin_evidencia
+      FROM audit_control_reviews
+      WHERE tenant_id = $1::uuid
+      `,
+      [tenantId]
+    );
+
+    const aiResult = await pool.query(
+      `
+      SELECT
+        id,
+        standard_code,
+        audit_id,
+        summary,
+        suggestions_json,
+        created_at
+      FROM ai_auditor_runs
+      WHERE tenant_id = $1::uuid
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [tenantId]
+    );
+
+    return {
+      reviews: reviewResult.rows[0] || {},
+      latest_ai_auditor_run: aiResult.rows[0] || null,
+    };
+  } catch (error) {
+    console.error('REPORT AUDIT EXECUTION SUMMARY ERROR:', error.message);
+    return {
+      reviews: {},
+      latest_ai_auditor_run: null,
+    };
+  }
+}
+
+
 async function getAuditSummaryForReport(tenantId) {
   try {
     const summaryResult = await pool.query(
@@ -2102,6 +2151,7 @@ router.post('/generate', auth, async (req, res) => {
     reportData.lifecycle_history = await getLifecycleHistoryForReport(targetTenantId);
     reportData.ai_report_addendum = await buildAiReportAddendum(reportData);
     reportData.audit_summary = await getAuditSummaryForReport(targetTenantId);
+    reportData.audit_execution_summary = await getAuditExecutionSummaryForReport(targetTenantId);
 
     const tenantBranding = await getTenantBrandingForReport(targetTenantId);
 

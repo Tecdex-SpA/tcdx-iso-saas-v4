@@ -508,6 +508,9 @@ function renderAuditSummaryPage(data) {
   const summary = auditData.summary || {};
   const next = auditData.next_audit || null;
   const recent = asArray(auditData.recent_audits).slice(0, 8);
+  const execution = data.audit_execution_summary || {};
+  const reviews = execution.reviews || {};
+  const latestAiRun = execution.latest_ai_auditor_run || null;
 
   const rows = recent.map((row) => `
     <tr>
@@ -560,6 +563,25 @@ function renderAuditSummaryPage(data) {
         ])}
       `)}
     </div>
+
+    ${card('Auditoría operativa por control', `
+      <div class="metricGrid three">
+        ${miniMetric('Controles revisados', fmtNumber(reviews.total_reviews), 'Checklist auditoría')}
+        ${miniMetric('No conformes', fmtNumber(reviews.no_conformes), 'Resultado formal', 'danger')}
+        ${miniMetric('Sin evidencia', fmtNumber(reviews.sin_evidencia), 'Requiere respaldo', 'warning')}
+      </div>
+
+      ${latestAiRun ? `
+        <div class="emptyBox" style="margin-top:4mm;">
+          <strong>Última lectura IA Auditor:</strong>
+          ${escapeHtml(cleanText(latestAiRun.summary || 'Sin resumen IA disponible', 260))}
+        </div>
+      ` : `
+        <div class="emptyBox" style="margin-top:4mm;">
+          IA Auditor aún no registra ejecuciones para este tenant.
+        </div>
+      `}
+    `, 'wideCard')}
 
     ${card('Auditorías recientes', table(
       ['ISO', 'Inicio', 'Término', 'Auditor', 'Tipo', 'Estado', 'Informe'],

@@ -197,6 +197,25 @@ const API_RULES = [
     write: TENANT_OPERATE_ROLES,
   },
 
+  // Auditoría operativa / checklist / IA Auditor
+  {
+    prefix: '/api/audit-execution',
+    read: TENANT_READ_ROLES,
+    write: ['admin', 'tenant_admin', 'auditor'],
+  },
+  {
+    prefix: '/api/ai-auditor',
+    read: TENANT_READ_ROLES,
+    write: ['admin', 'tenant_admin', 'auditor'],
+  },
+
+  // Prefacturación SaaS
+  {
+    prefix: '/api/billing',
+    read: ['admin', 'tenant_admin', 'dealer'],
+    write: ['admin', 'tenant_admin', 'dealer'],
+  },
+
   // Auditorías
   {
     prefix: '/api/audits',
@@ -261,7 +280,8 @@ function enforceApiAccess(req, res, next) {
     const dealerAllowed =
       starts(path, '/api/me') ||
       starts(path, '/api/quotes') ||
-      (starts(path, '/api/reports') && read);
+      (starts(path, '/api/reports') && read) ||
+      (starts(path, '/api/billing') && read);
 
     if (dealerAllowed) return next();
 
