@@ -44,6 +44,67 @@ const API_URL =
 const SERVICE_LOGO_SRC =
   process.env.NEXT_PUBLIC_TCDX_LOGO_URL || '/logo.png';
 
+function encodeAssetPath(value: string) {
+  return String(value || '')
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function buildAssetCandidates(value?: string | null) {
+  const raw = String(value || '').trim();
+
+  if (!raw) return [];
+
+  if (
+    raw.startsWith('http://') ||
+    raw.startsWith('https://') ||
+    raw.startsWith('data:')
+  ) {
+    return [raw];
+  }
+
+  if (raw.startsWith('/')) {
+    return uniqueStrings([
+      `${API_URL}${raw}`,
+      raw,
+    ]);
+  }
+
+  const encoded = encodeAssetPath(raw);
+
+  return uniqueStrings([
+    `${API_URL}/uploads/logos/${encoded}`,
+    `${API_URL}/uploads/tenants/${encoded}`,
+    `${API_URL}/uploads/tenant-logos/${encoded}`,
+    `${API_URL}/uploads/${encoded}`,
+    `${API_URL}/${encoded}`,
+  ]);
+}
+
+function unwrapTenantPayload(payload: any) {
+  return payload?.data || payload?.tenant || payload?.item || payload;
+}
+
+function buildTenantLogoCandidates(tenant: any) {
+  const candidates = [
+    ...buildAssetCandidates(tenant?.logo_public_url),
+    ...buildAssetCandidates(tenant?.report_logo_url),
+    ...buildAssetCandidates(tenant?.logo_url),
+    ...buildAssetCandidates(tenant?.brand_logo_url),
+    ...buildAssetCandidates(tenant?.logo),
+  ];
+
+  return uniqueStrings(candidates);
+}
+
+const SERVICE_LOGO_SRC =
+  process.env.NEXT_PUBLIC_TCDX_LOGO_URL || '/logo.png';
+
 function resolveAssetUrl(value?: string | null, fallback = SERVICE_LOGO_SRC) {
   const raw = String(value || '').trim();
 
@@ -74,7 +135,9 @@ function resolveTenantLogo(tenant: any) {
 export default function Header() {
   const [user, setUser] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
-  const [logo, setLogo] = useState<string>(SERVICE_LOGO_SRC);
+  const [logoCandidates, setLogoCandidates] = useState<string[]>([SERVICE_LOGO_SRC]);
+  const [logoIndex, setLogoIndex] = useState(0);
+  const logo = logoCandidates[logoIndex] || SERVICE_LOGO_SRC;
 
   const [open, setOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -121,13 +184,26 @@ export default function Header() {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => res.json())
-        .then((t) => {
+        .then((payload) => {
+          const t = unwrapTenantPayload(payload);
+
           setTenant(t);
 
-          const tenantLogo = resolveTenantLogo(t);
-          setLogo(resolveAssetUrl(tenantLogo, SERVICE_LOGO_SRC));
+          const candidates = buildTenantLogoCandidates(t);
+
+          if (candidates.length > 0) {
+            setLogoCandidates(candidates);
+            setLogoIndex(0);
+          } else {
+            setLogoCandidates([SERVICE_LOGO_SRC]);
+            setLogoIndex(0);
+          }
         })
-        .catch(console.error);
+        .catch((err) => {
+          console.error(err);
+          setLogoCandidates([SERVICE_LOGO_SRC]);
+          setLogoIndex(0);
+        });
 
       loadNotifications(data.tenant_id, token);
       loadRecentSearches(data.tenant_id, token, data?.userId || data?.id || null);

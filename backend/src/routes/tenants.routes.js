@@ -17,13 +17,36 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+function buildTenantLogoPublicUrl(tenant) {
+  if (!tenant) return null;
+
+  const logoUrl = String(tenant.logo_url || '').trim();
+  if (logoUrl) return logoUrl;
+
+  const logo = String(tenant.logo || '').trim();
+  if (logo) return `/uploads/logos/${logo}`;
+
+  return null;
+}
+
+function decorateTenantLogo(tenant) {
+  if (!tenant) return tenant;
+
+  return {
+    ...tenant,
+    logo_public_url: buildTenantLogoPublicUrl(tenant),
+  };
+}
+
+
+
 // =============================
 // LISTAR
 // =============================
 router.get('/', auth, async (req, res) => {
   try {
     const result = await pool.query(`SELECT * FROM tenants ORDER BY name`);
-    res.json(result.rows);
+    res.json(result.rows.map(decorateTenantLogo));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error obteniendo empresas' });
@@ -41,7 +64,7 @@ router.get('/:id', auth, async (req, res) => {
       [req.params.id]
     );
 
-    res.json(result.rows[0]);
+    res.json(decorateTenantLogo(result.rows[0] || null));
 
   } catch (err) {
     console.error(err);
