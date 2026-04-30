@@ -12,6 +12,12 @@ const {
   renderExecutivePremiumTemplate,
 } = require('../reports/templates/executivePremium.template');
 
+const AI_ENGINE_URL =
+  process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
+
+const AI_INTERNAL_TOKEN =
+  process.env.AI_INTERNAL_TOKEN || 'tecdex_ai_internal_2026';
+
 const CHROME_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
   process.env.CHROME_EXECUTABLE_PATH,
@@ -292,9 +298,31 @@ async function generatePdfFromHtml(html, outputPath) {
 
     await page.setViewport({ width: 1440, height: 1100 });
     await page.setContent(html, {
-      waitUntil: 'networkidle0',
+      waitUntil: ['domcontentloaded', 'networkidle0'],
     });
+
     await page.emulateMediaType('screen');
+
+    await page.evaluate(async () => {
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (_) {}
+      }
+
+      const images = Array.from(document.images || []);
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete) return Promise.resolve();
+
+          return new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+            setTimeout(resolve, 2500);
+          });
+        })
+      );
+    });
 
     await page.pdf({
       path: outputPath,
@@ -302,10 +330,10 @@ async function generatePdfFromHtml(html, outputPath) {
       printBackground: true,
       preferCSSPageSize: true,
       margin: {
-        top: '10mm',
-        right: '10mm',
-        bottom: '10mm',
-        left: '10mm',
+        top: '0mm',
+        right: '0mm',
+        bottom: '0mm',
+        left: '0mm',
       },
     });
   } finally {
@@ -853,8 +881,616 @@ async function getLifecycleHistoryForReport(tenantId, limit = 12) {
   }
 }
 
+
+function getReportPublicBaseUrl() {
+  return (
+    process.env.REPORT_PUBLIC_BASE_URL ||
+    process.env.PUBLIC_BASE_URL ||
+    process.env.API_PUBLIC_URL ||
+    'http://192.168.100.120:3000'
+  ).replace(/\/+$/, '');
+}
+
+function buildReportImageCandidates(rawSrc) {
+  const raw = String(rawSrc || '').trim();
+  const base = getReportPublicBaseUrl();
+
+  if (!raw) return [];
+
+  const candidates = [];
+
+  if (
+    raw.startsWith('http://') ||
+    raw.startsWith('https://') ||
+    raw.startsWith('data:') ||
+    raw.startsWith('file:')
+  ) {
+    candidates.push(raw);
+  }
+
+  if (raw.startsWith('/')) {
+    candidates.push(`${base}${raw}`);
+  } else {
+    candidates.push(`${base}/uploads/${raw}`);
+    candidates.push(`${base}/${raw}`);
+    candidates.push(raw);
+  }
+
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function renderReportLogo(rawSrc, fallbackText, align = 'left') {
+  const candidates = buildReportImageCandidates(rawSrc);
+  const first = candidates[0] || '';
+  const fallback1 = candidates[1] || '';
+  const fallback2 = candidates[2] || '';
+
+  const safeText = escapeReportHtml(fallbackText || 'Logo');
+  const textAlign = align === 'right' ? 'right' : 'left';
+
+  if (!first) {
+    return `
+      <div style="width:42mm;height:17mm;display:flex;align-items:center;justify-content:${align === 'right' ? 'flex-end' : 'flex-start'};">
+        <div style="font-size:13px;font-weight:800;color:#0B2F4F;text-align:${textAlign};line-height:1.1;">${safeText}</div>
+      </div>
+    `;
+  }
+
+  const onError = [
+    "if(!this.dataset.try1&&this.dataset.fallback1){this.dataset.try1='1';this.src=this.dataset.fallback1;return;}",
+    "if(!this.dataset.try2&&this.dataset.fallback2){this.dataset.try2='1';this.src=this.dataset.fallback2;return;}",
+    "this.style.display='none';",
+    "if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}"
+  ].join('');
+
+  return `
+    <div style="width:42mm;height:17mm;display:flex;align-items:center;justify-content:${align === 'right' ? 'flex-end' : 'flex-start'};">
+      <img
+        src="${escapeReportHtml(first)}"
+        data-fallback1="${escapeReportHtml(fallback1)}"
+        data-fallback2="${escapeReportHtml(fallback2)}"
+        onerror="${onError}"
+        style="display:block;max-width:42mm;max-height:17mm;object-fit:contain;"
+      />
+      <div style="display:none;width:42mm;height:17mm;align-items:center;justify-content:${align === 'right' ? 'flex-end' : 'flex-start'};font-size:13px;font-weight:800;color:#0B2F4F;text-align:${textAlign};line-height:1.1;">${safeText}</div>
+    </div>
+  `;
+}
+
+function getTenantLogoSourceForReport(reportData) {
+  const tenant = reportData?.tenant || {};
+
+  return (
+    tenant.report_logo_url ||
+    tenant.logo_url ||
+    tenant.logo ||
+    tenant.brand_logo_url ||
+    ''
+  );
+}
+
+function getTcdxLogoSourceForReport() {
+  return (
+    process.env.REPORT_TCDX_LOGO_URL ||
+    process.env.TCDX_LOGO_URL ||
+    ''
+  );
+}
+
+function renderPremiumExtraHeader(reportData, title, subtitle = '') {
+  const tenant = reportData?.tenant || {};
+  const tenantName = tenant.name || 'Cliente';
+
+  return `
+    <div class="tcdxExtraHeader">
+      <div class="tcdxExtraLogoLeft">
+        ${renderReportLogo(getTcdxLogoSourceForReport(), 'TCDX by Tecdex', 'left')}
+      </div>
+
+      <div class="tcdxExtraHeaderCenter">
+        <div class="tcdxExtraKicker">TCDX by Tecdex</div>
+        <h1>${escapeReportHtml(title)}</h1>
+        <p>${escapeReportHtml(subtitle)}</p>
+      </div>
+
+      <div class="tcdxExtraLogoRight">
+        ${renderReportLogo(getTenantLogoSourceForReport(reportData), tenantName, 'right')}
+      </div>
+    </div>
+  `;
+}
+
+function renderPremiumExtraFooter(pageLabel = 'Página adicional') {
+  return `
+    <div class="tcdxExtraFooter">
+      <div>Documento confidencial. Uso restringido al cliente y equipo autorizado.</div>
+      <div>${escapeReportHtml(pageLabel)}</div>
+    </div>
+  `;
+}
+
+function injectPremiumPdfQualityStyles(html) {
+  const css = `
+    <style id="tcdx-pdf-quality-fix">
+      @page {
+        size: Letter;
+        margin: 0;
+      }
+
+      html,
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .reportPage,
+      .tcdxExtraPage {
+        width: 216mm !important;
+        height: 279mm !important;
+        min-height: 279mm !important;
+        box-sizing: border-box !important;
+        page-break-after: always !important;
+        break-after: page !important;
+        position: relative !important;
+        overflow: hidden !important;
+        background: #ffffff !important;
+      }
+
+      .reportPage:last-child,
+      .tcdxExtraPage:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
+      }
+
+      .logoHolder img,
+      .brandLogo img,
+      .clientLogo img {
+        max-width: 42mm !important;
+        max-height: 17mm !important;
+        object-fit: contain !important;
+      }
+
+      .header {
+        box-sizing: border-box !important;
+        min-height: 24mm !important;
+      }
+
+      .footer {
+        box-sizing: border-box !important;
+      }
+
+      .pageContent {
+        box-sizing: border-box !important;
+      }
+
+      .sectionCard,
+      .compact,
+      .kpiCard,
+      .recommendation,
+      tr {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+
+      table {
+        border-collapse: collapse !important;
+      }
+
+      img {
+        image-rendering: auto;
+      }
+
+      .tcdxExtraPage {
+        padding: 0 !important;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #0f172a;
+      }
+
+      .tcdxExtraHeader {
+        height: 27mm;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: 46mm 1fr 46mm;
+        gap: 8mm;
+        align-items: center;
+        border-bottom: 1px solid #e2e8f0;
+        padding: 7mm 11mm 4mm;
+      }
+
+      .tcdxExtraHeaderCenter {
+        text-align: center;
+      }
+
+      .tcdxExtraHeaderCenter h1 {
+        margin: 2mm 0 1mm;
+        color: #0B2F4F;
+        font-size: 20px;
+        line-height: 1.1;
+        font-weight: 800;
+      }
+
+      .tcdxExtraHeaderCenter p {
+        margin: 0;
+        color: #64748b;
+        font-size: 11px;
+      }
+
+      .tcdxExtraKicker {
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: #64748b;
+        font-weight: 800;
+      }
+
+      .tcdxExtraContent {
+        height: 229mm;
+        box-sizing: border-box;
+        padding: 7mm 11mm 5mm;
+        overflow: hidden;
+      }
+
+      .tcdxExtraFooter {
+        position: absolute;
+        left: 11mm;
+        right: 11mm;
+        bottom: 5mm;
+        height: 12mm;
+        box-sizing: border-box;
+        border-top: 1px solid #e2e8f0;
+        padding-top: 3mm;
+        display: flex;
+        justify-content: space-between;
+        gap: 8mm;
+        color: #64748b;
+        font-size: 9.5px;
+      }
+
+      .tcdxExtraTableWrap {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        overflow: hidden;
+      }
+
+      .tcdxExtraTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 9.5px;
+      }
+
+      .tcdxExtraTable th {
+        background: #f1f5f9;
+        color: #334155;
+        text-align: left;
+        padding: 7px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .tcdxExtraTable td {
+        padding: 7px;
+        border-bottom: 1px solid #f1f5f9;
+        vertical-align: top;
+      }
+
+      .tcdxExtraKpiGrid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .tcdxExtraMiniCard {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 11px;
+        background: #f8fafc;
+      }
+
+      .tcdxExtraMiniCardLabel {
+        font-size: 9px;
+        text-transform: uppercase;
+        color: #64748b;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+      }
+
+      .tcdxExtraMiniCardValue {
+        font-size: 22px;
+        font-weight: 800;
+        color: #0B2F4F;
+        margin-top: 4px;
+      }
+
+      .tcdxAiGrid {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 12px;
+      }
+
+      .tcdxAiBox {
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        background: #ffffff;
+        padding: 13px;
+      }
+
+      .tcdxAiBox h3 {
+        margin: 0 0 7px;
+        color: #0B2F4F;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .tcdxAiBox p,
+      .tcdxAiBox li {
+        font-size: 11px;
+        line-height: 1.45;
+        color: #334155;
+      }
+
+      .tcdxAiBox ul {
+        margin: 0;
+        padding-left: 17px;
+      }
+    </style>
+  `;
+
+  if (String(html || '').includes('id="tcdx-pdf-quality-fix"')) {
+    return html;
+  }
+
+  if (String(html || '').includes('</head>')) {
+    return String(html).replace('</head>', `${css}</head>`);
+  }
+
+  return `${css}${html || ''}`;
+}
+
+function normalizeReportList(items, limit = 6) {
+  if (!Array.isArray(items)) return [];
+
+  const seen = new Set();
+  const out = [];
+
+  for (const item of items) {
+    const value = String(item || '').trim();
+    const key = value.toLowerCase();
+
+    if (!value || seen.has(key)) continue;
+
+    seen.add(key);
+    out.push(value);
+
+    if (out.length >= limit) break;
+  }
+
+  return out;
+}
+
+function buildFallbackAiReportAddendum(reportData) {
+  const stats = reportData?.stats || {};
+  const controls = stats.controls || {};
+  const evidences = stats.evidences || {};
+  const findings = stats.findings || {};
+  const actions = stats.action_plans || {};
+  const lifecycle = Array.isArray(reportData?.lifecycle_history) ? reportData.lifecycle_history : [];
+
+  const controlsCritical = Number(controls.critical_controls || 0);
+  const controlsWarning = Number(controls.warning_controls || 0);
+  const pendingEvidences = Number(evidences.pending_evidences || 0);
+  const criticalFindings = Number(findings.critical_findings || 0);
+  const overdueActions = Number(actions.overdue_actions || 0);
+
+  const priorities = [];
+
+  if (controlsCritical > 0) {
+    priorities.push(`Atender ${controlsCritical} control(es) deteriorado(s) antes de declarar avance de madurez.`);
+  }
+
+  if (controlsWarning > 0) {
+    priorities.push(`Convertir ${controlsWarning} control(es) en atención en un plan operativo con responsables y fechas.`);
+  }
+
+  if (pendingEvidences > 0) {
+    priorities.push(`Regularizar ${pendingEvidences} evidencia(s) pendiente(s) para fortalecer trazabilidad documental.`);
+  }
+
+  if (criticalFindings > 0) {
+    priorities.push(`Escalar ${criticalFindings} hallazgo(s) crítico(s) a comité o responsable de cumplimiento.`);
+  }
+
+  if (overdueActions > 0) {
+    priorities.push(`Reprogramar o escalar ${overdueActions} acción(es) vencida(s).`);
+  }
+
+  if (lifecycle.length > 0) {
+    priorities.push('Revisar los últimos movimientos de ciclo de vida y asegurar que cada avance tenga respaldo documental.');
+  }
+
+  if (priorities.length === 0) {
+    priorities.push('Mantener seguimiento mensual de controles, evidencias, auditorías y ciclo de vida.');
+  }
+
+  return {
+    source: 'fallback-report-intelligence',
+    headline: 'Lectura ejecutiva generada a partir del estado real del sistema.',
+    summary: [
+      `El informe consolida salud de controles, evidencias, hallazgos, acciones y trazabilidad del ciclo de vida.`,
+      `La prioridad debe estar en sostener evidencia objetiva, reducir pendientes y mantener trazabilidad auditable de los avances.`
+    ].join(' '),
+    priorities: normalizeReportList(priorities, 6),
+    risks: normalizeReportList([
+      controlsCritical > 0 ? 'Persisten controles deteriorados que pueden afectar avance de certificación.' : '',
+      pendingEvidences > 0 ? 'La falta de evidencia pendiente reduce la solidez del cumplimiento demostrado.' : '',
+      criticalFindings > 0 ? 'Los hallazgos críticos abiertos pueden convertirse en no conformidades si no se tratan oportunamente.' : '',
+      lifecycle.length === 0 ? 'No existe aún trazabilidad suficiente de movimientos de ciclo de vida.' : '',
+    ], 4),
+    decisions: normalizeReportList([
+      'Definir responsables y fechas de cierre para los puntos críticos.',
+      'Usar la trazabilidad del ciclo de vida como evidencia de gobierno del sistema.',
+      'Priorizar próximos esfuerzos según salud, evidencia y hallazgos abiertos.',
+    ], 4),
+  };
+}
+
+async function buildAiReportAddendum(reportData) {
+  const fallback = buildFallbackAiReportAddendum(reportData);
+
+  try {
+    const stats = reportData?.stats || {};
+    const controls = stats.controls || {};
+    const evidences = stats.evidences || {};
+    const findings = stats.findings || {};
+    const standards = Array.isArray(reportData?.standards)
+      ? reportData.standards.map((item) => item.code || item.standard_code || item).filter(Boolean)
+      : [];
+
+    const complianceRows = Array.isArray(reportData?.compliance_by_standard)
+      ? reportData.compliance_by_standard
+      : Array.isArray(reportData?.complianceByStandard)
+      ? reportData.complianceByStandard
+      : [];
+
+    const weakestStandards = complianceRows
+      .slice()
+      .sort((a, b) => Number(a.score || 999) - Number(b.score || 999))
+      .slice(0, 3)
+      .map((row) => `${row.code || row.standard_code || 'ISO'} (${Number(row.score || 0).toFixed(1)}%)`);
+
+    const response = await fetch(`${AI_ENGINE_URL}/api/ai/suggest/executive-brief`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-ai-token': AI_INTERNAL_TOKEN,
+      },
+      body: JSON.stringify({
+        tenant_id: reportData?.tenant?.id || reportData?.tenant_id || '',
+        tenant_name: reportData?.tenant?.name || 'Cliente',
+        period: reportData?.period || 'Periodo actual',
+        standards,
+        controls_total: Number(controls.total_controls || 0),
+        controls_warning: Number(controls.warning_controls || 0),
+        controls_critical: Number(controls.critical_controls || 0),
+        evidences_pending: Number(evidences.pending_evidences || 0),
+        findings_critical: Number(findings.critical_findings || 0),
+        weakest_standards: weakestStandards,
+      }),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined,
+    });
+
+    const json = await response.json();
+
+    if (!response.ok || json?.ok === false) {
+      throw new Error(json?.detail || json?.error || 'AI executive brief failed');
+    }
+
+    const ai = json.ai || json;
+
+    return {
+      source: 'own-ai-engine-140',
+      headline: String(ai.headline || ai.title || fallback.headline || '').trim(),
+      summary: String(ai.summary || ai.executive_summary || ai.brief || fallback.summary || '').trim(),
+      priorities: normalizeReportList([
+        ...(ai.top_priorities || []),
+        ...(ai.priorities || []),
+        ...(ai.suggestions || []),
+        ...(ai.recommended_actions || []),
+        ...fallback.priorities,
+      ], 6),
+      risks: normalizeReportList([
+        ...(ai.key_risks || []),
+        ...(ai.risks || []),
+        ...fallback.risks,
+      ], 4),
+      decisions: normalizeReportList([
+        ...(ai.decisions || []),
+        ...(ai.management_implications || []),
+        ...(ai.business_impact || []),
+        ...fallback.decisions,
+      ], 4),
+    };
+  } catch (error) {
+    console.error('REPORT AI ADDENDUM ERROR:', error.message);
+    return fallback;
+  }
+}
+
+function renderAiReportAddendumPage(reportData) {
+  const ai = reportData?.ai_report_addendum || buildFallbackAiReportAddendum(reportData);
+
+  const priorities = normalizeReportList(ai.priorities, 6);
+  const risks = normalizeReportList(ai.risks, 4);
+  const decisions = normalizeReportList(ai.decisions, 4);
+
+  const listHtml = (items) => {
+    if (!items.length) {
+      return '<p>No existen elementos priorizados para este bloque.</p>';
+    }
+
+    return `<ul>${items.map((item) => `<li>${escapeReportHtml(item)}</li>`).join('')}</ul>`;
+  };
+
+  return `
+    <section class="tcdxExtraPage">
+      ${renderPremiumExtraHeader(
+        reportData,
+        'Lectura Ejecutiva IA',
+        'Análisis complementario generado con el motor IA de TCDX sobre los datos reales del sistema.'
+      )}
+
+      <main class="tcdxExtraContent">
+        <div class="tcdxAiBox" style="margin-bottom:12px;background:#f8fafc;">
+          <h3>${escapeReportHtml(ai.headline || 'Lectura ejecutiva del periodo')}</h3>
+          <p>${escapeReportHtml(ai.summary || 'No fue posible generar una síntesis ejecutiva ampliada para este informe.')}</p>
+          <p style="font-size:10px;color:#64748b;margin-top:6px;">Fuente: ${escapeReportHtml(ai.source || 'own-ai-engine')}</p>
+        </div>
+
+        <div class="tcdxAiGrid">
+          <div class="tcdxAiBox">
+            <h3>Prioridades recomendadas</h3>
+            ${listHtml(priorities)}
+          </div>
+
+          <div class="tcdxAiBox">
+            <h3>Riesgos ejecutivos</h3>
+            ${listHtml(risks)}
+          </div>
+
+          <div class="tcdxAiBox">
+            <h3>Decisiones sugeridas</h3>
+            ${listHtml(decisions)}
+          </div>
+
+          <div class="tcdxAiBox">
+            <h3>Uso recomendado del informe</h3>
+            <ul>
+              <li>Revisar los puntos críticos con responsables de proceso.</li>
+              <li>Usar la trazabilidad del ciclo de vida como evidencia de gobierno.</li>
+              <li>Convertir prioridades en planes de acción con fecha y responsable.</li>
+            </ul>
+          </div>
+        </div>
+      </main>
+
+      ${renderPremiumExtraFooter('Lectura ejecutiva IA')}
+    </section>
+  `;
+}
+
+function injectAiReportAddendumIntoReportHtml(html, reportData) {
+  const page = renderAiReportAddendumPage(reportData);
+
+  if (String(html || '').includes('</body>')) {
+    return String(html).replace('</body>', `${page}</body>`);
+  }
+
+  return `${html || ''}${page}`;
+}
+
 function renderLifecycleHistoryReportPage(reportData) {
-  const tenantName = reportData?.tenant?.name || 'Cliente';
   const rows = Array.isArray(reportData?.lifecycle_history)
     ? reportData.lifecycle_history
     : [];
@@ -876,11 +1512,11 @@ function renderLifecycleHistoryReportPage(reportData) {
               <td>${escapeReportHtml(row.operation_name || row.operation_id || '-')}</td>
               <td>
                 <div><strong>${escapeReportHtml(row.from_stage_name || row.from_stage_code || 'Sin etapa')}</strong></div>
-                <div style="font-size:10px;color:#64748b;margin:2px 0;">hacia</div>
+                <div style="font-size:9px;color:#64748b;margin:2px 0;">hacia</div>
                 <div><strong>${escapeReportHtml(row.to_stage_name || row.to_stage_code || 'Sin etapa')}</strong></div>
               </td>
               <td>
-                <span style="display:inline-block;border:1px solid ${badgeColor};color:${badgeColor};border-radius:999px;padding:4px 8px;font-size:10px;font-weight:700;">
+                <span style="display:inline-block;border:1px solid ${badgeColor};color:${badgeColor};border-radius:999px;padding:3px 7px;font-size:9px;font-weight:800;">
                   ${escapeReportHtml(row.request_status_label || row.request_status || 'Pendiente')}
                 </span>
               </td>
@@ -890,7 +1526,7 @@ function renderLifecycleHistoryReportPage(reportData) {
                 <div>${escapeReportHtml(row.request_reason || 'Sin motivo informado')}</div>
                 ${
                   row.review_comment
-                    ? `<div style="margin-top:4px;color:#64748b;font-size:10px;">${escapeReportHtml(row.review_comment)}</div>`
+                    ? `<div style="margin-top:4px;color:#64748b;font-size:9px;">${escapeReportHtml(row.review_comment)}</div>`
                     : ''
                 }
               </td>
@@ -907,58 +1543,53 @@ function renderLifecycleHistoryReportPage(reportData) {
     `;
 
   return `
-    <section style="page-break-before:always;width:216mm;min-height:279mm;box-sizing:border-box;background:#ffffff;padding:14mm 12mm;font-family:Arial, Helvetica, sans-serif;color:#0f172a;">
-      <div style="border-bottom:1px solid #e2e8f0;padding-bottom:12px;margin-bottom:18px;display:flex;justify-content:space-between;gap:16px;align-items:flex-start;">
-        <div>
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.18em;color:#64748b;font-weight:700;">TCDX by Tecdex</div>
-          <h1 style="font-size:24px;line-height:1.1;margin:8px 0 4px;font-weight:800;color:#0B2F4F;">Trazabilidad del Ciclo de Vida</h1>
-          <div style="font-size:12px;color:#475569;">Historial auditable de movimientos, aprobaciones y rechazos.</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#64748b;font-weight:700;">Cliente</div>
-          <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:4px;">${escapeReportHtml(tenantName)}</div>
-        </div>
-      </div>
+    <section class="tcdxExtraPage">
+      ${renderPremiumExtraHeader(
+        reportData,
+        'Trazabilidad del Ciclo de Vida',
+        'Historial auditable de movimientos, aprobaciones y rechazos.'
+      )}
 
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
-        <div style="border:1px solid #e2e8f0;border-radius:14px;padding:12px;background:#f8fafc;">
-          <div style="font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Movimientos incluidos</div>
-          <div style="font-size:24px;font-weight:800;color:#0B2F4F;margin-top:4px;">${rows.length}</div>
-        </div>
-        <div style="border:1px solid #e2e8f0;border-radius:14px;padding:12px;background:#f8fafc;">
-          <div style="font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Uso auditor</div>
-          <div style="font-size:13px;font-weight:700;color:#0f172a;margin-top:6px;">Evidencia de trazabilidad</div>
-        </div>
-        <div style="border:1px solid #e2e8f0;border-radius:14px;padding:12px;background:#f8fafc;">
-          <div style="font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Cobertura</div>
-          <div style="font-size:13px;font-weight:700;color:#0f172a;margin-top:6px;">Últimos movimientos registrados</div>
-        </div>
-      </div>
+      <main class="tcdxExtraContent">
+        <div class="tcdxExtraKpiGrid">
+          <div class="tcdxExtraMiniCard">
+            <div class="tcdxExtraMiniCardLabel">Movimientos incluidos</div>
+            <div class="tcdxExtraMiniCardValue">${rows.length}</div>
+          </div>
 
-      <div style="border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
-        <table style="width:100%;border-collapse:collapse;font-size:10.5px;">
-          <thead>
-            <tr style="background:#f1f5f9;color:#334155;text-align:left;">
-              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Fecha</th>
-              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Norma</th>
-              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Operación</th>
-              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Movimiento</th>
-              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Estado</th>
-              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Solicitado por</th>
-              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Revisado por</th>
-              <th style="padding:8px;border-bottom:1px solid #e2e8f0;">Motivo / comentario</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml}
-          </tbody>
-        </table>
-      </div>
+          <div class="tcdxExtraMiniCard">
+            <div class="tcdxExtraMiniCardLabel">Uso auditor</div>
+            <div style="font-size:13px;font-weight:800;color:#0f172a;margin-top:6px;">Evidencia de trazabilidad</div>
+          </div>
 
-      <div style="margin-top:16px;border-top:1px solid #e2e8f0;padding-top:10px;font-size:10px;color:#64748b;display:flex;justify-content:space-between;gap:12px;">
-        <div>Documento confidencial. Uso restringido al cliente y equipo autorizado.</div>
-        <div>Página adicional de trazabilidad</div>
-      </div>
+          <div class="tcdxExtraMiniCard">
+            <div class="tcdxExtraMiniCardLabel">Cobertura</div>
+            <div style="font-size:13px;font-weight:800;color:#0f172a;margin-top:6px;">Últimos movimientos registrados</div>
+          </div>
+        </div>
+
+        <div class="tcdxExtraTableWrap">
+          <table class="tcdxExtraTable">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Norma</th>
+                <th>Operación</th>
+                <th>Movimiento</th>
+                <th>Estado</th>
+                <th>Solicitado por</th>
+                <th>Revisado por</th>
+                <th>Motivo / comentario</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      ${renderPremiumExtraFooter('Trazabilidad del ciclo de vida')}
     </section>
   `;
 }
@@ -1058,9 +1689,12 @@ router.post('/generate', auth, async (req, res) => {
     });
 
     reportData.lifecycle_history = await getLifecycleHistoryForReport(targetTenantId);
+    reportData.ai_report_addendum = await buildAiReportAddendum(reportData);
 
     const baseHtml = renderExecutivePremiumTemplate(reportData);
-    const html = injectLifecycleHistoryIntoReportHtml(baseHtml, reportData);
+    const withAiPage = injectAiReportAddendumIntoReportHtml(baseHtml, reportData);
+    const withLifecyclePage = injectLifecycleHistoryIntoReportHtml(withAiPage, reportData);
+    const html = injectPremiumPdfQualityStyles(withLifecyclePage);
 
     const reportTitle = buildReportTitle(reportType, report_type_code, period);
     const tenantFolder = path.join(
