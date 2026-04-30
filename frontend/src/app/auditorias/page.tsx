@@ -912,6 +912,10 @@ function AuditoriasPageContent() {
     window.location.href = `/auditorias/ejecucion?id=${audit.id}`;
   };
 
+  const goToAuditAi = (audit: AuditRow) => {
+    window.location.href = `/auditorias/ia?id=${audit.id}`;
+  };
+
   if (loadingStandards) {
     return (
       <AppLayout>
@@ -1380,6 +1384,15 @@ function AuditoriasPageContent() {
                     >
                       Abrir checklist
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => goToAuditAi(audit)}
+                      className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-bold text-violet-700 transition hover:bg-violet-100"
+                    >
+                      IA Auditor
+                    </button>
+
+
 
 
 
