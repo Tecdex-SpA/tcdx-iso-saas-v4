@@ -912,6 +912,9 @@ function buildReportImageCandidates(rawSrc) {
     candidates.push(`${base}${raw}`);
   } else {
     candidates.push(`${base}/uploads/${raw}`);
+    candidates.push(`${base}/uploads/logos/${raw}`);
+    candidates.push(`${base}/uploads/tenants/${raw}`);
+    candidates.push(`${base}/uploads/tenant-logos/${raw}`);
     candidates.push(`${base}/${raw}`);
     candidates.push(raw);
   }
@@ -973,7 +976,7 @@ function getTcdxLogoSourceForReport() {
   return (
     process.env.REPORT_TCDX_LOGO_URL ||
     process.env.TCDX_LOGO_URL ||
-    ''
+    'http://192.168.100.130:3000/logo.png'
   );
 }
 
@@ -1045,6 +1048,46 @@ function injectPremiumPdfQualityStyles(html) {
         break-after: auto !important;
       }
 
+      .header,
+      .tcdxExtraHeader {
+        background: #0B2F4F !important;
+        color: #ffffff !important;
+        border-bottom: none !important;
+      }
+
+      .header {
+        min-height: 27mm !important;
+        height: 27mm !important;
+        box-sizing: border-box !important;
+        padding-top: 5mm !important;
+        padding-bottom: 4mm !important;
+      }
+
+      .documentTitle,
+      .headerCenter h1,
+      .tcdxExtraHeaderCenter h1 {
+        color: #ffffff !important;
+      }
+
+      .documentDate,
+      .tcdxExtraHeaderCenter p {
+        color: #cbd5e1 !important;
+      }
+
+      .tcdxExtraKicker {
+        color: #dbeafe !important;
+        letter-spacing: 0.08em !important;
+      }
+
+      .logoHolder,
+      .brandLogo,
+      .clientLogo {
+        background: #ffffff !important;
+        border-radius: 12px !important;
+        padding: 5px 8px !important;
+        box-sizing: border-box !important;
+      }
+
       .logoHolder img,
       .brandLogo img,
       .clientLogo img {
@@ -1053,17 +1096,31 @@ function injectPremiumPdfQualityStyles(html) {
         object-fit: contain !important;
       }
 
-      .header {
-        box-sizing: border-box !important;
-        min-height: 24mm !important;
-      }
-
-      .footer {
-        box-sizing: border-box !important;
+      .logoFallbackText,
+      .brandTextLockup {
+        color: #0B2F4F !important;
       }
 
       .pageContent {
         box-sizing: border-box !important;
+        max-height: 235mm !important;
+        overflow: hidden !important;
+        padding-bottom: 5mm !important;
+      }
+
+      .footer {
+        background: #0B2F4F !important;
+        color: #ffffff !important;
+        min-height: 16mm !important;
+        height: 16mm !important;
+        box-sizing: border-box !important;
+        border-top: none !important;
+      }
+
+      .footer *,
+      .footerMuted,
+      .pageNumber {
+        color: #ffffff !important;
       }
 
       .sectionCard,
@@ -1096,8 +1153,7 @@ function injectPremiumPdfQualityStyles(html) {
         grid-template-columns: 46mm 1fr 46mm;
         gap: 8mm;
         align-items: center;
-        border-bottom: 1px solid #e2e8f0;
-        padding: 7mm 11mm 4mm;
+        padding: 5mm 11mm 4mm;
       }
 
       .tcdxExtraHeaderCenter {
@@ -1106,28 +1162,18 @@ function injectPremiumPdfQualityStyles(html) {
 
       .tcdxExtraHeaderCenter h1 {
         margin: 2mm 0 1mm;
-        color: #0B2F4F;
-        font-size: 20px;
-        line-height: 1.1;
+        font-size: 19px;
+        line-height: 1.08;
         font-weight: 800;
       }
 
       .tcdxExtraHeaderCenter p {
         margin: 0;
-        color: #64748b;
-        font-size: 11px;
-      }
-
-      .tcdxExtraKicker {
-        font-size: 9px;
-        text-transform: uppercase;
-        letter-spacing: 0.18em;
-        color: #64748b;
-        font-weight: 800;
+        font-size: 10.5px;
       }
 
       .tcdxExtraContent {
-        height: 229mm;
+        height: 236mm;
         box-sizing: border-box;
         padding: 7mm 11mm 5mm;
         overflow: hidden;
@@ -1135,17 +1181,18 @@ function injectPremiumPdfQualityStyles(html) {
 
       .tcdxExtraFooter {
         position: absolute;
-        left: 11mm;
-        right: 11mm;
-        bottom: 5mm;
-        height: 12mm;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 16mm;
         box-sizing: border-box;
-        border-top: 1px solid #e2e8f0;
-        padding-top: 3mm;
+        background: #0B2F4F;
+        color: #ffffff;
+        padding: 4mm 11mm;
         display: flex;
         justify-content: space-between;
+        align-items: center;
         gap: 8mm;
-        color: #64748b;
         font-size: 9.5px;
       }
 
@@ -1158,19 +1205,19 @@ function injectPremiumPdfQualityStyles(html) {
       .tcdxExtraTable {
         width: 100%;
         border-collapse: collapse;
-        font-size: 9.5px;
+        font-size: 9.2px;
       }
 
       .tcdxExtraTable th {
         background: #f1f5f9;
         color: #334155;
         text-align: left;
-        padding: 7px;
+        padding: 6px;
         border-bottom: 1px solid #e2e8f0;
       }
 
       .tcdxExtraTable td {
-        padding: 7px;
+        padding: 6px;
         border-bottom: 1px solid #f1f5f9;
         vertical-align: top;
       }
@@ -1418,8 +1465,150 @@ async function buildAiReportAddendum(reportData) {
   }
 }
 
+
+function cleanReportSentenceText(value, maxLength = 620) {
+  let text = String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/([.:;!?])(?=[A-ZÁÉÍÓÚÑ0-9])/g, '$1 ')
+    .replace(/(relevantes:)(\d)/gi, '$1 $2')
+    .replace(/(recomendadas:)(\d)/gi, '$1 $2')
+    .trim();
+
+  if (text.length > maxLength) {
+    text = text.slice(0, maxLength).replace(/\s+\S*$/, '').trim();
+    text = `${text}...`;
+  }
+
+  return text;
+}
+
+function buildUsefulReportExecutiveSummary(reportData) {
+  const stats = reportData?.stats || {};
+  const controls = stats.controls || {};
+  const evidences = stats.evidences || {};
+  const findings = stats.findings || {};
+  const actions = stats.action_plans || {};
+  const lifecycle = Array.isArray(reportData?.lifecycle_history)
+    ? reportData.lifecycle_history
+    : [];
+
+  const score = Number(controls.average_score || 0).toFixed(1);
+  const totalControls = Number(controls.total_controls || 0);
+  const warningControls = Number(controls.warning_controls || 0);
+  const criticalControls = Number(controls.critical_controls || 0);
+  const pendingEvidences = Number(evidences.pending_evidences || 0);
+  const openFindings = Number(findings.open_findings || 0);
+  const overdueActions = Number(actions.overdue_actions || 0);
+
+  const parts = [
+    `El periodo evaluado muestra un score consolidado de ${score}% sobre ${totalControls} controles activos.`,
+  ];
+
+  if (warningControls > 0) {
+    parts.push(`Existen ${warningControls} controles en atención que deben transformarse en un plan operativo priorizado.`);
+  }
+
+  if (criticalControls > 0) {
+    parts.push(`Se identifican ${criticalControls} controles deteriorados que requieren seguimiento ejecutivo.`);
+  }
+
+  if (pendingEvidences > 0) {
+    parts.push(`Hay ${pendingEvidences} evidencias pendientes que reducen la solidez documental del cumplimiento.`);
+  }
+
+  if (openFindings > 0) {
+    parts.push(`Se mantienen ${openFindings} hallazgos abiertos que deben vincularse a responsables, fechas y evidencia de cierre.`);
+  }
+
+  if (overdueActions > 0) {
+    parts.push(`Existen ${overdueActions} acciones vencidas que deben escalarse o reprogramarse.`);
+  }
+
+  if (lifecycle.length > 0) {
+    parts.push(`El historial de ciclo de vida registra ${lifecycle.length} movimientos recientes útiles como trazabilidad de gobierno.`);
+  }
+
+  return parts.join(' ');
+}
+
+function isLowQualityAiReportSummary(value) {
+  const text = String(value || '').trim();
+
+  if (!text) return true;
+  if (text.length > 700) return true;
+  if (/\basoc$/i.test(text)) return true;
+  if (/Resumen de salud:/i.test(text) && /Prioridades recomendadas:/i.test(text)) return true;
+  if (/Señales relevantes:\s*1\./i.test(text)) return true;
+
+  return false;
+}
+
+function polishAiReportAddendum(addendum, reportData) {
+  const fallback = buildFallbackAiReportAddendum(reportData);
+  const rawSummary = addendum?.summary || fallback.summary;
+  const cleanedSummary = cleanReportSentenceText(rawSummary);
+
+  return {
+    ...fallback,
+    ...addendum,
+    headline: cleanReportSentenceText(
+      addendum?.headline || fallback.headline || 'Lectura ejecutiva del periodo',
+      120
+    ),
+    summary: isLowQualityAiReportSummary(cleanedSummary)
+      ? buildUsefulReportExecutiveSummary(reportData)
+      : cleanedSummary,
+    priorities: normalizeReportList([
+      ...(addendum?.priorities || []),
+      ...(fallback.priorities || []),
+    ], 6),
+    risks: normalizeReportList([
+      ...(addendum?.risks || []),
+      ...(fallback.risks || []),
+    ], 4),
+    decisions: normalizeReportList([
+      ...(addendum?.decisions || []),
+      ...(fallback.decisions || []),
+    ], 4),
+  };
+}
+
+function removeDuplicatedFirstPageAiFocus(html) {
+  let out = String(html || '');
+
+  // Este bloque queda duplicado con la página IA y en el PDF actual se pisa con el pie.
+  const patterns = [
+    /<section[^>]*class="[^"]*sectionCard[^"]*"[^>]*>\s*<h2[^>]*>\s*Foco ejecutivo asistido por IA\s*<\/h2>[\s\S]*?<\/section>/i,
+    /<section[^>]*>\s*<h2[^>]*>\s*Foco ejecutivo asistido por IA\s*<\/h2>[\s\S]*?<\/section>/i,
+    /<div[^>]*>\s*<h2[^>]*>\s*Foco ejecutivo asistido por IA\s*<\/h2>[\s\S]*?<\/div>/i,
+  ];
+
+  for (const pattern of patterns) {
+    out = out.replace(pattern, '');
+  }
+
+  return out;
+}
+
+function normalizePremiumPageCount(html) {
+  const raw = String(html || '');
+  const reportPages = (raw.match(/class="[^"]*\breportPage\b/g) || []).length;
+  const extraPages = (raw.match(/class="[^"]*\btcdxExtraPage\b/g) || []).length;
+  const total = reportPages + extraPages;
+
+  if (!total) return raw;
+
+  return raw.replace(/Página\s+(\d+)\s+de\s+\d+/g, (_match, page) => {
+    return `Página ${page} de ${total}`;
+  });
+}
+
+
 function renderAiReportAddendumPage(reportData) {
-  const ai = reportData?.ai_report_addendum || buildFallbackAiReportAddendum(reportData);
+  const ai = polishAiReportAddendum(
+    reportData?.ai_report_addendum || buildFallbackAiReportAddendum(reportData),
+    reportData
+  );
 
   const priorities = normalizeReportList(ai.priorities, 6);
   const risks = normalizeReportList(ai.risks, 4);
@@ -1691,10 +1880,13 @@ router.post('/generate', auth, async (req, res) => {
     reportData.lifecycle_history = await getLifecycleHistoryForReport(targetTenantId);
     reportData.ai_report_addendum = await buildAiReportAddendum(reportData);
 
-    const baseHtml = renderExecutivePremiumTemplate(reportData);
+    const baseHtml = removeDuplicatedFirstPageAiFocus(
+      renderExecutivePremiumTemplate(reportData)
+    );
     const withAiPage = injectAiReportAddendumIntoReportHtml(baseHtml, reportData);
     const withLifecyclePage = injectLifecycleHistoryIntoReportHtml(withAiPage, reportData);
-    const html = injectPremiumPdfQualityStyles(withLifecyclePage);
+    const withQualityStyles = injectPremiumPdfQualityStyles(withLifecyclePage);
+    const html = normalizePremiumPageCount(withQualityStyles);
 
     const reportTitle = buildReportTitle(reportType, report_type_code, period);
     const tenantFolder = path.join(

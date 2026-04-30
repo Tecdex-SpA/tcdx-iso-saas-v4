@@ -214,6 +214,9 @@ function buildImageCandidates(rawSrc) {
   } else {
     candidates.push(`${base}/${raw}`);
     candidates.push(`${base}/uploads/${raw}`);
+    candidates.push(`${base}/uploads/logos/${raw}`);
+    candidates.push(`${base}/uploads/tenants/${raw}`);
+    candidates.push(`${base}/uploads/tenant-logos/${raw}`);
     candidates.push(`${base}/public/${raw}`);
   }
 
@@ -263,7 +266,7 @@ function renderBrandLogo() {
   const brandLogo =
     process.env.REPORT_TCDX_LOGO_URL ||
     process.env.TCDX_LOGO_URL ||
-    '';
+    'http://192.168.100.130:3000/logo.png';
 
   if (brandLogo) {
     return renderSmartLogo(brandLogo, 'TCDX by Tecdex', 'brandLogo', 'TCDX by Tecdex');
