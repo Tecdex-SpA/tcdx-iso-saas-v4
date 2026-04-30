@@ -1952,4 +1952,195 @@ router.post('/ai-feed/:event_id/processed', auth, async (req, res) => {
   }
 });
 
+
+// =====================================================
+// 📜 HISTORIAL AUDITABLE DE CICLO DE VIDA
+// GET /api/lifecycle/history/:tenant_id
+// =====================================================
+function quoteIdentifier(value) {
+  return `"${String(value || '').replace(/"/g, '""')}"`;
+}
+
+async function getExistingLifecycleHistoryTable(client) {
+  const candidates = [
+    'standard_lifecycle_stage_requests',
+    'tenant_lifecycle_stage_requests',
+    'lifecycle_stage_requests',
+    'standard_lifecycle_requests'
+  ];
+
+  const result = await client.query(
+    `
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = ANY($1)
+    ORDER BY array_position($1, table_name)
+    LIMIT 1
+    `,
+    [candidates]
+  );
+
+  return result.rows[0]?.table_name || null;
+}
+
+async function getTableColumns(client, tableName) {
+  const result = await client.query(
+    `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = $1
+    `,
+    [tableName]
+  );
+
+  return new Set(result.rows.map((row) => row.column_name));
+}
+
+function selectColumn(columns, candidates, fallbackSql) {
+  const found = candidates.find((column) => columns.has(column));
+  return found ? `r.${quoteIdentifier(found)}` : fallbackSql;
+}
+
+router.get('/history/:tenant_id', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { tenant_id } = req.params;
+    const { standard_code, operation_id, status, limit } = req.query || {};
+
+    if (!canAccessTenant(req, tenant_id)) {
+      return res.status(403).json({
+        ok: false,
+        code: 'RBAC_DENIED',
+        error: 'No autorizado para este tenant'
+      });
+    }
+
+    const tableName = await getExistingLifecycleHistoryTable(client);
+
+    if (!tableName) {
+      return res.json({
+        ok: true,
+        tenant_id,
+        table: null,
+        data: [],
+        message: 'No existe tabla de historial de ciclo de vida.'
+      });
+    }
+
+    const columns = await getTableColumns(client, tableName);
+    const tableRef = quoteIdentifier(tableName);
+
+    const idExpr = selectColumn(columns, ['id'], "NULL");
+    const tenantExpr = selectColumn(columns, ['tenant_id'], "$1::uuid");
+    const standardExpr = selectColumn(columns, ['standard_code', 'iso', 'iso_code'], "NULL");
+    const operationExpr = selectColumn(columns, ['operation_id'], "NULL");
+    const fromStageExpr = selectColumn(columns, ['from_stage_code', 'from_stage'], "NULL");
+    const toStageExpr = selectColumn(columns, ['to_stage_code', 'to_stage', 'pending_stage_code'], "NULL");
+    const statusExpr = selectColumn(columns, ['request_status', 'status'], "'pendiente'");
+    const reasonExpr = selectColumn(columns, ['request_reason', 'reason', 'comment'], "NULL");
+    const sourceExpr = selectColumn(columns, ['request_source', 'source'], "NULL");
+    const requestedAtExpr = selectColumn(columns, ['requested_at', 'created_at'], "NULL");
+    const reviewedAtExpr = selectColumn(columns, ['reviewed_at', 'updated_at'], "NULL");
+    const reviewCommentExpr = selectColumn(columns, ['review_comment', 'review_notes'], "NULL");
+    const requestedByExpr = selectColumn(columns, ['requested_by', 'created_by', 'user_id'], "NULL");
+    const reviewedByExpr = selectColumn(columns, ['reviewed_by', 'updated_by'], "NULL");
+
+    const params = [tenant_id];
+    const where = [`${tenantExpr} = $1::uuid`];
+
+    if (standard_code && standardExpr !== "NULL") {
+      params.push(String(standard_code));
+      where.push(`${standardExpr} = $${params.length}`);
+    }
+
+    if (operation_id && operationExpr !== "NULL") {
+      params.push(String(operation_id));
+      where.push(`${operationExpr}::text = $${params.length}`);
+    }
+
+    if (status && statusExpr !== "'pendiente'") {
+      params.push(String(status).toLowerCase());
+      where.push(`LOWER(COALESCE(${statusExpr}::text, '')) = $${params.length}`);
+    }
+
+    const safeLimit = Math.min(Math.max(Number(limit || 80), 1), 200);
+
+    const sql = `
+      SELECT
+        ${idExpr}::text AS id,
+        ${tenantExpr}::text AS tenant_id,
+        ${standardExpr}::text AS standard_code,
+        ${operationExpr}::text AS operation_id,
+        op.name AS operation_name,
+        ${fromStageExpr}::text AS from_stage_code,
+        ${toStageExpr}::text AS to_stage_code,
+        ${statusExpr}::text AS request_status,
+        ${reasonExpr}::text AS request_reason,
+        ${sourceExpr}::text AS request_source,
+        ${requestedAtExpr} AS requested_at,
+        ${reviewedAtExpr} AS reviewed_at,
+        ${reviewCommentExpr}::text AS review_comment,
+        ru.email AS requested_by_email,
+        COALESCE(ru.full_name, ru.name, ru.email) AS requested_by_name,
+        vu.email AS reviewed_by_email,
+        COALESCE(vu.full_name, vu.name, vu.email) AS reviewed_by_name
+      FROM ${tableRef} r
+      LEFT JOIN tenant_operations op
+        ON op.id::text = ${operationExpr}::text
+       AND op.tenant_id::text = ${tenantExpr}::text
+      LEFT JOIN users ru
+        ON ru.id::text = ${requestedByExpr}::text
+      LEFT JOIN users vu
+        ON vu.id::text = ${reviewedByExpr}::text
+      WHERE ${where.join(' AND ')}
+      ORDER BY COALESCE(${requestedAtExpr}, ${reviewedAtExpr}) DESC NULLS LAST
+      LIMIT ${safeLimit}
+    `;
+
+    const result = await client.query(sql, params);
+
+    const data = result.rows.map((row) => ({
+      ...row,
+      from_stage_name: stageNameFromCode(row.from_stage_code),
+      to_stage_name: stageNameFromCode(row.to_stage_code),
+      request_status_label:
+        String(row.request_status || '').toLowerCase() === 'confirmar'
+          ? 'Confirmado'
+          : String(row.request_status || '').toLowerCase() === 'rechazar'
+          ? 'Rechazado'
+          : String(row.request_status || '').toLowerCase() === 'aprobado'
+          ? 'Aprobado'
+          : String(row.request_status || '').toLowerCase() === 'rechazado'
+          ? 'Rechazado'
+          : String(row.request_status || '').toLowerCase() === 'confirmed'
+          ? 'Confirmado'
+          : String(row.request_status || '').toLowerCase() === 'rejected'
+          ? 'Rechazado'
+          : String(row.request_status || 'Pendiente')
+    }));
+
+    return res.json({
+      ok: true,
+      tenant_id,
+      table: tableName,
+      count: data.length,
+      data
+    });
+  } catch (error) {
+    console.error('ERROR GET LIFECYCLE HISTORY:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo historial de ciclo de vida',
+      detail: error.message
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
 module.exports = router;

@@ -113,6 +113,29 @@ type ScopeResponse = {
   standards: ScopeStandard[];
 };
 
+type LifecycleHistoryRow = {
+  id: string | null;
+  tenant_id: string;
+  standard_code: string | null;
+  operation_id: string | null;
+  operation_name: string | null;
+  from_stage_code: string | null;
+  from_stage_name: string | null;
+  to_stage_code: string | null;
+  to_stage_name: string | null;
+  request_status: string | null;
+  request_status_label: string | null;
+  request_reason: string | null;
+  request_source: string | null;
+  requested_at: string | null;
+  reviewed_at: string | null;
+  review_comment: string | null;
+  requested_by_email: string | null;
+  requested_by_name: string | null;
+  reviewed_by_email: string | null;
+  reviewed_by_name: string | null;
+};
+
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
@@ -259,7 +282,9 @@ export default function CicloVidaPage() {
   const [requestReason, setRequestReason] = useState<string>('');
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [topPanelCollapsed, setTopPanelCollapsed] = useState(true);
-  const [activeView, setActiveView] = useState<'lifecycle' | 'objectives'>('lifecycle');
+  const [activeView, setActiveView] = useState<'lifecycle' | 'objectives' | 'history'>('lifecycle');
+  const [historyRows, setHistoryRows] = useState<LifecycleHistoryRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const isAuditor = userRole === 'auditor';
 
@@ -370,6 +395,50 @@ export default function CicloVidaPage() {
     await loadBoard(tenantId, selectedStandard, selectedOperation);
   }
 
+  async function loadHistory(resolvedTenantId: string) {
+    const token = getToken();
+    if (!token || !resolvedTenantId) return;
+
+    try {
+      setHistoryLoading(true);
+
+      const params = new URLSearchParams();
+
+      if (selectedStandard && selectedStandard !== 'ALL') {
+        params.set('standard_code', selectedStandard);
+      }
+
+      if (selectedOperation && selectedOperation !== 'ALL') {
+        params.set('operation_id', selectedOperation);
+      }
+
+      params.set('limit', '100');
+
+      const url = `${API_URL}/api/lifecycle/history/${resolvedTenantId}${
+        params.toString() ? `?${params.toString()}` : ''
+      }`;
+
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.detail || data?.error || 'No fue posible cargar historial');
+      }
+
+      setHistoryRows(Array.isArray(data?.data) ? data.data : []);
+    } catch (err: any) {
+      setError(err?.message || 'Error cargando historial de ciclo de vida');
+      setHistoryRows([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -428,6 +497,12 @@ export default function CicloVidaPage() {
 
     run();
   }, [selectedStandard, selectedOperation, tenantId]);
+
+  useEffect(() => {
+    if (activeView !== 'history' || !tenantId) return;
+    void loadHistory(tenantId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, tenantId, selectedStandard, selectedOperation]);
 
   const activeStandards = useMemo(() => {
     return (scope.standards || []).filter((item) => item?.is_active === true);
@@ -804,6 +879,19 @@ export default function CicloVidaPage() {
                   >
                     Vista Objetivos
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('history')}
+                    className={[
+                      'rounded-xl px-4 py-2 text-sm font-semibold transition',
+                      activeView === 'history'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100',
+                    ].join(' ')}
+                  >
+                    Vista Historial
+                  </button>
                 </div>
               </div>
 
@@ -960,6 +1048,114 @@ export default function CicloVidaPage() {
             {successMessage}
           </div>
         ) : null}
+
+        {activeView === 'history' && (
+          <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-600">
+                  Trazabilidad auditable
+                </div>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">
+                  Historial de movimientos de ciclo de vida
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Registro de solicitudes, aprobaciones, rechazos, motivos y responsables.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => loadHistory(tenantId)}
+                disabled={historyLoading}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                {historyLoading ? 'Actualizando...' : 'Actualizar historial'}
+              </button>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+              {historyLoading ? (
+                <div className="p-6 text-sm text-slate-500">Cargando historial...</div>
+              ) : historyRows.length === 0 ? (
+                <div className="p-6 text-sm text-slate-500">
+                  No hay movimientos registrados para los filtros actuales.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3">Fecha</th>
+                        <th className="px-4 py-3">Norma</th>
+                        <th className="px-4 py-3">Operación</th>
+                        <th className="px-4 py-3">Movimiento</th>
+                        <th className="px-4 py-3">Estado</th>
+                        <th className="px-4 py-3">Solicitado por</th>
+                        <th className="px-4 py-3">Revisado por</th>
+                        <th className="px-4 py-3">Motivo / comentario</th>
+                      </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {historyRows.map((row, index) => {
+                        const status = String(row.request_status || '').toLowerCase();
+                        const statusClass =
+                          status.includes('rechaz')
+                            ? 'border-red-200 bg-red-50 text-red-700'
+                            : status.includes('confirm') || status.includes('aprobad')
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-amber-200 bg-amber-50 text-amber-700';
+
+                        return (
+                          <tr key={row.id || `${row.standard_code}-${row.operation_id}-${index}`} className="align-top">
+                            <td className="px-4 py-3 text-slate-600">
+                              {formatDateTime(row.requested_at || row.reviewed_at)}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-800">
+                              {row.standard_code || 'N/D'}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">
+                              {row.operation_name || row.operation_id || 'N/D'}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700">
+                              <div className="font-semibold">
+                                {row.from_stage_name || row.from_stage_code || 'Sin etapa'}
+                              </div>
+                              <div className="text-xs text-slate-400">hacia</div>
+                              <div className="font-semibold">
+                                {row.to_stage_name || row.to_stage_code || 'Sin etapa'}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusClass}`}>
+                                {row.request_status_label || row.request_status || 'Pendiente'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">
+                              {row.requested_by_name || row.requested_by_email || 'No informado'}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">
+                              {row.reviewed_by_name || row.reviewed_by_email || 'Pendiente'}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">
+                              <div>{row.request_reason || 'Sin motivo informado'}</div>
+                              {row.review_comment && (
+                                <div className="mt-1 rounded-xl bg-slate-50 p-2 text-xs text-slate-500">
+                                  {row.review_comment}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {error ? (
           <div className="rounded-[24px] border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-sm">
