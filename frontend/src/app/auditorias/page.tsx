@@ -1130,54 +1130,6 @@ function AuditoriasPageContent() {
           </div>
         )}
 
-        {viewStep === 'workspace' && filteredAudits.length > 0 && (
-          <section className="rounded-[30px] border border-indigo-100 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Checklists de auditoría
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Accede al checklist operativo de cada auditoría registrada para revisar controles,
-                  evidencias, conformidad, observaciones y no conformidades.
-                </p>
-              </div>
-
-              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
-                {filteredAudits.length} auditoría{filteredAudits.length === 1 ? '' : 's'}
-              </span>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
-              {filteredAudits.map((audit) => (
-                <div
-                  key={`checklist-${audit.id}`}
-                  className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-                      {audit.iso} · {formatDate(audit.start_date)} → {formatDate(audit.end_date)}
-                    </div>
-                    <div className="mt-1 font-bold text-slate-900">
-                      {audit.auditor_name || 'Auditor no informado'}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Estado: {normalizeAuditStatus(audit.status)}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => goToAuditChecklist(audit)}
-                    className="rounded-2xl border border-indigo-200 bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700"
-                  >
-                    Abrir checklist
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
         {viewStep === 'workspace' && (
           <div className="space-y-6">
@@ -1421,6 +1373,15 @@ function AuditoriasPageContent() {
                               >
                                 {actionLoading === `finding-${audit.id}` ? 'Creando...' : 'Crear hallazgo'}
                               </button>
+                    <button
+                      type="button"
+                      onClick={() => goToAuditChecklist(audit)}
+                      className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100"
+                    >
+                      Abrir checklist
+                    </button>
+
+
 
                               <button
                                 onClick={() => createFindingFromAudit(audit, 'no conformidad')}
