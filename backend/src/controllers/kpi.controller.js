@@ -1271,7 +1271,8 @@ async function getDashboardByTenant(req, res) {
       return denyTenantAccess(res);
     }
 
-    const defs = await getKpiDefinitionsForTenant(tenantId);
+    const defs = (await getKpiDefinitionsForTenant(tenantId))
+      .filter((def) => def.is_enabled !== false);
     const latestMap = await getLatestSnapshotsMap(tenantId);
 
     const result = [];
