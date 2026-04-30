@@ -229,6 +229,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           '/ciclo-vida',
           '/health',
           '/exportes',
+          '/auditorias',
           '/perfil',
         ];
 

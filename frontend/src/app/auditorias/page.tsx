@@ -175,7 +175,22 @@ function AuditoriasPageContent() {
 
   const focusAppliedRef = useRef(false);
 
-  const isReadOnly = resolveRole(user) === 'auditor';
+  const currentRole = resolveRole(user);
+
+  const isViewer =
+    currentRole === 'viewer' ||
+    currentRole === 'cliente' ||
+    currentRole === 'client' ||
+    currentRole === 'solo_lectura' ||
+    currentRole === 'read_only' ||
+    currentRole === 'readonly' ||
+    currentRole === 'ejecutivo';
+
+  const isReadOnly = currentRole === 'auditor' || isViewer;
+  const readOnlyMessage = isViewer
+    ? 'Tu usuario es solo lectura. Puedes revisar auditorías, pero no crear ni modificar registros.'
+    : 'Tu usuario tiene acceso de solo lectura en esta vista.';
+
   const tenantId = resolveTenantId(user);
 
   const operationalStandards = useMemo(() => {
@@ -375,6 +390,11 @@ function AuditoriasPageContent() {
   const save = async () => {
     if (!token || !tenantId) return;
 
+    if (isReadOnly) {
+      alert(readOnlyMessage);
+      return;
+    }
+
     if (!iso) {
       alert('Debes seleccionar una norma ISO');
       return;
@@ -424,6 +444,11 @@ function AuditoriasPageContent() {
   const startAudit = async (id: string) => {
     if (!token || !tenantId) return;
 
+    if (isReadOnly) {
+      alert(readOnlyMessage);
+      return;
+    }
+
     const res = await fetch(`${API_URL}/api/audits/start/${id}`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}` },
@@ -441,6 +466,11 @@ function AuditoriasPageContent() {
 
   const uploadReport = async (id: string, file: File) => {
     if (!token || !tenantId) return;
+
+    if (isReadOnly) {
+      alert(readOnlyMessage);
+      return;
+    }
 
     const fd = new FormData();
     fd.append('file', file);
@@ -463,6 +493,11 @@ function AuditoriasPageContent() {
 
   const completeAudit = async (id: string) => {
     if (!token || !tenantId) return;
+
+    if (isReadOnly) {
+      alert(readOnlyMessage);
+      return;
+    }
 
     const res = await fetch(`${API_URL}/api/audits/complete/${id}`, {
       method: 'PUT',
@@ -488,6 +523,11 @@ function AuditoriasPageContent() {
       | 'fortaleza' = 'observacion'
   ) => {
     if (!token || !tenantId) return;
+
+    if (isReadOnly) {
+      alert(readOnlyMessage);
+      return;
+    }
 
     const title = window.prompt(
       `Título del hallazgo para auditoría ${audit.iso}`,
@@ -555,6 +595,11 @@ function AuditoriasPageContent() {
 
   const createActionFromAudit = async (audit: AuditRow) => {
     if (!token || !tenantId) return;
+
+    if (isReadOnly) {
+      alert(readOnlyMessage);
+      return;
+    }
 
     const title = window.prompt(
       `Título del plan de acción para auditoría ${audit.iso}`,

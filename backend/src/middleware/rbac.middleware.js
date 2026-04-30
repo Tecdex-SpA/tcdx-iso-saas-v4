@@ -168,7 +168,7 @@ const API_RULES = [
   },
   {
     prefix: '/api/assets',
-    read: TENANT_OPERATE_ROLES,
+    read: TENANT_READ_ROLES,
     write: ['admin', 'tenant_admin', 'operativo'],
   },
   {
@@ -178,7 +178,7 @@ const API_RULES = [
   },
   {
     prefix: '/api/action-plans',
-    read: TENANT_OPERATE_ROLES,
+    read: TENANT_READ_ROLES,
     write: ['admin', 'tenant_admin', 'operativo'],
   },
   {
@@ -188,7 +188,7 @@ const API_RULES = [
   },
   {
     prefix: '/api/findings',
-    read: TENANT_OPERATE_ROLES,
+    read: TENANT_READ_ROLES,
     write: TENANT_OPERATE_ROLES,
   },
   {
@@ -200,7 +200,7 @@ const API_RULES = [
   // Auditorías
   {
     prefix: '/api/audits',
-    read: ['admin', 'tenant_admin', 'auditor'],
+    read: TENANT_READ_ROLES,
     write: ['admin', 'tenant_admin', 'auditor'],
   },
 
