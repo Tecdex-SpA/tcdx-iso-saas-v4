@@ -465,7 +465,27 @@ export default function Header() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/6 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-            <img src={logo} className="h-8 max-w-[120px] object-contain" alt="logo" onError={() => setLogo(SERVICE_LOGO_SRC)} />
+            <img
+              src={logo}
+              className="h-8 max-w-[128px] object-contain"
+              alt={tenant?.name ? `Logo ${tenant.name}` : 'Logo cliente'}
+              onError={() => {
+                setLogoIndex((prev) => {
+                  const next = prev + 1;
+
+                  if (next < logoCandidates.length) {
+                    return next;
+                  }
+
+                  if (logo !== SERVICE_LOGO_SRC) {
+                    setLogoCandidates([SERVICE_LOGO_SRC]);
+                    return 0;
+                  }
+
+                  return prev;
+                });
+              }}
+            />
             <div className="hidden min-w-0 lg:block">
               <div className="truncate text-sm font-semibold tracking-[0.01em] text-white">
                 TCDX Compliance 3.0
