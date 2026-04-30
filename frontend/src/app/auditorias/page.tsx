@@ -69,6 +69,25 @@ type ScopeResponse = {
   standards: ScopeStandard[];
 };
 
+type AuditSummaryResponse = {
+  ok?: boolean;
+  tenant_id?: string;
+  iso?: string | null;
+  summary?: {
+    total?: number;
+    pendientes?: number;
+    en_ejecucion?: number;
+    completadas?: number;
+    con_informe?: number;
+    sin_informe?: number;
+    hallazgos?: number;
+    acciones?: number;
+  };
+  next_audit?: AuditRow | null;
+  recent_audits?: AuditRow[];
+  note?: string;
+};
+
 function resolveTenantId(user: any): string {
   return (
     user?.tenant_id ||
@@ -152,6 +171,8 @@ function AuditoriasPageContent() {
   const [findings, setFindings] = useState<FindingRow[]>([]);
   const [actions, setActions] = useState<ActionPlanRow[]>([]);
   const [scope, setScope] = useState<ScopeResponse>({ operations: [], standards: [] });
+  const [auditSummary, setAuditSummary] = useState<AuditSummaryResponse | null>(null);
+  const [loadingAuditSummary, setLoadingAuditSummary] = useState(true);
 
   const [loadingStandards, setLoadingStandards] = useState(true);
   const [loadingAudits, setLoadingAudits] = useState(true);
@@ -305,6 +326,38 @@ function AuditoriasPageContent() {
     }
   };
 
+  const loadAuditSummary = async (tenantIdValue: string, tkn: string) => {
+    try {
+      setLoadingAuditSummary(true);
+
+      const params = new URLSearchParams();
+      if (iso) params.append('iso', iso);
+
+      const url = `${API_URL}/api/audits/summary/${tenantIdValue}${
+        params.toString() ? `?${params.toString()}` : ''
+      }`;
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${tkn}` },
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        console.error('ERROR LOAD AUDIT SUMMARY:', json);
+        setAuditSummary(null);
+        return;
+      }
+
+      setAuditSummary(json);
+    } catch (err) {
+      console.error('ERROR LOAD AUDIT SUMMARY:', err);
+      setAuditSummary(null);
+    } finally {
+      setLoadingAuditSummary(false);
+    }
+  };
+
   const loadRelations = async (
     tenantIdValue: string,
     tkn: string,
@@ -373,6 +426,12 @@ function AuditoriasPageContent() {
   }, [token, tenantId, iso, loadingStandards]);
 
   useEffect(() => {
+    if (!token || !tenantId || loadingStandards) return;
+    void loadAuditSummary(tenantId, token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, tenantId, iso, loadingStandards]);
+
+  useEffect(() => {
     if (!token || !tenantId || !iso || loadingStandards) {
       if (!loadingStandards) setLoadingRelations(false);
       return;
@@ -386,6 +445,7 @@ function AuditoriasPageContent() {
 
     await Promise.all([
       loadAudits(tenantId, token),
+      loadAuditSummary(tenantId, token),
       iso ? loadRelations(tenantId, token, iso) : Promise.resolve(),
     ]);
   };
@@ -749,29 +809,41 @@ function AuditoriasPageContent() {
   }, [filteredAudits]);
 
   const metrics = useMemo(() => {
+    const backend = auditSummary?.summary || null;
+
     const withReport = filteredAudits.filter((a) => Boolean(a.report_file)).length;
     const withoutReport = filteredAudits.length - withReport;
 
+    const localHallazgos = filteredAudits.reduce(
+      (acc, audit) => acc + (findingsByAudit[audit.id]?.length || 0),
+      0
+    );
+
+    const localAcciones = filteredAudits.reduce(
+      (acc, audit) => acc + (actionsByAudit[audit.id]?.length || 0),
+      0
+    );
+
     return {
-      total: filteredAudits.length,
-      pendientes: filteredAudits.filter((a) => normalizeAuditStatus(a.status) === 'pendiente')
-        .length,
-      ejecucion: filteredAudits.filter((a) => normalizeAuditStatus(a.status) === 'en_ejecucion')
-        .length,
-      completadas: filteredAudits.filter((a) => normalizeAuditStatus(a.status) === 'completada')
-        .length,
-      hallazgos: filteredAudits.reduce(
-        (acc, audit) => acc + (findingsByAudit[audit.id]?.length || 0),
-        0
+      total: Number(backend?.total ?? filteredAudits.length),
+      pendientes: Number(
+        backend?.pendientes ??
+          filteredAudits.filter((a) => normalizeAuditStatus(a.status) === 'pendiente').length
       ),
-      acciones: filteredAudits.reduce(
-        (acc, audit) => acc + (actionsByAudit[audit.id]?.length || 0),
-        0
+      ejecucion: Number(
+        backend?.en_ejecucion ??
+          filteredAudits.filter((a) => normalizeAuditStatus(a.status) === 'en_ejecucion').length
       ),
-      conInforme: withReport,
-      sinInforme: withoutReport,
+      completadas: Number(
+        backend?.completadas ??
+          filteredAudits.filter((a) => normalizeAuditStatus(a.status) === 'completada').length
+      ),
+      hallazgos: Number(backend?.hallazgos ?? localHallazgos),
+      acciones: Number(backend?.acciones ?? localAcciones),
+      conInforme: Number(backend?.con_informe ?? withReport),
+      sinInforme: Number(backend?.sin_informe ?? withoutReport),
     };
-  }, [filteredAudits, findingsByAudit, actionsByAudit]);
+  }, [filteredAudits, findingsByAudit, actionsByAudit, auditSummary]);
 
   const getAuditStatusColor = (status?: string) => {
     const normalized = normalizeAuditStatus(status);
@@ -893,6 +965,12 @@ function AuditoriasPageContent() {
                 Programa auditorías, controla su avance, gestiona informe final y
                 convierte resultados en hallazgos y planes de acción trazables.
               </p>
+
+              {auditSummary?.note && (
+                <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
+                  {auditSummary.note}
+                </div>
+              )}
             </div>
 
             <div className="grid min-w-[320px] grid-cols-1 gap-3 md:grid-cols-2">

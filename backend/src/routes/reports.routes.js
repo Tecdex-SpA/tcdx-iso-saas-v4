@@ -1844,6 +1844,155 @@ function injectLifecycleHistoryIntoReportHtml(html, reportData) {
 
 
 
+
+async function getAuditSummaryForReport(tenantId) {
+  try {
+    const summaryResult = await pool.query(
+      `
+      WITH base AS (
+        SELECT
+          a.*,
+          normalize_status_for_audits(a.status) AS normalized_status
+        FROM audits a
+        JOIN tenant_standards ts
+          ON ts.tenant_id = a.tenant_id
+         AND ts.standard_code = a.iso
+         AND ts.is_active = TRUE
+        WHERE a.tenant_id = $1::uuid
+          AND EXISTS (
+            SELECT 1
+            FROM tenant_standard_operations tso
+            JOIN tenant_operations op
+              ON op.id = tso.operation_id
+             AND op.tenant_id = tso.tenant_id
+             AND op.is_active = TRUE
+            WHERE tso.tenant_id = a.tenant_id
+              AND tso.standard_code = a.iso
+              AND tso.is_active = TRUE
+          )
+      )
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE normalized_status = 'pendiente')::int AS pendientes,
+        COUNT(*) FILTER (WHERE normalized_status = 'en_ejecucion')::int AS en_ejecucion,
+        COUNT(*) FILTER (WHERE normalized_status = 'completada')::int AS completadas,
+        COUNT(*) FILTER (WHERE report_file IS NOT NULL AND report_file <> '')::int AS con_informe,
+        COUNT(*) FILTER (WHERE report_file IS NULL OR report_file = '')::int AS sin_informe
+      FROM base
+      `,
+      [tenantId]
+    );
+
+    const relationResult = await pool.query(
+      `
+      SELECT
+        (
+          SELECT COUNT(*)::int
+          FROM findings f
+          WHERE f.tenant_id = $1::uuid
+            AND f.audit_id IS NOT NULL
+        ) AS hallazgos,
+        (
+          SELECT COUNT(*)::int
+          FROM action_plans ap
+          WHERE ap.tenant_id = $1::uuid
+            AND ap.audit_id IS NOT NULL
+        ) AS acciones
+      `,
+      [tenantId]
+    );
+
+    const nextResult = await pool.query(
+      `
+      SELECT
+        a.*,
+        normalize_status_for_audits(a.status) AS normalized_status
+      FROM audits a
+      JOIN tenant_standards ts
+        ON ts.tenant_id = a.tenant_id
+       AND ts.standard_code = a.iso
+       AND ts.is_active = TRUE
+      WHERE a.tenant_id = $1::uuid
+        AND normalize_status_for_audits(a.status) != 'completada'
+        AND EXISTS (
+          SELECT 1
+          FROM tenant_standard_operations tso
+          JOIN tenant_operations op
+            ON op.id = tso.operation_id
+           AND op.tenant_id = tso.tenant_id
+           AND op.is_active = TRUE
+          WHERE tso.tenant_id = a.tenant_id
+            AND tso.standard_code = a.iso
+            AND tso.is_active = TRUE
+        )
+      ORDER BY a.start_date ASC
+      LIMIT 1
+      `,
+      [tenantId]
+    );
+
+    const recentResult = await pool.query(
+      `
+      SELECT
+        a.*,
+        normalize_status_for_audits(a.status) AS normalized_status
+      FROM audits a
+      JOIN tenant_standards ts
+        ON ts.tenant_id = a.tenant_id
+       AND ts.standard_code = a.iso
+       AND ts.is_active = TRUE
+      WHERE a.tenant_id = $1::uuid
+        AND EXISTS (
+          SELECT 1
+          FROM tenant_standard_operations tso
+          JOIN tenant_operations op
+            ON op.id = tso.operation_id
+           AND op.tenant_id = tso.tenant_id
+           AND op.is_active = TRUE
+          WHERE tso.tenant_id = a.tenant_id
+            AND tso.standard_code = a.iso
+            AND tso.is_active = TRUE
+        )
+      ORDER BY a.start_date DESC, a.created_at DESC NULLS LAST
+      LIMIT 8
+      `,
+      [tenantId]
+    );
+
+    return {
+      summary: {
+        ...(summaryResult.rows[0] || {}),
+        hallazgos: Number(relationResult.rows[0]?.hallazgos || 0),
+        acciones: Number(relationResult.rows[0]?.acciones || 0),
+      },
+      next_audit: nextResult.rows[0] || null,
+      recent_audits: recentResult.rows,
+      note:
+        'Las auditorías en ejecución no deterioran KPI hasta existir resultado formal de conformidad, hallazgo o cierre.',
+    };
+  } catch (error) {
+    console.error('REPORT AUDIT SUMMARY ERROR:', error.message);
+
+    return {
+      summary: {
+        total: 0,
+        pendientes: 0,
+        en_ejecucion: 0,
+        completadas: 0,
+        con_informe: 0,
+        sin_informe: 0,
+        hallazgos: 0,
+        acciones: 0,
+      },
+      next_audit: null,
+      recent_audits: [],
+      note:
+        'No fue posible consolidar auditorías para este informe.',
+    };
+  }
+}
+
+
 async function getTenantBrandingForReport(tenantId) {
   try {
     const result = await pool.query(
@@ -1952,6 +2101,7 @@ router.post('/generate', auth, async (req, res) => {
 
     reportData.lifecycle_history = await getLifecycleHistoryForReport(targetTenantId);
     reportData.ai_report_addendum = await buildAiReportAddendum(reportData);
+    reportData.audit_summary = await getAuditSummaryForReport(targetTenantId);
 
     const tenantBranding = await getTenantBrandingForReport(targetTenantId);
 

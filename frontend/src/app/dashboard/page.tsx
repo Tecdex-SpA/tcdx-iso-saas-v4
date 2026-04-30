@@ -109,6 +109,23 @@ type DashboardSummary = {
   closed_nonconformities?: number;
 };
 
+type DashboardAuditSummary = {
+  ok?: boolean;
+  summary?: {
+    total?: number;
+    pendientes?: number;
+    en_ejecucion?: number;
+    completadas?: number;
+    con_informe?: number;
+    sin_informe?: number;
+    hallazgos?: number;
+    acciones?: number;
+  };
+  next_audit?: AuditItem | null;
+  recent_audits?: AuditItem[];
+  note?: string;
+};
+
 function numberOrZero(value: any) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -390,6 +407,7 @@ export default function DashboardPage() {
   const [controls, setControls] = useState<any[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [nextAudits, setNextAudits] = useState<AuditItem[]>([]);
+  const [auditSummary, setAuditSummary] = useState<DashboardAuditSummary | null>(null);
   const [riskSummary, setRiskSummary] = useState<any[]>([]);
   const [actionPlans, setActionPlans] = useState<ActionPlanItem[]>([]);
 
@@ -418,12 +436,14 @@ export default function DashboardPage() {
         controlsData,
         summaryData,
         auditsData,
+        auditSummaryData,
         riskData,
         actionPlansData,
       ] = await Promise.all([
         fetchJson(`${API_URL}/api/dashboard-controls/${user.tenant_id}`, token),
         fetchJson(`${API_URL}/api/dashboard/${user.tenant_id}`, token),
         fetchJson(`${API_URL}/api/audits/next-all/${user.tenant_id}`, token),
+        fetchJson(`${API_URL}/api/audits/summary/${user.tenant_id}`, token),
         fetchJson(`${API_URL}/api/assets/risk-summary/${user.tenant_id}`, token),
         fetchJson(`${API_URL}/api/action-plans/${user.tenant_id}`, token),
       ]);
@@ -431,6 +451,7 @@ export default function DashboardPage() {
       setControls(Array.isArray(controlsData) ? controlsData : []);
       setSummary(summaryData || null);
       setNextAudits(Array.isArray(auditsData) ? auditsData : []);
+      setAuditSummary(auditSummaryData?.ok === false ? null : auditSummaryData);
       setRiskSummary(Array.isArray(riskData) ? riskData : []);
       setActionPlans(Array.isArray(actionPlansData) ? actionPlansData : []);
     } catch (err: any) {
@@ -439,6 +460,7 @@ export default function DashboardPage() {
       setControls([]);
       setSummary(null);
       setNextAudits([]);
+      setAuditSummary(null);
       setRiskSummary([]);
       setActionPlans([]);
     } finally {
@@ -847,6 +869,52 @@ export default function DashboardPage() {
                     Vista consolidada de cumplimiento, riesgos, auditorías, hallazgos,
                     acciones y KPIs para seguimiento ejecutivo y operación diaria.
                   </p>
+
+                  {activeView === 'executive' && auditSummary?.summary && (
+                    <div className="mt-5 grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-4">
+                      <div className="rounded-2xl border border-indigo-100 bg-white px-4 py-3 shadow-sm">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                          Auditorías
+                        </div>
+                        <div className="mt-1 text-2xl font-bold text-slate-900">
+                          {auditSummary.summary.total || 0}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-amber-100 bg-white px-4 py-3 shadow-sm">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                          En ejecución
+                        </div>
+                        <div className="mt-1 text-2xl font-bold text-amber-600">
+                          {auditSummary.summary.en_ejecucion || 0}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-red-100 bg-white px-4 py-3 shadow-sm">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                          Hallazgos
+                        </div>
+                        <div className="mt-1 text-2xl font-bold text-red-600">
+                          {auditSummary.summary.hallazgos || 0}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                          Acciones
+                        </div>
+                        <div className="mt-1 text-2xl font-bold text-violet-600">
+                          {auditSummary.summary.acciones || 0}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeView === 'executive' && auditSummary?.note && (
+                    <div className="mt-3 max-w-5xl rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
+                      {auditSummary.note}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">

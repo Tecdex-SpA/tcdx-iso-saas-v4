@@ -502,6 +502,74 @@ function renderAiPage(data) {
   `;
 }
 
+
+function renderAuditSummaryPage(data) {
+  const auditData = data.audit_summary || {};
+  const summary = auditData.summary || {};
+  const next = auditData.next_audit || null;
+  const recent = asArray(auditData.recent_audits).slice(0, 8);
+
+  const rows = recent.map((row) => `
+    <tr>
+      <td><strong>${escapeHtml(row.iso || '-')}</strong></td>
+      <td>${escapeHtml(formatDateEs(row.start_date))}</td>
+      <td>${escapeHtml(formatDateEs(row.end_date))}</td>
+      <td>${escapeHtml(row.auditor_name || '-')}</td>
+      <td>${escapeHtml(row.auditor_type || '-')}</td>
+      <td>${statusBadge(row.normalized_status || row.status || 'pendiente')}</td>
+      <td>${row.report_file ? statusBadge('Con informe') : statusBadge('Sin informe')}</td>
+    </tr>
+  `);
+
+  return `
+    <div class="pageTitleBlock">
+      <span>Auditorías</span>
+      <h2>Estado ejecutivo de auditorías</h2>
+      <p>Seguimiento de planificación, ejecución, cierre, hallazgos y acciones asociadas.</p>
+    </div>
+
+    <div class="metricGrid">
+      ${miniMetric('Total auditorías', fmtNumber(summary.total), 'Registradas')}
+      ${miniMetric('Pendientes', fmtNumber(summary.pendientes), 'Planificadas', 'warning')}
+      ${miniMetric('En ejecución', fmtNumber(summary.en_ejecucion), 'No deterioran KPI', 'warning')}
+      ${miniMetric('Completadas', fmtNumber(summary.completadas), 'Con cierre formal')}
+      ${miniMetric('Con informe', fmtNumber(summary.con_informe), 'Respaldo documental')}
+      ${miniMetric('Sin informe', fmtNumber(summary.sin_informe), 'Requiere carga', 'warning')}
+      ${miniMetric('Hallazgos derivados', fmtNumber(summary.hallazgos), 'Vinculados')}
+      ${miniMetric('Acciones derivadas', fmtNumber(summary.acciones), 'Seguimiento')}
+    </div>
+
+    <div class="twoCol" style="margin-top:5mm;">
+      ${card('Próxima auditoría', next ? `
+        <div class="infoLine"><span>Norma</span><strong>${escapeHtml(next.iso || '-')}</strong></div>
+        <div class="infoLine"><span>Fecha inicio</span><strong>${escapeHtml(formatDateEs(next.start_date))}</strong></div>
+        <div class="infoLine"><span>Auditor</span><strong>${escapeHtml(next.auditor_name || '-')}</strong></div>
+        <div class="infoLine"><span>Estado</span>${statusBadge(next.normalized_status || next.status || 'pendiente')}</div>
+      ` : `
+        <div class="emptyBox">No hay auditorías próximas registradas.</div>
+      `)}
+
+      ${card('Criterio de impacto KPI', `
+        <p class="bodyText">
+          ${escapeHtml(auditData.note || 'Las auditorías en ejecución son trazabilidad operativa y no deterioran KPI hasta existir resultado formal.')}
+        </p>
+        ${bulletList([
+          'Auditoría pendiente: planificación, no afecta score.',
+          'Auditoría en ejecución: seguimiento operativo, no afecta score.',
+          'Auditoría completada: puede generar hallazgos, acciones o evidencias que sí impactan salud y KPI.',
+        ])}
+      `)}
+    </div>
+
+    ${card('Auditorías recientes', table(
+      ['ISO', 'Inicio', 'Término', 'Auditor', 'Tipo', 'Estado', 'Informe'],
+      rows,
+      'No existen auditorías recientes registradas.'
+    ), 'wideCard')}
+  `;
+}
+
+
 function renderHealthPage(data) {
   const health = firstArray(data, [
     'iso_health_by_standard',
@@ -1301,6 +1369,7 @@ function renderExecutivePremiumTemplate(data = {}) {
   const pageContents = [
     renderPage1(data),
     renderAiPage(data),
+    renderAuditSummaryPage(data),
     renderHealthPage(data),
     renderRecommendationsPage(data),
     ...renderKpiPages(data),
