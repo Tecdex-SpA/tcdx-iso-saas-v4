@@ -146,8 +146,8 @@ const API_RULES = [
   },
   {
     prefix: '/api/tenants',
-    read: [],
-    write: [],
+    read: [...TENANT_READ_ROLES, 'admin', 'tenant_admin', 'auditor', 'operativo', 'viewer'],
+    write: ['superadmin', 'platform_admin', 'admin_global', 'global_admin'],
   },
   {
     prefix: '/api/tenant',
