@@ -509,6 +509,18 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       ),
     },
     {
+      href: '/prefacturacion',
+      label: 'Prefacturación',
+      icon: (
+        <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M4 4h16v16H4z" />
+          <path d="M8 8h8" />
+          <path d="M8 12h8" />
+          <path d="M8 16h5" />
+        </svg>
+      ),
+    },
+    {
       href: '/health',
       label: 'Salud ISO',
       icon: (

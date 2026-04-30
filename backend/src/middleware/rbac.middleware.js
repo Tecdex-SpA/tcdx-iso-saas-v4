@@ -285,8 +285,9 @@ function enforceApiAccess(req, res, next) {
     const dealerAllowed =
       starts(path, '/api/me') ||
       starts(path, '/api/quotes') ||
+      (starts(path, '/api/admin-saas/dealer') && read) ||
       (starts(path, '/api/reports') && read) ||
-      (starts(path, '/api/billing') && read);
+      starts(path, '/api/billing');
 
     if (dealerAllowed) return next();
 

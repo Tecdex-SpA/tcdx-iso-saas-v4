@@ -20,11 +20,28 @@ type DealerTenant = {
   tenant_name?: string;
 };
 
+type TenantOption = {
+  tenant_id: string;
+  tenant_name?: string;
+};
+
+function isPlatformRole(role: string) {
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'admin_global',
+    'global_admin',
+    'owner',
+  ].includes(role);
+}
+
 export default function PrefacturacionPage() {
   const [token, setToken] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [role, setRole] = useState('');
   const [dealerTenants, setDealerTenants] = useState<DealerTenant[]>([]);
+  const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
   const [period, setPeriod] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -48,9 +65,9 @@ export default function PrefacturacionPage() {
     setTenantId(tid);
     setRole(role);
 
-    if (!tid && role !== 'dealer') {
+    if (!tid && role !== 'dealer' && !isPlatformRole(role)) {
       setMessage(
-        'Prefacturación requiere un tenant seleccionado. Ingresa como administrador de empresa o dealer con acceso asignado.'
+        'Prefacturación requiere un tenant seleccionado. Ingresa como administrador de empresa, dealer o superadmin.'
       );
     }
   }, []);
@@ -89,6 +106,46 @@ export default function PrefacturacionPage() {
     };
 
     void loadDealerTenants();
+  }, [token, role, tenantId]);
+
+  useEffect(() => {
+    const loadPlatformTenants = async () => {
+      if (!token || !isPlatformRole(role)) return;
+
+      try {
+        const res = await fetch(`${API_URL}/api/tenants`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || !Array.isArray(json)) {
+          setMessage('No fue posible cargar empresas para prefacturación.');
+          return;
+        }
+
+        const rows: TenantOption[] = json.map((tenant: any) => ({
+          tenant_id: tenant.id || tenant.tenant_id,
+          tenant_name: tenant.name || tenant.tenant_name,
+        })).filter((tenant: TenantOption) => tenant.tenant_id);
+
+        setTenantOptions(rows);
+
+        if (!tenantId && rows.length > 0) {
+          setTenantId(rows[0].tenant_id);
+        }
+
+        if (rows.length === 0) {
+          setMessage('No hay empresas disponibles para prefacturación.');
+        } else {
+          setMessage('');
+        }
+      } catch {
+        setMessage('No fue posible cargar empresas para prefacturación.');
+      }
+    };
+
+    void loadPlatformTenants();
   }, [token, role, tenantId]);
 
   const load = async () => {
@@ -171,6 +228,20 @@ export default function PrefacturacionPage() {
                 className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
               >
                 {dealerTenants.map((tenant) => (
+                  <option key={tenant.tenant_id} value={tenant.tenant_id}>
+                    {tenant.tenant_name || tenant.tenant_id}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {isPlatformRole(role) && tenantOptions.length > 0 && (
+              <select
+                value={tenantId}
+                onChange={(e) => setTenantId(e.target.value)}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+              >
+                {tenantOptions.map((tenant) => (
                   <option key={tenant.tenant_id} value={tenant.tenant_id}>
                     {tenant.tenant_name || tenant.tenant_id}
                   </option>
