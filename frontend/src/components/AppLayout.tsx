@@ -236,7 +236,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         const operativeBlockedRoutes = [
           '/usuarios',
           '/administrar-kpis',
-          '/auditorias',
           '/admin-saas',
           '/empresas',
           '/dealer',
