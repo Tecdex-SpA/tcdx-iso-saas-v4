@@ -822,14 +822,14 @@ function renderStyles() {
       }
 
       .pdfHeader {
-        height: 26mm;
+        height: 28mm;
         background: #0B2F4F;
         color: #ffffff;
         display: grid;
-        grid-template-columns: 45mm 1fr 45mm;
-        gap: 7mm;
+        grid-template-columns: 56mm 1fr 56mm;
+        gap: 5mm;
         align-items: center;
-        padding: 5mm 10mm 4mm;
+        padding: 4mm 9mm 4mm;
       }
 
       .headerTitle {
@@ -852,11 +852,11 @@ function renderStyles() {
       }
 
       .logoBox {
-        width: 43mm;
-        height: 17mm;
-        background: #ffffff;
-        border-radius: 13px;
-        padding: 3mm;
+        width: 56mm;
+        height: 20mm;
+        background: #0B2F4F;
+        border-radius: 0;
+        padding: 0;
         display: flex;
         align-items: center;
         justify-content: flex-start;
@@ -869,16 +869,16 @@ function renderStyles() {
 
       .logoBox img {
         display: block;
-        max-width: 37mm;
-        max-height: 11mm;
+        max-width: 52mm;
+        max-height: 18mm;
         object-fit: contain;
       }
 
       .logoFallbackText,
       .logoFallback span {
         display: none;
-        color: #0B2F4F;
-        font-size: 11px;
+        color: #ffffff;
+        font-size: 12px;
         line-height: 1.1;
         font-weight: 800;
         text-align: left;
@@ -889,8 +889,8 @@ function renderStyles() {
       }
 
       .pdfContent {
-        height: 238mm;
-        max-height: 238mm;
+        height: 236mm;
+        max-height: 236mm;
         overflow: hidden;
         padding: 7mm 10mm 5mm;
         background: #f8fafc;
