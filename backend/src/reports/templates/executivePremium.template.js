@@ -155,7 +155,7 @@ function getTcdxLogo() {
   return (
     process.env.REPORT_TCDX_LOGO_URL ||
     process.env.TCDX_LOGO_URL ||
-    'http://192.168.100.130:3000/logo.png'
+    'http://192.168.100.120:3000/uploads/logos/tcdx-logo.png'
   );
 }
 
