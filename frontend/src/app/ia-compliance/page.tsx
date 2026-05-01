@@ -180,12 +180,28 @@ export default function IaCompliancePage() {
     return healthContext.standards.join(' · ');
   }, [healthContext]);
 
+  const isSeniorAuditorSuggestionType = (value: string) =>
+    [
+      'senior_auditor_task',
+      'senior_auditor_risk_alert',
+      'senior_auditor_evidence_gap',
+      'senior_auditor_insight',
+    ].includes(value);
+
   const getSuggestionTypeLabel = (value: string) => {
     switch (value) {
       case 'finding_analysis':
         return 'Análisis de hallazgo';
       case 'action_plan_suggestion':
         return 'Plan sugerido';
+      case 'senior_auditor_task':
+        return 'Tarea auditor senior';
+      case 'senior_auditor_risk_alert':
+        return 'Alerta riesgo senior';
+      case 'senior_auditor_evidence_gap':
+        return 'Brecha evidencia senior';
+      case 'senior_auditor_insight':
+        return 'Insight auditor senior';
       case 'nonconformity_draft':
         return 'Borrador NC';
       case 'executive_brief':
@@ -201,6 +217,11 @@ export default function IaCompliancePage() {
         return 'border-indigo-200 bg-indigo-50 text-indigo-700';
       case 'action_plan_suggestion':
         return 'border-violet-200 bg-violet-50 text-violet-700';
+      case 'senior_auditor_task':
+      case 'senior_auditor_risk_alert':
+      case 'senior_auditor_evidence_gap':
+      case 'senior_auditor_insight':
+        return 'border-blue-200 bg-blue-50 text-blue-700';
       case 'nonconformity_draft':
         return 'border-amber-200 bg-amber-50 text-amber-700';
       case 'executive_brief':
@@ -219,6 +240,16 @@ export default function IaCompliancePage() {
 
     if (row.suggestion_type === 'action_plan_suggestion') {
       return String(output.objective || row.title || 'Plan sugerido IA');
+    }
+
+    if (isSeniorAuditorSuggestionType(row.suggestion_type)) {
+      return String(
+        output.title ||
+          output.recommended_action ||
+          output.summary ||
+          row.title ||
+          'Sugerencia auditor senior'
+      );
     }
 
     if (row.suggestion_type === 'nonconformity_draft') {

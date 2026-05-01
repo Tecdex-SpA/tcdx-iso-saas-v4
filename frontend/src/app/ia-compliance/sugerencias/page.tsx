@@ -429,12 +429,28 @@ export default function AiSuggestionsPage() {
     }
   };
 
+  const isSeniorAuditorSuggestionType = (value: string) =>
+    [
+      'senior_auditor_task',
+      'senior_auditor_risk_alert',
+      'senior_auditor_evidence_gap',
+      'senior_auditor_insight',
+    ].includes(value);
+
   const getTypeLabel = (value: string) => {
     switch (value) {
       case 'finding_analysis':
         return 'Análisis de hallazgo';
       case 'action_plan_suggestion':
         return 'Plan de acción sugerido';
+      case 'senior_auditor_task':
+        return 'Tarea auditor senior';
+      case 'senior_auditor_risk_alert':
+        return 'Alerta de riesgo senior';
+      case 'senior_auditor_evidence_gap':
+        return 'Brecha de evidencia senior';
+      case 'senior_auditor_insight':
+        return 'Insight auditor senior';
       case 'nonconformity_draft':
         return 'Borrador de no conformidad';
       case 'executive_brief':
@@ -450,6 +466,11 @@ export default function AiSuggestionsPage() {
         return 'border-indigo-200 bg-indigo-50 text-indigo-700';
       case 'action_plan_suggestion':
         return 'border-violet-200 bg-violet-50 text-violet-700';
+      case 'senior_auditor_task':
+      case 'senior_auditor_risk_alert':
+      case 'senior_auditor_evidence_gap':
+      case 'senior_auditor_insight':
+        return 'border-blue-200 bg-blue-50 text-blue-700';
       case 'nonconformity_draft':
         return 'border-amber-200 bg-amber-50 text-amber-700';
       case 'executive_brief':
@@ -511,6 +532,18 @@ export default function AiSuggestionsPage() {
       };
     }
 
+    if (isSeniorAuditorSuggestionType(row.suggestion_type)) {
+      return {
+        title: String(output.title || row.title || 'Sugerencia auditor senior'),
+        body: String(
+          output.recommended_action ||
+            output.summary ||
+            output.reason ||
+            'Sin detalle'
+        ),
+      };
+    }
+
     if (row.suggestion_type === 'nonconformity_draft') {
       return {
         title: String(output.draft_title || row.title || 'Borrador IA'),
@@ -540,6 +573,18 @@ export default function AiSuggestionsPage() {
             .filter((item: unknown) => typeof item === 'string')
             .slice(0, 3)
         : [];
+    }
+
+    if (isSeniorAuditorSuggestionType(row.suggestion_type)) {
+      return [
+        output.reason ? `Razón: ${output.reason}` : '',
+        output.recommended_action
+          ? `Acción: ${output.recommended_action}`
+          : '',
+        output.priority ? `Prioridad: ${output.priority}` : '',
+      ]
+        .filter((item): item is string => typeof item === 'string' && item.length > 0)
+        .slice(0, 3);
     }
 
     if (row.suggestion_type === 'finding_analysis') {
@@ -622,6 +667,7 @@ export default function AiSuggestionsPage() {
       applied: rows.filter((r) => r.status === 'applied').length,
       actionPlans: rows.filter((r) => r.suggestion_type === 'action_plan_suggestion').length,
       findings: rows.filter((r) => r.suggestion_type === 'finding_analysis').length,
+      seniorAuditor: rows.filter((r) => isSeniorAuditorSuggestionType(r.suggestion_type)).length,
     };
   }, [rows]);
 
@@ -661,6 +707,7 @@ export default function AiSuggestionsPage() {
           <MetricCard title="Aplicadas" value={metrics.applied} />
           <MetricCard title="Planes IA" value={metrics.actionPlans} />
           <MetricCard title="Hallazgos IA" value={metrics.findings} />
+          <MetricCard title="Auditor senior" value={metrics.seniorAuditor} />
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -679,6 +726,10 @@ export default function AiSuggestionsPage() {
                 <option value="">Todos</option>
                 <option value="finding_analysis">Análisis de hallazgo</option>
                 <option value="action_plan_suggestion">Plan de acción sugerido</option>
+                <option value="senior_auditor_task">Tarea auditor senior</option>
+                <option value="senior_auditor_risk_alert">Alerta de riesgo senior</option>
+                <option value="senior_auditor_evidence_gap">Brecha de evidencia senior</option>
+                <option value="senior_auditor_insight">Insight auditor senior</option>
                 <option value="nonconformity_draft">Borrador de no conformidad</option>
                 <option value="executive_brief">Resumen gerencial</option>
               </select>
@@ -724,7 +775,8 @@ export default function AiSuggestionsPage() {
               const preview = getPreview(row);
               const keyDetails: string[] = getKeyDetails(row);
               const canCreateDraftPlan =
-                row.suggestion_type === 'action_plan_suggestion' &&
+                (row.suggestion_type === 'action_plan_suggestion' ||
+                  isSeniorAuditorSuggestionType(row.suggestion_type)) &&
                 row.status !== 'applied';
 
               const canMarkApplied = row.status !== 'applied';
