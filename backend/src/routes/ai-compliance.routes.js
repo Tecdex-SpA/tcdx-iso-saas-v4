@@ -1181,7 +1181,11 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
 
 router.get('/engine-health', auth, async (_req, res) => {
   try {
-    const healthRes = await fetch(`${AI_ENGINE_URL}/health`);
+    const healthRes = await fetch(`${AI_ENGINE_URL}/health/deep`, {
+      headers: {
+        'X-AI-Token': getAiInternalToken(),
+      },
+    });
     const text = await healthRes.text();
 
     let json = null;
@@ -1195,9 +1199,19 @@ router.get('/engine-health', auth, async (_req, res) => {
       });
     }
 
+    if (!healthRes.ok || json?.ok === false) {
+      return res.status(502).json({
+        ok: false,
+        error: json?.detail || json?.error || 'AI Engine health profundo falló',
+      });
+    }
+
     return res.json({
       ok: true,
-      data: json,
+      data: {
+        ...json,
+        db_connection: Boolean(json?.db_connection ?? json?.db_ok),
+      },
     });
   } catch (error) {
     console.error('ERROR AI ENGINE HEALTH:', error);
