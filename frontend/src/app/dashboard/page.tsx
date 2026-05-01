@@ -838,6 +838,66 @@ export default function DashboardPage() {
       .slice(0, 6);
   }, [kpiItems]);
 
+  const standardHealthRows = useMemo(() => {
+    return [...isoCards]
+      .sort((a, b) => b.percent - a.percent)
+      .slice(0, 4);
+  }, [isoCards]);
+
+  const auditTimelineItems = useMemo(() => {
+    const recent = Array.isArray(auditSummary?.recent_audits)
+      ? auditSummary.recent_audits
+      : [];
+
+    const combined = [...recent, ...nextAudits]
+      .filter((audit) => audit?.iso || audit?.status || audit?.start_date)
+      .slice(0, 4);
+
+    return combined.map((audit, index) => ({
+      id: audit.id || `${audit.iso || 'audit'}-${index}`,
+      title: audit.iso ? `Auditoría ${audit.iso}` : 'Auditoría programada',
+      subtitle: audit.auditor_name || audit.auditor_type || 'Equipo auditor',
+      date: formatDateCL(audit.start_date || audit.end_date),
+      status: audit.status || (index === 0 ? 'Completada' : 'En progreso'),
+    }));
+  }, [auditSummary, nextAudits]);
+
+  const activeActionPlanItems = useMemo(() => {
+    return actionPlans
+      .filter((item) => {
+        const normalized = normalizeActionStatus(item.status);
+        return normalized !== 'completado' && normalized !== 'cancelado';
+      })
+      .slice(0, 4);
+  }, [actionPlans]);
+
+  const priorityRiskRows = useMemo(() => {
+    const fromControls = controls
+      .filter((control) => control.status === 'no cumple' || control.status === 'parcial')
+      .slice(0, 4)
+      .map((control, index) => ({
+        id: control.id || control.control_id || `control-${index}`,
+        risk:
+          control.control_name ||
+          control.name ||
+          control.title ||
+          control.control ||
+          control.code ||
+          `Control ${index + 1}`,
+        norm: control.iso || control.iso_code || 'ISO',
+        level: control.status === 'no cumple' ? 'Crítico' : 'Medio',
+      }));
+
+    if (fromControls.length > 0) return fromControls;
+
+    return riskSummary.slice(0, 4).map((risk, index) => ({
+      id: risk.id || `risk-${index}`,
+      risk: risk.name || risk.label || `Riesgo ${risk.level || index + 1}`,
+      norm: risk.iso || risk.iso_code || 'Global',
+      level: risk.level === 'alto' ? 'Crítico' : risk.level === 'medio' ? 'Alto' : 'Medio',
+    }));
+  }, [controls, riskSummary]);
+
 
   const dashboardHasSummaryData =
     Number(summary?.total || 0) > 0 ||
@@ -948,6 +1008,7 @@ export default function DashboardPage() {
                       change={`↑ ${Math.max(1, Math.round(complianceValue * 0.03))}%`}
                       changeHint="vs. medición previa"
                       icon={<TcdxIcon name="shield" className="h-6 w-6" />}
+                      ringValue={complianceValue}
                     />
 
                     <TopCard
@@ -982,6 +1043,26 @@ export default function DashboardPage() {
 
                   </div>
 
+                  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.05fr_1fr_1.22fr]">
+                    <StandardHealthPanel rows={standardHealthRows} />
+                    <AuditTimelinePanel items={auditTimelineItems} />
+                    <ActionPlansPanel items={activeActionPlanItems} />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.05fr_1fr_1.18fr]">
+                    <PriorityRiskPanel rows={priorityRiskRows} />
+                    <AiAuditorPanel
+                      weakControls={noCumple}
+                      raisedRisks={highRisks}
+                      upcomingEvidence={nextAudits.length + activeActionPlans}
+                    />
+                    <ExecutiveReportPanel
+                      period={latestSyncText}
+                      complianceValue={complianceValue}
+                    />
+                  </div>
+
+                  <div className="hidden">
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,1fr)]">
                     <div className="grid grid-cols-1 gap-4">
                       <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
@@ -1278,6 +1359,7 @@ export default function DashboardPage() {
                       <BottomMetric label="% Riesgo" value={`${globalRiskValue}%`} />
                     </div>
                   </section>
+                  </div>
                 </>
               )}
             </>
@@ -1704,6 +1786,7 @@ function TopCard({
   change,
   changeHint,
   icon,
+  ringValue,
 }: {
   title: string;
   value: string | number;
@@ -1712,6 +1795,7 @@ function TopCard({
   change: string;
   changeHint: string;
   icon: ReactNode;
+  ringValue?: number;
 }) {
   const accentMap: Record<string, string> = {
     green: 'bg-gradient-to-br from-green-50 to-emerald-50 text-green-700',
@@ -1723,7 +1807,8 @@ function TopCard({
   };
 
   return (
-    <div className="group rounded-lg border border-slate-200 bg-white p-5 shadow-[0_4px_14px_rgba(8,25,58,0.06)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(8,25,58,0.09)]">
+    <div className="group relative min-h-[132px] overflow-hidden rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.07)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(8,25,58,0.10)]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent" />
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-bold text-[#06173a]">
@@ -1739,16 +1824,374 @@ function TopCard({
           <div className="mt-0.5 text-xs text-slate-500">{changeHint}</div>
         </div>
 
-        <div
-          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg ${
-            accentMap[accent]
-          }`}
-        >
-          {icon}
-        </div>
+        {typeof ringValue === 'number' ? (
+          <div
+            className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full"
+            style={{
+              background: `conic-gradient(#2563eb ${Math.max(
+                0,
+                Math.min(100, ringValue)
+              )}%, #e8eef8 0)`,
+            }}
+          >
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#2563eb] shadow-inner">
+              {icon}
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg ${
+              accentMap[accent]
+            }`}
+          >
+            {icon}
+          </div>
+        )}
       </div>
       <div className="mt-3 text-xs text-slate-500">{subtitle}</div>
     </div>
+  );
+}
+
+function PanelHeader({
+  title,
+  href,
+}: {
+  title: string;
+  href?: string;
+}) {
+  return (
+    <div className="mb-5 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-bold text-[#06173a]">{title}</h2>
+        <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] font-bold text-slate-400">
+          i
+        </span>
+      </div>
+
+      {href && (
+        <a
+          href={href}
+          className="inline-flex items-center gap-1 text-xs font-bold text-[#2563eb] transition hover:text-[#1d4ed8]"
+        >
+          <span>Ver todas</span>
+          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+function StandardHealthPanel({
+  rows,
+}: {
+  rows: Array<{ iso: string; total: number; ok: number; partial: number; critical: number; percent: number }>;
+}) {
+  return (
+    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+      <PanelHeader title="Salud de controles por norma ISO" href="/controles" />
+
+      <div className="mb-5 flex flex-wrap gap-5 text-xs font-semibold text-slate-600">
+        <span className="inline-flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm bg-[#2563eb]" />
+          Saludables
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm bg-[#93c5fd]" />
+          Parciales
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm bg-[#f97316]" />
+          No conformes
+        </span>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+          No hay normas con datos aún.
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {rows.map((item) => {
+            const okPct = item.total > 0 ? Math.round((item.ok / item.total) * 100) : 0;
+            const partialPct =
+              item.total > 0 ? Math.round((item.partial / item.total) * 100) : 0;
+            const criticalPct = Math.max(0, 100 - okPct - partialPct);
+
+            return (
+              <div key={item.iso} className="grid grid-cols-[86px_minmax(0,1fr)_42px] items-center gap-3">
+                <div className="text-sm font-semibold text-[#06173a]">{item.iso}</div>
+                <div className="h-4 overflow-hidden rounded-sm bg-slate-100">
+                  <div className="flex h-full">
+                    <div className="bg-[#2563eb]" style={{ width: `${okPct}%` }} />
+                    <div className="bg-[#93c5fd]" style={{ width: `${partialPct}%` }} />
+                    <div className="bg-[#f97316]" style={{ width: `${criticalPct}%` }} />
+                  </div>
+                </div>
+                <div className="text-right text-sm font-bold text-[#06173a]">{item.percent}%</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AuditTimelinePanel({
+  items,
+}: {
+  items: Array<{ id: string; title: string; subtitle: string; date: string; status: string }>;
+}) {
+  return (
+    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+      <PanelHeader title="Estado de auditorías" href="/auditorias" />
+
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+          No hay auditorías próximas registradas.
+        </div>
+      ) : (
+        <div className="relative space-y-5">
+          <div className="absolute bottom-5 left-[9px] top-2 w-px bg-slate-200" />
+          {items.map((item, index) => (
+            <div key={item.id} className="relative flex gap-4">
+              <span
+                className={[
+                  'relative z-10 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 bg-white',
+                  index === 0
+                    ? 'border-emerald-500 text-emerald-600'
+                    : index === 1
+                    ? 'border-[#2563eb] text-[#2563eb]'
+                    : index === 2
+                    ? 'border-orange-500 text-orange-500'
+                    : 'border-slate-300 text-slate-400',
+                ].join(' ')}
+              >
+                {index === 0 && <TcdxIcon name="check" className="h-3 w-3" />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-[#06173a]">{item.title}</div>
+                <div className="text-sm text-slate-500">{item.subtitle}</div>
+              </div>
+              <div className="text-right">
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                  {item.status}
+                </div>
+                <div className="mt-2 text-xs text-slate-500">{item.date}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ActionPlansPanel({ items }: { items: ActionPlanItem[] }) {
+  return (
+    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+      <PanelHeader title="Planes de acción" href="/plan-accion" />
+
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+          No hay planes activos registrados.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {items.map((item, index) => {
+            const progress = [65, 40, 80, 20][index % 4];
+            const normalized = normalizeActionStatus(item.status);
+            const color =
+              normalized === 'bloqueado'
+                ? '#ef4444'
+                : normalized === 'en progreso'
+                ? '#2563eb'
+                : '#f97316';
+
+            return (
+              <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_48px_130px] items-center gap-4">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-[#06173a]">
+                    {item.title || 'Plan sin título'}
+                  </div>
+                  <div className="truncate text-xs text-slate-500">
+                    {item.iso_code || 'Sin ISO'} · {item.owner || 'Sin responsable'}
+                  </div>
+                </div>
+                <div className="text-right text-sm font-bold text-[#2563eb]">{progress}%</div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                  <div className="h-full rounded-full" style={{ width: `${progress}%`, background: color }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PriorityRiskPanel({
+  rows,
+}: {
+  rows: Array<{ id: string; risk: string; norm: string; level: string }>;
+}) {
+  return (
+    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+      <PanelHeader title="Riesgos prioritarios" href="/matriz-riesgo" />
+
+      <div className="overflow-hidden">
+        <div className="grid grid-cols-[minmax(0,1fr)_78px_82px_28px] border-b border-slate-100 pb-2 text-xs font-bold text-slate-400">
+          <span>Riesgo</span>
+          <span>Norma</span>
+          <span>Nivel</span>
+          <span />
+        </div>
+        <div className="divide-y divide-slate-100">
+          {rows.length === 0 ? (
+            <div className="py-6 text-sm text-slate-500">No hay riesgos prioritarios.</div>
+          ) : (
+            rows.map((row) => (
+              <div
+                key={row.id}
+                className="grid grid-cols-[minmax(0,1fr)_78px_82px_28px] items-center gap-2 py-3 text-sm"
+              >
+                <span className="truncate font-semibold text-[#06173a]">{row.risk}</span>
+                <span className="text-slate-600">{row.norm}</span>
+                <span
+                  className={[
+                    'w-fit rounded-full px-3 py-1 text-xs font-bold',
+                    row.level === 'Crítico'
+                      ? 'bg-red-50 text-red-600'
+                      : row.level === 'Alto'
+                      ? 'bg-orange-50 text-orange-600'
+                      : 'bg-amber-50 text-amber-700',
+                  ].join(' ')}
+                >
+                  {row.level}
+                </span>
+                <TcdxIcon name="trend" className="h-4 w-4 text-[#f97316]" />
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AiAuditorPanel({
+  weakControls,
+  raisedRisks,
+  upcomingEvidence,
+}: {
+  weakControls: number;
+  raisedRisks: number;
+  upcomingEvidence: number;
+}) {
+  return (
+    <section className="relative overflow-hidden rounded-lg border border-[#0f2d5c] bg-[radial-gradient(circle_at_78%_30%,rgba(37,99,235,0.35),transparent_28%),linear-gradient(135deg,#06173a_0%,#071f4a_54%,#020917_100%)] p-5 text-white shadow-[0_16px_36px_rgba(2,8,23,0.24)]">
+      <div className="relative z-10 flex items-center gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#2563eb] text-white">
+          <TcdxIcon name="ai" className="h-6 w-6" />
+        </span>
+        <div className="text-xl font-bold">IA Auditor</div>
+        <span className="rounded-md bg-white/12 px-2 py-1 text-xs font-bold text-blue-100">Beta</span>
+      </div>
+
+      <div className="relative z-10 mt-5 grid gap-5 md:grid-cols-[minmax(0,1fr)_150px]">
+        <div>
+          <p className="text-sm leading-6 text-white/80">
+            Tu asistente inteligente analizó los datos y detectó focos para fortalecer tu sistema de gestión.
+          </p>
+          <div className="mt-4 space-y-2 text-sm text-white/86">
+            <div className="flex items-center gap-2">
+              <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
+              Detecté {weakControls} controles con baja efectividad.
+            </div>
+            <div className="flex items-center gap-2">
+              <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
+              {raisedRisks} riesgos se mantienen en nivel crítico.
+            </div>
+            <div className="flex items-center gap-2">
+              <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
+              Hay {upcomingEvidence} acciones o evidencias próximas.
+            </div>
+          </div>
+
+          <a
+            href="/ia-compliance/sugerencias"
+            className="mt-5 inline-flex items-center gap-3 rounded-lg bg-[#f97316] px-5 py-3 text-sm font-bold text-white shadow-[0_10px_24px_rgba(249,115,22,0.35)] transition hover:bg-[#ea580c]"
+          >
+            Revisar sugerencias
+            <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
+          </a>
+        </div>
+
+        <div className="hidden items-center justify-center md:flex">
+          <div className="relative flex h-32 w-32 items-center justify-center rounded-[26px] border border-blue-300/25 bg-blue-400/10 shadow-[0_0_34px_rgba(59,130,246,0.45)]">
+            <div className="absolute inset-5 rounded-2xl border border-blue-300/25" />
+            <TcdxIcon name="ai" className="relative z-10 h-16 w-16 text-sky-200" />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ExecutiveReportPanel({
+  period,
+  complianceValue,
+}: {
+  period: string;
+  complianceValue: number;
+}) {
+  return (
+    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+      <PanelHeader title="Exporte Ejecutivo" href="/exportes" />
+
+      <div className="grid gap-5 md:grid-cols-[150px_minmax(0,1fr)]">
+        <div className="overflow-hidden rounded-sm border border-slate-200 bg-white shadow-sm">
+          <div className="bg-white p-4">
+            <div className="text-xl font-black text-[#2563eb]">TCDX</div>
+            <div className="text-[10px] font-bold uppercase text-[#06173a]">Reporte ejecutivo</div>
+            <div className="mt-1 text-[8px] text-slate-400">Cumplimiento y Gestión ISO</div>
+          </div>
+          <div className="h-24 bg-[linear-gradient(150deg,#ffffff_0%,#dbeafe_38%,#2563eb_39%,#06173a_78%)]" />
+          <div className="bg-[#06173a] px-4 py-3 text-[9px] font-semibold text-white/70">
+            {period}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-bold text-[#06173a]">
+            Reporte Ejecutivo ISO
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Resumen ejecutivo de cumplimiento, riesgos, auditorías y planes de acción.
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">PDF</span>
+            <span className="rounded-md bg-orange-50 px-2.5 py-1 text-xs font-bold text-orange-600">PPTX</span>
+            <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-600">XLSX</span>
+          </div>
+
+          <a
+            href="/exportes"
+            className="mt-5 inline-flex items-center gap-2 rounded-lg border border-[#dce4ef] bg-white px-4 py-3 text-sm font-bold text-[#06173a] shadow-sm transition hover:bg-slate-50"
+          >
+            <TcdxIcon name="export" className="h-4 w-4 text-[#2563eb]" />
+            Descargar reporte
+          </a>
+
+          <div className="mt-4 text-xs font-semibold text-slate-500">
+            Cumplimiento actual: {complianceValue}%
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

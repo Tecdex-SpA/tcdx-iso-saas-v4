@@ -103,14 +103,14 @@ textarea {
   background: transparent !important;
 }
 
-.tcdx-premium-view [class*="bg-white"][class*="border"],
-.tcdx-premium-view [class*="bg-white/"][class*="border"],
-.tcdx-premium-view [class*="bg-white"][class*="rounded"][class*=" p-"],
-.tcdx-premium-view [class*="bg-white"][class*="rounded"][class*=" shadow"],
+.tcdx-premium-view [class*="bg-white"][class*="border"]:not([class*="bg-white/"]),
+.tcdx-premium-view [class*="bg-white"][class*="rounded"][class*=" p-"]:not([class*="bg-white/"]),
+.tcdx-premium-view [class*="bg-white"][class*="rounded"][class*=" shadow"]:not([class*="bg-white/"]),
 .tcdx-premium-view .tcdx-card {
   border-color: var(--tcdx-border) !important;
   border-radius: 8px !important;
   background-color: rgba(255, 255, 255, 0.96);
+  color: var(--tcdx-ink);
   box-shadow: var(--tcdx-shadow-soft) !important;
 }
 
