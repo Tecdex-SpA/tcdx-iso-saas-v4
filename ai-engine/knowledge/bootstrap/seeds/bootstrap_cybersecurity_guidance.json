@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Controles basicos de ciberseguridad priorizados",
+    "knowledge_type": "cybersecurity_guidance",
+    "domain": "cybersecurity",
+    "module": "controls",
+    "standard_code": null,
+    "summary": "Los controles basicos de ciberseguridad suelen priorizar inventario, MFA, parches, backups, monitoreo, gestion de accesos y respuesta a incidentes.",
+    "content": "La IA debe usar estos temas como contexto general cuando existan riesgos tecnologicos, controles deteriorados o evidencias insuficientes.",
+    "practical_use": "Ayuda a entregar recomendaciones tecnicas sin depender de datos sensibles del tenant.",
+    "recommended_application": "Usar para sugerencias de tareas, controles de seguridad y reportes ejecutivos.",
+    "limitations": "El orden de prioridad depende de criticidad, exposicion y madurez de cada organizacion.",
+    "tags": ["ciberseguridad", "MFA", "parches", "backup"],
+    "confidence_score": 91,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "Evidencia de monitoreo de seguridad",
+    "knowledge_type": "evidence_example",
+    "domain": "cybersecurity",
+    "module": "evidence",
+    "standard_code": "ISO27001",
+    "summary": "La evidencia de monitoreo debe mostrar fuentes revisadas, eventos relevantes, responsable, fecha, resultado y acciones tomadas.",
+    "content": "La IA puede sugerir bitacoras, reportes de SIEM, alertas revisadas, tickets de incidentes, excepciones y evidencia de cierre segun el control analizado.",
+    "practical_use": "Mejora tareas para controles de monitoreo, incidentes y deteccion.",
+    "recommended_application": "Usar cuando se detectan controles deteriorados asociados a logging, alertas o incidentes.",
+    "limitations": "No deben exponerse logs sensibles ni datos personales en consultas externas.",
+    "tags": ["monitoreo", "logs", "incidentes", "evidencia"],
+    "confidence_score": 92,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]

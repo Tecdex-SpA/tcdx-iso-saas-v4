@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Interpretacion contextual de KPIs",
+    "knowledge_type": "kpi_interpretation",
+    "domain": "kpi",
+    "module": "kpi",
+    "standard_code": null,
+    "summary": "Un KPI aislado no basta para concluir mejora o deterioro; debe interpretarse con tendencia, umbral, periodo y fuente.",
+    "content": "La IA debe declarar limitaciones cuando falten datos historicos o definicion de umbral. Un KPI rojo requiere accion, pero la accion depende de causa y contexto.",
+    "practical_use": "Mejora paneles, reportes y alertas de salud de cumplimiento.",
+    "recommended_application": "Usar para explicar estados verde, amarillo, rojo y sin datos en reportes y dashboards.",
+    "limitations": "Los umbrales pueden variar por tenant, norma y proceso.",
+    "tags": ["kpi", "tendencia", "umbral", "periodo"],
+    "confidence_score": 92,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "KPI sin datos suficientes",
+    "knowledge_type": "kpi_interpretation",
+    "domain": "kpi",
+    "module": "kpi",
+    "standard_code": null,
+    "summary": "Un KPI sin fuente completa debe reportarse como no evaluable o sin datos, no como favorable.",
+    "content": "La ausencia de datos puede indicar brecha de medicion. La IA debe sugerir completar fuente, responsable, frecuencia y criterio de calculo.",
+    "practical_use": "Evita falsos positivos en salud de cumplimiento.",
+    "recommended_application": "Usar cuando KPIs esten grises, vacios o con periodo insuficiente.",
+    "limitations": "No todos los indicadores requieren la misma frecuencia o granularidad.",
+    "tags": ["sin datos", "medicion", "fuente", "calculo"],
+    "confidence_score": 91,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]

@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Prioridad de riesgo residual alto",
+    "knowledge_type": "risk_guidance",
+    "domain": "risk_management",
+    "module": "risk",
+    "standard_code": null,
+    "summary": "Un riesgo residual alto requiere tratamiento claro, controles asociados, responsable, fecha objetivo y seguimiento ejecutivo.",
+    "content": "La IA debe priorizar riesgos residuales altos cuando existan controles deteriorados, evidencias insuficientes o planes vencidos. La recomendacion debe explicar impacto y accion esperada.",
+    "practical_use": "Fortalece alertas, reportes ejecutivos y priorizacion de tareas.",
+    "recommended_application": "Usar para cruzar riesgos con controles, evidencias, hallazgos y planes de accion.",
+    "limitations": "El nivel de riesgo depende de criterios definidos por la organizacion.",
+    "tags": ["riesgo residual", "tratamiento", "prioridad", "control"],
+    "confidence_score": 94,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "Riesgo sin tratamiento suficiente",
+    "knowledge_type": "risk_guidance",
+    "domain": "risk_management",
+    "module": "risk",
+    "standard_code": null,
+    "summary": "Un riesgo relevante sin plan de tratamiento o con acciones vencidas debe escalarse como foco de atencion.",
+    "content": "La IA debe sugerir crear o actualizar plan de tratamiento cuando el riesgo supera el apetito definido, afecta activos criticos o tiene controles debiles.",
+    "practical_use": "Apoya recomendaciones accionables para matriz de riesgos y reportes de gerencia.",
+    "recommended_application": "Usar para generar tareas de revision de riesgo, tratamiento o evidencia de mitigacion.",
+    "limitations": "No reemplaza decision formal sobre apetito, aceptacion o transferencia de riesgo.",
+    "tags": ["tratamiento de riesgo", "plan de accion", "apetito", "escalamiento"],
+    "confidence_score": 90,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]

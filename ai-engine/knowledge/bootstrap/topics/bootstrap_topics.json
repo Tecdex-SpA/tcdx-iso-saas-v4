@@ -1,0 +1,752 @@
+[
+  {
+    "code": "ISO27001_CONTROLS_BEST_PRACTICES",
+    "title": "ISO 27001 buenas practicas de controles",
+    "query_templates": [
+      "ISO 27001 information security controls implementation best practices",
+      "ISO 27001 control operation evidence audit best practices",
+      "information security controls monitoring audit evidence"
+    ],
+    "domain": "information_security",
+    "module": "controls",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["best_practice", "audit_criteria", "evidence_example"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO27001_EVIDENCE",
+    "title": "ISO 27001 evidencias tipicas",
+    "query_templates": [
+      "ISO 27001 typical audit evidence information security controls",
+      "ISO 27001 evidence examples internal audit controls",
+      "information security control evidence examples audit"
+    ],
+    "domain": "information_security",
+    "module": "evidence",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["evidence_example", "audit_criteria", "best_practice"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO27001_INTERNAL_AUDIT",
+    "title": "ISO 27001 auditoria interna",
+    "query_templates": [
+      "ISO 27001 internal audit preparation information security management system",
+      "information security internal audit checklist evidence controls",
+      "ISO 27001 audit planning findings evidence best practices"
+    ],
+    "domain": "audit",
+    "module": "audit",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["audit_criteria", "typical_finding", "best_practice"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO27001_RISK_MANAGEMENT",
+    "title": "ISO 27001 gestion de riesgos",
+    "query_templates": [
+      "ISO 27001 information security risk assessment treatment best practices",
+      "information security risk treatment plan residual risk guidance",
+      "ISO 27001 risk assessment evidence audit"
+    ],
+    "domain": "risk_management",
+    "module": "risk",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["risk_guidance", "audit_criteria", "task_rule"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO27001_INCIDENT_MANAGEMENT",
+    "title": "ISO 27001 gestion de incidentes",
+    "query_templates": [
+      "information security incident management evidence lessons learned best practices",
+      "ISO 27001 incident response audit evidence",
+      "security incident management procedure records audit"
+    ],
+    "domain": "cybersecurity",
+    "module": "controls",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["cybersecurity_guidance", "evidence_example", "corrective_action"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO27001_ACCESS_CONTROL",
+    "title": "ISO 27001 control de accesos",
+    "query_templates": [
+      "access control policy audit evidence information security",
+      "ISO 27001 access management review evidence",
+      "user access review privileged access audit evidence"
+    ],
+    "domain": "information_security",
+    "module": "controls",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["evidence_example", "audit_criteria", "best_practice"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO27001_VULNERABILITY_MANAGEMENT",
+    "title": "ISO 27001 gestion de vulnerabilidades",
+    "query_templates": [
+      "vulnerability management program audit evidence best practices",
+      "ISO 27001 vulnerability management controls evidence",
+      "security vulnerability remediation tracking evidence"
+    ],
+    "domain": "cybersecurity",
+    "module": "risk",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["vulnerability_context", "cybersecurity_guidance", "evidence_example"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO27001_BUSINESS_CONTINUITY",
+    "title": "ISO 27001 continuidad operacional",
+    "query_templates": [
+      "information security business continuity audit evidence backup recovery",
+      "ISO 27001 business continuity information security continuity controls",
+      "security continuity testing evidence best practices"
+    ],
+    "domain": "business_continuity",
+    "module": "controls",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["continuity_guidance", "evidence_example", "risk_guidance"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO9001_PROCESS_APPROACH",
+    "title": "ISO 9001 enfoque basado en procesos",
+    "query_templates": [
+      "ISO 9001 process approach quality management best practices",
+      "quality management process approach KPIs evidence",
+      "ISO 9001 process performance monitoring audit"
+    ],
+    "domain": "quality",
+    "module": "lifecycle",
+    "standard_code": "ISO9001",
+    "knowledge_types": ["best_practice", "kpi_interpretation", "audit_criteria"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "ISO9001_NONCONFORMITY_MANAGEMENT",
+    "title": "ISO 9001 gestion de no conformidades",
+    "query_templates": [
+      "ISO 9001 nonconformity management corrective action evidence",
+      "quality nonconformity root cause corrective action audit evidence",
+      "ISO 9001 nonconformity handling best practices"
+    ],
+    "domain": "quality",
+    "module": "audit",
+    "standard_code": "ISO9001",
+    "knowledge_types": ["typical_finding", "corrective_action", "audit_criteria"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO9001_CORRECTIVE_ACTIONS",
+    "title": "ISO 9001 acciones correctivas",
+    "query_templates": [
+      "ISO 9001 effective corrective actions root cause analysis",
+      "quality corrective action evidence effectiveness verification",
+      "corrective action plan quality management audit"
+    ],
+    "domain": "quality",
+    "module": "tasks",
+    "standard_code": "ISO9001",
+    "knowledge_types": ["corrective_action", "task_rule", "evidence_example"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO9001_CUSTOMER_SATISFACTION",
+    "title": "ISO 9001 satisfaccion del cliente",
+    "query_templates": [
+      "ISO 9001 customer satisfaction monitoring KPI evidence",
+      "quality management customer feedback audit evidence",
+      "customer satisfaction process metrics quality management"
+    ],
+    "domain": "quality",
+    "module": "kpi",
+    "standard_code": "ISO9001",
+    "knowledge_types": ["kpi_interpretation", "evidence_example", "best_practice"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "ISO9001_MANAGEMENT_INDICATORS",
+    "title": "ISO 9001 indicadores de gestion",
+    "query_templates": [
+      "ISO 9001 quality management indicators KPI examples",
+      "quality management KPI dashboard audit evidence",
+      "process performance indicators ISO 9001"
+    ],
+    "domain": "kpi",
+    "module": "kpi",
+    "standard_code": "ISO9001",
+    "knowledge_types": ["kpi_interpretation", "report_guidance", "best_practice"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "ISO14001_ENVIRONMENTAL_ASPECTS",
+    "title": "ISO 14001 aspectos e impactos ambientales",
+    "query_templates": [
+      "ISO 14001 environmental aspects impacts evaluation best practices",
+      "environmental management aspects impacts register audit evidence",
+      "ISO 14001 environmental risk operational control evidence"
+    ],
+    "domain": "environmental",
+    "module": "risk",
+    "standard_code": "ISO14001",
+    "knowledge_types": ["risk_guidance", "audit_criteria", "evidence_example"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "ISO14001_LEGAL_COMPLIANCE",
+    "title": "ISO 14001 cumplimiento legal ambiental",
+    "query_templates": [
+      "ISO 14001 environmental legal compliance obligations audit evidence",
+      "environmental compliance register evaluation evidence",
+      "ISO 14001 compliance obligations monitoring best practices"
+    ],
+    "domain": "environmental",
+    "module": "controls",
+    "standard_code": "ISO14001",
+    "knowledge_types": ["audit_criteria", "evidence_example", "governance_guidance"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "ISO22301_BUSINESS_CONTINUITY",
+    "title": "ISO 22301 continuidad de negocio",
+    "query_templates": [
+      "ISO 22301 business continuity management best practices",
+      "business continuity management audit evidence BIA recovery plan",
+      "ISO 22301 exercise testing evidence business continuity"
+    ],
+    "domain": "business_continuity",
+    "module": "controls",
+    "standard_code": "ISO22301",
+    "knowledge_types": ["continuity_guidance", "evidence_example", "audit_criteria"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO20000_SERVICE_MANAGEMENT",
+    "title": "ISO 20000-1 gestion de servicios TI",
+    "query_templates": [
+      "ISO 20000-1 IT service management audit evidence",
+      "IT service management process controls KPI best practices",
+      "service management incident change problem evidence audit"
+    ],
+    "domain": "service_management",
+    "module": "controls",
+    "standard_code": "ISO20000",
+    "knowledge_types": ["best_practice", "evidence_example", "kpi_interpretation"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "ISO31000_RISK_MANAGEMENT",
+    "title": "ISO 31000 gestion de riesgos",
+    "query_templates": [
+      "ISO 31000 risk management principles risk treatment best practices",
+      "enterprise risk management risk appetite residual risk guidance",
+      "risk management framework monitoring review evidence"
+    ],
+    "domain": "risk_management",
+    "module": "risk",
+    "standard_code": "ISO31000",
+    "knowledge_types": ["risk_guidance", "governance_guidance", "report_guidance"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ISO37301_COMPLIANCE_MANAGEMENT",
+    "title": "ISO 37301 compliance management",
+    "query_templates": [
+      "ISO 37301 compliance management system best practices",
+      "compliance management obligations controls monitoring evidence",
+      "compliance program audit evidence governance"
+    ],
+    "domain": "governance",
+    "module": "controls",
+    "standard_code": "ISO37301",
+    "knowledge_types": ["governance_guidance", "audit_criteria", "best_practice"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "ISO50001_ENERGY_MANAGEMENT",
+    "title": "ISO 50001 gestion energetica",
+    "query_templates": [
+      "ISO 50001 energy management system performance indicators evidence",
+      "energy management audit evidence objectives targets",
+      "ISO 50001 energy performance monitoring best practices"
+    ],
+    "domain": "governance",
+    "module": "kpi",
+    "standard_code": "ISO50001",
+    "knowledge_types": ["kpi_interpretation", "evidence_example", "best_practice"],
+    "priority": "low",
+    "max_results": 5
+  },
+  {
+    "code": "INTERNAL_AUDIT_ISO",
+    "title": "auditoria interna ISO",
+    "query_templates": [
+      "ISO internal audit program planning evidence findings best practices",
+      "management system internal audit checklist findings evidence",
+      "internal auditor ISO audit report best practices"
+    ],
+    "domain": "audit",
+    "module": "audit",
+    "standard_code": null,
+    "knowledge_types": ["audit_criteria", "typical_finding", "report_guidance"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "AUDIT_EVIDENCE",
+    "title": "evidencias de auditoria",
+    "query_templates": [
+      "audit evidence quality relevance sufficiency traceability best practices",
+      "management system audit evidence examples objective evidence",
+      "audit evidence records documents interviews observation"
+    ],
+    "domain": "evidence_management",
+    "module": "evidence",
+    "standard_code": null,
+    "knowledge_types": ["evidence_example", "audit_criteria", "best_practice"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "TYPICAL_AUDIT_FINDINGS",
+    "title": "hallazgos tipicos de auditoria",
+    "query_templates": [
+      "typical internal audit findings management system controls evidence",
+      "audit findings examples root cause corrective action",
+      "management system audit nonconformity observation examples"
+    ],
+    "domain": "audit",
+    "module": "audit",
+    "standard_code": null,
+    "knowledge_types": ["typical_finding", "corrective_action", "audit_criteria"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "NONCONFORMITY_WRITING",
+    "title": "redaccion de no conformidades",
+    "query_templates": [
+      "how to write audit nonconformity statement objective evidence",
+      "nonconformity writing audit evidence requirement condition",
+      "management system nonconformity report best practices"
+    ],
+    "domain": "audit",
+    "module": "audit",
+    "standard_code": null,
+    "knowledge_types": ["typical_finding", "report_guidance", "corrective_action"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ROOT_CAUSE_ANALYSIS",
+    "title": "analisis causa raiz",
+    "query_templates": [
+      "root cause analysis corrective action 5 whys fishbone best practices",
+      "audit finding root cause analysis effective corrective action",
+      "problem solving root cause management system nonconformity"
+    ],
+    "domain": "quality",
+    "module": "tasks",
+    "standard_code": null,
+    "knowledge_types": ["corrective_action", "task_rule", "best_practice"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "EFFECTIVE_CORRECTIVE_ACTIONS",
+    "title": "acciones correctivas efectivas",
+    "query_templates": [
+      "effective corrective action plan verification effectiveness audit",
+      "corrective action implementation evidence effectiveness review",
+      "management system corrective action closure criteria"
+    ],
+    "domain": "quality",
+    "module": "tasks",
+    "standard_code": null,
+    "knowledge_types": ["corrective_action", "task_rule", "evidence_example"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "COMPLIANCE_KPIS",
+    "title": "KPIs de cumplimiento",
+    "query_templates": [
+      "compliance KPI dashboard metrics control effectiveness evidence",
+      "compliance management indicators risk controls audit",
+      "governance compliance metrics reporting best practices"
+    ],
+    "domain": "kpi",
+    "module": "kpi",
+    "standard_code": null,
+    "knowledge_types": ["kpi_interpretation", "report_guidance", "governance_guidance"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "INFORMATION_SECURITY_KPIS",
+    "title": "KPIs de seguridad de la informacion",
+    "query_templates": [
+      "information security KPI metrics control effectiveness examples",
+      "cybersecurity metrics vulnerability access incident monitoring",
+      "security management dashboard KPIs audit evidence"
+    ],
+    "domain": "information_security",
+    "module": "kpi",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["kpi_interpretation", "cybersecurity_guidance", "report_guidance"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "QUALITY_KPIS",
+    "title": "KPIs de calidad",
+    "query_templates": [
+      "quality management KPI examples process performance customer satisfaction",
+      "ISO 9001 quality metrics process indicators evidence",
+      "quality dashboard indicators corrective action performance"
+    ],
+    "domain": "quality",
+    "module": "kpi",
+    "standard_code": "ISO9001",
+    "knowledge_types": ["kpi_interpretation", "report_guidance", "best_practice"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "EXECUTIVE_COMPLIANCE_REPORTS",
+    "title": "reportes ejecutivos de cumplimiento",
+    "query_templates": [
+      "executive compliance report risk controls audit KPI best practices",
+      "compliance dashboard executive summary risk findings action plans",
+      "management report compliance audit evidence risk recommendations"
+    ],
+    "domain": "reporting",
+    "module": "reports",
+    "standard_code": null,
+    "knowledge_types": ["report_guidance", "governance_guidance", "kpi_interpretation"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "DOCUMENT_MANAGEMENT",
+    "title": "gestion documental",
+    "query_templates": [
+      "document control management system evidence version approval best practices",
+      "controlled documents policy procedure review approval evidence",
+      "management system document management audit evidence"
+    ],
+    "domain": "compliance",
+    "module": "controls",
+    "standard_code": null,
+    "knowledge_types": ["best_practice", "evidence_example", "audit_criteria"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "DOCUMENT_VERSION_CONTROL",
+    "title": "control de versiones documentales",
+    "query_templates": [
+      "document version control approval review audit evidence",
+      "controlled document revision history management system",
+      "document change control evidence best practices"
+    ],
+    "domain": "compliance",
+    "module": "evidence",
+    "standard_code": null,
+    "knowledge_types": ["evidence_example", "best_practice", "audit_criteria"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "RISK_MATRIX",
+    "title": "matriz de riesgos",
+    "query_templates": [
+      "risk matrix likelihood impact residual risk best practices",
+      "risk assessment matrix controls treatment evidence",
+      "risk register matrix prioritization audit"
+    ],
+    "domain": "risk_management",
+    "module": "risk",
+    "standard_code": null,
+    "knowledge_types": ["risk_guidance", "report_guidance", "task_rule"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "RISK_TREATMENT",
+    "title": "tratamiento de riesgos",
+    "query_templates": [
+      "risk treatment plan residual risk control effectiveness evidence",
+      "risk mitigation action plan owner due date monitoring",
+      "risk treatment options accept mitigate transfer avoid best practices"
+    ],
+    "domain": "risk_management",
+    "module": "risk",
+    "standard_code": null,
+    "knowledge_types": ["risk_guidance", "task_rule", "evidence_example"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "RISK_APPETITE",
+    "title": "apetito de riesgo",
+    "query_templates": [
+      "risk appetite statement tolerance thresholds governance best practices",
+      "risk appetite residual risk reporting executive management",
+      "risk tolerance compliance controls governance framework"
+    ],
+    "domain": "governance",
+    "module": "risk",
+    "standard_code": null,
+    "knowledge_types": ["governance_guidance", "risk_guidance", "report_guidance"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "CONTROL_MATURITY",
+    "title": "madurez de controles",
+    "query_templates": [
+      "control maturity model control effectiveness evidence monitoring",
+      "control maturity assessment compliance risk audit",
+      "control design implementation operation improvement maturity"
+    ],
+    "domain": "compliance",
+    "module": "controls",
+    "standard_code": null,
+    "knowledge_types": ["best_practice", "audit_criteria", "kpi_interpretation"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "CONTROL_MONITORING",
+    "title": "monitoreo de controles",
+    "query_templates": [
+      "continuous control monitoring compliance evidence best practices",
+      "control monitoring indicators exceptions remediation evidence",
+      "control effectiveness monitoring audit risk management"
+    ],
+    "domain": "compliance",
+    "module": "controls",
+    "standard_code": null,
+    "knowledge_types": ["best_practice", "evidence_example", "kpi_interpretation"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ASSET_MANAGEMENT",
+    "title": "gestion de activos",
+    "query_templates": [
+      "information asset management inventory ownership classification evidence",
+      "asset management security controls audit evidence",
+      "IT asset inventory risk management best practices"
+    ],
+    "domain": "information_security",
+    "module": "controls",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["best_practice", "evidence_example", "risk_guidance"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "SUPPLIER_MANAGEMENT",
+    "title": "gestion de proveedores",
+    "query_templates": [
+      "supplier risk management third party security audit evidence",
+      "vendor management compliance controls due diligence evidence",
+      "third party risk assessment contract SLA monitoring best practices"
+    ],
+    "domain": "governance",
+    "module": "risk",
+    "standard_code": null,
+    "knowledge_types": ["risk_guidance", "evidence_example", "governance_guidance"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "SMB_CYBERSECURITY",
+    "title": "ciberseguridad para pymes",
+    "query_templates": [
+      "small business cybersecurity best practices CISA NIST",
+      "SMB cybersecurity controls backup MFA patching awareness",
+      "small organization information security practical controls"
+    ],
+    "domain": "cybersecurity",
+    "module": "controls",
+    "standard_code": null,
+    "knowledge_types": ["cybersecurity_guidance", "task_rule", "best_practice"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "NIST_CSF",
+    "title": "NIST Cybersecurity Framework",
+    "query_templates": [
+      "NIST Cybersecurity Framework governance identify protect detect respond recover",
+      "NIST CSF implementation examples small business cybersecurity",
+      "NIST CSF risk management controls metrics"
+    ],
+    "domain": "cybersecurity",
+    "module": "controls",
+    "standard_code": null,
+    "knowledge_types": ["cybersecurity_guidance", "governance_guidance", "kpi_interpretation"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "CIS_CONTROLS",
+    "title": "CIS Controls",
+    "query_templates": [
+      "CIS Controls implementation groups safeguards audit evidence",
+      "CIS Controls asset inventory vulnerability management access control",
+      "CIS critical security controls metrics evidence"
+    ],
+    "domain": "cybersecurity",
+    "module": "controls",
+    "standard_code": null,
+    "knowledge_types": ["cybersecurity_guidance", "evidence_example", "best_practice"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "OWASP_TOP_10",
+    "title": "OWASP Top 10",
+    "query_templates": [
+      "OWASP Top 10 web application security risks controls evidence",
+      "application security OWASP Top 10 mitigation verification evidence",
+      "OWASP Top 10 secure development audit checklist"
+    ],
+    "domain": "cybersecurity",
+    "module": "risk",
+    "standard_code": null,
+    "knowledge_types": ["cybersecurity_guidance", "vulnerability_context", "risk_guidance"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "CISA_GUIDANCE",
+    "title": "CISA cybersecurity guidance",
+    "query_templates": [
+      "CISA cybersecurity best practices small business MFA patching backup",
+      "CISA vulnerability management incident response guidance",
+      "CISA cyber hygiene services controls guidance"
+    ],
+    "domain": "cybersecurity",
+    "module": "controls",
+    "standard_code": null,
+    "knowledge_types": ["cybersecurity_guidance", "threat_context", "task_rule"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "ENISA_GUIDANCE",
+    "title": "ENISA cybersecurity guidance",
+    "query_templates": [
+      "ENISA cybersecurity risk management guidance controls resilience",
+      "ENISA incident management cybersecurity best practices",
+      "ENISA cloud security SME cybersecurity guidance"
+    ],
+    "domain": "cybersecurity",
+    "module": "risk",
+    "standard_code": null,
+    "knowledge_types": ["cybersecurity_guidance", "risk_guidance", "governance_guidance"],
+    "priority": "medium",
+    "max_results": 5
+  },
+  {
+    "code": "BACKUP_RECOVERY",
+    "title": "backup y recuperacion",
+    "query_templates": [
+      "backup recovery testing evidence cybersecurity business continuity best practices",
+      "data backup restore test audit evidence",
+      "backup strategy recovery point recovery time evidence"
+    ],
+    "domain": "business_continuity",
+    "module": "evidence",
+    "standard_code": null,
+    "knowledge_types": ["continuity_guidance", "evidence_example", "risk_guidance"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "DISASTER_RECOVERY",
+    "title": "disaster recovery",
+    "query_templates": [
+      "disaster recovery plan testing evidence best practices",
+      "IT disaster recovery audit evidence recovery objectives",
+      "DRP exercise lessons learned remediation evidence"
+    ],
+    "domain": "business_continuity",
+    "module": "controls",
+    "standard_code": null,
+    "knowledge_types": ["continuity_guidance", "evidence_example", "task_rule"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "BUSINESS_IMPACT_ANALYSIS",
+    "title": "business impact analysis",
+    "query_templates": [
+      "business impact analysis BIA methodology recovery objectives evidence",
+      "BIA critical processes dependencies impact assessment best practices",
+      "business continuity impact analysis audit evidence"
+    ],
+    "domain": "business_continuity",
+    "module": "risk",
+    "standard_code": "ISO22301",
+    "knowledge_types": ["continuity_guidance", "risk_guidance", "evidence_example"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "OPERATIONAL_CONTINUITY",
+    "title": "gestion de continuidad operacional",
+    "query_templates": [
+      "operational continuity management controls exercises evidence",
+      "business continuity operational resilience monitoring best practices",
+      "continuity plan exercise action plan evidence"
+    ],
+    "domain": "business_continuity",
+    "module": "lifecycle",
+    "standard_code": null,
+    "knowledge_types": ["continuity_guidance", "task_rule", "report_guidance"],
+    "priority": "high",
+    "max_results": 5
+  },
+  {
+    "code": "INFORMATION_SECURITY_POLICIES",
+    "title": "politicas de seguridad de la informacion",
+    "query_templates": [
+      "information security policy approval review communication evidence",
+      "security policy governance audit evidence best practices",
+      "information security policies standards procedures awareness evidence"
+    ],
+    "domain": "information_security",
+    "module": "controls",
+    "standard_code": "ISO27001",
+    "knowledge_types": ["governance_guidance", "evidence_example", "audit_criteria"],
+    "priority": "high",
+    "max_results": 5
+  }
+]

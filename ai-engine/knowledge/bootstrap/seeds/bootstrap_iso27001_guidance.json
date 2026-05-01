@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Control ISO 27001 con evidencia operativa",
+    "knowledge_type": "audit_criteria",
+    "domain": "information_security",
+    "module": "controls",
+    "standard_code": "ISO27001",
+    "summary": "Para evaluar un control de seguridad de la informacion se debe revisar diseno, implementacion, operacion, evidencia y mejora.",
+    "content": "La IA debe valorar evidencia de operacion real: revisiones de acceso, registros de monitoreo, pruebas, reportes de vulnerabilidades, incidentes, respaldos o aprobaciones segun el control.",
+    "practical_use": "Aporta criterio general para controles ISO 27001 sin copiar texto normativo.",
+    "recommended_application": "Usar en auditoria IA, salud de controles y tareas de evidencia.",
+    "limitations": "No reemplaza el texto oficial ni la interpretacion formal de la norma.",
+    "tags": ["ISO27001", "control", "seguridad", "evidencia"],
+    "confidence_score": 93,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "Gestion de vulnerabilidades como ciclo operativo",
+    "knowledge_type": "cybersecurity_guidance",
+    "domain": "cybersecurity",
+    "module": "risk",
+    "standard_code": "ISO27001",
+    "summary": "La gestion de vulnerabilidades debe demostrar identificacion, priorizacion, remediacion, aceptacion justificada y seguimiento.",
+    "content": "La IA debe sugerir evidencias como reportes de escaneo, criticidad, responsables, fechas de remediacion, excepciones aprobadas y verificacion posterior.",
+    "practical_use": "Mejora recomendaciones de riesgos tecnologicos y controles deteriorados.",
+    "recommended_application": "Usar cuando existan riesgos tecnologicos, controles debiles o brechas de evidencia en seguridad.",
+    "limitations": "La tecnologia usada y la frecuencia de escaneo dependen del contexto de la organizacion.",
+    "tags": ["vulnerabilidades", "remediacion", "riesgo", "ISO27001"],
+    "confidence_score": 92,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]

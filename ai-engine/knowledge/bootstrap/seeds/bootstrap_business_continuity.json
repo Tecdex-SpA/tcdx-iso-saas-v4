@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Continuidad con prueba y evidencia",
+    "knowledge_type": "continuity_guidance",
+    "domain": "business_continuity",
+    "module": "controls",
+    "standard_code": null,
+    "summary": "La continuidad operacional debe demostrar planes actualizados, responsables, pruebas, resultados, brechas y acciones de mejora.",
+    "content": "La IA debe valorar evidencia de ejercicios, pruebas de restauracion, analisis de impacto, tiempos objetivo y lecciones aprendidas.",
+    "practical_use": "Fortalece recomendaciones para continuidad, backup y disaster recovery.",
+    "recommended_application": "Usar en auditorias, riesgos criticos y reportes ejecutivos de resiliencia.",
+    "limitations": "Los tiempos objetivo dependen de criticidad y capacidad operacional.",
+    "tags": ["continuidad", "pruebas", "backup", "resiliencia"],
+    "confidence_score": 93,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "BIA como base de priorizacion",
+    "knowledge_type": "risk_guidance",
+    "domain": "business_continuity",
+    "module": "risk",
+    "standard_code": "ISO22301",
+    "summary": "El analisis de impacto al negocio ayuda a priorizar procesos, dependencias, tiempos de recuperacion y recursos criticos.",
+    "content": "La IA debe sugerir completar BIA cuando no existan criterios claros para priorizar continuidad o recuperacion.",
+    "practical_use": "Ayuda a conectar riesgos, activos, procesos y planes de continuidad.",
+    "recommended_application": "Usar en recomendaciones de continuidad operacional y reportes de riesgo.",
+    "limitations": "La BIA requiere informacion de negocio que puede no estar en el sistema.",
+    "tags": ["BIA", "impacto", "recuperacion", "procesos criticos"],
+    "confidence_score": 90,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]

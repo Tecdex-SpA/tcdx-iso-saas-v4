@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Enfoque de procesos en ISO 9001",
+    "knowledge_type": "best_practice",
+    "domain": "quality",
+    "module": "lifecycle",
+    "standard_code": "ISO9001",
+    "summary": "El enfoque de procesos requiere comprender entradas, salidas, responsables, criterios, indicadores y oportunidades de mejora.",
+    "content": "La IA debe conectar no conformidades, acciones correctivas y KPIs con procesos reales, no solo con documentos aislados.",
+    "practical_use": "Apoya analisis de calidad, hallazgos y reportes por proceso.",
+    "recommended_application": "Usar cuando se evalua desempeno de procesos, cumplimiento operacional o eficacia de acciones.",
+    "limitations": "No traduce ni reemplaza procedimientos especificos del cliente.",
+    "tags": ["ISO9001", "procesos", "calidad", "indicadores"],
+    "confidence_score": 91,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "No conformidad de calidad accionable",
+    "knowledge_type": "typical_finding",
+    "domain": "quality",
+    "module": "audit",
+    "standard_code": "ISO9001",
+    "summary": "Una no conformidad de calidad debe vincular condicion, evidencia, criterio, impacto en proceso y accion correctiva esperada.",
+    "content": "La IA debe evitar textos vagos. Debe indicar que proceso se afecta, que evidencia lo demuestra y que informacion falta si no puede concluir.",
+    "practical_use": "Mejora redaccion de hallazgos y seguimiento de acciones correctivas.",
+    "recommended_application": "Usar para borradores de no conformidad y analisis de hallazgos.",
+    "limitations": "La validacion final corresponde al auditor o responsable de calidad.",
+    "tags": ["ISO9001", "no conformidad", "calidad", "accion correctiva"],
+    "confidence_score": 90,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]

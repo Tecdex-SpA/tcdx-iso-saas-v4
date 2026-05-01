@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Accion correctiva efectiva",
+    "knowledge_type": "corrective_action",
+    "domain": "quality",
+    "module": "tasks",
+    "standard_code": null,
+    "summary": "Una accion correctiva efectiva aborda la causa raiz, define responsable, fecha objetivo, evidencia esperada y forma de verificar efectividad.",
+    "content": "La IA debe diferenciar correccion inmediata de accion correctiva. Cerrar una brecha exige demostrar que la causa fue tratada y que la condicion no se repite o queda bajo control.",
+    "practical_use": "Permite generar tareas mas accionables y planes de accion auditables.",
+    "recommended_application": "Usar para sugerir planes de accion desde hallazgos, no conformidades o controles deteriorados.",
+    "limitations": "La causa raiz puede requerir entrevistas o informacion operacional que no siempre esta en el sistema.",
+    "tags": ["accion correctiva", "causa raiz", "efectividad", "responsable"],
+    "confidence_score": 94,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "Verificacion de efectividad",
+    "knowledge_type": "corrective_action",
+    "domain": "compliance",
+    "module": "tasks",
+    "standard_code": null,
+    "summary": "La verificacion de efectividad confirma que la accion implementada redujo o elimino la brecha, no solo que una tarea fue ejecutada.",
+    "content": "La IA debe recomendar evidencias de verificacion como revision posterior, indicador de recurrencia, muestreo, registro de prueba o aprobacion documentada del responsable.",
+    "practical_use": "Ayuda a cerrar planes con mayor solidez ante auditorias.",
+    "recommended_application": "Usar al crear tareas de cierre o al evaluar planes vencidos o recurrentes.",
+    "limitations": "La forma de verificar depende del tipo de control y del riesgo asociado.",
+    "tags": ["efectividad", "cierre", "accion", "recurrencia"],
+    "confidence_score": 91,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]

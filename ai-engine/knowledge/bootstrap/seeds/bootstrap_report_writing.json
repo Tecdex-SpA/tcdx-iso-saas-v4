@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Reporte ejecutivo orientado a decision",
+    "knowledge_type": "report_guidance",
+    "domain": "reporting",
+    "module": "reports",
+    "standard_code": null,
+    "summary": "Un reporte ejecutivo debe comenzar con conclusion, impacto, prioridades y proximos pasos, dejando el detalle tecnico para secciones posteriores.",
+    "content": "La IA debe separar hechos internos, inferencias, riesgos y recomendaciones. Los parrafos deben ser breves, claros y orientados a accion.",
+    "practical_use": "Mejora reportes premium, resumentes gerenciales y briefing de auditoria.",
+    "recommended_application": "Usar para estructurar reportes por estado general, causas principales, riesgos y acciones recomendadas.",
+    "limitations": "No debe presentar como cumplimiento lo que solo es una recomendacion o contexto externo.",
+    "tags": ["reporte ejecutivo", "decision", "prioridades", "riesgo"],
+    "confidence_score": 93,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "Separacion entre observacion y recomendacion",
+    "knowledge_type": "report_guidance",
+    "domain": "reporting",
+    "module": "reports",
+    "standard_code": null,
+    "summary": "La observacion describe lo que muestran los datos; la recomendacion indica que hacer y por que.",
+    "content": "La IA debe evitar mezclar diagnostico y accion en frases ambiguas. Cada recomendacion debe tener causa, impacto y accion concreta.",
+    "practical_use": "Aumenta claridad en reportes, hallazgos y tareas sugeridas.",
+    "recommended_application": "Usar al redactar insights, hallazgos y planes de accion ejecutivos.",
+    "limitations": "La accion final puede depender de recursos y responsables del cliente.",
+    "tags": ["observacion", "recomendacion", "redaccion", "accion"],
+    "confidence_score": 90,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]

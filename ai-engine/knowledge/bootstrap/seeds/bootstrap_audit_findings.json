@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Hallazgo de auditoria trazable",
+    "knowledge_type": "typical_finding",
+    "domain": "audit",
+    "module": "audit",
+    "standard_code": null,
+    "summary": "Un hallazgo trazable debe separar condicion observada, evidencia objetiva, criterio usado, impacto y recomendacion.",
+    "content": "La IA debe evitar redactar hallazgos genericos. Cuando falten criterio o evidencia, debe formular una observacion o brecha preliminar, no una no conformidad definitiva.",
+    "practical_use": "Mejora la calidad de hallazgos, reportes y preparacion de auditorias internas.",
+    "recommended_application": "Usar para estructurar hallazgos en lenguaje ejecutivo y tecnico sin exagerar conclusiones.",
+    "limitations": "La clasificacion final depende del juicio de auditor humano y del alcance de auditoria.",
+    "tags": ["hallazgo", "evidencia objetiva", "criterio", "impacto"],
+    "confidence_score": 94,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "Posible no conformidad con datos incompletos",
+    "knowledge_type": "audit_criteria",
+    "domain": "audit",
+    "module": "audit",
+    "standard_code": null,
+    "summary": "Si los datos son insuficientes, la IA puede sugerir una posible no conformidad, pero debe declarar limitaciones y requerir validacion humana.",
+    "content": "La ausencia de evidencia, controles deteriorados o riesgos altos pueden indicar brechas, pero no bastan por si solos para declarar incumplimiento total sin evaluar contexto, alcance y criterio.",
+    "practical_use": "Reduce falsos positivos y mantiene disciplina de auditoria.",
+    "recommended_application": "Usar en auditorias IA, reportes ejecutivos y recomendaciones de cierre.",
+    "limitations": "No debe usarse para automatizar juicios finales de certificacion.",
+    "tags": ["no conformidad", "limitaciones", "auditor humano", "brecha"],
+    "confidence_score": 93,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]

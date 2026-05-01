@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Evidencia minima para validar operacion de un control",
+    "knowledge_type": "evidence_example",
+    "domain": "evidence_management",
+    "module": "evidence",
+    "standard_code": null,
+    "summary": "Una evidencia util debe demostrar que actividad se ejecuto, cuando ocurrio, quien participo, cual fue el resultado y que control respalda.",
+    "content": "Para auditorias y reportes, la IA debe valorar mas las evidencias con fecha, responsable, descripcion clara, archivo verificable y relacion directa con un control. Una declaracion sin respaldo no debe tratarse como operacion efectiva.",
+    "practical_use": "Ayuda a evaluar calidad de evidencias y a distinguir evidencia fuerte, debil o insuficiente.",
+    "recommended_application": "Usar este criterio para sugerir tareas de mejora cuando falten fecha, responsable, descripcion o trazabilidad al control.",
+    "limitations": "No sustituye la revision del auditor ni valida por si sola el cumplimiento.",
+    "tags": ["evidencia", "auditoria", "trazabilidad", "control"],
+    "confidence_score": 95,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  },
+  {
+    "title": "Senales de evidencia debil",
+    "knowledge_type": "evidence_example",
+    "domain": "evidence_management",
+    "module": "evidence",
+    "standard_code": null,
+    "summary": "Una evidencia es debil cuando es generica, antigua, no relaciona un control, no permite verificar ejecucion o carece de archivo, URL o referencia verificable.",
+    "content": "La IA debe marcar limitaciones cuando la evidencia no demuestre operacion real. Una evidencia puede existir y aun asi ser insuficiente para sostener una conclusion robusta de cumplimiento.",
+    "practical_use": "Sirve para clasificar brechas y priorizar solicitudes de actualizacion documental.",
+    "recommended_application": "Usar en analisis de evidencias, salud de controles, preparacion de auditoria y tareas sugeridas.",
+    "limitations": "La antiguedad aceptable depende del control, periodo evaluado y criterio de auditoria.",
+    "tags": ["evidencia debil", "vigencia", "control", "brecha"],
+    "confidence_score": 92,
+    "origin": "bootstrap_seed",
+    "status": "bootstrap_approved",
+    "source_type": "internal_seed"
+  }
+]
