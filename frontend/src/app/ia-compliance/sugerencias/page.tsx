@@ -471,6 +471,19 @@ export default function AiSuggestionsPage() {
     return 'border-slate-200 bg-slate-50 text-slate-700';
   };
 
+  const getStatusLabel = (value?: string | null) => {
+    switch (String(value || 'draft').toLowerCase()) {
+      case 'applied':
+        return 'Aplicada';
+      case 'discarded':
+        return 'Descartada';
+      case 'draft':
+        return 'Borrador';
+      default:
+        return String(value || 'Borrador').replaceAll('_', ' ');
+    }
+  };
+
   const getPreview = (row: SuggestionRow): PreviewData => {
     const output = row.output_payload || {};
 
@@ -679,9 +692,9 @@ export default function AiSuggestionsPage() {
                 className="w-full rounded-xl border border-slate-200 px-3 py-2"
               >
                 <option value="">Todos</option>
-                <option value="draft">Draft</option>
-                <option value="applied">Applied</option>
-                <option value="discarded">Discarded</option>
+                <option value="draft">Borrador</option>
+                <option value="applied">Aplicada</option>
+                <option value="discarded">Descartada</option>
               </select>
             </div>
 
@@ -737,7 +750,7 @@ export default function AiSuggestionsPage() {
                             row.status
                           )}`}
                         >
-                          {row.status || 'draft'}
+                          {getStatusLabel(row.status)}
                         </span>
 
                         {row.confidence && (
