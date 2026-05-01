@@ -1,0 +1,929 @@
+RECOMENDACIONES SENIOR PARA HARDENING Y CONTINUIDAD
+PROYECTO TCDX ISO SAAS
+=====================================================
+
+Fecha de preparación: 2026-04-30
+Objetivo del documento:
+Entregar a Codex una pauta completa, ordenada y accionable para trabajar sobre el repositorio
+baruj77/tcdx-iso-saas sin romper la línea actual del proyecto.
+
+Contexto general:
+El proyecto TCDX ISO SaaS está compuesto por:
+
+- Base de datos PostgreSQL en VM 192.168.100.110
+- Backend Node.js / Express en VM 192.168.100.120
+- Frontend Next.js en VM 192.168.100.130
+- AI Engine FastAPI en VM 192.168.100.140
+
+La arquitectura objetivo para producción real será privada:
+- Backend, AI Engine y BD NO tendrán exposición directa a internet.
+- Solo el frontend debería acceder a los servicios backend.
+- Backend, AI Engine y BD deben quedar protegidos por red privada, firewall/security groups y secretos fuera del repositorio.
+- El backend se reinicia con systemd: sudo systemctl restart tecdex-backend
+- El AI Engine se reinicia con systemd: sudo systemctl restart ai-engine
+- El frontend normalmente se compila y levanta con npm start desde /home/tecdex/frontend.
+
+Regla principal:
+No hacer cambios a ciegas.
+Antes de modificar archivos, revisar estado actual, mantener compatibilidad con la demo funcional y evitar romper rutas, RBAC, multi-tenant, KPI, evidencias, auditorías, reportes, prefacturación y AI Engine.
+
+
+=====================================================
+1. PRIORIDAD MÁXIMA: ESTANDARIZAR SECRETOS BACKEND / AI ENGINE
+=====================================================
+
+Problema detectado:
+El AI Engine usa token interno desde variables AI_INTERNAL_TOKEN o AI_TOKEN.
+El backend, para llamar al AI Engine, busca el secreto en:
+- OWN_AI_SHARED_SECRET
+- AI_INTERNAL_TOKEN
+- AI_TOKEN
+
+Pero en la VM backend el servicio systemd tecdex-backend.service actualmente solo muestra:
+Environment=NODE_ENV=production
+
+No tiene EnvironmentFile configurado. Esto puede hacer que el backend lea secretos desde /home/tecdex/backend/.env, mientras el AI Engine lee desde /etc/tecdex/ai-engine.env.
+
+Riesgo:
+- Mismatch entre token backend y token AI Engine.
+- Errores Unauthorized AI internal token.
+- Configuración no reproducible si se reconstruye una VM.
+- Secretos dispersos.
+
+Recomendación:
+Estandarizar configuración segura fuera del repositorio:
+
+Backend:
+  /etc/tecdex/backend.env
+  OWN_AI_SHARED_SECRET=<mismo_token_real>
+  DB_HOST=192.168.100.110
+  DB_PORT=5432
+  DB_NAME=tecdex_saas
+  DB_USER=<usuario_db>
+  DB_PASSWORD=<password_db>
+  JWT_SECRET=<jwt_secret>
+  PORT=3000
+  NODE_ENV=production
+
+AI Engine:
+  /etc/tecdex/ai-engine.env
+  AI_INTERNAL_TOKEN=<mismo_token_real>
+  DB_HOST=192.168.100.110
+  DB_PORT=5432
+  DB_NAME=tecdex_saas
+  DB_USER=<usuario_db>
+  DB_PASSWORD=<password_db>
+  BACKEND_API_URL=http://192.168.100.120:3000
+  FRONTEND_URL=http://192.168.100.130:3000
+  APP_ENV=production
+
+Tareas para Codex:
+1. Proponer override systemd para backend:
+   sudo systemctl edit tecdex-backend
+
+   Contenido esperado:
+   [Service]
+   EnvironmentFile=/etc/tecdex/backend.env
+
+2. Mantener AI Engine con:
+   [Service]
+   EnvironmentFile=/etc/tecdex/ai-engine.env
+
+3. Documentar que los secretos NO van al repo.
+4. Agregar documentación en docs/OPERACION_SECRETOS.md o similar.
+5. Crear script de validación sin imprimir secretos:
+   scripts/check-secrets-runtime.sh
+
+Criterios de aceptación:
+- Backend y AI Engine usan archivos /etc/tecdex/*.env.
+- El mismo token se usa en backend y AI Engine.
+- Ningún secreto queda en GitHub.
+- El script muestra solo largos LEN=xx, no valores reales.
+- AI Engine responde correctamente endpoints protegidos con x-ai-token.
+
+
+=====================================================
+2. PRIORIDAD MÁXIMA: HEALTH CHECKS DEL AI ENGINE
+=====================================================
+
+Problema detectado:
+curl -I http://192.168.100.140:8001 responde 404 porque FastAPI no tiene ruta raíz / definida.
+Esto no significa que el servicio esté caído, pero confunde validaciones y monitoreo.
+
+Recomendación:
+Agregar endpoints seguros al AI Engine:
+
+- GET /
+- HEAD /
+- GET /health
+- HEAD /health
+- GET /health/deep protegido por token
+
+Diseño:
+- / y /health no deben exponer secretos ni conexión DB.
+- /health/deep debe validar token y revisar conexión a BD.
+- /health/deep debe responder db_ok y ai_token_configured, sin mostrar secreto.
+
+Archivo probable:
+ai-engine/main.py
+
+Implementación esperada:
+- Importar Response desde fastapi.
+- Agregar endpoints después de app = FastAPI(...).
+- Usar test_db_connection() ya existente.
+- Usar get_configured_ai_token() / require_ai_token() ya existente.
+
+Criterios de aceptación:
+curl -I http://192.168.100.140:8001 debe devolver HTTP 200.
+curl -s http://192.168.100.140:8001/health debe devolver:
+{
+  "ok": true,
+  "service": "AI Compliance Engine",
+  "status": "running"
+}
+
+curl -s http://192.168.100.140:8001/health/deep -H "x-ai-token: $AI_INTERNAL_TOKEN" debe devolver:
+{
+  "ok": true,
+  "service": "AI Compliance Engine",
+  "status": "running",
+  "db_ok": true,
+  "ai_token_configured": true
+}
+
+
+=====================================================
+3. PRIORIDAD ALTA: NO EXPONER error.message EN PRODUCCIÓN
+=====================================================
+
+Problema detectado:
+Varias rutas devuelven detail: error.message en errores 500.
+Ejemplos detectados:
+- audit-execution.routes.js
+- billing.routes.js
+- ai-external-lookup.routes.js
+- ai-feedback.routes.js
+- admin-saas.routes.js
+
+Riesgo:
+En producción, un error puede filtrar:
+- nombres de tablas
+- columnas
+- funciones SQL
+- rutas internas
+- detalles de infraestructura
+- trazas útiles para ataque
+
+Recomendación:
+Crear helper central:
+
+backend/src/utils/errorResponse.js
+
+Ejemplo:
+function serverError(res, error, publicMessage = 'Error procesando solicitud') {
+  const isProd = process.env.NODE_ENV === 'production';
+
+  return res.status(500).json({
+    ok: false,
+    error: publicMessage,
+    ...(isProd ? {} : { detail: error?.message || String(error) }),
+  });
+}
+
+module.exports = { serverError };
+
+Tareas:
+1. Crear helper.
+2. Reemplazar detail: error.message en rutas sensibles.
+3. Mantener console.error en servidor.
+4. En producción no devolver detail.
+5. En desarrollo sí permitir detail para debugging.
+
+Criterios de aceptación:
+- grep -R "detail: error.message" backend/src debe bajar a cero o quedar justificado.
+- En NODE_ENV=production no se expone detail.
+- Los errores siguen siendo diagnosticables en logs.
+
+
+=====================================================
+4. PRIORIDAD ALTA: DEFINIR POLÍTICA DE AUTOAPROBACIÓN DE EVIDENCIAS IA
+=====================================================
+
+Problema detectado:
+El discurso funcional deseado es:
+"La IA sugiere, anticipa y razona, pero no aprueba decisiones críticas sin humano".
+
+Sin embargo, el código actual tiene lógica que puede autoaprobar evidencias si supera umbral, por ejemplo AI_AUTO_APPROVAL_THRESHOLD = 80.
+
+Riesgo:
+- Contradicción con enfoque auditor humano.
+- Riesgo de auditoría real.
+- Puede cerrar evidencias sin validación formal.
+- Puede afectar salud ISO, KPIs o ciclo de vida de manera prematura.
+
+Recomendación:
+Cambiar autoaprobación por recomendación o preaprobación.
+
+Opciones:
+
+Opción A:
+Mantener status = pendiente, y guardar:
+metadata.ai_recommendation = "approve"
+metadata.ai_acceptance_pct = 92
+metadata.human_approval_required = true
+
+Opción B:
+Crear estado intermedio:
+- pendiente
+- recomendada_por_ia
+- aprobada
+- rechazada
+
+No aprobar automáticamente salvo que el usuario defina explícitamente que lo quiere para demo.
+
+Tareas:
+1. Revisar backend/src/routes/evidences.routes.js.
+2. Revisar frontend/src/app/evidencias/page.tsx.
+3. Reemplazar mensajes de "aprobación automática" por "recomendación IA".
+4. Mantener trazabilidad de score y razones IA.
+5. No afectar evidencias ya aprobadas manualmente.
+6. Recalcular salud ISO solo cuando haya aprobación humana o evento formal.
+
+Criterios de aceptación:
+- Ninguna evidencia cambia a aprobada solo por IA.
+- La UI muestra recomendación IA y botón de aprobación manual.
+- Queda claro que requiere revisión humana.
+- Se mantiene el valor comercial del auditor IA.
+
+
+=====================================================
+5. PRIORIDAD ALTA: MIGRACIONES SQL VERSIONADAS
+=====================================================
+
+Problema detectado:
+El backend depende de muchas tablas, vistas y funciones avanzadas:
+- tenant_billing_settings
+- tenant_monthly_preinvoices
+- dealer_tenant_access
+- dealer_tenants
+- v_tenant_modules
+- v_admin_saas_summary
+- v_tenant_contract_overview
+- audit_control_reviews
+- ai_auditor_runs
+- refresh_tenant_control_health
+- refresh_control_health_scores_v2_1
+- refresh_kpi_health_snapshots
+- user_has_permission
+- log_admin_audit_event
+
+Riesgo:
+Si se reconstruye una VM o se despliega en OCI/AWS, puede fallar porque el código espera objetos que no existen.
+
+Recomendación:
+Crear carpeta versionada:
+database/migrations/
+
+Propuesta de estructura:
+001_base_schema.sql
+002_tenants_users_roles.sql
+003_controls_catalog.sql
+004_evidence_ai.sql
+005_kpi_engine.sql
+006_lifecycle.sql
+007_admin_saas_billing.sql
+008_ai_auditor.sql
+009_rbac_permissions.sql
+010_report_exports.sql
+
+Crear script:
+scripts/db-migrate.sh
+
+Criterios:
+- Cada migración debe ser idempotente cuando sea posible.
+- Usar CREATE TABLE IF NOT EXISTS.
+- Usar CREATE OR REPLACE VIEW/FUNCTION.
+- Registrar ejecución en tabla schema_migrations.
+- No borrar datos productivos.
+- Separar seed demo de migraciones productivas.
+
+Validaciones:
+sudo -u postgres psql -d tecdex_saas -c "
+SELECT to_regclass('public.audit_control_reviews') AS audit_control_reviews,
+       to_regclass('public.ai_auditor_runs') AS ai_auditor_runs,
+       to_regclass('public.tenant_billing_settings') AS tenant_billing_settings,
+       to_regclass('public.tenant_monthly_preinvoices') AS tenant_monthly_preinvoices;
+"
+
+sudo -u postgres psql -d tecdex_saas -c "
+SELECT proname
+FROM pg_proc
+WHERE proname IN (
+  'refresh_tenant_control_health',
+  'refresh_control_health_scores_v2_1',
+  'refresh_kpi_health_snapshots',
+  'user_has_permission',
+  'log_admin_audit_event'
+)
+ORDER BY proname;
+"
+
+
+=====================================================
+6. PRIORIDAD ALTA: SMOKE TESTS Y VALIDACIÓN E2E
+=====================================================
+
+Problema detectado:
+backend/package.json tiene:
+"test": "echo \"Error: no test specified\" && exit 1"
+
+No hay test real de backend.
+Frontend tiene build/lint, pero no test funcional.
+La validación actual depende de pruebas manuales.
+
+Recomendación:
+Crear scripts mínimos:
+
+scripts/check-demo-readiness.sh
+scripts/check-backend.sh
+scripts/check-frontend.sh
+scripts/check-ai-engine.sh
+scripts/check-rbac.sh
+scripts/check-db-objects.sh
+scripts/check-secrets-runtime.sh
+
+Criterios de aceptación:
+- Los scripts no imprimen secretos.
+- Validan servicios y endpoints clave.
+- Entregan salida clara OK/FAIL.
+- Sirven para demo y predeploy.
+
+Pruebas mínimas:
+Backend:
+curl -I http://192.168.100.120:3000
+curl -s http://192.168.100.120:3000/
+
+Frontend:
+curl -I http://192.168.100.130:3000/login
+curl -I http://192.168.100.130:3000/dashboard
+curl -I http://192.168.100.130:3000/auditorias
+curl -I http://192.168.100.130:3000/evidencias
+curl -I http://192.168.100.130:3000/prefacturacion
+
+AI Engine:
+curl -I http://192.168.100.140:8001
+curl -s http://192.168.100.140:8001/health
+
+DB:
+Validar tablas, vistas y funciones críticas.
+
+RBAC:
+- Ruta no declarada /api/* debe devolver 403.
+- Usuario tenant no debe listar todos los tenants.
+- Superadmin sí puede listar todos los tenants.
+- Dealer solo ve lo permitido.
+- Viewer no escribe.
+- Auditor no administra usuarios.
+
+
+=====================================================
+7. PRIORIDAD MEDIA: CORS
+=====================================================
+
+Contexto:
+Se detectó en backend/src/app.js:
+app.use(cors());
+
+Esto permite CORS abierto.
+
+Ajuste según arquitectura real:
+Para producción real, backend, AI Engine y BD estarán en red privada, no expuestos a internet.
+Solo frontend debería acceder a backend.
+Por lo tanto, CORS abierto baja de prioridad crítica a prioridad media.
+
+Aun así, se recomienda restringirlo preventivamente, especialmente si algún día se publica el backend por error o se usa reverse proxy público.
+
+Recomendación:
+Usar variable:
+CORS_ORIGINS=http://192.168.100.130:3000,https://saas.tcdx.cl
+
+Implementación sugerida:
+const allowedOrigins = String(process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.length === 0) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Origen no permitido por CORS'));
+  },
+  credentials: true,
+}));
+
+Criterios:
+- En laboratorio puede quedar flexible.
+- En producción privada, definir CORS_ORIGINS.
+- No romper acceso del frontend.
+
+
+=====================================================
+8. PRIORIDAD MEDIA: CENTRALIZAR ROLES Y PERMISOS
+=====================================================
+
+Problema detectado:
+Roles y permisos están duplicados en:
+- backend/src/middleware/rbac.middleware.js
+- rutas individuales
+- frontend/src/components/AppLayout.tsx
+
+Roles usados:
+- superadmin
+- super_admin
+- platform_admin
+- admin_global
+- global_admin
+- owner
+- admin
+- tenant_admin
+- auditor
+- operativo
+- viewer
+- dealer
+
+Riesgo:
+Una ruta puede reconocer un rol y otra no.
+El frontend puede permitir algo que backend niega.
+El backend puede permitir algo que frontend oculta.
+
+Recomendación:
+Crear helper:
+backend/src/security/roles.js
+
+Con funciones:
+normalizeRole()
+isPlatformRole()
+isTenantAdminRole()
+isDealerRole()
+isAuditorRole()
+isOperatorRole()
+isViewerRole()
+
+Crear matriz:
+backend/src/security/accessPolicy.js
+
+Luego:
+- RBAC middleware usa esa matriz.
+- Rutas individuales usan helper central.
+- Frontend debería consultar /api/me/access-policy o /api/me/modules y no duplicar toda la lógica.
+
+Criterio:
+- No cambiar comportamiento funcional en la primera iteración.
+- Solo centralizar y reducir duplicación.
+- Luego refactorizar rutas gradualmente.
+
+
+=====================================================
+9. PRIORIDAD MEDIA: RUTAS FUERA DE /api
+=====================================================
+
+Problema:
+En app.js existen rutas fuera del RBAC transversal:
+- /ai-feedback
+- /ai-external-lookup
+
+Ambas tienen autenticación local propia, pero no pasan por:
+app.use('/api', auth, enforceApiAccess)
+
+Riesgo:
+No crítico ahora, pero inconsistente.
+Duplica auth y dificulta gobierno de seguridad.
+
+Recomendación:
+Mover progresivamente a:
+- /api/ai-feedback
+- /api/ai-external-lookup
+
+Agregar reglas RBAC explícitas.
+
+Criterios:
+- Mantener alias temporal para compatibilidad si frontend las usa.
+- Documentar deprecación.
+- No romper flujos actuales.
+
+
+=====================================================
+10. PRIORIDAD MEDIA: DEPLOY SCRIPTS VERSIONADOS
+=====================================================
+
+Problema:
+scripts/deploy-vms.sh llama scripts remotos:
+- /home/tecdex/deploy-backend.sh
+- /home/tecdex/deploy-frontend.sh
+- /home/tecdex/deploy-ai-engine.sh
+
+Pero esos scripts viven en las VMs y pueden no estar versionados en Git.
+
+Riesgo:
+Si una VM se reconstruye, se pierde parte del proceso real de deploy.
+Dificulta migración a OCI/AWS.
+Dificulta troubleshooting.
+
+Recomendación:
+Versionar scripts fuente en:
+scripts/vm/deploy-backend.sh
+scripts/vm/deploy-frontend.sh
+scripts/vm/deploy-ai-engine.sh
+
+Luego copiar a cada VM o ejecutarlos desde repo.
+
+Criterios:
+- Scripts deben hacer git pull/reset a main.
+- Instalar dependencias si corresponde.
+- Compilar frontend antes de npm start.
+- Reiniciar backend con systemd.
+- Reiniciar AI Engine con systemd.
+- No usar PM2 para backend.
+- No borrar .env productivo.
+- No imprimir secretos.
+
+
+=====================================================
+11. PRIORIDAD MEDIA: FRONTEND Y PERMISOS
+=====================================================
+
+Problema:
+AppLayout.tsx tiene permisos hardcodeados:
+- platformOnly
+- dealerOnly
+- adminOrPlatform
+- viewerAllowedRoutes
+- operativeBlockedRoutes
+- auditorBlockedRoutes
+- moduleProtected
+
+Riesgo:
+Cada nuevo módulo obliga a tocar frontend y backend.
+Puede haber divergencia con RBAC.
+
+Recomendación:
+Crear endpoint:
+GET /api/me/access-policy
+
+Respuesta sugerida:
+{
+  "ok": true,
+  "role": "auditor",
+  "home_path": "/dashboard",
+  "allowed_routes": ["/dashboard", "/auditorias", "/evidencias"],
+  "modules": {
+    "audits": true,
+    "evidences": true,
+    "ai": false
+  },
+  "permissions": {
+    "evidences.read": true,
+    "evidences.write": false
+  }
+}
+
+Criterios:
+- Frontend solo consume política.
+- Backend sigue siendo autoridad.
+- Mantener compatibilidad temporal con lógica actual.
+
+
+=====================================================
+12. PRIORIDAD MEDIA: API URL HARDCODEADA EN FRONTEND
+=====================================================
+
+Problema:
+Frontend usa fallback:
+NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000'
+
+Para laboratorio está bien.
+Para producción privada/publicada puede ser riesgoso si se olvida definir variable.
+
+Recomendación:
+- Mantener fallback solo en desarrollo/lab.
+- En producción exigir NEXT_PUBLIC_API_URL.
+- Documentar en manual de implementación.
+- Validar en build o runtime.
+
+Criterio:
+Si NODE_ENV=production y NEXT_PUBLIC_API_URL no existe, mostrar error claro o impedir build.
+
+
+=====================================================
+13. PRIORIDAD MEDIA: LOGOS Y UPLOADS PÚBLICOS
+=====================================================
+
+Estado:
+El backend expone:
+- /uploads/logos
+- /uploads/profiles
+- /uploads/reports
+- /uploads/tenants
+- /uploads/tenant-logos
+
+No expone /uploads/evidences como carpeta pública general, lo que es correcto para evidencias.
+
+Recomendación:
+- Mantener evidencias protegidas por endpoint autorizado.
+- Evaluar si reports deben ser públicos o por endpoint autorizado.
+- Validar tipos MIME para logos.
+- Usar nombres seguros con UUID.
+- Evitar path traversal.
+
+Criterios:
+- Evidencias nunca públicas por carpeta estática.
+- Reportes ejecutivos sensibles idealmente deberían descargarse con JWT.
+- Logos pueden ser públicos si no contienen datos sensibles.
+
+
+=====================================================
+14. PRIORIDAD BAJA/MEDIA: bcrypt vs bcryptjs
+=====================================================
+
+Problema:
+backend/package.json tiene bcrypt y bcryptjs.
+auth.service.js usa bcrypt.
+users.routes.js usa bcryptjs.
+
+Riesgo:
+Bajo, pero inconsistente.
+
+Recomendación:
+Elegir uno:
+- bcrypt: mejor performance, dependencia nativa.
+- bcryptjs: más portable, puro JS.
+
+Para simplificar despliegue en VMs, bcryptjs puede ser suficiente.
+Pero si ya funciona bcrypt, también es válido.
+
+Criterios:
+- Usar una sola librería.
+- Verificar compatibilidad de hashes existentes.
+- No forzar cambio de contraseñas.
+
+
+=====================================================
+15. PRIORIDAD BAJA/MEDIA: LIMPIEZA AI ENGINE
+=====================================================
+
+Problema:
+ai-engine/app/routes/ai.py tiene import duplicado:
+from fastapi import APIRouter, Header, HTTPException, Request, Request, Request
+
+Recomendación:
+Cambiar a:
+from fastapi import APIRouter, Header, HTTPException, Request
+
+Criterio:
+No cambia comportamiento.
+Solo limpieza técnica.
+
+
+=====================================================
+16. PRIORIDAD MEDIA: SEPARAR LÓGICA SQL DE RUTAS
+=====================================================
+
+Problema:
+Rutas como:
+- admin-saas.routes.js
+- audit-execution.routes.js
+- billing.routes.js
+
+contienen mucha lógica SQL y de negocio.
+
+Riesgo:
+Difícil testear.
+Difícil mantener.
+Mayor riesgo al tocar una consulta.
+
+Recomendación gradual:
+routes/        -> HTTP req/res
+services/      -> lógica de negocio
+repositories/  -> SQL
+security/      -> roles/permisos
+utils/         -> helpers comunes
+
+No hacerlo todo de golpe.
+Aplicar en módulos nuevos primero y refactorizar gradualmente.
+
+Criterios:
+- No romper rutas existentes.
+- No cambiar comportamiento funcional sin pruebas.
+- Refactorizar primero billing o audit-execution como piloto.
+
+
+=====================================================
+17. PRIORIDAD ALTA PARA PRODUCCIÓN PRIVADA: FIREWALL / RED
+=====================================================
+
+Contexto:
+El usuario indicó que producción real no estará expuesta a internet:
+- Backend, AI Engine y BD estarán en red privada.
+- Solo frontend accederá a backend.
+- AI Engine y BD solo deberían ser alcanzables por backend o red interna autorizada.
+
+Recomendación:
+En AWS/OCI:
+- DB sin IP pública.
+- AI Engine sin IP pública.
+- Backend sin IP pública si se usa reverse proxy/frontend privado.
+- Security Group / NSG:
+  - Frontend -> Backend: puerto 3000 o reverse proxy interno.
+  - Backend -> DB: 5432.
+  - Backend -> AI Engine: 8001.
+  - Admin SSH solo desde IP/VPN autorizada.
+- Bloquear 5432 y 8001 desde internet.
+- Considerar VPN o bastion host.
+
+Criterios:
+- nmap desde fuera no debe ver DB ni AI Engine.
+- Backend no debe aceptar tráfico desde orígenes no autorizados si no corresponde.
+- Documentar matriz de red.
+
+
+=====================================================
+18. PRIORIDAD MEDIA: COOKIES HTTPONLY EN PRODUCCIÓN
+=====================================================
+
+Estado:
+Frontend guarda JWT en localStorage.
+
+Riesgo:
+Si hay XSS, el token queda expuesto.
+
+Para demo:
+Aceptable.
+
+Para producción real:
+Considerar cookies:
+- HttpOnly
+- Secure
+- SameSite=Lax o Strict
+
+Criterio:
+No cambiar ahora si puede romper demo.
+Planificar para fase producción.
+
+
+=====================================================
+19. BACKLOG ORDENADO PARA CODEX
+=====================================================
+
+Fase 1 - Hardening sin romper demo:
+1. Agregar health checks AI Engine.
+2. Estandarizar secretos con EnvironmentFile.
+3. Crear scripts check-secrets-runtime y check-ai-engine.
+4. Quitar detail: error.message en producción.
+5. Revisar autoaprobación IA y convertir a recomendación si se aprueba la política.
+6. Agregar smoke tests mínimos.
+
+Fase 2 - Operación y despliegue:
+1. Versionar scripts deploy-backend, deploy-frontend, deploy-ai-engine.
+2. Crear check-db-objects.
+3. Crear documentación de secretos y operación.
+4. Crear documentación de red privada AWS/OCI.
+5. Restringir CORS con CORS_ORIGINS.
+
+Fase 3 - Base de datos:
+1. Crear database/migrations.
+2. Crear tabla schema_migrations.
+3. Versionar objetos críticos.
+4. Separar seed demo de migraciones productivas.
+
+Fase 4 - Permisos:
+1. Crear helpers de roles.
+2. Centralizar matriz de permisos.
+3. Crear /api/me/access-policy.
+4. Reducir lógica hardcodeada en AppLayout.
+
+Fase 5 - Refactor gradual:
+1. Separar billing.routes.js en service/repository.
+2. Separar audit-execution.routes.js.
+3. Separar admin-saas.routes.js.
+4. Unificar bcrypt/bcryptjs.
+
+
+=====================================================
+20. COMANDOS DE VALIDACIÓN RECOMENDADOS
+=====================================================
+
+En Mac:
+cd ~/repos/tcdx-iso-saas
+git status
+git pull --ff-only
+
+grep -R "detail: error.message" backend/src/routes backend/src/controllers backend/src/services || true
+grep -R "app.use(cors())" backend/src || true
+grep -R "AI_INTERNAL_TOKEN\|AI_TOKEN\|OWN_AI_SHARED_SECRET" backend ai-engine scripts docs || true
+grep -R "bcryptjs\|bcrypt" backend/src backend/package.json || true
+grep -R "192.168.100" backend frontend ai-engine scripts || true
+
+Backend VM:
+ssh tecdex@192.168.100.120
+sudo systemctl cat tecdex-backend
+sudo systemctl status tecdex-backend --no-pager
+
+cd /home/tecdex/backend
+sudo grep -E '^(DB_|JWT_|OWN_AI_SHARED_SECRET|AI_INTERNAL_TOKEN|AI_TOKEN|PORT|NODE_ENV)=' .env 2>/dev/null | awk -F= '{print $1 " LEN=" length($2)}'
+
+AI Engine VM:
+ssh tecdex@192.168.100.140
+sudo systemctl cat ai-engine
+sudo systemctl status ai-engine --no-pager
+
+sudo grep -E '^(AI_INTERNAL_TOKEN|AI_TOKEN|DB_|BACKEND_API_URL)=' /etc/tecdex/ai-engine.env 2>/dev/null | awk -F= '{print $1 " LEN=" length($2)}'
+
+curl -I http://192.168.100.140:8001
+curl -s http://192.168.100.140:8001/health | python3 -m json.tool
+
+DB VM:
+ssh tecdex@192.168.100.110
+
+sudo -u postgres psql -d tecdex_saas -c "
+SELECT to_regclass('public.audit_control_reviews') AS audit_control_reviews,
+       to_regclass('public.ai_auditor_runs') AS ai_auditor_runs,
+       to_regclass('public.tenant_billing_settings') AS tenant_billing_settings,
+       to_regclass('public.tenant_monthly_preinvoices') AS tenant_monthly_preinvoices;
+"
+
+sudo -u postgres psql -d tecdex_saas -c "
+SELECT proname
+FROM pg_proc
+WHERE proname IN (
+  'refresh_tenant_control_health',
+  'refresh_control_health_scores_v2_1',
+  'refresh_kpi_health_snapshots',
+  'user_has_permission',
+  'log_admin_audit_event'
+)
+ORDER BY proname;
+"
+
+
+=====================================================
+21. INSTRUCCIONES IMPORTANTES PARA CODEX
+=====================================================
+
+1. No subir secretos al repositorio.
+2. No modificar masivamente backend, frontend y AI Engine en un solo commit si no es necesario.
+3. Trabajar por ramas o commits pequeños:
+   - hardening-ai-health
+   - hardening-secrets-envfiles
+   - hardening-error-responses
+   - hardening-smoke-tests
+   - hardening-rbac-policy
+4. Después de cada cambio:
+   - compilar frontend si aplica
+   - reiniciar servicio correspondiente
+   - validar endpoints
+   - revisar git diff
+5. No romper:
+   - dashboard
+   - login
+   - evidencias
+   - auditorías
+   - reportes/exportes
+   - KPI
+   - prefacturación
+   - multi-tenant
+   - RBAC
+   - AI Engine
+6. Mantener estilo visual premium TCDX para exportes/reportes.
+7. Mantener modelo comercial SaaS sin límite por usuarios.
+8. Mantener variable comercial principal por normas ISO activas/módulos/consumo IA.
+9. Recordar que backend se reinicia con systemd:
+   sudo systemctl restart tecdex-backend
+10. Recordar que AI Engine se reinicia con:
+   sudo systemctl restart ai-engine
+
+
+=====================================================
+22. CONCLUSIÓN
+=====================================================
+
+El proyecto está bien encaminado y funcional para demo, pero antes de seguir agregando features conviene hacer una iteración corta de hardening técnico.
+
+Objetivo de esta iteración:
+- dejar servicios más verificables
+- estandarizar secretos
+- evitar filtración de errores
+- reducir riesgos de autorización
+- ordenar deploy
+- preparar el camino para producción privada en AWS/OCI
+- no romper la demo comercial actual
+
+Fin del documento.
