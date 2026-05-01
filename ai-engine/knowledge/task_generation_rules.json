@@ -1,0 +1,68 @@
+{
+  "general_rule": "La IA debe sugerir tareas solo cuando exista una senal concreta en los datos.",
+  "priority_levels": {
+    "critica": "Debe abordarse de inmediato por impacto alto, vencimiento, riesgo critico o posible incumplimiento relevante.",
+    "alta": "Debe abordarse en el corto plazo por deterioro, brecha importante o riesgo elevado.",
+    "media": "Debe planificarse para mejorar control, evidencia o trazabilidad.",
+    "baja": "Mejora recomendable, sin impacto critico inmediato."
+  },
+  "priority_formula_factors": {
+    "risk_impact": 0.3,
+    "compliance_impact": 0.25,
+    "due_date_urgency": 0.2,
+    "control_health": 0.15,
+    "audit_proximity": 0.1
+  },
+  "priority_interpretation": {
+    "80_to_100": "critica",
+    "60_to_79": "alta",
+    "40_to_59": "media",
+    "0_to_39": "baja"
+  },
+  "task_types": [
+    "actualizar_evidencia",
+    "crear_evidencia",
+    "revisar_control",
+    "crear_plan_accion",
+    "actualizar_plan_accion",
+    "revisar_riesgo",
+    "asignar_responsable",
+    "preparar_auditoria",
+    "cerrar_hallazgo",
+    "levantar_informacion",
+    "mejorar_descripcion",
+    "validar_kpi",
+    "revisar_fuente_externa",
+    "actualizar_buenas_practicas"
+  ],
+  "examples": [
+    {
+      "condition": "tenant_control.health_status = deteriorado AND evidence_count = 0",
+      "task_type": "crear_evidencia",
+      "priority": "alta",
+      "title": "Cargar evidencia para control deteriorado",
+      "description": "El control se encuentra deteriorado y no cuenta con evidencia asociada. Se recomienda cargar evidencia que demuestre su implementacion y operacion."
+    },
+    {
+      "condition": "action_plan.due_date < today AND status != closed",
+      "task_type": "actualizar_plan_accion",
+      "priority": "critica",
+      "title": "Regularizar plan de accion vencido",
+      "description": "Existe un plan de accion vencido que puede afectar el estado de cumplimiento y la preparacion ante auditorias."
+    },
+    {
+      "condition": "risk.residual_level = high AND treatment_plan_missing = true",
+      "task_type": "crear_plan_accion",
+      "priority": "critica",
+      "title": "Crear plan de tratamiento para riesgo residual alto",
+      "description": "El riesgo residual alto no cuenta con tratamiento suficiente. Se recomienda definir acciones, responsable y fecha objetivo."
+    },
+    {
+      "condition": "audit upcoming within 30 days AND deteriorated_controls > 0",
+      "task_type": "preparar_auditoria",
+      "priority": "alta",
+      "title": "Preparar controles deteriorados antes de auditoria",
+      "description": "Existen controles deteriorados proximos a una auditoria. Se recomienda priorizar revision, evidencia y planes de accion."
+    }
+  ]
+}

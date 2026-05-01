@@ -1,0 +1,76 @@
+{
+  "provider": {
+    "name": "brave",
+    "purpose": "Obtener contexto complementario externo para enriquecer analisis, reportes, sugerencias, auditorias y tareas.",
+    "primary_rule": "Los datos internos del tenant son la fuente principal de verdad. Brave Search solo puede aportar contexto complementario."
+  },
+  "allowed_use_cases": [
+    "Cambios normativos relevantes de caracter publico",
+    "Buenas practicas de cumplimiento",
+    "Guias publicas sobre ISO, auditoria, ciberseguridad, continuidad operacional, riesgos o gobierno corporativo",
+    "Amenazas actuales de ciberseguridad",
+    "Alertas de proveedores tecnologicos",
+    "Vulnerabilidades publicas",
+    "Tendencias o recomendaciones de mercado",
+    "Informacion publica util para enriquecer reportes ejecutivos",
+    "Referencias generales de organismos confiables"
+  ],
+  "not_allowed_use_cases": [
+    "Declarar cumplimiento interno del tenant",
+    "Validar evidencia confidencial del tenant en internet",
+    "Enviar datos sensibles del tenant a Brave Search",
+    "Buscar nombres de clientes, usuarios, correos, RUT, IPs privadas, archivos internos o documentos confidenciales",
+    "Copiar textos extensos de normas ISO protegidas",
+    "Usar fuentes externas como reemplazo de datos internos"
+  ],
+  "trusted_sources_priority": [
+    "ISO, solo como referencia publica y sin copiar textos protegidos",
+    "NIST",
+    "ENISA",
+    "CISA",
+    "OWASP",
+    "CIS Controls",
+    "CSA Cloud Security Alliance",
+    "Organismos reguladores oficiales",
+    "Microsoft Learn",
+    "Google Cloud Documentation",
+    "AWS Documentation",
+    "Oracle Documentation",
+    "VMware Documentation",
+    "Fortinet Documentation",
+    "Dell Documentation",
+    "HPE Documentation",
+    "Sitios gubernamentales",
+    "Publicaciones tecnicas reconocidas"
+  ],
+  "avoid_as_primary_sources": [
+    "Blogs sin reputacion clara",
+    "Foros sin validacion",
+    "Contenido comercial sin respaldo tecnico",
+    "Informacion sin fecha",
+    "Informacion contradictoria sin advertirlo"
+  ],
+  "sanitization_rules": [
+    "Eliminar tenant_id",
+    "Eliminar nombres de clientes",
+    "Eliminar nombres de usuarios",
+    "Eliminar correos electronicos",
+    "Eliminar RUT",
+    "Eliminar telefonos",
+    "Eliminar direcciones",
+    "Eliminar URLs internas",
+    "Eliminar IPs privadas",
+    "Eliminar nombres de archivos internos",
+    "Eliminar contenido de evidencias",
+    "Eliminar secretos, tokens o credenciales",
+    "Eliminar cualquier dato confidencial"
+  ],
+  "response_rules": [
+    "Indicar claramente cuando se uso contexto externo",
+    "Listar fuentes utilizadas cuando existan",
+    "Incluir fecha de consulta",
+    "No declarar cumplimiento usando solo fuentes externas",
+    "Declarar limitaciones si no se encontraron fuentes confiables",
+    "Mantener separacion entre datos internos e informacion complementaria"
+  ]
+}

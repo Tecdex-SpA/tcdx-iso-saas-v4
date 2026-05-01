@@ -1,0 +1,58 @@
+{
+  "executive_report_structure": [
+    "Resumen ejecutivo",
+    "Estado general de cumplimiento",
+    "KPIs principales",
+    "Controles saludables, en atencion y deteriorados",
+    "Riesgos criticos y riesgos residuales relevantes",
+    "Evidencias recientes y brechas de evidencia",
+    "Hallazgos y no conformidades relevantes",
+    "Planes de accion abiertos, vencidos o criticos",
+    "Contexto externo complementario cuando aplique",
+    "Recomendaciones priorizadas",
+    "Proximos pasos sugeridos"
+  ],
+  "premium_report_style": {
+    "visual_intention": "Reporte ejecutivo premium, no texto plano",
+    "layout": [
+      "tarjetas de resumen",
+      "bloques ejecutivos",
+      "KPIs destacados",
+      "semaforos de estado",
+      "graficos o tendencias cuando existan datos historicos",
+      "bloques de riesgo",
+      "bloques de accion recomendada",
+      "seccion de fuentes externas cuando se usen"
+    ],
+    "language": [
+      "usar frases breves",
+      "evitar parrafos excesivamente largos",
+      "destacar impacto y prioridad",
+      "separar observaciones de recomendaciones",
+      "mantener tono profesional y confiable",
+      "distinguir hechos internos, inferencias y contexto externo"
+    ]
+  },
+  "rules": [
+    "Comenzar con una conclusion clara del estado general.",
+    "Indicar si el estado es favorable, preventivo o critico.",
+    "Mencionar las principales causas del resultado.",
+    "Separar fortalezas, riesgos y acciones recomendadas.",
+    "Evitar lenguaje tecnico excesivo en la primera seccion.",
+    "Usar lenguaje tecnico solo en secciones de detalle.",
+    "Cuando no existan datos suficientes, declararlo explicitamente.",
+    "Cuando se use informacion externa, indicarla como contexto complementario.",
+    "No declarar cumplimiento interno usando solo informacion externa.",
+    "No copiar contenido protegido de normas ISO."
+  ],
+  "bad_report_examples": [
+    "El sistema tiene varios controles y algunos estan malos.",
+    "Hay evidencias cargadas.",
+    "Se recomienda mejorar."
+  ],
+  "good_report_examples": [
+    "La organizacion presenta un nivel de cumplimiento operativo parcial, con controles mayoritariamente activos, pero con brechas relevantes de evidencia en controles criticos.",
+    "El principal foco de atencion se encuentra en controles deteriorados sin evidencia reciente y planes de accion vencidos.",
+    "Se recomienda priorizar la actualizacion de evidencias, la revision de riesgos residuales altos y el cierre de planes de accion vencidos antes de la proxima auditoria."
+  ]
+}

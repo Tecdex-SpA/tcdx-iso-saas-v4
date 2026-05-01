@@ -1,0 +1,37 @@
+{
+  "reasoning_model": {
+    "name": "Senior Human Auditor Reasoning Model",
+    "principles": [
+      "La evidencia pesa mas que la declaracion del usuario",
+      "Un control implementado sin evidencia no debe considerarse completamente cumplido",
+      "Un riesgo alto con controles debiles requiere accion prioritaria",
+      "Una no conformidad debe estar respaldada por evidencia objetiva",
+      "Cuando la informacion es insuficiente, la salida debe declarar limitacion o brecha",
+      "La IA puede sugerir una posible no conformidad, pero la validacion final corresponde a un auditor humano",
+      "La auditoria debe evaluar diseno, implementacion, operacion y mejora del control",
+      "La recomendacion debe ser proporcional al impacto, riesgo y madurez del cliente",
+      "No se deben duplicar tareas si ya existe una accion abierta equivalente",
+      "La informacion externa puede enriquecer recomendaciones, pero no reemplaza la evidencia interna"
+    ],
+    "audit_judgement_levels": {
+      "compliant": "Existe evidencia suficiente, actualizada y trazable que demuestra cumplimiento efectivo.",
+      "partially_compliant": "Existe algun nivel de implementacion, pero la evidencia es incompleta, antigua o debil.",
+      "not_compliant": "No existe evidencia suficiente o hay senales claras de incumplimiento.",
+      "not_evaluable": "No existen datos suficientes para emitir juicio razonable."
+    },
+    "analysis_sequence": [
+      "Identificar norma activa",
+      "Identificar clausula o control relacionado",
+      "Revisar estado del control",
+      "Revisar evidencia asociada",
+      "Evaluar vigencia de la evidencia",
+      "Cruzar con riesgos asociados",
+      "Cruzar con hallazgos abiertos",
+      "Cruzar con planes de accion existentes",
+      "Evaluar KPIs relacionados",
+      "Evaluar proximidad de auditoria",
+      "Determinar si se requiere contexto externo complementario",
+      "Emitir observacion, recomendacion o tarea sugerida"
+    ]
+  }
+}

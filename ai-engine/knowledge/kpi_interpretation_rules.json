@@ -1,0 +1,29 @@
+{
+  "general": "Los KPIs deben interpretarse en contexto. Un valor aislado no siempre representa mejora o deterioro; se debe considerar tendencia, umbral, norma, periodo y fuente.",
+  "status_colors": {
+    "green": "Estado favorable o dentro del rango esperado.",
+    "yellow": "Estado preventivo, requiere seguimiento.",
+    "red": "Estado critico o fuera de rango esperado.",
+    "gray": "Sin datos suficientes o no calculable."
+  },
+  "report_language": {
+    "green": "El indicador se mantiene dentro del rango esperado.",
+    "yellow": "El indicador requiere seguimiento para evitar deterioro.",
+    "red": "El indicador refleja una condicion critica que requiere accion.",
+    "gray": "No existen datos suficientes para evaluar este indicador con certeza."
+  },
+  "recommendations": [
+    {
+      "condition": "kpi red",
+      "recommendation": "Generar accion prioritaria o revision del area responsable."
+    },
+    {
+      "condition": "kpi yellow for 2 or more periods",
+      "recommendation": "Escalar seguimiento y definir accion preventiva."
+    },
+    {
+      "condition": "kpi gray",
+      "recommendation": "Completar datos fuente para permitir calculo confiable."
+    }
+  ]
+}

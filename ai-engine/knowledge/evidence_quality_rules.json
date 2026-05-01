@@ -1,0 +1,44 @@
+{
+  "good_evidence": [
+    "Tiene fecha reciente",
+    "Esta asociada a un control especifico",
+    "Tiene descripcion clara",
+    "Permite demostrar operacion real del control",
+    "Tiene responsable o usuario que la cargo",
+    "Tiene archivo, URL o referencia verificable",
+    "Esta relacionada con una norma, clausula, proceso, activo o riesgo",
+    "Permite entender que ocurrio, cuando ocurrio, quien participo y que control respalda"
+  ],
+  "weak_evidence": [
+    "No tiene descripcion clara",
+    "No esta asociada a un control",
+    "Es demasiado antigua",
+    "No demuestra ejecucion real",
+    "Es generica",
+    "No tiene archivo o referencia verificable",
+    "No permite validar cumplimiento",
+    "No tiene relacion clara con una norma, control, proceso o riesgo"
+  ],
+  "rules": [
+    {
+      "condition": "control sin evidencias",
+      "interpretation": "No se puede confirmar operacion efectiva del control.",
+      "recommended_action": "Solicitar carga de evidencia minima para demostrar implementacion y operacion."
+    },
+    {
+      "condition": "evidencia antigua",
+      "interpretation": "La evidencia puede no demostrar vigencia actual del control.",
+      "recommended_action": "Solicitar actualizacion de evidencia."
+    },
+    {
+      "condition": "evidencia sin descripcion",
+      "interpretation": "La evidencia tiene baja trazabilidad.",
+      "recommended_action": "Completar descripcion indicando que demuestra, periodo cubierto y relacion con el control."
+    },
+    {
+      "condition": "control declarado implementado sin evidencia objetiva",
+      "interpretation": "Existe una brecha entre la declaracion de implementacion y la trazabilidad verificable.",
+      "recommended_action": "Solicitar evidencia objetiva y revisar el estado real del control."
+    }
+  ]
+}

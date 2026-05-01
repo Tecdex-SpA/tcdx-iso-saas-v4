@@ -17,6 +17,7 @@ from app.services.scenario_response_enricher import enrich_ai_response_with_scen
 from app.services.external_lookup_service import build_external_lookup_plan
 from app.services.external_lookup_service import execute_external_lookup_search
 from app.services.external_lookup_service import get_cached_external_lookup
+from app.services.knowledge_loader import get_knowledge_module, get_knowledge_status
 from app.core.config import settings
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
@@ -170,6 +171,27 @@ def suggest_executive_brief(
         return generate_executive_brief(payload_dict)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"executive-brief error: {e}")
+
+
+@router.get("/knowledge/status")
+def knowledge_status(
+    x_ai_token: Optional[str] = Header(default=None),
+):
+    validate_internal_token(x_ai_token)
+    return get_knowledge_status()
+
+
+@router.get("/knowledge/module/{module_name}")
+def knowledge_module(
+    module_name: str,
+    x_ai_token: Optional[str] = Header(default=None),
+):
+    validate_internal_token(x_ai_token)
+    return {
+        "ok": True,
+        "module": module_name,
+        "knowledge": get_knowledge_module(module_name),
+    }
 
 
 @router.post("/internal/diagnostic/context")

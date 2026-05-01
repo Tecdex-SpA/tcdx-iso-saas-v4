@@ -1,0 +1,33 @@
+{
+  "risk_priority_factors": [
+    "impacto",
+    "probabilidad",
+    "riesgo inherente",
+    "riesgo residual",
+    "criticidad del activo",
+    "controles asociados",
+    "estado de salud de controles",
+    "planes de tratamiento abiertos",
+    "fecha de vencimiento",
+    "hallazgos relacionados",
+    "amenazas externas actuales cuando aplique"
+  ],
+  "high_priority_conditions": [
+    "Riesgo residual alto sin plan de tratamiento",
+    "Activo critico con controles deteriorados",
+    "Riesgo alto con evidencia insuficiente",
+    "Plan de accion vencido asociado a riesgo alto",
+    "Hallazgo critico sin responsable asignado",
+    "Control clave deteriorado en norma activa",
+    "Riesgo tecnologico asociado a vulnerabilidad o amenaza vigente"
+  ],
+  "recommended_outputs": [
+    "alerta de riesgo",
+    "tarea sugerida",
+    "recomendacion ejecutiva",
+    "posible hallazgo",
+    "posible plan de accion",
+    "solicitud de evidencia",
+    "contexto complementario externo"
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "suggestion_output_schema": {
+    "type": "object",
+    "required_fields": [
+      "type",
+      "title",
+      "summary",
+      "priority",
+      "confidence",
+      "reason",
+      "recommended_action",
+      "related_entities"
+    ],
+    "fields": {
+      "type": "suggestion | task | risk_alert | report_insight | audit_observation | evidence_gap",
+      "title": "Titulo breve y accionable",
+      "summary": "Resumen ejecutivo de la situacion",
+      "priority": "critica | alta | media | baja",
+      "confidence": "high | medium | low",
+      "reason": "Motivo basado en datos del sistema",
+      "recommended_action": "Accion concreta recomendada",
+      "related_entities": [
+        {
+          "entity_type": "tenant_control | evidence | risk | finding | action_plan | audit | kpi",
+          "entity_id": "uuid",
+          "label": "Nombre visible para usuario"
+        }
+      ],
+      "suggested_owner_role": "responsable de control | encargado de calidad | CISO | auditor interno | administrador SaaS | usuario responsable",
+      "due_date_suggestion": "fecha sugerida o criterio",
+      "should_create_task": true
+    }
+  },
+  "ai_analysis_response_schema": {
+    "tenant_id": "uuid",
+    "generated_at": "ISO_DATE",
+    "module": "controls | risks | evidences | audits | reports | kpis | global",
+    "summary": {
+      "overall_status": "saludable | atencion | deteriorado | sin_datos",
+      "executive_message": "string",
+      "confidence": "high | medium | low"
+    },
+    "insights": [],
+    "suggested_tasks": [],
+    "audit_observations": [],
+    "limitations": [],
+    "external_context": {
+      "used": true,
+      "provider": "brave",
+      "purpose": "string",
+      "queries": [],
+      "sources": [
+        {
+          "title": "string",
+          "url": "string",
+          "source": "string",
+          "retrieved_at": "ISO_DATE",
+          "summary": "string"
+        }
+      ],
+      "limitations": []
+    }
+  }
+}

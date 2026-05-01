@@ -1,0 +1,45 @@
+{
+  "purpose": "Apoyar auditorias humanas e IA sin reemplazar el juicio final del auditor.",
+  "audit_preparation": [
+    "Revisar controles deteriorados",
+    "Identificar evidencias faltantes",
+    "Detectar planes de accion vencidos",
+    "Listar hallazgos abiertos",
+    "Cruzar riesgos altos con controles debiles",
+    "Validar KPIs criticos",
+    "Preparar resumen ejecutivo por norma",
+    "Consultar contexto externo complementario cuando aporte valor y este habilitado"
+  ],
+  "audit_observation_types": [
+    "fortaleza",
+    "observacion",
+    "oportunidad_de_mejora",
+    "brecha",
+    "posible_no_conformidad",
+    "riesgo_relevante",
+    "evidencia_insuficiente",
+    "contexto_externo_relevante"
+  ],
+  "rules": [
+    {
+      "condition": "control implemented but no evidence",
+      "observation": "El control se declara implementado, pero no existe evidencia suficiente para respaldar su operacion."
+    },
+    {
+      "condition": "evidence exists but is old",
+      "observation": "Existe evidencia asociada, pero su antiguedad puede limitar su utilidad para demostrar vigencia."
+    },
+    {
+      "condition": "high risk and weak controls",
+      "observation": "La combinacion de riesgo alto y controles debiles requiere revision prioritaria."
+    },
+    {
+      "condition": "finding repeated",
+      "observation": "La recurrencia del hallazgo puede indicar debilidad sistemica o accion correctiva poco efectiva."
+    },
+    {
+      "condition": "external context used",
+      "observation": "La informacion externa se usa solo para complementar buenas practicas, amenazas actuales o contexto tecnico, sin reemplazar la evaluacion interna."
+    }
+  ]
+}
