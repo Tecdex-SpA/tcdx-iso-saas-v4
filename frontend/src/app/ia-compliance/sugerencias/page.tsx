@@ -36,6 +36,63 @@ function aiTraceText(value: any, fallback = '') {
   return String(value ?? fallback ?? '').trim();
 }
 
+function formatSourceModule(value?: string | null) {
+  const labels: Record<string, string> = {
+    ia_compliance: 'IA Compliance',
+    ia_compliance_apply: 'IA Compliance - aplicación',
+    ia_module_in_page: 'Hallazgos - IA en página',
+    nc_module_in_page: 'No conformidades - IA en página',
+    frontend_hallazgos: 'Hallazgos',
+    diagnostic: 'Diagnóstico',
+    control: 'Controles',
+    audit: 'Auditorías',
+    soa: 'SoA',
+  };
+
+  const raw = String(value || '').trim();
+  return labels[raw] || raw.replaceAll('_', ' ') || 'No informado';
+}
+
+function formatSourceEntityType(value?: string | null) {
+  const labels: Record<string, string> = {
+    tenant: 'Cliente / tenant',
+    finding: 'Hallazgo',
+    nonconformity: 'No conformidad',
+    action_plan: 'Plan de acción',
+    manual_input: 'Entrada manual',
+    evidence: 'Evidencia',
+    control: 'Control',
+    audit: 'Auditoría',
+  };
+
+  const raw = String(value || '').trim();
+  return labels[raw] || raw.replaceAll('_', ' ') || 'No informado';
+}
+
+function shortReference(value?: string | null) {
+  const raw = String(value || '').trim();
+
+  if (!raw) return 'No informado';
+
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) {
+    return `Referencia ${raw.slice(0, 8)}`;
+  }
+
+  return raw;
+}
+
+function buildOriginSummary(row: SuggestionRow) {
+  const moduleLabel = formatSourceModule(row.source_module);
+  const entityLabel = formatSourceEntityType(row.source_entity_type);
+  const reference = shortReference(row.source_entity_id);
+
+  if (row.source_entity_id) {
+    return `${moduleLabel} · ${entityLabel} · ${reference}`;
+  }
+
+  return `${moduleLabel} · ${entityLabel}`;
+}
+
 function getSuggestionAiTrace(row: SuggestionRow) {
   const output = row.output_payload || {};
   const enhanced = output.enhanced_orchestration || output.enhanced || {};
@@ -695,7 +752,7 @@ export default function AiSuggestionsPage() {
                       </h2>
 
                       <div className="mt-1 text-sm text-slate-500">
-                        {row.title || 'Sin título manual'} · {row.source_module}
+                        {row.title || 'Sin título manual'} · {buildOriginSummary(row)}
                       </div>
 
                       <div className="mt-3 text-sm leading-6 text-slate-700">
@@ -720,19 +777,19 @@ export default function AiSuggestionsPage() {
                       <div className="grid grid-cols-1 gap-2 text-sm">
                         <InfoItem
                           label="Módulo"
-                          value={row.source_module || '-'}
+                          value={formatSourceModule(row.source_module)}
                         />
                         <InfoItem
                           label="Entidad origen"
-                          value={row.source_entity_type || '-'}
+                          value={formatSourceEntityType(row.source_entity_type)}
                         />
                         <InfoItem
-                          label="ID origen"
-                          value={row.source_entity_id || '-'}
+                          label="Registro relacionado"
+                          value={shortReference(row.source_entity_id)}
                         />
                         <InfoItem
-                          label="Tenant"
-                          value={row.tenant_id || '-'}
+                          label="Cliente"
+                          value="Cliente actual"
                         />
                       </div>
                     </div>
@@ -806,7 +863,7 @@ function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
       <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-slate-800 break-all">
+      <div className="mt-1 text-sm font-semibold text-slate-800">
         {value || '-'}
       </div>
     </div>
