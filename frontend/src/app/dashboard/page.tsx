@@ -850,147 +850,59 @@ export default function DashboardPage() {
     <AppLayout>
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef4ff_0%,#f5f7fb_42%,#edf2f7_100%)]">
         <div className="mx-auto max-w-[1720px] space-y-6">
-          <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.2fr)_420px]">
-              <div className="space-y-5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                    Centro de mando
-                  </span>
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Última actualización: {latestSyncText}
-                  </span>
-                </div>
+          <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h1 className="text-[2rem] font-bold tracking-tight text-[#06173a]">
+                Bienvenido a TCDX
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Vista general de cumplimiento y gestión ISO.
+              </p>
+            </div>
 
-                <div>
-                  <h1 className="text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                    Dashboard Ejecutivo
-                  </h1>
-                  <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600 md:text-lg">
-                    Vista consolidada de cumplimiento, riesgos, auditorías, hallazgos,
-                    acciones y KPIs para seguimiento ejecutivo y operación diaria.
-                  </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setActiveView('executive')}
+                  className={[
+                    'rounded-md px-4 py-2 text-sm font-semibold transition',
+                    activeView === 'executive'
+                      ? 'bg-[#2563eb] text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100',
+                  ].join(' ')}
+                >
+                  Vista Ejecutiva
+                </button>
 
-                  {activeView === 'executive' && auditSummary?.summary && (
-                    <div className="mt-5 grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-4">
-                      <div className="rounded-2xl border border-indigo-100 bg-white px-4 py-3 shadow-sm">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                          Auditorías
-                        </div>
-                        <div className="mt-1 text-2xl font-bold text-slate-900">
-                          {auditSummary.summary.total || 0}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-amber-100 bg-white px-4 py-3 shadow-sm">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                          En ejecución
-                        </div>
-                        <div className="mt-1 text-2xl font-bold text-amber-600">
-                          {auditSummary.summary.en_ejecucion || 0}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-red-100 bg-white px-4 py-3 shadow-sm">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                          Hallazgos
-                        </div>
-                        <div className="mt-1 text-2xl font-bold text-red-600">
-                          {auditSummary.summary.hallazgos || 0}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                          Acciones
-                        </div>
-                        <div className="mt-1 text-2xl font-bold text-violet-600">
-                          {auditSummary.summary.acciones || 0}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeView === 'executive' && auditSummary?.note && (
-                    <div className="mt-3 max-w-5xl rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
-                      {auditSummary.note}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-                    <button
-                      type="button"
-                      onClick={() => setActiveView('executive')}
-                      className={[
-                        'rounded-xl px-4 py-2 text-sm font-semibold transition',
-                        activeView === 'executive'
-                          ? 'bg-slate-900 text-white shadow-sm'
-                          : 'text-slate-600 hover:bg-slate-100',
-                      ].join(' ')}
-                    >
-                      Vista Ejecutiva
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveView('kpi')}
-                      className={[
-                        'rounded-xl px-4 py-2 text-sm font-semibold transition',
-                        activeView === 'kpi'
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'text-slate-600 hover:bg-slate-100',
-                      ].join(' ')}
-                    >
-                      Vista KPI
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleRefreshDashboard}
-                    disabled={refreshingExecutive}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    <TcdxIcon name="refresh" className="h-5 w-5" />
-                    {refreshingExecutive ? 'Actualizando...' : 'Actualizar'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveView('kpi')}
+                  className={[
+                    'rounded-md px-4 py-2 text-sm font-semibold transition',
+                    activeView === 'kpi'
+                      ? 'bg-[#2563eb] text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100',
+                  ].join(' ')}
+                >
+                  Vista KPI
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 rounded-[28px] border border-slate-200 bg-white/80 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-sm">
-                <HeroMetric
-                  label="Cumplimiento"
-                  value={`${complianceValue}%`}
-                  tone="green"
-                  hint="panorama actual"
-                />
-                <HeroMetric
-                  label="Riesgo global"
-                  value={globalRiskLabel}
-                  tone={
-                    globalRiskLabel === 'Alto'
-                      ? 'red'
-                      : globalRiskLabel === 'Medio'
-                      ? 'amber'
-                      : 'green'
-                  }
-                  hint={`${globalRiskValue}%`}
-                />
-                <HeroMetric
-                  label="Hallazgos abiertos"
-                  value={openFindingsCount}
-                  tone="rose"
-                  hint="seguimiento requerido"
-                />
-                <HeroMetric
-                  label="Auditorías próximas"
-                  value={nextAudits.length}
-                  tone="indigo"
-                  hint="agenda cercana"
-                />
+              <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm">
+                <TcdxIcon name="calendar" className="h-4 w-4 text-[#2563eb]" />
+                {latestSyncText}
               </div>
+
+              <button
+                type="button"
+                onClick={handleRefreshDashboard}
+                disabled={refreshingExecutive}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                <TcdxIcon name="refresh" className="h-4 w-4" />
+                {refreshingExecutive ? 'Actualizando...' : 'Actualizar'}
+              </button>
             </div>
           </section>
 
@@ -1027,56 +939,47 @@ export default function DashboardPage() {
 
               {!loading && (controls.length > 0 || dashboardHasSummaryData) && (
                 <>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-5">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
                     <TopCard
-                      title="Nivel de Cumplimiento"
+                      title="Cumplimiento global"
                       value={`${complianceValue}%`}
                       subtitle="Estado global actual"
-                      accent="green"
+                      accent="indigo"
                       change={`↑ ${Math.max(1, Math.round(complianceValue * 0.03))}%`}
                       changeHint="vs. medición previa"
                       icon={<TcdxIcon name="shield" className="h-6 w-6" />}
                     />
 
                     <TopCard
-                      title="Hallazgos Abiertos"
-                      value={openFindingsCount}
-                      subtitle="Seguimiento requerido"
-                      accent="red"
-                      change={`${noCumple} críticos`}
-                      changeHint="desde controles no conformes"
-                      icon={<TcdxIcon name="finding" className="h-6 w-6" />}
+                      title="Controles saludables"
+                      value={`${cumple} / ${totalControls || 0}`}
+                      subtitle="Controles cumplidos"
+                      accent="indigo"
+                      change={`${completionPct}% del total`}
+                      changeHint="según evaluación actual"
+                      icon={<TcdxIcon name="activity" className="h-6 w-6" />}
                     />
 
                     <TopCard
-                      title="Planes Activos"
-                      value={activeActionPlans}
-                      subtitle="Acciones en seguimiento"
-                      accent="amber"
-                      change={`${overdueActionPlans} atrasados`}
-                      changeHint="foco operativo"
-                      icon={<TcdxIcon name="plan" className="h-6 w-6" />}
-                    />
-
-                    <TopCard
-                      title="Riesgos Críticos"
+                      title="Riesgos críticos"
                       value={highRisks}
                       subtitle="Nivel alto registrado"
-                      accent="rose"
+                      accent="red"
                       change={`${mediumRisks} medios`}
                       changeHint="panorama actual"
                       icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                     />
 
                     <TopCard
-                      title="Auditorías Próximas"
-                      value={nextAudits.length}
-                      subtitle="Calendario cercano"
-                      accent="indigo"
-                      change={`${upcomingAuditBars[0]?.value || 0} en 7 días`}
-                      changeHint="agenda inmediata"
-                      icon={<TcdxIcon name="calendar" className="h-6 w-6" />}
+                      title="Planes de acción"
+                      value={activeActionPlans}
+                      subtitle="Acciones en seguimiento"
+                      accent="green"
+                      change={`${overdueActionPlans} atrasados`}
+                      changeHint="foco operativo"
+                      icon={<TcdxIcon name="plan" className="h-6 w-6" />}
                     />
+
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,1fr)]">
@@ -1820,33 +1723,31 @@ function TopCard({
   };
 
   return (
-    <div className="group rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(15,23,42,0.08)]">
+    <div className="group rounded-lg border border-slate-200 bg-white p-5 shadow-[0_4px_14px_rgba(8,25,58,0.06)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(8,25,58,0.09)]">
       <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold text-[#06173a]">
+            <span>{title}</span>
+            <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-400">
+              i
+            </span>
+          </div>
+          <div className="mt-4 text-4xl font-bold tracking-tight text-[#06173a]">
+            {value}
+          </div>
+          <div className="mt-2 text-sm font-semibold text-[#2563eb]">{change}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{changeHint}</div>
+        </div>
+
         <div
-          className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
+          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg ${
             accentMap[accent]
           }`}
         >
           {icon}
         </div>
-
-        <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500">
-          {change}
-        </div>
       </div>
-
-      <div className="mt-5 text-[1.55rem] font-semibold leading-tight text-slate-900">
-        {title}
-      </div>
-
-      <div className="mt-4 text-6xl font-bold tracking-tight text-slate-900">
-        {value}
-      </div>
-
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <div className="text-sm text-slate-500">{subtitle}</div>
-        <div className="text-xs font-medium text-slate-400">{changeHint}</div>
-      </div>
+      <div className="mt-3 text-xs text-slate-500">{subtitle}</div>
     </div>
   );
 }

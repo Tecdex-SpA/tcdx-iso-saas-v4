@@ -103,7 +103,6 @@ textarea {
   background: transparent !important;
 }
 
-.tcdx-premium-view :is(section, article, aside),
 .tcdx-premium-view [class*="bg-white"][class*="border"],
 .tcdx-premium-view [class*="bg-white/"][class*="border"],
 .tcdx-premium-view [class*="bg-white"][class*="rounded"][class*=" p-"],
@@ -138,7 +137,6 @@ textarea {
 }
 
 .tcdx-premium-view :is(h1, h2, h3) {
-  color: var(--tcdx-ink);
   letter-spacing: 0;
 }
 
