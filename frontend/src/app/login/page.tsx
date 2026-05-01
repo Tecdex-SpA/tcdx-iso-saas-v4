@@ -100,36 +100,59 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen">
-      <div className="hidden md:flex w-1/2 bg-[#0A1F44] text-white flex-col justify-center items-center p-10">
-        <img src="/logo.png" className="w-64 mb-8" alt="TCDX Compliance" />
-        <div className="h-1 w-20 bg-blue-400 mb-6 rounded" />
+    <div className="flex min-h-screen bg-[#f6f8fb]">
+      <div className="hidden w-[46%] flex-col justify-between bg-[linear-gradient(160deg,#102033_0%,#15385e_58%,#0f766e_100%)] p-10 text-white md:flex">
+        <div>
+          <img src="/logo.png" className="mb-10 w-56" alt="TCDX Compliance" />
+          <div className="h-1 w-16 rounded bg-emerald-300" />
+        </div>
 
-        <h1 className="text-3xl font-bold mb-4">TCDX Compliance 3.0</h1>
+        <div>
+          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-100/80">
+            ISO SaaS Platform
+          </p>
 
-        <p className="text-lg text-blue-200 text-center max-w-md">
-          Sistema de cumplimiento de normativas
-        </p>
+          <h1 className="max-w-xl text-4xl font-bold leading-tight">
+            Cumplimiento ISO con operación, evidencia e inteligencia auditora.
+          </h1>
 
-        <div className="mt-10 grid grid-cols-1 gap-3 text-sm text-blue-100 max-w-md">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            Gobierno ISO, evidencias, riesgos, hallazgos y planes de acción.
+          <p className="mt-5 max-w-lg text-base leading-7 text-white/72">
+            Plataforma multi-tenant para preparar auditorías, sostener controles,
+            gestionar hallazgos y convertir evidencias en decisiones ejecutivas.
+          </p>
+
+          <div className="mt-9 grid max-w-xl grid-cols-2 gap-3 text-sm text-white/82">
+            <div className="rounded-lg border border-white/12 bg-white/8 p-4">
+              Auditorías ISO 27001, 9001 y 22301.
+            </div>
+
+            <div className="rounded-lg border border-white/12 bg-white/8 p-4">
+              Evidencias, riesgos, KPI y planes de acción.
+            </div>
           </div>
+        </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            Acceso segmentado por rol: plataforma, cliente, auditor y dealer.
-          </div>
+        <div className="text-xs text-white/55">
+          Acceso segmentado por rol, tenant, módulos contratados y alcance activo.
         </div>
       </div>
 
-      <div className="flex w-full md:w-1/2 items-center justify-center bg-gray-100 p-6">
-        <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md border border-gray-200">
+      <div className="flex w-full items-center justify-center p-6 md:w-[54%]">
+        <div className="tcdx-card w-full max-w-md rounded-lg p-8">
           <div className="mb-8 text-center">
-            <h2 className="text-2xl font-bold text-gray-900">
+            <div className="mb-5 flex justify-center md:hidden">
+              <img src="/logo.png" className="h-16 w-auto object-contain" alt="TCDX Compliance" />
+            </div>
+
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
+              Acceso seguro
+            </p>
+
+            <h2 className="text-2xl font-bold text-slate-950">
               Iniciar sesión
             </h2>
 
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm text-slate-500">
               Ingresa con tus credenciales para acceder a la plataforma.
             </p>
           </div>
@@ -142,12 +165,12 @@ export default function LoginPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
                 Email
               </label>
 
               <input
-                className="border border-gray-300 p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="tcdx-focus-ring w-full rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-slate-900 placeholder:text-slate-400"
                 placeholder="usuario@empresa.cl"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -157,13 +180,13 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
                 Contraseña
               </label>
 
               <input
                 type="password"
-                className="border border-gray-300 p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="tcdx-focus-ring w-full rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-slate-900 placeholder:text-slate-400"
                 placeholder="Contraseña"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -175,13 +198,13 @@ export default function LoginPage() {
             <button
               onClick={handleLogin}
               disabled={loading}
-              className="bg-blue-600 text-white p-3 w-full rounded-xl font-semibold hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full rounded-lg bg-[#1f6feb] p-3 font-semibold text-white shadow-[0_14px_28px_rgba(31,111,235,0.24)] transition hover:bg-[#195fc9] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? 'Ingresando...' : 'Ingresar'}
             </button>
           </div>
 
-          <div className="mt-6 rounded-xl bg-gray-50 p-4 text-xs text-gray-500">
+          <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             La ruta inicial se asigna automáticamente según tu rol.
           </div>
         </div>

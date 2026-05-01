@@ -1,7 +1,7 @@
 import './globals.css';
 export const metadata = {
-  title: 'TCDX Compliance',
-  description: 'Sistema de cumplimiento',
+  title: 'TCDX Compliance | ISO SaaS',
+  description: 'Gobierno ISO, auditorías, evidencias, riesgos e IA senior.',
 };
 
 export default function RootLayout({
@@ -11,7 +11,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="bg-[#1b2733]">
+      <body className="bg-[#f6f8fb]">
         {children}
       </body>
     </html>

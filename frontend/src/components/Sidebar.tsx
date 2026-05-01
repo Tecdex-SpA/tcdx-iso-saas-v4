@@ -59,14 +59,21 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
       href={href}
       title={label}
       className={[
-        'group flex items-center rounded-2xl text-sm font-medium transition-all duration-200',
+        'group flex items-center rounded-lg text-sm font-medium transition-all duration-200',
         collapsed ? 'justify-center px-2 py-3' : 'gap-3 px-3 py-2.5',
         active
-          ? 'bg-[linear-gradient(135deg,#334a63_0%,#30455d_100%)] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
-          : 'text-white/88 hover:bg-white/10 hover:text-white',
+          ? 'bg-white text-[#102033] shadow-[0_10px_24px_rgba(0,0,0,0.16)]'
+          : 'text-white/78 hover:bg-white/9 hover:text-white',
       ].join(' ')}
     >
-      <span className="shrink-0">{icon}</span>
+      <span
+        className={[
+          'shrink-0 transition-colors',
+          active ? 'text-[#1f6feb]' : 'text-white/62 group-hover:text-white',
+        ].join(' ')}
+      >
+        {icon}
+      </span>
       {!collapsed && <span className="truncate">{label}</span>}
     </a>
   );
@@ -607,7 +614,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     if (collapsed) return null;
 
     return (
-      <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">
+      <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/38">
         {label}
       </div>
     );
@@ -616,14 +623,14 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   return (
     <aside
       className={[
-        'relative flex h-screen flex-col border-r border-white/10 bg-[linear-gradient(180deg,#243447_0%,#1f2f40_58%,#1b2733_100%)] text-white shadow-2xl transition-all duration-300',
-        collapsed ? 'w-[88px] px-3 pt-3 pb-5' : 'w-[272px] px-5 pt-3 pb-5',
+        'relative flex h-screen flex-col border-r border-white/10 bg-[linear-gradient(180deg,#13243a_0%,#102033_50%,#0b1726_100%)] text-white shadow-[18px_0_42px_rgba(15,23,42,0.16)] transition-all duration-300',
+        collapsed ? 'w-[88px] px-3 pt-4 pb-5' : 'w-[284px] px-5 pt-4 pb-5',
       ].join(' ')}
     >
       <button
         type="button"
         onClick={onToggle}
-        className="absolute -right-3 top-6 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-[#31485f] bg-[#243447] text-white shadow-lg transition hover:bg-[#2d4156]"
+        className="absolute -right-3 top-7 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-[#102033] shadow-lg transition hover:bg-slate-50"
         title={collapsed ? 'Expandir menú' : 'Contraer menú'}
       >
         <svg
@@ -637,21 +644,21 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         </svg>
       </button>
 
-      <div className={`mb-5 flex h-16 items-center ${collapsed ? 'justify-center' : 'justify-start pl-1'}`}>
+      <div className={`mb-5 flex h-14 items-center ${collapsed ? 'justify-center' : 'justify-start pl-1'}`}>
         <img
           src={SERVICE_LOGO_SRC}
           alt="Logo"
-          className={collapsed ? 'h-10 w-10 object-contain' : 'h-auto w-28 scale-150 object-contain origin-left'}
+          className={collapsed ? 'h-10 w-10 object-contain' : 'h-auto w-28 scale-[1.45] object-contain origin-left'}
         />
       </div>
 
       {!collapsed && (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/6 px-3 py-3 text-xs text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-          Navegación operativa por alcance real, módulos y rol.
+        <div className="mb-4 rounded-lg border border-white/10 bg-white/7 px-3 py-3 text-xs leading-5 text-white/66 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          Gobierno ISO operativo por rol, módulos contratados y alcance activo.
         </div>
       )}
 
-      <nav className="flex-1 overflow-y-auto pr-1 text-sm">
+      <nav className="tcdx-scrollbar flex-1 overflow-y-auto pr-1 text-sm">
         {isPlatformAdmin && (
           <>
             {sectionLabel('Plataforma')}
@@ -747,12 +754,12 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       <div className={['mt-4 border-t border-white/10 pt-4', collapsed ? 'flex justify-center' : ''].join(' ')}>
         {collapsed ? (
-          <div title="Powered by Tecdex" className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5">
+          <div title="Powered by Tecdex" className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/7">
             <img src={SERVICE_LOGO_SRC} alt="Tecdex" className="h-7 w-7 object-contain" />
           </div>
         ) : (
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
+          <div className="rounded-lg border border-white/10 bg-white/6 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/42">
               Powered by
             </p>
             <div className="flex items-center gap-3">

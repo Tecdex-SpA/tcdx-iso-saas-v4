@@ -461,10 +461,10 @@ export default function Header() {
   const displayResults = search.trim().length >= 2 ? searchResults : [];
 
   return (
-    <div className="border-b border-white/10 bg-[linear-gradient(90deg,#223244_0%,#23395d_42%,#223244_100%)] px-4 py-3 text-white shadow-[0_8px_30px_rgba(2,8,23,0.16)] md:px-6">
+    <div className="border-b border-slate-200/80 bg-white/90 px-4 py-3 text-[#162033] shadow-[0_8px_28px_rgba(15,23,42,0.06)] backdrop-blur-xl md:px-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/6 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
             <img
               src={logo}
               className="h-8 max-w-[128px] object-contain"
@@ -487,10 +487,10 @@ export default function Header() {
               }}
             />
             <div className="hidden min-w-0 lg:block">
-              <div className="truncate text-sm font-semibold tracking-[0.01em] text-white">
+              <div className="truncate text-sm font-semibold tracking-[0.01em] text-slate-950">
                 TCDX Compliance 3.0
               </div>
-              <div className="truncate text-[11px] text-white/55">
+              <div className="truncate text-[11px] text-slate-500">
                 {tenant?.name || 'Tenant activo'}
               </div>
             </div>
@@ -500,7 +500,7 @@ export default function Header() {
         <div className="flex min-w-0 items-center gap-3">
           <div ref={searchRef} className="relative hidden lg:block">
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/55">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <circle cx="11" cy="11" r="7" />
                   <path d="m20 20-3.5-3.5" />
@@ -518,16 +518,16 @@ export default function Header() {
                 onFocus={() => setSearchOpen(true)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Buscar normas, cláusulas, controles, hallazgos..."
-                className="w-[440px] rounded-2xl border border-white/10 bg-white/6 py-3 pl-10 pr-16 text-sm text-white placeholder:text-white/45 outline-none transition focus:border-white/20 focus:bg-white/10"
+                className="tcdx-focus-ring w-[440px] rounded-lg border border-slate-200 bg-slate-50/80 py-3 pl-10 pr-16 text-sm text-slate-900 placeholder:text-slate-400 transition focus:bg-white"
               />
 
-              <span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/60 xl:block">
+              <span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500 xl:block">
                 ⌘K
               </span>
             </div>
 
             {searchOpen && (
-              <div className="absolute right-0 z-50 mt-3 w-[560px] overflow-hidden rounded-[24px] border border-slate-200 bg-white text-black shadow-2xl">
+              <div className="absolute right-0 z-50 mt-3 w-[560px] overflow-hidden rounded-lg border border-slate-200 bg-white text-black shadow-2xl">
                 <div className="border-b border-slate-100 px-4 py-3">
                   <div className="text-sm font-semibold text-slate-900">Búsqueda global</div>
                   <div className="text-xs text-slate-500">Usa ↑ ↓ Enter para navegar</div>
@@ -591,8 +591,8 @@ export default function Header() {
             )}
           </div>
 
-          <div className="hidden xl:flex items-center gap-2 rounded-2xl border border-white/10 bg-white/6 px-3 py-2.5 text-xs text-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10">
+          <div className="hidden xl:flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 shadow-sm">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <rect x="3" y="4" width="18" height="18" rx="2" />
                 <line x1="16" y1="2" x2="16" y2="6" />
@@ -601,15 +601,15 @@ export default function Header() {
               </svg>
             </span>
             <div className="leading-tight">
-              <div className="text-[11px] uppercase tracking-wide text-white/60">Última sincronización</div>
-              <div className="font-semibold text-white">{lastSync}</div>
+              <div className="text-[11px] uppercase tracking-wide text-slate-400">Última sincronización</div>
+              <div className="font-semibold text-slate-900">{lastSync}</div>
             </div>
           </div>
 
           <div className="relative" ref={notificationsRef}>
             <button
               type="button"
-              className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white/90 transition hover:bg-white/10 hover:text-white"
+              className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-950"
               title="Notificaciones"
               onClick={() => setNotificationsOpen((prev) => !prev)}
             >
@@ -626,7 +626,7 @@ export default function Header() {
             </button>
 
             {notificationsOpen && (
-              <div className="absolute right-0 z-50 mt-3 w-[390px] overflow-hidden rounded-[24px] border border-slate-200 bg-white text-black shadow-2xl">
+              <div className="absolute right-0 z-50 mt-3 w-[390px] overflow-hidden rounded-lg border border-slate-200 bg-white text-black shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                   <div>
                     <div className="font-semibold text-slate-900">Notificaciones</div>
@@ -677,31 +677,31 @@ export default function Header() {
             <div className="relative">
               <button
                 type="button"
-                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/6 px-2.5 py-1.5 text-left transition hover:bg-white/10"
+                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left shadow-sm transition hover:bg-slate-50"
                 onClick={() => setOpen(!open)}
               >
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt="avatar"
-                    className="h-10 w-10 rounded-full border border-white/20 object-cover shadow-md"
+                    className="h-10 w-10 rounded-full border border-slate-200 object-cover shadow-md"
                   />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/15 text-sm font-bold">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-[#102033] text-sm font-bold text-white">
                     {displayName.charAt(0).toUpperCase()}
                   </div>
                 )}
 
                 <div className="hidden max-w-[220px] sm:block">
-                  <div className="truncate text-sm font-semibold text-white">{displayName}</div>
-                  <div className="truncate text-xs text-white/65">
+                  <div className="truncate text-sm font-semibold text-slate-950">{displayName}</div>
+                  <div className="truncate text-xs text-slate-500">
                     {tenant?.name || user?.role || 'Usuario'}
                   </div>
                 </div>
               </button>
 
               {open && (
-                <div className="absolute right-0 z-50 mt-3 w-80 rounded-[24px] border border-slate-200 bg-white p-4 text-black shadow-2xl">
+                <div className="absolute right-0 z-50 mt-3 w-80 rounded-lg border border-slate-200 bg-white p-4 text-black shadow-2xl">
                   <div className="flex items-center gap-3 mb-3">
                     {avatarUrl ? (
                       <img
@@ -742,7 +742,7 @@ export default function Header() {
             </div>
 
             <button
-              className="rounded-2xl bg-[linear-gradient(135deg,#5b5cf0_0%,#4f46e5_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(79,70,229,0.35)] border border-white/10 transition hover:brightness-110"
+              className="rounded-lg border border-slate-200 bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
               onClick={logout}
             >
               Cerrar sesión

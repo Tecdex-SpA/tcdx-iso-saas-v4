@@ -342,10 +342,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   if (checkingAccess) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[linear-gradient(135deg,#112033_0%,#1b2733_55%,#243447_100%)] text-white">
-        <div className="rounded-[28px] border border-white/10 bg-white/8 px-7 py-6 shadow-[0_18px_48px_rgba(2,8,23,0.3)] backdrop-blur-sm">
+      <div className="flex h-screen items-center justify-center bg-[#f6f8fb] text-[#162033]">
+        <div className="tcdx-card rounded-lg px-7 py-6">
           <div className="text-lg font-semibold">Validando acceso...</div>
-          <div className="mt-1 text-sm text-white/60">
+          <div className="mt-1 text-sm text-slate-500">
             Revisando permisos de usuario y módulos contratados.
           </div>
         </div>
@@ -355,10 +355,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   if (accessDeniedMessage) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[linear-gradient(135deg,#112033_0%,#1b2733_55%,#243447_100%)] text-white">
-        <div className="max-w-md rounded-[28px] border border-red-300/20 bg-red-500/10 px-7 py-6 shadow-[0_18px_48px_rgba(2,8,23,0.32)] backdrop-blur-sm">
+      <div className="flex h-screen items-center justify-center bg-[#f6f8fb] text-[#162033]">
+        <div className="max-w-md rounded-lg border border-red-200 bg-white px-7 py-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
           <div className="text-lg font-semibold">Acceso restringido</div>
-          <div className="mt-2 text-sm text-white/75">{accessDeniedMessage}</div>
+          <div className="mt-2 text-sm text-slate-600">{accessDeniedMessage}</div>
 
           <button
             type="button"
@@ -370,7 +370,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               sessionStorage.clear();
               window.location.href = '/login';
             }}
-            className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#1b2733]"
+            className="mt-4 rounded-lg bg-[#1f6feb] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#195fc9]"
           >
             Cerrar sesión e ingresar con otra cuenta
           </button>
@@ -380,15 +380,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-[#1b2733]">
+    <div className="flex h-screen bg-[#102033]">
       <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
 
-      <div className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(circle_at_top,#eff4ff_0%,#f5f7fb_36%,#eef2f7_100%)]">
+      <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#f8fafc_0%,#f2f6fb_48%,#eef3f8_100%)]">
         <div className="sticky top-0 z-30">
           <Header />
         </div>
 
-        <main className="flex-1 overflow-auto px-4 py-4 md:px-6 md:py-5 lg:px-7 lg:py-6">
+        <main className="tcdx-scrollbar flex-1 overflow-auto px-4 py-4 md:px-6 md:py-5 lg:px-8 lg:py-7">
           {children}
         </main>
       </div>
