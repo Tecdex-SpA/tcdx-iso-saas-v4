@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 function normalizeStandardKey(value) {
   return String(value || '')
@@ -234,7 +235,7 @@ router.get('/search', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error buscando conocimiento IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -269,7 +270,7 @@ router.post('/internal-search', internalAuth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error buscando conocimiento IA interno',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const puppeteer = require('puppeteer');
+const { errorDetail } = require('../utils/errorResponse');
 
 const router = express.Router();
 const pool = require('../config/db');
@@ -464,7 +465,7 @@ router.get('/types', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo tipos de reportes disponibles',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -579,7 +580,7 @@ router.get('/clients', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo clientes disponibles para reportes',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -729,7 +730,7 @@ router.get('/exports', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo historial de informes',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -2255,7 +2256,7 @@ router.post('/generate', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error generando informe',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -2435,7 +2436,7 @@ router.post('/schedules', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error creando programación mensual de reporte',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 function normalizeRole(user) {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
@@ -210,7 +211,7 @@ router.get('/preinvoice/:tenant_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error generando prefacturación',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -294,7 +295,7 @@ router.post('/preinvoice/:tenant_id/materialize', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error guardando prefacturación',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

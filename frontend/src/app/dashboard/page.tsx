@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
+import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import {
   PieChart,
   Pie,
@@ -952,7 +953,7 @@ export default function DashboardPage() {
                     disabled={refreshingExecutive}
                     className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
                   >
-                    <span className="flex h-5 w-5 items-center justify-center">↻</span>
+                    <TcdxIcon name="refresh" className="h-5 w-5" />
                     {refreshingExecutive ? 'Actualizando...' : 'Actualizar'}
                   </button>
                 </div>
@@ -1034,7 +1035,7 @@ export default function DashboardPage() {
                       accent="green"
                       change={`↑ ${Math.max(1, Math.round(complianceValue * 0.03))}%`}
                       changeHint="vs. medición previa"
-                      icon={<span>✓</span>}
+                      icon={<TcdxIcon name="shield" className="h-6 w-6" />}
                     />
 
                     <TopCard
@@ -1044,7 +1045,7 @@ export default function DashboardPage() {
                       accent="red"
                       change={`${noCumple} críticos`}
                       changeHint="desde controles no conformes"
-                      icon={<span>!</span>}
+                      icon={<TcdxIcon name="finding" className="h-6 w-6" />}
                     />
 
                     <TopCard
@@ -1054,7 +1055,7 @@ export default function DashboardPage() {
                       accent="amber"
                       change={`${overdueActionPlans} atrasados`}
                       changeHint="foco operativo"
-                      icon={<span>□</span>}
+                      icon={<TcdxIcon name="plan" className="h-6 w-6" />}
                     />
 
                     <TopCard
@@ -1064,7 +1065,7 @@ export default function DashboardPage() {
                       accent="rose"
                       change={`${mediumRisks} medios`}
                       changeHint="panorama actual"
-                      icon={<span>△</span>}
+                      icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                     />
 
                     <TopCard
@@ -1074,7 +1075,7 @@ export default function DashboardPage() {
                       accent="indigo"
                       change={`${upcomingAuditBars[0]?.value || 0} en 7 días`}
                       changeHint="agenda inmediata"
-                      icon={<span>📅</span>}
+                      icon={<TcdxIcon name="calendar" className="h-6 w-6" />}
                     />
                   </div>
 
@@ -1245,9 +1246,10 @@ export default function DashboardPage() {
 
                           <a
                             href="/auditorias"
-                            className="text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                            className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                           >
-                            Ver calendario →
+                            <span>Ver calendario</span>
+                            <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                           </a>
                         </div>
 
@@ -1336,9 +1338,10 @@ export default function DashboardPage() {
 
                         <a
                           href="/plan-accion"
-                          className="text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                         >
-                          Ver todos →
+                          <span>Ver todos</span>
+                          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                         </a>
                       </div>
 
@@ -1425,7 +1428,7 @@ export default function DashboardPage() {
                     accent="green"
                     change={`${kpiSummary?.green || 0} verdes`}
                     changeHint="estado actual"
-                    icon={<span>📊</span>}
+                    icon={<TcdxIcon name="kpi" className="h-6 w-6" />}
                   />
 
                   <TopCard
@@ -1435,7 +1438,7 @@ export default function DashboardPage() {
                     accent={kpiCoverageTone}
                     change={`${pendingKpis} sin dato`}
                     changeHint="madurez de datos"
-                    icon={<span>📈</span>}
+                    icon={<TcdxIcon name="trend" className="h-6 w-6" />}
                   />
 
                   <TopCard
@@ -1445,7 +1448,7 @@ export default function DashboardPage() {
                     accent="red"
                     change="ALERTA"
                     changeHint="impacto alto"
-                    icon={<span>⚠️</span>}
+                    icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                   />
 
                   <TopCard
@@ -1455,7 +1458,7 @@ export default function DashboardPage() {
                     accent="amber"
                     change="INPUT"
                     changeHint="carga requerida"
-                    icon={<span>⏳</span>}
+                    icon={<TcdxIcon name="hourglass" className="h-6 w-6" />}
                   />
 
                   <TopCard
@@ -1465,7 +1468,7 @@ export default function DashboardPage() {
                     accent="violet"
                     change={`${kpiItems.filter((item) => item.kpi_type === 'manual').length} manuales`}
                     changeHint="tipo de captura"
-                    icon={<span>🧩</span>}
+                    icon={<TcdxIcon name="puzzle" className="h-6 w-6" />}
                   />
 
                   <TopCard
@@ -1475,7 +1478,7 @@ export default function DashboardPage() {
                     accent="indigo"
                     change={formatKpiValue(healthMainKpi?.latest_snapshot?.value as any, '%')}
                     changeHint="salud general"
-                    icon={<span>💚</span>}
+                    icon={<TcdxIcon name="heart" className="h-6 w-6" />}
                   />
                 </div>
               </div>
@@ -1615,9 +1618,10 @@ export default function DashboardPage() {
 
                         <a
                           href="/administrar-kpis"
-                          className="text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                         >
-                          Gestionar →
+                          <span>Gestionar</span>
+                          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                         </a>
                       </div>
 
@@ -1695,9 +1699,10 @@ export default function DashboardPage() {
 
                       <a
                         href="/administrar-kpis"
-                        className="text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                       >
-                        Abrir administración →
+                        <span>Abrir administración</span>
+                        <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                       </a>
                     </div>
 
@@ -1873,12 +1878,12 @@ function MiniCard({
     rose: 'bg-rose-100 text-rose-700',
   };
 
-  const icons: Record<string, string> = {
-    violet: '◧',
-    amber: '▣',
-    red: '△',
-    indigo: '✓',
-    rose: '●',
+  const icons: Record<string, TcdxIconName> = {
+    violet: 'finding',
+    amber: 'plan',
+    red: 'alert',
+    indigo: 'audit',
+    rose: 'heart',
   };
 
   return (
@@ -1888,13 +1893,14 @@ function MiniCard({
           <span
             className={`flex h-10 w-10 items-center justify-center rounded-xl ${toneMap[tone]}`}
           >
-            {icons[tone]}
+            <TcdxIcon name={icons[tone]} className="h-5 w-5" />
           </span>
           <span>{title}</span>
         </div>
 
-        <a href={href} className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">
-          Ver →
+        <a href={href} className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+          <span>Ver</span>
+          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
         </a>
       </div>
 
@@ -1996,7 +2002,7 @@ function QuickActionButton({
       className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/8 px-4 py-4 text-base font-medium text-white transition hover:bg-white/12"
     >
       <span>{label}</span>
-      <span className="text-white/60">→</span>
+      <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90 text-white/60" />
     </a>
   );
 }

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import TcdxIcon from '@/components/icons/TcdxIcon';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -392,7 +393,12 @@ function RiskMatrixPageContent() {
 
         {!iso && (
           <div className="bg-white p-6 rounded shadow space-y-3">
-            <h2 className="text-xl font-semibold">📊 Matriz de Riesgo</h2>
+            <h2 className="flex items-center gap-2 text-xl font-semibold">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+                <TcdxIcon name="risk" className="h-5 w-5" />
+              </span>
+              Matriz de Riesgo
+            </h2>
             <p className="text-gray-700">
               La matriz de riesgo permite identificar, evaluar y priorizar riesgos en función de su probabilidad e impacto.
             </p>

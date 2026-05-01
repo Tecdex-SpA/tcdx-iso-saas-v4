@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 function normalizeRole(role) {
   return String(role || '').toLowerCase();
@@ -547,7 +548,7 @@ async function handleBenchmark(req, res) {
     return res.status(500).json({
       ok: false,
       error: 'Error ejecutando benchmark anonimizado',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 }

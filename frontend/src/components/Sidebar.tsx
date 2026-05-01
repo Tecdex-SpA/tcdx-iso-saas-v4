@@ -62,14 +62,14 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
         'group flex items-center rounded-lg text-sm font-medium transition-all duration-200',
         collapsed ? 'justify-center px-2 py-3' : 'gap-3 px-3 py-2.5',
         active
-          ? 'bg-white text-[#102033] shadow-[0_10px_24px_rgba(0,0,0,0.16)]'
-          : 'text-white/78 hover:bg-white/9 hover:text-white',
+          ? 'bg-[#2563eb] text-white shadow-[0_12px_26px_rgba(37,99,235,0.34)]'
+          : 'text-white/76 hover:bg-white/9 hover:text-white',
       ].join(' ')}
     >
       <span
         className={[
           'shrink-0 transition-colors',
-          active ? 'text-[#1f6feb]' : 'text-white/62 group-hover:text-white',
+          active ? 'text-white' : 'text-white/62 group-hover:text-white',
         ].join(' ')}
       >
         {icon}
@@ -623,8 +623,8 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   return (
     <aside
       className={[
-        'relative flex h-screen flex-col border-r border-white/10 bg-[linear-gradient(180deg,#13243a_0%,#102033_50%,#0b1726_100%)] text-white shadow-[18px_0_42px_rgba(15,23,42,0.16)] transition-all duration-300',
-        collapsed ? 'w-[88px] px-3 pt-4 pb-5' : 'w-[284px] px-5 pt-4 pb-5',
+        'tcdx-shell-sidebar relative flex h-screen flex-col border-r border-white/10 text-white shadow-[18px_0_42px_rgba(8,25,58,0.2)] transition-all duration-300',
+        collapsed ? 'w-[88px] px-3 pt-4 pb-5' : 'w-[272px] px-4 pt-4 pb-5',
       ].join(' ')}
     >
       <button

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 function getUserTenantId(user) {
   return (
@@ -210,7 +211,7 @@ router.get('/modules', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo módulos contratados del usuario',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

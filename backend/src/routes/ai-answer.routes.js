@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 const { tenantInternalSearch } = require('./ai-tenant-search.routes');
 const { benchmarkSearch } = require('./ai-benchmark.routes');
@@ -1523,7 +1524,7 @@ router.post('/', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error generando respuesta IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

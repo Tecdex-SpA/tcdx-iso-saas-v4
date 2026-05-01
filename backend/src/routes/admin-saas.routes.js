@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const { errorDetail } = require('../utils/errorResponse');
 
 
 const logoUploadDir = path.join(__dirname, '..', '..', 'uploads', 'logos');
@@ -610,7 +611,7 @@ router.get('/overview', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo overview de Administración SaaS',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -672,7 +673,7 @@ router.get('/dealer/tenants', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo empresas del dealer',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -819,7 +820,7 @@ router.get('/tenants', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo empresas',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -986,14 +987,14 @@ router.post('/tenants', auth, uploadLogo.single('logo'), async (req, res) => {
       return res.status(409).json({
         ok: false,
         error: 'Ya existe una empresa con esos datos',
-        detail: error.message,
+        ...errorDetail(error),
       });
     }
 
     return res.status(500).json({
       ok: false,
       error: 'Error creando empresa desde Administración SaaS',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -1096,7 +1097,7 @@ router.put('/tenants/:tenant_id/logo', auth, uploadLogo.single('logo'), async (r
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando logo de empresa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1240,7 +1241,7 @@ router.put('/tenants/:tenant_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando empresa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1286,7 +1287,7 @@ router.get('/tenants/:tenant_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo detalle de empresa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1332,7 +1333,7 @@ router.get('/dealers', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo dealers',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1390,7 +1391,7 @@ router.get('/audit-log', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo bitácora administrativa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1448,7 +1449,7 @@ router.get('/dealer/requests', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo solicitudes dealer',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1487,7 +1488,7 @@ router.get('/modules', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo módulos SaaS',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1690,7 +1691,7 @@ router.put('/tenants/:tenant_id/modules/:module_key', auth, async (req, res) => 
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando módulo del tenant',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -1829,7 +1830,7 @@ router.put('/tenants/:tenant_id/standards/:standard_code', auth, async (req, res
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando norma del tenant',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -2218,7 +2219,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
     return res.status(500).json({
       ok: false,
       error: 'Error inicializando controles de la norma',
-      detail: error.message,
+      ...errorDetail(error),
       code: error.code || null,
     });
   } finally {
@@ -2436,7 +2437,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
     return res.status(500).json({
       ok: false,
       error: 'Error inicializando controles de la norma',
-      detail: error.message,
+      ...errorDetail(error),
       code: error.code || null,
     });
   } finally {
@@ -2493,7 +2494,7 @@ router.post('/tenants/:tenant_id/refresh-health', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error refrescando health del tenant',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -2560,7 +2561,7 @@ router.get('/external-lookup/quotas', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo cuotas de búsqueda externa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -2715,7 +2716,7 @@ router.put('/tenants/:tenant_id/external-lookup/quota', auth, async (req, res) =
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando cuota de búsqueda externa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -2776,7 +2777,7 @@ router.get('/tenants/:tenant_id/external-lookup/logs', auth, async (req, res) =>
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo logs de búsqueda externa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -2840,7 +2841,7 @@ router.get('/tenants/:tenant_id/external-lookup/quota-audit', auth, async (req, 
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo auditoría de cuota externa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -3308,7 +3309,7 @@ router.get('/prebilling/prices', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo catálogo de precios SaaS',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -3386,7 +3387,7 @@ router.get('/tenants/:tenant_id/prebilling/current', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo prefacturación mensual',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -3432,7 +3433,7 @@ router.post('/tenants/:tenant_id/prebilling/recalculate', auth, async (req, res)
     return res.status(500).json({
       ok: false,
       error: 'Error recalculando prefacturación mensual',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -3496,7 +3497,7 @@ router.put('/prebilling/:prebilling_id/status', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando estado de prefactura',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -3607,7 +3608,7 @@ router.get('/tenants/:tenant_id/standards/catalog', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo catálogo de normas contratables',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -3854,7 +3855,7 @@ router.put('/tenants/:tenant_id/standards/:standard_code/contract', auth, async 
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando norma contratada',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -4038,7 +4039,7 @@ router.put('/tenants/:tenant_id/standards/:standard_code/contract', auth, async 
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando norma contratada',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -4108,7 +4109,7 @@ router.get('/tenants/:tenant_id/contract', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo contrato SaaS',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -4392,7 +4393,7 @@ router.put('/tenants/:tenant_id/contract', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error guardando contrato SaaS',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -4515,7 +4516,7 @@ router.put('/prebilling/prices/:price_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando catálogo de precios SaaS',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -4603,7 +4604,7 @@ router.get('/dealer/my-tenants', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo empresas asignadas al dealer',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -4675,7 +4676,7 @@ router.get('/dealer/requests', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo solicitudes dealer',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -4767,7 +4768,7 @@ router.get('/tenants/:tenant_id/modules/catalog', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo módulos del tenant',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -4947,7 +4948,7 @@ router.put('/tenants/:tenant_id/modules/:module_key/contract-toggle', auth, asyn
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando módulo del tenant',
-      detail: error.message,
+      ...errorDetail(error),
       code: error.code || null,
     });
   } finally {
@@ -5102,7 +5103,7 @@ router.post('/tenants/:tenant_id/suspend-service', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error suspendiendo servicio',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -5222,7 +5223,7 @@ router.post('/tenants/:tenant_id/reactivate-service', auth, async (req, res) => 
     return res.status(500).json({
       ok: false,
       error: 'Error reactivando servicio',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -5347,7 +5348,7 @@ router.delete('/tenants/:tenant_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error eliminando empresa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();

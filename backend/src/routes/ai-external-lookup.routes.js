@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const http = require('http');
+const { errorDetail } = require('../utils/errorResponse');
 
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
@@ -311,7 +312,7 @@ router.post('/search', auth, async (req, res, next) => {
     return res.status(500).json({
       ok: false,
       error: 'Error validando cuota de búsqueda externa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -535,7 +536,7 @@ router.post('/search', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error ejecutando búsqueda externa controlada',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -605,7 +606,7 @@ router.post('/cache', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error consultando caché de respaldo externo',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

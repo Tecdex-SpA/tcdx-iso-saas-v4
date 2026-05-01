@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
 const pool = require('../config/db');
+const { errorDetail } = require('../utils/errorResponse');
 
 // =====================================================
 // Middleware local de autenticación para rutas Health
@@ -239,7 +240,7 @@ router.get('/dashboard', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo dashboard de salud',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -288,7 +289,7 @@ router.get('/standards', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo salud por norma',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -340,7 +341,7 @@ router.get('/kpis', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo KPIs de salud',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -434,7 +435,7 @@ router.get('/controls-risk', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo controles deteriorados',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -478,7 +479,7 @@ router.get('/root-causes', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo causas raíz por empresa',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -542,7 +543,7 @@ router.get('/root-causes/standards', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo causas raíz por norma',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -588,7 +589,7 @@ router.get('/remediation-summary', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo resumen de remediación',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -654,7 +655,7 @@ router.get('/remediation-summary/standards', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo resumen de remediación por norma',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -736,7 +737,7 @@ router.get('/remediation-plan', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo plan de remediación',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -782,7 +783,7 @@ router.get('/remediation-executive', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo ejecutivo de remediación',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -848,7 +849,7 @@ router.get('/remediation-executive/standards', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo ejecutivo de remediación por norma',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -918,7 +919,7 @@ router.get('/evidence-approval-queue', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo cola de aprobación de evidencias',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -988,7 +989,7 @@ router.get('/controls-recovered', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo controles recuperados',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1054,7 +1055,7 @@ router.get('/audit-log', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo bitácora de auditoría',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1114,7 +1115,7 @@ router.get('/audit-log/action-plans', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo auditoría de planes de acción',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1174,7 +1175,7 @@ router.get('/audit-log/evidences', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo auditoría de evidencias',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1234,7 +1235,7 @@ router.get('/audit-log/control-recovery', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo auditoría de recuperación de controles',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1434,7 +1435,7 @@ router.post('/remediation-plan/create-action', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error creando plan de acción desde remediación',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();

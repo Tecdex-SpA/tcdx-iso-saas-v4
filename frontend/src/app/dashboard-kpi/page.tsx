@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getUserFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
+import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import {
   PieChart,
   Pie,
@@ -101,7 +102,7 @@ type ActivityItem = {
   title: string;
   description: string;
   color: string;
-  icon: string;
+  icon: TcdxIconName;
 };
 
 type LatestSnapshot = {
@@ -607,25 +608,25 @@ export default function DashboardPage() {
         title: 'Diagnóstico completado',
         description: `${activeNorms} norma(s) activa(s) detectadas`,
         color: 'green',
-        icon: '✓',
+        icon: 'check',
       },
       {
         title: 'Nueva evidencia subida',
         description: `${cumple} controles en estado cumplido`,
         color: 'amber',
-        icon: '↑',
+        icon: 'evidence',
       },
       {
         title: 'Plan de acción creado',
         description: `${activeActionPlans} plan(es) activo(s) en seguimiento`,
         color: 'violet',
-        icon: '□',
+        icon: 'plan',
       },
       {
         title: 'Hallazgo crítico registrado',
         description: `${noCumple} control(es) no conforme(s)`,
         color: 'red',
-        icon: '!',
+        icon: 'alert',
       },
     ];
   }, [activeNorms, cumple, activeActionPlans, noCumple]);
@@ -790,7 +791,7 @@ export default function DashboardPage() {
                       value={activeActionPlans}
                       subtitle="Activos del sistema"
                       accent="amber"
-                      change={`→ ${overdueActionPlans}%`}
+                      change={`${overdueActionPlans} atrasados`}
                       changeHint="sin cambios"
                       icon={
                         <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -975,9 +976,10 @@ export default function DashboardPage() {
 
                           <a
                             href="/auditorias"
-                            className="text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                            className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                           >
-                            Ver calendario →
+                            <span>Ver calendario</span>
+                            <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                           </a>
                         </div>
 
@@ -1026,9 +1028,10 @@ export default function DashboardPage() {
 
                           <a
                             href="/hallazgos"
-                            className="text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                            className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                           >
-                            Ver todo →
+                            <span>Ver todo</span>
+                            <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                           </a>
                         </div>
 
@@ -1171,7 +1174,7 @@ export default function DashboardPage() {
                     accent="green"
                     change={`${kpiSummary?.green || 0} verdes`}
                     changeHint="estado actual"
-                    icon={<span>📊</span>}
+                    icon={<TcdxIcon name="kpi" className="h-6 w-6" />}
                   />
 
                   <TopCard
@@ -1181,7 +1184,7 @@ export default function DashboardPage() {
                     accent="red"
                     change="ALERTA"
                     changeHint="impacto alto"
-                    icon={<span>⚠️</span>}
+                    icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                   />
 
                   <TopCard
@@ -1191,7 +1194,7 @@ export default function DashboardPage() {
                     accent="amber"
                     change="INPUT"
                     changeHint="carga requerida"
-                    icon={<span>⏳</span>}
+                    icon={<TcdxIcon name="hourglass" className="h-6 w-6" />}
                   />
 
                   <TopCard
@@ -1216,7 +1219,7 @@ export default function DashboardPage() {
                     accent="green"
                     change={`${healthKpiCount} health`}
                     changeHint="salud de controles"
-                    icon={<span>💚</span>}
+                    icon={<TcdxIcon name="heart" className="h-6 w-6" />}
                   />
                 </div>
 
@@ -1341,9 +1344,10 @@ export default function DashboardPage() {
 
                         <a
                           href="/administrar-kpis"
-                          className="text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                         >
-                          Gestionar →
+                          <span>Gestionar</span>
+                          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                         </a>
                       </div>
 
@@ -1415,9 +1419,10 @@ export default function DashboardPage() {
 
                       <a
                         href="/administrar-kpis"
-                        className="text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                       >
-                        Abrir administración →
+                        <span>Abrir administración</span>
+                        <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                       </a>
                     </div>
 
@@ -1755,11 +1760,11 @@ function MiniCard({
     indigo: 'bg-indigo-100 text-indigo-700',
   };
 
-  const icons: Record<string, string> = {
-    violet: '◧',
-    amber: '▣',
-    red: '△',
-    indigo: '✓',
+  const icons: Record<string, TcdxIconName> = {
+    violet: 'finding',
+    amber: 'plan',
+    red: 'alert',
+    indigo: 'audit',
   };
 
   return (
@@ -1767,13 +1772,14 @@ function MiniCard({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-xl font-semibold text-slate-900">
           <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${toneMap[tone]}`}>
-            {icons[tone]}
+            <TcdxIcon name={icons[tone]} className="h-5 w-5" />
           </span>
           <span>{title}</span>
         </div>
 
-        <a href={href} className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">
-          Ver todos →
+        <a href={href} className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+          <span>Ver todos</span>
+          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
         </a>
       </div>
 
@@ -1871,7 +1877,7 @@ function QuickActionButton({
       className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/8 px-4 py-4 text-base font-medium text-white transition hover:bg-white/12"
     >
       <span>{label}</span>
-      <span className="text-white/60">→</span>
+      <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90 text-white/60" />
     </a>
   );
 }
@@ -1885,7 +1891,7 @@ function ActivityRow({
   title: string;
   description: string;
   color: string;
-  icon: string;
+  icon: TcdxIconName;
 }) {
   const colorMap: Record<string, string> = {
     green: 'bg-green-100 text-green-700',
@@ -1897,7 +1903,7 @@ function ActivityRow({
   return (
     <div className="flex items-start gap-4">
       <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-bold ${colorMap[color]}`}>
-        {icon}
+        <TcdxIcon name={icon} className="h-5 w-5" />
       </div>
 
       <div className="min-w-0">

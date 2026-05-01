@@ -380,16 +380,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-[#102033]">
+    <div className="flex h-screen bg-[#06173a]">
       <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
 
-      <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#f8fafc_0%,#f2f6fb_48%,#eef3f8_100%)]">
+      <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#f8fbff_0%,#f4f7fb_48%,#eef3f8_100%)]">
         <div className="sticky top-0 z-30">
           <Header />
         </div>
 
-        <main className="tcdx-scrollbar flex-1 overflow-auto px-4 py-4 md:px-6 md:py-5 lg:px-8 lg:py-7">
-          {children}
+        <main className="tcdx-premium-main tcdx-scrollbar flex-1 overflow-auto px-4 py-4 md:px-6 md:py-5 lg:px-8 lg:py-7">
+          <div className="tcdx-premium-view">
+            {children}
+          </div>
         </main>
       </div>
     </div>

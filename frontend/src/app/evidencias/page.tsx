@@ -8,7 +8,7 @@ import { getUserFromToken } from '@/utils/auth';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
-const AI_AUTO_APPROVAL_THRESHOLD = 80;
+const AI_RECOMMENDATION_THRESHOLD = 80;
 
 async function openAuthorizedFile(url: string, token: string | null) {
   if (!token) {
@@ -91,8 +91,11 @@ type EvidenceRow = {
   analyzed_at?: string | null;
   ai_acceptance_pct?: number | string | null;
   auto_approved_by_ai?: boolean | null;
+  ai_recommended_by_ai?: boolean | null;
   ai_auto_review_reason?: string | null;
   ai_auto_approved_at?: string | null;
+  ai_recommendation_reason?: string | null;
+  ai_recommended_at?: string | null;
 
   ai_trace_id?: string | null;
   ai_source_level?: string | null;
@@ -689,7 +692,7 @@ function EvidenciasPageContent() {
       if (fileInput) fileInput.value = '';
 
       alert(
-        'Evidencia subida correctamente. La IA la evaluará y, si supera el 80% con evidencia completa, podrá aprobarse automáticamente.'
+        'Evidencia subida correctamente. La IA la evaluará y, si supera el 80% con evidencia completa, la dejará recomendada para aprobación humana.'
       );
       await refresh();
     } catch (err) {
@@ -819,7 +822,7 @@ function EvidenciasPageContent() {
   };
 
   const getAcceptanceClass = (pct: number) => {
-    if (pct >= AI_AUTO_APPROVAL_THRESHOLD) {
+    if (pct >= AI_RECOMMENDATION_THRESHOLD) {
       return 'bg-green-100 text-green-700 border-green-200';
     }
 
@@ -881,7 +884,9 @@ function EvidenciasPageContent() {
       aprobadas: normalized.filter((s) => s === 'aprobada').length,
       rechazadas: normalized.filter((s) => s === 'rechazada').length,
       vinculadasPlan: data.filter((row) => Boolean(row.action_plan_id)).length,
-      autoIa: data.filter((row) => row.auto_approved_by_ai === true).length,
+      recomendadasIa: data.filter(
+        (row) => row.ai_recommended_by_ai === true || row.auto_approved_by_ai === true
+      ).length,
     };
   }, [data]);
 
@@ -997,7 +1002,7 @@ function EvidenciasPageContent() {
           <MetricCard title="Aprobadas" value={metrics.aprobadas} />
           <MetricCard title="Rechazadas" value={metrics.rechazadas} />
           <MetricCard title="Ligadas a plan" value={metrics.vinculadasPlan} />
-          <MetricCard title="Auto IA" value={metrics.autoIa} />
+          <MetricCard title="Recomendadas IA" value={metrics.recomendadasIa} />
         </div>
 
         {isRemediationMode && (
@@ -1065,7 +1070,7 @@ function EvidenciasPageContent() {
                 Subir evidencia de corrección
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                La IA revisará el archivo. Si supera el {AI_AUTO_APPROVAL_THRESHOLD}% de aceptación y la evidencia está completa, podrá aprobarse automáticamente.
+                La IA revisará el archivo. Si supera el {AI_RECOMMENDATION_THRESHOLD}% de aceptación y la evidencia está completa, quedará recomendada para aprobación humana.
               </p>
             </div>
 
@@ -1237,10 +1242,10 @@ function EvidenciasPageContent() {
 
                 {e.auto_approved_by_ai && (
                   <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">
-                    <div className="font-semibold">Aprobada automáticamente por IA</div>
+                    <div className="font-semibold">Aprobación IA histórica</div>
                     <div className="mt-1 text-sm">
                       {e.ai_auto_review_reason ||
-                        `La evidencia superó el ${AI_AUTO_APPROVAL_THRESHOLD}% de aceptación.`}
+                        `La evidencia superó el ${AI_RECOMMENDATION_THRESHOLD}% de aceptación.`}
                     </div>
                     <div className="mt-2 text-xs">
                       % aceptación: <b>{toPercent(acceptancePct)}</b>
@@ -1254,16 +1259,37 @@ function EvidenciasPageContent() {
                   </div>
                 )}
 
+                {e.ai_recommended_by_ai &&
+                  normalizedStatus === 'pendiente' && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+                      <div className="font-semibold">IA recomienda aprobación humana</div>
+                      <div className="mt-1 text-sm">
+                        {e.ai_recommendation_reason ||
+                          `La evidencia superó el ${AI_RECOMMENDATION_THRESHOLD}% de aceptación y requiere revisión humana.`}
+                      </div>
+                      <div className="mt-2 text-xs">
+                        % aceptación: <b>{toPercent(acceptancePct)}</b>
+                        {e.ai_recommended_at ? (
+                          <>
+                            {' '}
+                            · Fecha: <b>{formatDateTime(e.ai_recommended_at)}</b>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+
                 {!e.auto_approved_by_ai &&
+                  !e.ai_recommended_by_ai &&
                   normalizedStatus === 'pendiente' &&
                   e.analysis_status === 'completed' && (
                     <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
                       <div className="font-semibold">Revisión IA completada</div>
                       <div className="mt-1 text-sm">
                         La evidencia fue evaluada por IA con <b>{toPercent(acceptancePct)}</b> de aceptación.
-                        {acceptancePct >= AI_AUTO_APPROVAL_THRESHOLD
-                          ? ' Está lista para aprobación.'
-                          : ` No alcanza el umbral automático de ${AI_AUTO_APPROVAL_THRESHOLD}%.`}
+                        {acceptancePct >= AI_RECOMMENDATION_THRESHOLD
+                          ? ' Está lista para revisión y aprobación humana.'
+                          : ` No alcanza el umbral de recomendación de ${AI_RECOMMENDATION_THRESHOLD}%.`}
                       </div>
                     </div>
                   )}
@@ -1300,7 +1326,7 @@ function EvidenciasPageContent() {
                   <InfoBox label="Revisada" value={formatDate(e.reviewed_at)} />
                   <InfoBox
                     label="Revisor"
-                    value={e.reviewed_by_label || (e.auto_approved_by_ai ? 'IA automática' : '-')}
+                    value={e.reviewed_by_label || '-'}
                   />
                   <InfoBox
                     label="Expira"

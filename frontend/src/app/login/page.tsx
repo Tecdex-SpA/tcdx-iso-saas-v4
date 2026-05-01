@@ -100,8 +100,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#f6f8fb]">
-      <div className="hidden w-[46%] flex-col justify-between bg-[linear-gradient(160deg,#102033_0%,#15385e_58%,#0f766e_100%)] p-10 text-white md:flex">
+    <div className="flex min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f4f7fb_48%,#eef3f8_100%)]">
+      <div className="hidden w-[46%] flex-col justify-between bg-[linear-gradient(180deg,#06173a_0%,#061f49_52%,#041126_100%)] p-10 text-white shadow-[18px_0_42px_rgba(8,25,58,0.2)] md:flex">
         <div>
           <img src="/logo.png" className="mb-10 w-56" alt="TCDX Compliance" />
           <div className="h-1 w-16 rounded bg-emerald-300" />
@@ -122,11 +122,11 @@ export default function LoginPage() {
           </p>
 
           <div className="mt-9 grid max-w-xl grid-cols-2 gap-3 text-sm text-white/82">
-            <div className="rounded-lg border border-white/12 bg-white/8 p-4">
+            <div className="rounded-lg border border-white/12 bg-white/8 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               Auditorías ISO 27001, 9001 y 22301.
             </div>
 
-            <div className="rounded-lg border border-white/12 bg-white/8 p-4">
+            <div className="rounded-lg border border-white/12 bg-white/8 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               Evidencias, riesgos, KPI y planes de acción.
             </div>
           </div>

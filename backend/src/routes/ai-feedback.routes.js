@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
 const pool = require('../config/db');
+const { errorDetail } = require('../utils/errorResponse');
 
 // =====================================================
 // Auth local para feedback IA
@@ -282,7 +283,7 @@ router.post('/', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error guardando feedback IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -344,7 +345,7 @@ router.get('/entity/:entityType/:entityId', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo feedback IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -399,7 +400,7 @@ router.get('/stats', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo estadísticas feedback IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -504,7 +505,7 @@ router.get('/useful-cases', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo casos útiles IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

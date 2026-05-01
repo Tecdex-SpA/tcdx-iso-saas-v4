@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 function getUserTenantId(user) {
   return (
@@ -256,7 +257,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo objetivos',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -388,7 +389,7 @@ router.post('/', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error creando objetivo',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -528,7 +529,7 @@ router.put('/:id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando objetivo',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -592,7 +593,7 @@ router.delete('/:id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error eliminando objetivo',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

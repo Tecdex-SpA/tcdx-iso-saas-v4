@@ -12,8 +12,10 @@ const {
   processEvidenceAiJobs
 } = require('../services/evidence-ai.service')
 
-const AI_AUTO_APPROVAL_THRESHOLD = Number(
-  process.env.EVIDENCE_AI_AUTO_APPROVAL_THRESHOLD || 80
+const AI_RECOMMENDATION_THRESHOLD = Number(
+  process.env.EVIDENCE_AI_RECOMMENDATION_THRESHOLD ||
+    process.env.EVIDENCE_AI_AUTO_APPROVAL_THRESHOLD ||
+    80
 )
 
 function getUserTenantId(user) {
@@ -216,7 +218,7 @@ function buildAiAcceptancePct(row) {
   )
 }
 
-function isAiAutoApprovalEligible(row) {
+function isAiRecommendationEligible(row) {
   const normalizedStatus = normalizeEvidenceStatus(row.status)
   const analysisStatus = String(row.analysis_status || '').toLowerCase()
   const validityResult = String(row.validity_result || '').toLowerCase()
@@ -230,7 +232,7 @@ function isAiAutoApprovalEligible(row) {
     validityResult === 'valida' &&
     appearsComplete &&
     !appearsExpired &&
-    acceptancePct >= AI_AUTO_APPROVAL_THRESHOLD
+    acceptancePct >= AI_RECOMMENDATION_THRESHOLD
   )
 }
 
@@ -247,25 +249,25 @@ function resolveEvidenceFilePath(filePath) {
   return candidates.find((candidate) => fs.existsSync(candidate)) || null
 }
 
-function buildAiAutoApprovalPayload(row, acceptancePct) {
-  const reviewedAt = new Date().toISOString()
+function buildAiRecommendationPayload(row, acceptancePct) {
+  const recommendedAt = new Date().toISOString()
 
   return {
-    ai_auto_review: {
-      review_mode: 'automatic',
-      auto_approved: true,
+    ai_recommendation: {
+      recommendation: 'approve',
       acceptance_pct: acceptancePct,
-      threshold_pct: AI_AUTO_APPROVAL_THRESHOLD,
-      approved_at: reviewedAt,
-      reason: `Aprobada automáticamente por IA con ${acceptancePct}% de aceptación.`,
+      threshold_pct: AI_RECOMMENDATION_THRESHOLD,
+      recommended_at: recommendedAt,
+      human_approval_required: true,
+      reason: `IA recomienda aprobación humana: ${acceptancePct}% de aceptación.`,
       validity_result: row.validity_result || null,
       contribution_level: row.contribution_level || null,
       assessment_id: row.assessment_id || null,
       model_name: row.model_name || 'own_ai_140',
       model_version: row.model_version || null
     },
-    reviewed_from: 'ai_auto_review',
-    last_review_status: 'aprobada'
+    reviewed_from: 'human_required_ai_recommendation',
+    last_review_status: 'pendiente'
   }
 }
 
@@ -463,7 +465,7 @@ async function touchLinkedActionPlanForEvidence(client, evidenceRow) {
   return linkedPlan.id
 }
 
-async function autoApproveEligibleEvidences(client, tenantId, filters = {}) {
+async function recommendEligibleEvidences(client, tenantId, filters = {}) {
   const params = [tenantId]
   let idx = 2
 
@@ -561,23 +563,18 @@ async function autoApproveEligibleEvidences(client, tenantId, filters = {}) {
   const updatedIds = []
 
   for (const row of result.rows) {
-    if (!isAiAutoApprovalEligible(row)) continue
+    if (!isAiRecommendationEligible(row)) continue
 
     const acceptancePct = buildAiAcceptancePct(row)
     const mergedMetadata = deepMerge(
       safeObject(row.metadata),
-      buildAiAutoApprovalPayload(row, acceptancePct)
+      buildAiRecommendationPayload(row, acceptancePct)
     )
 
     const update = await client.query(
       `
       UPDATE evidences
       SET
-        status = 'aprobada',
-        validated = TRUE,
-        reviewed_by = NULL,
-        reviewed_at = NOW(),
-        rejection_reason = NULL,
         metadata = $2::jsonb
       WHERE id = $1
         AND LOWER(COALESCE(status, '')) IN ('pendiente', 'pending', 'uploaded', 'subida', '')
@@ -587,13 +584,8 @@ async function autoApproveEligibleEvidences(client, tenantId, filters = {}) {
     )
 
     if (update.rowCount > 0) {
-      await touchLinkedActionPlanForEvidence(client, update.rows[0])
       updatedIds.push(row.id)
     }
-  }
-
-  if (updatedIds.length > 0) {
-    await refreshHealthForTenant(client, tenantId)
   }
 
   return {
@@ -1241,7 +1233,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
 
     await client.query('BEGIN')
 
-    await autoApproveEligibleEvidences(client, tenant_id, {
+    await recommendEligibleEvidences(client, tenant_id, {
       iso: iso || null,
       tenantControlId: tenant_control_id || null,
       actionPlanId: action_plan_id || null
@@ -1325,8 +1317,14 @@ router.get('/:tenant_id', auth, async (req, res) => {
           (e.metadata->'ai_auto_review'->>'auto_approved')::boolean,
           FALSE
         ) AS auto_approved_by_ai,
+        COALESCE(
+          e.metadata->'ai_recommendation'->>'recommendation' = 'approve',
+          FALSE
+        ) AS ai_recommended_by_ai,
         e.metadata->'ai_auto_review'->>'reason' AS ai_auto_review_reason,
         e.metadata->'ai_auto_review'->>'approved_at' AS ai_auto_approved_at,
+        e.metadata->'ai_recommendation'->>'reason' AS ai_recommendation_reason,
+        e.metadata->'ai_recommendation'->>'recommended_at' AS ai_recommended_at,
         COALESCE(
           NULLIF(TRIM(u.full_name), ''),
           NULLIF(TRIM(u.name), ''),

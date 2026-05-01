@@ -47,7 +47,21 @@ const objectivesRoutes = require('./routes/objectives.routes');
 
 const app = express();
 
-app.use(cors());
+const allowedCorsOrigins = String(process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedCorsOrigins.length === 0 || allowedCorsOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Origen no permitido por CORS'));
+  },
+  credentials: true,
+}));
 app.use('/uploads/logos', express.static(path.join(__dirname, '..', 'uploads', 'logos')));
 app.use('/uploads/profiles', express.static(path.join(__dirname, '..', 'uploads', 'profiles')));
 app.use('/uploads/reports', express.static(path.join(__dirname, '..', 'uploads', 'reports')));

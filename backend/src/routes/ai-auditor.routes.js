@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 function normalizeRole(user) {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
@@ -630,7 +631,7 @@ router.get('/context/:audit_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo contexto IA Auditor',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -716,7 +717,7 @@ router.post('/analyze/:audit_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error ejecutando IA Auditor',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -763,7 +764,7 @@ router.get('/runs/:tenant_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo historial IA Auditor',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

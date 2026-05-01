@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const pool = require('../config/db');
+const { errorDetail } = require('../utils/errorResponse');
 const {
   buildGovernanceContext,
 } = require('../services/governance.service');
@@ -127,7 +128,7 @@ router.get('/session', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo sesión del usuario',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -157,7 +158,7 @@ router.get('/governance', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo contexto de gobernanza del usuario',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -190,7 +191,7 @@ router.get('/permissions', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo permisos del usuario',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

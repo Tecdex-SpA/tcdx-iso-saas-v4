@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 function getUserId(user) {
   return user?.id || user?.user_id || user?.userId || null;
@@ -182,7 +183,7 @@ router.post('/', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error registrando trazabilidad IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -290,7 +291,7 @@ router.get('/', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error listando trazabilidad IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -345,7 +346,7 @@ router.get('/:id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo traza IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });

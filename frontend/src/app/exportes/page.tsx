@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserRoleFromToken } from '@/utils/auth';
+import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -72,13 +73,13 @@ function formatDate(value?: string) {
   }).format(new Date(value));
 }
 
-function getReportIcon(code: string) {
-  if (code === 'executive_summary') return '📊';
-  if (code === 'audit_report') return '🔎';
-  if (code === 'control_status') return '✅';
-  if (code === 'platform_client_monthly') return '🏢';
+function getReportIcon(code: string): TcdxIconName {
+  if (code === 'executive_summary') return 'kpi';
+  if (code === 'audit_report') return 'audit';
+  if (code === 'control_status') return 'check';
+  if (code === 'platform_client_monthly') return 'building';
 
-  return '📄';
+  return 'document';
 }
 
 function getCategoryLabel(category: string) {
@@ -752,8 +753,8 @@ export default function ExportesPage() {
                           ].join(' ')}
                         >
                           <div className="flex items-start justify-between gap-4">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
-                              {getReportIcon(report.code)}
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-[#2563eb]">
+                              <TcdxIcon name={getReportIcon(report.code)} className="h-6 w-6" />
                             </div>
 
                             <div className="flex flex-col items-end gap-2">
@@ -838,8 +839,8 @@ export default function ExportesPage() {
                 {selectedReport ? (
                   <div className="mt-4 space-y-4">
                     <div className="flex items-start gap-4">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
-                        {getReportIcon(selectedReport.code)}
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-[#2563eb]">
+                        <TcdxIcon name={getReportIcon(selectedReport.code)} className="h-7 w-7" />
                       </div>
 
                       <div className="min-w-0">
@@ -1131,8 +1132,8 @@ export default function ExportesPage() {
                         <tr key={report.id} className="hover:bg-slate-50/70">
                           <td className="px-4 py-3 align-top">
                             <div className="flex items-start gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-lg">
-                                {getReportIcon(report.report_type_code)}
+                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[#2563eb]">
+                                <TcdxIcon name={getReportIcon(report.report_type_code)} className="h-5 w-5" />
                               </div>
 
                               <div>

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 const STAGE_CATALOG = [
   { code: 'diagnostico', name: 'Diagnóstico', sort_order: 10 },
@@ -2135,7 +2136,7 @@ router.get('/history/:tenant_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo historial de ciclo de vida',
-      detail: error.message
+      ...errorDetail(error),
     });
   } finally {
     client.release();

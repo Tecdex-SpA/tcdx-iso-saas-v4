@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getUserFromToken } from '@/utils/auth';
+import TcdxIcon from '@/components/icons/TcdxIcon';
 
 type SearchResult = {
   id: string;
@@ -461,7 +462,7 @@ export default function Header() {
   const displayResults = search.trim().length >= 2 ? searchResults : [];
 
   return (
-    <div className="border-b border-white/10 bg-[linear-gradient(90deg,#13243a_0%,#102033_52%,#0b1726_100%)] px-4 py-3 text-white shadow-[0_8px_28px_rgba(15,23,42,0.16)] backdrop-blur-xl md:px-6">
+    <div className="tcdx-shell-header px-4 py-3 text-white shadow-[0_8px_28px_rgba(8,25,58,0.18)] backdrop-blur-xl md:px-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/7 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
@@ -501,10 +502,7 @@ export default function Header() {
           <div ref={searchRef} className="relative hidden lg:block">
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/48">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
+                <TcdxIcon name="search" className="h-4 w-4" />
               </span>
 
               <input
@@ -593,12 +591,7 @@ export default function Header() {
 
           <div className="hidden xl:flex items-center gap-2 rounded-lg border border-white/10 bg-white/7 px-3 py-2.5 text-xs text-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <rect x="3" y="4" width="18" height="18" rx="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
+              <TcdxIcon name="calendar" className="h-4 w-4" />
             </span>
             <div className="leading-tight">
               <div className="text-[11px] uppercase tracking-wide text-white/46">Última sincronización</div>
@@ -613,10 +606,7 @@ export default function Header() {
               title="Notificaciones"
               onClick={() => setNotificationsOpen((prev) => !prev)}
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                <path d="M9 17a3 3 0 0 0 6 0" />
-              </svg>
+              <TcdxIcon name="bell" className="h-5 w-5" />
 
               {unreadCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
@@ -742,9 +732,10 @@ export default function Header() {
             </div>
 
             <button
-              className="rounded-lg border border-white/10 bg-white px-4 py-2.5 text-sm font-semibold text-[#102033] shadow-sm transition hover:bg-slate-100"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white px-4 py-2.5 text-sm font-semibold text-[#06173a] shadow-sm transition hover:bg-slate-100"
               onClick={logout}
             >
+              <TcdxIcon name="logout" className="h-4 w-4" />
               Cerrar sesión
             </button>
           </div>

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 function getUserId(req) {
   return req.user?.id || req.user?.user_id || req.user?.userId || null;
@@ -162,7 +163,7 @@ router.get('/prices', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo precios para cotizador',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -187,7 +188,7 @@ router.post('/calculate', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error calculando cotización',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -253,7 +254,7 @@ router.get('/', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error listando cotizaciones',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -315,7 +316,7 @@ router.get('/:id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo cotización',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -527,7 +528,7 @@ router.post('/', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error creando cotización',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -595,7 +596,7 @@ router.put('/:id/status', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando estado de cotización',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -953,7 +954,7 @@ router.post('/:id/convert-to-tenant', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error convirtiendo cotización en empresa/contrato',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();

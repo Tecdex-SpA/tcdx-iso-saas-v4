@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { errorDetail } = require('../utils/errorResponse');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
@@ -1219,7 +1220,7 @@ router.get('/engine-health', auth, async (_req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'No fue posible conectar con AI Engine',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1279,7 +1280,7 @@ router.get('/health-summary', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error generando resumen IA de cumplimiento',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1307,7 +1308,7 @@ router.get('/findings', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error cargando hallazgos para IA Compliance',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1393,7 +1394,7 @@ router.post('/finding-analysis', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error analizando hallazgo con IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1491,7 +1492,7 @@ router.post('/nonconformity-draft', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error generando borrador de no conformidad',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1572,7 +1573,7 @@ router.post('/action-plan-suggestion', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error generando plan de acción con IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1635,7 +1636,7 @@ router.get('/executive-brief', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error generando resumen gerencial con IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1666,7 +1667,7 @@ router.get('/suggestions', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error listando sugerencias IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1717,7 +1718,7 @@ router.post('/suggestions/save', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error guardando sugerencia IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1781,7 +1782,7 @@ router.post('/suggestions/:id/apply', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error aplicando sugerencia IA',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -1885,7 +1886,7 @@ router.post('/apply/finding-analysis-to-finding', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error aplicando análisis IA al hallazgo',
-      detail: error.message,
+      ...errorDetail(error),
     });
   }
 });
@@ -2207,7 +2208,7 @@ router.post('/apply/action-plan-suggestion-to-plan', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error aplicando plan IA al plan de acción',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
@@ -2523,7 +2524,7 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
     return res.status(500).json({
       ok: false,
       error: 'Error creando acción desde borrador IA de no conformidad',
-      detail: error.message,
+      ...errorDetail(error),
     });
   } finally {
     client.release();
