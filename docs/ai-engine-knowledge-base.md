@@ -48,9 +48,12 @@ Los endpoints quedan bajo la convencion actual del AI Engine y exigen `x-ai-toke
 ```bash
 GET /api/ai/knowledge/status
 GET /api/ai/knowledge/module/{module_name}
+POST /api/ai/auditor/analyze
 ```
 
 El estado devuelve archivos cargados, faltantes, errores y configuracion segura de contexto web. No devuelve secretos.
+
+`POST /api/ai/auditor/analyze` ejecuta una primera capa de razonamiento auditor senior sobre resumenes internos ya filtrados por tenant. La salida incluye `summary`, `insights`, `suggested_tasks`, `audit_observations`, `limitations`, `external_context`, `knowledge` y `guardrails`.
 
 ## Uso en reportes
 
@@ -153,6 +156,50 @@ sudo systemctl status ai-engine --no-pager
 curl -s http://localhost:8001/health
 curl -s http://localhost:8001/api/ai/knowledge/status -H "x-ai-token: $AI_INTERNAL_TOKEN" | jq
 curl -s http://localhost:8001/api/ai/knowledge/module/audit -H "x-ai-token: $AI_INTERNAL_TOKEN" | jq
+```
+
+Prueba de analisis sin contexto externo:
+
+```bash
+curl -s -X POST http://localhost:8001/api/ai/auditor/analyze \
+  -H "Content-Type: application/json" \
+  -H "x-ai-token: $AI_INTERNAL_TOKEN" \
+  -d '{
+    "tenant_context": {"tenant_id": "demo"},
+    "active_standards": ["ISO27001"],
+    "controls_summary": {
+      "deteriorated_controls": 3,
+      "controls_without_evidence": 2
+    },
+    "evidence_summary": {"old_evidence_count": 5},
+    "risks_summary": {"high_residual_risks": 2},
+    "requested_output": "audit_preparation",
+    "allow_web_context": false
+  }' | jq
+```
+
+Prueba con contexto externo opcional:
+
+```bash
+curl -s -X POST http://localhost:8001/api/ai/auditor/analyze \
+  -H "Content-Type: application/json" \
+  -H "x-ai-token: $AI_INTERNAL_TOKEN" \
+  -d '{
+    "tenant_context": {"tenant_id": "demo"},
+    "active_standards": ["ISO27001"],
+    "controls_summary": {
+      "deteriorated_controls": 3,
+      "controls_without_evidence": 2
+    },
+    "evidence_summary": {"old_evidence_count": 5},
+    "risks_summary": {"high_residual_risks": 2},
+    "requested_output": "audit_preparation",
+    "allow_web_context": true,
+    "web_context_topics": [
+      "iso_best_practices",
+      "cybersecurity_threats"
+    ]
+  }' | jq
 ```
 
 ## Agregar nuevas reglas

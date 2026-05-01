@@ -18,6 +18,7 @@ from app.services.external_lookup_service import build_external_lookup_plan
 from app.services.external_lookup_service import execute_external_lookup_search
 from app.services.external_lookup_service import get_cached_external_lookup
 from app.services.knowledge_loader import get_knowledge_module, get_knowledge_status
+from app.services.senior_auditor_service import analyze_as_senior_auditor
 from app.core.config import settings
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
@@ -192,6 +193,24 @@ def knowledge_module(
         "module": module_name,
         "knowledge": get_knowledge_module(module_name),
     }
+
+
+@router.post("/auditor/analyze")
+async def auditor_analyze(
+    request: Request,
+    x_ai_token: Optional[str] = Header(default=None),
+):
+    validate_internal_token(x_ai_token)
+
+    try:
+        payload_dict = await request.json()
+        if not isinstance(payload_dict, dict):
+            raise ValueError("payload must be a JSON object")
+        return analyze_as_senior_auditor(payload_dict)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"auditor-analyze error: {exc}")
 
 
 @router.post("/internal/diagnostic/context")
