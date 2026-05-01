@@ -61,6 +61,14 @@ Los reportes deben usar `report_generation_rules.json` para ordenar resumen ejec
 
 La conclusion de cumplimiento siempre debe depender de datos internos: controles, evidencias, riesgos, hallazgos, planes, KPIs y auditorias del tenant.
 
+Desde fase 3, el backend consume `POST /api/ai/auditor/analyze` en:
+
+- `backend/src/reports/services/reportData.service.js`, al construir datos de reportes premium.
+- `backend/src/routes/reports.routes.js`, al enriquecer el addendum ejecutivo si existe respuesta de auditor senior.
+- `backend/src/routes/ai-compliance.routes.js`, en los endpoints `/health-summary` y `/executive-brief`.
+
+El consumo usa fallback: si el endpoint de auditor senior falla, los reportes y respuestas existentes siguen funcionando con la inteligencia previa. El contexto web desde backend esta desactivado por defecto y solo se activa con `AI_AUDITOR_WEB_CONTEXT=true`, `AI_REPORT_WEB_CONTEXT=true` o `AI_COMPLIANCE_WEB_CONTEXT=true`, segun la ruta.
+
 ## Uso en sugerencias y tareas
 
 Las sugerencias deben seguir `task_generation_rules.json` y `ai_output_schemas.json`. La IA solo debe sugerir tareas cuando exista una senal concreta en los datos y debe indicar prioridad, razon y entidades relacionadas.

@@ -279,6 +279,145 @@ function mergeKnowledgeSources(...lists) {
   return normalizeKnowledgeSources(lists.flat());
 }
 
+function isTruthyEnv(value) {
+  return ['1', 'true', 'yes', 'y', 'si', 'sí', 'on'].includes(
+    normalizeText(value)
+  );
+}
+
+function getStandardCodes(standards = []) {
+  return asArray(standards)
+    .map((item) => item?.code || item?.standard_code || item?.iso_code || item)
+    .map(asString)
+    .filter(Boolean);
+}
+
+function getAuditorWebContextTopics(standards = [], reportTypeCode = '') {
+  const codes = getStandardCodes(standards).join(' ').toLowerCase();
+  const topics = ['iso_best_practices', 'risk_management'];
+
+  if (
+    codes.includes('27001') ||
+    codes.includes('22301') ||
+    normalizeText(reportTypeCode).includes('audit')
+  ) {
+    topics.push('cybersecurity_threats', 'business_continuity');
+  }
+
+  return dedupeStrings(topics, 6);
+}
+
+function buildSeniorAuditorPayloadForReport({
+  tenantId,
+  tenant,
+  period,
+  reportTypeCode,
+  standards,
+  stats,
+  latestKpis,
+}) {
+  const controls = stats?.controls || {};
+  const controlHealth = stats?.control_health || {};
+  const evidences = stats?.evidences || {};
+  const findings = stats?.findings || {};
+  const risks = stats?.risks || {};
+  const audits = stats?.audits || {};
+  const actionPlans = stats?.action_plans || {};
+  const redKpis = asArray(latestKpis).filter(
+    (item) => normalizeText(item?.status_color) === 'red'
+  ).length;
+
+  const allowWebContext = isTruthyEnv(
+    process.env.AI_AUDITOR_WEB_CONTEXT || process.env.AI_REPORT_WEB_CONTEXT
+  );
+
+  return {
+    tenant_context: {
+      tenant_id: tenantId,
+      tenant_name: tenant?.name || 'Cliente',
+      period: period || 'Periodo actual',
+    },
+    active_standards: getStandardCodes(standards),
+    controls_summary: {
+      total_controls: toNumber(controls.total_controls, 0),
+      healthy_controls: toNumber(controls.healthy_controls, 0),
+      attention_controls: toNumber(controls.warning_controls, 0),
+      deteriorated_controls: toNumber(controls.critical_controls, 0),
+      overdue_controls: toNumber(controls.overdue_controls, 0),
+      controls_without_evidence: toNumber(
+        controlHealth.pending_evidence_count || evidences.pending_evidences,
+        0
+      ),
+      average_score: toNumber(controls.average_score, 0),
+    },
+    evidence_summary: {
+      total_evidences: toNumber(evidences.total_evidences, 0),
+      pending_evidence_count: toNumber(evidences.pending_evidences, 0),
+      expired_evidence_count: toNumber(evidences.expired_evidences, 0),
+      old_evidence_count: toNumber(evidences.expired_evidences, 0),
+    },
+    risks_summary: {
+      total_risks: toNumber(risks.total_risks, 0),
+      high_residual_risks: toNumber(risks.critical_risks, 0),
+      medium_risks: toNumber(risks.medium_risks, 0),
+    },
+    findings_summary: {
+      open_findings: toNumber(findings.open_findings, 0),
+      critical_findings: toNumber(findings.critical_findings, 0),
+      overdue_findings: toNumber(findings.overdue_findings, 0),
+    },
+    action_plans_summary: {
+      open_action_plans: toNumber(actionPlans.open_actions, 0),
+      overdue_action_plans: toNumber(actionPlans.overdue_actions, 0),
+      high_priority_action_plans: toNumber(actionPlans.high_priority_actions, 0),
+    },
+    kpi_summary: {
+      red_kpis: redKpis,
+      total_kpis: asArray(latestKpis).length,
+    },
+    audit_context: {
+      active_audits: toNumber(audits.active_audits, 0),
+      audits_last_30_days: toNumber(audits.audits_last_30_days, 0),
+    },
+    requested_output:
+      reportTypeCode === 'audit_report' ? 'audit_preparation' : 'report',
+    allow_web_context: allowWebContext,
+    web_context_topics: allowWebContext
+      ? getAuditorWebContextTopics(standards, reportTypeCode)
+      : [],
+  };
+}
+
+function normalizeSeniorAuditorResponse(raw) {
+  const response = raw?.ai || raw?.analysis || raw;
+
+  if (!response || typeof response !== 'object') {
+    return null;
+  }
+
+  return response;
+}
+
+function getSeniorAuditorRecommendationText(item) {
+  return firstNonEmptyString(
+    item?.recommended_action,
+    item?.summary,
+    item?.title,
+    item?.observation
+  );
+}
+
+function extractSeniorAuditorRecommendations(seniorAuditor) {
+  const tasks = asArray(seniorAuditor?.suggested_tasks).map(
+    getSeniorAuditorRecommendationText
+  );
+  const insights = asArray(seniorAuditor?.insights).map(
+    getSeniorAuditorRecommendationText
+  );
+
+  return filterInsights([...tasks, ...insights], 6);
+}
+
 function rankFindingsForAi(rows) {
   return [...asArray(rows)].sort((a, b) => {
     const severityDiff = severityRank(a?.severity) - severityRank(b?.severity);
@@ -2041,6 +2180,7 @@ async function getAiEnhancements({
   topRisks,
   auditFocusControls,
   openFindings,
+  latestKpis,
   platformMonthlyStats,
 }) {
   const weakestStandards = buildWeakestStandardsList(complianceByStandard);
@@ -2069,10 +2209,23 @@ async function getAiEnhancements({
     findings_critical: toNumber(stats?.findings?.critical_findings, 0),
   };
 
-  const [executiveBriefRaw, healthSummaryRaw] = await Promise.all([
+  const seniorAuditorPayload = buildSeniorAuditorPayloadForReport({
+    tenantId,
+    tenant,
+    period,
+    reportTypeCode,
+    standards,
+    stats,
+    latestKpis,
+  });
+
+  const [executiveBriefRaw, healthSummaryRaw, seniorAuditorRaw] = await Promise.all([
     safeAiCall('/api/ai/suggest/executive-brief', executiveBriefPayload, null),
     safeAiCall('/api/ai/suggest/health-summary', healthSummaryPayload, null),
+    safeAiCall('/api/ai/auditor/analyze', seniorAuditorPayload, null, 20000),
   ]);
+
+  const seniorAuditor = normalizeSeniorAuditorResponse(seniorAuditorRaw);
 
   let executiveFallbackSummary = buildExecutiveFallbackSummary({
     tenant,
@@ -2206,6 +2359,7 @@ async function getAiEnhancements({
   return {
     executive_brief: executiveBrief,
     health_summary: healthSummary,
+    senior_auditor: seniorAuditor,
     top_finding_analyses: topFindingAnalyses,
     knowledge_sources: mergeKnowledgeSources(
       executiveBrief.knowledge_sources,
@@ -2481,6 +2635,7 @@ async function buildReportData({
     topRisks,
     auditFocusControls,
     openFindings,
+    latestKpis,
     platformMonthlyStats,
   });
 
@@ -2513,6 +2668,7 @@ async function buildReportData({
     ai.executive_brief?.priorities || [],
     ai.executive_brief?.recommendations || [],
     ai.health_summary?.suggestions || [],
+    extractSeniorAuditorRecommendations(ai.senior_auditor),
     asArray(ai.top_finding_analyses).flatMap((item) => item.recommended_actions || [])
   );
 

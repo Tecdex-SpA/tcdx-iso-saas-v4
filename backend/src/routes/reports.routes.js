@@ -1430,6 +1430,62 @@ function buildFallbackAiReportAddendum(reportData) {
   };
 }
 
+function getSeniorAuditorDisplayText(item) {
+  return String(
+    item?.recommended_action ||
+      item?.summary ||
+      item?.observation ||
+      item?.title ||
+      ''
+  ).trim();
+}
+
+function mergeAiReportAddendumWithSenior(addendum, reportData) {
+  const seniorAuditor = reportData?.ai?.senior_auditor;
+
+  if (!seniorAuditor || typeof seniorAuditor !== 'object') {
+    return addendum;
+  }
+
+  const seniorSummary = String(
+    seniorAuditor?.summary?.executive_message || ''
+  ).trim();
+  const taskLines = Array.isArray(seniorAuditor.suggested_tasks)
+    ? seniorAuditor.suggested_tasks.map(getSeniorAuditorDisplayText)
+    : [];
+  const insightLines = Array.isArray(seniorAuditor.insights)
+    ? seniorAuditor.insights.map(getSeniorAuditorDisplayText)
+    : [];
+  const observationLines = Array.isArray(seniorAuditor.audit_observations)
+    ? seniorAuditor.audit_observations.map(getSeniorAuditorDisplayText)
+    : [];
+
+  const source = addendum.source?.includes('senior-auditor')
+    ? addendum.source
+    : `${addendum.source || 'report-intelligence'}+senior-auditor`;
+
+  return {
+    ...addendum,
+    source,
+    summary: cleanReportSentenceText(
+      [addendum.summary, seniorSummary].filter(Boolean).join(' '),
+      900
+    ),
+    priorities: normalizeReportList(
+      [...taskLines, ...(addendum.priorities || [])],
+      6
+    ),
+    risks: normalizeReportList(
+      [...insightLines, ...(addendum.risks || [])],
+      4
+    ),
+    decisions: normalizeReportList(
+      [...observationLines, ...(addendum.decisions || [])],
+      4
+    ),
+  };
+}
+
 async function buildAiReportAddendum(reportData) {
   const fallback = buildFallbackAiReportAddendum(reportData);
 
@@ -1483,7 +1539,7 @@ async function buildAiReportAddendum(reportData) {
 
     const ai = json.ai || json;
 
-    return {
+    return mergeAiReportAddendumWithSenior({
       source: 'own-ai-engine-140',
       headline: String(ai.headline || ai.title || fallback.headline || '').trim(),
       summary: String(ai.summary || ai.executive_summary || ai.brief || fallback.summary || '').trim(),
@@ -1505,10 +1561,10 @@ async function buildAiReportAddendum(reportData) {
         ...(ai.business_impact || []),
         ...fallback.decisions,
       ], 4),
-    };
+    }, reportData);
   } catch (error) {
     console.error('REPORT AI ADDENDUM ERROR:', error.message);
-    return fallback;
+    return mergeAiReportAddendumWithSenior(fallback, reportData);
   }
 }
 

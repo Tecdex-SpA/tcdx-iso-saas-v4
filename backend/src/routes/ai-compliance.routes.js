@@ -588,6 +588,82 @@ async function callAiEngine(path, payload) {
   }
 }
 
+async function callAiEngineOptional(path, payload, fallback = null) {
+  try {
+    return await callAiEngine(path, payload);
+  } catch (error) {
+    console.error(`AI ENGINE OPTIONAL ERROR [${path}]:`, error.message);
+    return fallback;
+  }
+}
+
+function isTruthyFlag(value) {
+  return ['1', 'true', 'yes', 'y', 'si', 'sí', 'on'].includes(
+    String(value || '').trim().toLowerCase()
+  );
+}
+
+function getAuditorWebContextFlag(req) {
+  if (req.query?.allow_web_context !== undefined) {
+    return isTruthyFlag(req.query.allow_web_context);
+  }
+
+  return isTruthyFlag(
+    process.env.AI_AUDITOR_WEB_CONTEXT || process.env.AI_COMPLIANCE_WEB_CONTEXT
+  );
+}
+
+function buildAuditorWebContextTopics(standards = []) {
+  const codes = Array.isArray(standards) ? standards.join(' ').toLowerCase() : '';
+  const topics = ['iso_best_practices', 'risk_management'];
+
+  if (codes.includes('27001') || codes.includes('22301')) {
+    topics.push('cybersecurity_threats', 'business_continuity');
+  }
+
+  return [...new Set(topics)];
+}
+
+function buildSeniorAuditorPayload({
+  tenantId,
+  tenantName,
+  standards,
+  stats,
+  weakestStandards = [],
+  requestedOutput = 'global_analysis',
+  allowWebContext = false,
+}) {
+  return {
+    tenant_context: {
+      tenant_id: tenantId,
+      tenant_name: tenantName || 'Cliente',
+    },
+    active_standards: Array.isArray(standards) ? standards : [],
+    controls_summary: {
+      total_controls: Number(stats?.controls_total || 0),
+      attention_controls: Number(stats?.controls_warning || 0),
+      deteriorated_controls: Number(stats?.controls_critical || 0),
+      controls_without_evidence: Number(stats?.evidences_pending || 0),
+      weakest_standards: weakestStandards,
+    },
+    evidence_summary: {
+      pending_evidence_count: Number(stats?.evidences_pending || 0),
+    },
+    findings_summary: {
+      critical_findings: Number(stats?.findings_critical || 0),
+    },
+    risks_summary: {},
+    action_plans_summary: {},
+    kpi_summary: {},
+    audit_context: {},
+    requested_output: requestedOutput,
+    allow_web_context: allowWebContext,
+    web_context_topics: allowWebContext
+      ? buildAuditorWebContextTopics(standards)
+      : [],
+  };
+}
+
 async function getTenantName(tenantId) {
   const result = await pool.query(
     `
@@ -1252,10 +1328,19 @@ router.get('/health-summary', auth, async (req, res) => {
       findings_critical: stats.findings_critical,
     };
 
-    const aiResponse = await callAiEngine(
-      '/api/ai/suggest/health-summary',
-      aiPayload
-    );
+    const seniorAuditorPayload = buildSeniorAuditorPayload({
+      tenantId,
+      tenantName,
+      standards,
+      stats,
+      requestedOutput: 'global_analysis',
+      allowWebContext: getAuditorWebContextFlag(req),
+    });
+
+    const [aiResponse, seniorAuditor] = await Promise.all([
+      callAiEngine('/api/ai/suggest/health-summary', aiPayload),
+      callAiEngineOptional('/api/ai/auditor/analyze', seniorAuditorPayload),
+    ]);
 
     await savePromptLog({
       tenantId,
@@ -1263,8 +1348,14 @@ router.get('/health-summary', auth, async (req, res) => {
       sourceModule: 'ia_compliance',
       sourceEntityType: 'tenant',
       sourceEntityId: tenantId,
-      requestPayload: aiPayload,
-      responsePayload: aiResponse,
+      requestPayload: {
+        health_summary: aiPayload,
+        senior_auditor: seniorAuditorPayload,
+      },
+      responsePayload: {
+        health_summary: aiResponse,
+        senior_auditor: seniorAuditor,
+      },
       status: 'ok',
       createdBy: userId,
     });
@@ -1273,6 +1364,7 @@ router.get('/health-summary', auth, async (req, res) => {
       ok: true,
       context: aiPayload,
       ai: aiResponse,
+      senior_auditor: seniorAuditor,
     });
   } catch (error) {
     console.error('ERROR AI COMPLIANCE HEALTH SUMMARY:', error);
@@ -1608,10 +1700,20 @@ router.get('/executive-brief', auth, async (req, res) => {
       weakest_standards: weakestStandards,
     };
 
-    const aiResponse = await callAiEngine(
-      '/api/ai/suggest/executive-brief',
-      aiPayload
-    );
+    const seniorAuditorPayload = buildSeniorAuditorPayload({
+      tenantId,
+      tenantName,
+      standards,
+      stats,
+      weakestStandards,
+      requestedOutput: 'report',
+      allowWebContext: getAuditorWebContextFlag(req),
+    });
+
+    const [aiResponse, seniorAuditor] = await Promise.all([
+      callAiEngine('/api/ai/suggest/executive-brief', aiPayload),
+      callAiEngineOptional('/api/ai/auditor/analyze', seniorAuditorPayload),
+    ]);
 
     await savePromptLog({
       tenantId,
@@ -1619,8 +1721,14 @@ router.get('/executive-brief', auth, async (req, res) => {
       sourceModule: 'ia_compliance',
       sourceEntityType: 'tenant',
       sourceEntityId: tenantId,
-      requestPayload: aiPayload,
-      responsePayload: aiResponse,
+      requestPayload: {
+        executive_brief: aiPayload,
+        senior_auditor: seniorAuditorPayload,
+      },
+      responsePayload: {
+        executive_brief: aiResponse,
+        senior_auditor: seniorAuditor,
+      },
       status: 'ok',
       createdBy: userId,
     });
@@ -1629,6 +1737,7 @@ router.get('/executive-brief', auth, async (req, res) => {
       ok: true,
       context: aiPayload,
       ai: aiResponse,
+      senior_auditor: seniorAuditor,
     });
   } catch (error) {
     console.error('ERROR AI COMPLIANCE EXECUTIVE BRIEF:', error);
