@@ -69,6 +69,10 @@ Desde fase 3, el backend consume `POST /api/ai/auditor/analyze` en:
 
 El consumo usa fallback: si el endpoint de auditor senior falla, los reportes y respuestas existentes siguen funcionando con la inteligencia previa. El contexto web desde backend esta desactivado por defecto y solo se activa con `AI_AUDITOR_WEB_CONTEXT=true`, `AI_REPORT_WEB_CONTEXT=true` o `AI_COMPLIANCE_WEB_CONTEXT=true`, segun la ruta.
 
+Desde fase 4, las tareas, brechas de evidencia y alertas de riesgo generadas por auditor senior pueden persistirse como borradores en `ai_suggestions`. La persistencia esta centralizada en `backend/src/services/seniorAuditorSuggestions.service.js` y deduplica por tenant, tipo, titulo, entidad y estado abierto antes de insertar. Esto evita que llamadas repetidas a reportes o resumenes creen sugerencias duplicadas.
+
+Las sugerencias de tipo `senior_auditor_task`, `senior_auditor_risk_alert`, `senior_auditor_evidence_gap` y `senior_auditor_insight` pueden aplicarse como borrador de plan de accion mediante el flujo existente `POST /api/ai-compliance/suggestions/:id/apply` con `apply_mode=create_action_plan_draft`.
+
 ## Uso en sugerencias y tareas
 
 Las sugerencias deben seguir `task_generation_rules.json` y `ai_output_schemas.json`. La IA solo debe sugerir tareas cuando exista una senal concreta en los datos y debe indicar prioridad, razon y entidades relacionadas.

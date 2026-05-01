@@ -12,6 +12,10 @@ const { buildReportData } = require('../reports/services/reportData.service');
 const {
   renderExecutivePremiumTemplate,
 } = require('../reports/templates/executivePremium.template');
+const {
+  persistSeniorAuditorSuggestions,
+  summarizeSeniorSuggestionSync,
+} = require('../services/seniorAuditorSuggestions.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
@@ -1486,6 +1490,40 @@ function mergeAiReportAddendumWithSenior(addendum, reportData) {
   };
 }
 
+async function syncReportSeniorAuditorSuggestionsSafe({
+  tenantId,
+  userId,
+  reportTypeCode,
+  period,
+  reportData,
+}) {
+  try {
+    const result = await persistSeniorAuditorSuggestions({
+      tenantId,
+      seniorAuditor: reportData?.ai?.senior_auditor,
+      sourceModule: 'reports',
+      sourceEntityType: 'tenant',
+      sourceEntityId: tenantId,
+      inputPayload: {
+        report_type_code: reportTypeCode,
+        period: period || null,
+        source: 'report_generation',
+      },
+      createdBy: userId,
+    });
+
+    return summarizeSeniorSuggestionSync(result);
+  } catch (error) {
+    console.error('REPORT SENIOR AUDITOR SUGGESTION SYNC ERROR:', error.message);
+    return {
+      created: 0,
+      reused: 0,
+      skipped: 0,
+      error: 'No fue posible sincronizar sugerencias del auditor senior',
+    };
+  }
+}
+
 async function buildAiReportAddendum(reportData) {
   const fallback = buildFallbackAiReportAddendum(reportData);
 
@@ -2214,6 +2252,13 @@ router.post('/generate', auth, async (req, res) => {
 
     reportData.lifecycle_history = await getLifecycleHistoryForReport(targetTenantId);
     reportData.ai_report_addendum = await buildAiReportAddendum(reportData);
+    reportData.senior_auditor_suggestions = await syncReportSeniorAuditorSuggestionsSafe({
+      tenantId: targetTenantId,
+      userId,
+      reportTypeCode: report_type_code,
+      period: period || null,
+      reportData,
+    });
     reportData.audit_summary = await getAuditSummaryForReport(targetTenantId);
     reportData.audit_execution_summary = await getAuditExecutionSummaryForReport(targetTenantId);
 

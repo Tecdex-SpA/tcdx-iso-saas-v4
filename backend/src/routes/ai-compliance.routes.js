@@ -3,6 +3,10 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
+const {
+  persistSeniorAuditorSuggestions,
+  summarizeSeniorSuggestionSync,
+} = require('../services/seniorAuditorSuggestions.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
@@ -594,6 +598,21 @@ async function callAiEngineOptional(path, payload, fallback = null) {
   } catch (error) {
     console.error(`AI ENGINE OPTIONAL ERROR [${path}]:`, error.message);
     return fallback;
+  }
+}
+
+async function syncSeniorAuditorSuggestionsSafe(options) {
+  try {
+    const result = await persistSeniorAuditorSuggestions(options);
+    return summarizeSeniorSuggestionSync(result);
+  } catch (error) {
+    console.error('AI SENIOR AUDITOR SUGGESTION SYNC ERROR:', error.message);
+    return {
+      created: 0,
+      reused: 0,
+      skipped: 0,
+      error: 'No fue posible sincronizar sugerencias del auditor senior',
+    };
   }
 }
 
@@ -1193,10 +1212,17 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
   const title =
     input.title ||
     payload.objective ||
+    payload.title ||
+    payload.recommended_action ||
     'Plan de acción generado por IA';
 
   const description = [
     payload.objective ? `Objetivo: ${payload.objective}` : '',
+    payload.summary ? `Resumen: ${payload.summary}` : '',
+    payload.reason ? `Razón: ${payload.reason}` : '',
+    payload.recommended_action
+      ? `Acción recomendada: ${payload.recommended_action}`
+      : '',
     Array.isArray(payload.immediate_actions) && payload.immediate_actions.length
       ? `Acciones inmediatas: ${payload.immediate_actions.join(' | ')}`
       : '',
@@ -1208,7 +1234,7 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
     .join('\n\n');
 
   const sourceType = 'ai_suggestion';
-  const priority = normalizePriority(payload.priority);
+  const priority = normalizePriority(payload.priority || input.priority);
   const status = 'draft';
 
   const result = await pool.query(
@@ -1342,6 +1368,16 @@ router.get('/health-summary', auth, async (req, res) => {
       callAiEngineOptional('/api/ai/auditor/analyze', seniorAuditorPayload),
     ]);
 
+    const seniorAuditorSuggestions = await syncSeniorAuditorSuggestionsSafe({
+      tenantId,
+      seniorAuditor,
+      sourceModule: 'ia_compliance_health_summary',
+      sourceEntityType: 'tenant',
+      sourceEntityId: tenantId,
+      inputPayload: seniorAuditorPayload,
+      createdBy: userId,
+    });
+
     await savePromptLog({
       tenantId,
       promptType: 'health_summary',
@@ -1355,6 +1391,7 @@ router.get('/health-summary', auth, async (req, res) => {
       responsePayload: {
         health_summary: aiResponse,
         senior_auditor: seniorAuditor,
+        senior_auditor_suggestions: seniorAuditorSuggestions,
       },
       status: 'ok',
       createdBy: userId,
@@ -1365,6 +1402,7 @@ router.get('/health-summary', auth, async (req, res) => {
       context: aiPayload,
       ai: aiResponse,
       senior_auditor: seniorAuditor,
+      senior_auditor_suggestions: seniorAuditorSuggestions,
     });
   } catch (error) {
     console.error('ERROR AI COMPLIANCE HEALTH SUMMARY:', error);
@@ -1715,6 +1753,16 @@ router.get('/executive-brief', auth, async (req, res) => {
       callAiEngineOptional('/api/ai/auditor/analyze', seniorAuditorPayload),
     ]);
 
+    const seniorAuditorSuggestions = await syncSeniorAuditorSuggestionsSafe({
+      tenantId,
+      seniorAuditor,
+      sourceModule: 'ia_compliance_executive_brief',
+      sourceEntityType: 'tenant',
+      sourceEntityId: tenantId,
+      inputPayload: seniorAuditorPayload,
+      createdBy: userId,
+    });
+
     await savePromptLog({
       tenantId,
       promptType: 'executive_brief',
@@ -1728,6 +1776,7 @@ router.get('/executive-brief', auth, async (req, res) => {
       responsePayload: {
         executive_brief: aiResponse,
         senior_auditor: seniorAuditor,
+        senior_auditor_suggestions: seniorAuditorSuggestions,
       },
       status: 'ok',
       createdBy: userId,
@@ -1738,6 +1787,7 @@ router.get('/executive-brief', auth, async (req, res) => {
       context: aiPayload,
       ai: aiResponse,
       senior_auditor: seniorAuditor,
+      senior_auditor_suggestions: seniorAuditorSuggestions,
     });
   } catch (error) {
     console.error('ERROR AI COMPLIANCE EXECUTIVE BRIEF:', error);
@@ -1868,10 +1918,20 @@ router.post('/suggestions/:id/apply', auth, async (req, res) => {
 
     let appliedArtifact = null;
 
-    if (
+    const canCreateActionPlanDraft =
       applyMode === 'create_action_plan_draft' &&
-      suggestion.suggestion_type === 'action_plan_suggestion'
-    ) {
+      (
+        suggestion.suggestion_type === 'action_plan_suggestion' ||
+        [
+          'senior_auditor_task',
+          'senior_auditor_risk_alert',
+          'senior_auditor_evidence_gap',
+          'senior_auditor_insight',
+        ].includes(suggestion.suggestion_type) ||
+        suggestion.output_payload?.should_create_task === true
+      );
+
+    if (canCreateActionPlanDraft) {
       appliedArtifact = await createDraftActionPlanFromSuggestion(
         tenantId,
         suggestion
