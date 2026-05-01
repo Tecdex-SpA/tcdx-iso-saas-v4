@@ -2010,7 +2010,7 @@ function ActionPlansPanel({ items }: { items: ActionPlanItem[] }) {
                 : '#f97316';
 
             return (
-              <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_48px_130px] items-center gap-4">
+              <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_48px] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_48px_130px] sm:gap-4">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-[#06173a]">
                     {item.title || 'Plan sin título'}
@@ -2020,7 +2020,7 @@ function ActionPlansPanel({ items }: { items: ActionPlanItem[] }) {
                   </div>
                 </div>
                 <div className="text-right text-sm font-bold text-[#2563eb]">{progress}%</div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                <div className="col-span-2 h-2 overflow-hidden rounded-full bg-slate-200 sm:col-span-1">
                   <div className="h-full rounded-full" style={{ width: `${progress}%`, background: color }} />
                 </div>
               </div>
@@ -2042,7 +2042,7 @@ function PriorityRiskPanel({
       <PanelHeader title="Riesgos prioritarios" href="/matriz-riesgo" />
 
       <div className="overflow-hidden">
-        <div className="grid grid-cols-[minmax(0,1fr)_78px_82px_28px] border-b border-slate-100 pb-2 text-xs font-bold text-slate-400">
+        <div className="hidden grid-cols-[minmax(0,1fr)_78px_82px_28px] border-b border-slate-100 pb-2 text-xs font-bold text-slate-400 sm:grid">
           <span>Riesgo</span>
           <span>Norma</span>
           <span>Nivel</span>
@@ -2055,10 +2055,10 @@ function PriorityRiskPanel({
             rows.map((row) => (
               <div
                 key={row.id}
-                className="grid grid-cols-[minmax(0,1fr)_78px_82px_28px] items-center gap-2 py-3 text-sm"
+                className="grid grid-cols-[minmax(0,1fr)_82px_28px] items-center gap-2 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_78px_82px_28px]"
               >
                 <span className="truncate font-semibold text-[#06173a]">{row.risk}</span>
-                <span className="text-slate-600">{row.norm}</span>
+                <span className="hidden text-slate-600 sm:block">{row.norm}</span>
                 <span
                   className={[
                     'w-fit rounded-full px-3 py-1 text-xs font-bold',
@@ -2071,7 +2071,10 @@ function PriorityRiskPanel({
                 >
                   {row.level}
                 </span>
-                <TcdxIcon name="trend" className="h-4 w-4 text-[#f97316]" />
+                <TcdxIcon name="trend" className="h-4 w-4 justify-self-end text-[#f97316]" />
+                <span className="col-span-3 text-xs font-semibold text-slate-500 sm:hidden">
+                  {row.norm}
+                </span>
               </div>
             ))
           )}

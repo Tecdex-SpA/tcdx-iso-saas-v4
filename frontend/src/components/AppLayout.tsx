@@ -43,6 +43,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
 
@@ -340,6 +341,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     };
   }, [pathname, routeRules]);
 
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname]);
+
   if (checkingAccess) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#f6f8fb] text-[#162033]">
@@ -380,15 +385,32 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-[#06173a]">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+    <div className="flex h-[100dvh] overflow-hidden bg-[#06173a]">
+      <div className="hidden lg:block">
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+      </div>
+
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            type="button"
+            aria-label="Cerrar menú"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+
+          <div className="absolute inset-y-0 left-0 max-w-[86vw]">
+            <Sidebar collapsed={false} onToggle={() => setMobileSidebarOpen(false)} />
+          </div>
+        </div>
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#f8fbff_0%,#f4f7fb_48%,#eef3f8_100%)]">
         <div className="sticky top-0 z-30">
-          <Header />
+          <Header onMenuClick={() => setMobileSidebarOpen(true)} />
         </div>
 
-        <main className="tcdx-premium-main tcdx-scrollbar flex-1 overflow-auto px-4 py-4 md:px-6 md:py-5 lg:px-8 lg:py-7">
+        <main className="tcdx-premium-main tcdx-scrollbar min-w-0 flex-1 overflow-auto px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5 lg:px-8 lg:py-7">
           <div className="tcdx-premium-view">
             {children}
           </div>

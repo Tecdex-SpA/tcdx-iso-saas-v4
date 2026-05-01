@@ -41,6 +41,28 @@ body {
   box-sizing: border-box;
 }
 
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+div,
+section,
+article,
+aside,
+main,
+header,
+footer {
+  min-width: 0;
+}
+
 ::selection {
   background: rgba(31, 111, 235, 0.18);
   color: var(--tcdx-ink);
@@ -97,6 +119,8 @@ textarea {
 .tcdx-premium-view {
   min-height: 100%;
   color: var(--tcdx-ink);
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
 }
 
 .tcdx-premium-view > div[class*="min-h-screen"] {
@@ -153,6 +177,7 @@ textarea {
 .tcdx-premium-view table {
   border-collapse: separate;
   border-spacing: 0;
+  max-width: 100%;
 }
 
 .tcdx-premium-view thead {
@@ -180,4 +205,12 @@ textarea {
 .tcdx-shell-sidebar {
   background:
     linear-gradient(180deg, #06173a 0%, #061f49 48%, #041126 100%);
+}
+
+@media (max-width: 767px) {
+  .tcdx-premium-view table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
 }
