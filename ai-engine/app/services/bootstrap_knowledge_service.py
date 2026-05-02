@@ -27,9 +27,9 @@ def _engine():
 
 
 def _sql(query: str):
-    from sqlalchemy import text
+    from sqlalchemy import text as sqlalchemy_text
 
-    return _sql(query)
+    return sqlalchemy_text(query)
 
 
 def _utc_now() -> datetime:
