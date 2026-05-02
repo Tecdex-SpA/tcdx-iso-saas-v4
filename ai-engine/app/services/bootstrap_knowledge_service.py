@@ -4,6 +4,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,6 +19,34 @@ BOOTSTRAP_STATUSES = {
     "bootstrap_rejected",
     "bootstrap_archived",
 }
+
+ITEM_COLUMNS = """
+  id,
+  title,
+  summary,
+  content,
+  practical_use,
+  recommended_application,
+  limitations,
+  knowledge_type,
+  domain,
+  module,
+  standard_code,
+  clause_or_control,
+  tags_json,
+  trust_score,
+  freshness_score,
+  usefulness_score,
+  confidence_score,
+  source_type,
+  origin,
+  status,
+  source_url,
+  source_provider,
+  retrieved_at,
+  created_at,
+  updated_at
+"""
 
 
 def _engine():
@@ -45,6 +74,35 @@ def _env_bool(name: str, default: bool) -> bool:
 
 def _json(value: Any, fallback: Any) -> str:
     return json.dumps(value if value is not None else fallback, ensure_ascii=False)
+
+
+def _clean_value(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _clean_row(row: Any) -> Dict[str, Any]:
+    data = dict(row)
+    return {key: _clean_value(value) for key, value in data.items()}
+
+
+def _safe_limit(value: int, fallback: int = 20, maximum: int = 100) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = fallback
+    return max(1, min(parsed, maximum))
+
+
+def _safe_offset(value: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = 0
+    return max(0, parsed)
 
 
 def _load_json(path: Path) -> Any:
@@ -630,6 +688,185 @@ def load_seed_knowledge(dry_run: bool = False, require_review: Optional[bool] = 
             raise
 
     return summary
+
+
+def search_bootstrap_knowledge(
+    q: Optional[str] = None,
+    module: Optional[str] = None,
+    domain: Optional[str] = None,
+    standard_code: Optional[str] = None,
+    knowledge_type: Optional[str] = None,
+    approved_only: bool = True,
+    limit: int = 20,
+    offset: int = 0,
+) -> Dict[str, Any]:
+    limit = _safe_limit(limit)
+    offset = _safe_offset(offset)
+    conditions = ["is_active = true"]
+    params: Dict[str, Any] = {"limit": limit, "offset": offset}
+
+    if approved_only:
+        conditions.append("status = 'bootstrap_approved'")
+
+    if module:
+        conditions.append("module = :module")
+        params["module"] = module
+
+    if domain:
+        conditions.append("domain = :domain")
+        params["domain"] = domain
+
+    if standard_code:
+        conditions.append("standard_code = :standard_code")
+        params["standard_code"] = standard_code
+
+    if knowledge_type:
+        conditions.append("knowledge_type = :knowledge_type")
+        params["knowledge_type"] = knowledge_type
+
+    if q:
+        params["q_like"] = f"%{q.strip()}%"
+        conditions.append(
+            """
+            (
+              title ILIKE :q_like
+              OR summary ILIKE :q_like
+              OR coalesce(content, '') ILIKE :q_like
+              OR coalesce(practical_use, '') ILIKE :q_like
+              OR coalesce(recommended_application, '') ILIKE :q_like
+            )
+            """
+        )
+
+    where_sql = " AND ".join(conditions)
+
+    with _engine().connect() as conn:
+        rows = conn.execute(
+            _sql(
+                f"""
+                SELECT {ITEM_COLUMNS}
+                FROM ai_bootstrap_knowledge_items
+                WHERE {where_sql}
+                ORDER BY confidence_score DESC, updated_at DESC
+                LIMIT :limit OFFSET :offset
+                """
+            ),
+            params,
+        ).mappings().all()
+
+        total = conn.execute(
+            _sql(
+                f"""
+                SELECT COUNT(*)::int AS total
+                FROM ai_bootstrap_knowledge_items
+                WHERE {where_sql}
+                """
+            ),
+            params,
+        ).mappings().first()
+
+    return {
+        "ok": True,
+        "approved_only": approved_only,
+        "count": len(rows),
+        "total": int(total["total"] if total else 0),
+        "limit": limit,
+        "offset": offset,
+        "data": [_clean_row(row) for row in rows],
+    }
+
+
+def list_pending_bootstrap_knowledge(limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+    limit = _safe_limit(limit)
+    offset = _safe_offset(offset)
+
+    with _engine().connect() as conn:
+        rows = conn.execute(
+            _sql(
+                f"""
+                SELECT {ITEM_COLUMNS}
+                FROM ai_bootstrap_knowledge_items
+                WHERE is_active = true
+                  AND status = 'bootstrap_pending_review'
+                ORDER BY confidence_score DESC, created_at ASC
+                LIMIT :limit OFFSET :offset
+                """
+            ),
+            {"limit": limit, "offset": offset},
+        ).mappings().all()
+
+        total = conn.execute(
+            _sql(
+                """
+                SELECT COUNT(*)::int AS total
+                FROM ai_bootstrap_knowledge_items
+                WHERE is_active = true
+                  AND status = 'bootstrap_pending_review'
+                """
+            )
+        ).mappings().first()
+
+    return {
+        "ok": True,
+        "count": len(rows),
+        "total": int(total["total"] if total else 0),
+        "limit": limit,
+        "offset": offset,
+        "data": [_clean_row(row) for row in rows],
+    }
+
+
+def approve_bootstrap_knowledge_item(item_id: str) -> Dict[str, Any]:
+    with _engine().begin() as conn:
+        row = conn.execute(
+            _sql(
+                """
+                UPDATE ai_bootstrap_knowledge_items
+                SET
+                  status = 'bootstrap_approved',
+                  approved_at = CURRENT_TIMESTAMP,
+                  reviewed_at = CURRENT_TIMESTAMP,
+                  rejection_reason = NULL,
+                  updated_at = CURRENT_TIMESTAMP
+                WHERE id = CAST(:item_id AS uuid)
+                  AND is_active = true
+                RETURNING id, title, status, approved_at, updated_at
+                """
+            ),
+            {"item_id": item_id},
+        ).mappings().first()
+
+    if not row:
+        return {"ok": False, "error": "bootstrap_item_not_found", "id": item_id}
+
+    return {"ok": True, "item": _clean_row(row)}
+
+
+def reject_bootstrap_knowledge_item(item_id: str, reason: Optional[str] = None) -> Dict[str, Any]:
+    clean_reason = str(reason or "").strip()[:500] or "Rechazado en revision interna."
+
+    with _engine().begin() as conn:
+        row = conn.execute(
+            _sql(
+                """
+                UPDATE ai_bootstrap_knowledge_items
+                SET
+                  status = 'bootstrap_rejected',
+                  reviewed_at = CURRENT_TIMESTAMP,
+                  rejection_reason = :reason,
+                  updated_at = CURRENT_TIMESTAMP
+                WHERE id = CAST(:item_id AS uuid)
+                  AND is_active = true
+                RETURNING id, title, status, rejection_reason, reviewed_at, updated_at
+                """
+            ),
+            {"item_id": item_id, "reason": clean_reason},
+        ).mappings().first()
+
+    if not row:
+        return {"ok": False, "error": "bootstrap_item_not_found", "id": item_id}
+
+    return {"ok": True, "item": _clean_row(row)}
 
 
 def main() -> None:

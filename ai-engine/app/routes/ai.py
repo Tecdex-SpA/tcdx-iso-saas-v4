@@ -19,7 +19,14 @@ from app.services.external_lookup_service import execute_external_lookup_search
 from app.services.external_lookup_service import get_cached_external_lookup
 from app.services.knowledge_loader import get_knowledge_module, get_knowledge_status
 from app.services.senior_auditor_service import analyze_as_senior_auditor
-from app.services.bootstrap_knowledge_service import get_bootstrap_status, load_seed_knowledge
+from app.services.bootstrap_knowledge_service import (
+    approve_bootstrap_knowledge_item,
+    get_bootstrap_status,
+    list_pending_bootstrap_knowledge,
+    load_seed_knowledge,
+    reject_bootstrap_knowledge_item,
+    search_bootstrap_knowledge,
+)
 from app.core.config import settings
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
@@ -231,6 +238,68 @@ async def bootstrap_knowledge_run(
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"bootstrap-run error: {exc}")
+
+
+@router.get("/knowledge/bootstrap/pending")
+def bootstrap_knowledge_pending(
+    limit: int = 20,
+    offset: int = 0,
+    x_ai_token: Optional[str] = Header(default=None),
+):
+    validate_internal_token(x_ai_token)
+    return list_pending_bootstrap_knowledge(limit=limit, offset=offset)
+
+
+@router.get("/knowledge/bootstrap/search")
+def bootstrap_knowledge_search(
+    q: Optional[str] = None,
+    module: Optional[str] = None,
+    domain: Optional[str] = None,
+    standard_code: Optional[str] = None,
+    knowledge_type: Optional[str] = None,
+    approved_only: bool = True,
+    limit: int = 20,
+    offset: int = 0,
+    x_ai_token: Optional[str] = Header(default=None),
+):
+    validate_internal_token(x_ai_token)
+    return search_bootstrap_knowledge(
+        q=q,
+        module=module,
+        domain=domain,
+        standard_code=standard_code,
+        knowledge_type=knowledge_type,
+        approved_only=approved_only,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post("/knowledge/bootstrap/{item_id}/approve")
+def bootstrap_knowledge_approve(
+    item_id: str,
+    x_ai_token: Optional[str] = Header(default=None),
+):
+    validate_internal_token(x_ai_token)
+    result = approve_bootstrap_knowledge_item(item_id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result)
+    return result
+
+
+@router.post("/knowledge/bootstrap/{item_id}/reject")
+async def bootstrap_knowledge_reject(
+    item_id: str,
+    request: Request,
+    x_ai_token: Optional[str] = Header(default=None),
+):
+    validate_internal_token(x_ai_token)
+    payload = await request.json()
+    reason = payload.get("reason") if isinstance(payload, dict) else None
+    result = reject_bootstrap_knowledge_item(item_id, reason=reason)
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result)
+    return result
 
 
 @router.post("/auditor/analyze")
