@@ -2,9 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AI_ENGINE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 "${SCRIPT_DIR}/validate-bootstrap-knowledge.sh"
 
 echo "AI General Knowledge Bootstrap - reindex"
-echo "Fase 1 no tiene indice persistente."
-echo "La reindexacion real se habilitara cuando exista persistencia en DB en Fase 2/3."
+PYTHONPATH="${AI_ENGINE_DIR}" python3 -m app.services.bootstrap_knowledge_service --status

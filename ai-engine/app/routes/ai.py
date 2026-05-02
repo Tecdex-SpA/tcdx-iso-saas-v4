@@ -19,6 +19,7 @@ from app.services.external_lookup_service import execute_external_lookup_search
 from app.services.external_lookup_service import get_cached_external_lookup
 from app.services.knowledge_loader import get_knowledge_module, get_knowledge_status
 from app.services.senior_auditor_service import analyze_as_senior_auditor
+from app.services.bootstrap_knowledge_service import get_bootstrap_status, load_seed_knowledge
 from app.core.config import settings
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
@@ -193,6 +194,43 @@ def knowledge_module(
         "module": module_name,
         "knowledge": get_knowledge_module(module_name),
     }
+
+
+@router.get("/knowledge/bootstrap/status")
+def bootstrap_knowledge_status(
+    x_ai_token: Optional[str] = Header(default=None),
+):
+    validate_internal_token(x_ai_token)
+    return get_bootstrap_status()
+
+
+@router.post("/knowledge/bootstrap/run")
+async def bootstrap_knowledge_run(
+    request: Request,
+    x_ai_token: Optional[str] = Header(default=None),
+):
+    validate_internal_token(x_ai_token)
+
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            payload = {}
+
+        mode = str(payload.get("mode") or "seeds").strip().lower()
+        if mode not in {"seeds", "all"}:
+            return {
+                "ok": False,
+                "error": "unsupported_bootstrap_mode",
+                "supported_modes": ["seeds", "all"],
+                "note": "Brave bootstrap se habilitara en una fase posterior.",
+            }
+
+        return load_seed_knowledge(
+            dry_run=bool(payload.get("dry_run", False)),
+            require_review=payload.get("require_review"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"bootstrap-run error: {exc}")
 
 
 @router.post("/auditor/analyze")
