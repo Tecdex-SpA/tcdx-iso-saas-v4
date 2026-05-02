@@ -4,6 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AI_ENGINE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MODE="${1:---dry-run}"
+PYTHON_BIN="${AI_ENGINE_DIR}/venv/bin/python3"
+
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+  PYTHON_BIN="python3"
+fi
 
 case "${MODE}" in
   --dry-run|--seeds|--all)
@@ -23,9 +28,9 @@ esac
 
 case "${MODE}" in
   --dry-run)
-    PYTHONPATH="${AI_ENGINE_DIR}" python3 -m app.services.bootstrap_knowledge_service --dry-run
+    PYTHONPATH="${AI_ENGINE_DIR}" "${PYTHON_BIN}" -m app.services.bootstrap_knowledge_service --dry-run
     ;;
   --seeds|--all)
-    PYTHONPATH="${AI_ENGINE_DIR}" python3 -m app.services.bootstrap_knowledge_service --seeds
+    PYTHONPATH="${AI_ENGINE_DIR}" "${PYTHON_BIN}" -m app.services.bootstrap_knowledge_service --seeds
     ;;
 esac
