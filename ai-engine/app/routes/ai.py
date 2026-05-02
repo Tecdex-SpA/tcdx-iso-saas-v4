@@ -23,6 +23,7 @@ from app.services.bootstrap_knowledge_service import (
     approve_bootstrap_knowledge_item,
     get_bootstrap_status,
     list_pending_bootstrap_knowledge,
+    load_brave_knowledge,
     load_seed_knowledge,
     reject_bootstrap_knowledge_item,
     search_bootstrap_knowledge,
@@ -224,18 +225,48 @@ async def bootstrap_knowledge_run(
             payload = {}
 
         mode = str(payload.get("mode") or "seeds").strip().lower()
-        if mode not in {"seeds", "all"}:
+        if mode not in {"seeds", "brave", "all"}:
             return {
                 "ok": False,
                 "error": "unsupported_bootstrap_mode",
-                "supported_modes": ["seeds", "all"],
-                "note": "Brave bootstrap se habilitara en una fase posterior.",
+                "supported_modes": ["seeds", "brave", "all"],
             }
 
-        return load_seed_knowledge(
-            dry_run=bool(payload.get("dry_run", False)),
-            require_review=payload.get("require_review"),
+        dry_run = bool(payload.get("dry_run", False))
+        require_review = payload.get("require_review")
+
+        if mode == "seeds":
+            return load_seed_knowledge(
+                dry_run=dry_run,
+                require_review=require_review,
+            )
+
+        if mode == "brave":
+            return load_brave_knowledge(
+                topic_codes=payload.get("topic_codes") or [],
+                max_topics=payload.get("max_topics"),
+                max_results_per_topic=payload.get("max_results_per_topic"),
+                dry_run=dry_run,
+                require_review=require_review,
+            )
+
+        seed_result = load_seed_knowledge(
+            dry_run=dry_run,
+            require_review=require_review,
         )
+        brave_result = load_brave_knowledge(
+            topic_codes=payload.get("topic_codes") or [],
+            max_topics=payload.get("max_topics"),
+            max_results_per_topic=payload.get("max_results_per_topic"),
+            dry_run=dry_run,
+            require_review=require_review,
+        )
+        return {
+            "ok": bool(seed_result.get("ok")) and bool(brave_result.get("ok")),
+            "mode": "all",
+            "seeds": seed_result,
+            "brave": brave_result,
+        }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"bootstrap-run error: {exc}")
 

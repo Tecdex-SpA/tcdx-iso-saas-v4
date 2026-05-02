@@ -11,12 +11,7 @@ if [[ ! -x "${PYTHON_BIN}" ]]; then
 fi
 
 case "${MODE}" in
-  --dry-run|--seeds|--all)
-    ;;
-  --brave)
-    echo "Brave bootstrap se implementara en una fase posterior."
-    echo "Fase 1 solo valida estructura, temas y seeds internos."
-    exit 0
+  --dry-run|--seeds|--all|--brave)
     ;;
   *)
     echo "Uso: $0 [--dry-run|--seeds|--all|--brave]"
@@ -30,7 +25,14 @@ case "${MODE}" in
   --dry-run)
     PYTHONPATH="${AI_ENGINE_DIR}" "${PYTHON_BIN}" -m app.services.bootstrap_knowledge_service --dry-run
     ;;
-  --seeds|--all)
+  --seeds)
     PYTHONPATH="${AI_ENGINE_DIR}" "${PYTHON_BIN}" -m app.services.bootstrap_knowledge_service --seeds
+    ;;
+  --all)
+    PYTHONPATH="${AI_ENGINE_DIR}" "${PYTHON_BIN}" -m app.services.bootstrap_knowledge_service --seeds
+    PYTHONPATH="${AI_ENGINE_DIR}" "${PYTHON_BIN}" -m app.services.bootstrap_knowledge_service --brave
+    ;;
+  --brave)
+    PYTHONPATH="${AI_ENGINE_DIR}" "${PYTHON_BIN}" -m app.services.bootstrap_knowledge_service --brave
     ;;
 esac

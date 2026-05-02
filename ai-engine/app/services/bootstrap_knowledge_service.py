@@ -3,10 +3,15 @@ import hashlib
 import json
 import os
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+from app.services.web_context_service import sanitize_web_query
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 BOOTSTRAP_DIR = BASE_DIR / "knowledge" / "bootstrap"
@@ -164,8 +169,21 @@ def _settings() -> Dict[str, Any]:
         "auto_approve_internal_seeds": auto_approve_internal,
         "auto_approve_external": auto_approve_external,
         "brave_configured": bool(os.getenv("BRAVE_SEARCH_API_KEY")),
+        "brave_endpoint": os.getenv("BRAVE_SEARCH_ENDPOINT", "https://api.search.brave.com/res/v1/web/search"),
+        "timeout_seconds": max(1, min(int(os.getenv("WEB_CONTEXT_TIMEOUT_MS", "8000") or "8000") / 1000, 20)),
         "max_topics_per_run": int(os.getenv("BOOTSTRAP_KNOWLEDGE_MAX_TOPICS_PER_RUN", "10") or "10"),
         "max_results_per_topic": int(os.getenv("BOOTSTRAP_KNOWLEDGE_MAX_RESULTS_PER_TOPIC", "5") or "5"),
+        "allowed_domains": _csv_env("BOOTSTRAP_KNOWLEDGE_ALLOWED_DOMAINS"),
+        "blocked_domains": _csv_env("BOOTSTRAP_KNOWLEDGE_BLOCKED_DOMAINS"),
+    }
+
+
+def _csv_env(name: str) -> Set[str]:
+    raw = os.getenv(name, "")
+    return {
+        item.strip().lower()
+        for item in raw.split(",")
+        if item.strip()
     }
 
 
@@ -180,6 +198,125 @@ def _seed_status(item: Dict[str, Any], settings: Dict[str, Any]) -> str:
         return requested
 
     return "bootstrap_pending_review"
+
+
+def _external_status(settings: Dict[str, Any], confidence_score: float) -> str:
+    if (
+        settings["auto_approve_external"]
+        and not settings["require_review"]
+        and confidence_score >= 70
+    ):
+        return "bootstrap_approved"
+    return "bootstrap_pending_review"
+
+
+def _hostname(url: str) -> str:
+    try:
+        return (urllib.parse.urlparse(url).hostname or "").lower()
+    except Exception:
+        return ""
+
+
+def _domain_allowed(url: str, settings: Dict[str, Any]) -> bool:
+    host = _hostname(url)
+    if not host:
+        return False
+
+    blocked = settings.get("blocked_domains") or set()
+    allowed = settings.get("allowed_domains") or set()
+
+    if any(host == domain or host.endswith(f".{domain}") for domain in blocked):
+        return False
+
+    if allowed:
+        return any(host == domain or host.endswith(f".{domain}") for domain in allowed)
+
+    return True
+
+
+def _trust_score_for_url(url: str) -> float:
+    host = _hostname(url)
+    official_domains = (
+        "nist.gov",
+        "cisa.gov",
+        "enisa.europa.eu",
+        "owasp.org",
+        "cisecurity.org",
+        "cloudsecurityalliance.org",
+        "iso.org",
+    )
+    vendor_domains = (
+        "learn.microsoft.com",
+        "docs.aws.amazon.com",
+        "cloud.google.com",
+        "docs.oracle.com",
+        "docs.vmware.com",
+        "docs.fortinet.com",
+        "dell.com",
+        "hpe.com",
+    )
+
+    if any(host == domain or host.endswith(f".{domain}") for domain in official_domains):
+        return 92.0
+    if any(host == domain or host.endswith(f".{domain}") for domain in vendor_domains):
+        return 84.0
+    if host.endswith(".gov") or ".gov." in host:
+        return 88.0
+    if host.endswith(".edu"):
+        return 78.0
+    return 65.0
+
+
+def _external_item_from_result(topic: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+    knowledge_types = topic.get("knowledge_types") or ["best_practice"]
+    knowledge_type = knowledge_types[0] if knowledge_types else "best_practice"
+    source_url = result.get("url") or ""
+    source_title = result.get("title") or topic.get("title") or "Fuente externa"
+    source_summary = result.get("summary") or ""
+    trust_score = _trust_score_for_url(source_url)
+    usefulness_score = 82.0 if topic.get("priority") == "high" else 74.0
+    freshness_score = 72.0
+    confidence_score = round((trust_score * 0.45) + (freshness_score * 0.25) + (usefulness_score * 0.30), 2)
+
+    return {
+        "title": f"{topic.get('title')}: {source_title}"[:240],
+        "summary": (
+            "Contexto externo complementario localizado mediante Brave Search. "
+            f"Resumen de referencia: {source_summary[:450]}"
+        ).strip(),
+        "content": (
+            "Este item no almacena contenido completo de la fuente. "
+            "Registra metadata y un resumen operativo breve para revision humana antes de uso general."
+        ),
+        "practical_use": "Puede enriquecer recomendaciones, reportes o preparacion de auditoria como contexto externo complementario.",
+        "recommended_application": (
+            "Usar solo si se aprueba internamente y siempre separado de la evidencia interna del tenant."
+        ),
+        "limitations": (
+            "No declara cumplimiento interno, no reemplaza evidencia del tenant y requiere revision humana antes de quedar aprobado."
+        ),
+        "knowledge_type": knowledge_type,
+        "domain": topic.get("domain"),
+        "module": topic.get("module"),
+        "standard_code": topic.get("standard_code"),
+        "clause_or_control": None,
+        "tags": [
+            "bootstrap",
+            "brave",
+            str(topic.get("code") or "").lower(),
+            str(topic.get("module") or "").lower(),
+        ],
+        "trust_score": trust_score,
+        "freshness_score": freshness_score,
+        "usefulness_score": usefulness_score,
+        "confidence_score": confidence_score,
+        "source_type": "external_public",
+        "origin": "bootstrap_brave",
+        "source_url": source_url,
+        "source_provider": "brave",
+        "retrieved_at": result.get("retrieved_at") or _utc_now().isoformat(),
+        "raw_result": result,
+    }
 
 
 def _source_url_for_seed(seed_file: Path) -> str:
@@ -556,6 +693,257 @@ def _upsert_seed_item(
     return "created"
 
 
+def _brave_search(query: str, settings: Dict[str, Any], max_results: int) -> Dict[str, Any]:
+    api_key = os.getenv("BRAVE_SEARCH_API_KEY")
+    if not api_key:
+        return {"ok": False, "error": "brave_api_key_missing", "results": []}
+
+    params = urllib.parse.urlencode({
+        "q": query,
+        "count": max(1, min(int(max_results or 5), 10)),
+        "search_lang": "en",
+        "country": "us",
+    })
+    request = urllib.request.Request(
+        f"{settings['brave_endpoint']}?{params}",
+        headers={
+            "Accept": "application/json",
+            "Accept-Encoding": "identity",
+            "X-Subscription-Token": api_key,
+            "User-Agent": "TCDX-AI-Bootstrap/1.0",
+        },
+        method="GET",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=settings["timeout_seconds"]) as response:
+            data = json.loads(response.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as exc:
+        return {"ok": False, "error": f"brave_http_{exc.code}", "results": []}
+    except Exception:
+        return {"ok": False, "error": "brave_request_failed", "results": []}
+
+    results = []
+    for item in (data.get("web") or {}).get("results") or []:
+        url = item.get("url") or ""
+        if not url.startswith(("http://", "https://")):
+            continue
+        if not _domain_allowed(url, settings):
+            continue
+        results.append({
+            "title": item.get("title") or "Fuente externa",
+            "url": url,
+            "source": "brave",
+            "retrieved_at": _utc_now().isoformat(),
+            "summary": item.get("description") or "",
+        })
+
+    return {"ok": True, "query": query, "results": results}
+
+
+def _upsert_external_source(conn, result: Dict[str, Any], item: Dict[str, Any]) -> str:
+    source_url = result.get("url") or item.get("source_url")
+    source_domain = _hostname(source_url)
+    row = conn.execute(
+        _sql(
+            """
+            INSERT INTO ai_bootstrap_knowledge_sources (
+              source_url,
+              source_provider,
+              source_domain,
+              source_type,
+              title,
+              summary,
+              trust_score,
+              retrieved_at,
+              metadata_json,
+              updated_at
+            )
+            VALUES (
+              :source_url,
+              'brave',
+              :source_domain,
+              'external_public',
+              :title,
+              :summary,
+              :trust_score,
+              :retrieved_at,
+              CAST(:metadata_json AS jsonb),
+              CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (source_provider, source_url)
+            DO UPDATE SET
+              title = EXCLUDED.title,
+              summary = EXCLUDED.summary,
+              trust_score = EXCLUDED.trust_score,
+              retrieved_at = EXCLUDED.retrieved_at,
+              metadata_json = EXCLUDED.metadata_json,
+              updated_at = CURRENT_TIMESTAMP
+            RETURNING id
+            """
+        ),
+        {
+            "source_url": source_url,
+            "source_domain": source_domain,
+            "title": result.get("title") or item.get("title"),
+            "summary": result.get("summary") or item.get("summary"),
+            "trust_score": item.get("trust_score") or 65,
+            "retrieved_at": item.get("retrieved_at"),
+            "metadata_json": _json({"origin": "bootstrap_brave", "raw_result": result}, {}),
+        },
+    ).mappings().first()
+    return str(row["id"])
+
+
+def _upsert_external_item(
+    conn,
+    item: Dict[str, Any],
+    run_id: str,
+    source_id: str,
+    topic_id: Optional[str],
+    settings: Dict[str, Any],
+) -> str:
+    status = _external_status(settings, _to_float(item.get("confidence_score"), 0))
+    fingerprint = _fingerprint(item)
+    existing = conn.execute(
+        _sql("SELECT id FROM ai_bootstrap_knowledge_items WHERE fingerprint = :fingerprint"),
+        {"fingerprint": fingerprint},
+    ).mappings().first()
+    params = {
+        "topic_id": topic_id,
+        "source_id": source_id,
+        "run_id": run_id,
+        "title": item.get("title"),
+        "summary": item.get("summary"),
+        "content": item.get("content"),
+        "practical_use": item.get("practical_use"),
+        "recommended_application": item.get("recommended_application"),
+        "limitations": item.get("limitations"),
+        "knowledge_type": item.get("knowledge_type"),
+        "domain": item.get("domain"),
+        "module": item.get("module"),
+        "standard_code": item.get("standard_code"),
+        "clause_or_control": item.get("clause_or_control"),
+        "tags": _json(item.get("tags"), []),
+        "trust_score": item.get("trust_score"),
+        "freshness_score": item.get("freshness_score"),
+        "usefulness_score": item.get("usefulness_score"),
+        "confidence_score": item.get("confidence_score"),
+        "source_type": item.get("source_type") or "external_public",
+        "origin": item.get("origin") or "bootstrap_brave",
+        "status": status,
+        "source_url": item.get("source_url"),
+        "source_provider": item.get("source_provider") or "brave",
+        "retrieved_at": item.get("retrieved_at"),
+        "fingerprint": fingerprint,
+        "raw_json": _json(item, {}),
+    }
+
+    if existing:
+        conn.execute(
+            _sql(
+                """
+                UPDATE ai_bootstrap_knowledge_items
+                SET
+                  topic_id = :topic_id,
+                  source_id = :source_id,
+                  run_id = :run_id,
+                  title = :title,
+                  summary = :summary,
+                  content = :content,
+                  practical_use = :practical_use,
+                  recommended_application = :recommended_application,
+                  limitations = :limitations,
+                  knowledge_type = :knowledge_type,
+                  domain = :domain,
+                  module = :module,
+                  standard_code = :standard_code,
+                  clause_or_control = :clause_or_control,
+                  tags_json = CAST(:tags AS jsonb),
+                  trust_score = :trust_score,
+                  freshness_score = :freshness_score,
+                  usefulness_score = :usefulness_score,
+                  confidence_score = :confidence_score,
+                  source_url = :source_url,
+                  source_provider = :source_provider,
+                  raw_json = CAST(:raw_json AS jsonb),
+                  is_active = true,
+                  updated_at = CURRENT_TIMESTAMP
+                WHERE fingerprint = :fingerprint
+                """
+            ),
+            params,
+        )
+        return "duplicate_updated"
+
+    conn.execute(
+        _sql(
+            """
+            INSERT INTO ai_bootstrap_knowledge_items (
+              topic_id,
+              source_id,
+              run_id,
+              title,
+              summary,
+              content,
+              practical_use,
+              recommended_application,
+              limitations,
+              knowledge_type,
+              domain,
+              module,
+              standard_code,
+              clause_or_control,
+              tags_json,
+              trust_score,
+              freshness_score,
+              usefulness_score,
+              confidence_score,
+              source_type,
+              origin,
+              status,
+              source_url,
+              source_provider,
+              retrieved_at,
+              fingerprint,
+              raw_json
+            )
+            VALUES (
+              :topic_id,
+              :source_id,
+              :run_id,
+              :title,
+              :summary,
+              :content,
+              :practical_use,
+              :recommended_application,
+              :limitations,
+              :knowledge_type,
+              :domain,
+              :module,
+              :standard_code,
+              :clause_or_control,
+              CAST(:tags AS jsonb),
+              :trust_score,
+              :freshness_score,
+              :usefulness_score,
+              :confidence_score,
+              :source_type,
+              :origin,
+              :status,
+              :source_url,
+              :source_provider,
+              :retrieved_at,
+              :fingerprint,
+              CAST(:raw_json AS jsonb)
+            )
+            """
+        ),
+        params,
+    )
+    return "created"
+
+
 def get_bootstrap_status() -> Dict[str, Any]:
     settings = _settings()
     try:
@@ -680,6 +1068,151 @@ def load_seed_knowledge(dry_run: bool = False, require_review: Optional[bool] = 
             summary["logs"].append({
                 "message": "Seeds internos cargados en base bootstrap separada.",
                 "seed_files": sorted(source_ids.keys()),
+                "generated_at": _utc_now().isoformat(),
+            })
+            _finish_run(conn, run_id, "completed", summary)
+        except Exception as exc:
+            _finish_run(conn, run_id, "failed", summary, error_message=str(exc))
+            raise
+
+    return summary
+
+
+def load_brave_knowledge(
+    topic_codes: Optional[List[str]] = None,
+    max_topics: Optional[int] = None,
+    max_results_per_topic: Optional[int] = None,
+    dry_run: bool = False,
+    require_review: Optional[bool] = None,
+) -> Dict[str, Any]:
+    settings = _settings()
+    _ensure_enabled(settings)
+    dry_run = bool(dry_run or settings["dry_run"])
+    require_review = settings["require_review"] if require_review is None else bool(require_review)
+
+    if settings["provider"] != "brave":
+        return {
+            "ok": False,
+            "mode": "brave",
+            "reason": "BOOTSTRAP_KNOWLEDGE_PROVIDER no esta configurado como brave.",
+            "provider": settings["provider"],
+        }
+
+    if not settings["brave_configured"]:
+        return {
+            "ok": False,
+            "mode": "brave",
+            "reason": "BRAVE_SEARCH_API_KEY no esta configurada.",
+            "items_created": 0,
+        }
+
+    topics = load_topics_from_disk()
+    requested_codes = {
+        str(code).strip()
+        for code in (topic_codes or [])
+        if str(code).strip()
+    }
+    if requested_codes:
+        topics = [topic for topic in topics if str(topic.get("code") or "") in requested_codes]
+
+    topics = topics[: _safe_limit(max_topics or settings["max_topics_per_run"], fallback=10, maximum=50)]
+    max_results = _safe_limit(
+        max_results_per_topic or settings["max_results_per_topic"],
+        fallback=5,
+        maximum=10,
+    )
+
+    summary: Dict[str, Any] = {
+        "ok": True,
+        "mode": "brave",
+        "dry_run": dry_run,
+        "topics_requested": len(requested_codes),
+        "topics_selected": len(topics),
+        "topics_processed": 0,
+        "queries_executed": 0,
+        "items_created": 0,
+        "items_pending_review": 0,
+        "items_approved": 0,
+        "items_rejected": 0,
+        "duplicates": 0,
+        "failed_queries": [],
+        "blocked_queries": [],
+        "logs": [],
+    }
+
+    if dry_run:
+        for topic in topics:
+            query_templates = topic.get("query_templates") or []
+            query = query_templates[0] if query_templates else topic.get("title")
+            sanitized = sanitize_web_query(query)
+            if sanitized.get("safe"):
+                summary["queries_executed"] += 1
+            else:
+                summary["blocked_queries"].append({
+                    "topic_code": topic.get("code"),
+                    "reason": sanitized.get("blocked_reason"),
+                })
+        return summary
+
+    with _engine().begin() as conn:
+        run_id = _create_run(conn, "brave", dry_run, require_review, settings)
+        summary["run_id"] = run_id
+
+        try:
+            for topic in topics:
+                topic_id = _upsert_topic(conn, topic)
+                query_templates = topic.get("query_templates") or []
+                raw_query = query_templates[0] if query_templates else topic.get("title")
+                sanitized = sanitize_web_query(raw_query)
+
+                if not sanitized.get("safe"):
+                    summary["blocked_queries"].append({
+                        "topic_code": topic.get("code"),
+                        "reason": sanitized.get("blocked_reason"),
+                    })
+                    continue
+
+                query = sanitized["query"]
+                result = _brave_search(query, settings, max_results)
+                summary["topics_processed"] += 1
+                summary["queries_executed"] += 1
+
+                if not result.get("ok"):
+                    summary["failed_queries"].append({
+                        "topic_code": topic.get("code"),
+                        "query": query,
+                        "error": result.get("error"),
+                    })
+                    continue
+
+                for raw_result in result.get("results") or []:
+                    item = _external_item_from_result(topic, raw_result)
+                    source_id = _upsert_external_source(conn, raw_result, item)
+                    write_result = _upsert_external_item(
+                        conn,
+                        item,
+                        run_id,
+                        source_id,
+                        topic_id,
+                        settings,
+                    )
+                    status = _external_status(settings, _to_float(item.get("confidence_score"), 0))
+
+                    if write_result == "created":
+                        summary["items_created"] += 1
+                    else:
+                        summary["duplicates"] += 1
+
+                    if status == "bootstrap_approved":
+                        summary["items_approved"] += 1
+                    elif status == "bootstrap_rejected":
+                        summary["items_rejected"] += 1
+                    else:
+                        summary["items_pending_review"] += 1
+
+            summary["logs"].append({
+                "message": "Brave bootstrap ejecutado con consultas genericas sanitizadas.",
+                "max_results_per_topic": max_results,
                 "generated_at": _utc_now().isoformat(),
             })
             _finish_run(conn, run_id, "completed", summary)
@@ -872,8 +1405,11 @@ def reject_bootstrap_knowledge_item(item_id: str, reason: Optional[str] = None) 
 def main() -> None:
     parser = argparse.ArgumentParser(description="AI General Knowledge Bootstrap service")
     parser.add_argument("--seeds", action="store_true", help="Carga seeds internos en PostgreSQL")
+    parser.add_argument("--brave", action="store_true", help="Carga contexto externo desde Brave Search")
     parser.add_argument("--status", action="store_true", help="Muestra estado de bootstrap")
     parser.add_argument("--dry-run", action="store_true", help="Valida sin escribir en PostgreSQL")
+    parser.add_argument("--max-topics", type=int, default=None)
+    parser.add_argument("--max-results-per-topic", type=int, default=None)
     args = parser.parse_args()
 
     if args.status:
@@ -882,6 +1418,15 @@ def main() -> None:
 
     if args.seeds or args.dry_run:
         result = load_seed_knowledge(dry_run=args.dry_run)
+        print(json.dumps(result, ensure_ascii=False, default=str, indent=2))
+        return
+
+    if args.brave:
+        result = load_brave_knowledge(
+            dry_run=False,
+            max_topics=args.max_topics,
+            max_results_per_topic=args.max_results_per_topic,
+        )
         print(json.dumps(result, ensure_ascii=False, default=str, indent=2))
         return
 
