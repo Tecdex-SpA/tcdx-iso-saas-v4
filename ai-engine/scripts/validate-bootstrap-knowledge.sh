@@ -90,6 +90,8 @@ def scan_sensitive(path: Path, value):
 
 for dirname in required_dirs:
     path = bootstrap_dir / dirname
+    if dirname == "logs" and not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
     if not path.is_dir():
         errors.append(f"missing_dir={path}")
 
