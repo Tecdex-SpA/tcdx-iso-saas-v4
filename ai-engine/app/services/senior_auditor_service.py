@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 
 from app.services.knowledge_loader import get_knowledge_module
 from app.services.web_context_service import build_external_context
+from app.services.bootstrap_knowledge_service import get_bootstrap_context_for_auditor
 
 
 def _num(value: Any) -> int:
@@ -261,6 +262,7 @@ def analyze_as_senior_auditor(payload: Dict[str, Any]) -> Dict[str, Any]:
             "should_create_task": False,
         })
 
+    bootstrap_knowledge_context = get_bootstrap_context_for_auditor(payload)
     external_context = build_external_context(payload)
 
     knowledge_modules = {
@@ -288,13 +290,16 @@ def analyze_as_senior_auditor(payload: Dict[str, Any]) -> Dict[str, Any]:
         "suggested_tasks": suggested_tasks,
         "audit_observations": audit_observations,
         "limitations": limitations,
+        "bootstrap_knowledge_context": bootstrap_knowledge_context,
         "external_context": external_context,
         "knowledge": {
             "used": True,
             "modules": knowledge_modules,
+            "bootstrap_used": bool(bootstrap_knowledge_context.get("used")),
         },
         "guardrails": [
             "No se declara cumplimiento total sin evidencia suficiente.",
+            "El conocimiento bootstrap aprobado es contexto general y no reemplaza evidencia interna.",
             "La informacion externa no reemplaza los datos internos del tenant.",
             "Las posibles no conformidades requieren validacion de auditor humano.",
         ],

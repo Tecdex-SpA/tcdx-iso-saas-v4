@@ -1320,6 +1320,81 @@ def search_bootstrap_knowledge(
     }
 
 
+def get_bootstrap_context_for_auditor(payload: Dict[str, Any], limit: int = 5) -> Dict[str, Any]:
+    if not (
+        payload.get("use_bootstrap_knowledge") is True
+        or payload.get("use_general_knowledge") is True
+    ):
+        return {
+            "used": False,
+            "reason": "El payload no solicito uso de conocimiento bootstrap aprobado.",
+        }
+
+    requested_output = str(payload.get("requested_output") or "global_analysis")
+    standards = payload.get("active_standards") or []
+    standards_text = " ".join(str(item) for item in standards if item)
+    controls = payload.get("controls_summary") if isinstance(payload.get("controls_summary"), dict) else {}
+    evidence = payload.get("evidence_summary") if isinstance(payload.get("evidence_summary"), dict) else {}
+    risks = payload.get("risks_summary") if isinstance(payload.get("risks_summary"), dict) else {}
+
+    if controls.get("controls_without_evidence") or evidence.get("old_evidence_count"):
+        q = "evidencia"
+    elif risks.get("high_residual_risks"):
+        q = "riesgo"
+    elif controls.get("deteriorated_controls"):
+        q = "control"
+    elif standards_text:
+        q = standards_text
+    else:
+        q = requested_output or "auditoria"
+
+    try:
+        result = search_bootstrap_knowledge(
+            q=q,
+            approved_only=True,
+            limit=limit,
+        )
+    except Exception as exc:
+        return {
+            "used": False,
+            "reason": "No fue posible consultar conocimiento bootstrap aprobado.",
+            "error": str(exc),
+        }
+
+    items = []
+    for row in result.get("data") or []:
+        items.append({
+            "id": row.get("id"),
+            "title": row.get("title"),
+            "summary": row.get("summary"),
+            "knowledge_type": row.get("knowledge_type"),
+            "module": row.get("module"),
+            "domain": row.get("domain"),
+            "standard_code": row.get("standard_code"),
+            "source_url": row.get("source_url"),
+            "source_provider": row.get("source_provider"),
+            "confidence_score": row.get("confidence_score"),
+            "origin": row.get("origin"),
+        })
+
+    if not items:
+        return {
+            "used": False,
+            "reason": "No se encontro conocimiento bootstrap aprobado relevante.",
+            "query": q,
+        }
+
+    return {
+        "used": True,
+        "query": q,
+        "items": items,
+        "limitations": [
+            "El conocimiento bootstrap aprobado es contexto general y no reemplaza datos internos ni evidencia del tenant.",
+            "No se debe declarar cumplimiento usando solo conocimiento bootstrap.",
+        ],
+    }
+
+
 def list_pending_bootstrap_knowledge(limit: int = 20, offset: int = 0) -> Dict[str, Any]:
     limit = _safe_limit(limit)
     offset = _safe_offset(offset)
