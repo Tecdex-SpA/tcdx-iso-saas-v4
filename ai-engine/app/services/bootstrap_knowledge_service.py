@@ -129,6 +129,17 @@ def _normalize_text(value: Any) -> str:
     return text_value
 
 
+def _clean_external_text(value: Any, max_length: int = 600) -> str:
+    text_value = str(value or "")
+    text_value = re.sub(r"<[^>]+>", " ", text_value)
+    text_value = re.sub(r"&nbsp;", " ", text_value, flags=re.IGNORECASE)
+    text_value = re.sub(r"&amp;", "&", text_value, flags=re.IGNORECASE)
+    text_value = re.sub(r"&lt;", "<", text_value, flags=re.IGNORECASE)
+    text_value = re.sub(r"&gt;", ">", text_value, flags=re.IGNORECASE)
+    text_value = re.sub(r"\s+", " ", text_value).strip()
+    return text_value[:max_length]
+
+
 def _fingerprint(item: Dict[str, Any]) -> str:
     raw = "|".join(
         [
@@ -271,8 +282,8 @@ def _external_item_from_result(topic: Dict[str, Any], result: Dict[str, Any]) ->
     knowledge_types = topic.get("knowledge_types") or ["best_practice"]
     knowledge_type = knowledge_types[0] if knowledge_types else "best_practice"
     source_url = result.get("url") or ""
-    source_title = result.get("title") or topic.get("title") or "Fuente externa"
-    source_summary = result.get("summary") or ""
+    source_title = _clean_external_text(result.get("title") or topic.get("title") or "Fuente externa", 220)
+    source_summary = _clean_external_text(result.get("summary") or "", 500)
     trust_score = _trust_score_for_url(source_url)
     usefulness_score = 82.0 if topic.get("priority") == "high" else 74.0
     freshness_score = 72.0
@@ -731,11 +742,11 @@ def _brave_search(query: str, settings: Dict[str, Any], max_results: int) -> Dic
         if not _domain_allowed(url, settings):
             continue
         results.append({
-            "title": item.get("title") or "Fuente externa",
+            "title": _clean_external_text(item.get("title") or "Fuente externa", 220),
             "url": url,
             "source": "brave",
             "retrieved_at": _utc_now().isoformat(),
-            "summary": item.get("description") or "",
+            "summary": _clean_external_text(item.get("description") or "", 600),
         })
 
     return {"ok": True, "query": query, "results": results}
