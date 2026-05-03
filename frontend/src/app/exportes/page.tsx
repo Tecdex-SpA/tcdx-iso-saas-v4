@@ -52,6 +52,18 @@ function getDefaultPeriod(locale = 'es') {
   return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${now.getFullYear()}`;
 }
 
+function buildLocaleHeaders(token: string, locale: string) {
+  return {
+    Authorization: `Bearer ${token}`,
+    'x-tcdx-locale': locale,
+  };
+}
+
+function appendLocaleParam(params: URLSearchParams, locale: string) {
+  params.set('locale', locale);
+  return params;
+}
+
 function getAbsoluteFileUrl(fileUrl: string) {
   if (!fileUrl) return '#';
 
@@ -311,7 +323,7 @@ export default function ExportesPage() {
         return;
       }
 
-      const params = new URLSearchParams();
+      const params = appendLocaleParam(new URLSearchParams(), locale);
 
       if (filterType) params.set('report_type_code', filterType);
       if (filterTenant) params.set('tenant_id', filterTenant);
@@ -322,9 +334,7 @@ export default function ExportesPage() {
       params.set('limit', '100');
 
       const res = await fetch(`${API_URL}/api/reports/exports?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: buildLocaleHeaders(token, locale),
       });
 
       const json = await res.json();
@@ -356,15 +366,11 @@ export default function ExportesPage() {
         }
 
         const [typesRes, clientsRes] = await Promise.all([
-          fetch(`${API_URL}/api/reports/types`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+          fetch(`${API_URL}/api/reports/types?locale=${encodeURIComponent(locale)}`, {
+            headers: buildLocaleHeaders(token, locale),
           }),
-          fetch(`${API_URL}/api/reports/clients`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+          fetch(`${API_URL}/api/reports/clients?locale=${encodeURIComponent(locale)}`, {
+            headers: buildLocaleHeaders(token, locale),
           }),
         ]);
 
@@ -412,7 +418,7 @@ export default function ExportesPage() {
     };
 
     loadInitialData();
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (!loading) {
@@ -464,7 +470,7 @@ export default function ExportesPage() {
       const res = await fetch(`${API_URL}/api/reports/generate`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...buildLocaleHeaders(token, locale),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),

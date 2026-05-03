@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 const { errorDetail } = require('../utils/errorResponse');
+const { resolveLocale } = require('../utils/locale');
 
 const router = express.Router();
 const pool = require('../config/db');
@@ -412,6 +413,7 @@ async function ensureTargetTenantAccess({ role, userId, userTenantId, targetTena
 // =====================================================
 router.get('/types', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
     const originalRole =
       req.user?.role || req.user?.user_role || req.user?.userRole;
 
@@ -456,6 +458,7 @@ router.get('/types', auth, async (req, res) => {
       scope: {
         user_id: userId,
         tenant_id: tenantId,
+        locale,
         original_role: originalRole || null,
         role,
         is_platform: isPlatformRole(role),
@@ -482,6 +485,7 @@ router.get('/types', auth, async (req, res) => {
 // =====================================================
 router.get('/clients', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
     const originalRole =
       req.user?.role || req.user?.user_role || req.user?.userRole;
 
@@ -514,6 +518,7 @@ router.get('/clients', auth, async (req, res) => {
         scope: {
           original_role: originalRole || null,
           role,
+          locale,
           mode: 'platform',
         },
         data: result.rows,
@@ -543,6 +548,7 @@ router.get('/clients', auth, async (req, res) => {
         scope: {
           original_role: originalRole || null,
           role,
+          locale,
           mode: 'dealer',
         },
         data: result.rows,
@@ -574,6 +580,7 @@ router.get('/clients', auth, async (req, res) => {
       scope: {
         original_role: originalRole || null,
         role,
+        locale,
         mode: 'tenant',
       },
       data: result.rows,
@@ -595,6 +602,7 @@ router.get('/clients', auth, async (req, res) => {
 // =====================================================
 router.get('/exports', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
     const originalRole =
       req.user?.role || req.user?.user_role || req.user?.userRole;
 
@@ -722,6 +730,7 @@ router.get('/exports', auth, async (req, res) => {
       scope: {
         original_role: originalRole || null,
         role,
+        locale,
         tenant_id: userTenantId || null,
         is_platform: isPlatformRole(role),
         is_dealer: isDealerRole(role),
@@ -2173,6 +2182,7 @@ async function getTenantBrandingForReport(tenantId) {
 // =====================================================
 router.post('/generate', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
     const originalRole =
       req.user?.role || req.user?.user_role || req.user?.userRole;
 
