@@ -13,7 +13,7 @@ const AI_RECOMMENDATION_THRESHOLD = 80;
 
 async function openAuthorizedFile(url: string, token: string | null) {
   if (!token) {
-    alert('Sesión no disponible. Inicia sesión nuevamente.');
+    alert('Session unavailable. Sign in again.');
     return;
   }
 
@@ -22,7 +22,7 @@ async function openAuthorizedFile(url: string, token: string | null) {
   });
 
   if (!res.ok) {
-    alert('No fue posible abrir el archivo.');
+    alert('Unable to open the file.');
     return;
   }
 
@@ -212,6 +212,7 @@ function getEvidenceAiTrace(row: EvidenceRow) {
 }
 
 function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
+  const { t } = useTranslation();
   const trace = getEvidenceAiTrace(evidence);
 
   if (!trace.hasTrace) return null;
@@ -221,18 +222,18 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
     tcdx_knowledge: 'Base TCDX',
     anonymized_benchmark: 'Benchmark',
     external_web: 'Internet',
-    best_effort: 'Mejor esfuerzo',
+    best_effort: t('evidence.ai.bestEffort'),
   };
 
   const sourceName =
     trace.sourceLabel ||
     sourceLabels[trace.sourceLevel] ||
     trace.sourceLevel ||
-    'Motor IA TCDX';
+    t('evidence.ai.engine');
 
   const sourceOrderText = trace.sourceOrder.length
     ? trace.sourceOrder.map((item: string) => sourceLabels[item] || item).join(' → ')
-    : 'No informada';
+    : t('evidence.ai.notReported');
 
   const sourceClass =
     trace.sourceLevel === 'external_web'
@@ -250,22 +251,22 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-xs font-black uppercase tracking-[0.14em] text-blue-600">
-            Orquestación IA TCDX
+            {t('evidence.ai.orchestration')}
           </div>
 
           <div className="mt-2 text-sm leading-6 text-blue-950">
-            Esta evaluación conserva trazabilidad del motor IA central usado para validar la evidencia.
+            {t('evidence.ai.traceability')}
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2 text-xs">
           <span className={`rounded-full px-3 py-1 font-bold ring-1 ${sourceClass}`}>
-            Origen: {sourceName}
+            {t('evidence.ai.source')}: {sourceName}
           </span>
 
           {trace.confidence && (
             <span className="rounded-full bg-white px-3 py-1 font-bold text-slate-700 ring-1 ring-slate-200">
-              Confianza: {trace.confidence}
+              {t('evidence.ai.confidence')}: {trace.confidence}
               {trace.confidenceScore ? ` · ${trace.confidenceScore}%` : ''}
             </span>
           )}
@@ -280,7 +281,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
 
       <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-5">
         <div className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-blue-100">
-          Ruta: {sourceOrderText}
+          {t('evidence.ai.route')}: {sourceOrderText}
         </div>
 
         <div className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-blue-100">
@@ -305,7 +306,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
           {trace.executiveSummary && (
             <div className="rounded-2xl border border-blue-100 bg-white p-4">
               <div className="mb-1 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-                Resumen IA central
+                {t('evidence.ai.centralSummary')}
               </div>
               <div className="text-sm leading-6 text-slate-700">
                 {trace.executiveSummary}
@@ -316,7 +317,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
           {trace.recommendation && (
             <div className="rounded-2xl border border-blue-100 bg-white p-4">
               <div className="mb-1 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-                Recomendación IA central
+                {t('evidence.ai.centralRecommendation')}
               </div>
               <div className="text-sm leading-6 text-slate-700">
                 {trace.recommendation}
@@ -329,14 +330,14 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
       {(trace.suggestedEvidence.length > 0 || trace.nextSteps.length > 0) && (
         <details className="mt-4 rounded-2xl border border-blue-100 bg-white p-4">
           <summary className="cursor-pointer text-sm font-bold text-slate-700">
-            Ver evidencia sugerida y próximos pasos IA central
+            {t('evidence.ai.viewSuggested')}
           </summary>
 
           <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
             {trace.suggestedEvidence.length > 0 && (
               <div>
                 <div className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-                  Evidencia sugerida
+                  {t('evidence.ai.suggestedEvidence')}
                 </div>
 
                 <ul className="space-y-2 text-sm text-slate-700">
@@ -355,7 +356,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
             {trace.nextSteps.length > 0 && (
               <div>
                 <div className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-                  Próximos pasos
+                  {t('evidence.ai.nextSteps')}
                 </div>
 
                 <ul className="space-y-2 text-sm text-slate-700">
@@ -1012,35 +1013,35 @@ function EvidenciasPageContent() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h2 className="text-lg font-bold text-indigo-950">
-                  Remediación desde Plan de Acción
+                  {t('evidence.remediationTitle')}
                 </h2>
 
                 <p className="mt-1 text-sm text-indigo-800">
-                  Esta evidencia será asociada al control y al plan de acción correspondiente.
+                  {t('evidence.remediationHelp')}
                 </p>
 
                 <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
                   {focusISO && (
                     <span className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-700">
-                      Norma: {focusISO}
+                      {t('dashboard.standard')}: {focusISO}
                     </span>
                   )}
 
                   {clauseFromUrl && (
                     <span className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-700">
-                      Cláusula: {clauseFromUrl}
+                      {t('evidence.clause')}: {clauseFromUrl}
                     </span>
                   )}
 
                   {tenantControlIdFromUrl && (
                     <span className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-700">
-                      Control asociado
+                      {t('findings.fields.associatedControl')}
                     </span>
                   )}
 
                   {actionPlanIdFromUrl && (
                     <span className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-700">
-                      Plan asociado
+                      {t('evidence.linkedPlan')}
                     </span>
                   )}
                 </div>
@@ -1059,7 +1060,7 @@ function EvidenciasPageContent() {
                 }}
                 className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm border border-indigo-200 hover:bg-indigo-100"
               >
-                Volver al plan
+                {t('evidence.backToPlan')}
               </button>
             </div>
           </div>
@@ -1069,10 +1070,10 @@ function EvidenciasPageContent() {
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
             <div>
               <h2 className="text-xl font-bold text-slate-900">
-                Subir evidencia de corrección
+                {t('evidence.uploadCorrectiveEvidence')}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                La IA revisará el archivo. Si supera el {AI_RECOMMENDATION_THRESHOLD}% de aceptación y la evidencia está completa, quedará recomendada para aprobación humana.
+                {t('evidence.correctiveEvidenceHelp', { threshold: AI_RECOMMENDATION_THRESHOLD })}
               </p>
             </div>
 
@@ -1139,7 +1140,7 @@ function EvidenciasPageContent() {
               disabled={uploading}
               className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
             >
-              {uploading ? 'Subiendo...' : 'Subir evidencia'}
+              {uploading ? t('common.upload') + '...' : t('controls.uploadEvidence')}
             </button>
           </div>
         )}
@@ -1147,17 +1148,17 @@ function EvidenciasPageContent() {
         {!isAuditor && !isRemediationMode && (
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="text-sm font-semibold text-slate-900">
-              Carga de evidencia directa
+              {t('evidence.directUploadTitle')}
             </div>
             <div className="mt-1 text-sm text-slate-500">
-              Para subir evidencia desde esta vista, entra desde un Plan de Acción o desde un control específico.
+              {t('evidence.directUploadHelp')}
             </div>
           </div>
         )}
 
         {focusMessage && (
           <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-2xl px-5 py-4 shadow-sm">
-            <div className="font-semibold">Apertura directa desde búsqueda</div>
+            <div className="font-semibold">{t('controls.directOpen')}</div>
             <div className="text-sm mt-1">{focusMessage}</div>
           </div>
         )}
@@ -1165,8 +1166,8 @@ function EvidenciasPageContent() {
         {filteredData.length === 0 ? (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 text-gray-500">
             {statusFilter
-              ? 'No hay evidencias para el filtro seleccionado.'
-              : 'No hay evidencias registradas para esta norma o plan de acción.'}
+              ? t('evidence.noEvidenceForFilter')
+              : t('evidence.noEvidenceForScope')}
           </div>
         ) : (
           filteredData.map((e: EvidenceRow) => {
@@ -1196,16 +1197,16 @@ function EvidenciasPageContent() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-bold text-slate-900">
-                      {e.iso || iso || 'Sin norma'} — Cláusula {e.clause || 'N/A'}
+                      {e.iso || iso || t('evidence.noStandard')} — {t('evidence.clause')} {e.clause || 'N/A'}
                     </div>
 
                     <div className="mt-1 text-sm text-slate-600">
-                      {e.control_description || 'Control asociado'}
+                      {e.control_description || t('findings.fields.associatedControl')}
                     </div>
 
                     {e.action_plan_title && (
                       <div className="mt-2 text-sm text-indigo-700">
-                        Plan asociado: {e.action_plan_title}
+                        {t('evidence.linkedPlan')}: {e.action_plan_title}
                       </div>
                     )}
                   </div>
@@ -1216,7 +1217,7 @@ function EvidenciasPageContent() {
                         e.status || 'pendiente'
                       )}`}
                     >
-                      Estado: {normalizedStatus}
+                      {t('common.status')}: {normalizedStatus}
                     </div>
 
                     <div
@@ -1224,7 +1225,7 @@ function EvidenciasPageContent() {
                         acceptancePct
                       )}`}
                     >
-                      Aceptación IA: {toPercent(acceptancePct)}
+                      {t('evidence.aiAcceptance')}: {toPercent(acceptancePct)}
                     </div>
                   </div>
                 </div>
@@ -1234,7 +1235,7 @@ function EvidenciasPageContent() {
                 {e.ai_headline && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-xs uppercase tracking-wide text-slate-400">
-                      Resumen IA
+                      {t('evidence.aiSummary')}
                     </div>
                     <div className="mt-1 text-sm font-semibold text-slate-900">
                       {e.ai_headline}
@@ -1244,7 +1245,7 @@ function EvidenciasPageContent() {
 
                 {e.auto_approved_by_ai && (
                   <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">
-                    <div className="font-semibold">Aprobación IA histórica</div>
+                    <div className="font-semibold">{t('evidence.historicalAiApproval')}</div>
                     <div className="mt-1 text-sm">
                       {e.ai_auto_review_reason ||
                         `La evidencia superó el ${AI_RECOMMENDATION_THRESHOLD}% de aceptación.`}
@@ -1264,7 +1265,7 @@ function EvidenciasPageContent() {
                 {e.ai_recommended_by_ai &&
                   normalizedStatus === 'pendiente' && (
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
-                      <div className="font-semibold">IA recomienda aprobación humana</div>
+                      <div className="font-semibold">{t('evidence.aiRecommendsHumanApproval')}</div>
                       <div className="mt-1 text-sm">
                         {e.ai_recommendation_reason ||
                           `La evidencia superó el ${AI_RECOMMENDATION_THRESHOLD}% de aceptación y requiere revisión humana.`}
@@ -1286,7 +1287,7 @@ function EvidenciasPageContent() {
                   normalizedStatus === 'pendiente' &&
                   e.analysis_status === 'completed' && (
                     <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
-                      <div className="font-semibold">Revisión IA completada</div>
+                      <div className="font-semibold">{t('evidence.aiReviewCompleted')}</div>
                       <div className="mt-1 text-sm">
                         La evidencia fue evaluada por IA con <b>{toPercent(acceptancePct)}</b> de aceptación.
                         {acceptancePct >= AI_RECOMMENDATION_THRESHOLD
@@ -1311,51 +1312,51 @@ function EvidenciasPageContent() {
 
                 {e.rejection_reason && (
                   <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                    Motivo de rechazo: {e.rejection_reason}
+                    {t('evidence.rejectionReason')}: {e.rejection_reason}
                   </div>
                 )}
 
                 {e.action_plan_id && (
                   <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-800">
-                    Esta evidencia está vinculada a un plan de acción y puede impactar su flujo de aprobación y cierre.
+                    {t('evidence.linkedPlanImpact')}
                   </div>
                 )}
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                  <InfoBox label="Tipo" value={e.evidence_type || 'documento'} />
-                  <InfoBox label="Validada" value={e.validated ? 'Sí' : 'No'} />
-                  <InfoBox label="Creada" value={formatDate(e.created_at)} />
-                  <InfoBox label="Revisada" value={formatDate(e.reviewed_at)} />
+                  <InfoBox label={t('evidence.type')} value={e.evidence_type || t('evidence.types.document')} />
+                  <InfoBox label={t('evidence.validated')} value={e.validated ? t('common.yes') : t('common.no')} />
+                  <InfoBox label={t('evidence.created')} value={formatDate(e.created_at)} />
+                  <InfoBox label={t('evidence.reviewed')} value={formatDate(e.reviewed_at)} />
                   <InfoBox
-                    label="Revisor"
+                    label={t('evidence.reviewer')}
                     value={e.reviewed_by_label || '-'}
                   />
                   <InfoBox
-                    label="Expira"
+                    label={t('evidence.expires')}
                     value={e.expires_at ? formatDate(e.expires_at) : 'No definida'}
                   />
                   <InfoBox
-                    label="% aceptación IA"
+                    label={t('evidence.aiAcceptancePercent')}
                     value={toPercent(acceptancePct)}
                   />
                   <InfoBox
-                    label="Validez IA"
+                    label={t('evidence.aiValidity')}
                     value={e.validity_result || '-'}
                   />
                   <InfoBox
-                    label="Aporte IA"
+                    label={t('evidence.aiContribution')}
                     value={e.contribution_level || '-'}
                   />
                   <InfoBox
-                    label="Páginas"
+                    label={t('evidence.pages')}
                     value={e.page_count || '-'}
                   />
                   <InfoBox
-                    label="Texto extraído"
+                    label={t('evidence.extractedText')}
                     value={e.text_char_count ? `${e.text_char_count} chars` : '-'}
                   />
                   <InfoBox
-                    label="Análisis IA"
+                    label={t('evidence.aiAnalysis')}
                     value={e.analysis_status || '-'}
                   />
                 </div>
@@ -1363,51 +1364,51 @@ function EvidenciasPageContent() {
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                     <div className="text-sm font-semibold text-slate-900">
-                      Señales de cumplimiento
+                      {t('evidence.complianceSignals')}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                      <MiniKpi label="Pertinencia" value={toPercent(e.pertinence_score)} />
-                      <MiniKpi label="Suficiencia" value={toPercent(e.sufficiency_score)} />
-                      <MiniKpi label="Vigencia" value={toPercent(e.freshness_score)} />
-                      <MiniKpi label="Trazabilidad" value={toPercent(e.traceability_score)} />
-                      <MiniKpi label="Consistencia" value={toPercent(e.consistency_score)} />
-                      <MiniKpi label="Impacto" value={toPercent(e.compliance_impact_score)} />
+                      <MiniKpi label={t('evidence.metrics.pertinence')} value={toPercent(e.pertinence_score)} />
+                      <MiniKpi label={t('evidence.metrics.sufficiency')} value={toPercent(e.sufficiency_score)} />
+                      <MiniKpi label={t('evidence.metrics.freshness')} value={toPercent(e.freshness_score)} />
+                      <MiniKpi label={t('evidence.metrics.traceability')} value={toPercent(e.traceability_score)} />
+                      <MiniKpi label={t('evidence.metrics.consistency')} value={toPercent(e.consistency_score)} />
+                      <MiniKpi label={t('evidence.metrics.impact')} value={toPercent(e.compliance_impact_score)} />
                     </div>
 
                     {e.control_fit && (
                       <div className="text-sm text-slate-700">
-                        <b>Ajuste al control:</b> {e.control_fit}
+                        <b>{t('evidence.controlFit')}:</b> {e.control_fit}
                       </div>
                     )}
 
                     {e.gap_summary && (
                       <div className="text-sm text-slate-700">
-                        <b>Brecha:</b> {e.gap_summary}
+                        <b>{t('evidence.gap')}:</b> {e.gap_summary}
                       </div>
                     )}
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                     <div className="text-sm font-semibold text-slate-900">
-                      Extracción documental
+                      {t('evidence.documentExtraction')}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                      <MiniKpi label="Archivo" value={e.file_type || '-'} />
-                      <MiniKpi label="OCR" value={e.ocr_used ? 'Sí' : 'No'} />
-                      <MiniKpi label="Idioma" value={e.detected_language || '-'} />
-                      <MiniKpi label="Hojas" value={e.sheet_count || '-'} />
-                      <MiniKpi label="Imágenes" value={e.image_count || '-'} />
-                      <MiniKpi label="Completa" value={e.appears_complete ? 'Sí' : 'No'} />
+                      <MiniKpi label={t('evidence.file')} value={e.file_type || '-'} />
+                      <MiniKpi label={t('evidence.ocr')} value={e.ocr_used ? t('common.yes') : t('common.no')} />
+                      <MiniKpi label={t('evidence.language')} value={e.detected_language || '-'} />
+                      <MiniKpi label={t('evidence.sheets')} value={e.sheet_count || '-'} />
+                      <MiniKpi label={t('evidence.images')} value={e.image_count || '-'} />
+                      <MiniKpi label={t('evidence.complete')} value={e.appears_complete ? t('common.yes') : t('common.no')} />
                     </div>
 
                     <div className="text-sm text-slate-700">
-                      <b>Operación:</b> {e.operation_name || 'Sin operación'}
+                      <b>{t('controls.operation')}:</b> {e.operation_name || t('evidence.noOperation')}
                     </div>
 
                     <div className="text-sm text-slate-700">
-                      <b>Analizada:</b> {formatDateTime(e.analyzed_at)}
+                      <b>{t('evidence.analyzed')}:</b> {formatDateTime(e.analyzed_at)}
                     </div>
                   </div>
                 </div>
@@ -1415,17 +1416,17 @@ function EvidenciasPageContent() {
                 {(aiRisks.length > 0 || aiNextSteps.length > 0 || aiEntities.length > 0) && (
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
                     <ListCard
-                      title="Riesgos detectados"
+                      title={t('evidence.detectedRisks')}
                       items={aiRisks}
                       emptyText="Sin riesgos relevantes."
                     />
                     <ListCard
-                      title="Siguientes pasos sugeridos"
+                      title={t('evidence.suggestedNextSteps')}
                       items={aiNextSteps}
                       emptyText="Sin acciones sugeridas."
                     />
                     <ListCard
-                      title="Entidades detectadas"
+                      title={t('evidence.detectedEntities')}
                       items={aiEntities}
                       emptyText="Sin entidades detectadas."
                     />
@@ -1441,7 +1442,7 @@ function EvidenciasPageContent() {
                       }
                       className="inline-flex rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
                     >
-                      Ver archivo
+                      {t('controls.viewFile')}
                     </button>
                   )}
 

@@ -286,6 +286,14 @@ function ControlesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const mapHealthLabel = (value?: string | null) => {
+    const raw = String(value || '').toLowerCase().trim();
+    if (raw === 'saludable') return t('statuses.controls.saludable');
+    if (raw === 'atencion') return t('statuses.controls.atencion');
+    if (raw === 'deteriorado') return t('statuses.controls.deteriorado');
+    return value || t('common.noData');
+  };
+
   const focusId = searchParams.get('id') || '';
   const focusISO = searchParams.get('iso') || '';
   const focusOperationId = searchParams.get('operation_id') || '';
@@ -1293,14 +1301,13 @@ function ControlesPageContent() {
 
         {!selectedISO && (
           <div className="rounded-[24px] border border-yellow-200 bg-yellow-50 p-5 text-yellow-800 shadow-sm">
-            No hay normas operativas disponibles.
+            {t('controls.noOperationalStandardsAvailable')}
           </div>
         )}
 
         {selectedISO && availableOperations.length === 0 && (
           <div className="rounded-[24px] border border-yellow-200 bg-yellow-50 p-5 text-yellow-800 shadow-sm">
-            La norma seleccionada no tiene operaciones activas asignadas. Define el
-            alcance por operación desde <b>Empresas</b>.
+            {t('controls.noAssignedOperations')} <b>Empresas</b>.
           </div>
         )}
 
@@ -1310,18 +1317,18 @@ function ControlesPageContent() {
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                    Controles disponibles
+                    {t('controls.availableControls')}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Habilita controles para esta combinación de norma y operación.
+                    {t('controls.availableControlsHelp')}
                   </p>
                 </div>
-                {loadingCatalog && <div className="text-sm text-slate-500">Cargando...</div>}
+                {loadingCatalog && <div className="text-sm text-slate-500">{t('common.loading')}</div>}
               </div>
 
               {!loadingCatalog && filteredAvailableControls.length === 0 && (
                 <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                  No hay controles disponibles para esta combinación o para el filtro aplicado.
+                  {t('controls.noAvailableControls')}
                 </div>
               )}
 
@@ -1340,7 +1347,7 @@ function ControlesPageContent() {
                           <div className="text-xs text-slate-500">{items.length} controles</div>
                         </div>
                         <div className="text-sm text-slate-500">
-                          {collapsed ? 'Expandir' : 'Colapsar'}
+                          {collapsed ? t('controls.expand') : t('controls.collapse')}
                         </div>
                       </button>
 
@@ -1351,10 +1358,10 @@ function ControlesPageContent() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="space-y-2">
                                   <div className="font-medium text-slate-900">
-                                    {item.description || 'Sin descripción'}
+                                    {item.description || t('controls.noDescription')}
                                   </div>
                                   <div className="text-sm text-slate-500">
-                                    {item.category || 'Sin categoría'}
+                                    {item.category || t('controls.noCategory')}
                                   </div>
 
                                   {(item.also_valid_for || []).length > 0 && (
@@ -1364,7 +1371,7 @@ function ControlesPageContent() {
                                           key={code}
                                           className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700"
                                         >
-                                          También válido para {code}
+                                          {t('controls.alsoValidFor')} {code}
                                         </span>
                                       ))}
                                     </div>
@@ -1378,8 +1385,8 @@ function ControlesPageContent() {
                                     className="rounded-2xl bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                                   >
                                     {actionLoading === `enable-${item.id}`
-                                      ? 'Habilitando...'
-                                      : 'Habilitar'}
+                                      ? t('controls.enabling')
+                                      : t('controls.enable')}
                                   </button>
                                 )}
                               </div>
@@ -1397,20 +1404,20 @@ function ControlesPageContent() {
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                    Workbench de controles
+                    {t('controls.workbench')}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Estado operativo, evidencia y remediación para la operación seleccionada.
+                    {t('controls.workbenchHelp')}
                   </p>
                 </div>
                 {loadingWorkbench && (
-                  <div className="text-sm text-slate-500">Cargando...</div>
+                  <div className="text-sm text-slate-500">{t('common.loading')}</div>
                 )}
               </div>
 
               {!loadingWorkbench && filteredEnabledControls.length === 0 && (
                 <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                  No hay controles habilitados para el filtro seleccionado.
+                  {t('controls.noEnabledControls')}
                 </div>
               )}
 
@@ -1429,7 +1436,7 @@ function ControlesPageContent() {
                           <div className="text-xs text-slate-500">{items.length} controles</div>
                         </div>
                         <div className="text-sm text-slate-500">
-                          {collapsed ? 'Expandir' : 'Colapsar'}
+                          {collapsed ? t('controls.expand') : t('controls.collapse')}
                         </div>
                       </button>
 
@@ -1466,7 +1473,7 @@ function ControlesPageContent() {
                                           item.derived_health_status
                                         )}`}
                                       >
-                                        {item.derived_health_status || 'sin estado'}
+                                        {mapHealthLabel(item.derived_health_status)}
                                       </span>
                                       <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                                         Health {toNumber(item.health_score)}
@@ -1478,7 +1485,7 @@ function ControlesPageContent() {
                                         Pendientes {toNumber(item.pending_evidence_count)}
                                       </span>
                                       <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                                        Hallazgos {toNumber(item.open_findings_count)}
+                                        {t('sidebar.findings')} {toNumber(item.open_findings_count)}
                                       </span>
                                       <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
                                         NC {toNumber(item.open_nonconformities_count)}
@@ -1490,7 +1497,7 @@ function ControlesPageContent() {
                                         {item.clause || 'Sin cláusula'} · {item.description}
                                       </h3>
                                       <div className="mt-1 text-sm text-slate-500">
-                                        {item.category || 'Sin categoría'} · Operación:{' '}
+                                        {item.category || t('controls.noCategory')} · {t('controls.operation')}:{' '}
                                         {item.operation_name || '—'}
                                       </div>
                                     </div>
@@ -1502,7 +1509,7 @@ function ControlesPageContent() {
                                             key={code}
                                             className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700"
                                           >
-                                            También válido para {code}
+                                            {t('controls.alsoValidFor')} {code}
                                           </span>
                                         ))}
                                       </div>
@@ -1510,7 +1517,7 @@ function ControlesPageContent() {
 
                                     {needsEvidenceAttention && (
                                       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                                        Este control requiere refuerzo de evidencia porque no está saludable.
+                                        {t('controls.needsEvidenceAttention')}
                                       </div>
                                     )}
                                   </div>
@@ -1522,8 +1529,8 @@ function ControlesPageContent() {
                                       className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                                     >
                                       {actionLoading === `disable-${item.catalog_control_id}`
-                                        ? 'Deshabilitando...'
-                                        : 'Deshabilitar'}
+                                        ? t('controls.disabling')
+                                        : t('controls.disable')}
                                     </button>
                                   )}
                                 </div>
@@ -1645,7 +1652,7 @@ function ControlesPageContent() {
                                       }
                                       className="w-full rounded-2xl border border-slate-200 p-3 text-sm"
                                       disabled={isReadOnly}
-                                      placeholder="usuario@empresa.cl"
+                                      placeholder={t('login.emailPlaceholder')}
                                     />
                                   </FieldBlock>
                                 </div>
@@ -1662,7 +1669,7 @@ function ControlesPageContent() {
                                     >
                                       {actionLoading === `nc-${item.tenant_control_id}`
                                         ? 'Abriendo...'
-                                        : 'No conformidad'}
+                                        : t('findings.nonconformities')}
                                     </button>
 
                                     <button
@@ -1675,7 +1682,7 @@ function ControlesPageContent() {
                                     >
                                       {actionLoading === `finding-${item.tenant_control_id}`
                                         ? 'Abriendo...'
-                                        : 'Hallazgo'}
+                                        : t('sidebar.findings')}
                                     </button>
 
                                     <button
@@ -1688,7 +1695,7 @@ function ControlesPageContent() {
                                     >
                                       {actionLoading === `plan-${item.tenant_control_id}`
                                         ? 'Abriendo...'
-                                        : 'Plan de acción'}
+                                        : t('sidebar.actionPlan')}
                                     </button>
 
                                     <button
@@ -1696,8 +1703,8 @@ function ControlesPageContent() {
                                       className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                                     >
                                       {evidenceExpanded
-                                        ? 'Ocultar evidencias'
-                                        : 'Gestionar evidencias'}
+                                        ? t('controls.hideEvidence')
+                                        : t('controls.manageEvidence')}
                                     </button>
                                   </div>
 
@@ -1707,7 +1714,7 @@ function ControlesPageContent() {
                                       disabled={saving}
                                       className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                                     >
-                                      {saving ? 'Guardando...' : 'Guardar cambios'}
+                                      {saving ? t('controls.saving') : t('controls.saveChanges')}
                                     </button>
                                   )}
                                 </div>
@@ -1717,7 +1724,7 @@ function ControlesPageContent() {
                                     {!isReadOnly && (
                                       <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4 space-y-3">
                                         <div className="font-semibold text-slate-900">
-                                          Subir evidencia
+                                          {t('controls.uploadEvidence')}
                                         </div>
 
                                         <input
@@ -1757,7 +1764,7 @@ function ControlesPageContent() {
                                             {actionLoading ===
                                             `upload-evidence-${item.tenant_control_id}`
                                               ? 'Subiendo...'
-                                              : 'Subir evidencia'}
+                                              : t('controls.uploadEvidence')}
                                           </button>
                                         </div>
                                       </div>
@@ -1765,12 +1772,12 @@ function ControlesPageContent() {
 
                                     <div className="space-y-3">
                                       <div className="font-semibold text-slate-900">
-                                        Evidencias asociadas
+                                        {t('controls.linkedEvidence')}
                                       </div>
 
                                       {evidenceItems.length === 0 && (
                                         <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                                          No hay evidencias cargadas para este control.
+                                          {t('controls.noEvidenceForControl')}
                                         </div>
                                       )}
 
@@ -1782,13 +1789,13 @@ function ControlesPageContent() {
                                           <div className="flex flex-wrap items-start justify-between gap-3">
                                             <div>
                                               <div className="font-medium text-slate-900">
-                                                {evidence.file_name || 'Archivo sin nombre'}
+                                                {evidence.file_name || t('controls.unnamedFile')}
                                               </div>
                                               <div className="text-sm text-slate-500">
-                                                {evidence.description || 'Sin descripción'}
+                                                {evidence.description || t('controls.noDescription')}
                                               </div>
                                               <div className="mt-1 text-xs text-slate-400">
-                                                Subida: {formatDateTime(evidence.created_at)}
+                                                {t('controls.uploadedAt')}: {formatDateTime(evidence.created_at)}
                                               </div>
                                             </div>
 
@@ -1813,17 +1820,17 @@ function ControlesPageContent() {
                                           <div className="flex flex-wrap gap-2 text-xs text-slate-600">
                                             {evidence.validity_result && (
                                               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
-                                                Validez: {evidence.validity_result}
+                                                {t('controls.validity')}: {evidence.validity_result}
                                               </span>
                                             )}
                                             {evidence.contribution_level && (
                                               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
-                                                Contribución: {evidence.contribution_level}
+                                                {t('controls.contribution')}: {evidence.contribution_level}
                                               </span>
                                             )}
                                             {evidence.reviewed_by_label && (
                                               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
-                                                Revisó: {evidence.reviewed_by_label}
+                                                {t('controls.reviewedBy')}: {evidence.reviewed_by_label}
                                               </span>
                                             )}
                                             {evidence.action_plan_title && (
@@ -1835,7 +1842,7 @@ function ControlesPageContent() {
 
                                           {evidence.rejection_reason && (
                                             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                                              Motivo rechazo: {evidence.rejection_reason}
+                                              {t('controls.rejectionReason')}: {evidence.rejection_reason}
                                             </div>
                                           )}
 
@@ -1851,7 +1858,7 @@ function ControlesPageContent() {
                                                 }
                                                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                                               >
-                                                Ver archivo
+                                                {t('controls.viewFile')}
                                               </button>
                                             </div>
                                           )}
@@ -1869,7 +1876,7 @@ function ControlesPageContent() {
                                                       [evidence.id]: ev.target.value,
                                                     }))
                                                   }
-                                                  placeholder="Comentario de revisión / motivo de rechazo"
+                                                  placeholder={t('controls.reviewCommentPlaceholder')}
                                                   className="w-full rounded-2xl border border-slate-200 p-3 text-sm"
                                                 />
 
@@ -1889,8 +1896,8 @@ function ControlesPageContent() {
                                                     className="rounded-2xl bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                                                   >
                                                     {actionLoading === `aprobada-${evidence.id}`
-                                                      ? 'Aprobando...'
-                                                      : 'Aprobar'}
+                                                      ? t('controls.approving')
+                                                      : t('controls.approve')}
                                                   </button>
 
                                                   <button
@@ -1908,8 +1915,8 @@ function ControlesPageContent() {
                                                     className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                                                   >
                                                     {actionLoading === `rechazada-${evidence.id}`
-                                                      ? 'Rechazando...'
-                                                      : 'Rechazar'}
+                                                      ? t('controls.rejecting')
+                                                      : t('controls.reject')}
                                                   </button>
                                                 </div>
                                               </div>
