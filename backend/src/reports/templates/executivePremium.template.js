@@ -845,13 +845,13 @@ function renderEvidencePages(data) {
 
     return `
       <div class="pageTitleBlock">
-        <span>Evidencias</span>
+        <span>${escapeHtml(tr('evidence.kicker'))}</span>
         <h2>Evidencias recientes con contexto útil${index > 0 ? ' (continuación)' : ''}</h2>
-        <p>Base documental reciente para respaldar controles, auditorías y reportes.</p>
+        <p>${escapeHtml(tr('evidence.subtitle'))}</p>
       </div>
 
-      ${card('Evidencias recientes', table(
-        ['ISO', 'Cláusula', 'Archivo', 'Tipo', 'Estado', 'Fecha'],
+      ${card(tr('evidence.recent'), table(
+        [tr('evidence.table.iso'), tr('evidence.table.clause'), tr('evidence.table.file'), tr('evidence.table.type'), tr('evidence.table.status'), tr('evidence.table.date')],
         rows,
         'No existen evidencias recientes.'
       ), 'wideCard')}
@@ -897,21 +897,21 @@ function renderActionsAndFindingsPage(data) {
 
   return `
     <div class="pageTitleBlock">
-      <span>Gestión operativa</span>
-      <h2>Hallazgos y acciones abiertas</h2>
-      <p>Seguimiento ejecutivo de brechas, responsables y vencimientos.</p>
+      <span>${escapeHtml(tr('operations.kicker'))}</span>
+      <h2>${escapeHtml(tr('operations.title'))}</h2>
+      <p>${escapeHtml(tr('operations.subtitle'))}</p>
     </div>
 
-    ${card('Acciones abiertas relevantes', table(
-      ['ISO', 'Acción', 'Prioridad', 'Estado', 'Responsable', 'Vence'],
+    ${card(tr('operations.openActions'), table(
+      [tr('operations.table.iso'), tr('operations.table.action'), tr('operations.table.priority'), tr('operations.table.status'), tr('operations.table.owner'), tr('operations.table.dueDate')],
       actionRows,
-      'No existen acciones abiertas.'
+      tr('operations.emptyActions')
     ), 'wideCard')}
 
-    ${card('Hallazgos abiertos relevantes', table(
-      ['ISO', 'Hallazgo', 'Severidad', 'Estado', 'Responsable', 'Vence'],
+    ${card(tr('operations.openFindings'), table(
+      [tr('operations.table.iso'), tr('operations.table.finding'), tr('operations.table.severity'), tr('operations.table.status'), tr('operations.table.owner'), tr('operations.table.dueDate')],
       findingRows,
-      'No existen hallazgos abiertos.'
+      tr('operations.emptyFindings')
     ), 'wideCard')}
   `;
 }
@@ -939,21 +939,21 @@ function renderLifecyclePages(data) {
 
     return `
       <div class="pageTitleBlock">
-        <span>Trazabilidad auditable</span>
+        <span>${escapeHtml(tr('lifecycle.kicker'))}</span>
         <h2>Historial de Ciclo de Vida${index > 0 ? ' (continuación)' : ''}</h2>
-        <p>Movimientos, aprobaciones, rechazos, responsables y comentarios de revisión.</p>
+        <p>${escapeHtml(tr('lifecycle.subtitle'))}</p>
       </div>
 
       <div class="metricGrid three">
-        ${miniMetric('Movimientos incluidos', fmtNumber(lifecycle.length), 'Últimos registros')}
-        ${miniMetric('Uso auditor', 'Evidencia', 'Gobierno del sistema')}
-        ${miniMetric('Cobertura', 'Ciclo de Vida', 'Trazabilidad')}
+        ${miniMetric(tr('lifecycle.includedMoves'), fmtNumber(lifecycle.length), tr('lifecycle.latestRecords'))}
+        ${miniMetric(tr('lifecycle.auditUse'), tr('lifecycle.evidence'), tr('lifecycle.systemGovernance'))}
+        ${miniMetric(tr('lifecycle.coverage'), tr('lifecycle.lifecycle'), tr('lifecycle.traceability'))}
       </div>
 
-      ${card('Movimientos registrados', table(
+      ${card(tr('lifecycle.registeredMoves'), table(
         ['Fecha', 'Norma', 'Operación', 'Movimiento', 'Estado', 'Solicitado por', 'Revisado por', 'Motivo / comentario'],
         rows,
-        'No existen movimientos de ciclo de vida registrados.'
+        tr('lifecycle.empty')
       ), 'wideCard')}
     `;
   });
