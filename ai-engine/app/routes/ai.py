@@ -29,6 +29,7 @@ from app.services.bootstrap_knowledge_service import (
     search_bootstrap_knowledge,
 )
 from app.core.config import settings
+from app.services.language_service import localize_ai_response, normalize_locale
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
 
@@ -100,6 +101,16 @@ class ExecutiveBriefRequest(BaseModel):
     weakest_standards: List[str] = Field(default_factory=list)
 
 
+def _request_locale(payload: Optional[Dict[str, Any]] = None, header_locale: Optional[str] = None) -> str:
+    payload = payload if isinstance(payload, dict) else {}
+    return normalize_locale(
+        payload.get("locale")
+        or payload.get("language")
+        or payload.get("response_language")
+        or header_locale
+    )
+
+
 def validate_internal_token(token: Optional[str]) -> None:
     if not settings.AI_INTERNAL_TOKEN:
         raise HTTPException(status_code=503, detail="AI token not configured")
@@ -112,11 +123,14 @@ def validate_internal_token(token: Optional[str]) -> None:
 def suggest_health_summary(
     payload: HealthSummaryRequest,
     x_ai_token: Optional[str] = Header(default=None),
+    x_tcdx_locale: Optional[str] = Header(default=None),
 ):
     validate_internal_token(x_ai_token)
     try:
         payload_dict = _payload_to_dict(payload)
-        return generate_health_summary(payload_dict)
+        locale = _request_locale(payload_dict, x_tcdx_locale)
+        payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
+        return localize_ai_response(generate_health_summary(payload_dict), locale)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"health-summary error: {e}")
 
@@ -125,16 +139,19 @@ def suggest_health_summary(
 def suggest_finding_analysis(
     payload: FindingAnalysisRequest,
     x_ai_token: Optional[str] = Header(default=None),
+    x_tcdx_locale: Optional[str] = Header(default=None),
 ):
     validate_internal_token(x_ai_token)
     try:
         payload_dict = _payload_to_dict(payload)
+        locale = _request_locale(payload_dict, x_tcdx_locale)
+        payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
         result = generate_finding_analysis(payload_dict)
-        return enrich_ai_response_with_scenario(
+        return localize_ai_response(enrich_ai_response_with_scenario(
             payload_dict,
             result,
             mode="finding_analysis",
-        )
+        ), locale)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"finding-analysis error: {e}")
 
@@ -143,11 +160,14 @@ def suggest_finding_analysis(
 def suggest_nonconformity_draft(
     payload: NonconformityDraftRequest,
     x_ai_token: Optional[str] = Header(default=None),
+    x_tcdx_locale: Optional[str] = Header(default=None),
 ):
     validate_internal_token(x_ai_token)
     try:
         payload_dict = _payload_to_dict(payload)
-        return generate_nonconformity_draft(payload_dict)
+        locale = _request_locale(payload_dict, x_tcdx_locale)
+        payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
+        return localize_ai_response(generate_nonconformity_draft(payload_dict), locale)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"nonconformity-draft error: {e}")
 
@@ -156,16 +176,19 @@ def suggest_nonconformity_draft(
 def suggest_action_plan(
     payload: ActionPlanSuggestionRequest,
     x_ai_token: Optional[str] = Header(default=None),
+    x_tcdx_locale: Optional[str] = Header(default=None),
 ):
     validate_internal_token(x_ai_token)
     try:
         payload_dict = _payload_to_dict(payload)
+        locale = _request_locale(payload_dict, x_tcdx_locale)
+        payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
         result = generate_action_plan(payload_dict)
-        return enrich_ai_response_with_scenario(
+        return localize_ai_response(enrich_ai_response_with_scenario(
             payload_dict,
             result,
             mode="action_plan",
-        )
+        ), locale)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"action-plan error: {e}")
 
@@ -174,11 +197,14 @@ def suggest_action_plan(
 def suggest_executive_brief(
     payload: ExecutiveBriefRequest,
     x_ai_token: Optional[str] = Header(default=None),
+    x_tcdx_locale: Optional[str] = Header(default=None),
 ):
     validate_internal_token(x_ai_token)
     try:
         payload_dict = _payload_to_dict(payload)
-        return generate_executive_brief(payload_dict)
+        locale = _request_locale(payload_dict, x_tcdx_locale)
+        payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
+        return localize_ai_response(generate_executive_brief(payload_dict), locale)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"executive-brief error: {e}")
 
@@ -337,6 +363,7 @@ async def bootstrap_knowledge_reject(
 async def auditor_analyze(
     request: Request,
     x_ai_token: Optional[str] = Header(default=None),
+    x_tcdx_locale: Optional[str] = Header(default=None),
 ):
     validate_internal_token(x_ai_token)
 
@@ -344,7 +371,9 @@ async def auditor_analyze(
         payload_dict = await request.json()
         if not isinstance(payload_dict, dict):
             raise ValueError("payload must be a JSON object")
-        return analyze_as_senior_auditor(payload_dict)
+        locale = _request_locale(payload_dict, x_tcdx_locale)
+        payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
+        return localize_ai_response(analyze_as_senior_auditor(payload_dict), locale)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

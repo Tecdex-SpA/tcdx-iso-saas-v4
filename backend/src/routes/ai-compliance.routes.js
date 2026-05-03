@@ -23,6 +23,12 @@ function getUserTenantId(user) {
   );
 }
 
+function normalizeAiLocale(value) {
+  const raw = String(value || '').trim().toLowerCase().replace('_', '-');
+  const base = raw.split(',')[0].split(';')[0].split('-')[0];
+  return ['es', 'en'].includes(base) ? base : 'es';
+}
+
 function getAiInternalToken() {
   const token = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
 
@@ -560,6 +566,14 @@ function enrichAiResponseWithOrchestrator(aiResponse, enhancedResult) {
 
 
 async function callAiEngine(path, payload) {
+  const locale = normalizeAiLocale(payload?.locale || payload?.language || payload?.response_language);
+  const payloadWithLocale = {
+    ...(payload || {}),
+    locale,
+    language: locale,
+    response_language: locale,
+  };
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
 
@@ -569,8 +583,9 @@ async function callAiEngine(path, payload) {
       headers: {
         'Content-Type': 'application/json',
         'X-AI-Token': getAiInternalToken(),
+        'x-tcdx-locale': locale,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payloadWithLocale),
       signal: controller.signal,
     });
 
