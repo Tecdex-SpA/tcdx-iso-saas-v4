@@ -367,6 +367,15 @@ function getKpiStatusClass(color?: string | null) {
   return 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
+
+function getRuntimePeriodLabel() {
+  if (typeof document !== 'undefined' && document.documentElement.lang === 'en') {
+    return 'Period';
+  }
+
+  return 'Periodo';
+}
+
 function formatKpiValue(value: number | string | null | undefined, unit?: string, noDataLabel = 'Sin dato') {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return noDataLabel;
@@ -2449,7 +2458,7 @@ function HealthKpiMiniCard({
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
-        Período: {formatDateCL(item?.latest_snapshot?.period_start)} -{' '}
+        {getRuntimePeriodLabel()}: {formatDateCL(item?.latest_snapshot?.period_start)} -{' '}
         {formatDateCL(item?.latest_snapshot?.period_end)}
       </div>
 
