@@ -93,13 +93,36 @@ function replacePhrasesEn(value) {
   return text;
 }
 
+function polishEnglishAiText(value) {
+  return String(value || '')
+    .replace(
+      /Criterio auditor: la respuesta usa fuente ([^.]+?) con confianza (alta|media|baja|high|medium|low)\./g,
+      (_, source, confidence) => {
+        const confidenceMap = {
+          alta: 'high',
+          media: 'medium',
+          baja: 'low',
+          high: 'high',
+          medium: 'medium',
+          low: 'low',
+        };
+
+        return `Auditor criterion: the answer uses source ${source} with ${confidenceMap[confidence] || confidence} confidence.`;
+      }
+    )
+    .replace(
+      /No se observan brechas cr[ií]ticas con la informaci[oó]n disponible\./g,
+      'No critical gaps are observed with the available information.'
+    );
+}
+
 function localizeString(value, locale) {
   if (!isEnglishLocale(locale)) return value;
 
   const raw = String(value || '');
   if (exactEn.has(raw)) return exactEn.get(raw);
 
-  return replacePhrasesEn(raw);
+  return polishEnglishAiText(replacePhrasesEn(raw));
 }
 
 function shouldLocalizeKey(key) {
