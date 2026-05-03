@@ -39,6 +39,9 @@ function replacePhrasesEn(value) {
   let text = String(value || '');
 
   const replacements = [
+    [' con confianza medium.', ' with medium confidence.'],
+    [' con confianza high.', ' with high confidence.'],
+    [' con confianza low.', ' with low confidence.'],
     ['Se encontraron ', 'Found '],
     [' coincidencias internas relacionadas con la consulta.', ' internal matches related to the query.'],
     ['La respuesta se basa primero en información propia de la empresa.', 'The answer is based first on the company’s own information.'],
