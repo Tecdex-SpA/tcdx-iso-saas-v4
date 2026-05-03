@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -68,14 +69,17 @@ function friendlyControlMeta(row: ReviewRow) {
 }
 
 export default function AuditExecutionPage() {
+  const { t } = useTranslation();
+
   return (
-    <Suspense fallback={<AppLayout><div className="p-6">Cargando ejecución de auditoría...</div></AppLayout>}>
+    <Suspense fallback={<AppLayout><div className="p-6">{t('auditExecution.loading')}</div></AppLayout>}>
       <AuditExecutionContent />
     </Suspense>
   );
 }
 
 function AuditExecutionContent() {
+  const { t } = useTranslation();
   const params = useSearchParams();
   const auditId = params.get('id') || '';
 
@@ -110,7 +114,7 @@ function AuditExecutionContent() {
       const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
-        alert(json.error || 'No fue posible cargar checklist');
+        alert(json.error || t('auditExecution.loadError'));
         return;
       }
 
@@ -158,7 +162,7 @@ function AuditExecutionContent() {
       const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
-        alert(json.error || 'Error actualizando revisión');
+        alert(json.error || t('auditExecution.updateError'));
         return;
       }
 
@@ -171,7 +175,7 @@ function AuditExecutionContent() {
   if (!auditId) {
     return (
       <AppLayout>
-        <div className="p-6">Falta parámetro id de auditoría.</div>
+        <div className="p-6">{t('auditExecution.missingAuditId')}</div>
       </AppLayout>
     );
   }
@@ -183,16 +187,15 @@ function AuditExecutionContent() {
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-700">
-                Auditoría operativa
+                {t('auditExecution.eyebrow')}
               </span>
 
               <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900">
-                Checklist de auditoría por control
+                {t('auditExecution.title')}
               </h1>
 
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Evalúa cada control como conforme, observación, no conforme, sin evidencia o no aplica.
-                La auditoría en ejecución no deteriora KPI hasta formalizar hallazgos, acciones o evidencias.
+                {t('auditExecution.subtitle')}
               </p>
             </div>
 
@@ -200,35 +203,35 @@ function AuditExecutionContent() {
               onClick={() => window.location.href = '/auditorias'}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
-              Volver a Auditorías
+              {t('auditExecution.backToAudits')}
             </button>
           </div>
 
           {audit && (
             <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-6">
               <Metric label="ISO" value={audit.iso || '-'} />
-              <Metric label="Total" value={summary.total} />
-              <Metric label="Conformes" value={summary.conformes} />
-              <Metric label="Observaciones" value={summary.observaciones} />
-              <Metric label="No conformes" value={summary.noConformes} />
-              <Metric label="Sin evidencia" value={summary.sinEvidencia} />
+              <Metric label={t('auditExecution.metrics.total')} value={summary.total} />
+              <Metric label={t('auditExecution.metrics.compliant')} value={summary.conformes} />
+              <Metric label={t('auditExecution.metrics.observations')} value={summary.observaciones} />
+              <Metric label={t('auditExecution.metrics.nonCompliant')} value={summary.noConformes} />
+              <Metric label={t('auditExecution.metrics.noEvidence')} value={summary.sinEvidencia} />
             </div>
           )}
         </section>
 
         {loading ? (
-          <div className="rounded-3xl bg-white p-6 shadow-sm">Cargando controles...</div>
+          <div className="rounded-3xl bg-white p-6 shadow-sm">{t('auditExecution.loadingControls')}</div>
         ) : (
           <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b bg-slate-50 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                    <th className="px-3 py-3">Cláusula</th>
-                    <th className="px-3 py-3">Control</th>
-                    <th className="px-3 py-3">Estado inicial</th>
-                    <th className="px-3 py-3">Resultado auditoría</th>
-                    <th className="px-3 py-3">Notas</th>
+                    <th className="px-3 py-3">{t('auditExecution.columns.clause')}</th>
+                    <th className="px-3 py-3">{t('auditExecution.columns.control')}</th>
+                    <th className="px-3 py-3">{t('auditExecution.columns.initialStatus')}</th>
+                    <th className="px-3 py-3">{t('auditExecution.columns.auditResult')}</th>
+                    <th className="px-3 py-3">{t('auditExecution.columns.notes')}</th>
                   </tr>
                 </thead>
 
@@ -243,7 +246,7 @@ function AuditExecutionContent() {
                         </div>
                         {row.initial_health_status && (
                           <div className="mt-1 text-[11px] text-slate-400">
-                            Salud inicial: {row.initial_health_status}
+                            {t('auditExecution.initialHealth')}: {row.initial_health_status}
                           </div>
                         )}
                       </td>
@@ -258,12 +261,12 @@ function AuditExecutionContent() {
                           onChange={(e) => updateReview(row, e.target.value)}
                           className={`rounded-xl border px-3 py-2 text-xs font-semibold ${statusClass(row.result)}`}
                         >
-                          <option value="pendiente">Pendiente</option>
-                          <option value="conforme">Conforme</option>
-                          <option value="observacion">Observación</option>
-                          <option value="no_conforme">No conforme</option>
-                          <option value="sin_evidencia">Sin evidencia</option>
-                          <option value="no_aplica">No aplica</option>
+                          <option value="pendiente">{t('statuses.controls.pendiente')}</option>
+                          <option value="conforme">{t('auditExecution.results.compliant')}</option>
+                          <option value="observacion">{t('auditExecution.results.observation')}</option>
+                          <option value="no_conforme">{t('auditExecution.results.nonCompliant')}</option>
+                          <option value="sin_evidencia">{t('auditExecution.results.noEvidence')}</option>
+                          <option value="no_aplica">{t('statuses.controls.no_aplica')}</option>
                         </select>
                       </td>
                       <td className="px-3 py-3">
@@ -272,7 +275,7 @@ function AuditExecutionContent() {
                           rows={2}
                           onBlur={(e) => updateReview(row, row.result || 'pendiente', e.target.value)}
                           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-300"
-                          placeholder="Comentario del auditor..."
+                          placeholder={t('auditExecution.notesPlaceholder')}
                         />
                       </td>
                     </tr>
@@ -281,7 +284,7 @@ function AuditExecutionContent() {
                   {rows.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-3 py-8 text-center text-slate-500">
-                        No hay controles para esta auditoría.
+                        {t('auditExecution.empty')}
                       </td>
                     </tr>
                   )}

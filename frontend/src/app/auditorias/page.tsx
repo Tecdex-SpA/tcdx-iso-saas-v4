@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -165,11 +166,13 @@ async function openAuthorizedFile(url: string, token: string | null) {
 }
 
 export default function AuditoriasPage() {
+  const { t } = useTranslation();
+
   return (
     <Suspense
       fallback={
         <AppLayout>
-          <div className="p-6">Cargando auditorías...</div>
+          <div className="p-6">{t('audits.loading')}</div>
         </AppLayout>
       }
     >
@@ -179,6 +182,7 @@ export default function AuditoriasPage() {
 }
 
 function AuditoriasPageContent() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
@@ -232,8 +236,8 @@ function AuditoriasPageContent() {
   const isReadOnly = isViewer || isOperativo;
 
   const readOnlyMessage = isViewer
-    ? 'Tu usuario es solo lectura. Puedes revisar auditorías, pero no crear ni modificar registros.'
-    : 'Tu usuario operativo puede revisar auditorías y sus acciones asociadas, pero no crear ni modificar auditorías.';
+    ? t('audits.readOnly.viewer')
+    : t('audits.readOnly.operational');
 
   const tenantId = resolveTenantId(user);
 
@@ -281,7 +285,7 @@ function AuditoriasPageContent() {
         setScope({ operations: [], standards: [] });
         setIso('');
         setViewStep('intro');
-        setErrorMessage('No fue posible cargar el alcance operativo.');
+        setErrorMessage(t('audits.scopeLoadError'));
         return;
       }
 
@@ -312,7 +316,7 @@ function AuditoriasPageContent() {
       setScope({ operations: [], standards: [] });
       setIso('');
       setViewStep('intro');
-      setErrorMessage('Error cargando el alcance operativo.');
+      setErrorMessage(t('audits.scopeLoadGenericError'));
     } finally {
       setLoadingStandards(false);
     }
@@ -479,17 +483,17 @@ function AuditoriasPageContent() {
     }
 
     if (!iso) {
-      alert('Debes seleccionar una norma ISO');
+      alert(t('audits.selectIsoRequired'));
       return;
     }
 
     if (!operationalStandardCodes.has(iso)) {
-      alert('La norma seleccionada no está dentro del alcance operativo activo.');
+      alert(t('audits.invalidOperationalStandard'));
       return;
     }
 
     if (!form.start || !form.end || !form.requester || !form.type || !form.auditor) {
-      alert('Completa todos los campos');
+      alert(t('audits.completeFields'));
       return;
     }
 
@@ -513,7 +517,7 @@ function AuditoriasPageContent() {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.error || 'Error guardando auditoría');
+      alert(data.error || t('audits.saveError'));
       return;
     }
 
@@ -521,7 +525,7 @@ function AuditoriasPageContent() {
     await refreshAll();
     setExpandedAuditId(data?.id || '');
     setFocusedAuditId(data?.id || '');
-    alert('Auditoría guardada correctamente');
+    alert(t('audits.saved'));
   };
 
   const startAudit = async (id: string) => {
@@ -540,7 +544,7 @@ function AuditoriasPageContent() {
     const json = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      alert(json.error || 'Error iniciando auditoría');
+      alert(json.error || t('audits.startError'));
       return;
     }
 
@@ -567,7 +571,7 @@ function AuditoriasPageContent() {
     const json = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      alert(json.error || 'Error subiendo informe');
+      alert(json.error || t('audits.uploadReportError'));
       return;
     }
 
@@ -590,7 +594,7 @@ function AuditoriasPageContent() {
     const json = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      alert(json.error || 'Error completando auditoría');
+      alert(json.error || t('audits.completeError'));
       return;
     }
 
@@ -613,28 +617,28 @@ function AuditoriasPageContent() {
     }
 
     const title = window.prompt(
-      `Título del hallazgo para auditoría ${audit.iso}`,
+      `${t('audits.findingPromptTitle')} ${audit.iso}`,
       defaultType === 'no conformidad'
-        ? `No conformidad auditoría ${audit.iso}`
-        : `Hallazgo auditoría ${audit.iso}`
+        ? `${t('audits.nonconformityDefaultTitle')} ${audit.iso}`
+        : `${t('audits.findingDefaultTitle')} ${audit.iso}`
     );
 
     if (!title) return;
 
     const description =
       window.prompt(
-        'Descripción del hallazgo',
+        t('audits.findingPromptDescription'),
         `Hallazgo levantado durante auditoría ${audit.iso} del período ${audit.start_date} a ${audit.end_date}`
       ) || '';
 
     const findingType =
       window.prompt(
-        'Tipo de hallazgo: no conformidad / observacion / oportunidad de mejora / fortaleza',
+        t('audits.findingPromptType'),
         defaultType
       ) || defaultType;
 
     const severity =
-      window.prompt('Severidad: alta / media / baja', 'media') || 'media';
+      window.prompt(t('audits.findingPromptSeverity'), 'media') || 'media';
 
     try {
       setActionLoading(`finding-${audit.id}`);
@@ -661,16 +665,16 @@ function AuditoriasPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando hallazgo');
+        alert(json.error || t('audits.createFindingError'));
         return;
       }
 
       await refreshAll();
       setExpandedAuditId(audit.id);
-      alert('Hallazgo creado correctamente');
+      alert(t('audits.findingCreated'));
     } catch (err) {
       console.error('ERROR CREATE FINDING FROM AUDIT:', err);
-      alert('Error creando hallazgo');
+      alert(t('audits.createFindingError'));
     } finally {
       setActionLoading('');
     }
@@ -685,21 +689,21 @@ function AuditoriasPageContent() {
     }
 
     const title = window.prompt(
-      `Título del plan de acción para auditoría ${audit.iso}`,
-      `Acción auditoría ${audit.iso}`
+      `${t('audits.actionPromptTitle')} ${audit.iso}`,
+      `${t('audits.actionDefaultTitle')} ${audit.iso}`
     );
 
     if (!title) return;
 
     const description =
       window.prompt(
-        'Descripción del plan de acción',
+        t('audits.actionPromptDescription'),
         `Acción derivada de auditoría ${audit.iso} del período ${audit.start_date} a ${audit.end_date}`
       ) || '';
 
-    const owner = window.prompt('Responsable del plan de acción', '') || '';
+    const owner = window.prompt(t('audits.actionPromptOwner'), '') || '';
     const priority =
-      window.prompt('Prioridad: alta / media / baja', 'media') || 'media';
+      window.prompt(t('audits.actionPromptPriority'), 'media') || 'media';
 
     try {
       setActionLoading(`action-${audit.id}`);
@@ -725,16 +729,16 @@ function AuditoriasPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando plan de acción');
+        alert(json.error || t('audits.createActionError'));
         return;
       }
 
       await refreshAll();
       setExpandedAuditId(audit.id);
-      alert('Plan de acción creado correctamente');
+      alert(t('audits.actionCreated'));
     } catch (err) {
       console.error('ERROR CREATE ACTION FROM AUDIT:', err);
-      alert('Error creando plan de acción');
+      alert(t('audits.createActionError'));
     } finally {
       setActionLoading('');
     }
@@ -744,7 +748,7 @@ function AuditoriasPageContent() {
     setFocusedAuditId(audit.id);
     setExpandedAuditId(audit.id);
     setFocusMessage(
-      `Resultado abierto desde búsqueda: auditoría ${audit.iso} (${audit.start_date} → ${audit.end_date})`
+      `${t('audits.directOpen')}: ${t('audits.auditLabel').toLowerCase()} ${audit.iso} (${audit.start_date} → ${audit.end_date})`
     );
     setViewStep('workspace');
     focusAppliedRef.current = true;
@@ -879,6 +883,13 @@ function AuditoriasPageContent() {
     return 'bg-slate-100 text-slate-700 border-slate-200';
   };
 
+  const getAuditStatusLabel = (status?: string | null) => {
+    const normalized = normalizeAuditStatus(status);
+    if (normalized === 'completada') return t('audits.statusLabels.completed');
+    if (normalized === 'en_ejecucion') return t('audits.statusLabels.inExecution');
+    return t('audits.statusLabels.pending');
+  };
+
   const getFindingTypeColor = (type?: string | null) => {
     if (type === 'no conformidad') return 'bg-red-100 text-red-700 border-red-200';
     if (type === 'oportunidad de mejora') {
@@ -939,7 +950,7 @@ function AuditoriasPageContent() {
   if (loadingStandards) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando normas operativas...</div>
+        <div className="p-6">{t('audits.loadingStandards')}</div>
       </AppLayout>
     );
   }
@@ -948,15 +959,15 @@ function AuditoriasPageContent() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">Auditorías</h1>
+          <h1 className="text-2xl font-bold">{t('audits.title')}</h1>
 
           <div className="rounded-[28px] border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
             <h2 className="mb-2 text-lg font-semibold">
-              No hay normas operativas para esta empresa
+              {t('audits.noOperationalStandards')}
             </h2>
 
             <p className="text-sm text-gray-700">
-              Primero debes dejar una norma activa con al menos una operación activa asignada.
+              {t('audits.noOperationalStandardsHelp')}
             </p>
           </div>
         </div>
@@ -972,26 +983,25 @@ function AuditoriasPageContent() {
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                  Auditoría interna y externa
+                  {t('audits.eyebrow')}
                 </span>
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  planificación · ejecución · cierre
+                  {t('audits.badge')}
                 </span>
               </div>
 
               <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                Auditorías
+                {t('audits.title')}
               </h1>
 
               {isReadOnly && (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-                  Modo solo lectura: puedes revisar auditorías, hallazgos y planes asociados, pero no crear ni modificar registros desde esta vista.
+                  {t('audits.readOnly.banner')}
                 </div>
               )}
 
               <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
-                Programa auditorías, controla su avance, gestiona informe final y
-                convierte resultados en hallazgos y planes de acción trazables.
+                {t('audits.subtitle')}
               </p>
 
               {auditSummary?.note && (
@@ -1002,26 +1012,26 @@ function AuditoriasPageContent() {
             </div>
 
             <div className="grid min-w-[320px] grid-cols-1 gap-3 md:grid-cols-2">
-              <MetricCard title="Auditorías activas" value={metrics.pendientes + metrics.ejecucion} color="blue" />
-              <MetricCard title="Sin informe" value={metrics.sinInforme} color="amber" />
+              <MetricCard title={t('audits.metrics.active')} value={metrics.pendientes + metrics.ejecucion} color="blue" />
+              <MetricCard title={t('audits.metrics.withoutReport')} value={metrics.sinInforme} color="amber" />
             </div>
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-8">
-            <MetricCard title="Total" value={metrics.total} color="slate" />
-            <MetricCard title="Pendientes" value={metrics.pendientes} color="amber" />
-            <MetricCard title="En ejecución" value={metrics.ejecucion} color="blue" />
-            <MetricCard title="Completadas" value={metrics.completadas} color="green" />
-            <MetricCard title="Hallazgos" value={metrics.hallazgos} color="red" />
-            <MetricCard title="Acciones" value={metrics.acciones} color="violet" />
-            <MetricCard title="Con informe" value={metrics.conInforme} color="green" />
-            <MetricCard title="Sin informe" value={metrics.sinInforme} color="amber" />
+            <MetricCard title={t('audits.metrics.total')} value={metrics.total} color="slate" />
+            <MetricCard title={t('audits.metrics.pending')} value={metrics.pendientes} color="amber" />
+            <MetricCard title={t('audits.metrics.inExecution')} value={metrics.ejecucion} color="blue" />
+            <MetricCard title={t('audits.metrics.completed')} value={metrics.completadas} color="green" />
+            <MetricCard title={t('audits.metrics.findings')} value={metrics.hallazgos} color="red" />
+            <MetricCard title={t('audits.metrics.actions')} value={metrics.acciones} color="violet" />
+            <MetricCard title={t('audits.metrics.withReport')} value={metrics.conInforme} color="green" />
+            <MetricCard title={t('audits.metrics.withoutReport')} value={metrics.sinInforme} color="amber" />
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_420px]">
             <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <FilterCard label="Norma">
+                <FilterCard label={t('audits.filters.standard')}>
                   <select
                     value={iso}
                     onChange={(e) => {
@@ -1030,7 +1040,7 @@ function AuditoriasPageContent() {
                     }}
                     className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
                   >
-                    <option value="">Seleccionar ISO</option>
+                    <option value="">{t('audits.filters.selectIso')}</option>
                     {operationalStandards.map((s) => (
                       <option key={s.code} value={s.code}>
                         {s.code} - {s.name}
@@ -1039,20 +1049,20 @@ function AuditoriasPageContent() {
                   </select>
                 </FilterCard>
 
-                <FilterCard label="Estado">
+                <FilterCard label={t('audits.filters.status')}>
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
                   >
-                    <option value="">Todos</option>
-                    <option value="pendiente">Pendiente</option>
-                    <option value="en_ejecucion">En ejecución</option>
-                    <option value="completada">Completada</option>
+                    <option value="">{t('common.all')}</option>
+                    <option value="pendiente">{t('audits.statusLabels.pending')}</option>
+                    <option value="en_ejecucion">{t('audits.statusLabels.inExecution')}</option>
+                    <option value="completada">{t('audits.statusLabels.completed')}</option>
                   </select>
                 </FilterCard>
 
-                <FilterCard label="Vista">
+                <FilterCard label={t('audits.filters.view')}>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -1063,7 +1073,7 @@ function AuditoriasPageContent() {
                           : 'border border-slate-200 bg-white text-slate-700'
                       }`}
                     >
-                      Resumen
+                      {t('audits.views.summary')}
                     </button>
                     <button
                       type="button"
@@ -1074,7 +1084,7 @@ function AuditoriasPageContent() {
                           : 'border border-slate-200 bg-white text-slate-700'
                       }`}
                     >
-                      Gestión
+                      {t('audits.views.management')}
                     </button>
                   </div>
                 </FilterCard>
@@ -1083,7 +1093,7 @@ function AuditoriasPageContent() {
 
             <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Próxima auditoría
+                {t('audits.nextAudit')}
               </div>
 
               {nextUpcomingAudit ? (
@@ -1095,7 +1105,7 @@ function AuditoriasPageContent() {
                     {formatDate(nextUpcomingAudit.start_date)} → {formatDate(nextUpcomingAudit.end_date)}
                   </div>
                   <div className="text-sm text-slate-500">
-                    Auditor: {nextUpcomingAudit.auditor_name || 'Sin asignar'}
+                    {t('audits.auditor')}: {nextUpcomingAudit.auditor_name || t('audits.unassigned')}
                   </div>
                   <div>
                     <span
@@ -1103,13 +1113,13 @@ function AuditoriasPageContent() {
                         nextUpcomingAudit.status
                       )}`}
                     >
-                      {normalizeAuditStatus(nextUpcomingAudit.status)}
+                      {getAuditStatusLabel(nextUpcomingAudit.status)}
                     </span>
                   </div>
                 </div>
               ) : (
                 <div className="mt-3 text-sm text-slate-500">
-                  No hay auditorías activas próximas.
+                  {t('audits.noUpcoming')}
                 </div>
               )}
             </div>
@@ -1124,31 +1134,28 @@ function AuditoriasPageContent() {
 
         {focusMessage && (
           <div className="rounded-[24px] border border-indigo-200 bg-indigo-50 px-5 py-4 text-indigo-900 shadow-sm">
-            <div className="font-semibold">Apertura directa desde búsqueda</div>
+            <div className="font-semibold">{t('audits.directOpen')}</div>
             <div className="text-sm mt-1">{focusMessage}</div>
           </div>
         )}
 
         {viewStep === 'intro' && (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <SectionCard title="1. Planificación">
+            <SectionCard title={t('audits.intro.planningTitle')}>
               <p className="text-sm leading-6 text-slate-600">
-                Define la norma, el período, el solicitante y el auditor responsable.
-                Esta etapa deja la auditoría programada y visible para seguimiento.
+                {t('audits.intro.planningBody')}
               </p>
             </SectionCard>
 
-            <SectionCard title="2. Ejecución">
+            <SectionCard title={t('audits.intro.executionTitle')}>
               <p className="text-sm leading-6 text-slate-600">
-                Una vez iniciada, la auditoría permite subir informe, registrar
-                hallazgos y crear acciones correctivas derivadas.
+                {t('audits.intro.executionBody')}
               </p>
             </SectionCard>
 
-            <SectionCard title="3. Cierre y trazabilidad">
+            <SectionCard title={t('audits.intro.closureTitle')}>
               <p className="text-sm leading-6 text-slate-600">
-                El cierre debe quedar respaldado con informe cargado y con sus
-                derivados visibles: hallazgos, acciones y evidencias asociadas.
+                {t('audits.intro.closureBody')}
               </p>
             </SectionCard>
           </div>
@@ -1161,16 +1168,16 @@ function AuditoriasPageContent() {
               <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                 <div className="mb-5">
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                    Crear nueva auditoría
+                    {t('audits.createTitle')}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Completa el calendario y los datos del responsable para dejar la auditoría programada.
+                    {t('audits.createHelp')}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                   <div className="space-y-4">
-                    <FieldBlock label="Fecha inicio">
+                    <FieldBlock label={t('audits.fields.startDate')}>
                       <input
                         type="date"
                         value={form.start}
@@ -1179,7 +1186,7 @@ function AuditoriasPageContent() {
                       />
                     </FieldBlock>
 
-                    <FieldBlock label="Fecha término">
+                    <FieldBlock label={t('audits.fields.endDate')}>
                       <input
                         type="date"
                         value={form.end}
@@ -1188,9 +1195,9 @@ function AuditoriasPageContent() {
                       />
                     </FieldBlock>
 
-                    <FieldBlock label="Solicitante">
+                    <FieldBlock label={t('audits.fields.requester')}>
                       <input
-                        placeholder="Nombre solicitante"
+                        placeholder={t('audits.placeholders.requester')}
                         value={form.requester}
                         onChange={(e) => setForm({ ...form, requester: e.target.value })}
                         className="w-full rounded-2xl border border-slate-200 p-3"
@@ -1199,21 +1206,21 @@ function AuditoriasPageContent() {
                   </div>
 
                   <div className="space-y-4">
-                    <FieldBlock label="Tipo auditor">
+                    <FieldBlock label={t('audits.fields.auditorType')}>
                       <select
                         value={form.type}
                         onChange={(e) => setForm({ ...form, type: e.target.value })}
                         className="w-full rounded-2xl border border-slate-200 p-3 bg-white"
                       >
-                        <option value="">Seleccionar</option>
-                        <option value="interno">Auditor interno</option>
-                        <option value="externo">Auditor externo</option>
+                        <option value="">{t('audits.select')}</option>
+                        <option value="interno">{t('audits.auditorTypes.internal')}</option>
+                        <option value="externo">{t('audits.auditorTypes.external')}</option>
                       </select>
                     </FieldBlock>
 
-                    <FieldBlock label="Nombre del auditor">
+                    <FieldBlock label={t('audits.fields.auditorName')}>
                       <input
-                        placeholder="Nombre del auditor"
+                        placeholder={t('audits.placeholders.auditor')}
                         value={form.auditor}
                         onChange={(e) => setForm({ ...form, auditor: e.target.value })}
                         className="w-full rounded-2xl border border-slate-200 p-3"
@@ -1221,14 +1228,14 @@ function AuditoriasPageContent() {
                     </FieldBlock>
 
                     <div className="rounded-[24px] border border-indigo-100 bg-indigo-50/70 p-4 text-sm text-slate-700">
-                      Norma seleccionada: <strong>{iso || 'Sin selección'}</strong>
+                      {t('audits.selectedStandard')}: <strong>{iso || t('audits.notSelected')}</strong>
                     </div>
 
                     <button
                       onClick={save}
                       className="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
                     >
-                      Guardar auditoría
+                      {t('audits.saveAudit')}
                     </button>
                   </div>
                 </div>
@@ -1239,10 +1246,10 @@ function AuditoriasPageContent() {
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                    Auditorías registradas
+                    {t('audits.registeredTitle')}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    {iso ? `Mostrando auditorías para ${iso}` : 'Mostrando auditorías operativas'}
+                    {iso ? t('audits.showingFor', { iso }) : t('audits.showingOperational')}
                   </p>
                 </div>
 
@@ -1251,15 +1258,15 @@ function AuditoriasPageContent() {
                   onClick={refreshAll}
                   className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  Refrescar
+                  {t('common.refresh')}
                 </button>
               </div>
 
               {loadingAudits || loadingRelations ? (
-                <div className="text-gray-500">Cargando auditorías...</div>
+                <div className="text-gray-500">{t('audits.loading')}</div>
               ) : filteredAudits.length === 0 ? (
                 <div className="text-gray-500">
-                  No hay auditorías registradas para esta selección.
+                  {t('audits.empty')}
                 </div>
               ) : (
                 <div className="space-y-5">
@@ -1298,31 +1305,31 @@ function AuditoriasPageContent() {
                                   audit.status
                                 )}`}
                               >
-                                {normalizedStatus}
+                                {getAuditStatusLabel(audit.status)}
                               </span>
                               <InfoPill tone={hasReport ? 'green' : 'amber'}>
-                                {hasReport ? 'Informe cargado' : 'Sin informe'}
+                                {hasReport ? t('audits.reportUploaded') : t('audits.withoutReport')}
                               </InfoPill>
-                              <InfoPill tone="blue">Hallazgos {linkedFindings.length}</InfoPill>
-                              <InfoPill tone="violet">Acciones {linkedActions.length}</InfoPill>
+                              <InfoPill tone="blue">{t('audits.metrics.findings')} {linkedFindings.length}</InfoPill>
+                              <InfoPill tone="violet">{t('audits.metrics.actions')} {linkedActions.length}</InfoPill>
                             </div>
 
                             <h3 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900">
-                              Auditoría {audit.auditor_type || 'sin tipo'} · {formatDate(audit.start_date)} → {formatDate(audit.end_date)}
+                              {t('audits.auditLabel')} {audit.auditor_type || t('audits.noType')} · {formatDate(audit.start_date)} → {formatDate(audit.end_date)}
                             </h3>
 
                             <div className="mt-2 text-sm text-slate-500">
-                              Solicitante: {audit.requester_name || 'No informado'} · Auditor:{' '}
-                              {audit.auditor_name || 'Sin asignar'}
+                              {t('audits.requester')}: {audit.requester_name || t('audits.notReported')} · {t('audits.auditor')}:{' '}
+                              {audit.auditor_name || t('audits.unassigned')}
                             </div>
                           </div>
 
                           <div className="grid grid-cols-2 gap-3 xl:min-w-[320px]">
-                            <InfoBox label="Auditor" value={audit.auditor_name || '-'} />
-                            <InfoBox label="Tipo" value={audit.auditor_type || '-'} />
-                            <InfoBox label="Informe" value={hasReport ? 'Sí' : 'No'} />
+                            <InfoBox label={t('audits.auditor')} value={audit.auditor_name || '-'} />
+                            <InfoBox label={t('audits.fields.auditorTypeShort')} value={audit.auditor_type || '-'} />
+                            <InfoBox label={t('audits.report')} value={hasReport ? t('common.yes') : t('common.no')} />
                             <InfoBox
-                              label="Última actualización"
+                              label={t('audits.lastUpdated')}
                               value={formatDate(audit.updated_at || audit.created_at)}
                             />
                           </div>
@@ -1336,10 +1343,10 @@ function AuditoriasPageContent() {
                         </div>
 
                         <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
-                          <MiniStat label="Hallazgos" value={linkedFindings.length} />
-                          <MiniStat label="Acciones" value={linkedActions.length} />
-                          <MiniStat label="Evidencias" value={linkedEvidenceCount} />
-                          <MiniStat label="Aprobadas" value={linkedApprovedEvidenceCount} />
+                          <MiniStat label={t('audits.metrics.findings')} value={linkedFindings.length} />
+                          <MiniStat label={t('audits.metrics.actions')} value={linkedActions.length} />
+                          <MiniStat label={t('audits.metrics.evidence')} value={linkedEvidenceCount} />
+                          <MiniStat label={t('audits.metrics.approved')} value={linkedApprovedEvidenceCount} />
                         </div>
 
                         <div className="mt-5 flex flex-wrap gap-2">
@@ -1348,7 +1355,7 @@ function AuditoriasPageContent() {
                             onClick={() => goToAuditChecklist(audit)}
                             className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100"
                           >
-                            Abrir checklist
+                            {t('audits.openChecklist')}
                           </button>
 
                           <button
@@ -1356,7 +1363,7 @@ function AuditoriasPageContent() {
                             onClick={() => goToAuditAi(audit)}
                             className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-bold text-violet-700 transition hover:bg-violet-100"
                           >
-                            IA Auditor
+                            {t('audits.aiAuditor')}
                           </button>
 
                           {!isReadOnly && normalizedStatus === 'pendiente' && (
@@ -1364,14 +1371,14 @@ function AuditoriasPageContent() {
                               onClick={() => startAudit(audit.id)}
                               className="rounded-2xl bg-yellow-500 px-4 py-3 text-sm font-semibold text-white"
                             >
-                              Iniciar
+                              {t('audits.start')}
                             </button>
                           )}
 
                           {!isReadOnly && normalizedStatus === 'en_ejecucion' && (
                             <>
                               <label className="inline-flex cursor-pointer items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                                Subir informe
+                                {t('audits.uploadReport')}
                                 <input
                                   type="file"
                                   className="hidden"
@@ -1387,7 +1394,7 @@ function AuditoriasPageContent() {
                                   onClick={() => completeAudit(audit.id)}
                                   className="rounded-2xl bg-green-600 px-4 py-3 text-sm font-semibold text-white"
                                 >
-                                  Completar auditoría
+                                  {t('audits.completeAudit')}
                                 </button>
                               )}
                             </>
@@ -1400,7 +1407,7 @@ function AuditoriasPageContent() {
                                 disabled={isReadOnly || actionLoading === `finding-${audit.id}`}
                                 className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                               >
-                                {actionLoading === `finding-${audit.id}` ? 'Creando...' : 'Crear hallazgo'}
+                                {actionLoading === `finding-${audit.id}` ? t('audits.creating') : t('audits.createFinding')}
                               </button>
 
                               <button
@@ -1408,7 +1415,7 @@ function AuditoriasPageContent() {
                                 disabled={isReadOnly || actionLoading === `finding-${audit.id}`}
                                 className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                               >
-                                {actionLoading === `finding-${audit.id}` ? 'Creando...' : 'Crear NC'}
+                                {actionLoading === `finding-${audit.id}` ? t('audits.creating') : t('audits.createNonconformity')}
                               </button>
 
                               <button
@@ -1416,7 +1423,7 @@ function AuditoriasPageContent() {
                                 disabled={isReadOnly || actionLoading === `action-${audit.id}`}
                                 className="rounded-2xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                               >
-                                {actionLoading === `action-${audit.id}` ? 'Creando...' : 'Crear acción'}
+                                {actionLoading === `action-${audit.id}` ? t('audits.creating') : t('audits.createAction')}
                               </button>
                             </>
                           )}
@@ -1429,7 +1436,7 @@ function AuditoriasPageContent() {
                               }
                               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                             >
-                              Ver informe
+                              {t('audits.viewReport')}
                             </button>
                           )}
 
@@ -1440,27 +1447,27 @@ function AuditoriasPageContent() {
                             }
                             className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                           >
-                            {isExpanded ? 'Ocultar detalle' : 'Ver detalle'}
+                            {isExpanded ? t('audits.hideDetail') : t('common.viewDetails')}
                           </button>
                         </div>
 
                         {isExpanded && (
                           <div className="mt-5 grid gap-4 xl:grid-cols-3">
-                            <SectionCard title="Resumen de auditoría">
+                            <SectionCard title={t('audits.detail.summary')}>
                               <DetailRow label="ISO" value={audit.iso} />
-                              <DetailRow label="Inicio" value={formatDateTime(audit.start_date)} />
-                              <DetailRow label="Término" value={formatDateTime(audit.end_date)} />
-                              <DetailRow label="Solicitante" value={audit.requester_name || '-'} />
-                              <DetailRow label="Auditor" value={audit.auditor_name || '-'} />
-                              <DetailRow label="Tipo" value={audit.auditor_type || '-'} />
-                              <DetailRow label="Estado" value={normalizedStatus} />
-                              <DetailRow label="Informe" value={hasReport ? 'Cargado' : 'Pendiente'} />
+                              <DetailRow label={t('audits.fields.startDateShort')} value={formatDateTime(audit.start_date)} />
+                              <DetailRow label={t('audits.fields.endDateShort')} value={formatDateTime(audit.end_date)} />
+                              <DetailRow label={t('audits.requester')} value={audit.requester_name || '-'} />
+                              <DetailRow label={t('audits.auditor')} value={audit.auditor_name || '-'} />
+                              <DetailRow label={t('audits.fields.auditorTypeShort')} value={audit.auditor_type || '-'} />
+                              <DetailRow label={t('common.status')} value={getAuditStatusLabel(audit.status)} />
+                              <DetailRow label={t('audits.report')} value={hasReport ? t('audits.loaded') : t('statuses.controls.pendiente')} />
                             </SectionCard>
 
-                            <SectionCard title="Hallazgos derivados">
+                            <SectionCard title={t('audits.detail.derivedFindings')}>
                               {linkedFindings.length === 0 ? (
                                 <div className="text-sm text-slate-500">
-                                  Sin hallazgos asociados.
+                                  {t('audits.detail.noFindings')}
                                 </div>
                               ) : (
                                 <div className="space-y-3">
@@ -1488,7 +1495,7 @@ function AuditoriasPageContent() {
                                       </div>
 
                                       <div className="mt-2 text-sm font-semibold text-slate-900">
-                                        {finding.title || 'Hallazgo sin título'}
+                                          {finding.title || t('audits.detail.untitledFinding')}
                                       </div>
 
                                       <div className="mt-1 text-xs text-slate-500">
@@ -1500,7 +1507,7 @@ function AuditoriasPageContent() {
                                         onClick={() => goToFinding(finding)}
                                         className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                       >
-                                        Abrir hallazgo
+                                        {t('audits.openFinding')}
                                       </button>
                                     </div>
                                   ))}
@@ -1508,10 +1515,10 @@ function AuditoriasPageContent() {
                               )}
                             </SectionCard>
 
-                            <SectionCard title="Planes de acción derivados">
+                            <SectionCard title={t('audits.detail.derivedActions')}>
                               {linkedActions.length === 0 ? (
                                 <div className="text-sm text-slate-500">
-                                  Sin planes de acción asociados.
+                                  {t('audits.detail.noActions')}
                                 </div>
                               ) : (
                                 <div className="space-y-3">
@@ -1530,19 +1537,19 @@ function AuditoriasPageContent() {
                                         </span>
 
                                         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                                          Prioridad {action.priority || 'media'}
+                                          {t('audits.priority')} {action.priority || 'media'}
                                         </span>
                                       </div>
 
                                       <div className="mt-2 text-sm font-semibold text-slate-900">
-                                        {action.title || 'Acción sin título'}
+                                        {action.title || t('audits.detail.untitledAction')}
                                       </div>
 
                                       <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                                        <div>Avance: {action.latest_progress_percent || 0}%</div>
-                                        <div>Evidencias: {action.evidence_count || 0}</div>
-                                        <div>Aprobadas: {action.approved_evidence_count || 0}</div>
-                                        <div>Pendientes: {action.pending_evidence_count || 0}</div>
+                                        <div>{t('audits.progress')}: {action.latest_progress_percent || 0}%</div>
+                                        <div>{t('audits.metrics.evidence')}: {action.evidence_count || 0}</div>
+                                        <div>{t('audits.metrics.approved')}: {action.approved_evidence_count || 0}</div>
+                                        <div>{t('audits.metrics.pending')}: {action.pending_evidence_count || 0}</div>
                                       </div>
 
                                       <button
@@ -1550,7 +1557,7 @@ function AuditoriasPageContent() {
                                         onClick={() => goToAction(action)}
                                         className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                       >
-                                        Abrir acción
+                                        {t('audits.openAction')}
                                       </button>
                                     </div>
                                   ))}
@@ -1715,6 +1722,7 @@ function AuditStepper({
   status: string;
   hasReport: boolean;
 }) {
+  const { t } = useTranslation();
   const stepDone = {
     planned: true,
     running: status === 'en_ejecucion' || status === 'completada',
@@ -1724,10 +1732,10 @@ function AuditStepper({
 
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <StepChip label="Programada" active={stepDone.planned} />
-      <StepChip label="En ejecución" active={stepDone.running} />
-      <StepChip label="Informe cargado" active={stepDone.report} />
-      <StepChip label="Completada" active={stepDone.done} />
+      <StepChip label={t('audits.stepper.planned')} active={stepDone.planned} />
+      <StepChip label={t('audits.stepper.inExecution')} active={stepDone.running} />
+      <StepChip label={t('audits.stepper.reportUploaded')} active={stepDone.report} />
+      <StepChip label={t('audits.stepper.completed')} active={stepDone.done} />
     </div>
   );
 }

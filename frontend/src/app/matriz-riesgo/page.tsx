@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -56,11 +57,13 @@ function isOperationalStandard(s: ScopeStandard) {
 }
 
 export default function RiskMatrixPage() {
+  const { t } = useTranslation();
+
   return (
     <Suspense
       fallback={
         <AppLayout>
-          <div className="p-6">Cargando matriz de riesgo...</div>
+          <div className="p-6">{t('riskMatrix.loading')}</div>
         </AppLayout>
       }
     >
@@ -70,6 +73,7 @@ export default function RiskMatrixPage() {
 }
 
 function RiskMatrixPageContent() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
@@ -259,20 +263,20 @@ function RiskMatrixPageContent() {
       }
     } catch (err) {
       console.error('ERROR APPLY AI:', err);
-      alert('Error aplicando acción IA');
+      alert(t('riskMatrix.applyAiError'));
     }
   };
 
   const explainRisk = (nivel: string) => {
     if (nivel === 'ALTO') {
-      return 'Este nivel representa riesgos críticos que pueden generar no conformidades mayores en auditoría.';
+      return t('riskMatrix.explanations.high');
     }
 
     if (nivel === 'MEDIO') {
-      return 'Existe implementación parcial del control y riesgo de observación.';
+      return t('riskMatrix.explanations.medium');
     }
 
-    return 'El control está correctamente implementado.';
+    return t('riskMatrix.explanations.low');
   };
 
   const getColor = (value: number) => {
@@ -287,13 +291,20 @@ function RiskMatrixPageContent() {
       : [];
   }, [controls, selectedLevel]);
 
+  const riskLevelLabel = (value?: string | null) => {
+    const raw = String(value || '').toUpperCase();
+    if (raw === 'ALTO') return t('statuses.findings.alto');
+    if (raw === 'MEDIO') return t('statuses.findings.medio');
+    return t('statuses.findings.bajo');
+  };
+
   const applyFocus = (control: RiskControlRow) => {
     setFocusedControlId(control.id);
     setSelectedLevel(control.nivel || null);
     setFocusMessage(
-      `Resultado abierto desde búsqueda: ${control.iso} · cláusula ${
+      `${t('riskMatrix.directOpen')}: ${control.iso} · ${t('riskMatrix.clause').toLowerCase()} ${
         control.clause || 'N/A'
-      } · riesgo ${control.nivel}`
+      } · ${t('dashboard.risk').toLowerCase()} ${riskLevelLabel(control.nivel)}`
     );
     focusAppliedRef.current = true;
 
@@ -329,7 +340,7 @@ function RiskMatrixPageContent() {
   if (loadingStandards) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando normas disponibles...</div>
+        <div className="p-6">{t('riskMatrix.loadingStandards')}</div>
       </AppLayout>
     );
   }
@@ -338,15 +349,15 @@ function RiskMatrixPageContent() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">Matriz de Riesgo</h1>
+          <h1 className="text-2xl font-bold">{t('riskMatrix.title')}</h1>
 
           <div className="bg-yellow-50 border border-yellow-200 p-6 rounded shadow">
             <h2 className="text-lg font-semibold mb-2">
-              No hay normas operativas para esta empresa
+              {t('riskMatrix.noOperationalStandards')}
             </h2>
 
             <p className="text-sm text-gray-700">
-              Primero debes activar una norma con al menos una operación activa asignada.
+              {t('riskMatrix.noOperationalStandardsHelp')}
             </p>
           </div>
         </div>
@@ -358,15 +369,15 @@ function RiskMatrixPageContent() {
     <AppLayout>
       <div className="p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Matriz de Riesgo</h1>
+          <h1 className="text-2xl font-bold">{t('riskMatrix.title')}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Solo se calculan riesgos sobre normas dentro del alcance operativo activo.
+            {t('riskMatrix.subtitle')}
           </p>
         </div>
 
         {focusMessage && (
           <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-2xl px-5 py-4 shadow-sm">
-            <div className="font-semibold">Apertura directa desde búsqueda</div>
+            <div className="font-semibold">{t('riskMatrix.directOpen')}</div>
             <div className="text-sm mt-1">{focusMessage}</div>
           </div>
         )}
@@ -383,7 +394,7 @@ function RiskMatrixPageContent() {
           }}
           className="border px-3 py-2 rounded"
         >
-          <option value="">Seleccionar ISO</option>
+          <option value="">{t('riskMatrix.selectIso')}</option>
           {operationalStandards.map((s) => (
             <option key={s.code} value={s.code}>
               {s.code} - {s.name}
@@ -397,45 +408,45 @@ function RiskMatrixPageContent() {
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
                 <TcdxIcon name="risk" className="h-5 w-5" />
               </span>
-              Matriz de Riesgo
+              {t('riskMatrix.title')}
             </h2>
             <p className="text-gray-700">
-              La matriz de riesgo permite identificar, evaluar y priorizar riesgos en función de su probabilidad e impacto.
+              {t('riskMatrix.emptyIntro.line1')}
             </p>
             <p className="text-gray-700">
-              Esta vista traduce automáticamente el estado de los controles en una evaluación visual del riesgo.
+              {t('riskMatrix.emptyIntro.line2')}
             </p>
             <p className="text-gray-600">
-              Selecciona una norma operativa para visualizar los riesgos asociados.
+              {t('riskMatrix.emptyIntro.line3')}
             </p>
           </div>
         )}
 
         {iso && loadingControls && (
           <div className="bg-white p-4 rounded shadow text-gray-500">
-            Cargando matriz de riesgo...
+            {t('riskMatrix.loading')}
           </div>
         )}
 
         {iso && !loadingControls && (
           <div className="bg-white p-6 rounded shadow">
-            <h2 className="font-semibold mb-4">Heatmap — {iso}</h2>
+            <h2 className="font-semibold mb-4">{t('riskMatrix.heatmap')} — {iso}</h2>
 
             {controls.length === 0 ? (
               <div className="text-gray-500">
-                Esta norma no tiene controles cargados aún para esta empresa.
+                {t('riskMatrix.noControls')}
               </div>
             ) : (
               <div className="grid grid-cols-4 gap-2 text-center">
                 <div></div>
-                <div>Prob. Baja</div>
-                <div>Media</div>
-                <div>Alta</div>
+                <div>{t('riskMatrix.grid.likelihoodLow')}</div>
+                <div>{t('riskMatrix.grid.likelihoodMedium')}</div>
+                <div>{t('riskMatrix.grid.likelihoodHigh')}</div>
 
                 {[3, 2, 1].map((impact) => (
                   <div key={`row-${impact}`} className="contents">
                     <div className="font-semibold">
-                      {impact === 3 ? 'Impacto Alto' : impact === 2 ? 'Medio' : 'Bajo'}
+                      {impact === 3 ? t('riskMatrix.grid.impactHigh') : impact === 2 ? t('riskMatrix.grid.impactMedium') : t('riskMatrix.grid.impactLow')}
                     </div>
 
                     {[1, 2, 3].map((prob) => {
@@ -458,10 +469,8 @@ function RiskMatrixPageContent() {
                           )}`}
                         >
                           <div>{value}</div>
-                          <div className="text-xs">{nivel}</div>
-                          <div className="text-[10px] opacity-90">
-                            {totalEnNivel} ctrl
-                          </div>
+                          <div className="text-xs">{riskLevelLabel(nivel)}</div>
+                          <div className="text-[10px] opacity-90">{t('riskMatrix.controlsCount', { count: totalEnNivel })}</div>
                         </div>
                       );
                     })}
@@ -474,7 +483,7 @@ function RiskMatrixPageContent() {
 
         {selectedLevel && controls.length > 0 && (
           <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold">Análisis IA — {selectedLevel}</h3>
+            <h3 className="font-semibold">{t('riskMatrix.aiAnalysis')} — {riskLevelLabel(selectedLevel)}</h3>
             <p className="mt-2 text-gray-700">{explainRisk(selectedLevel)}</p>
           </div>
         )}
@@ -482,12 +491,12 @@ function RiskMatrixPageContent() {
         {selectedLevel && controls.length > 0 && (
           <div className="bg-white p-6 rounded shadow space-y-4">
             <h3 className="font-semibold">
-              Controles con riesgo {selectedLevel}
+              {t('riskMatrix.controlsWithRisk')} {riskLevelLabel(selectedLevel)}
             </h3>
 
             {filtered.length === 0 ? (
               <div className="text-gray-500">
-                No hay controles en este nivel de riesgo.
+                {t('riskMatrix.noControlsForLevel')}
               </div>
             ) : (
               filtered.map((c) => (
@@ -501,7 +510,7 @@ function RiskMatrixPageContent() {
                   }`}
                 >
                   <div className="font-semibold">
-                    Cláusula {c.clause}:{' '}
+                    {t('riskMatrix.clause')} {c.clause}:{' '}
                     {c.category
                       ?.replace(`Cláusula ${c.clause}:`, '')
                       .replace(':', '')
@@ -511,11 +520,11 @@ function RiskMatrixPageContent() {
                   <div className="text-sm text-gray-600">{c.description}</div>
 
                   <div className="text-sm">
-                    Norma: <strong>{c.iso}</strong>
+                    {t('riskMatrix.standard')}: <strong>{c.iso}</strong>
                   </div>
 
                   <div className="text-sm">
-                    Score: <strong>{c.score}</strong>
+                    {t('riskMatrix.score')}: <strong>{c.score}</strong>
                   </div>
 
                   {c.nivel !== 'BAJO' && (
@@ -523,7 +532,7 @@ function RiskMatrixPageContent() {
                       onClick={() => applyAI(c.id)}
                       className="bg-blue-600 text-white px-3 py-1 rounded"
                     >
-                      ✨ Aplicar acción IA
+                      {t('riskMatrix.applyAiAction')}
                     </button>
                   )}
                 </div>

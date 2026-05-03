@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -97,11 +98,13 @@ function criticalityClasses(value?: string | null) {
 }
 
 export default function ActivosPage() {
+  const { t } = useTranslation();
+
   return (
     <Suspense
       fallback={
         <AppLayout>
-          <div className="p-6">Cargando activos...</div>
+          <div className="p-6">{t('assets.loading')}</div>
         </AppLayout>
       }
     >
@@ -111,6 +114,7 @@ export default function ActivosPage() {
 }
 
 function ActivosPageContent() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
@@ -206,6 +210,13 @@ function ActivosPageContent() {
     };
   }, [risks]);
 
+  const displayLevel = (value?: string | null) => {
+    const raw = String(value || '').toLowerCase();
+    if (raw === 'alto' || raw === 'alta') return t('assets.levels.high');
+    if (raw === 'medio' || raw === 'media') return t('assets.levels.medium');
+    return t('assets.levels.low');
+  };
+
   const highCriticalityCount = useMemo(() => {
     return visibleAssets.filter((a) => String(a.criticality || '').toLowerCase() === 'alta')
       .length;
@@ -240,7 +251,7 @@ function ActivosPageContent() {
         console.error('ERROR LOAD ASSETS SCOPE:', json);
         setScope({ operations: [], standards: [] });
         setIso('');
-        setErrorMessage('No fue posible cargar el alcance operativo.');
+        setErrorMessage(t('assets.scopeLoadError'));
         return;
       }
 
@@ -270,7 +281,7 @@ function ActivosPageContent() {
       console.error('ERROR LOAD ASSETS SCOPE:', err);
       setScope({ operations: [], standards: [] });
       setIso('');
-      setErrorMessage('Error cargando el alcance operativo.');
+      setErrorMessage(t('assets.scopeLoadGenericError'));
     } finally {
       setLoadingStandards(false);
     }
@@ -393,12 +404,12 @@ function ActivosPageContent() {
     if (!user || !token || !tenantId) return;
 
     if (!iso) {
-      alert('Debes seleccionar una ISO de contexto');
+      alert(t('assets.selectContextIso'));
       return;
     }
 
     if (!form.name || !form.type || !form.criticality || !form.owner) {
-      alert('Completa todos los campos del activo');
+      alert(t('assets.completeAssetFields'));
       return;
     }
 
@@ -418,14 +429,14 @@ function ActivosPageContent() {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.error || 'Error creando activo');
+      alert(data.error || t('assets.createError'));
       return;
     }
 
     setForm({ name: '', type: '', criticality: '', owner: '' });
     await refreshAll();
     alert(
-      `Activo creado y relacionado con: ${(data.related_standards || []).join(', ')}`
+      `${t('assets.createdLinkedTo')} ${(data.related_standards || []).join(', ')}`
     );
   };
 
@@ -433,7 +444,7 @@ function ActivosPageContent() {
     if (!selectedAsset || !token) return;
 
     if (!riskForm.risk || !riskForm.impact || !riskForm.probability) {
-      alert('Completa todos los campos del riesgo');
+      alert(t('assets.completeRiskFields'));
       return;
     }
 
@@ -454,7 +465,7 @@ function ActivosPageContent() {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.error || 'Error guardando riesgo');
+      alert(data.error || t('assets.saveRiskError'));
       return;
     }
 
@@ -467,15 +478,15 @@ function ActivosPageContent() {
     if (!token || !tenantId) return;
 
     const title = window.prompt(
-      `Título del hallazgo para el riesgo del activo ${asset.name}`,
-      `Hallazgo por riesgo en ${asset.name}`
+      `${t('assets.findingPromptTitle')} ${asset.name}`,
+      `${t('assets.findingDefaultTitle')} ${asset.name}`
     );
 
     if (!title) return;
 
     const description =
       window.prompt(
-        'Descripción del hallazgo',
+        t('assets.findingPromptDescription'),
         `${risk.risk} — Activo: ${asset.name}`
       ) || '';
 
@@ -518,14 +529,14 @@ function ActivosPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando hallazgo');
+        alert(json.error || t('assets.createFindingError'));
         return;
       }
 
-      alert('Hallazgo creado correctamente');
+      alert(t('assets.findingCreated'));
     } catch (err) {
       console.error('ERROR CREATE FINDING FROM RISK:', err);
-      alert('Error creando hallazgo');
+      alert(t('assets.createFindingError'));
     } finally {
       setActionLoading('');
     }
@@ -535,20 +546,20 @@ function ActivosPageContent() {
     if (!token || !tenantId) return;
 
     const title = window.prompt(
-      `Título del plan de acción para el riesgo del activo ${asset.name}`,
-      `Acción para riesgo en ${asset.name}`
+      `${t('assets.actionPromptTitle')} ${asset.name}`,
+      `${t('assets.actionDefaultTitle')} ${asset.name}`
     );
 
     if (!title) return;
 
     const description =
       window.prompt(
-        'Descripción del plan de acción',
+        t('assets.actionPromptDescription'),
         `${risk.risk} — Activo: ${asset.name}`
       ) || '';
 
     const owner =
-      window.prompt('Responsable del plan de acción', asset.owner || '') ||
+      window.prompt(t('assets.actionPromptOwner'), asset.owner || '') ||
       asset.owner ||
       '';
 
@@ -583,14 +594,14 @@ function ActivosPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando plan de acción');
+        alert(json.error || t('assets.createActionError'));
         return;
       }
 
-      alert('Plan de acción creado correctamente');
+      alert(t('assets.actionCreated'));
     } catch (err) {
       console.error('ERROR CREATE ACTION FROM RISK:', err);
-      alert('Error creando plan de acción');
+      alert(t('assets.createActionError'));
     } finally {
       setActionLoading('');
     }
@@ -600,7 +611,7 @@ function ActivosPageContent() {
     setFocusedAssetId(asset.id);
     setSelectedAsset(asset);
     setFocusMessage(
-      `Resultado abierto desde búsqueda: activo ${asset.name}${asset.type ? ` (${asset.type})` : ''}`
+      `${t('assets.directOpen')}: ${t('assets.title').toLowerCase()} ${asset.name}${asset.type ? ` (${asset.type})` : ''}`
     );
     focusAppliedRef.current = true;
 
@@ -656,7 +667,7 @@ function ActivosPageContent() {
   if (loadingStandards) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando normas disponibles...</div>
+        <div className="p-6">{t('assets.loadingStandards')}</div>
       </AppLayout>
     );
   }
@@ -665,15 +676,15 @@ function ActivosPageContent() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">Activos</h1>
+          <h1 className="text-2xl font-bold">{t('assets.title')}</h1>
 
           <div className="rounded-[28px] border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
             <h2 className="mb-2 text-lg font-semibold">
-              No hay normas operativas para esta empresa
+              {t('assets.noOperationalStandards')}
             </h2>
 
             <p className="text-sm text-gray-700">
-              Primero debes dejar una norma activa con al menos una operación activa asignada.
+              {t('assets.noOperationalStandardsHelp')}
             </p>
           </div>
         </div>
@@ -684,7 +695,7 @@ function ActivosPageContent() {
   if (loadingAssets) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando activos...</div>
+        <div className="p-6">{t('assets.loading')}</div>
       </AppLayout>
     );
   }
@@ -697,43 +708,42 @@ function ActivosPageContent() {
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                  Inventario y riesgos
+                  {t('assets.eyebrow')}
                 </span>
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  activos · criticidad · riesgos · acciones
+                  {t('assets.badge')}
                 </span>
               </div>
 
               <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                Activos
+                {t('assets.title')}
               </h1>
 
               <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
-                Gestiona los activos del cliente, evalúa sus riesgos y convierte
-                rápidamente un riesgo relevante en hallazgo o plan de acción.
+                {t('assets.subtitle')}
               </p>
             </div>
 
             <div className="grid min-w-[320px] grid-cols-1 gap-3 md:grid-cols-2">
-              <MetricCard title="Activos visibles" value={visibleAssets.length} tone="slate" />
-              <MetricCard title="Criticidad alta" value={highCriticalityCount} tone="red" />
+              <MetricCard title={t('assets.metrics.visibleAssets')} value={visibleAssets.length} tone="slate" />
+              <MetricCard title={t('assets.metrics.highCriticality')} value={highCriticalityCount} tone="red" />
             </div>
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
-            <MetricCard title="Riesgos altos" value={loadingRiskSummary ? '...' : riskTotals.alto} tone="red" />
-            <MetricCard title="Riesgos medios" value={loadingRiskSummary ? '...' : riskTotals.medio} tone="amber" />
-            <MetricCard title="Riesgos bajos" value={loadingRiskSummary ? '...' : riskTotals.bajo} tone="green" />
-            <MetricCard title="Riesgos activo sel." value={selectedAssetRisks.total} tone="blue" />
-            <MetricCard title="Altos sel." value={selectedAssetRisks.alto} tone="red" />
-            <MetricCard title="Medios sel." value={selectedAssetRisks.medio} tone="amber" />
-            <MetricCard title="Bajos sel." value={selectedAssetRisks.bajo} tone="green" />
-            <MetricCard title="Norma visible" value={iso || '-'} tone="slate" />
+            <MetricCard title={t('assets.metrics.highRisks')} value={loadingRiskSummary ? '...' : riskTotals.alto} tone="red" />
+            <MetricCard title={t('assets.metrics.mediumRisks')} value={loadingRiskSummary ? '...' : riskTotals.medio} tone="amber" />
+            <MetricCard title={t('assets.metrics.lowRisks')} value={loadingRiskSummary ? '...' : riskTotals.bajo} tone="green" />
+            <MetricCard title={t('assets.metrics.selectedAssetRisks')} value={selectedAssetRisks.total} tone="blue" />
+            <MetricCard title={t('assets.metrics.selectedHigh')} value={selectedAssetRisks.alto} tone="red" />
+            <MetricCard title={t('assets.metrics.selectedMedium')} value={selectedAssetRisks.medio} tone="amber" />
+            <MetricCard title={t('assets.metrics.selectedLow')} value={selectedAssetRisks.bajo} tone="green" />
+            <MetricCard title={t('assets.metrics.visibleStandard')} value={iso || '-'} tone="slate" />
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_340px]">
             <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <FilterLabel>Norma de contexto</FilterLabel>
+              <FilterLabel>{t('assets.contextStandard')}</FilterLabel>
               <select
                 value={iso}
                 onChange={(e) => {
@@ -745,7 +755,7 @@ function ActivosPageContent() {
                 }}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
               >
-                <option value="">Seleccionar ISO</option>
+                <option value="">{t('assets.selectIso')}</option>
                 {operationalStandards.map((s) => (
                   <option key={s.code} value={s.code}>
                     {s.code} - {s.name}
@@ -756,17 +766,17 @@ function ActivosPageContent() {
 
             <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Activo seleccionado
+                {t('assets.selectedAsset')}
               </div>
               <div className="mt-3 text-sm text-slate-700">
                 {selectedAsset ? (
                   <>
                     <div className="font-semibold text-slate-900">{selectedAsset.name}</div>
-                    <div>{selectedAsset.type || 'Sin tipo'}</div>
-                    <div className="mt-1">Responsable: {selectedAsset.owner || '-'}</div>
+                    <div>{selectedAsset.type || t('assets.noType')}</div>
+                    <div className="mt-1">{t('assets.owner')}: {selectedAsset.owner || '-'}</div>
                   </>
                 ) : (
-                  'Selecciona un activo para ver y gestionar sus riesgos.'
+                  t('assets.selectAssetHelp')
                 )}
               </div>
             </div>
@@ -781,7 +791,7 @@ function ActivosPageContent() {
 
         {focusMessage && (
           <div className="rounded-[24px] border border-indigo-200 bg-indigo-50 px-5 py-4 text-indigo-900 shadow-sm">
-            <div className="font-semibold">Apertura directa desde búsqueda</div>
+            <div className="font-semibold">{t('assets.directOpen')}</div>
             <div className="mt-1 text-sm">{focusMessage}</div>
           </div>
         )}
@@ -791,27 +801,27 @@ function ActivosPageContent() {
             <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
               <div className="mb-5">
                 <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                  Crear activo
+                  {t('assets.createAsset')}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  El activo se relacionará automáticamente con las normas operativas relevantes del cliente.
+                  {t('assets.createAssetHelp')}
                 </p>
               </div>
 
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div className="space-y-4">
-                  <FieldBlock label="Nombre activo">
+                  <FieldBlock label={t('assets.fields.assetName')}>
                     <input
-                      placeholder="Nombre activo"
+                      placeholder={t('assets.placeholders.assetName')}
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
                       className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
                     />
                   </FieldBlock>
 
-                  <FieldBlock label="Tipo">
+                  <FieldBlock label={t('assets.fields.type')}>
                     <input
-                      placeholder="Servidor, proveedor crítico, documento, laboratorio..."
+                      placeholder={t('assets.placeholders.type')}
                       value={form.type}
                       onChange={(e) => setForm({ ...form, type: e.target.value })}
                       className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
@@ -820,22 +830,22 @@ function ActivosPageContent() {
                 </div>
 
                 <div className="space-y-4">
-                  <FieldBlock label="Criticidad">
+                  <FieldBlock label={t('assets.fields.criticality')}>
                     <select
                       value={form.criticality}
                       onChange={(e) => setForm({ ...form, criticality: e.target.value })}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                     >
-                      <option value="">Seleccionar criticidad</option>
-                      <option value="alta">Alta</option>
-                      <option value="media">Media</option>
-                      <option value="baja">Baja</option>
+                      <option value="">{t('assets.selectCriticality')}</option>
+                      <option value="alta">{t('assets.levels.high')}</option>
+                      <option value="media">{t('assets.levels.medium')}</option>
+                      <option value="baja">{t('assets.levels.low')}</option>
                     </select>
                   </FieldBlock>
 
-                  <FieldBlock label="Responsable">
+                  <FieldBlock label={t('assets.fields.owner')}>
                     <input
-                      placeholder="Responsable"
+                      placeholder={t('assets.placeholders.owner')}
                       value={form.owner}
                       onChange={(e) => setForm({ ...form, owner: e.target.value })}
                       className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
@@ -845,7 +855,7 @@ function ActivosPageContent() {
               </div>
 
               <div className="mt-4 rounded-[24px] border border-indigo-100 bg-indigo-50/70 p-4 text-sm text-slate-700">
-                Norma de contexto: <strong>{iso || 'Sin selección'}</strong>
+                {t('assets.contextStandard')}: <strong>{iso || t('assets.notSelected')}</strong>
               </div>
 
               <div className="mt-4">
@@ -853,7 +863,7 @@ function ActivosPageContent() {
                   onClick={save}
                   className="rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
                 >
-                  Guardar activo
+                  {t('assets.saveAsset')}
                 </button>
               </div>
             </section>
@@ -862,10 +872,10 @@ function ActivosPageContent() {
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                    Activos relacionados con {iso || 'la norma'}
+                    {t('assets.relatedAssets')} {iso || t('assets.theStandard')}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Selecciona un activo para revisar y gestionar sus riesgos.
+                    {t('assets.relatedAssetsHelp')}
                   </p>
                 </div>
 
@@ -874,13 +884,13 @@ function ActivosPageContent() {
                   onClick={refreshAll}
                   className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  Refrescar
+                  {t('common.refresh')}
                 </button>
               </div>
 
               {visibleAssets.length === 0 ? (
                 <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                  No hay activos relacionados con esta norma todavía.
+                  {t('assets.noAssetsForStandard')}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -898,14 +908,14 @@ function ActivosPageContent() {
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                              {asset.iso || 'Sin ISO'}
+                              {asset.iso || t('assets.noIso')}
                             </span>
                             <span
                               className={`rounded-full border px-3 py-1 text-xs font-semibold ${criticalityClasses(
                                 asset.criticality
                               )}`}
                             >
-                              Criticidad {asset.criticality || 'baja'}
+                              {t('assets.fields.criticality')} {displayLevel(asset.criticality)}
                             </span>
                           </div>
 
@@ -914,7 +924,7 @@ function ActivosPageContent() {
                           </h3>
 
                           <div className="mt-2 text-sm text-slate-500">
-                            {asset.type || 'Sin tipo'} · Responsable: {asset.owner || '-'}
+                            {asset.type || t('assets.noType')} · {t('assets.owner')}: {asset.owner || '-'}
                           </div>
 
                           <div className="mt-4 flex flex-wrap gap-2">
@@ -935,10 +945,10 @@ function ActivosPageContent() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 xl:min-w-[280px]">
-                          <InfoBox label="Tipo" value={asset.type || '-'} />
-                          <InfoBox label="Responsable" value={asset.owner || '-'} />
-                          <InfoBox label="Criticidad" value={asset.criticality || '-'} />
-                          <InfoBox label="Creado" value={formatDate(asset.created_at)} />
+                          <InfoBox label={t('assets.fields.type')} value={asset.type || '-'} />
+                          <InfoBox label={t('assets.fields.owner')} value={asset.owner || '-'} />
+                          <InfoBox label={t('assets.fields.criticality')} value={asset.criticality ? displayLevel(asset.criticality) : '-'} />
+                          <InfoBox label={t('assets.fields.created')} value={formatDate(asset.created_at)} />
                         </div>
                       </div>
 
@@ -951,7 +961,7 @@ function ActivosPageContent() {
                           }}
                           className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white"
                         >
-                          Ver riesgos
+                          {t('assets.viewRisks')}
                         </button>
                       </div>
                     </article>
@@ -965,16 +975,16 @@ function ActivosPageContent() {
             <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
               <div className="mb-5">
                 <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                  Riesgos del activo
+                  {t('assets.assetRisks')}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Registra riesgos y deriva hallazgos o acciones cuando corresponda.
+                  {t('assets.assetRisksHelp')}
                 </p>
               </div>
 
               {!selectedAsset ? (
                 <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                  Selecciona un activo desde la lista para ver sus riesgos.
+                  {t('assets.selectAssetRisksHelp')}
                 </div>
               ) : (
                 <div className="space-y-5">
@@ -983,40 +993,40 @@ function ActivosPageContent() {
                       {selectedAsset.name}
                     </div>
                     <div className="mt-1 text-sm text-slate-600">
-                      {selectedAsset.type || 'Sin tipo'} · {selectedAsset.owner || 'Sin responsable'}
+                      {selectedAsset.type || t('assets.noType')} · {selectedAsset.owner || t('assets.noOwner')}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-3">
-                    <MetricTiny title="Altos" value={selectedAssetRisks.alto} tone="red" />
-                    <MetricTiny title="Medios" value={selectedAssetRisks.medio} tone="amber" />
-                    <MetricTiny title="Bajos" value={selectedAssetRisks.bajo} tone="green" />
+                    <MetricTiny title={t('assets.levels.highPlural')} value={selectedAssetRisks.alto} tone="red" />
+                    <MetricTiny title={t('assets.levels.mediumPlural')} value={selectedAssetRisks.medio} tone="amber" />
+                    <MetricTiny title={t('assets.levels.lowPlural')} value={selectedAssetRisks.bajo} tone="green" />
                   </div>
 
                   <div className="space-y-3">
-                    <FieldBlock label="Descripción riesgo">
+                    <FieldBlock label={t('assets.fields.riskDescription')}>
                       <input
-                        placeholder="Descripción riesgo"
+                        placeholder={t('assets.placeholders.riskDescription')}
                         value={riskForm.risk}
                         onChange={(e) => setRiskForm({ ...riskForm, risk: e.target.value })}
                         className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
                       />
                     </FieldBlock>
 
-                    <FieldBlock label="Impacto">
+                    <FieldBlock label={t('assets.fields.impact')}>
                       <select
                         value={riskForm.impact}
                         onChange={(e) => setRiskForm({ ...riskForm, impact: e.target.value })}
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                       >
-                        <option value="">Seleccionar impacto</option>
-                        <option value="alto">Alto</option>
-                        <option value="medio">Medio</option>
-                        <option value="bajo">Bajo</option>
+                        <option value="">{t('assets.selectImpact')}</option>
+                        <option value="alto">{t('assets.levels.high')}</option>
+                        <option value="medio">{t('assets.levels.medium')}</option>
+                        <option value="bajo">{t('assets.levels.low')}</option>
                       </select>
                     </FieldBlock>
 
-                    <FieldBlock label="Probabilidad">
+                    <FieldBlock label={t('assets.fields.likelihood')}>
                       <select
                         value={riskForm.probability}
                         onChange={(e) =>
@@ -1024,10 +1034,10 @@ function ActivosPageContent() {
                         }
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                       >
-                        <option value="">Seleccionar probabilidad</option>
-                        <option value="alta">Alta</option>
-                        <option value="media">Media</option>
-                        <option value="baja">Baja</option>
+                        <option value="">{t('assets.selectLikelihood')}</option>
+                        <option value="alta">{t('assets.levels.high')}</option>
+                        <option value="media">{t('assets.levels.medium')}</option>
+                        <option value="baja">{t('assets.levels.low')}</option>
                       </select>
                     </FieldBlock>
 
@@ -1035,15 +1045,15 @@ function ActivosPageContent() {
                       onClick={saveRisk}
                       className="rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700"
                     >
-                      Agregar riesgo
+                      {t('assets.addRisk')}
                     </button>
                   </div>
 
                   {loadingRisks ? (
-                    <div className="text-sm text-slate-500">Cargando riesgos...</div>
+                    <div className="text-sm text-slate-500">{t('assets.loadingRisks')}</div>
                   ) : risks.length === 0 ? (
                     <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                      Este activo aún no tiene riesgos registrados.
+                      {t('assets.noRisks')}
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -1058,13 +1068,13 @@ function ActivosPageContent() {
                                 risk.level
                               )}`}
                             >
-                              {risk.level || 'bajo'}
+                              {risk.level ? displayLevel(risk.level) : t('assets.levels.low')}
                             </span>
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                              Impacto {risk.impact || '-'}
+                              {t('assets.fields.impact')} {risk.impact ? displayLevel(risk.impact) : '-'}
                             </span>
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                              Probabilidad {risk.probability || '-'}
+                              {t('assets.fields.likelihood')} {risk.probability ? displayLevel(risk.probability) : '-'}
                             </span>
                           </div>
 
@@ -1078,7 +1088,7 @@ function ActivosPageContent() {
                               disabled={actionLoading === `finding-${risk.id}`}
                               className="rounded-2xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                             >
-                              {actionLoading === `finding-${risk.id}` ? 'Creando...' : 'Crear hallazgo'}
+                              {actionLoading === `finding-${risk.id}` ? t('assets.creating') : t('assets.createFinding')}
                             </button>
 
                             <button
@@ -1086,7 +1096,7 @@ function ActivosPageContent() {
                               disabled={actionLoading === `action-${risk.id}`}
                               className="rounded-2xl bg-purple-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                             >
-                              {actionLoading === `action-${risk.id}` ? 'Creando...' : 'Crear acción'}
+                              {actionLoading === `action-${risk.id}` ? t('assets.creating') : t('assets.createAction')}
                             </button>
                           </div>
                         </div>
