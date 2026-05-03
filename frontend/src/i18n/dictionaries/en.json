@@ -1007,7 +1007,9 @@
     "noDeterioratedControls": "No deteriorated controls for this company or standard.",
     "noStatus": "No status",
     "noPriority": "No priority",
-    "status": { "blocked": "Blocked" },
+    "status": {
+      "blocked": "Blocked"
+    },
     "priority": {
       "urgent": "Urgent",
       "high": "High",
@@ -1170,6 +1172,15 @@
       "requestMove": "Unable to request the stage change",
       "reviewDenied": "Your role cannot approve or reject stage changes.",
       "reviewRequest": "Unable to review the request"
+    },
+    "stages": {
+      "diagnostico": "Assessment",
+      "diseno_planificacion": "Design & Planning",
+      "implementacion": "Implementation",
+      "verificacion_auditoria": "Verification / Audit",
+      "certificacion": "Certification",
+      "mejora_continua": "Continuous Improvement",
+      "suspendida_fuera_alcance": "Suspended / Out of Scope"
     }
   },
   "dashboardKpi": {
@@ -1265,6 +1276,37 @@
       "activePlans": "{{count}} active plan(s) under follow-up",
       "criticalFindingRegistered": "Critical finding registered",
       "nonCompliantControls": "{{count}} non-compliant control(s)"
+    },
+    "noDescription": "No description available.",
+    "statusColors": {
+      "green": "Green",
+      "yellow": "Yellow",
+      "red": "Red",
+      "gray": "No Data"
+    },
+    "healthLabels": {
+      "saludable": "Healthy",
+      "atencion": "Needs Attention",
+      "deteriorado": "Deteriorated",
+      "sin_datos": "No Data"
+    },
+    "standardKpis": {
+      "KPI-HLT-001": {
+        "name": "Control Health",
+        "description": "Measures the overall health of controls based on current status, evidence, and remediation signals."
+      },
+      "KPI-HLT-002": {
+        "name": "Evidence Coverage",
+        "description": "Measures the percentage of controls with valid evidence linked to the compliance scope."
+      },
+      "KPI-HLT-003": {
+        "name": "Deteriorated Controls",
+        "description": "Tracks controls that require urgent attention due to weak health or missing evidence."
+      },
+      "KPI-HLT-004": {
+        "name": "Control Remediation Progress",
+        "description": "Measures progress on remediation actions associated with control health and compliance gaps."
+      }
     }
   },
   "kpiAdmin": {

@@ -309,6 +309,41 @@ function getHealthRefreshCount(json: any) {
 
 export default function DashboardPage() {
   const { t, locale } = useTranslation();
+
+  function getKpiDisplayName(item: KpiDashboardItem) {
+    const key = `dashboardKpi.standardKpis.${item.code}.name`;
+    const translated = t(key);
+
+    if (translated && translated !== key) {
+      return translated;
+    }
+
+    return item.name;
+  }
+
+  function getKpiDisplayDescription(item: KpiDashboardItem) {
+    const key = `dashboardKpi.standardKpis.${item.code}.description`;
+    const translated = t(key);
+
+    if (translated && translated !== key) {
+      return translated;
+    }
+
+    return item.description || t('dashboardKpi.noDescription');
+  }
+
+  function getStatusColorLabel(color?: string | null) {
+    const normalized = String(color || 'gray').toLowerCase();
+
+    const labels: Record<string, string> = {
+      green: t('dashboardKpi.statusColors.green'),
+      yellow: t('dashboardKpi.statusColors.yellow'),
+      red: t('dashboardKpi.statusColors.red'),
+      gray: t('dashboardKpi.statusColors.gray'),
+    };
+
+    return labels[normalized] || labels.gray;
+  }
   const [activeView, setActiveView] = useState<'executive' | 'kpi'>('executive');
 
   const [controls, setControls] = useState<any[]>([]);

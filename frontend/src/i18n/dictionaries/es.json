@@ -1007,7 +1007,9 @@
     "noDeterioratedControls": "No hay controles deteriorados para esta empresa o norma.",
     "noStatus": "Sin estado",
     "noPriority": "Sin prioridad",
-    "status": { "blocked": "Bloqueado" },
+    "status": {
+      "blocked": "Bloqueado"
+    },
     "priority": {
       "urgent": "Urgente",
       "high": "Alta",
@@ -1170,6 +1172,15 @@
       "requestMove": "No fue posible solicitar el cambio de etapa",
       "reviewDenied": "Tu rol no permite aprobar o rechazar cambios de etapa.",
       "reviewRequest": "No fue posible revisar la solicitud"
+    },
+    "stages": {
+      "diagnostico": "Diagnóstico",
+      "diseno_planificacion": "Diseño y planificación",
+      "implementacion": "Implementación",
+      "verificacion_auditoria": "Verificación / Auditoría",
+      "certificacion": "Certificación",
+      "mejora_continua": "Mejora continua",
+      "suspendida_fuera_alcance": "Suspendida / Fuera de alcance"
     }
   },
   "dashboardKpi": {
@@ -1265,6 +1276,37 @@
       "activePlans": "{{count}} plan(es) activo(s) en seguimiento",
       "criticalFindingRegistered": "Hallazgo crítico registrado",
       "nonCompliantControls": "{{count}} control(es) no conforme(s)"
+    },
+    "noDescription": "Sin descripción disponible.",
+    "statusColors": {
+      "green": "Verde",
+      "yellow": "Amarillo",
+      "red": "Rojo",
+      "gray": "Sin datos"
+    },
+    "healthLabels": {
+      "saludable": "Saludable",
+      "atencion": "Atención",
+      "deteriorado": "Deteriorado",
+      "sin_datos": "Sin datos"
+    },
+    "standardKpis": {
+      "KPI-HLT-001": {
+        "name": "Salud de controles",
+        "description": "Mide la salud general de los controles según estado actual, evidencia y señales de remediación."
+      },
+      "KPI-HLT-002": {
+        "name": "Cobertura de evidencias",
+        "description": "Mide el porcentaje de controles con evidencia válida vinculada al alcance de cumplimiento."
+      },
+      "KPI-HLT-003": {
+        "name": "Controles deteriorados",
+        "description": "Monitorea controles que requieren atención urgente por salud débil o evidencia insuficiente."
+      },
+      "KPI-HLT-004": {
+        "name": "Avance de remediación de controles",
+        "description": "Mide el avance de acciones de remediación asociadas a salud de controles y brechas de cumplimiento."
+      }
     }
   },
   "kpiAdmin": {

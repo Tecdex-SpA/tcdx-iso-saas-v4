@@ -194,10 +194,25 @@ function formatDateTime(value: string | null | undefined) {
   });
 }
 
-function prettifyStage(code: string | null | undefined, stages: StageDef[]) {
-  if (!code) return 'Sin etapa';
-  const found = stages.find((s) => s.code === code);
-  return found?.name || code;
+function prettifyStage(
+  code: string | null | undefined,
+  stages: StageDef[],
+  t?: (key: string, params?: Record<string, any>) => string
+) {
+  if (!code) return t ? t('lifecycle.noStage') : 'Sin etapa';
+
+  const normalizedCode = String(code || '').trim();
+  const translatedKey = `lifecycle.stages.${normalizedCode}`;
+
+  if (t) {
+    const translated = t(translatedKey);
+    if (translated && translated !== translatedKey) {
+      return translated;
+    }
+  }
+
+  const found = stages.find((s) => s.code === normalizedCode);
+  return found?.name || normalizedCode;
 }
 
 function healthClasses(health: string) {
@@ -629,8 +644,8 @@ export default function CicloVidaPage() {
       healthy,
       pending,
       avg,
-      mostLoaded: mostLoaded?.stage_name || 'N/D',
-      weakestStage: weakestByHealth?.stage_name || 'N/D',
+      mostLoaded: mostLoaded?.stage_code || 'N/D',
+      weakestStage: weakestByHealth?.stage_code || 'N/D',
     };
   }, [allCards, filteredBoard]);
 
@@ -733,7 +748,7 @@ export default function CicloVidaPage() {
       await refreshBoard();
       setSuccessMessage(
         t('lifecycle.moveSubmitted', {
-          stage: prettifyStage(stageCode, filteredBoard?.stages || []),
+          stage: prettifyStage(stageCode, filteredBoard?.stages || [], t),
         })
       );
       setRequestReason('');
@@ -999,7 +1014,7 @@ export default function CicloVidaPage() {
                       {t('lifecycle.mostLoadedStage')}
                     </label>
                     <div className="rounded-2xl bg-slate-100 px-3 py-3 text-sm font-medium text-slate-700">
-                      {summary.mostLoaded}
+                      {summary.mostLoaded === 'N/D' ? 'N/D' : prettifyStage(summary.mostLoaded, filteredBoard?.stages || [], t)}
                     </div>
                   </div>
 
@@ -1020,7 +1035,7 @@ export default function CicloVidaPage() {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <InsightCard
                     title={t('lifecycle.weakestStage')}
-                    value={summary.weakestStage}
+                    value={summary.weakestStage === 'N/D' ? 'N/D' : prettifyStage(summary.weakestStage, filteredBoard?.stages || [], t)}
                     subtitle={t('lifecycle.lowestHealthAverage')}
                   />
                   <InsightCard
@@ -1222,7 +1237,7 @@ export default function CicloVidaPage() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <h2 className="text-sm font-bold">{column.stage_name}</h2>
+                            <h2 className="text-sm font-bold">{prettifyStage(column.stage_code, filteredBoard?.stages || [], t)}</h2>
                             <p className="mt-1 text-xs opacity-80">
                               {t('lifecycle.cardsCount', { count: column.items.length })}
                             </p>
