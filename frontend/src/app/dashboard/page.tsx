@@ -391,6 +391,20 @@ function formatKpiValue(value: number | string | null | undefined, unit?: string
 }
 
 export default function DashboardPage() {
+  function getKpiCategoryLabel(category?: string | null) {
+    const normalized = String(category || 'otros').toLowerCase();
+    const key = `dashboardKpi.categories.${normalized}`;
+    const translated = t(key);
+    return translated && translated !== key ? translated : normalized;
+  }
+
+  function getKpiStatusBadgeLabel(color?: string | null) {
+    const normalized = String(color || 'gray').toLowerCase();
+    const key = `dashboardKpi.statusBadge.${normalized}`;
+    const translated = t(key);
+    return translated && translated !== key ? translated : normalized;
+  }
+
   const { locale, t } = useTranslation();
   const [activeView, setActiveView] = useState<'executive' | 'kpi'>('executive');
 
@@ -1139,7 +1153,7 @@ export default function DashboardPage() {
                               <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={complianceTrend}>
                                   <CartesianGrid vertical={false} stroke="#eef2f7" />
-                                  <XAxis dataKey="name" hide />
+                                  <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} hide />
                                   <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
                                   <Tooltip />
                                   <Line
@@ -1242,7 +1256,7 @@ export default function DashboardPage() {
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={upcomingAuditBars}>
                               <CartesianGrid vertical={false} stroke="#e5e7eb" />
-                              <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                              <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} tickLine={false} axisLine={false} />
                               <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
                               <Tooltip content={<UpcomingAuditsTooltip />} />
                               <Bar dataKey="value" radius={[10, 10, 0, 0]}>
@@ -1412,7 +1426,7 @@ export default function DashboardPage() {
                     value={`${scoreKpiGlobal}%`}
                     subtitle={t('dashboard.kpiGlobalScoreSubtitle')}
                     accent="green"
-                    change={`${kpiSummary?.green || 0} verdes`}
+                    change={t('dashboardKpi.greenPlural', { count: kpiSummary?.green || 0 })}
                     changeHint={t('dashboard.currentState')}
                     icon={<TcdxIcon name="kpi" className="h-6 w-6" />}
                   />
@@ -1452,7 +1466,7 @@ export default function DashboardPage() {
                     value={kpiItems.filter((item) => item.is_enabled).length}
                     subtitle={t('dashboard.enabledKpisSubtitle')}
                     accent="violet"
-                    change={`${kpiItems.filter((item) => item.kpi_type === 'manual').length} manuales`}
+                    change={t('dashboardKpi.manualPlural', { count: kpiItems.filter((item) => item.kpi_type === 'manual').length })}
                     changeHint={t('dashboard.captureType')}
                     icon={<TcdxIcon name="puzzle" className="h-6 w-6" />}
                   />
@@ -1606,7 +1620,7 @@ export default function DashboardPage() {
                           href="/administrar-kpis"
                           className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                         >
-                          <span>Gestionar</span>
+                          <span>{t('dashboardKpi.manage')}</span>
                           <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                         </a>
                       </div>
@@ -1615,7 +1629,7 @@ export default function DashboardPage() {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={kpiCategoryData}>
                             <CartesianGrid vertical={false} stroke="#e5e7eb" />
-                            <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                            <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} tickLine={false} axisLine={false} />
                             <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
                             <Tooltip />
                             <Bar

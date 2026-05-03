@@ -1238,7 +1238,7 @@
     "activeStandards": "Active Standards",
     "globalRisk": "Global Risk",
     "riskPercent": "Risk %",
-    "kpiViewSubtitle": "Unified KPIs across ISO standards, with traffic-light status and historical follow-up.",
+    "kpiViewSubtitle": "Real system KPIs, calculated snapshots, traffic-light status, Health, and standard-level follow-up.",
     "systemHealth": "Overall system health",
     "greenCount": "{{count}} green",
     "requireAction": "Require action",
@@ -1364,7 +1364,22 @@
     "healthEngineTitle": "Health KPIs connected to the health engine",
     "healthEngineSubtitle": "Real snapshots from the Health engine: overall health, evidence coverage, and control deterioration.",
     "noHealthKpis": "No Health KPIs are available yet. Run “Recalculate KPIs” to generate current snapshots.",
-    "pendingNoData": "{{count}} no data"
+    "pendingNoData": "{{count}} no data",
+    "kpiViewTitle": "KPI View",
+    "viewHealth": "View Health",
+    "administerKpis": "Administer KPIs",
+    "greenPlural": "{{count}} green",
+    "noDataPlural": "{{count}} no data",
+    "manualPlural": "{{count}} manual",
+    "viewHealthDetail": "View Health detail",
+    "periodRange": "Period: {{start}} - {{end}}",
+    "noDate": "No date",
+    "statusBadge": {
+      "green": "Green",
+      "yellow": "Yellow",
+      "red": "Red",
+      "gray": "No Data"
+    }
   },
   "kpiAdmin": {
     "title": "KPI Administration",

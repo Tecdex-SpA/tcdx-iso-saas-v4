@@ -1238,7 +1238,7 @@
     "activeStandards": "Normas activas",
     "globalRisk": "Riesgo global",
     "riskPercent": "% Riesgo",
-    "kpiViewSubtitle": "KPIs unificados, transversales a normas ISO, con semáforos y seguimiento histórico.",
+    "kpiViewSubtitle": "KPIs reales del sistema, snapshots calculados, semáforos, Health y seguimiento por norma.",
     "systemHealth": "Salud general del sistema",
     "greenCount": "{{count}} en verde",
     "requireAction": "Requieren acción",
@@ -1281,10 +1281,10 @@
     },
     "noDescription": "Sin descripción disponible.",
     "statusColors": {
-      "green": "En Verde",
-      "yellow": "En Amarillo",
-      "red": "En Rojo",
-      "gray": "Sin Dato"
+      "green": "Green",
+      "yellow": "Yellow",
+      "red": "Red",
+      "gray": "Sin dato"
     },
     "healthLabels": {
       "saludable": "Saludable",
@@ -1364,7 +1364,22 @@
     "healthEngineTitle": "KPIs Health conectados al motor de salud",
     "healthEngineSubtitle": "Datos reales de snapshots del motor Health: salud general, cobertura de evidencias y deterioro de controles.",
     "noHealthKpis": "Aún no hay KPIs Health disponibles. Ejecuta “Recalcular KPIs” para generar snapshots actuales.",
-    "pendingNoData": "{{count}} sin dato"
+    "pendingNoData": "{{count}} sin dato",
+    "kpiViewTitle": "KPI View",
+    "viewHealth": "Ver Health",
+    "administerKpis": "Administrar KPIs",
+    "greenPlural": "{{count}} verdes",
+    "noDataPlural": "{{count}} no data",
+    "manualPlural": "{{count}} manuales",
+    "viewHealthDetail": "Ver detalle Health",
+    "periodRange": "Periodo: {{start}} - {{end}}",
+    "noDate": "Sin fecha",
+    "statusBadge": {
+      "green": "Verde",
+      "yellow": "Amarillo",
+      "red": "Rojo",
+      "gray": "Sin dato"
+    }
   },
   "kpiAdmin": {
     "title": "Administrar KPIs",
