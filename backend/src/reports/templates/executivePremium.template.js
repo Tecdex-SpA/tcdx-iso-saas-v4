@@ -846,7 +846,7 @@ function renderEvidencePages(data) {
     return `
       <div class="pageTitleBlock">
         <span>${escapeHtml(tr('evidence.kicker'))}</span>
-        <h2>Evidencias recientes con contexto útil${index > 0 ? ' (continuación)' : ''}</h2>
+        <h2>${escapeHtml(tr('evidence.title'))}${index > 0 ? ' (continuación)' : ''}</h2>
         <p>${escapeHtml(tr('evidence.subtitle'))}</p>
       </div>
 
@@ -940,7 +940,7 @@ function renderLifecyclePages(data) {
     return `
       <div class="pageTitleBlock">
         <span>${escapeHtml(tr('lifecycle.kicker'))}</span>
-        <h2>Historial de Ciclo de Vida${index > 0 ? ' (continuación)' : ''}</h2>
+        <h2>${escapeHtml(tr('lifecycle.title'))}${index > 0 ? ' (continuación)' : ''}</h2>
         <p>${escapeHtml(tr('lifecycle.subtitle'))}</p>
       </div>
 
