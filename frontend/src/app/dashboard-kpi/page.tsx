@@ -332,6 +332,27 @@ export default function DashboardPage() {
     return item.description || t('dashboardKpi.noDescription');
   }
 
+  function getKpiCategoryLabel(category?: string | null) {
+    const normalized = String(category || 'otros').toLowerCase();
+    const key = `dashboardKpi.categories.${normalized}`;
+    const translated = t(key);
+    return translated && translated !== key ? translated : normalized;
+  }
+
+  function getKpiTypeLabel(type?: string | null) {
+    const normalized = String(type || '').toLowerCase();
+    const key = `dashboardKpi.types.${normalized}`;
+    const translated = t(key);
+    return translated && translated !== key ? translated : normalized;
+  }
+
+  function getKpiDirectionLabel(direction?: string | null) {
+    const normalized = String(direction || '').toLowerCase();
+    const key = `dashboardKpi.directions.${normalized}`;
+    const translated = t(key);
+    return translated && translated !== key ? translated : normalized;
+  }
+
   function getStatusColorLabel(color?: string | null) {
     const normalized = String(color || 'gray').toLowerCase();
 
@@ -1489,9 +1510,9 @@ export default function DashboardPage() {
 }
 
 function getKpiStatusLabel(color: string | null | undefined, t: TFunction) {
-  if (color === 'green') return t('statuses.kpis.verde');
-  if (color === 'yellow') return t('statuses.kpis.amarillo');
-  if (color === 'red') return t('statuses.kpis.rojo');
+  if (color === 'green') return t('dashboardKpi.statusColors.green');
+  if (color === 'yellow') return t('dashboardKpi.statusColors.yellow');
+  if (color === 'red') return t('dashboardKpi.statusColors.red');
   return t('common.noData');
 }
 

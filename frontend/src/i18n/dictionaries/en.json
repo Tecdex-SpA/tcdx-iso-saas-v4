@@ -1181,7 +1181,9 @@
       "certificacion": "Certification",
       "mejora_continua": "Continuous Improvement",
       "suspendida_fuera_alcance": "Suspended / Out of Scope"
-    }
+    },
+    "hideSidePanel": "Hide panel",
+    "showSidePanel": "Show panel"
   },
   "dashboardKpi": {
     "executiveDashboard": "Executive Dashboard",
@@ -1291,21 +1293,37 @@
       "sin_datos": "No Data"
     },
     "standardKpis": {
+      "KPI-01": {
+        "name": "Objective Achievement",
+        "description": "Measures the percentage of completed objectives against the defined total."
+      },
+      "KPI-02": {
+        "name": "Nonconformity Index",
+        "description": "Measures the density of nonconformities across processes or audits."
+      },
+      "KPI-04": {
+        "name": "Total Incidents",
+        "description": "Tracks the total number of incidents recorded in the period."
+      },
+      "KPI-14": {
+        "name": "Customer Satisfaction",
+        "description": "Measures the customer satisfaction level against the defined target."
+      },
       "KPI-HLT-001": {
-        "name": "Control Health",
-        "description": "Measures the overall health of controls based on current status, evidence, and remediation signals."
+        "name": "Overall Health",
+        "description": "Measures the overall health of the ISO compliance system."
       },
       "KPI-HLT-002": {
+        "name": "Control Health",
+        "description": "Measures the health level of active controls based on status, score, and evidence."
+      },
+      "KPI-HLT-003": {
         "name": "Evidence Coverage",
         "description": "Measures the percentage of controls with valid evidence linked to the compliance scope."
       },
-      "KPI-HLT-003": {
-        "name": "Deteriorated Controls",
-        "description": "Tracks controls that require urgent attention due to weak health or missing evidence."
-      },
       "KPI-HLT-004": {
-        "name": "Control Remediation Progress",
-        "description": "Measures progress on remediation actions associated with control health and compliance gaps."
+        "name": "Deteriorated Controls",
+        "description": "Tracks controls that require attention due to deterioration or weak evidence coverage."
       }
     },
     "healthEngine": {
@@ -1323,6 +1341,23 @@
       "yellow": "Monitoring required",
       "red": "Recommended action",
       "gray": "Input or calculation pending"
+    },
+    "allKpisTitle": "All KPIs",
+    "categories": {
+      "estrategico": "Strategic",
+      "cumplimiento": "Compliance",
+      "riesgo": "Risk",
+      "cliente": "Client",
+      "otros": "Other"
+    },
+    "directions": {
+      "higher_is_better": "Higher is better",
+      "lower_is_better": "Lower is better"
+    },
+    "types": {
+      "automatico": "Automatic",
+      "manual": "Manual",
+      "hibrido": "Hybrid"
     }
   },
   "kpiAdmin": {

@@ -1181,7 +1181,9 @@
       "certificacion": "Certificación",
       "mejora_continua": "Mejora continua",
       "suspendida_fuera_alcance": "Suspendida / Fuera de alcance"
-    }
+    },
+    "hideSidePanel": "Ocultar panel",
+    "showSidePanel": "Mostrar panel"
   },
   "dashboardKpi": {
     "executiveDashboard": "Dashboard Ejecutivo",
@@ -1279,10 +1281,10 @@
     },
     "noDescription": "Sin descripción disponible.",
     "statusColors": {
-      "green": "Verde",
-      "yellow": "Amarillo",
-      "red": "Rojo",
-      "gray": "Sin datos"
+      "green": "En Verde",
+      "yellow": "En Amarillo",
+      "red": "En Rojo",
+      "gray": "Sin Dato"
     },
     "healthLabels": {
       "saludable": "Saludable",
@@ -1291,21 +1293,37 @@
       "sin_datos": "Sin datos"
     },
     "standardKpis": {
+      "KPI-01": {
+        "name": "Cumplimiento de Objetivos",
+        "description": "Mide el porcentaje de objetivos cumplidos respecto del total definido."
+      },
+      "KPI-02": {
+        "name": "Índice de No Conformidades",
+        "description": "Mide la densidad de no conformidades sobre procesos o auditorías."
+      },
+      "KPI-04": {
+        "name": "Incidentes Totales",
+        "description": "Monitorea el número total de incidentes registrados en el periodo."
+      },
+      "KPI-14": {
+        "name": "Satisfacción del Cliente",
+        "description": "Mide el nivel de satisfacción del cliente respecto del objetivo definido."
+      },
       "KPI-HLT-001": {
-        "name": "Salud de controles",
-        "description": "Mide la salud general de los controles según estado actual, evidencia y señales de remediación."
+        "name": "Salud General",
+        "description": "Mide la salud general del sistema de cumplimiento ISO."
       },
       "KPI-HLT-002": {
-        "name": "Cobertura de evidencias",
-        "description": "Mide el porcentaje de controles con evidencia válida vinculada al alcance de cumplimiento."
+        "name": "Salud de Controles",
+        "description": "Mide el nivel de salud de los controles activos según estado, puntaje y evidencia."
       },
       "KPI-HLT-003": {
-        "name": "Controles deteriorados",
-        "description": "Monitorea controles que requieren atención urgente por salud débil o evidencia insuficiente."
+        "name": "Cobertura de Evidencias",
+        "description": "Mide el porcentaje de controles con evidencia válida vinculada al alcance de cumplimiento."
       },
       "KPI-HLT-004": {
-        "name": "Avance de remediación de controles",
-        "description": "Mide el avance de acciones de remediación asociadas a salud de controles y brechas de cumplimiento."
+        "name": "Controles Deteriorados",
+        "description": "Monitorea controles que requieren atención por deterioro o baja cobertura de evidencia."
       }
     },
     "healthEngine": {
@@ -1323,6 +1341,23 @@
       "yellow": "Monitoreo requerido",
       "red": "Acción recomendada",
       "gray": "Carga o cálculo pendiente"
+    },
+    "allKpisTitle": "Todos los KPIs",
+    "categories": {
+      "estrategico": "estratégico",
+      "cumplimiento": "cumplimiento",
+      "riesgo": "riesgo",
+      "cliente": "cliente",
+      "otros": "otros"
+    },
+    "directions": {
+      "higher_is_better": "higher_is_better",
+      "lower_is_better": "lower_is_better"
+    },
+    "types": {
+      "automatico": "automático",
+      "manual": "manual",
+      "hibrido": "híbrido"
     }
   },
   "kpiAdmin": {
@@ -1493,10 +1528,10 @@
       "cancelada": "Cancelada"
     },
     "kpis": {
-      "verde": "Verde",
-      "amarillo": "Amarillo",
-      "rojo": "Rojo",
-      "sin_datos": "Sin datos"
+      "verde": "En Verde",
+      "amarillo": "En Amarillo",
+      "rojo": "En Rojo",
+      "sin_datos": "Sin Dato"
     },
     "reports": {
       "completed": "Generado",
