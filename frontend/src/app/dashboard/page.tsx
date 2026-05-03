@@ -10,6 +10,7 @@ import {
 import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   PieChart,
   Pie,
@@ -390,6 +391,7 @@ function formatKpiValue(value: number | string | null | undefined, unit?: string
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const [activeView, setActiveView] = useState<'executive' | 'kpi'>('executive');
 
   const currentRole = getUserRoleFromToken();
@@ -913,10 +915,10 @@ export default function DashboardPage() {
           <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-[2rem] font-bold tracking-tight text-[#06173a]">
-                Bienvenido a TCDX
+                {t('dashboard.title')}
               </h1>
               <p className="mt-1 text-sm text-slate-500">
-                Vista general de cumplimiento y gestión ISO.
+                {t('dashboard.subtitle')}
               </p>
             </div>
 
@@ -932,7 +934,7 @@ export default function DashboardPage() {
                       : 'text-slate-600 hover:bg-slate-100',
                   ].join(' ')}
                 >
-                  Vista Ejecutiva
+                  {t('dashboard.executiveView')}
                 </button>
 
                 <button
@@ -945,7 +947,7 @@ export default function DashboardPage() {
                       : 'text-slate-600 hover:bg-slate-100',
                   ].join(' ')}
                 >
-                  Vista KPI
+                  {t('dashboard.kpiView')}
                 </button>
               </div>
 
@@ -961,7 +963,7 @@ export default function DashboardPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
               >
                 <TcdxIcon name="refresh" className="h-4 w-4" />
-                {refreshingExecutive ? 'Actualizando...' : 'Actualizar'}
+                {refreshingExecutive ? t('common.refreshing') : t('common.refresh')}
               </button>
             </div>
           </section>
@@ -976,23 +978,22 @@ export default function DashboardPage() {
             <>
               {loading && (
                 <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                  Cargando datos...
+                  {t('dashboard.loadingData')}
                 </div>
               )}
 
               {!loading && controls.length === 0 && !dashboardHasSummaryData && (
                 <div className="rounded-[30px] border border-amber-200 bg-[linear-gradient(135deg,#fffdf5_0%,#fdf8e8_100%)] p-8 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                   <h2 className="mb-3 text-3xl font-bold text-slate-900">
-                    Controles inicializados pendientes de evaluación
+                    {t('dashboard.initialControlsTitle')}
                   </h2>
 
                   <p className="mb-4 text-lg text-slate-600">
-                    Esta empresa aún no tiene controles cargados o vigentes en el
-                    dashboard.
+                    {t('dashboard.initialControlsSubtitle')}
                   </p>
 
                   <div className="text-base text-slate-500">
-                    Próximo paso: evaluar controles, cargar evidencias y registrar avances para que el dashboard refleje cumplimiento real.
+                    {t('dashboard.initialControlsNext')}
                   </div>
                 </div>
               )}
@@ -1001,43 +1002,43 @@ export default function DashboardPage() {
                 <>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
                     <TopCard
-                      title="Cumplimiento global"
+                      title={t('dashboard.globalCompliance')}
                       value={`${complianceValue}%`}
-                      subtitle="Estado global actual"
+                      subtitle={t('dashboard.globalComplianceSubtitle')}
                       accent="indigo"
                       change={`↑ ${Math.max(1, Math.round(complianceValue * 0.03))}%`}
-                      changeHint="vs. medición previa"
+                      changeHint={t('dashboard.previousMeasurement')}
                       icon={<TcdxIcon name="shield" className="h-6 w-6" />}
                       ringValue={complianceValue}
                     />
 
                     <TopCard
-                      title="Controles saludables"
+                      title={t('dashboard.healthyControls')}
                       value={`${cumple} / ${totalControls || 0}`}
-                      subtitle="Controles cumplidos"
+                      subtitle={t('dashboard.healthyControlsSubtitle')}
                       accent="indigo"
                       change={`${completionPct}% del total`}
-                      changeHint="según evaluación actual"
+                      changeHint={t('dashboard.currentAssessment')}
                       icon={<TcdxIcon name="activity" className="h-6 w-6" />}
                     />
 
                     <TopCard
-                      title="Riesgos críticos"
+                      title={t('dashboard.criticalRisks')}
                       value={highRisks}
-                      subtitle="Nivel alto registrado"
+                      subtitle={t('dashboard.criticalRisksSubtitle')}
                       accent="red"
                       change={`${mediumRisks} medios`}
-                      changeHint="panorama actual"
+                      changeHint={t('dashboard.currentOverview')}
                       icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                     />
 
                     <TopCard
-                      title="Planes de acción"
+                      title={t('dashboard.actionPlans')}
                       value={activeActionPlans}
-                      subtitle="Acciones en seguimiento"
+                      subtitle={t('dashboard.actionPlansSubtitle')}
                       accent="green"
                       change={`${overdueActionPlans} atrasados`}
-                      changeHint="foco operativo"
+                      changeHint={t('dashboard.operationalFocus')}
                       icon={<TcdxIcon name="plan" className="h-6 w-6" />}
                     />
 
@@ -1371,7 +1372,7 @@ export default function DashboardPage() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-                      Vista KPI
+                      {t('dashboard.kpiView')}
                     </h2>
                     <p className="mt-1 text-slate-500">
                       KPIs reales del sistema, snapshots calculados, semáforos, Health y
@@ -1407,62 +1408,62 @@ export default function DashboardPage() {
 
                 <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-6">
                   <TopCard
-                    title="Score KPI Global"
+                    title={t('dashboard.kpiGlobalScore')}
                     value={`${scoreKpiGlobal}%`}
-                    subtitle="Ponderación de semáforos KPI"
+                    subtitle={t('dashboard.kpiGlobalScoreSubtitle')}
                     accent="green"
                     change={`${kpiSummary?.green || 0} verdes`}
-                    changeHint="estado actual"
+                    changeHint={t('dashboard.currentState')}
                     icon={<TcdxIcon name="kpi" className="h-6 w-6" />}
                   />
 
                   <TopCard
-                    title="Cobertura KPI"
+                    title={t('dashboard.kpiCoverage')}
                     value={`${kpiCoveragePct}%`}
                     subtitle={`${measuredKpis}/${totalKpis} KPIs medidos`}
                     accent={kpiCoverageTone}
                     change={`${pendingKpis} sin dato`}
-                    changeHint="madurez de datos"
+                    changeHint={t('dashboard.kpiCoverageHint')}
                     icon={<TcdxIcon name="trend" className="h-6 w-6" />}
                   />
 
                   <TopCard
-                    title="KPIs Críticos"
+                    title={t('dashboard.criticalKpis')}
                     value={kpiSummary?.red || 0}
-                    subtitle="Necesitan acción"
+                    subtitle={t('dashboard.criticalKpisSubtitle')}
                     accent="red"
                     change="ALERTA"
-                    changeHint="impacto alto"
+                    changeHint={t('dashboard.highImpact')}
                     icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                   />
 
                   <TopCard
-                    title="Sin Datos"
+                    title={t('dashboard.noDataKpis')}
                     value={kpiSummary?.gray || 0}
-                    subtitle="Pendientes de carga o cálculo"
+                    subtitle={t('dashboard.noDataKpisSubtitle')}
                     accent="amber"
                     change="INPUT"
-                    changeHint="carga requerida"
+                    changeHint={t('dashboard.requiredInput')}
                     icon={<TcdxIcon name="hourglass" className="h-6 w-6" />}
                   />
 
                   <TopCard
-                    title="KPIs Habilitados"
+                    title={t('dashboard.enabledKpis')}
                     value={kpiItems.filter((item) => item.is_enabled).length}
-                    subtitle="Activos para el tenant"
+                    subtitle={t('dashboard.enabledKpisSubtitle')}
                     accent="violet"
                     change={`${kpiItems.filter((item) => item.kpi_type === 'manual').length} manuales`}
-                    changeHint="tipo de captura"
+                    changeHint={t('dashboard.captureType')}
                     icon={<TcdxIcon name="puzzle" className="h-6 w-6" />}
                   />
 
                   <TopCard
-                    title="KPIs Health"
+                    title={t('dashboard.healthKpis')}
                     value={kpiSummary?.health_kpis || healthKpiItems.length}
-                    subtitle="Conectados a salud de controles"
+                    subtitle={t('dashboard.healthKpisSubtitle')}
                     accent="indigo"
                     change={formatKpiValue(healthMainKpi?.latest_snapshot?.value as any, '%')}
-                    changeHint="salud general"
+                    changeHint={t('dashboard.generalHealth')}
                     icon={<TcdxIcon name="heart" className="h-6 w-6" />}
                   />
                 </div>
@@ -1504,17 +1505,17 @@ export default function DashboardPage() {
                     ) : (
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <HealthKpiMiniCard
-                          title="Salud General"
+                          title={t('dashboard.healthGeneral')}
                           item={healthMainKpi}
                           fallback="KPI-HLT-001"
                         />
                         <HealthKpiMiniCard
-                          title="Cobertura de Evidencias"
+                          title={t('dashboard.evidenceCoverage')}
                           item={healthCoverageKpi}
                           fallback="KPI-HLT-003"
                         />
                         <HealthKpiMiniCard
-                          title="Controles Deteriorados"
+                          title={t('dashboard.deterioratedControls')}
                           item={healthDeterioratedKpi}
                           fallback="KPI-HLT-004"
                         />
@@ -1860,6 +1861,8 @@ function PanelHeader({
   title: string;
   href?: string;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="mb-5 flex items-center justify-between gap-4">
       <div className="flex items-center gap-2">
@@ -1874,7 +1877,7 @@ function PanelHeader({
           href={href}
           className="inline-flex items-center gap-1 text-xs font-bold text-[#2563eb] transition hover:text-[#1d4ed8]"
         >
-          <span>Ver todas</span>
+          <span>{t('common.view')}</span>
           <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
         </a>
       )}
@@ -1887,28 +1890,30 @@ function StandardHealthPanel({
 }: {
   rows: Array<{ iso: string; total: number; ok: number; partial: number; critical: number; percent: number }>;
 }) {
+  const { t } = useTranslation();
+
   return (
     <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title="Salud de controles por norma ISO" href="/controles" />
+      <PanelHeader title={t('dashboard.controlHealthByStandard')} href="/controles" />
 
       <div className="mb-5 flex flex-wrap gap-5 text-xs font-semibold text-slate-600">
         <span className="inline-flex items-center gap-2">
           <span className="h-3 w-3 rounded-sm bg-[#2563eb]" />
-          Saludables
+          {t('statuses.controls.saludable')}
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="h-3 w-3 rounded-sm bg-[#93c5fd]" />
-          Parciales
+          {t('statuses.controls.parcial')}
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="h-3 w-3 rounded-sm bg-[#f97316]" />
-          No conformes
+          {t('sidebar.nonconformities')}
         </span>
       </div>
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-          No hay normas con datos aún.
+          {t('common.emptyState')}
         </div>
       ) : (
         <div className="space-y-5">
@@ -1943,13 +1948,15 @@ function AuditTimelinePanel({
 }: {
   items: Array<{ id: string; title: string; subtitle: string; date: string; status: string }>;
 }) {
+  const { t } = useTranslation();
+
   return (
     <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title="Estado de auditorías" href="/auditorias" />
+      <PanelHeader title={t('dashboard.auditStatus')} href="/auditorias" />
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-          No hay auditorías próximas registradas.
+          {t('common.emptyState')}
         </div>
       ) : (
         <div className="relative space-y-5">
@@ -1989,13 +1996,15 @@ function AuditTimelinePanel({
 }
 
 function ActionPlansPanel({ items }: { items: ActionPlanItem[] }) {
+  const { t } = useTranslation();
+
   return (
     <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title="Planes de acción" href="/plan-accion" />
+      <PanelHeader title={t('dashboard.actionPlans')} href="/plan-accion" />
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-          No hay planes activos registrados.
+          {t('common.emptyState')}
         </div>
       ) : (
         <div className="space-y-4">
@@ -2013,10 +2022,10 @@ function ActionPlansPanel({ items }: { items: ActionPlanItem[] }) {
               <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_48px] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_48px_130px] sm:gap-4">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-[#06173a]">
-                    {item.title || 'Plan sin título'}
+                    {item.title || t('dashboard.actionPlans')}
                   </div>
                   <div className="truncate text-xs text-slate-500">
-                    {item.iso_code || 'Sin ISO'} · {item.owner || 'Sin responsable'}
+                    {item.iso_code || 'Sin ISO'} · {item.owner || t('common.notSelected')}
                   </div>
                 </div>
                 <div className="text-right text-sm font-bold text-[#2563eb]">{progress}%</div>
@@ -2037,20 +2046,22 @@ function PriorityRiskPanel({
 }: {
   rows: Array<{ id: string; risk: string; norm: string; level: string }>;
 }) {
+  const { t } = useTranslation();
+
   return (
     <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title="Riesgos prioritarios" href="/matriz-riesgo" />
+      <PanelHeader title={t('dashboard.priorityRisks')} href="/matriz-riesgo" />
 
       <div className="overflow-hidden">
         <div className="hidden grid-cols-[minmax(0,1fr)_78px_82px_28px] border-b border-slate-100 pb-2 text-xs font-bold text-slate-400 sm:grid">
-          <span>Riesgo</span>
-          <span>Norma</span>
-          <span>Nivel</span>
+          <span>{t('dashboard.risk')}</span>
+          <span>{t('dashboard.standard')}</span>
+          <span>{t('dashboard.level')}</span>
           <span />
         </div>
         <div className="divide-y divide-slate-100">
           {rows.length === 0 ? (
-            <div className="py-6 text-sm text-slate-500">No hay riesgos prioritarios.</div>
+            <div className="py-6 text-sm text-slate-500">{t('dashboard.noPriorityRisks')}</div>
           ) : (
             rows.map((row) => (
               <div
@@ -2150,16 +2161,18 @@ function ExecutiveReportPanel({
   period: string;
   complianceValue: number;
 }) {
+  const { t } = useTranslation();
+
   return (
     <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title="Exporte Ejecutivo" href="/exportes" />
+      <PanelHeader title={t('dashboard.executiveReport')} href="/exportes" />
 
       <div className="grid gap-5 md:grid-cols-[150px_minmax(0,1fr)]">
         <div className="overflow-hidden rounded-sm border border-slate-200 bg-white shadow-sm">
           <div className="bg-white p-4">
             <div className="text-xl font-black text-[#2563eb]">TCDX</div>
-            <div className="text-[10px] font-bold uppercase text-[#06173a]">Reporte ejecutivo</div>
-            <div className="mt-1 text-[8px] text-slate-400">Cumplimiento y Gestión ISO</div>
+            <div className="text-[10px] font-bold uppercase text-[#06173a]">{t('dashboard.reportTitle')}</div>
+            <div className="mt-1 text-[8px] text-slate-400">{t('dashboard.reportSubtitle')}</div>
           </div>
           <div className="h-24 bg-[linear-gradient(150deg,#ffffff_0%,#dbeafe_38%,#2563eb_39%,#06173a_78%)]" />
           <div className="bg-[#06173a] px-4 py-3 text-[9px] font-semibold text-white/70">
@@ -2169,10 +2182,10 @@ function ExecutiveReportPanel({
 
         <div>
           <h3 className="text-lg font-bold text-[#06173a]">
-            Reporte Ejecutivo ISO
+            {t('dashboard.reportTitle')} ISO
           </h3>
           <p className="mt-1 text-sm text-slate-500">
-            Resumen ejecutivo de cumplimiento, riesgos, auditorías y planes de acción.
+            {t('exports.categoryDescriptions.executive')}
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -2186,11 +2199,11 @@ function ExecutiveReportPanel({
             className="mt-5 inline-flex items-center gap-2 rounded-lg border border-[#dce4ef] bg-white px-4 py-3 text-sm font-bold text-[#06173a] shadow-sm transition hover:bg-slate-50"
           >
             <TcdxIcon name="export" className="h-4 w-4 text-[#2563eb]" />
-            Descargar reporte
+            {t('dashboard.downloadReport')}
           </a>
 
           <div className="mt-4 text-xs font-semibold text-slate-500">
-            Cumplimiento actual: {complianceValue}%
+            {t('dashboard.globalCompliance')}: {complianceValue}%
           </div>
         </div>
       </div>

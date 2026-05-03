@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserRoleFromToken } from '@/utils/auth';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -41,10 +42,10 @@ type ReportExport = {
   generated_at: string;
 };
 
-function getDefaultPeriod() {
+function getDefaultPeriod(locale = 'es') {
   const now = new Date();
 
-  const month = new Intl.DateTimeFormat('es-CL', {
+  const month = new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'es-CL', {
     month: 'long',
   }).format(now);
 
@@ -61,10 +62,10 @@ function getAbsoluteFileUrl(fileUrl: string) {
   return `${API_URL}${fileUrl}`;
 }
 
-function formatDate(value?: string) {
+function formatDate(value?: string, locale = 'es') {
   if (!value) return '-';
 
-  return new Intl.DateTimeFormat('es-CL', {
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'es-CL', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -82,26 +83,16 @@ function getReportIcon(code: string): TcdxIconName {
   return 'document';
 }
 
-function getCategoryLabel(category: string) {
-  const labels: Record<string, string> = {
-    executive: 'Gerencia',
-    audit: 'Auditoría',
-    operational: 'Control de estado',
-    platform: 'Plataforma',
-  };
-
-  return labels[category] || category || 'Reporte';
+function getCategoryLabel(category: string, t: (key: string) => string) {
+  return t(`exports.categories.${category}`) !== `exports.categories.${category}`
+    ? t(`exports.categories.${category}`)
+    : category || t('exports.categories.default');
 }
 
-function getCategoryDescription(category: string) {
-  const labels: Record<string, string> = {
-    executive: 'Síntesis de alto nivel para dirección y toma de decisiones.',
-    audit: 'Enfoque en hallazgos, trazabilidad, cierre y seguimiento auditor.',
-    operational: 'Estado actual de controles, cumplimiento y foco de remediación.',
-    platform: 'Vista consolidada mensual por cliente y comportamiento de plataforma.',
-  };
-
-  return labels[category] || 'Reporte ejecutivo premium.';
+function getCategoryDescription(category: string, t: (key: string) => string) {
+  const key = `exports.categoryDescriptions.${category}`;
+  const value = t(key);
+  return value !== key ? value : t('exports.categoryDescriptions.default');
 }
 
 function getCategoryBadgeClass(category: string) {
@@ -115,22 +106,22 @@ function getCategoryBadgeClass(category: string) {
   return styles[category] || 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
-function getStatusLabel(status?: string) {
+function getStatusLabel(status: string | undefined, t: (key: string) => string) {
   const raw = String(status || '').toLowerCase();
 
   if (['completed', 'completado', 'generado', 'generated', 'success', 'ok'].includes(raw)) {
-    return 'Generado';
+    return t('statuses.reports.completed');
   }
 
   if (['processing', 'running', 'pending', 'pendiente'].includes(raw)) {
-    return 'En proceso';
+    return t('statuses.reports.processing');
   }
 
   if (['error', 'failed', 'fallido'].includes(raw)) {
-    return 'Error';
+    return t('statuses.reports.error');
   }
 
-  return status || 'Generado';
+  return status || t('statuses.reports.completed');
 }
 
 function getStatusClass(status?: string) {
@@ -192,6 +183,7 @@ const REPORT_ORDER = [
 ];
 
 export default function ExportesPage() {
+  const { locale, t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [generatingCode, setGeneratingCode] = useState<string | null>(null);
@@ -204,7 +196,7 @@ export default function ExportesPage() {
 
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [selectedReportCode, setSelectedReportCode] = useState('');
-  const [period, setPeriod] = useState(getDefaultPeriod());
+  const [period, setPeriod] = useState(() => getDefaultPeriod(locale));
   const [activeTab, setActiveTab] = useState<'generate' | 'history'>('generate');
 
   const currentRole = getUserRoleFromToken();
@@ -263,9 +255,9 @@ export default function ExportesPage() {
         return (aReportIndex === -1 ? 999 : aReportIndex) - (bReportIndex === -1 ? 999 : bReportIndex);
       }
 
-      return a.name.localeCompare(b.name, 'es');
+      return a.name.localeCompare(b.name, locale === 'en' ? 'en' : 'es');
     });
-  }, [reportTypes]);
+  }, [reportTypes, locale]);
 
   const selectedReport = useMemo(() => {
     return orderedReportTypes.find((report) => report.code === selectedReportCode) || null;
@@ -338,13 +330,13 @@ export default function ExportesPage() {
       const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || 'No fue posible cargar el historial de informes.');
+        throw new Error(json?.error || t('exports.loadHistoryError'));
       }
 
       setExportsHistory(json?.data || []);
     } catch (err: any) {
       console.error('ERROR LOAD REPORT HISTORY:', err);
-      setError(err.message || 'Error cargando historial de informes.');
+      setError(err.message || t('exports.loadHistoryError'));
     } finally {
       setHistoryLoading(false);
     }
@@ -381,13 +373,13 @@ export default function ExportesPage() {
 
         if (!typesRes.ok || typesJson?.ok === false) {
           throw new Error(
-            typesJson?.error || 'No fue posible cargar los tipos de informes.'
+            typesJson?.error || t('exports.loadTypesError')
           );
         }
 
         if (!clientsRes.ok || clientsJson?.ok === false) {
           throw new Error(
-            clientsJson?.error || 'No fue posible cargar los clientes disponibles.'
+            clientsJson?.error || t('exports.loadClientsError')
           );
         }
 
@@ -413,7 +405,7 @@ export default function ExportesPage() {
         }
       } catch (err: any) {
         console.error('ERROR LOAD EXPORTES:', err);
-        setError(err.message || 'Error cargando exportes ejecutivos.');
+        setError(err.message || t('exports.loadExportsError'));
       } finally {
         setLoading(false);
       }
@@ -437,7 +429,7 @@ export default function ExportesPage() {
 
   const generateReport = async (reportTypeCode: string) => {
     if (isReadOnlyReports) {
-      setError('Tu rol puede ver y descargar reportes generados, pero no generar nuevos informes.');
+      setError(t('exports.readonlyError'));
       setActiveTab('history');
       return;
     }
@@ -456,10 +448,12 @@ export default function ExportesPage() {
 
       const payload: any = {
         report_type_code: reportTypeCode,
+        locale,
         period,
         metadata: {
           source: 'frontend_exportes',
           generated_from: '/exportes',
+          locale,
         },
       };
 
@@ -479,10 +473,10 @@ export default function ExportesPage() {
       const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || json?.detail || 'Error generando informe.');
+        throw new Error(json?.error || json?.detail || t('exports.generateError'));
       }
 
-      setSuccessMessage('Informe generado correctamente.');
+      setSuccessMessage(t('exports.generatedSuccessfully'));
       setActiveTab('history');
       await loadHistory();
 
@@ -493,7 +487,7 @@ export default function ExportesPage() {
       }
     } catch (err: any) {
       console.error('ERROR GENERATE REPORT:', err);
-      setError(err.message || 'Error generando informe.');
+      setError(err.message || t('exports.generateError'));
     } finally {
       setGeneratingCode(null);
     }
@@ -518,56 +512,53 @@ export default function ExportesPage() {
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/50">
-                TCDX by Tecdex
+                {t('exports.brand')}
               </p>
 
               <h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">
-                Exportes ejecutivos premium
+                {t('exports.title')}
               </h1>
 
               <p className="mt-3 text-sm leading-7 text-white/75 md:text-base">
-                Genere informes PDF de nivel ejecutivo para gerencia, auditoría,
-                control de estado y seguimiento de plataforma por cliente, con
-                trazabilidad histórica y una presentación alineada al estándar visual
-                premium del sistema.
+                {t('exports.subtitle')}
               </p>
 
               <div className="mt-5 flex flex-wrap gap-2">
                 <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-                  Branding premium
+                  {t('exports.badges.branding')}
                 </span>
                 <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-                  Historial persistente
+                  {t('exports.badges.history')}
                 </span>
                 <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-                  PDFs descargables
+                  {t('exports.badges.pdf')}
                 </span>
                 <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-                  Salida ejecutiva comercial
+                  {t('exports.badges.commercial')}
                 </span>
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[440px] xl:max-w-[480px]">
               <HeroMiniStat
-                label="Tipos de informe"
+                label={t('exports.reportTypes')}
                 value={typeCount}
-                helper="Disponibles según perfil"
+                helper={t('exports.availableByProfile')}
               />
               <HeroMiniStat
-                label="Informes hoy"
+                label={t('exports.reportsToday')}
                 value={historyStats.today}
-                helper="Generados en la jornada"
+                helper={t('exports.generatedToday')}
               />
               <HeroMiniStat
-                label="Últimos 7 días"
+                label={t('common.last7Days')}
                 value={historyStats.last7Days}
-                helper="Actividad reciente"
+                helper={t('exports.recentActivity')}
               />
               <HeroMiniStat
-                label="Clientes con historial"
+                label={t('exports.clientsWithHistory')}
                 value={historyStats.uniqueClients}
-                helper="Trazabilidad acumulada"
+                helper={t('exports.accumulatedTraceability')}
               />
             </div>
           </div>
@@ -576,24 +567,24 @@ export default function ExportesPage() {
         <section className="grid gap-4 xl:grid-cols-[1.1fr_1fr_0.95fr]">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <label className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-              Periodo del informe
+              {t('exports.periodLabel')}
             </label>
 
             <input
               value={period}
               onChange={(event) => setPeriod(event.target.value)}
               className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-[#0B2F4F] focus:ring-2 focus:ring-[#0B2F4F]/10"
-              placeholder="Ej: Abril 2026"
+              placeholder={t('exports.periodPlaceholder')}
             />
 
             <p className="mt-3 text-xs text-slate-500">
-              Texto base del período que quedará visible en el documento final.
+              {t('exports.periodHelp')}
             </p>
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <label className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-              Cliente / empresa
+              {t('exports.clientLabel')}
             </label>
 
             <select
@@ -609,7 +600,7 @@ export default function ExportesPage() {
             </select>
 
             <p className="mt-3 text-xs text-slate-500">
-              El tenant seleccionado define la fuente de datos del informe.
+              {t('exports.clientHelp')}
             </p>
           </div>
 
@@ -627,19 +618,19 @@ export default function ExportesPage() {
 
               <div className="min-w-0">
                 <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/50">
-                  Contexto actual
+                  {t('exports.currentContext')}
                 </div>
 
                 <div className="mt-2 truncate text-lg font-bold">
-                  {selectedClient?.name || 'Cliente no seleccionado'}
+                  {selectedClient?.name || t('exports.clientNotSelected')}
                 </div>
 
                 <div className="mt-1 text-sm text-white/65">
-                  Documento premium con foco ejecutivo y marca TCDX by Tecdex.
+                  {t('exports.premiumDocument')}
                 </div>
 
                 <div className="mt-3 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/75">
-                  Periodo: <span className="font-semibold text-white">{period}</span>
+                  {t('common.period')}: <span className="font-semibold text-white">{period}</span>
                 </div>
               </div>
             </div>
@@ -648,7 +639,7 @@ export default function ExportesPage() {
 
         {isReadOnlyReports && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-700">
-            Modo solo lectura: tu rol puede revisar y descargar reportes generados, pero no generar nuevos informes.
+            {t('exports.readOnlyMode')}
           </div>
         )}
 
@@ -666,7 +657,7 @@ export default function ExportesPage() {
                   : 'text-slate-600 hover:bg-slate-100',
               ].join(' ')}
             >
-              Generar informes
+              {t('exports.generateTab')}
             </button>
 
             <button
@@ -679,7 +670,7 @@ export default function ExportesPage() {
                   : 'text-slate-600 hover:bg-slate-100',
               ].join(' ')}
             >
-              Historial
+              {t('exports.history')}
             </button>
           </div>
         </section>
@@ -702,25 +693,25 @@ export default function ExportesPage() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">
-                    Informes disponibles
+                    {t('exports.availableReports')}
                   </h2>
                   <p className="text-sm text-slate-500">
-                    Selecciona el tipo de salida y genera el PDF ejecutivo.
+                    {t('exports.availableReportsHelp')}
                   </p>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {reportTypes.length} tipo(s) disponibles
+                  {t('exports.typesAvailable', { count: reportTypes.length })}
                 </div>
               </div>
 
               {loading ? (
                 <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-                  Cargando informes disponibles...
+                  {t('exports.loadingReports')}
                 </div>
               ) : reportTypes.length === 0 ? (
                 <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-                  No hay informes disponibles para este perfil.
+                  {t('exports.noReports')}
                 </div>
               ) : (
                 <>
@@ -732,7 +723,7 @@ export default function ExportesPage() {
                           item.category
                         )}`}
                       >
-                        {getCategoryLabel(item.category)} · {item.count}
+                        {getCategoryLabel(item.category, t)} · {item.count}
                       </span>
                     ))}
                   </div>
@@ -763,7 +754,7 @@ export default function ExportesPage() {
                                   report.category
                                 )}`}
                               >
-                                {getCategoryLabel(report.category)}
+                                {getCategoryLabel(report.category, t)}
                               </span>
 
                               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
@@ -784,12 +775,12 @@ export default function ExportesPage() {
 
                           <div className="mt-4 flex flex-wrap gap-2">
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
-                              Plantilla: {report.template_key}
+                              {t('common.template')}: {report.template_key}
                             </span>
 
                             {report.can_schedule && (
                               <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
-                                Programable
+                                {t('common.status')}
                               </span>
                             )}
                           </div>
@@ -805,7 +796,7 @@ export default function ExportesPage() {
                                   : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
                               ].join(' ')}
                             >
-                              {isSelected ? 'Seleccionado' : 'Ver detalle'}
+                              {isSelected ? t('common.selected') : t('common.viewDetails')}
                             </button>
 
                             <button
@@ -819,7 +810,7 @@ export default function ExportesPage() {
                                   : 'cursor-not-allowed bg-slate-200 text-slate-400',
                               ].join(' ')}
                             >
-                              {isGenerating ? 'Generando...' : 'Generar informe'}
+                              {isGenerating ? t('exports.generating') : t('exports.generateReport')}
                             </button>
                           </div>
                         </article>
@@ -833,7 +824,7 @@ export default function ExportesPage() {
             <aside className="space-y-5">
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-                  Informe seleccionado
+                  {t('exports.selectedReport')}
                 </div>
 
                 {selectedReport ? (
@@ -850,7 +841,7 @@ export default function ExportesPage() {
                               selectedReport.category
                             )}`}
                           >
-                            {getCategoryLabel(selectedReport.category)}
+                            {getCategoryLabel(selectedReport.category, t)}
                           </span>
 
                           <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
@@ -870,28 +861,28 @@ export default function ExportesPage() {
 
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
-                        Enfoque
+                        {t('exports.focus')}
                       </div>
                       <div className="mt-2 text-sm leading-6 text-slate-700">
-                        {getCategoryDescription(selectedReport.category)}
+                        {getCategoryDescription(selectedReport.category, t)}
                       </div>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
                       <DetailCard
-                        label="Plantilla"
+                        label={t('common.template')}
                         value={selectedReport.template_key}
                       />
                       <DetailCard
-                        label="Formato"
+                        label={t('common.format')}
                         value={(selectedReport.default_format || 'pdf').toUpperCase()}
                       />
                       <DetailCard
-                        label="Cliente"
-                        value={selectedClient?.name || 'No seleccionado'}
+                        label={t('common.client')}
+                        value={selectedClient?.name || t('common.notSelected')}
                       />
                       <DetailCard
-                        label="Periodo"
+                        label={t('common.period')}
                         value={period || '-'}
                       />
                     </div>
@@ -908,26 +899,26 @@ export default function ExportesPage() {
                       ].join(' ')}
                     >
                       {generatingCode === selectedReport.code
-                        ? 'Generando...'
-                        : 'Generar ahora'}
+                        ? t('exports.generating')
+                        : t('exports.generateNow')}
                     </button>
                   </div>
                 ) : (
                   <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                    Selecciona un tipo de informe para ver su resumen.
+                    {t('exports.selectReportHint')}
                   </div>
                 )}
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-                  Actividad reciente
+                  {t('exports.recentActivity')}
                 </div>
 
                 <div className="mt-4 space-y-3">
                   {latestExports.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                      Aún no hay informes generados.
+                      {t('exports.noRecentReports')}
                     </div>
                   ) : (
                     latestExports.map((item) => (
@@ -950,12 +941,12 @@ export default function ExportesPage() {
                               item.status
                             )}`}
                           >
-                            {getStatusLabel(item.status)}
+                            {getStatusLabel(item.status, t)}
                           </span>
                         </div>
 
                         <div className="mt-2 text-xs text-slate-500">
-                          {formatDate(item.generated_at)}
+                          {formatDate(item.generated_at, locale)}
                         </div>
                       </div>
                     ))
@@ -965,13 +956,13 @@ export default function ExportesPage() {
 
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-                  Distribución reciente
+                  {t('exports.recentDistribution')}
                 </div>
 
                 <div className="mt-4 space-y-3">
                   {recentByType.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                      Aún no hay datos suficientes para mostrar distribución.
+                      {t('exports.notEnoughData')}
                     </div>
                   ) : (
                     recentByType.map((item) => (
@@ -996,10 +987,10 @@ export default function ExportesPage() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">
-                  Historial de informes generados
+                  {t('exports.historyTitle')}
                 </h2>
                 <p className="text-sm text-slate-500">
-                  Filtros ordenados para revisión rápida y trazabilidad histórica.
+                  {t('exports.historySubtitle')}
                 </p>
               </div>
 
@@ -1008,30 +999,30 @@ export default function ExportesPage() {
                 onClick={loadHistory}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
               >
-                Actualizar
+                {t('common.refresh')}
               </button>
             </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <HistoryStatCard
-                label="Total en historial"
+                label={t('exports.totalHistory')}
                 value={historyStats.total}
-                helper="Informes visibles con filtros actuales"
+                helper={t('exports.visibleWithFilters')}
               />
               <HistoryStatCard
-                label="Generados hoy"
+                label={t('exports.generatedTodayShort')}
                 value={historyStats.today}
-                helper="Actividad del día"
+                helper={t('exports.dayActivity')}
               />
               <HistoryStatCard
-                label="Últimos 7 días"
+                label={t('common.last7Days')}
                 value={historyStats.last7Days}
-                helper="Ritmo reciente"
+                helper={t('exports.recentPace')}
               />
               <HistoryStatCard
-                label="Clientes distintos"
+                label={t('exports.distinctClients')}
                 value={historyStats.uniqueClients}
-                helper="Cobertura histórica"
+                helper={t('exports.historicalCoverage')}
               />
             </div>
 
@@ -1040,7 +1031,7 @@ export default function ExportesPage() {
                 <input
                   value={filterText}
                   onChange={(event) => setFilterText(event.target.value)}
-                  placeholder="Buscar generador, cliente o informe"
+                  placeholder={t('exports.searchPlaceholder')}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#0B2F4F]"
                 />
 
@@ -1049,7 +1040,7 @@ export default function ExportesPage() {
                   onChange={(event) => setFilterType(event.target.value)}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#0B2F4F]"
                 >
-                  <option value="">Todos los tipos</option>
+                  <option value="">{t('exports.allTypes')}</option>
                   {reportTypes.map((report) => (
                     <option key={report.code} value={report.code}>
                       {report.name}
@@ -1062,7 +1053,7 @@ export default function ExportesPage() {
                   onChange={(event) => setFilterTenant(event.target.value)}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#0B2F4F]"
                 >
-                  <option value="">Todos los clientes</option>
+                  <option value="">{t('exports.allClients')}</option>
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
                       {client.name}
@@ -1091,7 +1082,7 @@ export default function ExportesPage() {
                   onClick={loadHistory}
                   className="rounded-xl bg-[#0B2F4F] px-4 py-2 text-sm font-bold text-white hover:bg-[#123d63]"
                 >
-                  Aplicar filtros
+                  {t('exports.applyFilters')}
                 </button>
 
                 <button
@@ -1099,7 +1090,7 @@ export default function ExportesPage() {
                   onClick={clearFilters}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
                 >
-                  Limpiar
+                  {t('exports.clear')}
                 </button>
               </div>
             </div>
@@ -1107,23 +1098,23 @@ export default function ExportesPage() {
             <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
               {historyLoading ? (
                 <div className="p-8 text-center text-sm text-slate-500">
-                  Cargando historial...
+                  {t('exports.loadingHistory')}
                 </div>
               ) : exportsHistory.length === 0 ? (
                 <div className="p-8 text-center text-sm text-slate-500">
-                  No hay informes generados con los filtros actuales.
+                  {t('exports.noHistory')}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                       <tr>
-                        <th className="px-4 py-3">Informe</th>
-                        <th className="px-4 py-3">Cliente</th>
-                        <th className="px-4 py-3">Fecha</th>
-                        <th className="px-4 py-3">Generado por</th>
-                        <th className="px-4 py-3">Estado</th>
-                        <th className="px-4 py-3">Archivo</th>
+                        <th className="px-4 py-3">{t('exports.report')}</th>
+                        <th className="px-4 py-3">{t('common.client')}</th>
+                        <th className="px-4 py-3">{t('exports.date')}</th>
+                        <th className="px-4 py-3">{t('common.generatedBy')}</th>
+                        <th className="px-4 py-3">{t('common.status')}</th>
+                        <th className="px-4 py-3">{t('common.file')}</th>
                       </tr>
                     </thead>
 
@@ -1144,7 +1135,7 @@ export default function ExportesPage() {
                                   {report.report_type_code}
                                 </div>
                                 <div className="mt-1 text-xs text-slate-500">
-                                  Formato: {(report.report_format || 'pdf').toUpperCase()}
+                                  {t('exports.format')}: {(report.report_format || 'pdf').toUpperCase()}
                                 </div>
                               </div>
                             </div>
@@ -1157,7 +1148,7 @@ export default function ExportesPage() {
                           </td>
 
                           <td className="px-4 py-3 align-top text-slate-600">
-                            {formatDate(report.generated_at)}
+                            {formatDate(report.generated_at, locale)}
                           </td>
 
                           <td className="px-4 py-3 align-top">
@@ -1175,7 +1166,7 @@ export default function ExportesPage() {
                                 report.status
                               )}`}
                             >
-                              {getStatusLabel(report.status)}
+                              {getStatusLabel(report.status, t)}
                             </span>
                           </td>
 
@@ -1186,7 +1177,7 @@ export default function ExportesPage() {
                               rel="noreferrer"
                               className="font-bold text-[#0B2F4F] hover:underline"
                             >
-                              Ver PDF
+                              {t('exports.viewPdf')}
                             </a>
                           </td>
                         </tr>

@@ -9,6 +9,7 @@ import {
   getUserFromToken,
   isTokenExpired,
 } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -41,6 +42,7 @@ type ModuleAccessResponse = {
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -78,29 +80,29 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           module_key: 'risks',
           routes: ['/matriz-riesgo', '/activos'],
           fallback: '/dashboard',
-          label: 'Riesgos y activos',
+          label: t('sidebar.riskMatrix'),
         },
         {
           module_key: 'audits',
           routes: ['/auditorias'],
           fallback: '/dashboard',
-          label: 'Auditorías',
+          label: t('sidebar.audits'),
         },
         {
           module_key: 'evidences',
           routes: ['/evidencias'],
           fallback: '/dashboard',
-          label: 'Evidencias',
+          label: t('sidebar.evidence'),
         },
         {
           module_key: 'kpis',
           routes: ['/administrar-kpis'],
           fallback: '/dashboard',
-          label: 'Administración de KPI',
+          label: t('sidebar.kpis'),
         },
       ],
     };
-  }, []);
+  }, [t]);
 
   function isRoute(routes: string[]) {
     return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
@@ -124,11 +126,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
-      throw new Error(`Respuesta inválida del backend en /api/me/modules. HTTP ${res.status}.`);
+      throw new Error(t('app.invalidModulesResponse', { status: res.status }));
     }
 
     if (!res.ok || !json || json.ok === false) {
-      throw new Error(json?.error || 'Error consultando módulos contratados');
+      throw new Error(json?.error || t('app.modulesError'));
     }
 
     return json;
@@ -279,16 +281,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           ).toLowerCase();
 
           const tenantName =
-            moduleAccess?.scope?.tenant_name || 'esta empresa';
+            moduleAccess?.scope?.tenant_name || t('common.company').toLowerCase();
 
           if (
             serviceStatus === 'suspended' ||
             serviceStatus === 'suspended_non_payment'
           ) {
             if (!cancelled) {
-              setAccessDeniedMessage(
-                `El servicio de ${tenantName} está suspendido por no pago. Contacta al administrador comercial de TCDX para regularizar la cuenta.`
-              );
+              setAccessDeniedMessage(t('app.serviceSuspended', { tenantName }));
               setCheckingAccess(false);
             }
             return;
@@ -296,9 +296,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
           if (serviceStatus === 'deleted') {
             if (!cancelled) {
-              setAccessDeniedMessage(
-                `El servicio de ${tenantName} ya no se encuentra activo. La empresa fue dada de baja administrativamente.`
-              );
+              setAccessDeniedMessage(t('app.serviceDeleted', { tenantName }));
               setCheckingAccess(false);
             }
             return;
@@ -311,7 +309,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             if (!moduleIsEnabled(moduleAccess.module_map, requiredModule.module_key)) {
               sessionStorage.setItem(
                 'module-access-denied-message',
-                `El módulo "${requiredModule.label}" no está habilitado para esta empresa.`
+                t('app.moduleDisabled', { module: requiredModule.label })
               );
 
               window.location.href = requiredModule.fallback;
@@ -328,7 +326,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         console.error('ERROR VALIDATING APP ACCESS:', error);
 
         if (!cancelled) {
-          setAccessDeniedMessage(error.message || 'Error validando permisos de acceso.');
+          setAccessDeniedMessage(error.message || t('app.permissionsError'));
           setCheckingAccess(false);
         }
       }
@@ -339,7 +337,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [pathname, routeRules]);
+  }, [pathname, routeRules, t]);
 
   useEffect(() => {
     setMobileSidebarOpen(false);
@@ -349,9 +347,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#f6f8fb] text-[#162033]">
         <div className="tcdx-card rounded-lg px-7 py-6">
-          <div className="text-lg font-semibold">Validando acceso...</div>
+          <div className="text-lg font-semibold">{t('app.validatingAccess')}</div>
           <div className="mt-1 text-sm text-slate-500">
-            Revisando permisos de usuario y módulos contratados.
+            {t('app.checkingPermissions')}
           </div>
         </div>
       </div>
@@ -362,7 +360,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#f6f8fb] text-[#162033]">
         <div className="max-w-md rounded-lg border border-red-200 bg-white px-7 py-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-          <div className="text-lg font-semibold">Acceso restringido</div>
+          <div className="text-lg font-semibold">{t('app.restrictedAccess')}</div>
           <div className="mt-2 text-sm text-slate-600">{accessDeniedMessage}</div>
 
           <button
@@ -377,7 +375,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             }}
             className="mt-4 rounded-lg bg-[#1f6feb] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#195fc9]"
           >
-            Cerrar sesión e ingresar con otra cuenta
+            {t('app.logoutAndSwitch')}
           </button>
         </div>
       </div>
@@ -394,7 +392,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div className="fixed inset-0 z-40 lg:hidden">
           <button
             type="button"
-            aria-label="Cerrar menú"
+            aria-label={t('common.close')}
             className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
             onClick={() => setMobileSidebarOpen(false)}
           />

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -96,6 +97,7 @@ function resolveRole(user: any): string {
 
 export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   const [role, setRole] = useState<string | null>(null);
   const [standards, setStandards] = useState<string[]>([]);
@@ -254,7 +256,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     const items = [
       {
         href: '/dashboard',
-        label: 'Dashboard',
+        label: t('sidebar.dashboard'),
         show: true,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -265,7 +267,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/ciclo-vida',
-        label: 'Ciclo de Vida',
+        label: t('sidebar.lifecycle'),
         show: true,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -282,7 +284,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/health',
-        label: 'Salud ISO',
+        label: t('sidebar.controlHealth'),
         show: true,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -293,7 +295,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/exportes',
-        label: 'Reportes',
+        label: t('sidebar.exports'),
         show: true,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -307,7 +309,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/administrar-kpis',
-        label: 'Administración de KPI',
+        label: t('sidebar.kpis'),
         show: canManageTenant && hasModule('kpis'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -318,7 +320,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/prefacturacion',
-        label: 'Prefacturación',
+        label: t('sidebar.prebilling'),
         show: false,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -332,13 +334,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     ];
 
     return items.filter((item) => item.show);
-  }, [hasModule, modulesLoaded, canManageTenant]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasModule, modulesLoaded, canManageTenant, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const operationItems = useMemo(() => {
     const items = [
       {
         href: '/diagnostico',
-        label: 'Diagnóstico',
+        label: t('sidebar.diagnosis'),
         show: !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -349,7 +351,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/controles',
-        label: 'Controles',
+        label: t('sidebar.controls'),
         show: !isAuditor && !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -361,7 +363,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/matriz-riesgo',
-        label: 'Matriz de Riesgo',
+        label: t('sidebar.riskMatrix'),
         show: !isClientReadOnly && hasModule('risks'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -372,7 +374,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/activos',
-        label: 'Activos',
+        label: t('sidebar.assets'),
         show: !isClientReadOnly && hasModule('risks'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -393,7 +395,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/plan-accion',
-        label: 'Plan de Acción',
+        label: t('sidebar.actionPlan'),
         show: !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -404,7 +406,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/no-conformidades',
-        label: 'No Conformidades',
+        label: t('sidebar.nonconformities'),
         show: !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -416,7 +418,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/auditorias',
-        label: 'Auditorías',
+        label: t('sidebar.audits'),
         show: hasModule('audits'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -428,7 +430,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/evidencias',
-        label: 'Evidencias',
+        label: t('sidebar.evidence'),
         show: !isClientReadOnly && hasModule('evidences'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -438,7 +440,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/hallazgos',
-        label: 'Hallazgos',
+        label: t('sidebar.findings'),
         show: !isClientReadOnly,
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -449,7 +451,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       },
       {
         href: '/ia-compliance',
-        label: 'IA Compliance',
+        label: t('sidebar.aiCompliance'),
         show: !isAuditor && !isClientReadOnly && hasModule('ai'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -464,13 +466,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     ];
 
     return items.filter((item) => item.show);
-    }, [hasModule, isAuditor, isClientReadOnly, showSoA, modulesLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [hasModule, isAuditor, isClientReadOnly, showSoA, modulesLoaded, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const platformItems = [
 
     {
       href: '/admin-saas',
-      label: 'Empresas / Admin SaaS',
+      label: t('sidebar.saasAdmin'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
@@ -489,7 +491,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
     {
       href: '/cotizador',
-      label: 'Cotizador',
+      label: t('sidebar.quoteBuilder'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M7 3h8l4 4v14H7z" />
@@ -505,7 +507,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     },
     {
       href: '/usuarios',
-      label: 'Usuarios',
+      label: t('sidebar.users'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -516,7 +518,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     },
     {
       href: '/prefacturacion',
-      label: 'Prefacturación',
+      label: t('sidebar.prebilling'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M4 4h16v16H4z" />
@@ -528,7 +530,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     },
     {
       href: '/health',
-      label: 'Salud ISO',
+      label: t('sidebar.controlHealth'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
@@ -539,7 +541,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
     {
       href: '/exportes',
-      label: 'Reportes',
+      label: t('sidebar.exports'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -555,7 +557,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const dealerItems = [
     {
       href: '/dealer',
-      label: 'Portal Dealer',
+      label: t('sidebar.dealerPortal'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M3 21h18" />
@@ -568,7 +570,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
     {
       href: '/cotizador',
-      label: 'Cotizador',
+      label: t('sidebar.quoteBuilder'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M7 3h8l4 4v14H7z" />
@@ -584,7 +586,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     },
     {
       href: '/prefacturacion',
-      label: 'Prefacturación',
+      label: t('sidebar.prebilling'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M4 4h16v16H4z" />
@@ -596,7 +598,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     },
     {
       href: '/exportes',
-      label: 'Reportes',
+      label: t('sidebar.exports'),
       icon: (
         <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -630,7 +632,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         type="button"
         onClick={onToggle}
         className="absolute -right-3 top-7 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-[#102033] shadow-lg transition hover:bg-slate-50"
-        title={collapsed ? 'Expandir menú' : 'Contraer menú'}
+        title={collapsed ? t('sidebar.expandMenu') : t('sidebar.collapseMenu')}
       >
         <svg
           className={`h-4 w-4 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}
@@ -653,14 +655,14 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       {!collapsed && (
         <div className="mb-4 rounded-lg border border-white/10 bg-white/7 px-3 py-3 text-xs leading-5 text-white/66 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-          Gobierno ISO operativo por rol, módulos contratados y alcance activo.
+          {t('sidebar.description')}
         </div>
       )}
 
       <nav className="tcdx-scrollbar flex-1 overflow-y-auto pr-1 text-sm">
         {isPlatformAdmin && (
           <>
-            {sectionLabel('Plataforma')}
+            {sectionLabel(t('sidebar.platform'))}
             <div className="space-y-2">
               {platformItems.map((item) => (
                 <NavItem
@@ -678,7 +680,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
         {isDealer && !isPlatformAdmin && (
           <>
-            {sectionLabel('Dealer')}
+            {sectionLabel(t('sidebar.dealer'))}
             <div className="space-y-2">
               {dealerItems.map((item) => (
                 <NavItem
@@ -696,7 +698,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
         {!isPlatformAdmin && !isDealer && (
           <>
-            {sectionLabel('General')}
+            {sectionLabel(t('sidebar.general'))}
             <div className="space-y-2">
               {generalItems.map((item) => (
                 <NavItem
@@ -712,7 +714,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
             {scopeLoaded && hasActiveStandards && operationItems.length > 0 && (
               <>
-                {sectionLabel('Operación')}
+                {sectionLabel(t('sidebar.operation'))}
                 <div className="space-y-2">
                   {operationItems.map((item) => (
                     <NavItem
@@ -730,11 +732,11 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
             {isAdmin && (
               <>
-                {sectionLabel('Administración')}
+                {sectionLabel(t('sidebar.administration'))}
                 <div className="space-y-2">
                   <NavItem
                     href="/usuarios"
-                    label="Usuarios"
+                    label={t('sidebar.users')}
                     collapsed={collapsed}
                     active={isActive('/usuarios')}
                     icon={
@@ -753,7 +755,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       <div className={['mt-4 border-t border-white/10 pt-4', collapsed ? 'flex justify-center' : ''].join(' ')}>
         {collapsed ? (
-          <div title="Powered by Tecdex" className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/7">
+          <div title={t('sidebar.poweredBy')} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/7">
             <img src={SERVICE_LOGO_SRC} alt="Tecdex" className="h-7 w-7 object-contain" />
           </div>
         ) : (

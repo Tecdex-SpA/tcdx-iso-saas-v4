@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getUserFromToken } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type SearchResult = {
   id: string;
@@ -108,6 +109,7 @@ type HeaderProps = {
 };
 
 export default function Header({ onMenuClick }: HeaderProps) {
+  const { locale, t } = useTranslation();
   const [user, setUser] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
   const [logoCandidates, setLogoCandidates] = useState<string[]>([SERVICE_LOGO_SRC]);
@@ -417,9 +419,9 @@ export default function Header({ onMenuClick }: HeaderProps) {
   };
 
   const avatarUrl = user?.avatar ? `${API_URL}/uploads/profiles/${user.avatar}` : null;
-  const displayName = user?.full_name || user?.name || user?.email || 'Usuario';
+  const displayName = user?.full_name || user?.name || user?.email || t('header.userFallback');
 
-  const lastSync = new Date().toLocaleString('es-CL', {
+  const lastSync = new Date().toLocaleString(locale === 'en' ? 'en-US' : 'es-CL', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -473,7 +475,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             type="button"
             onClick={onMenuClick}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/7 text-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:bg-white/11 hover:text-white lg:hidden"
-            title="Abrir menú"
+            title={t('header.openMenu')}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path d="M4 7h16M4 12h16M4 17h16" />
@@ -484,7 +486,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <img
               src={logo}
               className="h-8 max-w-[104px] object-contain sm:max-w-[128px]"
-              alt={tenant?.name ? `Logo ${tenant.name}` : 'Logo cliente'}
+              alt={tenant?.name ? `Logo ${tenant.name}` : t('header.clientLogoAlt')}
               onError={() => {
                 setLogoIndex((prev) => {
                   const next = prev + 1;
@@ -507,7 +509,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 TCDX Compliance 3.0
               </div>
               <div className="truncate text-[11px] text-white/58">
-                {tenant?.name || 'Tenant activo'}
+                {tenant?.name || t('header.tenantActive')}
               </div>
             </div>
           </div>
@@ -530,7 +532,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 }}
                 onFocus={() => setSearchOpen(true)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="Buscar normas, cláusulas, controles, hallazgos..."
+                placeholder={t('header.searchPlaceholder')}
                 className="w-[440px] rounded-lg border border-white/10 bg-white/7 py-3 pl-10 pr-16 text-sm text-white placeholder:text-white/42 transition focus:border-white/25 focus:bg-white/11 focus:shadow-[0_0_0_4px_rgba(255,255,255,0.08)]"
               />
 
@@ -542,18 +544,18 @@ export default function Header({ onMenuClick }: HeaderProps) {
             {searchOpen && (
               <div className="absolute right-0 z-50 mt-3 w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-lg border border-slate-200 bg-white text-black shadow-2xl">
                 <div className="border-b border-slate-100 px-4 py-3">
-                  <div className="text-sm font-semibold text-slate-900">Búsqueda global</div>
-                  <div className="text-xs text-slate-500">Usa ↑ ↓ Enter para navegar</div>
+                  <div className="text-sm font-semibold text-slate-900">{t('header.searchTitle')}</div>
+                  <div className="text-xs text-slate-500">{t('header.searchHelp')}</div>
                 </div>
 
                 {search.trim() === '' ? (
                   <div className="p-4">
                     <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Búsquedas recientes
+                      {t('header.recentSearches')}
                     </div>
 
                     {recentSearches.length === 0 ? (
-                      <div className="text-sm text-slate-500">No hay historial todavía.</div>
+                      <div className="text-sm text-slate-500">{t('header.noSearchHistory')}</div>
                     ) : (
                       <div className="space-y-2">
                         {recentSearches.map((item) => (
@@ -564,7 +566,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                           >
                             <div className="font-medium text-slate-900">{item.query}</div>
                             <div className="text-sm text-slate-500">
-                              {item.result_title || item.result_type || 'Resultado reciente'}
+                              {item.result_title || item.result_type || t('header.recentResult')}
                             </div>
                           </a>
                         ))}
@@ -572,10 +574,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
                     )}
                   </div>
                 ) : searchLoading ? (
-                  <div className="p-4 text-sm text-slate-500">Buscando...</div>
+                  <div className="p-4 text-sm text-slate-500">{t('header.searching')}</div>
                 ) : displayResults.length === 0 ? (
                   <div className="p-4 text-sm text-slate-500">
-                    No se encontraron resultados para <b>{search}</b>.
+                    {t('header.noSearchResults')} <b>{search}</b>.
                   </div>
                 ) : (
                   <div className="max-h-[430px] overflow-auto p-2">
@@ -609,7 +611,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
               <TcdxIcon name="calendar" className="h-4 w-4" />
             </span>
             <div className="leading-tight">
-              <div className="text-[11px] uppercase tracking-wide text-white/46">Última sincronización</div>
+              <div className="text-[11px] uppercase tracking-wide text-white/46">{t('header.lastSync')}</div>
               <div className="font-semibold text-white">{lastSync}</div>
             </div>
           </div>
@@ -618,7 +620,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <button
               type="button"
               className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/7 text-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:bg-white/11 hover:text-white"
-              title="Notificaciones"
+              title={t('header.notifications')}
               onClick={() => setNotificationsOpen((prev) => !prev)}
             >
               <TcdxIcon name="bell" className="h-5 w-5" />
@@ -634,8 +636,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
               <div className="absolute right-0 z-50 mt-3 w-[min(390px,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-slate-200 bg-white text-black shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                   <div>
-                    <div className="font-semibold text-slate-900">Notificaciones</div>
-                    <div className="text-xs text-slate-500">Persistentes y sincronizadas</div>
+                    <div className="font-semibold text-slate-900">{t('header.notifications')}</div>
+                    <div className="text-xs text-slate-500">{t('header.notificationsSubtitle')}</div>
                   </div>
 
                   <button
@@ -643,15 +645,15 @@ export default function Header({ onMenuClick }: HeaderProps) {
                     onClick={markAllNotificationsRead}
                     className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
                   >
-                    Marcar todo leído
+                    {t('header.markAllRead')}
                   </button>
                 </div>
 
                 <div className="max-h-[380px] overflow-auto p-2">
                   {notificationsLoading ? (
-                    <div className="p-3 text-sm text-slate-500">Cargando notificaciones...</div>
+                    <div className="p-3 text-sm text-slate-500">{t('header.loadingNotifications')}</div>
                   ) : notifications.length === 0 ? (
-                    <div className="p-3 text-sm text-slate-500">No hay notificaciones.</div>
+                    <div className="p-3 text-sm text-slate-500">{t('header.noNotifications')}</div>
                   ) : (
                     notifications.map((item) => (
                       <button
@@ -663,12 +665,12 @@ export default function Header({ onMenuClick }: HeaderProps) {
                         }`}
                       >
                         <span className={`mt-1 rounded-full px-2 py-1 text-[10px] font-semibold ${getNotificationClasses(item.level)}`}>
-                          {item.level === 'critical' ? 'Crítica' : item.level === 'warning' ? 'Atención' : 'Info'}
+                          {item.level === 'critical' ? t('header.critical') : item.level === 'warning' ? t('header.warning') : t('header.info')}
                         </span>
 
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-semibold text-slate-900">{item.title}</div>
-                          <div className="mt-1 text-sm text-slate-500">{item.description || 'Sin descripción'}</div>
+                          <div className="mt-1 text-sm text-slate-500">{item.description || t('header.noDescription')}</div>
                         </div>
                       </button>
                     ))
@@ -700,7 +702,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 <div className="hidden max-w-[220px] sm:block">
                   <div className="truncate text-sm font-semibold text-white">{displayName}</div>
                   <div className="truncate text-xs text-white/62">
-                    {tenant?.name || user?.role || 'Usuario'}
+                    {tenant?.name || user?.role || t('header.userFallback')}
                   </div>
                 </div>
               </button>
@@ -728,7 +730,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                   </div>
 
                   <div className="mb-3 rounded-2xl bg-slate-50 px-3 py-3 text-xs text-slate-600">
-                    Entorno premium TCDX listo para operación diaria.
+                    {t('header.profileHint')}
                   </div>
 
                   <hr className="my-2 border-slate-200" />
@@ -740,7 +742,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                       window.location.href = '/perfil';
                     }}
                   >
-                    Editar perfil
+                    {t('header.profile')}
                   </button>
                 </div>
               )}
@@ -749,10 +751,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <button
               className="inline-flex h-11 items-center gap-2 rounded-lg border border-white/10 bg-white px-3 text-sm font-semibold text-[#06173a] shadow-sm transition hover:bg-slate-100 sm:px-4"
               onClick={logout}
-              title="Cerrar sesión"
+              title={t('header.logout')}
             >
               <TcdxIcon name="logout" className="h-4 w-4" />
-              <span className="hidden md:inline">Cerrar sesión</span>
+              <span className="hidden md:inline">{t('header.logout')}</span>
             </button>
           </div>
         </div>
