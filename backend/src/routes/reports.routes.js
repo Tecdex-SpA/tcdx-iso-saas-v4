@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 const { errorDetail } = require('../utils/errorResponse');
-const { resolveLocale } = require('../utils/locale');
+const { resolveLocale, isEnglishLocale } = require('../utils/locale');
 
 const router = express.Router();
 const pool = require('../config/db');
@@ -267,16 +267,25 @@ async function getTenantById(tenantId) {
   return result.rowCount > 0 ? result.rows[0] : null;
 }
 
-function buildReportTitle(reportType, reportTypeCode, period) {
-  const fallbackTitles = {
+function buildReportTitle(reportType, reportTypeCode, period, locale = 'es') {
+  const fallbackTitlesEs = {
     executive_summary: 'Informe para Gerencia',
     audit_report: 'Informe para Auditoría',
     control_status: 'Informe de Control de Estado',
     platform_client_monthly: 'Informe Mensual de Plataforma por Cliente',
   };
 
+  const fallbackTitlesEn = {
+    executive_summary: 'Management Report',
+    audit_report: 'Audit Report',
+    control_status: 'Control Status Report',
+    platform_client_monthly: 'Monthly Client Platform Report',
+  };
+
+  const fallbackTitles = isEnglishLocale(locale) ? fallbackTitlesEn : fallbackTitlesEs;
+
   const baseTitle =
-    reportType?.name || fallbackTitles[reportTypeCode] || 'Informe Ejecutivo';
+    reportType?.name || fallbackTitles[reportTypeCode] || (isEnglishLocale(locale) ? 'Executive Report' : 'Informe Ejecutivo');
 
   if (!period) return baseTitle;
 
@@ -2281,9 +2290,18 @@ router.post('/generate', auth, async (req, res) => {
       logo_url: reportData.tenant?.logo_url || tenantBranding?.logo_url || null,
     };
 
-    const html = renderExecutivePremiumTemplate(reportData);
+    if (reportData && typeof reportData === 'object') {
+      reportData.locale = locale;
+      reportData.report_locale = locale;
+      reportData.metadata = {
+        ...(reportData.metadata || {}),
+        locale,
+      };
+    }
 
-    const reportTitle = buildReportTitle(reportType, report_type_code, period);
+    const html = renderExecutivePremiumTemplate(reportData, { locale });
+
+    const reportTitle = buildReportTitle(reportType, report_type_code, period, locale);
     const tenantFolder = path.join(
       __dirname,
       '..',

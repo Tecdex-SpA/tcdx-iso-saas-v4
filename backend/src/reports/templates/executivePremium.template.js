@@ -1,3 +1,21 @@
+const { createReportTranslator, reportLocaleToIntl, normalizeReportLocale } = require('../i18n/reportLocale');
+
+let activeReportLocale = 'es';
+let activeReportTranslator = createReportTranslator(activeReportLocale);
+
+function setActiveReportLocale(locale) {
+  activeReportLocale = normalizeReportLocale(locale || 'es');
+  activeReportTranslator = createReportTranslator(activeReportLocale);
+}
+
+function getActiveReportLocale() {
+  return activeReportLocale || 'es';
+}
+
+function tr(key, params = {}) {
+  return activeReportTranslator(key, params);
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -28,7 +46,7 @@ function clampPercent(value) {
 }
 
 function fmtNumber(value) {
-  return toNumber(value, 0).toLocaleString('es-CL');
+  return toNumber(value, 0).toLocaleString(reportLocaleToIntl(getActiveReportLocale()));
 }
 
 function fmtPercent(value) {
@@ -36,24 +54,24 @@ function fmtPercent(value) {
 }
 
 function formatDateEs(date = new Date()) {
-  if (!date) return 'Sin fecha';
+  if (!date) return tr('empty.noDate');
 
   try {
-    return new Intl.DateTimeFormat('es-CL', {
+    return new Intl.DateTimeFormat(reportLocaleToIntl(getActiveReportLocale()), {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
     }).format(new Date(date));
   } catch {
-    return String(date || 'Sin fecha');
+    return String(date || tr('empty.noDate'));
   }
 }
 
 function formatDateTimeEs(date = new Date()) {
-  if (!date) return 'Sin fecha';
+  if (!date) return tr('empty.noDate');
 
   try {
-    return new Intl.DateTimeFormat('es-CL', {
+    return new Intl.DateTimeFormat(reportLocaleToIntl(getActiveReportLocale()), {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -61,7 +79,7 @@ function formatDateTimeEs(date = new Date()) {
       minute: '2-digit',
     }).format(new Date(date));
   } catch {
-    return String(date || 'Sin fecha');
+    return String(date || tr('empty.noDate'));
   }
 }
 
@@ -170,34 +188,16 @@ function getTenantLogo(tenant) {
 }
 
 function getReportConfig(reportTypeCode) {
-  const configs = {
-    executive_summary: {
-      title: 'Resumen Ejecutivo de Cumplimiento',
-      badge: 'Gerencia',
-      subtitle: 'Visión gerencial del cumplimiento, riesgos, KPIs, evidencias y prioridades de decisión.',
-      scoreLabel: 'Score Ejecutivo',
-    },
-    audit_report: {
-      title: 'Informe para Auditoría',
-      badge: 'Auditoría',
-      subtitle: 'Trazabilidad de controles, evidencias, hallazgos y preparación de auditoría.',
-      scoreLabel: 'Preparación Auditoría',
-    },
-    control_status: {
-      title: 'Informe de Control de Estado',
-      badge: 'Control operativo',
-      subtitle: 'Seguimiento operativo de controles, salud ISO, acciones y prioridades de remediación.',
-      scoreLabel: 'Salud de Control',
-    },
-    platform_client_monthly: {
-      title: 'Informe Mensual de Plataforma',
-      badge: 'Plataforma cliente',
-      subtitle: 'Estado mensual del cliente, módulos activos, actividad y acompañamiento.',
-      scoreLabel: 'Estado Cliente',
-    },
-  };
+  const code = reportTypeCode || 'executive_summary';
+  const known = ['executive_summary', 'audit_report', 'control_status', 'platform_client_monthly'];
+  const safeCode = known.includes(code) ? code : 'executive_summary';
 
-  return configs[reportTypeCode] || configs.executive_summary;
+  return {
+    title: tr(`reports.config.${safeCode}.title`),
+    badge: tr(`reports.config.${safeCode}.badge`),
+    subtitle: tr(`reports.config.${safeCode}.subtitle`),
+    scoreLabel: tr(`reports.config.${safeCode}.scoreLabel`),
+  };
 }
 
 function cleanText(value, maxLength = 360) {
@@ -269,9 +269,9 @@ function getStats(data) {
 
 function getGeneralTone(score) {
   const safe = clampPercent(score);
-  if (safe >= 85) return 'Saludable';
-  if (safe >= 65) return 'Atención';
-  return 'Crítico';
+  if (safe >= 85) return tr('tone.healthy');
+  if (safe >= 65) return tr('tone.attention');
+  return tr('tone.critical');
 }
 
 function renderHeader({ tenant, title, generatedAt }) {
@@ -285,7 +285,7 @@ function renderHeader({ tenant, title, generatedAt }) {
 
       <div class="headerTitle">
         <h1>${escapeHtml(title)}</h1>
-        <p>Fecha de emisión: ${escapeHtml(formatDateEs(generatedAt || new Date()))}</p>
+        <p>${escapeHtml(tr('reports.issueDate'))}: ${escapeHtml(formatDateEs(generatedAt || new Date()))}</p>
       </div>
 
       <div class="headerLogoRight">
@@ -302,15 +302,15 @@ function renderFooter({ tenant, pageNumber, totalPages, label }) {
     <footer class="pdfFooter">
       <div>
         <strong>© ${new Date().getFullYear()} ${escapeHtml(tenantName)}.</strong>
-        <span> Todos los derechos reservados.</span>
+        <span> ${escapeHtml(tr('reports.allRightsReserved'))}</span>
       </div>
 
       <div class="footerCenter">
-        Documento confidencial · Generado por TCDX by Tecdex
+        ${escapeHtml(tr('reports.confidentialDocument'))} · ${escapeHtml(tr('reports.generatedBy'))}
       </div>
 
       <div class="footerRight">
-        Página ${pageNumber} de ${totalPages}
+        ${escapeHtml(tr('reports.page'))} ${pageNumber} ${escapeHtml(tr('reports.of'))} ${totalPages}
       </div>
     </footer>
   `;
@@ -353,7 +353,7 @@ function bulletList(items) {
   const safe = dedupe(items, 8);
 
   if (!safe.length) {
-    return `<div class="emptyBox">No existen observaciones priorizadas para este bloque.</div>`;
+    return `<div class="emptyBox">${escapeHtml(tr('empty.noPrioritizedObservations'))}</div>`;
   }
 
   return `
@@ -363,7 +363,7 @@ function bulletList(items) {
   `;
 }
 
-function table(headers, rows, emptyMessage = 'Sin datos disponibles') {
+function table(headers, rows, emptyMessage = tr('empty.noData')) {
   const safeRows = asArray(rows);
 
   return `
@@ -443,24 +443,24 @@ function renderPage1(data) {
   const shortSummary = cleanText(
     ai.summary ||
       data.executive_summary ||
-      `El periodo evaluado registra un score consolidado de ${score}%. Se recomienda priorizar evidencia, responsables y fechas de cierre.`,
+      tr('page1.defaultSummary', { score }),
     320
   );
 
   const standardsHtml = standards.length
     ? standards.map((standard) => `<span class="pill">${escapeHtml(standard.code || standard.standard_code || standard)}</span>`).join('')
-    : '<span class="pill">Sin normas activas</span>';
+    : `<span class="pill">${escapeHtml(tr('empty.noActiveStandards'))}</span>`;
 
   return `
     <div class="heroGrid">
       <section class="heroCard">
         <div class="reportBadge">${escapeHtml(config.badge)}</div>
-        <h2>Tablero Ejecutivo de Cumplimiento</h2>
+        <h2>${escapeHtml(tr('page1.executiveDashboard'))}</h2>
         <p>${escapeHtml(config.subtitle)}</p>
 
         <div class="periodBox">
-          <span>Periodo evaluado</span>
-          <strong>${escapeHtml(data.period || 'Periodo actual')}</strong>
+          <span>${escapeHtml(tr('page1.evaluatedPeriod'))}</span>
+          <strong>${escapeHtml(data.period || tr('empty.noCurrentPeriod'))}</strong>
         </div>
       </section>
 
@@ -473,59 +473,59 @@ function renderPage1(data) {
     </div>
 
     <div class="infoGrid">
-      ${card('Individualización del informe', `
-        <div class="infoLine"><span>Empresa</span><strong>${escapeHtml(data.tenant?.name || 'Cliente')}</strong></div>
-        <div class="infoLine"><span>Tipo de informe</span><strong>${escapeHtml(config.badge)}</strong></div>
-        <div class="infoLine"><span>Normas activas</span><div class="pillWrap">${standardsHtml}</div></div>
+      ${card(tr('page1.reportIdentification'), `
+        <div class="infoLine"><span>${escapeHtml(tr('page1.company'))}</span><strong>${escapeHtml(data.tenant?.name || 'Cliente')}</strong></div>
+        <div class="infoLine"><span>${escapeHtml(tr('page1.reportType'))}</span><strong>${escapeHtml(config.badge)}</strong></div>
+        <div class="infoLine"><span>${escapeHtml(tr('page1.activeStandards'))}</span><div class="pillWrap">${standardsHtml}</div></div>
       `)}
 
-      ${card('Prioridad ejecutiva', `
+      ${card(tr('page1.executivePriority'), `
         <p class="bodyText">${escapeHtml(cleanText(ai.headline || shortSummary, 240))}</p>
         ${bulletList(asArray(ai.priorities).slice(0, 3))}
       `)}
     </div>
 
     <div class="metricGrid">
-      ${miniMetric('Cumplimiento general', fmtPercent(score), getGeneralTone(score))}
-      ${miniMetric('Controles evaluados', fmtNumber(controls.total_controls), 'Cobertura total')}
-      ${miniMetric('Saludables', fmtNumber(controls.healthy_controls), `${controls.healthy_percent || 0}%`)}
-      ${miniMetric('En atención', fmtNumber(controls.warning_controls), `${controls.warning_percent || 0}%`, 'warning')}
-      ${miniMetric('Deteriorados', fmtNumber(controls.critical_controls), `${controls.critical_percent || 0}%`, 'danger')}
-      ${miniMetric('Evidencias pendientes', fmtNumber(evidences.pending_evidences), 'Gestión requerida', 'warning')}
-      ${miniMetric('Hallazgos abiertos', fmtNumber(findings.open_findings), 'Seguimiento')}
-      ${miniMetric('Riesgos críticos', fmtNumber(risks.critical_risks || risks.high_risks || 0), 'Exposición')}
+      ${miniMetric(tr('page1.overallCompliance'), fmtPercent(score), getGeneralTone(score))}
+      ${miniMetric(tr('page1.evaluatedControls'), fmtNumber(controls.total_controls), tr('page1.totalCoverage'))}
+      ${miniMetric(tr('page1.healthy'), fmtNumber(controls.healthy_controls), `${controls.healthy_percent || 0}%`)}
+      ${miniMetric(tr('page1.attention'), fmtNumber(controls.warning_controls), `${controls.warning_percent || 0}%`, 'warning')}
+      ${miniMetric(tr('page1.deteriorated'), fmtNumber(controls.critical_controls), `${controls.critical_percent || 0}%`, 'danger')}
+      ${miniMetric(tr('page1.pendingEvidence'), fmtNumber(evidences.pending_evidences), tr('page1.managementRequired'), 'warning')}
+      ${miniMetric(tr('page1.openFindings'), fmtNumber(findings.open_findings), tr('page1.followUp'))}
+      ${miniMetric(tr('page1.criticalRisks'), fmtNumber(risks.critical_risks || risks.high_risks || 0), tr('page1.exposure'))}
     </div>
   `;
 }
 
 function renderAiPage(data) {
   const ai = data.ai_report_addendum || {};
-  const fallbackSummary = `El periodo evaluado debe gestionarse priorizando evidencia objetiva, controles en atención, hallazgos abiertos y trazabilidad del ciclo de vida.`;
+  const fallbackSummary = tr('ai.defaultSummary');
   const summary = cleanText(ai.summary || fallbackSummary, 650);
 
   return `
     <div class="pageTitleBlock">
-      <span>Lectura ejecutiva asistida por IA</span>
-      <h2>Síntesis ejecutiva y decisiones recomendadas</h2>
-      <p>Análisis complementario generado sobre los datos reales del sistema.</p>
+      <span>${escapeHtml(tr('ai.kicker'))}</span>
+      <h2>${escapeHtml(tr('ai.title'))}</h2>
+      <p>${escapeHtml(tr('ai.subtitle'))}</p>
     </div>
 
-    ${card(ai.headline || 'Resumen ejecutivo IA', `
+    ${card(ai.headline || tr('ai.summaryTitle'), `
       <p class="bodyText">${escapeHtml(summary)}</p>
-      <div class="sourceTag">Fuente: ${escapeHtml(ai.source || 'Motor IA TCDX')}</div>
+      <div class="sourceTag">${escapeHtml(tr('ai.source'))}: ${escapeHtml(ai.source || tr('ai.defaultSource'))}</div>
     `, 'wideCard')}
 
     <div class="twoCol">
-      ${card('Prioridades recomendadas', bulletList(ai.priorities))}
-      ${card('Riesgos ejecutivos', bulletList(ai.risks))}
+      ${card(tr('ai.recommendedPriorities'), bulletList(ai.priorities))}
+      ${card(tr('ai.executiveRisks'), bulletList(ai.risks))}
     </div>
 
     <div class="twoCol">
-      ${card('Decisiones sugeridas', bulletList(ai.decisions))}
-      ${card('Uso recomendado del informe', bulletList([
-        'Revisar los puntos críticos con responsables de proceso.',
-        'Convertir prioridades en planes de acción con fecha y responsable.',
-        'Usar trazabilidad del ciclo de vida como evidencia de gobierno.',
+      ${card(tr('ai.suggestedDecisions'), bulletList(ai.decisions))}
+      ${card(tr('ai.recommendedUse'), bulletList([
+        tr('ai.use.1'),
+        tr('ai.use.2'),
+        tr('ai.use.3'),
       ]))}
     </div>
   `;
@@ -559,120 +559,120 @@ function renderAuditSummaryPage(data) {
       <td>${escapeHtml(formatDateEs(row.end_date))}</td>
       <td>${escapeHtml(row.auditor_name || '-')}</td>
       <td>${escapeHtml(row.auditor_type || '-')}</td>
-      <td>${statusBadge(row.normalized_status || row.status || 'pendiente')}</td>
-      <td>${row.report_file ? statusBadge('Con informe') : statusBadge('Sin informe')}</td>
+      <td>${statusBadge(row.normalized_status || row.status || tr('status.pending'))}</td>
+      <td>${row.report_file ? statusBadge(tr('status.withReport')) : statusBadge(tr('status.withoutReport'))}</td>
     </tr>
   `);
 
   return `
     <div class="pageTitleBlock">
-      <span>Auditorías</span>
-      <h2>Estado ejecutivo de auditorías</h2>
-      <p>Seguimiento de planificación, ejecución, cierre, hallazgos y acciones asociadas.</p>
+      <span>${escapeHtml(tr('audit.kicker'))}</span>
+      <h2>${escapeHtml(tr('audit.title'))}</h2>
+      <p>${escapeHtml(tr('audit.subtitle'))}</p>
     </div>
 
     <div class="metricGrid">
-      ${miniMetric('Total auditorías', fmtNumber(summary.total), 'Registradas')}
-      ${miniMetric('Pendientes', fmtNumber(summary.pendientes), 'Planificadas', 'warning')}
-      ${miniMetric('En ejecución', fmtNumber(summary.en_ejecucion), 'No deterioran KPI', 'warning')}
-      ${miniMetric('Completadas', fmtNumber(summary.completadas), 'Con cierre formal')}
-      ${miniMetric('Con informe', fmtNumber(summary.con_informe), 'Respaldo documental')}
-      ${miniMetric('Sin informe', fmtNumber(summary.sin_informe), 'Requiere carga', 'warning')}
-      ${miniMetric('Hallazgos derivados', fmtNumber(summary.hallazgos), 'Vinculados')}
-      ${miniMetric('Acciones derivadas', fmtNumber(summary.acciones), 'Seguimiento')}
+      ${miniMetric(tr('audit.total'), fmtNumber(summary.total), tr('audit.registered'))}
+      ${miniMetric(tr('audit.pending'), fmtNumber(summary.pendientes), tr('audit.planned'), 'warning')}
+      ${miniMetric(tr('audit.running'), fmtNumber(summary.en_ejecucion), tr('audit.noKpiDeterioration'), 'warning')}
+      ${miniMetric(tr('audit.completed'), fmtNumber(summary.completadas), tr('audit.formalClosure'))}
+      ${miniMetric(tr('audit.withReport'), fmtNumber(summary.con_informe), tr('audit.documentarySupport'))}
+      ${miniMetric(tr('audit.withoutReport'), fmtNumber(summary.sin_informe), tr('audit.requiresUpload'), 'warning')}
+      ${miniMetric(tr('audit.derivedFindings'), fmtNumber(summary.hallazgos), tr('audit.linked'))}
+      ${miniMetric(tr('audit.derivedActions'), fmtNumber(summary.acciones), tr('page1.followUp'))}
     </div>
 
     <div class="twoCol" style="margin-top:5mm;">
-      ${card('Próxima auditoría', next ? `
-        <div class="infoLine"><span>Norma</span><strong>${escapeHtml(next.iso || '-')}</strong></div>
-        <div class="infoLine"><span>Fecha inicio</span><strong>${escapeHtml(formatDateEs(next.start_date))}</strong></div>
-        <div class="infoLine"><span>Auditor</span><strong>${escapeHtml(next.auditor_name || '-')}</strong></div>
-        <div class="infoLine"><span>Estado</span>${statusBadge(next.normalized_status || next.status || 'pendiente')}</div>
+      ${card(tr('audit.nextAudit'), next ? `
+        <div class="infoLine"><span>${escapeHtml(tr('audit.standard'))}</span><strong>${escapeHtml(next.iso || '-')}</strong></div>
+        <div class="infoLine"><span>${escapeHtml(tr('audit.startDate'))}</span><strong>${escapeHtml(formatDateEs(next.start_date))}</strong></div>
+        <div class="infoLine"><span>${escapeHtml(tr('audit.auditor'))}</span><strong>${escapeHtml(next.auditor_name || '-')}</strong></div>
+        <div class="infoLine"><span>${escapeHtml(tr('audit.status'))}</span>${statusBadge(next.normalized_status || next.status || tr('status.pending'))}</div>
       ` : `
-        <div class="emptyBox">No hay auditorías próximas registradas.</div>
+        <div class="emptyBox">${escapeHtml(tr('empty.noUpcomingAudits'))}</div>
       `)}
 
-      ${card('Criterio de impacto KPI', `
+      ${card(tr('audit.kpiImpactCriteria'), `
         <p class="bodyText">
-          ${escapeHtml(auditData.note || 'Las auditorías en ejecución son trazabilidad operativa y no deterioran KPI hasta existir resultado formal.')}
+          ${escapeHtml(auditData.note || tr('audit.kpiImpactNote'))}
         </p>
         ${bulletList([
-          'Auditoría pendiente: planificación, no afecta score.',
-          'Auditoría en ejecución: seguimiento operativo, no afecta score.',
-          'Auditoría completada: puede generar hallazgos, acciones o evidencias que sí impactan salud y KPI.',
+          tr('audit.criteria.1'),
+          tr('audit.criteria.2'),
+          tr('audit.criteria.3'),
         ])}
       `)}
     </div>
 
-    ${card('Auditoría operativa por control', `
+    ${card(tr('audit.operationalByControl'), `
       <div class="metricGrid three">
-        ${miniMetric('Controles revisados', fmtNumber(reviews.total_reviews), 'Checklist auditoría')}
-        ${miniMetric('No conformes', fmtNumber(reviews.no_conformes), 'Resultado formal', 'danger')}
-        ${miniMetric('Sin evidencia', fmtNumber(reviews.sin_evidencia), 'Requiere respaldo', 'warning')}
+        ${miniMetric(tr('audit.reviewedControls'), fmtNumber(reviews.total_reviews), tr('audit.auditChecklist'))}
+        ${miniMetric(tr('audit.nonConforming'), fmtNumber(reviews.no_conformes), tr('audit.formalResult'), 'danger')}
+        ${miniMetric(tr('audit.noEvidence'), fmtNumber(reviews.sin_evidencia), tr('audit.requiresEvidence'), 'warning')}
       </div>
 
       ${latestAiRun ? `
         <div class="emptyBox" style="margin-top:4mm;">
-          <strong>Última ejecución IA Auditor:</strong>
+          <strong>${escapeHtml(tr('audit.latestAiRun'))}:</strong>
           ${escapeHtml(formatDateTimeEs(latestAiRun.created_at))}
         </div>
 
         <div class="metricGrid three" style="margin-top:4mm;">
           ${miniMetric(
-            'Score preparación',
+            tr('audit.readinessScore'),
             fmtPercent(aiAnalysis.readiness_score ?? aiDiagnosis.readiness_score),
             latestAiRun.standard_code || 'IA Auditor'
           )}
           ${miniMetric(
-            'Revisión checklist',
+            tr('audit.checklistReview'),
             fmtPercent(aiAnalysis.reviewed_percent ?? aiDiagnosis.reviewed_percent),
-            'Controles revisados'
+            tr('audit.reviewedControls')
           )}
           ${miniMetric(
-            'Conformidad',
+            tr('audit.conformity'),
             fmtPercent(aiAnalysis.conformity_percent ?? aiDiagnosis.conformity_percent),
-            'Sin reemplazar criterio humano'
+            tr('audit.noHumanReplacement')
           )}
         </div>
 
         <p class="bodyText" style="margin-top:4mm;">
-          ${escapeHtml(cleanText(aiAnalysis.executive_summary || latestAiRun.summary || 'Sin resumen IA disponible', 420))}
+          ${escapeHtml(cleanText(aiAnalysis.executive_summary || latestAiRun.summary || tr('empty.noAiSummary'), 420))}
         </p>
 
         <div class="twoCol" style="margin-top:4mm;">
-          ${card('Controles críticos priorizados', bulletList(
+          ${card(tr('audit.prioritizedCriticalControls'), bulletList(
             aiCriticalControls.map((item) =>
-              `${item.control_title || item.control_code || 'Control'}: ${item.result || 'sin resultado'} (${item.risk_level || 'riesgo'} ${item.risk_score || 0})`
+              `${item.control_title || item.control_code || 'Control'}: ${item.result || tr('status.noResult')} (${item.risk_level || tr('status.risk')} ${item.risk_score || 0})`
             )
           ))}
 
-          ${card('Brechas de evidencia', bulletList(
+          ${card(tr('audit.evidenceGaps'), bulletList(
             aiEvidenceGaps.map((item) =>
-              `${item.control_title || item.control_code || 'Control'}: ${item.reason || 'requiere evidencia'}`
+              `${item.control_title || item.control_code || 'Control'}: ${item.reason || tr('status.requiresEvidence')}`
             )
           ))}
         </div>
 
-        ${card('Recomendaciones ejecutivas IA Auditor', bulletList(aiRecommendations), 'wideCard')}
+        ${card(tr('audit.aiRecommendations'), bulletList(aiRecommendations), 'wideCard')}
 
         <div class="emptyBox" style="margin-top:4mm;">
           ${escapeHtml(
             aiAnalysis.human_approval_note ||
-              'IA Auditor no reemplaza al auditor humano; sus sugerencias requieren aprobación antes de convertirse en hallazgos, acciones o solicitudes formales.'
+              tr('audit.humanApprovalNote')
           )}
         </div>
       ` : `
         <div class="emptyBox" style="margin-top:4mm;">
-          <strong>Última ejecución IA Auditor:</strong>
-          Sin ejecución registrada para este tenant.
+          <strong>${escapeHtml(tr('audit.latestAiRun'))}:</strong>
+          ${escapeHtml(tr('empty.noAiRun'))}
         </div>
       `}
     `, 'wideCard')}
 
-    ${card('Auditorías recientes', table(
-      ['ISO', 'Inicio', 'Término', 'Auditor', 'Tipo', 'Estado', 'Informe'],
+    ${card(tr('audit.recentAudits'), table(
+      [tr('audit.table.iso'), tr('audit.table.start'), tr('audit.table.end'), tr('audit.table.auditor'), tr('audit.table.type'), tr('audit.table.status'), tr('audit.table.report')],
       rows,
-      'No existen auditorías recientes registradas.'
+      tr('empty.noRecentAudits')
     ), 'wideCard')}
   `;
 }
@@ -720,21 +720,21 @@ function renderHealthPage(data) {
 
   return `
     <div class="pageTitleBlock">
-      <span>Salud y exposición</span>
-      <h2>Salud ISO por norma y riesgos relevantes</h2>
-      <p>Vista consolidada para priorizar decisiones gerenciales.</p>
+      <span>${escapeHtml(tr('health.kicker'))}</span>
+      <h2>${escapeHtml(tr('health.title'))}</h2>
+      <p>${escapeHtml(tr('health.subtitle'))}</p>
     </div>
 
-    ${card('Salud ISO por norma', table(
-      ['Norma', 'Nombre', 'Salud', 'Controles', 'Saludables', 'Atención', 'Deteriorados', 'Evid. pend.'],
+    ${card(tr('health.isoByStandard'), table(
+      [tr('health.table.standard'), tr('health.table.name'), tr('health.table.health'), tr('health.table.controls'), tr('health.table.healthy'), tr('health.table.attention'), tr('health.table.deteriorated'), tr('health.table.pendingEvidenceShort')],
       healthRows,
-      'No existen datos de salud ISO.'
+      tr('empty.noIsoHealth')
     ), 'wideCard')}
 
-    ${card('Riesgos críticos y exposición', table(
-      ['Riesgo', 'Descripción', 'Activo', 'Prob.', 'Nivel'],
+    ${card(tr('health.criticalRisksExposure'), table(
+      [tr('health.table.risk'), tr('health.table.description'), tr('health.table.asset'), tr('health.table.probabilityShort'), tr('health.table.level')],
       riskRows,
-      'No existen riesgos críticos registrados.'
+      tr('empty.noCriticalRisks')
     ), 'wideCard')}
   `;
 }
@@ -757,15 +757,15 @@ function renderRecommendationsPage(data) {
 
   return `
     <div class="pageTitleBlock">
-      <span>Plan ejecutivo</span>
-      <h2>Recomendaciones y foco gerencial</h2>
-      <p>Elementos priorizados para seguimiento de comité o reunión ejecutiva.</p>
+      <span>${escapeHtml(tr('recommendations.kicker'))}</span>
+      <h2>${escapeHtml(tr('recommendations.title'))}</h2>
+      <p>${escapeHtml(tr('recommendations.subtitle'))}</p>
     </div>
 
     <div class="twoCol">
-      ${card('Recomendaciones ejecutivas', bulletList(recommendations), 'tallCard')}
+      ${card(tr('recommendations.executive'), bulletList(recommendations), 'tallCard')}
 
-      ${card('Cumplimiento por norma', `
+      ${card(tr('recommendations.complianceByStandard'), `
         <div class="barList">
           ${
             compliance.length
@@ -780,7 +780,7 @@ function renderRecommendationsPage(data) {
                     </div>
                   `;
                 }).join('')
-              : '<div class="emptyBox">No existen datos por norma.</div>'
+              : `<div class="emptyBox">${escapeHtml(tr('empty.noStandardData'))}</div>`
           }
         </div>
       `, 'tallCard')}
@@ -810,8 +810,8 @@ function renderKpiPages(data) {
 
     return `
       <div class="pageTitleBlock">
-        <span>KPIs</span>
-        <h2>KPIs recientes para seguimiento gerencial${index > 0 ? ' (continuación)' : ''}</h2>
+        <span>${escapeHtml(tr('kpi.kicker'))}</span>
+        <h2>${escapeHtml(tr('kpi.recentTitle'))}${index > 0 ? ' (' + escapeHtml(tr('kpi.continuation')) + ')' : ''}</h2>
         <p>Indicadores calculados sobre el alcance activo del tenant.</p>
       </div>
 
@@ -1468,7 +1468,10 @@ function renderStyles() {
   `;
 }
 
-function renderExecutivePremiumTemplate(data = {}) {
+function renderExecutivePremiumTemplate(data = {}, options = {}) {
+  const requestedLocale = options?.locale || data?.locale || data?.metadata?.locale || data?.report_locale || 'es';
+  setActiveReportLocale(requestedLocale);
+
   const tenant = data.tenant || {};
   const config = getReportConfig(data.report_type_code);
   const title = data.report_title || config.title;
