@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
+const { resolveLocale } = require('../utils/locale');
 
 const { tenantInternalSearch } = require('./ai-tenant-search.routes');
 const { benchmarkSearch } = require('./ai-benchmark.routes');
@@ -1317,6 +1318,8 @@ async function saveTrace({
 // =====================================================
 router.post('/', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const question = cleanQuestion(req.body?.question || req.body?.q || '');
 
     if (!question) {
@@ -1484,6 +1487,7 @@ router.post('/', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       tenant_id: tenantId,
       question,
       answer,

@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
+const { resolveLocale } = require('../utils/locale');
 const {
   persistSeniorAuditorSuggestions,
   summarizeSeniorSuggestionSync,
@@ -423,6 +424,7 @@ async function callEnhancedComplianceAnswer(req, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: getAuthHeader(req),
+        'x-tcdx-locale': resolveLocale(req),
       },
       body: JSON.stringify({
         tenant_id: tenantId,
@@ -432,6 +434,7 @@ async function callEnhancedComplianceAnswer(req, {
         benchmark_limit: benchmarkLimit,
         force_external_lookup: forceExternalLookup === true,
         accept_extra_charge: acceptExtraCharge === true,
+        locale: resolveLocale(req),
       }),
     });
 
@@ -1311,6 +1314,7 @@ router.get('/engine-health', auth, async (_req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       data: {
         ...json,
         db_connection: Boolean(json?.db_connection ?? json?.db_ok),
@@ -1329,6 +1333,8 @@ router.get('/engine-health', auth, async (_req, res) => {
 
 router.get('/health-summary', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const tenantId = resolveTenantId(req);
     const userId = getUserId(req.user);
 
@@ -1399,6 +1405,7 @@ router.get('/health-summary', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       context: aiPayload,
       ai: aiResponse,
       senior_auditor: seniorAuditor,
@@ -1417,6 +1424,8 @@ router.get('/health-summary', auth, async (req, res) => {
 
 router.get('/findings', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const tenantId = resolveTenantId(req);
 
     if (!tenantId) {
@@ -1430,6 +1439,7 @@ router.get('/findings', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       data: rows,
     });
   } catch (error) {
@@ -1445,6 +1455,8 @@ router.get('/findings', auth, async (req, res) => {
 
 router.post('/finding-analysis', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const tenantId = resolveTenantId(req);
     const userId = getUserId(req.user);
     const findingId = String(req.body?.finding_id || '');
@@ -1514,6 +1526,7 @@ router.post('/finding-analysis', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       context: aiPayload,
       ai: enrichedAiResponse,
       enhanced: enhancedResult,
@@ -1531,6 +1544,8 @@ router.post('/finding-analysis', auth, async (req, res) => {
 
 router.post('/nonconformity-draft', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const tenantId = resolveTenantId(req);
     const userId = getUserId(req.user);
     const nonconformityId = req.body?.nonconformity_id
@@ -1612,6 +1627,7 @@ router.post('/nonconformity-draft', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       context: aiPayload,
       ai: enrichedAiResponse,
       enhanced: enhancedResult,
@@ -1629,6 +1645,8 @@ router.post('/nonconformity-draft', auth, async (req, res) => {
 
 router.post('/action-plan-suggestion', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const tenantId = resolveTenantId(req);
     const userId = getUserId(req.user);
     const findingId = String(req.body?.finding_id || '');
@@ -1693,6 +1711,7 @@ router.post('/action-plan-suggestion', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       context: aiPayload,
       ai: enrichedAiResponse,
       enhanced: enhancedResult,
@@ -1710,6 +1729,8 @@ router.post('/action-plan-suggestion', auth, async (req, res) => {
 
 router.get('/executive-brief', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const tenantId = resolveTenantId(req);
     const userId = getUserId(req.user);
 
@@ -1784,6 +1805,7 @@ router.get('/executive-brief', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       context: aiPayload,
       ai: aiResponse,
       senior_auditor: seniorAuditor,
@@ -1802,6 +1824,8 @@ router.get('/executive-brief', auth, async (req, res) => {
 
 router.get('/suggestions', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const tenantId = resolveTenantId(req);
     const suggestionType = req.query?.suggestion_type
       ? String(req.query.suggestion_type)
@@ -1818,6 +1842,7 @@ router.get('/suggestions', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       data: rows,
     });
   } catch (error) {
@@ -1833,6 +1858,8 @@ router.get('/suggestions', auth, async (req, res) => {
 
 router.post('/suggestions/save', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const tenantId = resolveTenantId(req);
     const userId = getUserId(req.user);
 
@@ -1869,6 +1896,7 @@ router.post('/suggestions/save', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       data: row,
     });
   } catch (error) {
@@ -1884,6 +1912,8 @@ router.post('/suggestions/save', auth, async (req, res) => {
 
 router.post('/suggestions/:id/apply', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const suggestionId = String(req.params.id || '');
     const tenantId = resolveTenantId(req);
     const userId = getUserId(req.user);
@@ -1942,6 +1972,7 @@ router.post('/suggestions/:id/apply', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       data: updated,
       applied_artifact: appliedArtifact,
     });
@@ -1962,6 +1993,8 @@ router.post('/suggestions/:id/apply', auth, async (req, res) => {
 
 router.post('/apply/finding-analysis-to-finding', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const tenantId = resolveTenantId(req);
     const userId = getUserId(req.user);
     const findingId = String(req.body?.finding_id || '');
@@ -2046,6 +2079,7 @@ router.post('/apply/finding-analysis-to-finding', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       data: updateRes.rows[0],
       applied_text: appendBlock,
     });
@@ -2367,6 +2401,7 @@ router.post('/apply/action-plan-suggestion-to-plan', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       data: updateRes.rows[0],
       applied_text: appendBlock,
     });
@@ -2684,6 +2719,7 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
 
     return res.json({
       ok: true,
+      locale,
       data: savedRow,
     });
   } catch (error) {

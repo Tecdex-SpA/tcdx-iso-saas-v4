@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { resolveLocale } = require('../utils/locale');
 
 // =============================
 // 🔐 VALIDADOR UUID
@@ -22,6 +23,8 @@ const ensureTenantAccess = (req, tenantId) => {
 // =============================
 router.get('/recommendations/:tenant_id', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const { tenant_id } = req.params;
 
     if (!isUUID(tenant_id)) {
@@ -109,6 +112,8 @@ router.get('/recommendations/:tenant_id', auth, async (req, res) => {
 // =============================
 router.put('/apply/:tenant_control_id', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     const { tenant_control_id } = req.params;
 
     if (!isUUID(tenant_control_id)) {

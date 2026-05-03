@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { resolveLocale } = require('../utils/locale');
 
 function normalizeRole(role) {
   return String(role || '').trim().toLowerCase();
@@ -350,6 +351,9 @@ async function syncNotificationsForTenant(tenantId) {
 
 async function getNotifications(req, res) {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
+
     const { tenantId } = req.params;
 
     if (!tenantId) {
@@ -391,6 +395,7 @@ async function getNotifications(req, res) {
     const unreadCount = rows.filter((r) => !r.is_read).length;
 
     return res.json({
+      locale,
       unreadCount,
       items: rows,
     });
@@ -402,6 +407,9 @@ async function getNotifications(req, res) {
 
 async function markNotificationRead(req, res) {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
+
     const { id } = req.params;
 
     const current = await db.query(
@@ -434,7 +442,7 @@ async function markNotificationRead(req, res) {
       [id]
     );
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, locale });
   } catch (err) {
     console.error('MARK NOTIFICATION READ ERROR:', err);
     return res.status(500).json({ error: 'Error marcando notificación' });
@@ -443,6 +451,9 @@ async function markNotificationRead(req, res) {
 
 async function markAllNotificationsRead(req, res) {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
+
     const { tenantId } = req.params;
 
     if (!tenantId) {
@@ -464,7 +475,7 @@ async function markAllNotificationsRead(req, res) {
       [tenantId]
     );
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, locale });
   } catch (err) {
     console.error('MARK ALL NOTIFICATIONS READ ERROR:', err);
     return res.status(500).json({ error: 'Error marcando notificaciones' });

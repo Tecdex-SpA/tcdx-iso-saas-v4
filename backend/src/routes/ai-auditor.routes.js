@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
+const { resolveLocale } = require('../utils/locale');
 
 function normalizeRole(user) {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
@@ -597,6 +598,8 @@ function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
 
 router.get('/context/:audit_id', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     if (!canRead(req.user)) {
       return res.status(403).json({ ok: false, code: 'RBAC_DENIED', error: 'No autorizado' });
     }
@@ -621,6 +624,7 @@ router.get('/context/:audit_id', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       audit,
       checklist,
       evidence_stats: evidenceStats,
@@ -638,6 +642,8 @@ router.get('/context/:audit_id', auth, async (req, res) => {
 
 router.post('/analyze/:audit_id', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     if (!canAnalyze(req.user)) {
       return res.status(403).json({
         ok: false,
@@ -699,12 +705,14 @@ router.post('/analyze/:audit_id', auth, async (req, res) => {
           evidence_total: evidenceStats.total,
           relations,
           generated_at: new Date().toISOString(),
+          locale,
         }),
       ]
     );
 
     return res.json({
       ok: true,
+      locale,
       data: inserted.rows[0],
       analysis,
       summary: analysis.executive_summary,
@@ -724,6 +732,8 @@ router.post('/analyze/:audit_id', auth, async (req, res) => {
 
 router.get('/runs/:tenant_id', auth, async (req, res) => {
   try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
     if (!canRead(req.user)) {
       return res.status(403).json({ ok: false, code: 'RBAC_DENIED', error: 'No autorizado' });
     }
@@ -757,6 +767,7 @@ router.get('/runs/:tenant_id', auth, async (req, res) => {
 
     return res.json({
       ok: true,
+      locale,
       data: result.rows,
     });
   } catch (error) {
