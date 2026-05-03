@@ -4,6 +4,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
 const { resolveLocale } = require('../utils/locale');
+const { localizeAiAnswerPayload } = require('../utils/aiAnswerLocale');
 
 const { tenantInternalSearch } = require('./ai-tenant-search.routes');
 const { benchmarkSearch } = require('./ai-benchmark.routes');
