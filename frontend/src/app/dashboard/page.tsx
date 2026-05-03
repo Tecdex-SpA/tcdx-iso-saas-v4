@@ -391,7 +391,7 @@ function formatKpiValue(value: number | string | null | undefined, unit?: string
 }
 
 export default function DashboardPage() {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const [activeView, setActiveView] = useState<'executive' | 'kpi'>('executive');
 
   const currentRole = getUserRoleFromToken();
@@ -738,11 +738,11 @@ export default function DashboardPage() {
 
   const latestSyncText = useMemo(() => {
     const now = new Date();
-    return `Hoy, ${now.toLocaleTimeString('es-CL', {
+    return `${t('common.today')}, ${now.toLocaleTimeString(locale === 'en' ? 'en-US' : 'es-CL', {
       hour: '2-digit',
       minute: '2-digit',
     })}`;
-  }, []);
+  }, [locale, t]);
 
   const complianceTrend = useMemo(() => {
     const start = Math.max(40, complianceValue - 12);
