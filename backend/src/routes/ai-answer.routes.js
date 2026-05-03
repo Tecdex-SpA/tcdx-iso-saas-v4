@@ -1361,6 +1361,7 @@ router.post('/', auth, async (req, res) => {
     let benchmarkResult = null;
     let externalLookupResult = null;
     let answer = buildAnswerFromTenantSearch(question, tenantSearch);
+    answer = localizeAiAnswerPayload(answer, locale);
 
     const needsTcdxKnowledge = questionNeedsTcdxKnowledge(question);
 
@@ -1393,6 +1394,7 @@ router.post('/', auth, async (req, res) => {
 
       if (Number(knowledgeSearch?.total || 0) > 0 && knowledgeIsUseful) {
         answer = buildAnswerFromTcdxKnowledge(question, tenantSearch, knowledgeSearch);
+    answer = localizeAiAnswerPayload(answer, locale);
       }
     }
 
@@ -1425,6 +1427,7 @@ router.post('/', auth, async (req, res) => {
           knowledgeSearch,
           benchmarkResult
         );
+    answer = localizeAiAnswerPayload(answer, locale);
       }
     }
 
@@ -1455,6 +1458,7 @@ router.post('/', auth, async (req, res) => {
           benchmarkResult,
           externalLookupResult
         );
+    answer = localizeAiAnswerPayload(answer, locale);
       }
     }
 
