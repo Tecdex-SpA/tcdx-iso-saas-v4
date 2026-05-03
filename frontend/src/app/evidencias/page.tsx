@@ -391,11 +391,13 @@ function resolveTenantId(user: any): string {
 }
 
 export default function EvidenciasPage() {
+  const { t } = useTranslation();
+
   return (
     <Suspense
       fallback={
         <AppLayout>
-          <div className="p-6">Cargando evidencias...</div>
+          <div className="p-6">{t('evidence.loading')}</div>
         </AppLayout>
       }
     >
@@ -470,12 +472,12 @@ function EvidenciasPageContent() {
       setUploadForm((prev) => ({
         ...prev,
         description:
-          prev.description || 'Evidencia de remediación cargada desde Plan de Acción',
+          prev.description || t('evidence.remediationDefaultDescription'),
       }));
     }
 
     loadStandards(resolvedTenantId, authToken);
-  }, [tenantControlIdFromUrl, actionPlanIdFromUrl]);
+  }, [tenantControlIdFromUrl, actionPlanIdFromUrl, t]);
 
   useEffect(() => {
     focusAppliedRef.current = false;
@@ -730,8 +732,8 @@ function EvidenciasPageContent() {
 
       alert(
         actionPlanIdFromUrl
-          ? 'Evidencia aprobada manualmente. El plan asociado fue actualizado y la salud ISO fue recalculada.'
-          : 'Evidencia aprobada manualmente. La salud ISO fue recalculada.'
+          ? t('evidence.manualApprovalSuccessWithPlan')
+          : t('evidence.manualApprovalSuccess')
       );
 
       await refresh();
@@ -745,7 +747,7 @@ function EvidenciasPageContent() {
 
   const rechazar = async (id: string) => {
     const authToken = localStorage.getItem('token');
-    const reason = window.prompt('Motivo del rechazo', '') || '';
+    const reason = window.prompt(t('evidence.rejectionPrompt'), '') || '';
 
     try {
       setReviewingId(id);
@@ -769,7 +771,7 @@ function EvidenciasPageContent() {
         return;
       }
 
-      alert('Evidencia rechazada manualmente.');
+      alert(t('evidence.manualRejectionSuccess'));
       await refresh();
     } catch (err) {
       console.error('ERROR REJECT EVIDENCE:', err);
@@ -1248,14 +1250,16 @@ function EvidenciasPageContent() {
                     <div className="font-semibold">{t('evidence.historicalAiApproval')}</div>
                     <div className="mt-1 text-sm">
                       {e.ai_auto_review_reason ||
-                        `La evidencia superó el ${AI_RECOMMENDATION_THRESHOLD}% de aceptación.`}
+                        t('evidence.aiHistoricalApprovalReason', {
+                          threshold: AI_RECOMMENDATION_THRESHOLD,
+                        })}
                     </div>
                     <div className="mt-2 text-xs">
-                      % aceptación: <b>{toPercent(acceptancePct)}</b>
+                      {t('evidence.acceptancePercentLabel')}: <b>{toPercent(acceptancePct)}</b>
                       {e.ai_auto_approved_at ? (
                         <>
                           {' '}
-                          · Fecha: <b>{formatDateTime(e.ai_auto_approved_at)}</b>
+                          · {t('evidence.dateLabel')}: <b>{formatDateTime(e.ai_auto_approved_at)}</b>
                         </>
                       ) : null}
                     </div>
@@ -1268,14 +1272,16 @@ function EvidenciasPageContent() {
                       <div className="font-semibold">{t('evidence.aiRecommendsHumanApproval')}</div>
                       <div className="mt-1 text-sm">
                         {e.ai_recommendation_reason ||
-                          `La evidencia superó el ${AI_RECOMMENDATION_THRESHOLD}% de aceptación y requiere revisión humana.`}
+                          t('evidence.aiHumanReviewReason', {
+                            threshold: AI_RECOMMENDATION_THRESHOLD,
+                          })}
                       </div>
                       <div className="mt-2 text-xs">
-                        % aceptación: <b>{toPercent(acceptancePct)}</b>
+                        {t('evidence.acceptancePercentLabel')}: <b>{toPercent(acceptancePct)}</b>
                         {e.ai_recommended_at ? (
                           <>
                             {' '}
-                            · Fecha: <b>{formatDateTime(e.ai_recommended_at)}</b>
+                            · {t('evidence.dateLabel')}: <b>{formatDateTime(e.ai_recommended_at)}</b>
                           </>
                         ) : null}
                       </div>
@@ -1289,10 +1295,13 @@ function EvidenciasPageContent() {
                     <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
                       <div className="font-semibold">{t('evidence.aiReviewCompleted')}</div>
                       <div className="mt-1 text-sm">
-                        La evidencia fue evaluada por IA con <b>{toPercent(acceptancePct)}</b> de aceptación.
+                        {t('evidence.aiReviewedWithAcceptancePrefix')} <b>{toPercent(acceptancePct)}</b>{' '}
+                        {t('evidence.aiReviewedWithAcceptanceSuffix')}
                         {acceptancePct >= AI_RECOMMENDATION_THRESHOLD
-                          ? ' Está lista para revisión y aprobación humana.'
-                          : ` No alcanza el umbral de recomendación de ${AI_RECOMMENDATION_THRESHOLD}%.`}
+                          ? t('evidence.readyForHumanReview')
+                          : t('evidence.aiBelowThreshold', {
+                              threshold: AI_RECOMMENDATION_THRESHOLD,
+                            })}
                       </div>
                     </div>
                   )}
@@ -1304,7 +1313,7 @@ function EvidenciasPageContent() {
                 {e.ai_narrative && (
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <div className="text-xs uppercase tracking-wide text-slate-400">
-                      Narrativa IA
+                      {t('evidence.aiNarrative')}
                     </div>
                     <div className="mt-1 text-sm text-slate-700">{e.ai_narrative}</div>
                   </div>
@@ -1333,7 +1342,7 @@ function EvidenciasPageContent() {
                   />
                   <InfoBox
                     label={t('evidence.expires')}
-                    value={e.expires_at ? formatDate(e.expires_at) : 'No definida'}
+                    value={e.expires_at ? formatDate(e.expires_at) : t('evidence.notDefined')}
                   />
                   <InfoBox
                     label={t('evidence.aiAcceptancePercent')}
@@ -1353,7 +1362,7 @@ function EvidenciasPageContent() {
                   />
                   <InfoBox
                     label={t('evidence.extractedText')}
-                    value={e.text_char_count ? `${e.text_char_count} chars` : '-'}
+                    value={e.text_char_count ? `${e.text_char_count} ${t('evidence.characters')}` : '-'}
                   />
                   <InfoBox
                     label={t('evidence.aiAnalysis')}
@@ -1418,17 +1427,17 @@ function EvidenciasPageContent() {
                     <ListCard
                       title={t('evidence.detectedRisks')}
                       items={aiRisks}
-                      emptyText="Sin riesgos relevantes."
+                      emptyText={t('evidence.empty.detectedRisks')}
                     />
                     <ListCard
                       title={t('evidence.suggestedNextSteps')}
                       items={aiNextSteps}
-                      emptyText="Sin acciones sugeridas."
+                      emptyText={t('evidence.empty.nextSteps')}
                     />
                     <ListCard
                       title={t('evidence.detectedEntities')}
                       items={aiEntities}
-                      emptyText="Sin entidades detectadas."
+                      emptyText={t('evidence.empty.entities')}
                     />
                   </div>
                 )}
@@ -1456,7 +1465,7 @@ function EvidenciasPageContent() {
                       }}
                       className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
                     >
-                      Abrir plan
+                      {t('evidence.openPlan')}
                     </button>
                   )}
                 </div>
@@ -1469,10 +1478,10 @@ function EvidenciasPageContent() {
                       className="bg-green-600 text-white px-3 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-60"
                     >
                       {reviewingId === e.id && canApproveManually
-                        ? 'Procesando...'
+                        ? t('common.processing')
                         : normalizedStatus === 'aprobada'
-                        ? 'Ya aprobada'
-                        : 'Aprobar manualmente'}
+                        ? t('evidence.alreadyApproved')
+                        : t('evidence.manuallyApprove')}
                     </button>
 
                     <button
@@ -1481,10 +1490,10 @@ function EvidenciasPageContent() {
                       className="bg-red-600 text-white px-3 py-2 rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
                     >
                       {reviewingId === e.id && canRejectManually
-                        ? 'Procesando...'
+                        ? t('common.processing')
                         : normalizedStatus === 'rechazada'
-                        ? 'Ya rechazada'
-                        : 'Rechazar manualmente'}
+                        ? t('evidence.alreadyRejected')
+                        : t('evidence.manuallyReject')}
                     </button>
                   </div>
                 )}
