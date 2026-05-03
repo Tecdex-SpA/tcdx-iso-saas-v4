@@ -1450,7 +1450,7 @@ export default function DashboardPage() {
                     value={kpiSummary?.red || 0}
                     subtitle={t('dashboard.criticalKpisSubtitle')}
                     accent="red"
-                    change="ALERTA"
+                    change={t('dashboardKpi.alertLabel')}
                     changeHint={t('dashboard.highImpact')}
                     icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                   />
