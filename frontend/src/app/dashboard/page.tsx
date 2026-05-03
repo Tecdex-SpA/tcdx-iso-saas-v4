@@ -343,8 +343,8 @@ function isHealthKpiItem(item?: KpiDashboardItem | null) {
   return Boolean(item?.is_health_kpi || item?.code?.startsWith('KPI-HLT-'));
 }
 
-function formatDateCL(value?: string | null) {
-  if (!value) return 'Sin fecha';
+function formatDateCL(value?: string | null, emptyLabel = 'Sin fecha') {
+  if (!value) return emptyLabel;
 
   try {
     return new Date(value).toLocaleDateString('es-CL');
@@ -353,11 +353,11 @@ function formatDateCL(value?: string | null) {
   }
 }
 
-function getKpiStatusLabel(color?: string | null) {
-  if (color === 'green') return 'Verde';
-  if (color === 'yellow') return 'Amarillo';
-  if (color === 'red') return 'Rojo';
-  return 'Sin dato';
+function getKpiStatusLabel(color?: string | null, labels?: Record<string, string>) {
+  if (color === 'green') return labels?.green || 'Verde';
+  if (color === 'yellow') return labels?.yellow || 'Amarillo';
+  if (color === 'red') return labels?.red || 'Rojo';
+  return labels?.gray || 'Sin dato';
 }
 
 function getKpiStatusClass(color?: string | null) {
@@ -367,9 +367,9 @@ function getKpiStatusClass(color?: string | null) {
   return 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
-function formatKpiValue(value: number | string | null | undefined, unit?: string) {
+function formatKpiValue(value: number | string | null | undefined, unit?: string, noDataLabel = 'Sin dato') {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return 'Sin dato';
+    return noDataLabel;
   }
 
   const rounded =
@@ -1398,16 +1398,12 @@ export default function DashboardPage() {
                     <a
                       href="/health"
                       className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
-                    >
-                      Ver Health
-                    </a>
+                    >{t('dashboardKpi.viewHealth')}</a>
 
                     <a
                       href="/administrar-kpis"
                       className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                    >
-                      Administrar KPIs
-                    </a>
+                    >{t('dashboardKpi.administerKpis')}</a>
 
                     <button
                       type="button"
@@ -1506,9 +1502,7 @@ export default function DashboardPage() {
                       <a
                         href="/health"
                         className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-                      >
-                        Ver detalle Health
-                      </a>
+                      >{t('dashboardKpi.viewHealthDetail')}</a>
                     </div>
 
                     {healthKpiItems.length === 0 ? (

@@ -1362,7 +1362,7 @@
     "noDataStatus": "Sin dato",
     "kpiHealthTitle": "KPIs Health",
     "healthEngineTitle": "KPIs Health conectados al motor de salud",
-    "healthEngineSubtitle": "Datos reales de snapshots del motor Health: salud general, cobertura de evidencias y deterioro de controles.",
+    "healthEngineSubtitle": "Datos reales desde snapshots del motor Health: salud general, cobertura de evidencias y deterioro de controles.",
     "noHealthKpis": "Aún no hay KPIs Health disponibles. Ejecuta “Recalcular KPIs” para generar snapshots actuales.",
     "pendingNoData": "{{count}} sin dato",
     "kpiViewTitle": "KPI View",
@@ -1379,7 +1379,8 @@
       "yellow": "Amarillo",
       "red": "Rojo",
       "gray": "Sin dato"
-    }
+    },
+    "periodLabel": "Periodo"
   },
   "kpiAdmin": {
     "title": "Administrar KPIs",

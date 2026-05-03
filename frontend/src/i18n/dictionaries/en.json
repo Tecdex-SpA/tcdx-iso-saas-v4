@@ -1379,7 +1379,8 @@
       "yellow": "Yellow",
       "red": "Red",
       "gray": "No Data"
-    }
+    },
+    "periodLabel": "Period"
   },
   "kpiAdmin": {
     "title": "KPI Administration",
