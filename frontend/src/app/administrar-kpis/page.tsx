@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -100,11 +101,13 @@ function colorBadgeClass(color?: string | null) {
   return 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
-function colorLabel(color?: string | null) {
-  if (color === 'green') return 'Verde';
-  if (color === 'yellow') return 'Amarillo';
-  if (color === 'red') return 'Rojo';
-  return 'Sin dato';
+type TFunction = (key: string, params?: Record<string, string | number>) => string;
+
+function colorLabel(color: string | null | undefined, t: TFunction) {
+  if (color === 'green') return t('statuses.kpis.verde');
+  if (color === 'yellow') return t('statuses.kpis.amarillo');
+  if (color === 'red') return t('statuses.kpis.rojo');
+  return t('common.noData');
 }
 
 function getHealthRefreshCount(payload: any): number {
@@ -118,6 +121,7 @@ function getHealthRefreshCount(payload: any): number {
 }
 
 export default function AdministrarKpisPage() {
+  const { t } = useTranslation();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
 
@@ -303,7 +307,7 @@ export default function AdministrarKpisPage() {
     if (!token || !user?.tenant_id) return;
 
     if (!form.name.trim()) {
-      alert('El nombre es obligatorio');
+      alert(t('kpiAdmin.nameRequired'));
       return;
     }
 
@@ -345,7 +349,7 @@ export default function AdministrarKpisPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando KPI personalizado');
+        alert(json.error || t('kpiAdmin.createError'));
         return;
       }
 
@@ -374,10 +378,10 @@ export default function AdministrarKpisPage() {
       });
 
       await refresh();
-      alert('KPI personalizado creado correctamente');
+      alert(t('kpiAdmin.createSuccess'));
     } catch (err) {
       console.error('ERROR CREATE KPI:', err);
-      alert('Error creando KPI personalizado');
+      alert(t('kpiAdmin.createError'));
     } finally {
       setSaving('');
     }
@@ -387,7 +391,7 @@ export default function AdministrarKpisPage() {
     if (!token || !user?.tenant_id) return;
 
     if (isHealthKpi(item)) {
-      alert('Los KPIs de salud son automáticos del sistema y no se deshabilitan desde esta vista.');
+      alert(t('kpiAdmin.healthKpisCannotDisable'));
       return;
     }
 
@@ -415,14 +419,14 @@ export default function AdministrarKpisPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error actualizando KPI');
+        alert(json.error || t('kpiAdmin.updateError'));
         return;
       }
 
       await refresh();
     } catch (err) {
       console.error('ERROR TOGGLE KPI:', err);
-      alert('Error actualizando KPI');
+      alert(t('kpiAdmin.updateError'));
     } finally {
       setSaving('');
     }
@@ -432,24 +436,24 @@ export default function AdministrarKpisPage() {
     if (!token || !user?.tenant_id) return;
 
     if (isHealthKpi(item)) {
-      alert('Los KPIs de salud son gestionados automáticamente por el motor Health.');
+      alert(t('kpiAdmin.healthKpisManaged'));
       return;
     }
 
     const customLabel =
-      window.prompt('Etiqueta personalizada del KPI', item.custom_label || item.name) ??
+      window.prompt(t('kpiAdmin.customLabelPrompt'), item.custom_label || item.name) ??
       item.custom_label ??
       item.name;
 
     const customDescription =
-      window.prompt('Descripción personalizada', item.custom_description || item.description || '') ??
+      window.prompt(t('kpiAdmin.customDescriptionPrompt'), item.custom_description || item.description || '') ??
       item.custom_description ??
       item.description ??
       '';
 
     const overrideFrequency =
       window.prompt(
-        'Frecuencia: mensual / trimestral / semestral / anual',
+        t('kpiAdmin.frequencyPrompt'),
         item.override_frequency || item.frequency
       ) ??
       item.override_frequency ??
@@ -457,7 +461,7 @@ export default function AdministrarKpisPage() {
 
     const overrideDirection =
       window.prompt(
-        'Dirección: higher_is_better / lower_is_better / target_range',
+        t('kpiAdmin.directionPrompt'),
         item.override_direction || item.direction
       ) ??
       item.override_direction ??
@@ -465,7 +469,7 @@ export default function AdministrarKpisPage() {
 
     const overrideTargetValue =
       window.prompt(
-        'Objetivo numérico',
+        t('kpiAdmin.numericTargetPrompt'),
         String(item.override_target_value ?? item.target_value ?? '')
       ) ??
       String(item.override_target_value ?? item.target_value ?? '');
@@ -494,15 +498,15 @@ export default function AdministrarKpisPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error personalizando KPI');
+        alert(json.error || t('kpiAdmin.customizeError'));
         return;
       }
 
       await refresh();
-      alert('KPI actualizado para este tenant');
+      alert(t('kpiAdmin.customizeSuccess'));
     } catch (err) {
       console.error('ERROR CUSTOMIZE KPI:', err);
-      alert('Error personalizando KPI');
+      alert(t('kpiAdmin.customizeError'));
     } finally {
       setSaving('');
     }
@@ -511,58 +515,58 @@ export default function AdministrarKpisPage() {
   const editCustomKpi = async (item: KpiAdminItem) => {
     if (!token || !user?.tenant_id) return;
     if (item.is_standard) {
-      alert('Este endpoint es solo para KPIs personalizados');
+      alert(t('kpiAdmin.customEndpointOnly'));
       return;
     }
 
-    const name = window.prompt('Nombre del KPI', item.name) ?? item.name;
+    const name = window.prompt(t('kpiAdmin.kpiName'), item.name) ?? item.name;
     const description =
-      window.prompt('Descripción', item.description || '') ?? item.description ?? '';
+      window.prompt(t('kpiAdmin.description'), item.description || '') ?? item.description ?? '';
     const category =
       window.prompt(
-        'Categoría: estrategico / operacional / riesgo / cumplimiento / cliente / industrial / financiero / personalizado',
+        t('kpiAdmin.categoryPrompt'),
         item.category
       ) ?? item.category;
     const kpiType =
-      window.prompt('Tipo: manual / hibrido / automatico', item.kpi_type) ?? item.kpi_type;
-    const unit = window.prompt('Unidad', item.unit) ?? item.unit;
+      window.prompt(t('kpiAdmin.typePrompt'), item.kpi_type) ?? item.kpi_type;
+    const unit = window.prompt(t('kpiAdmin.unit'), item.unit) ?? item.unit;
     const frequency =
       window.prompt(
-        'Frecuencia: mensual / trimestral / semestral / anual',
+        t('kpiAdmin.frequencyPrompt'),
         item.override_frequency || item.frequency
       ) ?? (item.override_frequency || item.frequency);
     const direction =
       window.prompt(
-        'Dirección: higher_is_better / lower_is_better / target_range',
+        t('kpiAdmin.directionPrompt'),
         item.override_direction || item.direction
       ) ?? (item.override_direction || item.direction);
     const targetValue =
       window.prompt(
-        'Objetivo numérico',
+        t('kpiAdmin.numericTargetPrompt'),
         String(item.override_target_value ?? item.target_value ?? '')
       ) ?? String(item.override_target_value ?? item.target_value ?? '');
     const greenMin =
-      window.prompt('Verde min', String(item.thresholds?.green_min ?? '')) ??
+      window.prompt(t('kpiAdmin.greenMin'), String(item.thresholds?.green_min ?? '')) ??
       String(item.thresholds?.green_min ?? '');
     const greenMax =
-      window.prompt('Verde max', String(item.thresholds?.green_max ?? '')) ??
+      window.prompt(t('kpiAdmin.greenMax'), String(item.thresholds?.green_max ?? '')) ??
       String(item.thresholds?.green_max ?? '');
     const yellowMin =
-      window.prompt('Amarillo min', String(item.thresholds?.yellow_min ?? '')) ??
+      window.prompt(t('kpiAdmin.yellowMin'), String(item.thresholds?.yellow_min ?? '')) ??
       String(item.thresholds?.yellow_min ?? '');
     const yellowMax =
-      window.prompt('Amarillo max', String(item.thresholds?.yellow_max ?? '')) ??
+      window.prompt(t('kpiAdmin.yellowMax'), String(item.thresholds?.yellow_max ?? '')) ??
       String(item.thresholds?.yellow_max ?? '');
     const redMin =
-      window.prompt('Rojo min', String(item.thresholds?.red_min ?? '')) ??
+      window.prompt(t('kpiAdmin.redMin'), String(item.thresholds?.red_min ?? '')) ??
       String(item.thresholds?.red_min ?? '');
     const redMax =
-      window.prompt('Rojo max', String(item.thresholds?.red_max ?? '')) ??
+      window.prompt(t('kpiAdmin.redMax'), String(item.thresholds?.red_max ?? '')) ??
       String(item.thresholds?.red_max ?? '');
 
     const standardCodesRaw =
       window.prompt(
-        'Normas asociadas separadas por coma',
+        t('kpiAdmin.associatedStandardsPrompt'),
         (item.applicable_standards || []).join(',')
       ) ?? (item.applicable_standards || []).join(',');
 
@@ -600,15 +604,15 @@ export default function AdministrarKpisPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error editando KPI personalizado');
+        alert(json.error || t('kpiAdmin.editError'));
         return;
       }
 
       await refresh();
-      alert('KPI personalizado actualizado');
+      alert(t('kpiAdmin.editSuccess'));
     } catch (err) {
       console.error('ERROR EDIT CUSTOM KPI:', err);
-      alert('Error editando KPI personalizado');
+      alert(t('kpiAdmin.editError'));
     } finally {
       setSaving('');
     }
@@ -617,12 +621,12 @@ export default function AdministrarKpisPage() {
   const deleteCustomKpi = async (item: KpiAdminItem) => {
     if (!token || !user?.tenant_id) return;
     if (item.is_standard) {
-      alert('Solo se pueden eliminar KPIs personalizados');
+      alert(t('kpiAdmin.deleteCustomOnly'));
       return;
     }
 
     const ok = window.confirm(
-      `¿Eliminar el KPI personalizado "${item.name}"? Esta acción no se puede deshacer.`
+      t('kpiAdmin.deleteConfirm', { name: item.name })
     );
 
     if (!ok) return;
@@ -640,15 +644,15 @@ export default function AdministrarKpisPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error eliminando KPI personalizado');
+        alert(json.error || t('kpiAdmin.deleteError'));
         return;
       }
 
       await refresh();
-      alert('KPI personalizado eliminado');
+      alert(t('kpiAdmin.deleteSuccess'));
     } catch (err) {
       console.error('ERROR DELETE CUSTOM KPI:', err);
-      alert('Error eliminando KPI personalizado');
+      alert(t('kpiAdmin.deleteError'));
     } finally {
       setSaving('');
     }
@@ -656,17 +660,17 @@ export default function AdministrarKpisPage() {
 
   const saveManualValue = async (item: KpiAdminItem) => {
     if (!token || !user?.tenant_id) {
-      alert('No hay sesión activa para guardar el valor manual.');
+      alert(t('kpiAdmin.noActiveSession'));
       return;
     }
 
     if (isHealthKpi(item)) {
-      alert('Los KPIs de salud se calculan automáticamente desde Health.');
+      alert(t('kpiAdmin.healthKpisAutomatic'));
       return;
     }
 
     if (item.kpi_type === 'automatico') {
-      alert('Este KPI es automático y no permite carga manual.');
+      alert(t('kpiAdmin.automaticNoManual'));
       return;
     }
 
@@ -704,7 +708,7 @@ export default function AdministrarKpisPage() {
 
     if (standards.length > 1) {
       const selectedStandard = window.prompt(
-        `Este KPI aplica a varias normas.\n\nOpciones: ${standards.join(', ')}\n\nEscribe la norma para guardar el valor manual:`,
+        t('kpiAdmin.multiStandardPrompt', { standards: standards.join(', ') }),
         standardCode || ''
       );
 
@@ -713,14 +717,14 @@ export default function AdministrarKpisPage() {
       standardCode = selectedStandard.trim() || null;
 
       if (standardCode && !standards.includes(standardCode)) {
-        alert(`Norma no válida. Debe ser una de estas opciones: ${standards.join(', ')}`);
+        alert(t('kpiAdmin.invalidStandard', { standards: standards.join(', ') }));
         return;
       }
     }
 
     if (standards.length === 0) {
       const selectedGlobal = window.prompt(
-        'Este KPI no tiene norma específica.\n\nDeja vacío para guardar como KPI global o escribe una norma si corresponde:',
+        t('kpiAdmin.globalStandardPrompt'),
         ''
       );
 
@@ -730,7 +734,7 @@ export default function AdministrarKpisPage() {
     }
 
     const valueInput = window.prompt(
-      `Valor manual para ${item.code} - ${item.name}\n\nPeriodo: ${frequency}\nNorma: ${standardCode || 'GLOBAL'}\n\nIngresa el valor numérico:`,
+      t('kpiAdmin.manualValuePrompt', { code: item.code, name: item.name, frequency, standard: standardCode || t('kpiAdmin.global') }),
       ''
     );
 
@@ -740,24 +744,26 @@ export default function AdministrarKpisPage() {
     const numericValue = Number(normalizedValue);
 
     if (!Number.isFinite(numericValue)) {
-      alert('El valor ingresado no es válido. Debe ser numérico, por ejemplo: 97, 80.5 o 0.');
+      alert(t('kpiAdmin.invalidNumericValue'));
       return;
     }
 
     const notes = window.prompt(
-      'Comentario para este valor manual:',
-      'Carga manual desde Administración KPI'
+      t('kpiAdmin.manualValueCommentPrompt'),
+      t('kpiAdmin.manualValueDefaultComment')
     );
 
     if (notes === null) return;
 
     const ok = window.confirm(
-      `Confirmar guardado de valor manual\n\n` +
-        `KPI: ${item.code} - ${item.name}\n` +
-        `Valor: ${numericValue}\n` +
-        `Norma: ${standardCode || 'GLOBAL'}\n` +
-        `Periodo: ${periodStart.toISOString().slice(0, 10)} a ${periodEnd.toISOString().slice(0, 10)}\n\n` +
-        `¿Guardar este valor y actualizar el snapshot KPI?`
+      t('kpiAdmin.confirmManualValue', {
+        code: item.code,
+        name: item.name,
+        value: numericValue,
+        standard: standardCode || t('kpiAdmin.global'),
+        start: periodStart.toISOString().slice(0, 10),
+        end: periodEnd.toISOString().slice(0, 10),
+      })
     );
 
     if (!ok) return;
@@ -786,22 +792,22 @@ export default function AdministrarKpisPage() {
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        alert(json.error || 'Error guardando valor manual');
+        alert(json.error || t('kpiAdmin.manualSaveError'));
         return;
       }
 
       await refresh();
 
       if (json.snapshot?.id) {
-        alert('Valor manual guardado correctamente y snapshot KPI actualizado.');
+        alert(t('kpiAdmin.manualSaveSnapshotSuccess'));
       } else if (json.snapshot_error) {
-        alert(`Valor manual guardado, pero no se pudo actualizar el snapshot: ${json.snapshot_error}`);
+        alert(t('kpiAdmin.manualSaveSnapshotWarning', { error: json.snapshot_error }));
       } else {
-        alert('Valor manual guardado correctamente. Recarga el dashboard KPI para verificar el resultado.');
+        alert(t('kpiAdmin.manualSaveSuccess'));
       }
     } catch (err) {
       console.error('ERROR SAVE KPI MANUAL VALUE:', err);
-      alert('Error guardando valor manual');
+      alert(t('kpiAdmin.manualSaveError'));
     } finally {
       setSaving('');
     }
@@ -824,7 +830,7 @@ export default function AdministrarKpisPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error recalculando KPIs');
+        alert(json.error || t('dashboardKpi.recalculateError'));
         return;
       }
 
@@ -837,11 +843,11 @@ export default function AdministrarKpisPage() {
       const healthRecalculated = getHealthRefreshCount(json);
 
       alert(
-        `KPIs recalculados: ${kpisRecalculated}\nKPIs Health recalculados: ${healthRecalculated}`
+        t('dashboardKpi.recalculateSuccess', { count: kpisRecalculated, healthCount: healthRecalculated })
       );
     } catch (err) {
       console.error('ERROR RECALCULATE KPI:', err);
-      alert('Error recalculando KPIs');
+      alert(t('dashboardKpi.recalculateError'));
     } finally {
       setSaving('');
     }
@@ -876,9 +882,9 @@ export default function AdministrarKpisPage() {
       <div className="p-6 bg-[#f5f7fb] min-h-screen space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Administrar KPIs</h1>
+            <h1 className="text-3xl font-bold text-slate-900">{t('kpiAdmin.title')}</h1>
             <p className="mt-2 text-slate-500">
-              Gestiona KPIs estándar, personalizados y KPIs automáticos del motor Health.
+              {t('kpiAdmin.subtitle')}
             </p>
           </div>
 
@@ -887,7 +893,7 @@ export default function AdministrarKpisPage() {
               href="/health"
               className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
             >
-              Ver Health
+              {t('kpiAdmin.viewHealth')}
             </a>
 
             <button
@@ -896,25 +902,25 @@ export default function AdministrarKpisPage() {
               disabled={saving === 'recalculate'}
               className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
             >
-              {saving === 'recalculate' ? 'Recalculando...' : 'Recalcular KPIs'}
+              {saving === 'recalculate' ? t('dashboardKpi.recalculating') : t('dashboardKpi.recalculateKpis')}
             </button>
 
             <a
               href="/dashboard"
               className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
-              ← Volver al Dashboard
+              {t('kpiAdmin.backToDashboard')}
             </a>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <MetricCard title="KPIs totales" value={stats.total} />
-          <MetricCard title="Habilitados" value={stats.enabled} />
-          <MetricCard title="Estándar" value={stats.standard} />
-          <MetricCard title="Health" value={stats.health} />
-          <MetricCard title="Personalizados" value={stats.custom} />
-          <MetricCard title="Filtrados" value={stats.filtered} />
+          <MetricCard title={t('kpiAdmin.totalKpis')} value={stats.total} />
+          <MetricCard title={t('kpiAdmin.enabled')} value={stats.enabled} />
+          <MetricCard title={t('kpiAdmin.standard')} value={stats.standard} />
+          <MetricCard title={t('dashboardKpi.health')} value={stats.health} />
+          <MetricCard title={t('kpiAdmin.custom')} value={stats.custom} />
+          <MetricCard title={t('kpiAdmin.filtered')} value={stats.filtered} />
         </div>
 
         {manualPendingKpis.length > 0 && (
@@ -922,15 +928,15 @@ export default function AdministrarKpisPage() {
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold text-slate-900">
-                  KPI manuales pendientes de carga
+                  {t('kpiAdmin.pendingManualKpis')}
                 </h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Estos KPI están habilitados y requieren un valor manual o híbrido para dejar de aparecer como “Sin dato”.
+                  {t('kpiAdmin.pendingManualSubtitle')}
                 </p>
               </div>
 
               <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-700">
-                {manualPendingKpis.length} pendiente(s)
+                {t('kpiAdmin.pendingCount', { count: manualPendingKpis.length })}
               </span>
             </div>
 
@@ -966,7 +972,7 @@ export default function AdministrarKpisPage() {
                       disabled={saving === `manual-${item.id}`}
                       className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
                     >
-                      {saving === `manual-${item.id}` ? 'Guardando...' : 'Cargar valor'}
+                      {saving === `manual-${item.id}` ? t('kpiAdmin.saving') : t('kpiAdmin.loadValue')}
                     </button>
                   </div>
                 </div>
@@ -977,9 +983,9 @@ export default function AdministrarKpisPage() {
 
         <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)] space-y-4">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">Crear KPI personalizado</h2>
+            <h2 className="text-xl font-semibold text-slate-900">{t('kpiAdmin.createCustomKpi')}</h2>
             <p className="text-sm text-slate-500 mt-1">
-              Este KPI se administra desde el sistema y puede asignarse a una o más normas contratadas.
+              {t('kpiAdmin.createCustomSubtitle')}
             </p>
           </div>
 
@@ -987,14 +993,14 @@ export default function AdministrarKpisPage() {
             <input
               value={form.code}
               onChange={(e) => setForm({ ...form, code: e.target.value })}
-              placeholder="Código opcional"
+              placeholder={t('kpiAdmin.optionalCode')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
 
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Nombre KPI"
+              placeholder={t('kpiAdmin.kpiName')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
 
@@ -1003,14 +1009,14 @@ export default function AdministrarKpisPage() {
               onChange={(e) => setForm({ ...form, category: e.target.value })}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              <option value="estrategico">Estratégico</option>
-              <option value="operacional">Operacional</option>
-              <option value="riesgo">Riesgo</option>
-              <option value="cumplimiento">Cumplimiento</option>
-              <option value="cliente">Cliente</option>
-              <option value="industrial">Industrial</option>
-              <option value="financiero">Financiero</option>
-              <option value="personalizado">Personalizado</option>
+              <option value="estrategico">{t('kpiAdmin.categories.strategic')}</option>
+              <option value="operacional">{t('kpiAdmin.categories.operational')}</option>
+              <option value="riesgo">{t('kpiAdmin.categories.risk')}</option>
+              <option value="cumplimiento">{t('kpiAdmin.categories.compliance')}</option>
+              <option value="cliente">{t('kpiAdmin.categories.client')}</option>
+              <option value="industrial">{t('kpiAdmin.categories.industrial')}</option>
+              <option value="financiero">{t('kpiAdmin.categories.financial')}</option>
+              <option value="personalizado">{t('kpiAdmin.categories.custom')}</option>
             </select>
 
             <select
@@ -1018,15 +1024,15 @@ export default function AdministrarKpisPage() {
               onChange={(e) => setForm({ ...form, kpi_type: e.target.value })}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              <option value="manual">Manual</option>
-              <option value="hibrido">Híbrido</option>
-              <option value="automatico">Automático</option>
+              <option value="manual">{t('kpiAdmin.types.manual')}</option>
+              <option value="hibrido">{t('kpiAdmin.types.hybrid')}</option>
+              <option value="automatico">{t('kpiAdmin.types.automatic')}</option>
             </select>
 
             <input
               value={form.unit}
               onChange={(e) => setForm({ ...form, unit: e.target.value })}
-              placeholder="Unidad"
+              placeholder={t('kpiAdmin.unit')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
 
@@ -1035,10 +1041,10 @@ export default function AdministrarKpisPage() {
               onChange={(e) => setForm({ ...form, frequency: e.target.value })}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              <option value="mensual">Mensual</option>
-              <option value="trimestral">Trimestral</option>
-              <option value="semestral">Semestral</option>
-              <option value="anual">Anual</option>
+              <option value="mensual">{t('kpiAdmin.frequency.monthly')}</option>
+              <option value="trimestral">{t('kpiAdmin.frequency.quarterly')}</option>
+              <option value="semestral">{t('kpiAdmin.frequency.semiannual')}</option>
+              <option value="anual">{t('kpiAdmin.frequency.annual')}</option>
             </select>
 
             <select
@@ -1046,15 +1052,15 @@ export default function AdministrarKpisPage() {
               onChange={(e) => setForm({ ...form, direction: e.target.value })}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              <option value="higher_is_better">Más alto es mejor</option>
-              <option value="lower_is_better">Más bajo es mejor</option>
-              <option value="target_range">Rango óptimo</option>
+              <option value="higher_is_better">{t('kpiAdmin.directionHigher')}</option>
+              <option value="lower_is_better">{t('kpiAdmin.directionLower')}</option>
+              <option value="target_range">{t('kpiAdmin.directionTargetRange')}</option>
             </select>
 
             <input
               value={form.target_value}
               onChange={(e) => setForm({ ...form, target_value: e.target.value })}
-              placeholder="Objetivo"
+              placeholder={t('kpiAdmin.target')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
           </div>
@@ -1062,7 +1068,7 @@ export default function AdministrarKpisPage() {
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Descripción"
+            placeholder={t('kpiAdmin.description')}
             className="min-h-[90px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
           />
 
@@ -1070,19 +1076,19 @@ export default function AdministrarKpisPage() {
             <input
               value={form.base_formula}
               onChange={(e) => setForm({ ...form, base_formula: e.target.value })}
-              placeholder="Fórmula base"
+              placeholder={t('kpiAdmin.baseFormula')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
             <input
               value={form.formula_expression}
               onChange={(e) => setForm({ ...form, formula_expression: e.target.value })}
-              placeholder="Fórmula expresión"
+              placeholder={t('kpiAdmin.formulaExpression')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
             <input
               value={form.data_source_summary}
               onChange={(e) => setForm({ ...form, data_source_summary: e.target.value })}
-              placeholder="Fuente de datos"
+              placeholder={t('kpiAdmin.dataSource')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
           </div>
@@ -1091,50 +1097,50 @@ export default function AdministrarKpisPage() {
             <input
               value={form.green_min}
               onChange={(e) => setForm({ ...form, green_min: e.target.value })}
-              placeholder="Verde min"
+              placeholder={t('kpiAdmin.greenMin')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
             <input
               value={form.green_max}
               onChange={(e) => setForm({ ...form, green_max: e.target.value })}
-              placeholder="Verde max"
+              placeholder={t('kpiAdmin.greenMax')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
             <input
               value={form.yellow_min}
               onChange={(e) => setForm({ ...form, yellow_min: e.target.value })}
-              placeholder="Amarillo min"
+              placeholder={t('kpiAdmin.yellowMin')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
             <input
               value={form.yellow_max}
               onChange={(e) => setForm({ ...form, yellow_max: e.target.value })}
-              placeholder="Amarillo max"
+              placeholder={t('kpiAdmin.yellowMax')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
             <input
               value={form.red_min}
               onChange={(e) => setForm({ ...form, red_min: e.target.value })}
-              placeholder="Rojo min"
+              placeholder={t('kpiAdmin.redMin')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
             <input
               value={form.red_max}
               onChange={(e) => setForm({ ...form, red_max: e.target.value })}
-              placeholder="Rojo max"
+              placeholder={t('kpiAdmin.redMax')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
           </div>
 
           <div>
             <div className="mb-3 text-sm font-semibold text-slate-700">
-              Asociar a normas contratadas
+              {t('kpiAdmin.associateStandards')}
             </div>
 
             {loadingStandards ? (
-              <div className="text-sm text-slate-500">Cargando normas...</div>
+              <div className="text-sm text-slate-500">{t('kpiAdmin.loadingStandards')}</div>
             ) : standards.length === 0 ? (
-              <div className="text-sm text-slate-500">No hay normas activas disponibles.</div>
+              <div className="text-sm text-slate-500">{t('kpiAdmin.noActiveStandards')}</div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {standards.map((s) => {
@@ -1167,7 +1173,7 @@ export default function AdministrarKpisPage() {
               disabled={saving === 'create'}
               className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
             >
-              {saving === 'create' ? 'Creando...' : 'Crear KPI personalizado'}
+              {saving === 'create' ? t('health.creating') : t('kpiAdmin.createCustomKpi')}
             </button>
           </div>
         </section>
@@ -1175,9 +1181,9 @@ export default function AdministrarKpisPage() {
         <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)] space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">Listado de KPIs</h2>
+              <h2 className="text-xl font-semibold text-slate-900">{t('kpiAdmin.kpiList')}</h2>
               <p className="text-sm text-slate-500 mt-1">
-                Aquí se listan los KPIs disponibles, sus configuraciones y sus últimos valores calculados.
+                {t('kpiAdmin.kpiListSubtitle')}
               </p>
             </div>
 
@@ -1186,7 +1192,7 @@ export default function AdministrarKpisPage() {
               onClick={refresh}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
-              Refrescar
+              {t('common.refresh')}
             </button>
           </div>
 
@@ -1194,7 +1200,7 @@ export default function AdministrarKpisPage() {
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Buscar por código, nombre o descripción"
+              placeholder={t('kpiAdmin.searchPlaceholder')}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
 
@@ -1203,10 +1209,10 @@ export default function AdministrarKpisPage() {
               onChange={(e) => setOriginFilter(e.target.value)}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              <option value="">Todos los orígenes</option>
-              <option value="standard">Solo estándar</option>
-              <option value="custom">Solo personalizados</option>
-              <option value="health">Solo Health</option>
+              <option value="">{t('kpiAdmin.allOrigins')}</option>
+              <option value="standard">{t('kpiAdmin.onlyStandard')}</option>
+              <option value="custom">{t('kpiAdmin.onlyCustom')}</option>
+              <option value="health">{t('kpiAdmin.onlyHealth')}</option>
             </select>
 
             <select
@@ -1214,9 +1220,9 @@ export default function AdministrarKpisPage() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              <option value="">Todos los estados</option>
-              <option value="enabled">Habilitados</option>
-              <option value="disabled">Deshabilitados</option>
+              <option value="">{t('kpiAdmin.allStatuses')}</option>
+              <option value="enabled">{t('kpiAdmin.enabled')}</option>
+              <option value="disabled">{t('kpiAdmin.disabled')}</option>
             </select>
 
             <select
@@ -1224,7 +1230,7 @@ export default function AdministrarKpisPage() {
               onChange={(e) => setStandardFilter(e.target.value)}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              <option value="">Todas las normas</option>
+              <option value="">{t('health.allStandards')}</option>
               {availableStandards.map((standard) => (
                 <option key={standard.code} value={standard.code}>
                   {standard.code}
@@ -1237,15 +1243,15 @@ export default function AdministrarKpisPage() {
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              <option value="">Todas las categorías</option>
-              <option value="estrategico">Estratégico</option>
-              <option value="operacional">Operacional</option>
-              <option value="riesgo">Riesgo</option>
-              <option value="cumplimiento">Cumplimiento</option>
-              <option value="cliente">Cliente</option>
-              <option value="industrial">Industrial</option>
-              <option value="financiero">Financiero</option>
-              <option value="personalizado">Personalizado</option>
+              <option value="">{t('kpiAdmin.allCategories')}</option>
+              <option value="estrategico">{t('kpiAdmin.categories.strategic')}</option>
+              <option value="operacional">{t('kpiAdmin.categories.operational')}</option>
+              <option value="riesgo">{t('kpiAdmin.categories.risk')}</option>
+              <option value="cumplimiento">{t('kpiAdmin.categories.compliance')}</option>
+              <option value="cliente">{t('kpiAdmin.categories.client')}</option>
+              <option value="industrial">{t('kpiAdmin.categories.industrial')}</option>
+              <option value="financiero">{t('kpiAdmin.categories.financial')}</option>
+              <option value="personalizado">{t('kpiAdmin.categories.custom')}</option>
             </select>
 
             <select
@@ -1253,16 +1259,16 @@ export default function AdministrarKpisPage() {
               onChange={(e) => setTypeFilter(e.target.value)}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              <option value="">Todos los tipos</option>
-              <option value="manual">Manual</option>
-              <option value="hibrido">Híbrido</option>
-              <option value="automatico">Automático</option>
+              <option value="">{t('kpiAdmin.allTypes')}</option>
+              <option value="manual">{t('kpiAdmin.types.manual')}</option>
+              <option value="hibrido">{t('kpiAdmin.types.hybrid')}</option>
+              <option value="automatico">{t('kpiAdmin.types.automatic')}</option>
             </select>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
             <div className="text-sm text-slate-600">
-              Mostrando <span className="font-semibold text-slate-900">{filtered.length}</span> de{' '}
+              {t('kpiAdmin.showing')} <span className="font-semibold text-slate-900">{filtered.length}</span> {t('kpiAdmin.of')}{' '}
               <span className="font-semibold text-slate-900">{data.length}</span> KPI(s)
             </div>
 
@@ -1278,14 +1284,14 @@ export default function AdministrarKpisPage() {
               }}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
-              Limpiar filtros
+              {t('common.clearFilters')}
             </button>
           </div>
 
           {loading ? (
-            <div className="text-slate-500">Cargando KPIs...</div>
+            <div className="text-slate-500">{t('kpiAdmin.loadingKpis')}</div>
           ) : filtered.length === 0 ? (
-            <div className="text-slate-500">No se encontraron KPIs con esos filtros.</div>
+            <div className="text-slate-500">{t('kpiAdmin.noKpisFound')}</div>
           ) : (
             <div className="space-y-4">
               {filtered.map((item) => {
@@ -1311,7 +1317,7 @@ export default function AdministrarKpisPage() {
 
                           {health ? (
                             <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                              Motor Health
+                              {t('kpiAdmin.healthEngine')}
                             </span>
                           ) : (
                             <span
@@ -1321,7 +1327,7 @@ export default function AdministrarKpisPage() {
                                   : 'bg-indigo-100 text-indigo-700'
                               }`}
                             >
-                              {item.is_standard ? 'Estándar' : 'Personalizado'}
+                              {item.is_standard ? t('kpiAdmin.standard') : t('kpiAdmin.custom')}
                             </span>
                           )}
 
@@ -1332,7 +1338,7 @@ export default function AdministrarKpisPage() {
                                 : 'bg-red-100 text-red-700'
                             }`}
                           >
-                            {item.is_enabled ? 'Habilitado' : 'Deshabilitado'}
+                            {item.is_enabled ? t('kpiAdmin.enabled') : t('kpiAdmin.disabled')}
                           </span>
 
                           {item.latest_status_color && (
@@ -1341,7 +1347,7 @@ export default function AdministrarKpisPage() {
                                 item.latest_status_color
                               )}`}
                             >
-                              {colorLabel(item.latest_status_color)}
+                              {colorLabel(item.latest_status_color, t)}
                             </span>
                           )}
                         </div>
@@ -1351,7 +1357,7 @@ export default function AdministrarKpisPage() {
                         </div>
 
                         <div className="mt-1 text-sm text-slate-500">
-                          {item.custom_description || item.description || 'Sin descripción'}
+                          {item.custom_description || item.description || t('header.noDescription')}
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
@@ -1367,14 +1373,14 @@ export default function AdministrarKpisPage() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                        <InfoBox label="Categoría" value={item.category} />
-                        <InfoBox label="Tipo" value={item.kpi_type} />
-                        <InfoBox label="Unidad" value={item.unit} />
-                        <InfoBox label="Frecuencia" value={item.override_frequency || item.frequency} />
-                        <InfoBox label="Dirección" value={item.override_direction || item.direction} />
+                        <InfoBox label={t('kpiAdmin.category')} value={item.category} />
+                        <InfoBox label={t('kpiAdmin.type')} value={item.kpi_type} />
+                        <InfoBox label={t('kpiAdmin.unit')} value={item.unit} />
+                        <InfoBox label={t('kpiAdmin.frequencyLabel')} value={item.override_frequency || item.frequency} />
+                        <InfoBox label={t('kpiAdmin.direction')} value={item.override_direction || item.direction} />
                         <InfoBox
-                          label="Objetivo"
-                          value={item.override_target_value ?? item.target_value ?? 'N/A'}
+                          label={t('kpiAdmin.target')}
+                          value={item.override_target_value ?? item.target_value ?? t('common.noData')}
                         />
                       </div>
                     </div>
@@ -1383,10 +1389,10 @@ export default function AdministrarKpisPage() {
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <div className="text-sm font-semibold text-slate-900">
-                            Último valor calculado
+                            {t('kpiAdmin.latestCalculatedValue')}
                           </div>
                           <div className="text-xs text-slate-500">
-                            Período: {formatDate(item.latest_period_start)} - {formatDate(item.latest_period_end)}
+                            {t('common.period')}: {formatDate(item.latest_period_start)} - {formatDate(item.latest_period_end)}
                           </div>
                         </div>
 
@@ -1396,7 +1402,7 @@ export default function AdministrarKpisPage() {
                             {item.unit === '%' ? '%' : item.unit ? ` ${item.unit}` : ''}
                           </div>
                           <div className="text-xs text-slate-500">
-                            Calculado: {formatDate(item.latest_calculated_at)}
+                            {t('kpiAdmin.calculated')}: {formatDate(item.latest_calculated_at)}
                           </div>
                         </div>
                       </div>
@@ -1404,7 +1410,7 @@ export default function AdministrarKpisPage() {
                       {latestSnapshots.length > 1 && (
                         <div className="mt-4">
                           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                            Detalle por norma / alcance
+                            {t('kpiAdmin.detailByScope')}
                           </div>
 
                           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -1415,14 +1421,14 @@ export default function AdministrarKpisPage() {
                               >
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-xs font-semibold text-slate-600">
-                                    {snap.standard_code || 'Global'}
+                                    {snap.standard_code || t('kpiAdmin.global')}
                                   </span>
                                   <span
                                     className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${colorBadgeClass(
                                       snap.status_color
                                     )}`}
                                   >
-                                    {colorLabel(snap.status_color)}
+                                    {colorLabel(snap.status_color, t)}
                                   </span>
                                 </div>
 
@@ -1442,9 +1448,7 @@ export default function AdministrarKpisPage() {
 
                       {health && (
                         <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                          KPI automático generado desde el motor de salud de controles. Su valor proviene de
-                          evidencias, estado de controles, cobertura y deterioro. Para ver el detalle operacional,
-                          usa el Dashboard de Salud ISO.
+                          {t('kpiAdmin.healthKpiNotice')}
                         </div>
                       )}
                     </div>
@@ -1455,7 +1459,7 @@ export default function AdministrarKpisPage() {
                           href="/health"
                           className="rounded-xl bg-emerald-600 px-3 py-1.5 text-center text-sm font-semibold text-white transition hover:bg-emerald-700"
                         >
-                          Ver Dashboard Health
+                          {t('kpiAdmin.viewHealthDashboard')}
                         </a>
                       ) : (
                         <>
@@ -1466,10 +1470,10 @@ export default function AdministrarKpisPage() {
                             className="rounded-xl bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
                           >
                             {saving === `toggle-${item.id}`
-                              ? 'Guardando...'
+                              ? t('kpiAdmin.saving')
                               : item.is_enabled
-                              ? 'Deshabilitar'
-                              : 'Habilitar'}
+                              ? t('kpiAdmin.disable')
+                              : t('kpiAdmin.enable')}
                           </button>
 
                           {!item.is_standard && (
@@ -1479,7 +1483,7 @@ export default function AdministrarKpisPage() {
                               disabled={saving === `edit-custom-${item.id}`}
                               className="rounded-xl bg-violet-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
                             >
-                              {saving === `edit-custom-${item.id}` ? 'Guardando...' : 'Editar KPI'}
+                              {saving === `edit-custom-${item.id}` ? t('kpiAdmin.saving') : t('kpiAdmin.editKpi')}
                             </button>
                           )}
 
@@ -1490,7 +1494,7 @@ export default function AdministrarKpisPage() {
                               disabled={saving === `delete-custom-${item.id}`}
                               className="rounded-xl bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
                             >
-                              {saving === `delete-custom-${item.id}` ? 'Eliminando...' : 'Eliminar KPI'}
+                              {saving === `delete-custom-${item.id}` ? t('kpiAdmin.deleting') : t('kpiAdmin.deleteKpi')}
                             </button>
                           )}
 
@@ -1500,7 +1504,7 @@ export default function AdministrarKpisPage() {
                             disabled={saving === `customize-${item.id}`}
                             className="rounded-xl bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
                           >
-                            {saving === `customize-${item.id}` ? 'Guardando...' : 'Personalizar tenant'}
+                            {saving === `customize-${item.id}` ? t('kpiAdmin.saving') : t('kpiAdmin.customizeTenant')}
                           </button>
 
                           {item.kpi_type !== 'automatico' && (
@@ -1510,7 +1514,7 @@ export default function AdministrarKpisPage() {
                               disabled={saving === `manual-${item.id}`}
                               className="rounded-xl bg-amber-500 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-60"
                             >
-                              {saving === `manual-${item.id}` ? 'Guardando...' : 'Guardar valor manual'}
+                              {saving === `manual-${item.id}` ? t('kpiAdmin.saving') : t('kpiAdmin.saveManualValue')}
                             </button>
                           )}
                         </>
@@ -1519,7 +1523,7 @@ export default function AdministrarKpisPage() {
 
                     {!item.is_standard && !health && (
                       <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
-                        KPI personalizado del tenant. Puedes editarlo directamente con el botón “Editar KPI”.
+                        {t('kpiAdmin.customTenantNotice')}
                       </div>
                     )}
                   </div>

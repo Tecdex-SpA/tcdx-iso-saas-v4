@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getUserFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   PieChart,
   Pie,
@@ -307,6 +308,7 @@ function getHealthRefreshCount(json: any) {
 }
 
 export default function DashboardPage() {
+  const { t, locale } = useTranslation();
   const [activeView, setActiveView] = useState<'executive' | 'kpi'>('executive');
 
   const [controls, setControls] = useState<any[]>([]);
@@ -409,17 +411,20 @@ export default function DashboardPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error recalculando KPIs');
+        alert(json.error || t('dashboardKpi.recalculateError'));
         return;
       }
 
       await loadKpiDashboard();
       alert(
-        `KPIs recalculados: ${json.snapshots_created || json.recalculated || 0}\nKPIs Health recalculados: ${getHealthRefreshCount(json)}`
+        t('dashboardKpi.recalculateSuccess', {
+          count: json.snapshots_created || json.recalculated || 0,
+          healthCount: getHealthRefreshCount(json),
+        })
       );
     } catch (err) {
       console.error('ERROR RECALCULATE KPI:', err);
-      alert('Error recalculando KPIs');
+      alert(t('dashboardKpi.recalculateError'));
     } finally {
       setRecalculatingKpis(false);
     }
@@ -449,9 +454,9 @@ export default function DashboardPage() {
     totalControls > 0 ? Math.round((cumple / totalControls) * 100) : 0;
 
   const donutData = [
-    { name: 'Cumplido', value: cumple },
-    { name: 'En proceso', value: parcial },
-    { name: 'No cumplido', value: noCumple },
+    { name: t('dashboardKpi.compliant'), value: cumple },
+    { name: t('dashboardKpi.inProgress'), value: parcial },
+    { name: t('dashboardKpi.nonCompliant'), value: noCumple },
   ];
 
   const donutColors = ['#16a34a', '#f59e0b', '#ef4444'];
@@ -513,25 +518,25 @@ export default function DashboardPage() {
 
     return [
       {
-        name: 'Próximos 7 días',
+        name: t('dashboardKpi.next7Days'),
         value: buckets.next7.length,
         details: buckets.next7,
         fill: '#dbeafe',
       },
       {
-        name: '8 a 14 días',
+        name: t('dashboardKpi.days8to14'),
         value: buckets.next14.length,
         details: buckets.next14,
         fill: '#fde68a',
       },
       {
-        name: '15 a 30 días',
+        name: t('dashboardKpi.days15to30'),
         value: buckets.next30.length,
         details: buckets.next30,
         fill: '#f59e0b',
       },
       {
-        name: '> 30 días',
+        name: t('dashboardKpi.after30Days'),
         value: buckets.after30.length,
         details: buckets.after30,
         fill: '#cbd5e1',
@@ -565,11 +570,11 @@ export default function DashboardPage() {
       : 0;
 
   const globalRiskLabel =
-    globalRiskValue >= 50 ? 'Alto' : globalRiskValue >= 20 ? 'Medio' : 'Bajo';
+    globalRiskValue >= 50 ? t('findings.severity.high') : globalRiskValue >= 20 ? t('findings.severity.medium') : t('findings.severity.low');
 
-  const riesgoColor = (nivel: string) => {
-    if (nivel === 'Alto') return 'text-red-600';
-    if (nivel === 'Medio') return 'text-yellow-600';
+  const riesgoColor = (value: number) => {
+    if (value >= 50) return 'text-red-600';
+    if (value >= 20) return 'text-yellow-600';
     return 'text-green-600';
   };
 
@@ -579,11 +584,11 @@ export default function DashboardPage() {
 
   const latestSyncText = useMemo(() => {
     const now = new Date();
-    return `Hoy, ${now.toLocaleTimeString('es-CL', {
+    return `${t('common.today')}, ${now.toLocaleTimeString(locale === 'en' ? 'en-US' : 'es-CL', {
       hour: '2-digit',
       minute: '2-digit',
     })}`;
-  }, []);
+  }, [locale, t]);
 
   const complianceTrend = useMemo(() => {
     const start = Math.max(40, complianceValue - 12);
@@ -605,26 +610,26 @@ export default function DashboardPage() {
   const activityItems: ActivityItem[] = useMemo(() => {
     return [
       {
-        title: 'Diagnóstico completado',
-        description: `${activeNorms} norma(s) activa(s) detectadas`,
+        title: t('dashboardKpi.activity.diagnosisCompleted'),
+        description: t('dashboardKpi.activity.activeStandardsDetected', { count: activeNorms }),
         color: 'green',
         icon: 'check',
       },
       {
-        title: 'Nueva evidencia subida',
-        description: `${cumple} controles en estado cumplido`,
+        title: t('dashboardKpi.activity.newEvidenceUploaded'),
+        description: t('dashboardKpi.activity.compliantControls', { count: cumple }),
         color: 'amber',
         icon: 'evidence',
       },
       {
-        title: 'Plan de acción creado',
-        description: `${activeActionPlans} plan(es) activo(s) en seguimiento`,
+        title: t('dashboardKpi.activity.actionPlanCreated'),
+        description: t('dashboardKpi.activity.activePlans', { count: activeActionPlans }),
         color: 'violet',
         icon: 'plan',
       },
       {
-        title: 'Hallazgo crítico registrado',
-        description: `${noCumple} control(es) no conforme(s)`,
+        title: t('dashboardKpi.activity.criticalFindingRegistered'),
+        description: t('dashboardKpi.activity.nonCompliantControls', { count: noCumple }),
         color: 'red',
         icon: 'alert',
       },
@@ -639,10 +644,10 @@ export default function DashboardPage() {
 
   const kpiStatusData = useMemo(() => {
     return [
-      { name: 'En verde', value: kpiSummary?.green || 0, fill: '#16a34a' },
-      { name: 'En amarillo', value: kpiSummary?.yellow || 0, fill: '#f59e0b' },
-      { name: 'En rojo', value: kpiSummary?.red || 0, fill: '#ef4444' },
-      { name: 'Sin dato', value: kpiSummary?.gray || 0, fill: '#94a3b8' },
+      { name: t('dashboardKpi.greenStatus'), value: kpiSummary?.green || 0, fill: '#16a34a' },
+      { name: t('dashboardKpi.yellowStatus'), value: kpiSummary?.yellow || 0, fill: '#f59e0b' },
+      { name: t('dashboardKpi.redStatus'), value: kpiSummary?.red || 0, fill: '#ef4444' },
+      { name: t('common.noData'), value: kpiSummary?.gray || 0, fill: '#94a3b8' },
     ];
   }, [kpiSummary]);
 
@@ -677,10 +682,10 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <h1 className="text-4xl font-bold tracking-tight text-slate-900">
-                  Dashboard Ejecutivo
+                  {t('dashboardKpi.executiveDashboard')}
                 </h1>
                 <p className="mt-2 text-lg text-slate-500">
-                  Vista general del cumplimiento, riesgos, auditorías y KPIs de la organización.
+                  {t('dashboardKpi.executiveSubtitle')}
                 </p>
               </div>
 
@@ -696,7 +701,7 @@ export default function DashboardPage() {
                         : 'text-slate-600 hover:bg-slate-100',
                     ].join(' ')}
                   >
-                    Vista Ejecutiva
+                    {t('dashboard.executiveView')}
                   </button>
 
                   <button
@@ -709,7 +714,7 @@ export default function DashboardPage() {
                         : 'text-slate-600 hover:bg-slate-100',
                     ].join(' ')}
                   >
-                    Vista KPI
+                    {t('dashboard.kpiView')}
                   </button>
                 </div>
 
@@ -732,22 +737,22 @@ export default function DashboardPage() {
             <>
               {loading && (
                 <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                  Cargando datos...
+                  {t('dashboard.loadingData')}
                 </div>
               )}
 
               {!loading && controls.length === 0 && (
                 <div className="rounded-[28px] border border-amber-200 bg-[#fdf8e8] p-8 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                   <h2 className="mb-3 text-3xl font-bold text-slate-900">
-                    Controles inicializados pendientes de evaluación
+                    {t('dashboard.initialControlsTitle')}
                   </h2>
 
                   <p className="mb-4 text-lg text-slate-600">
-                    Esta empresa aún no tiene controles cargados. Debes inicializar la base de cumplimiento ISO.
+                    {t('dashboard.initialControlsSubtitle')}
                   </p>
 
                   <div className="text-base text-slate-500">
-                    Próximo paso: cargar controles desde catálogo ISO
+                    {t('dashboard.initialControlsNext')}
                   </div>
                 </div>
               )}
@@ -756,12 +761,12 @@ export default function DashboardPage() {
                 <>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
                     <TopCard
-                      title="Nivel de Cumplimiento"
+                      title={t('dashboardKpi.complianceLevel')}
                       value={`${complianceValue}%`}
-                      subtitle="Estado global actual"
+                      subtitle={t('dashboard.globalComplianceSubtitle')}
                       accent="green"
                       change={`↑ ${Math.max(1, Math.round(complianceValue * 0.03))}%`}
-                      changeHint="vs. mes anterior"
+                      changeHint={t('dashboardKpi.vsPreviousMonth')}
                       icon={
                         <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <rect x="3" y="3" width="18" height="18" rx="4" />
@@ -771,12 +776,12 @@ export default function DashboardPage() {
                     />
 
                     <TopCard
-                      title="Hallazgos Abiertos"
+                      title={t('dashboard.openFindings')}
                       value={noCumple}
-                      subtitle="Controles no conformes"
+                      subtitle={t('dashboardKpi.nonCompliantControlsLabel')}
                       accent="red"
                       change={`↑ ${Math.max(1, noCumple)}%`}
-                      changeHint="vs. mes anterior"
+                      changeHint={t('dashboardKpi.vsPreviousMonth')}
                       icon={
                         <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path d="M12 8v5" />
@@ -787,12 +792,12 @@ export default function DashboardPage() {
                     />
 
                     <TopCard
-                      title="Planes de Acción"
+                      title={t('dashboard.actionPlans')}
                       value={activeActionPlans}
-                      subtitle="Activos del sistema"
+                      subtitle={t('dashboardKpi.systemActive')}
                       accent="amber"
-                      change={`${overdueActionPlans} atrasados`}
-                      changeHint="sin cambios"
+                      change={t('dashboardKpi.overdueCount', { count: overdueActionPlans })}
+                      changeHint={t('dashboardKpi.noChanges')}
                       icon={
                         <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path d="M9 11l3 3L22 4" />
@@ -802,12 +807,12 @@ export default function DashboardPage() {
                     />
 
                     <TopCard
-                      title="Riesgos Críticos"
+                      title={t('dashboard.criticalRisks')}
                       value={highRisks}
-                      subtitle="Nivel alto registrado"
+                      subtitle={t('dashboard.criticalRisksSubtitle')}
                       accent="rose"
                       change={`↓ ${Math.max(1, Math.round((highRisks || 1) * 0.2))}%`}
-                      changeHint="vs. mes anterior"
+                      changeHint={t('dashboardKpi.vsPreviousMonth')}
                       icon={
                         <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" />
@@ -821,7 +826,7 @@ export default function DashboardPage() {
                       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                         <div className="mb-5 flex items-center justify-between">
                           <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">
-                            Estado de Cumplimiento
+                            {t('dashboardKpi.complianceStatus')}
                           </h2>
 
                           <button
@@ -861,35 +866,35 @@ export default function DashboardPage() {
                                 {complianceValue}%
                               </div>
                               <div className="mt-1 text-base font-medium text-slate-500">
-                                Cumplimiento
+                                {t('dashboardKpi.compliance')}
                               </div>
                             </div>
                           </div>
 
                           <div className="space-y-5">
                             <LegendRow
-                              label="Cumplido"
+                              label={t('dashboardKpi.compliant')}
                               value={`${completionPct}%`}
                               color="bg-green-600"
-                              extra={`${cumple} controles`}
+                              extra={t('health.controlsCount', { count: cumple })}
                             />
                             <LegendRow
-                              label="En Proceso"
+                              label={t('dashboardKpi.inProgress')}
                               value={`${progressPct}%`}
                               color="bg-amber-400"
-                              extra={`${parcial} controles`}
+                              extra={t('health.controlsCount', { count: parcial })}
                             />
                             <LegendRow
-                              label="No Cumplido"
+                              label={t('dashboardKpi.nonCompliant')}
                               value={`${failPct}%`}
                               color="bg-red-500"
-                              extra={`${noCumple} controles`}
+                              extra={t('health.controlsCount', { count: noCumple })}
                             />
                           </div>
 
                           <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                             <div className="mb-3 text-sm font-semibold text-slate-500">
-                              Tendencia (30 días)
+                              {t('dashboardKpi.trend30Days')}
                             </div>
                             <div className="h-[170px]">
                               <ResponsiveContainer width="100%" height="100%">
@@ -916,52 +921,52 @@ export default function DashboardPage() {
                           <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-indigo-600 shadow-sm">
                             i
                           </span>
-                          Última actualización: {latestSyncText}
+                          {t('health.lastUpdate')}: {latestSyncText}
                         </div>
                       </section>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                         <MiniCard
-                          title="Hallazgos"
+                          title={t('sidebar.findings')}
                           mainValue={noCumple}
-                          mainLabel="Abiertos"
+                          mainLabel={t('findings.status.open')}
                           sideValue={highRisks}
-                          sideLabel="Críticos"
+                          sideLabel={t('findings.severity.critical')}
                           tone="violet"
-                          footer={`Total: ${noCumple + partialOrZero(summary?.open_findings) || noCumple} hallazgos`}
+                          footer={t('dashboardKpi.totalFindings', { count: noCumple + partialOrZero(summary?.open_findings) || noCumple })}
                           href="/hallazgos"
                         />
 
                         <MiniCard
-                          title="Planes de Acción"
+                          title={t('dashboard.actionPlans')}
                           mainValue={activeActionPlans}
-                          mainLabel="Activos"
+                          mainLabel={t('dashboardKpi.active')}
                           sideValue={overdueActionPlans}
-                          sideLabel="Atrasados"
+                          sideLabel={t('dashboardKpi.overdue')}
                           tone="amber"
-                          footer={`Total: ${actionPlans.length} planes`}
+                          footer={t('dashboardKpi.totalPlans', { count: actionPlans.length })}
                           href="/plan-accion"
                         />
 
                         <MiniCard
-                          title="Riesgos"
+                          title={t('dashboard.risk')}
                           mainValue={highRisks}
-                          mainLabel="Altos"
+                          mainLabel={t('assets.levels.highPlural')}
                           sideValue={highRisks + mediumRisks + lowRisks}
-                          sideLabel="Totales"
+                          sideLabel={t('dashboardKpi.total')}
                           tone="red"
-                          footer="Evaluación en curso"
+                          footer={t('dashboardKpi.assessmentInProgress')}
                           href="/matriz-riesgo"
                         />
 
                         <MiniCard
-                          title="Auditorías"
+                          title={t('sidebar.audits')}
                           mainValue={nextAudits.length}
-                          mainLabel="Próximas"
+                          mainLabel={t('dashboardKpi.upcoming')}
                           sideValue={activeNorms}
-                          sideLabel="Normas"
+                          sideLabel={t('sidebar.standards')}
                           tone="indigo"
-                          footer={`Programadas este año: ${nextAudits.length}`}
+                          footer={t('dashboardKpi.scheduledThisYear', { count: nextAudits.length })}
                           href="/auditorias"
                         />
                       </div>
@@ -971,14 +976,14 @@ export default function DashboardPage() {
                       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                         <div className="mb-4 flex items-center justify-between">
                           <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">
-                            Vencimientos Próximos
+                            {t('dashboardKpi.upcomingDeadlines')}
                           </h2>
 
                           <a
                             href="/auditorias"
                             className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                           >
-                            <span>Ver calendario</span>
+                            <span>{t('dashboardKpi.viewCalendar')}</span>
                             <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                           </a>
                         </div>
@@ -1003,34 +1008,34 @@ export default function DashboardPage() {
                           <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-amber-600 shadow-sm">
                             !
                           </span>
-                          {upcomingAuditBars[2]?.value || 0} vencimiento(s) en los próximos 30 días requiere(n) atención
+                          {t('dashboardKpi.deadlinesAttention', { count: upcomingAuditBars[2]?.value || 0 })}
                         </div>
                       </section>
 
                       <section className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#091b49_0%,#0b1636_55%,#081226_100%)] p-6 text-white shadow-[0_16px_40px_rgba(2,8,23,0.22)]">
                         <h2 className="mb-5 text-2xl font-semibold">
-                          Acciones rápidas
+                          {t('dashboardKpi.quickActions')}
                         </h2>
 
                         <div className="space-y-3">
-                          <QuickActionButton href="/plan-accion" label="Nuevo Plan de Acción" />
-                          <QuickActionButton href="/evidencias" label="Registrar Evidencia" />
-                          <QuickActionButton href="/no-conformidades" label="Crear No Conformidad" />
-                          <QuickActionButton href="/auditorias" label="Generar Reporte" />
+                          <QuickActionButton href="/plan-accion" label={t('dashboardKpi.newActionPlan')} />
+                          <QuickActionButton href="/evidencias" label={t('dashboardKpi.registerEvidence')} />
+                          <QuickActionButton href="/no-conformidades" label={t('dashboardKpi.createNonconformity')} />
+                          <QuickActionButton href="/auditorias" label={t('dashboardKpi.generateReport')} />
                         </div>
                       </section>
 
                       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                         <div className="mb-4 flex items-center justify-between">
                           <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                            Actividad reciente
+                            {t('dashboard.latestActivity')}
                           </h2>
 
                           <a
                             href="/hallazgos"
                             className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                           >
-                            <span>Ver todo</span>
+                            <span>{t('dashboardKpi.viewAll')}</span>
                             <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                           </a>
                         </div>
@@ -1054,16 +1059,16 @@ export default function DashboardPage() {
                     <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                       <div className="mb-4 flex items-center justify-between">
                         <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                          Resumen por Norma
+                          {t('dashboardKpi.standardSummary')}
                         </h2>
 
                         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                          {isoCards.length} norma(s)
+                          {t('dashboardKpi.standardsCount', { count: isoCards.length })}
                         </span>
                       </div>
 
                       {isoCards.length === 0 ? (
-                        <div className="text-slate-500">No hay normas con datos aún.</div>
+                        <div className="text-slate-500">{t('dashboardKpi.noStandardsData')}</div>
                       ) : (
                         <div className="space-y-4">
                           {isoCards.map((item) => (
@@ -1074,7 +1079,7 @@ export default function DashboardPage() {
                               <div className="mb-3 flex items-center justify-between gap-4">
                                 <div className="font-semibold text-slate-900">{item.iso}</div>
                                 <div className="text-sm font-semibold text-indigo-600">
-                                  {item.percent}% cumplimiento
+                                  {item.percent}% {t('dashboardKpi.compliance')}
                                 </div>
                               </div>
 
@@ -1086,10 +1091,10 @@ export default function DashboardPage() {
                               </div>
 
                               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                                <StatChip label="Total" value={item.total} color="text-slate-900" />
+                                <StatChip label={t('dashboardKpi.total')} value={item.total} color="text-slate-900" />
                                 <StatChip label="OK" value={item.ok} color="text-green-600" />
-                                <StatChip label="Parcial" value={item.partial} color="text-amber-600" />
-                                <StatChip label="Crítico" value={item.critical} color="text-red-600" />
+                                <StatChip label={t('dashboardKpi.partial')} value={item.partial} color="text-amber-600" />
+                                <StatChip label={t('findings.severity.critical')} value={item.critical} color="text-red-600" />
                               </div>
                             </div>
                           ))}
@@ -1100,16 +1105,16 @@ export default function DashboardPage() {
                     <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                       <div className="mb-4 flex items-center justify-between">
                         <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                          Próximas Auditorías
+                          {t('dashboardKpi.upcomingAudits')}
                         </h2>
 
                         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                          {nextAudits.length} evento(s)
+                          {t('dashboardKpi.eventsCount', { count: nextAudits.length })}
                         </span>
                       </div>
 
                       {nextAudits.length === 0 ? (
-                        <div className="text-slate-500">No hay auditorías próximas registradas.</div>
+                        <div className="text-slate-500">{t('dashboardKpi.noUpcomingAudits')}</div>
                       ) : (
                         <div className="space-y-4">
                           {nextAudits.map((a, i) => (
@@ -1121,12 +1126,12 @@ export default function DashboardPage() {
                                 <div className="min-w-0">
                                   <div className="font-semibold text-slate-900">{a.iso}</div>
                                   <div className="mt-1 text-sm text-slate-500">
-                                    Auditor: {a.auditor_name || 'Sin asignar'}
+                                    {t('audits.auditor')}: {a.auditor_name || t('dashboardKpi.unassigned')}
                                   </div>
                                 </div>
 
                                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
-                                  <div className="text-xs uppercase tracking-wide text-slate-400">Fecha</div>
+                                  <div className="text-xs uppercase tracking-wide text-slate-400">{t('common.date')}</div>
                                   <div className="font-semibold text-slate-900">{a.start_date}</div>
                                 </div>
                               </div>
@@ -1139,14 +1144,14 @@ export default function DashboardPage() {
 
                   <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <BottomMetric label="Controles contratados" value={contractedControls} />
-                      <BottomMetric label="Normas activas" value={activeNorms} />
+                      <BottomMetric label={t('dashboardKpi.contractedControls')} value={contractedControls} />
+                      <BottomMetric label={t('dashboardKpi.activeStandards')} value={activeNorms} />
                       <BottomMetric
-                        label="Riesgo global"
+                        label={t('dashboardKpi.globalRisk')}
                         value={globalRiskLabel}
-                        className={riesgoColor(globalRiskLabel)}
+                        className={riesgoColor(globalRiskValue)}
                       />
-                      <BottomMetric label="% Riesgo" value={`${globalRiskValue}%`} />
+                      <BottomMetric label={t('dashboardKpi.riskPercent')} value={`${globalRiskValue}%`} />
                     </div>
                   </section>
                 </>
@@ -1159,51 +1164,51 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                 <div>
                   <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-                    Vista KPI
+                    {t('dashboard.kpiView')}
                   </h2>
                   <p className="mt-1 text-slate-500">
-                    KPIs unificados, transversales a normas ISO, con semáforos y seguimiento histórico.
+                    {t('dashboardKpi.kpiViewSubtitle')}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
                   <TopCard
-                    title="Score KPI Global"
+                    title={t('dashboard.kpiGlobalScore')}
                     value={`${calculateExecutiveScore(kpiSummary)}%`}
-                    subtitle="Salud general del sistema"
+                    subtitle={t('dashboardKpi.systemHealth')}
                     accent="green"
-                    change={`${kpiSummary?.green || 0} verdes`}
-                    changeHint="estado actual"
+                    change={t('dashboardKpi.greenCount', { count: kpiSummary?.green || 0 })}
+                    changeHint={t('dashboard.currentState')}
                     icon={<TcdxIcon name="kpi" className="h-6 w-6" />}
                   />
 
                   <TopCard
-                    title="KPIs Críticos"
+                    title={t('dashboard.criticalKpis')}
                     value={kpiSummary?.red || 0}
-                    subtitle="Requieren acción"
+                    subtitle={t('dashboardKpi.requireAction')}
                     accent="red"
                     change="ALERTA"
-                    changeHint="impacto alto"
+                    changeHint={t('dashboard.highImpact')}
                     icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                   />
 
                   <TopCard
-                    title="Sin Datos"
+                    title={t('dashboard.noDataKpis')}
                     value={kpiSummary?.gray || 0}
-                    subtitle="Pendientes"
+                    subtitle={t('statuses.evidence.pendiente')}
                     accent="amber"
                     change="INPUT"
-                    changeHint="carga requerida"
+                    changeHint={t('dashboard.requiredInput')}
                     icon={<TcdxIcon name="hourglass" className="h-6 w-6" />}
                   />
 
                   <TopCard
-                    title="KPIs Habilitados"
+                    title={t('dashboard.enabledKpis')}
                     value={kpiItems.filter((item) => item.is_enabled).length}
-                    subtitle="Activos para el tenant"
+                    subtitle={t('dashboard.enabledKpisSubtitle')}
                     accent="amber"
-                    change={`${kpiItems.filter((item) => item.kpi_type === 'manual').length} manuales`}
-                    changeHint="tipo de captura"
+                    change={t('dashboardKpi.manualCount', { count: kpiItems.filter((item) => item.kpi_type === 'manual').length })}
+                    changeHint={t('dashboard.captureType')}
                     icon={
                       <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path d="M12 20h9" />
@@ -1213,19 +1218,19 @@ export default function DashboardPage() {
                   />
 
                   <TopCard
-                    title="KPIs Health"
+                    title={t('dashboard.healthKpis')}
                     value={kpiSummary?.health_kpis || healthKpiCount}
-                    subtitle="Conectados al motor Health"
+                    subtitle={t('dashboard.healthKpisSubtitle')}
                     accent="green"
                     change={`${healthKpiCount} health`}
-                    changeHint="salud de controles"
+                    changeHint={t('dashboard.controlHealth')}
                     icon={<TcdxIcon name="heart" className="h-6 w-6" />}
                   />
                 </div>
 
                 {((kpiSummary?.red || 0) > 0 || (kpiSummary?.gray || 0) > 0) && (
                   <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
-                    {kpiSummary?.red || 0} KPI(s) críticos y {kpiSummary?.gray || 0} sin datos.
+                    {t('dashboardKpi.kpiAlert', { red: kpiSummary?.red || 0, gray: kpiSummary?.gray || 0 })}
                   </div>
                 )}
 
@@ -1234,14 +1239,14 @@ export default function DashboardPage() {
                     href="/administrar-kpis"
                     className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
                   >
-                    Administrar KPIs
+                    {t('kpiAdmin.title')}
                   </a>
 
                   <a
                     href="/health"
                     className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
                   >
-                    Ver Health
+                    {t('kpiAdmin.viewHealth')}
                   </a>
 
                   <button
@@ -1250,14 +1255,14 @@ export default function DashboardPage() {
                     disabled={recalculatingKpis}
                     className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
                   >
-                    {recalculatingKpis ? 'Recalculando...' : 'Recalcular KPIs'}
+                    {recalculatingKpis ? t('dashboardKpi.recalculating') : t('dashboardKpi.recalculateKpis')}
                   </button>
                 </div>
               </div>
 
               {loadingKpis && (
                 <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                  Cargando vista KPI...
+                  {t('dashboardKpi.loadingKpiView')}
                 </div>
               )}
 
@@ -1267,11 +1272,11 @@ export default function DashboardPage() {
                     <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                       <div className="mb-5 flex items-center justify-between">
                         <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">
-                          Estado General KPI
+                          {t('dashboardKpi.overallKpiStatus')}
                         </h2>
 
                         <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                          {kpiSummary?.total_kpis || 0} KPI(s)
+                          {t('dashboardKpi.kpisCount', { count: kpiSummary?.total_kpis || 0 })}
                         </div>
                       </div>
 
@@ -1302,35 +1307,35 @@ export default function DashboardPage() {
                               {kpiSummary?.green || 0}
                             </div>
                             <div className="mt-1 text-base font-medium text-slate-500">
-                              En verde
+                              {t('dashboardKpi.greenStatus')}
                             </div>
                           </div>
                         </div>
 
                         <div className="space-y-5">
                           <LegendRow
-                            label="En Verde"
+                            label={t('dashboardKpi.greenStatus')}
                             value={kpiSummary?.green || 0}
                             color="bg-green-600"
-                            extra="Objetivo logrado"
+                            extra={t('dashboardKpi.targetAchieved')}
                           />
                           <LegendRow
-                            label="En Amarillo"
+                            label={t('dashboardKpi.yellowStatus')}
                             value={kpiSummary?.yellow || 0}
                             color="bg-amber-400"
-                            extra="Monitoreo requerido"
+                            extra={t('dashboardKpi.monitoringRequired')}
                           />
                           <LegendRow
-                            label="En Rojo"
+                            label={t('dashboardKpi.redStatus')}
                             value={kpiSummary?.red || 0}
                             color="bg-red-500"
-                            extra="Acción recomendada"
+                            extra={t('dashboardKpi.actionRecommended')}
                           />
                           <LegendRow
-                            label="Sin Dato"
+                            label={t('common.noData')}
                             value={kpiSummary?.gray || 0}
                             color="bg-slate-400"
-                            extra="Carga o cálculo pendiente"
+                            extra={t('dashboardKpi.loadOrCalculationPending')}
                           />
                         </div>
                       </div>
@@ -1339,14 +1344,14 @@ export default function DashboardPage() {
                     <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                       <div className="mb-4 flex items-center justify-between">
                         <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                          Distribución por Categoría
+                          {t('dashboardKpi.categoryDistribution')}
                         </h2>
 
                         <a
                           href="/administrar-kpis"
                           className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                         >
-                          <span>Gestionar</span>
+                          <span>{t('dashboardKpi.manage')}</span>
                           <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                         </a>
                       </div>
@@ -1369,16 +1374,16 @@ export default function DashboardPage() {
                     <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                       <div className="mb-4 flex items-center justify-between">
                         <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                          KPIs Críticos
+                          {t('dashboard.criticalKpis')}
                         </h2>
 
                         <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
-                          {topRedKpis.length} en rojo
+                          {t('dashboardKpi.redCount', { count: topRedKpis.length })}
                         </span>
                       </div>
 
                       {topRedKpis.length === 0 ? (
-                        <div className="text-slate-500">No hay KPIs en rojo actualmente.</div>
+                        <div className="text-slate-500">{t('dashboardKpi.noRedKpis')}</div>
                       ) : (
                         <div className="space-y-4">
                           {topRedKpis.map((item) => (
@@ -1391,16 +1396,16 @@ export default function DashboardPage() {
                     <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                       <div className="mb-4 flex items-center justify-between">
                         <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                          KPIs Destacados
+                          {t('dashboardKpi.featuredKpis')}
                         </h2>
 
                         <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-600">
-                          {topGreenKpis.length} en verde
+                          {t('dashboardKpi.greenCount', { count: topGreenKpis.length })}
                         </span>
                       </div>
 
                       {topGreenKpis.length === 0 ? (
-                        <div className="text-slate-500">Aún no hay KPIs calculados en verde.</div>
+                        <div className="text-slate-500">{t('dashboardKpi.noGreenKpis')}</div>
                       ) : (
                         <div className="space-y-4">
                           {topGreenKpis.map((item) => (
@@ -1414,21 +1419,21 @@ export default function DashboardPage() {
                   <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                     <div className="mb-4 flex items-center justify-between">
                       <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                        Todos los KPIs
+                        {t('dashboardKpi.allKpis')}
                       </h2>
 
                       <a
                         href="/administrar-kpis"
                         className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
                       >
-                        <span>Abrir administración</span>
+                        <span>{t('dashboardKpi.openAdministration')}</span>
                         <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                       </a>
                     </div>
 
                     {kpiItems.length === 0 ? (
                       <div className="text-slate-500">
-                        No hay KPIs disponibles para este tenant.
+                        {t('dashboardKpi.noKpis')}
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -1448,11 +1453,11 @@ export default function DashboardPage() {
   );
 }
 
-function getKpiStatusLabel(color?: string | null) {
-  if (color === 'green') return 'Verde';
-  if (color === 'yellow') return 'Amarillo';
-  if (color === 'red') return 'Rojo';
-  return 'Sin dato';
+function getKpiStatusLabel(color: string | null | undefined, t: TFunction) {
+  if (color === 'green') return t('statuses.kpis.verde');
+  if (color === 'yellow') return t('statuses.kpis.amarillo');
+  if (color === 'red') return t('statuses.kpis.rojo');
+  return t('common.noData');
 }
 
 function getKpiStatusClass(color?: string | null) {
@@ -1462,9 +1467,11 @@ function getKpiStatusClass(color?: string | null) {
   return 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
-function formatKpiValue(value: number | string | null | undefined, unit?: string) {
+type TFunction = (key: string, params?: Record<string, string | number>) => string;
+
+function formatKpiValue(value: number | string | null | undefined, unit?: string, noDataLabel = 'Sin dato') {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return 'Sin dato';
+    return noDataLabel;
   }
 
   const rounded =
@@ -1486,6 +1493,7 @@ function formatKpiValue(value: number | string | null | undefined, unit?: string
 }
 
 function KpiRow({ item }: { item: KpiDashboardItem }) {
+  const { t } = useTranslation();
   const status = item.latest_snapshot?.status_color || 'gray';
 
   return (
@@ -1497,11 +1505,11 @@ function KpiRow({ item }: { item: KpiDashboardItem }) {
               {item.code}
             </span>
             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getKpiStatusClass(status)}`}>
-              {getKpiStatusLabel(status)}
+              {getKpiStatusLabel(status, t)}
             </span>
             {(item.is_health_kpi || item.code.startsWith('KPI-HLT-')) && (
               <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                Health
+                {t('dashboardKpi.health')}
               </span>
             )}
           </div>
@@ -1516,21 +1524,21 @@ function KpiRow({ item }: { item: KpiDashboardItem }) {
 
           {item.applicable_standards?.length ? (
             <div className="mt-2 text-xs text-slate-500">
-              Normas: {item.applicable_standards.join(', ')}
+              {t('sidebar.standards')}: {item.applicable_standards.join(', ')}
             </div>
           ) : null}
         </div>
 
         <div className="text-right">
           <div className="text-2xl font-bold tracking-tight text-slate-900">
-            {formatKpiValue(item.latest_snapshot?.value, item.unit)}
+            {formatKpiValue(item.latest_snapshot?.value, item.unit, t('common.noData'))}
           </div>
 
           <div className="mt-1 text-xs text-slate-500">
-            Objetivo:{' '}
+            {t('kpiAdmin.target')}:{' '}
             {item.target_value !== null && item.target_value !== undefined
-              ? formatKpiValue(item.target_value, item.unit)
-              : 'N/A'}
+              ? formatKpiValue(item.target_value, item.unit, t('common.noData'))
+              : t('common.noData')}
           </div>
         </div>
       </div>
@@ -1539,6 +1547,7 @@ function KpiRow({ item }: { item: KpiDashboardItem }) {
 }
 
 function KpiCard({ item }: { item: KpiDashboardItem }) {
+  const { t } = useTranslation();
   const status = item.latest_snapshot?.status_color || 'gray';
 
   return (
@@ -1550,11 +1559,11 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
               {item.code}
             </span>
             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getKpiStatusClass(status)}`}>
-              {getKpiStatusLabel(status)}
+              {getKpiStatusLabel(status, t)}
             </span>
             {(item.is_health_kpi || item.code.startsWith('KPI-HLT-')) && (
               <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                Motor Health
+                {t('kpiAdmin.healthEngine')}
               </span>
             )}
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
@@ -1567,13 +1576,13 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
           </h3>
 
           <p className="mt-1 text-sm text-slate-500">
-            {item.description || 'Sin descripción'}
+            {item.description || t('header.noDescription')}
           </p>
         </div>
 
         <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
           <div className="text-3xl font-bold tracking-tight text-slate-900">
-            {formatKpiValue(item.latest_snapshot?.value, item.unit)}
+            {formatKpiValue(item.latest_snapshot?.value, item.unit, t('common.noData'))}
           </div>
           <div className="mt-1 text-xs text-slate-500">
             {item.frequency}
@@ -1582,20 +1591,20 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
-        <StatChip label="Categoría" value={item.category} color="text-slate-900" />
-        <StatChip label="Dirección" value={item.direction} color="text-slate-900" />
+        <StatChip label={t('kpiAdmin.category')} value={item.category} color="text-slate-900" />
+        <StatChip label={t('kpiAdmin.direction')} value={item.direction} color="text-slate-900" />
         <StatChip
-          label="Objetivo"
+          label={t('kpiAdmin.target')}
           value={
             item.target_value !== null && item.target_value !== undefined
-              ? formatKpiValue(item.target_value, item.unit)
-              : 'N/A'
+              ? formatKpiValue(item.target_value, item.unit, t('common.noData'))
+              : t('common.noData')
           }
           color="text-slate-900"
         />
         <StatChip
           label="Delta"
-          value={item.delta !== null && item.delta !== undefined ? item.delta.toFixed(2) : 'N/A'}
+          value={item.delta !== null && item.delta !== undefined ? item.delta.toFixed(2) : t('common.noData')}
           color={
             item.delta !== null && item.delta !== undefined && item.delta < 0
               ? 'text-red-600'
@@ -1620,7 +1629,7 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
       {item.latest_snapshots?.length && item.latest_snapshots.length > 1 ? (
         <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4">
           <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Snapshot por norma / alcance
+            {t('dashboardKpi.snapshotByScope')}
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             {item.latest_snapshots.slice(0, 6).map((snap, index) => (
@@ -1629,10 +1638,10 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
                 className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-xs"
               >
                 <span className="font-semibold text-slate-600">
-                  {snap.standard_code || 'Global'}
+                  {snap.standard_code || t('kpiAdmin.global')}
                 </span>
                 <span className="font-bold text-slate-900">
-                  {formatKpiValue(snap.value as any, item.unit)}
+                  {formatKpiValue(snap.value as any, item.unit, t('common.noData'))}
                 </span>
               </div>
             ))}
@@ -1652,6 +1661,7 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
 }
 
 function UpcomingAuditsTooltip({ active, payload, label }: any) {
+  const { t } = useTranslation();
   if (!active || !payload || !payload.length) return null;
 
   const barData = payload[0]?.payload;
@@ -1661,19 +1671,19 @@ function UpcomingAuditsTooltip({ active, payload, label }: any) {
     <div className="max-w-[340px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
       <div className="mb-2 font-semibold text-slate-900">{label}</div>
       <div className="mb-3 text-sm text-slate-600">
-        Total eventos: <b>{barData?.value || 0}</b>
+        {t('dashboardKpi.totalEvents')}: <b>{barData?.value || 0}</b>
       </div>
 
       {details.length === 0 ? (
-        <div className="text-sm text-slate-500">Sin eventos en este rango.</div>
+        <div className="text-sm text-slate-500">{t('dashboardKpi.noEventsInRange')}</div>
       ) : (
         <div className="max-h-56 space-y-2 overflow-auto">
           {details.map((audit, idx) => (
             <div key={idx} className="border-t border-slate-100 pt-2 text-sm first:border-t-0 first:pt-0">
-              <div className="font-medium text-slate-900">{audit.iso || 'Sin ISO'}</div>
-              <div className="text-slate-600">Fecha: {audit.start_date || '-'}</div>
-              <div className="text-slate-600">Evento: Auditoría programada</div>
-              <div className="text-slate-600">Auditor: {audit.auditor_name || 'Sin asignar'}</div>
+              <div className="font-medium text-slate-900">{audit.iso || t('dashboardKpi.noIso')}</div>
+              <div className="text-slate-600">{t('common.date')}: {audit.start_date || '-'}</div>
+              <div className="text-slate-600">{t('dashboardKpi.event')}: {t('dashboardKpi.scheduledAudit')}</div>
+              <div className="text-slate-600">{t('audits.auditor')}: {audit.auditor_name || t('dashboardKpi.unassigned')}</div>
             </div>
           ))}
         </div>

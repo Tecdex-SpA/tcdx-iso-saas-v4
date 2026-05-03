@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import ObjectivesPanel from '@/components/objectives/ObjectivesPanel';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type StageDef = {
   code: string;
@@ -264,6 +265,7 @@ function cardHealthRing(health: string) {
 
 export default function CicloVidaPage() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState<string>('');
@@ -341,7 +343,7 @@ export default function CicloVidaPage() {
 
     if (!res.ok) {
       throw new Error(
-        data?.detail || data?.error || 'No fue posible cargar el alcance de normas'
+        data?.detail || data?.error || t('lifecycle.errors.loadScope')
       );
     }
 
@@ -383,7 +385,7 @@ export default function CicloVidaPage() {
 
     if (!res.ok) {
       throw new Error(
-        data?.detail || data?.error || 'No fue posible cargar el tablero'
+        data?.detail || data?.error || t('lifecycle.errors.loadBoard')
       );
     }
 
@@ -427,12 +429,12 @@ export default function CicloVidaPage() {
       const data = await res.json();
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.detail || data?.error || 'No fue posible cargar historial');
+        throw new Error(data?.detail || data?.error || t('lifecycle.errors.loadHistory'));
       }
 
       setHistoryRows(Array.isArray(data?.data) ? data.data : []);
     } catch (err: any) {
-      setError(err?.message || 'Error cargando historial de ciclo de vida');
+      setError(err?.message || t('lifecycle.errors.loadHistory'));
       setHistoryRows([]);
     } finally {
       setHistoryLoading(false);
@@ -448,7 +450,7 @@ export default function CicloVidaPage() {
 
         const token = getToken();
         if (!token) {
-          throw new Error('No hay token activo');
+          throw new Error(t('lifecycle.errors.noToken'));
         }
 
         let resolvedTenantId = resolveTenantIdFromToken();
@@ -464,14 +466,14 @@ export default function CicloVidaPage() {
         }
 
         if (!resolvedTenantId) {
-          throw new Error('No fue posible resolver el tenant_id');
+          throw new Error(t('lifecycle.errors.tenantResolve'));
         }
 
         setTenantId(resolvedTenantId);
         await loadScope(resolvedTenantId);
         await loadBoard(resolvedTenantId);
       } catch (err: any) {
-        setError(err?.message || 'Error cargando ciclo de vida');
+        setError(err?.message || t('lifecycle.errors.loadLifecycle'));
       } finally {
         setLoading(false);
       }
@@ -489,7 +491,7 @@ export default function CicloVidaPage() {
         setError('');
         await loadBoard(tenantId, selectedStandard, selectedOperation);
       } catch (err: any) {
-        setError(err?.message || 'Error cargando filtros');
+        setError(err?.message || t('lifecycle.errors.loadFilters'));
       } finally {
         setLoading(false);
       }
@@ -656,7 +658,7 @@ export default function CicloVidaPage() {
 
   function handleDragStart(card: LifecycleCard) {
     if (!canRequestLifecycleMove) {
-      setError('Tu rol es solo lectura y no puede solicitar cambios de etapa.');
+      setError(t('lifecycle.errors.readOnlyMove'));
       return;
     }
 
@@ -685,7 +687,7 @@ export default function CicloVidaPage() {
     if (!dragging || !tenantId) return;
 
     if (!canRequestLifecycleMove) {
-      setError('Tu rol es solo lectura y no puede solicitar cambios de etapa.');
+      setError(t('lifecycle.errors.readOnlyMove'));
       setDragging(null);
       return;
     }
@@ -716,7 +718,7 @@ export default function CicloVidaPage() {
           to_stage_code: stageCode,
           request_reason:
             requestReason?.trim() ||
-            'Movimiento manual solicitado desde el tablero kanban',
+            t('lifecycle.manualMoveDefaultReason'),
         }),
       });
 
@@ -724,20 +726,19 @@ export default function CicloVidaPage() {
 
       if (!res.ok) {
         throw new Error(
-          data?.detail || data?.error || 'No fue posible solicitar el cambio de etapa'
+          data?.detail || data?.error || t('lifecycle.errors.requestMove')
         );
       }
 
       await refreshBoard();
       setSuccessMessage(
-        `Movimiento enviado a ${prettifyStage(
-          stageCode,
-          filteredBoard?.stages || []
-        )} y quedó pendiente de validación del auditor.`
+        t('lifecycle.moveSubmitted', {
+          stage: prettifyStage(stageCode, filteredBoard?.stages || []),
+        })
       );
       setRequestReason('');
     } catch (err: any) {
-      setError(err?.message || 'Error solicitando movimiento');
+      setError(err?.message || t('lifecycle.errors.requestMove'));
     } finally {
       setActionLoading(false);
       setDragging(null);
@@ -748,7 +749,7 @@ export default function CicloVidaPage() {
     if (!selectedPendingCard?.pending_request_row_id) return;
 
     if (!canReviewLifecycleMove) {
-      setError('Tu rol no permite aprobar o rechazar cambios de etapa.');
+      setError(t('lifecycle.errors.reviewDenied'));
       return;
     }
 
@@ -770,8 +771,8 @@ export default function CicloVidaPage() {
             review_action: action,
             review_comment:
               action === 'confirmar'
-                ? 'Cambio confirmado por auditor desde tablero ciclo de vida'
-                : 'Cambio rechazado por auditor desde tablero ciclo de vida',
+                ? t('lifecycle.confirmComment')
+                : t('lifecycle.rejectComment'),
           }),
         }
       );
@@ -779,18 +780,18 @@ export default function CicloVidaPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.detail || data?.error || 'No fue posible revisar la solicitud');
+        throw new Error(data?.detail || data?.error || t('lifecycle.errors.reviewRequest'));
       }
 
       await refreshBoard();
       setSuccessMessage(
         action === 'confirmar'
-          ? 'El cambio fue confirmado por el auditor.'
-          : 'El cambio fue rechazado por el auditor.'
+          ? t('lifecycle.confirmedByAuditor')
+          : t('lifecycle.rejectedByAuditor')
       );
       setSelectedPendingCard(null);
     } catch (err: any) {
-      setError(err?.message || 'Error revisando solicitud');
+      setError(err?.message || t('lifecycle.errors.reviewRequest'));
     } finally {
       setActionLoading(false);
     }
@@ -829,20 +830,19 @@ export default function CicloVidaPage() {
               <div className="max-w-4xl">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                    Kanban operativo
+                    {t('lifecycle.operationalKanban')}
                   </span>
                   <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Alcance real por norma y operación
+                    {t('lifecycle.realScope')}
                   </span>
                 </div>
 
                 <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                  Ciclo de Vida de Cumplimiento
+                  {t('lifecycle.title')}
                 </h1>
 
                 <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
-                  Vista ejecutiva multinorma por operación, con salud, madurez, cobertura
-                  de evidencia y validación de transiciones por auditor.
+                  {t('lifecycle.subtitle')}
                 </p>
 
                 <div className="mt-5 inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
@@ -856,16 +856,16 @@ export default function CicloVidaPage() {
                         : 'text-slate-600 hover:bg-slate-100',
                     ].join(' ')}
                   >
-                    Vista Ciclo de Vida
+                    {t('lifecycle.lifecycleView')}
                   </button>
 
                   <button
                     type="button"
                     disabled={!canUseObjectives}
-                    title={!canUseObjectives ? 'Tu rol no tiene acceso a la vista Objetivos.' : 'Ver objetivos'}
+                    title={!canUseObjectives ? t('lifecycle.objectivesAccessDenied') : t('lifecycle.viewObjectives')}
                     onClick={() => {
                       if (!canUseObjectives) {
-                        setError('Tu rol no tiene acceso a la vista Objetivos.');
+                        setError(t('lifecycle.objectivesAccessDenied'));
                         return;
                       }
                       setActiveView('objectives');
@@ -877,7 +877,7 @@ export default function CicloVidaPage() {
                         : 'text-slate-600 hover:bg-slate-100',
                     ].join(' ')}
                   >
-                    Vista Objetivos
+                    {t('lifecycle.objectivesView')}
                   </button>
 
                   <button
@@ -890,7 +890,7 @@ export default function CicloVidaPage() {
                         : 'text-slate-600 hover:bg-slate-100',
                     ].join(' ')}
                   >
-                    Vista Historial
+                    {t('lifecycle.historyView')}
                   </button>
                 </div>
               </div>
@@ -900,7 +900,7 @@ export default function CicloVidaPage() {
                   type="button"
                   onClick={() => setTopPanelCollapsed((prev) => !prev)}
                   className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
-                  title={topPanelCollapsed ? 'Expandir panel superior' : 'Colapsar panel superior'}
+                  title={topPanelCollapsed ? t('lifecycle.expandTopPanel') : t('lifecycle.collapseTopPanel')}
                 >
                   <svg
                     className={`h-4 w-4 transition-transform ${topPanelCollapsed ? '' : 'rotate-180'}`}
@@ -911,7 +911,7 @@ export default function CicloVidaPage() {
                   >
                     <path d="M19 9l-7 7-7-7" />
                   </svg>
-                  {topPanelCollapsed ? 'Mostrar filtros' : 'Ocultar filtros'}
+                  {topPanelCollapsed ? t('lifecycle.showFilters') : t('lifecycle.hideFilters')}
                 </button>
               </div>
             </div>
@@ -920,27 +920,27 @@ export default function CicloVidaPage() {
               <>
                 <div className="grid min-w-[320px] grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <SummaryTopCard
-                    title="Tarjetas activas"
+                    title={t('lifecycle.activeCards')}
                     value={summary.totalCards}
-                    subtitle="alcance visible"
+                    subtitle={t('lifecycle.visibleScope')}
                     tone="slate"
                   />
                   <SummaryTopCard
-                    title="Saludables"
+                    title={t('health.healthy')}
                     value={summary.healthy}
-                    subtitle="estado favorable"
+                    subtitle={t('lifecycle.favorableStatus')}
                     tone="green"
                   />
                   <SummaryTopCard
-                    title="Madurez promedio"
+                    title={t('lifecycle.averageMaturity')}
                     value={`${formatScore(summary.avg)}%`}
-                    subtitle="nivel actual"
+                    subtitle={t('lifecycle.currentLevel')}
                     tone="indigo"
                   />
                   <SummaryTopCard
-                    title="Pendientes auditor"
+                    title={t('lifecycle.pendingAuditor')}
                     value={summary.pending}
-                    subtitle="por confirmar"
+                    subtitle={t('lifecycle.toConfirm')}
                     tone="amber"
                   />
                 </div>
@@ -948,16 +948,16 @@ export default function CicloVidaPage() {
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
                   <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
                     <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      Vista
+                      {t('lifecycle.view')}
                     </label>
                     <div className="rounded-2xl bg-slate-100 px-3 py-3 text-sm font-medium text-slate-700">
-                      General multinorma
+                      {t('lifecycle.multiStandardGeneral')}
                     </div>
                   </div>
 
                   <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
                     <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      Norma contratada
+                      {t('lifecycle.contractedStandard')}
                     </label>
                     <select
                       value={selectedStandard}
@@ -967,7 +967,7 @@ export default function CicloVidaPage() {
                       }}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
                     >
-                      <option value="ALL">Todas</option>
+                      <option value="ALL">{t('common.all')}</option>
                       {standards.map((standard) => (
                         <option key={standard} value={standard}>
                           {standard}
@@ -978,14 +978,14 @@ export default function CicloVidaPage() {
 
                   <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
                     <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      Operación
+                      {t('lifecycle.operation')}
                     </label>
                     <select
                       value={selectedOperation}
                       onChange={(e) => setSelectedOperation(e.target.value)}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
                     >
-                      <option value="ALL">Todas</option>
+                      <option value="ALL">{t('common.all')}</option>
                       {operations.map((operation) => (
                         <option key={operation.id} value={operation.id}>
                           {operation.name} ({operation.code})
@@ -996,7 +996,7 @@ export default function CicloVidaPage() {
 
                   <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
                     <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      Etapa más cargada
+                      {t('lifecycle.mostLoadedStage')}
                     </label>
                     <div className="rounded-2xl bg-slate-100 px-3 py-3 text-sm font-medium text-slate-700">
                       {summary.mostLoaded}
@@ -1005,13 +1005,13 @@ export default function CicloVidaPage() {
 
                   <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
                     <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      Motivo del movimiento
+                      {t('lifecycle.moveReason')}
                     </label>
                     <input
                       disabled={!canRequestLifecycleMove}
                       value={requestReason}
                       onChange={(e) => setRequestReason(e.target.value)}
-                      placeholder="Opcional para auditoría"
+                      placeholder={t('lifecycle.auditOptional')}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
                     />
                   </div>
@@ -1019,22 +1019,22 @@ export default function CicloVidaPage() {
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <InsightCard
-                    title="Etapa más débil"
+                    title={t('lifecycle.weakestStage')}
                     value={summary.weakestStage}
-                    subtitle="menor promedio de health score"
+                    subtitle={t('lifecycle.lowestHealthAverage')}
                   />
                   <InsightCard
-                    title="Normas contratadas"
+                    title={t('lifecycle.contractedStandards')}
                     value={activeStandards.length}
-                    subtitle="visibles en el tablero"
+                    subtitle={t('lifecycle.visibleOnBoard')}
                   />
                   <InsightCard
-                    title="Flujo controlado"
-                    value={isAuditor ? 'Modo auditor' : 'Modo usuario'}
+                    title={t('lifecycle.controlledFlow')}
+                    value={isAuditor ? t('lifecycle.auditorMode') : t('lifecycle.userMode')}
                     subtitle={
                       isAuditor
-                        ? 'puede confirmar o rechazar avances'
-                        : 'solicita transiciones de etapa'
+                        ? t('lifecycle.auditorModeSubtitle')
+                        : t('lifecycle.userModeSubtitle')
                     }
                   />
                 </div>
@@ -1054,13 +1054,13 @@ export default function CicloVidaPage() {
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-600">
-                  Trazabilidad auditable
+                  {t('lifecycle.auditableTraceability')}
                 </div>
                 <h2 className="mt-1 text-xl font-bold text-slate-900">
-                  Historial de movimientos de ciclo de vida
+                  {t('lifecycle.movementHistory')}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Registro de solicitudes, aprobaciones, rechazos, motivos y responsables.
+                  {t('lifecycle.movementHistorySubtitle')}
                 </p>
               </div>
 
@@ -1070,30 +1070,30 @@ export default function CicloVidaPage() {
                 disabled={historyLoading}
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
               >
-                {historyLoading ? 'Actualizando...' : 'Actualizar historial'}
+                {historyLoading ? t('common.refreshing') : t('lifecycle.refreshHistory')}
               </button>
             </div>
 
             <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
               {historyLoading ? (
-                <div className="p-6 text-sm text-slate-500">Cargando historial...</div>
+                <div className="p-6 text-sm text-slate-500">{t('lifecycle.loadingHistory')}</div>
               ) : historyRows.length === 0 ? (
                 <div className="p-6 text-sm text-slate-500">
-                  No hay movimientos registrados para los filtros actuales.
+                  {t('lifecycle.noMovements')}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-slate-200 text-sm">
                     <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                       <tr>
-                        <th className="px-4 py-3">Fecha</th>
-                        <th className="px-4 py-3">Norma</th>
-                        <th className="px-4 py-3">Operación</th>
-                        <th className="px-4 py-3">Movimiento</th>
-                        <th className="px-4 py-3">Estado</th>
-                        <th className="px-4 py-3">Solicitado por</th>
-                        <th className="px-4 py-3">Revisado por</th>
-                        <th className="px-4 py-3">Motivo / comentario</th>
+                        <th className="px-4 py-3">{t('common.date')}</th>
+                        <th className="px-4 py-3">{t('common.standard')}</th>
+                        <th className="px-4 py-3">{t('lifecycle.operation')}</th>
+                        <th className="px-4 py-3">{t('lifecycle.movement')}</th>
+                        <th className="px-4 py-3">{t('common.status')}</th>
+                        <th className="px-4 py-3">{t('lifecycle.requestedBy')}</th>
+                        <th className="px-4 py-3">{t('lifecycle.reviewedBy')}</th>
+                        <th className="px-4 py-3">{t('lifecycle.reasonComment')}</th>
                       </tr>
                     </thead>
 
@@ -1113,33 +1113,33 @@ export default function CicloVidaPage() {
                               {formatDateTime(row.requested_at || row.reviewed_at)}
                             </td>
                             <td className="px-4 py-3 font-semibold text-slate-800">
-                              {row.standard_code || 'N/D'}
+                              {row.standard_code || t('common.noData')}
                             </td>
                             <td className="px-4 py-3 text-slate-600">
-                              {row.operation_name || row.operation_id || 'N/D'}
+                              {row.operation_name || row.operation_id || t('common.noData')}
                             </td>
                             <td className="px-4 py-3 text-slate-700">
                               <div className="font-semibold">
-                                {row.from_stage_name || row.from_stage_code || 'Sin etapa'}
+                                {row.from_stage_name || row.from_stage_code || t('lifecycle.noStage')}
                               </div>
-                              <div className="text-xs text-slate-400">hacia</div>
+                              <div className="text-xs text-slate-400">{t('lifecycle.to')}</div>
                               <div className="font-semibold">
-                                {row.to_stage_name || row.to_stage_code || 'Sin etapa'}
+                                {row.to_stage_name || row.to_stage_code || t('lifecycle.noStage')}
                               </div>
                             </td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusClass}`}>
-                                {row.request_status_label || row.request_status || 'Pendiente'}
+                                {row.request_status_label || row.request_status || t('statuses.evidence.pendiente')}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-slate-600">
-                              {row.requested_by_name || row.requested_by_email || 'No informado'}
+                              {row.requested_by_name || row.requested_by_email || t('lifecycle.notReported')}
                             </td>
                             <td className="px-4 py-3 text-slate-600">
-                              {row.reviewed_by_name || row.reviewed_by_email || 'Pendiente'}
+                              {row.reviewed_by_name || row.reviewed_by_email || t('statuses.evidence.pendiente')}
                             </td>
                             <td className="px-4 py-3 text-slate-600">
-                              <div>{row.request_reason || 'Sin motivo informado'}</div>
+                              <div>{row.request_reason || t('lifecycle.noReason')}</div>
                               {row.review_comment && (
                                 <div className="mt-1 rounded-xl bg-slate-50 p-2 text-xs text-slate-500">
                                   {row.review_comment}
@@ -1175,7 +1175,7 @@ export default function CicloVidaPage() {
 
         {activeView === 'lifecycle' && loading ? (
           <div className="rounded-[30px] border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-            Cargando tablero de ciclo de vida...
+            {t('lifecycle.loadingBoard')}
           </div>
         ) : null}
 
@@ -1224,8 +1224,7 @@ export default function CicloVidaPage() {
                           <div>
                             <h2 className="text-sm font-bold">{column.stage_name}</h2>
                             <p className="mt-1 text-xs opacity-80">
-                              {column.items.length} tarjeta
-                              {column.items.length === 1 ? '' : 's'}
+                              {t('lifecycle.cardsCount', { count: column.items.length })}
                             </p>
                           </div>
                           <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold">
@@ -1235,19 +1234,19 @@ export default function CicloVidaPage() {
 
                         <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
                           <div className="rounded-xl bg-white/70 px-3 py-2">
-                            <div className="font-semibold">Saludables</div>
+                            <div className="font-semibold">{t('health.healthy')}</div>
                             <div>{healthyCount}</div>
                           </div>
                           <div className="rounded-xl bg-white/70 px-3 py-2">
-                            <div className="font-semibold">Atención</div>
+                            <div className="font-semibold">{t('statuses.controls.atencion')}</div>
                             <div>{attentionCount}</div>
                           </div>
                           <div className="rounded-xl bg-white/70 px-3 py-2">
-                            <div className="font-semibold">Deteriorados</div>
+                            <div className="font-semibold">{t('health.deteriorated')}</div>
                             <div>{deterioratedCount}</div>
                           </div>
                           <div className="rounded-xl bg-white/70 px-3 py-2">
-                            <div className="font-semibold">Madurez</div>
+                            <div className="font-semibold">{t('lifecycle.maturity')}</div>
                             <div>{formatScore(avgMaturity)}%</div>
                           </div>
                         </div>
@@ -1256,7 +1255,7 @@ export default function CicloVidaPage() {
                       <div className="space-y-4 p-4">
                         {column.items.length === 0 ? (
                           <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-400">
-                            Suelta una tarjeta aquí
+                            {t('lifecycle.dropCardHere')}
                           </div>
                         ) : null}
 
@@ -1303,12 +1302,12 @@ export default function CicloVidaPage() {
                                   </span>
                                   {card.display_stage_code === 'certificacion' ? (
                                     <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-[11px] font-semibold text-cyan-700">
-                                      Certificación
+                                      {t('lifecycle.certification')}
                                     </span>
                                   ) : null}
                                   {card.display_stage_code === 'suspendida_fuera_alcance' ? (
                                     <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-700">
-                                      Suspendida / Fuera alcance
+                                      {t('lifecycle.suspendedOutOfScope')}
                                     </span>
                                   ) : null}
                                 </div>
@@ -1318,8 +1317,8 @@ export default function CicloVidaPage() {
                                 </p>
 
                                 <p className="mt-1 text-xs text-slate-500">
-                                  Código operación: {card.operation_code} · Modo catálogo:{' '}
-                                  {card.catalog_mode || 'N/D'}
+                                  {t('lifecycle.operationCode')}: {card.operation_code} · {t('lifecycle.catalogMode')}:{' '}
+                                  {card.catalog_mode || t('common.noData')}
                                 </p>
                               </div>
 
@@ -1332,12 +1331,12 @@ export default function CicloVidaPage() {
                                   {card.health_status}
                                 </span>
                                 {!card.is_pending_confirmation ? (
-                                  <span className="text-slate-300" title="Arrastrar tarjeta">
+                                  <span className="text-slate-300" title={t('lifecycle.dragCard')}>
                                     ⋮⋮
                                   </span>
                                 ) : (
                                   <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                                    Por confirmar
+                                    {t('lifecycle.toConfirm')}
                                   </span>
                                 )}
                               </div>
@@ -1345,12 +1344,12 @@ export default function CicloVidaPage() {
 
                             {card.is_pending_confirmation ? (
                               <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                                <div className="font-semibold">Movimiento pendiente</div>
+                                <div className="font-semibold">{t('lifecycle.pendingMovement')}</div>
                                 <div className="mt-1">
-                                  Desde: {prettifyStage(card.from_stage_code, filteredBoard.stages)}
+                                  {t('lifecycle.from')}: {prettifyStage(card.from_stage_code, filteredBoard.stages)}
                                 </div>
                                 <div className="mt-1">
-                                  Hacia: {prettifyStage(card.to_stage_code, filteredBoard.stages)}
+                                  {t('lifecycle.to')}: {prettifyStage(card.to_stage_code, filteredBoard.stages)}
                                 </div>
                               </div>
                             ) : null}
@@ -1358,7 +1357,7 @@ export default function CicloVidaPage() {
                             <div className="mt-4 grid grid-cols-2 gap-3">
                               <div className="rounded-2xl bg-slate-50 p-3">
                                 <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                                  Madurez
+                                  {t('lifecycle.maturity')}
                                 </p>
                                 <p className="mt-1 text-lg font-bold text-slate-900">
                                   {formatScore(card.maturity_score)}%
@@ -1367,7 +1366,7 @@ export default function CicloVidaPage() {
 
                               <div className="rounded-2xl bg-slate-50 p-3">
                                 <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                                  Salud score
+                                  {t('lifecycle.healthScore')}
                                 </p>
                                 <p className="mt-1 text-lg font-bold text-slate-900">
                                   {formatScore(card.avg_health_score)}
@@ -1377,7 +1376,7 @@ export default function CicloVidaPage() {
 
                             <div className="mt-4">
                               <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
-                                <span>Controles habilitados</span>
+                                <span>{t('lifecycle.enabledControls')}</span>
                                 <span>{formatPct(card.controls_enabled_pct)}</span>
                               </div>
                               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -1398,7 +1397,7 @@ export default function CicloVidaPage() {
 
                             <div className="mt-4">
                               <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
-                                <span>Cobertura evidencia</span>
+                                <span>{t('lifecycle.evidenceCoverage')}</span>
                                 <span>{formatPct(card.evidence_coverage_pct)}</span>
                               </div>
                               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -1413,27 +1412,27 @@ export default function CicloVidaPage() {
                                 />
                               </div>
                               <p className="mt-1 text-[11px] text-slate-500">
-                                {card.controls_with_evidence_count} controles con evidencia
+                                {t('lifecycle.controlsWithEvidence', { count: card.controls_with_evidence_count })}
                               </p>
                             </div>
 
                             <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                               <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700">
-                                NC abiertas: <strong>{card.open_nonconformities_count}</strong>
+                                {t('lifecycle.openNonconformities')}: <strong>{card.open_nonconformities_count}</strong>
                               </div>
                               <div className="rounded-xl bg-violet-50 px-3 py-2 text-violet-700">
-                                Hallazgos: <strong>{card.open_findings_count}</strong>
+                                {t('sidebar.findings')}: <strong>{card.open_findings_count}</strong>
                               </div>
                               <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700">
-                                Planes: <strong>{card.open_action_plans_count}</strong>
+                                {t('health.plan')}: <strong>{card.open_action_plans_count}</strong>
                               </div>
                               <div className="rounded-xl bg-sky-50 px-3 py-2 text-sky-700">
-                                Auditorías: <strong>{card.open_audits_count}</strong>
+                                {t('sidebar.audits')}: <strong>{card.open_audits_count}</strong>
                               </div>
                             </div>
 
                             <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
-                              <span>Última actividad</span>
+                              <span>{t('lifecycle.lastActivity')}</span>
                               <span>{formatDate(card.last_activity_at)}</span>
                             </div>
                           </div>
@@ -1464,7 +1463,7 @@ export default function CicloVidaPage() {
                       <path d="M9 18l6-6-6-6" />
                     </svg>
                     <span className="rotate-180 text-[11px] font-semibold uppercase tracking-[0.2em] [writing-mode:vertical-rl]">
-                      Panel
+                      {t('lifecycle.panel')}
                     </span>
                   </button>
                 </div>
@@ -1495,21 +1494,21 @@ export default function CicloVidaPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                        Validación del auditor
+                        {t('lifecycle.auditorValidation')}
                       </p>
                       <h3 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-                        Solicitudes pendientes
+                        {t('lifecycle.pendingRequests')}
                       </h3>
                     </div>
                     <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                      {pendingCards.length} pendientes
+                      {t('kpiAdmin.pendingCount', { count: pendingCards.length })}
                     </span>
                   </div>
 
                   <div className="mt-5 space-y-3">
                     {pendingCards.length === 0 ? (
                       <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-400">
-                        No hay movimientos pendientes por validar.
+                        {t('lifecycle.noPendingMovements')}
                       </div>
                     ) : (
                       pendingCards.map((card) => (
@@ -1534,7 +1533,7 @@ export default function CicloVidaPage() {
                               </div>
                             </div>
                             <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                              Por confirmar
+                              {t('lifecycle.toConfirm')}
                             </span>
                           </div>
                         </button>
@@ -1550,31 +1549,31 @@ export default function CicloVidaPage() {
 
                       <div className="mt-4 space-y-2 text-sm text-slate-600">
                         <div>
-                          <span className="font-semibold">Etapa actual:</span>{' '}
+                          <span className="font-semibold">{t('lifecycle.currentStage')}:</span>{' '}
                           {prettifyStage(selectedPendingDetail.from_stage_code, filteredBoard.stages)}
                         </div>
                         <div>
-                          <span className="font-semibold">Etapa solicitada:</span>{' '}
+                          <span className="font-semibold">{t('lifecycle.requestedStage')}:</span>{' '}
                           {prettifyStage(selectedPendingDetail.to_stage_code, filteredBoard.stages)}
                         </div>
                         <div>
-                          <span className="font-semibold">Solicitado:</span>{' '}
+                          <span className="font-semibold">{t('lifecycle.requested')}:</span>{' '}
                           {formatDateTime(selectedPendingDetail.requested_at)}
                         </div>
                         <div>
-                          <span className="font-semibold">Solicitante:</span>{' '}
-                          {selectedPendingDetail.pending_requested_by_email || 'No informado'}
+                          <span className="font-semibold">{t('lifecycle.requester')}:</span>{' '}
+                          {selectedPendingDetail.pending_requested_by_email || t('lifecycle.notReported')}
                         </div>
                         <div>
-                          <span className="font-semibold">Motivo:</span>{' '}
-                          {selectedPendingDetail.request_reason || 'Sin motivo'}
+                          <span className="font-semibold">{t('lifecycle.reason')}:</span>{' '}
+                          {selectedPendingDetail.request_reason || t('lifecycle.noReasonShort')}
                         </div>
                         <div>
-                          <span className="font-semibold">Salud:</span>{' '}
+                          <span className="font-semibold">{t('health.health')}:</span>{' '}
                           {selectedPendingDetail.health_status}
                         </div>
                         <div>
-                          <span className="font-semibold">Madurez:</span>{' '}
+                          <span className="font-semibold">{t('lifecycle.maturity')}:</span>{' '}
                           {formatScore(selectedPendingDetail.maturity_score)}%
                         </div>
                       </div>
@@ -1587,7 +1586,7 @@ export default function CicloVidaPage() {
                             onClick={() => handleReviewRequest('confirmar')}
                             className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Confirmar avance
+                            {t('lifecycle.confirmProgress')}
                           </button>
                           <button
                             type="button"
@@ -1595,12 +1594,12 @@ export default function CicloVidaPage() {
                             onClick={() => handleReviewRequest('rechazar')}
                             className="flex-1 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Rechazar
+                            {t('lifecycle.reject')}
                           </button>
                         </div>
                       ) : (
                         <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-700">
-                          Solo un auditor puede confirmar o rechazar este movimiento.
+                          {t('lifecycle.auditorOnly')}
                         </div>
                       )}
                     </div>
@@ -1609,15 +1608,15 @@ export default function CicloVidaPage() {
 
                 <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Detalle de tarjeta
+                    {t('lifecycle.cardDetail')}
                   </p>
                   <h3 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-                    Accesos rápidos
+                    {t('lifecycle.quickAccess')}
                   </h3>
 
                   {!selectedCardDetail ? (
                     <div className="mt-5 rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-400">
-                      Selecciona una tarjeta del kanban para ver sus accesos.
+                      {t('lifecycle.selectCard')}
                     </div>
                   ) : (
                     <div className="mt-5">
@@ -1627,32 +1626,32 @@ export default function CicloVidaPage() {
                         </p>
                         <div className="mt-3 space-y-2 text-sm text-slate-600">
                           <div>
-                            <span className="font-semibold">Etapa visible:</span>{' '}
+                            <span className="font-semibold">{t('lifecycle.visibleStage')}:</span>{' '}
                             {prettifyStage(selectedCardDetail.display_stage_code, filteredBoard.stages)}
                           </div>
                           <div>
-                            <span className="font-semibold">Etapa confirmada:</span>{' '}
+                            <span className="font-semibold">{t('lifecycle.confirmedStage')}:</span>{' '}
                             {prettifyStage(selectedCardDetail.confirmed_stage_code, filteredBoard.stages)}
                           </div>
                           <div>
-                            <span className="font-semibold">Etapa calculada:</span>{' '}
+                            <span className="font-semibold">{t('lifecycle.calculatedStage')}:</span>{' '}
                             {prettifyStage(selectedCardDetail.calculated_stage_code, filteredBoard.stages)}
                           </div>
                           <div>
-                            <span className="font-semibold">Pendiente:</span>{' '}
+                            <span className="font-semibold">{t('statuses.evidence.pendiente')}:</span>{' '}
                             {selectedCardDetail.pending_stage_code
                               ? prettifyStage(
                                   selectedCardDetail.pending_stage_code,
                                   filteredBoard.stages
                                 )
-                              : 'No'}
+                              : t('common.no')}
                           </div>
                           <div>
-                            <span className="font-semibold">Salud:</span>{' '}
+                            <span className="font-semibold">{t('health.health')}:</span>{' '}
                             {selectedCardDetail.health_status}
                           </div>
                           <div>
-                            <span className="font-semibold">Madurez:</span>{' '}
+                            <span className="font-semibold">{t('lifecycle.maturity')}:</span>{' '}
                             {formatScore(selectedCardDetail.maturity_score)}%
                           </div>
                           <div>
@@ -1660,11 +1659,11 @@ export default function CicloVidaPage() {
                             {formatScore(selectedCardDetail.avg_health_score)}
                           </div>
                           <div>
-                            <span className="font-semibold">Modo catálogo:</span>{' '}
-                            {selectedCardDetail.catalog_mode || 'N/D'}
+                            <span className="font-semibold">{t('lifecycle.catalogMode')}:</span>{' '}
+                            {selectedCardDetail.catalog_mode || t('common.noData')}
                           </div>
                           <div>
-                            <span className="font-semibold">Última actividad:</span>{' '}
+                            <span className="font-semibold">{t('lifecycle.lastActivity')}:</span>{' '}
                             {formatDate(selectedCardDetail.last_activity_at)}
                           </div>
                         </div>
@@ -1673,7 +1672,7 @@ export default function CicloVidaPage() {
                       <div className="mt-4 grid grid-cols-2 gap-3">
                         <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
                           <div className="text-xs uppercase tracking-wide text-slate-500">
-                            Cobertura evidencia
+                            {t('lifecycle.evidenceCoverage')}
                           </div>
                           <div className="mt-2 text-lg font-bold text-slate-900">
                             {formatPct(selectedCardDetail.evidence_coverage_pct)}
@@ -1682,7 +1681,7 @@ export default function CicloVidaPage() {
 
                         <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
                           <div className="text-xs uppercase tracking-wide text-slate-500">
-                            Controles activos
+                            {t('lifecycle.activeControls')}
                           </div>
                           <div className="mt-2 text-lg font-bold text-slate-900">
                             {selectedCardDetail.enabled_controls_count}/
@@ -1697,7 +1696,7 @@ export default function CicloVidaPage() {
                           onClick={() => goToControls(selectedCardDetail)}
                           className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                         >
-                          Ir a Controles
+                          {t('lifecycle.goToControls')}
                         </button>
 
                         <button
@@ -1705,7 +1704,7 @@ export default function CicloVidaPage() {
                           onClick={() => goToFindings(selectedCardDetail)}
                           className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                         >
-                          Ir a Hallazgos
+                          {t('lifecycle.goToFindings')}
                         </button>
 
                         <button
@@ -1713,7 +1712,7 @@ export default function CicloVidaPage() {
                           onClick={() => goToActionPlans(selectedCardDetail)}
                           className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                         >
-                          Ir a Plan de acción
+                          {t('lifecycle.goToActionPlan')}
                         </button>
 
                         <button
@@ -1721,14 +1720,12 @@ export default function CicloVidaPage() {
                           onClick={() => goToAudits(selectedCardDetail)}
                           className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                         >
-                          Ir a Auditorías
+                          {t('lifecycle.goToAudits')}
                         </button>
                       </div>
 
                       <div className="mt-4 rounded-[22px] border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-700">
-                        Esta tarjeta ya está lista para alimentar análisis narrativos y
-                        resúmenes del motor de IA usando su etapa, salud, madurez y eventos
-                        de transición.
+                        {t('lifecycle.aiReadyNote')}
                       </div>
                     </div>
                   )}

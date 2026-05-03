@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -388,26 +389,52 @@ function toNumber(value: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function statusLabel(status: string) {
+type TFunction = (key: string, params?: Record<string, string | number>) => string;
+
+function statusLabel(status: string, t: TFunction) {
   const map: Record<string, string> = {
-    saludable: 'Saludable',
-    atencion: 'Atención',
-    deteriorado: 'Deteriorado',
-    critico: 'Crítico',
+    saludable: t('statuses.controls.saludable'),
+    atencion: t('statuses.controls.atencion'),
+    deteriorado: t('statuses.controls.deteriorado'),
+    critico: t('statuses.findings.critico'),
   };
 
-  return map[status] || status || 'Sin estado';
+  return map[status] || status || t('health.noStatus');
 }
 
-function priorityLabel(priority: string) {
+function priorityLabel(priority: string, t: TFunction) {
   const map: Record<string, string> = {
-    urgente: 'Urgente',
-    alta: 'Alta',
-    media: 'Media',
-    baja: 'Baja',
+    urgente: t('health.priority.urgent'),
+    alta: t('health.priority.high'),
+    media: t('health.priority.medium'),
+    baja: t('health.priority.low'),
   };
 
-  return map[priority] || priority || 'Sin prioridad';
+  return map[priority] || priority || t('health.noPriority');
+}
+
+function translateStatus(value: string | undefined, t: TFunction) {
+  const normalized = String(value || '').toLowerCase().replace(/\s+/g, '_');
+  const map: Record<string, string> = {
+    pendiente: t('statuses.evidence.pendiente'),
+    aprobada: t('statuses.evidence.aprobada'),
+    aprobado: t('statuses.evidence.aprobada'),
+    rechazada: t('statuses.evidence.rechazada'),
+    rechazado: t('statuses.evidence.rechazada'),
+    abierto: t('findings.status.open'),
+    en_progreso: t('audits.status.inProgress'),
+    completado: t('audits.status.completed'),
+    completada: t('audits.status.completed'),
+    cancelado: t('audits.status.cancelled'),
+    cancelada: t('audits.status.cancelled'),
+    bloqueado: t('health.status.blocked'),
+    saludable: t('statuses.controls.saludable'),
+    atencion: t('statuses.controls.atencion'),
+    deteriorado: t('statuses.controls.deteriorado'),
+    critico: t('statuses.findings.critico'),
+  };
+
+  return map[normalized] || value || t('common.noData');
 }
 
 function colorClasses(color?: string) {
@@ -710,10 +737,12 @@ function CauseMiniCard({
   title,
   value,
   max,
+  maxLabel,
 }: {
   title: string;
   value: string | number;
   max?: string | number;
+  maxLabel: string;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -722,13 +751,14 @@ function CauseMiniCard({
       </p>
       <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
       {max !== undefined && (
-        <p className="mt-1 text-xs text-slate-500">Máximo esperado: {max}</p>
+        <p className="mt-1 text-xs text-slate-500">{maxLabel}: {max}</p>
       )}
     </div>
   );
 }
 
 export default function HealthDashboardPage() {
+  const { t } = useTranslation();
   const [token, setToken] = useState<string | null>(null);
 
   const [summaries, setSummaries] = useState<HealthSummary[]>([]);
@@ -858,12 +888,12 @@ export default function HealthDashboardPage() {
       json = text ? JSON.parse(text) : {};
     } catch {
       throw new Error(
-        `Respuesta inválida del backend en ${path}. HTTP ${res.status}.`
+        t('health.errors.invalidBackendResponse', { path, status: res.status })
       );
     }
 
     if (!res.ok || json.ok === false) {
-      throw new Error(json.error || 'Error consultando servicio');
+      throw new Error(json.error || t('health.errors.serviceQuery'))
     }
 
     return json;
@@ -925,7 +955,7 @@ export default function HealthDashboardPage() {
       setEvidenceApprovalQueue(approvalQueueJson.data || []);
       setControlsRecovered(recoveredJson.data || []);
     } catch (err: any) {
-      setError(err.message || 'Error cargando plan de remediación');
+      setError(err.message || t('health.errors.loadingRemediation'));
     } finally {
       setLoadingRemediation(false);
     }
@@ -964,7 +994,7 @@ export default function HealthDashboardPage() {
       setAuditActionPlans(auditPlansJson.data || []);
       setAuditEvidences(auditEvidencesJson.data || []);
     } catch (err: any) {
-      setError(err.message || 'Error cargando bitácora');
+      setError(err.message || t('health.errors.loadingLog'));
     } finally {
       setLoadingAudit(false);
     }
@@ -978,7 +1008,7 @@ export default function HealthDashboardPage() {
 
     if (!authToken) {
       setLoading(false);
-      setError('Token no encontrado. Inicia sesión nuevamente.');
+      setError(t('health.errors.missingToken'));
       return;
     }
 
@@ -1029,7 +1059,7 @@ export default function HealthDashboardPage() {
         ]);
       }
     } catch (err: any) {
-      setError(err.message || 'Error inesperado cargando dashboard');
+      setError(err.message || t('health.errors.loadingDashboard'));
     } finally {
       setLoading(false);
     }
@@ -1045,7 +1075,7 @@ export default function HealthDashboardPage() {
 
   async function refreshHealth() {
     if (!token) {
-      setError('Token no encontrado. Inicia sesión nuevamente.');
+      setError(t('health.errors.missingToken'));
       return;
     }
 
@@ -1067,16 +1097,16 @@ export default function HealthDashboardPage() {
       try {
         json = text ? JSON.parse(text) : {};
       } catch {
-        throw new Error('Respuesta inválida del backend al recalcular salud.');
+        throw new Error(t('health.errors.invalidRefreshResponse'));
       }
 
       if (!res.ok || json.ok === false) {
-        throw new Error(json.error || 'Error recalculando salud');
+        throw new Error(json.error || t('health.errors.refresh'));
       }
 
       await loadDashboard(selectedTenantId, token);
     } catch (err: any) {
-      setError(err.message || 'Error recalculando salud');
+      setError(err.message || t('health.errors.refresh'));
     } finally {
       setRefreshing(false);
     }
@@ -1084,17 +1114,17 @@ export default function HealthDashboardPage() {
 
   async function createRemediationAction(item: RemediationPlanItem) {
     if (!token) {
-      setError('Token no encontrado. Inicia sesión nuevamente.');
+      setError(t('health.errors.missingToken'));
       return;
     }
 
     if (!item.tenant_control_id) {
-      setError('No se puede crear el plan: falta tenant_control_id.');
+      setError(t('health.errors.missingTenantControl'));
       return;
     }
 
     if (!item.standard_code) {
-      setError('No se puede crear el plan: falta iso_code / standard_code.');
+      setError(t('health.errors.missingStandardCode'));
       return;
     }
 
@@ -1117,7 +1147,7 @@ export default function HealthDashboardPage() {
             `Regularizar control: ${item.control_description}`,
           description:
             item.suggested_action_description ||
-            'Acción sugerida automáticamente por el motor de salud ISO.',
+            t('health.autoSuggestedActionDescription'),
           priority: item.remediation_priority || 'media',
           due_date: normalizeDateOnly(item.suggested_due_date),
           owner: item.suggested_owner_role || null,
@@ -1132,17 +1162,17 @@ export default function HealthDashboardPage() {
       try {
         json = text ? JSON.parse(text) : {};
       } catch {
-        throw new Error('Respuesta inválida del backend al crear plan.');
+        throw new Error(t('health.errors.invalidCreatePlanResponse'));
       }
 
       if (!res.ok || json.ok === false) {
-        throw new Error(json.error || 'Error creando plan de acción');
+        throw new Error(json.error || t('health.errors.createPlan'));
       }
 
       window.alert(
         json.already_exists
-          ? 'Ya existe un plan abierto para este control.'
-          : 'Plan de acción creado correctamente.'
+          ? t('health.planAlreadyExists')
+          : t('health.planCreated')
       );
 
       await Promise.all([
@@ -1156,7 +1186,7 @@ export default function HealthDashboardPage() {
         }),
       ]);
     } catch (err: any) {
-      const message = err.message || 'Error creando plan de acción';
+      const message = err.message || t('health.errors.createPlan');
       setError(message);
       window.alert(message);
     } finally {
@@ -1172,7 +1202,7 @@ export default function HealthDashboardPage() {
       loadDashboard(undefined, authToken);
     } else {
       setLoading(false);
-      setError('Token no encontrado. Inicia sesión nuevamente.');
+      setError(t('health.errors.missingToken'));
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1215,17 +1245,17 @@ export default function HealthDashboardPage() {
       <div className="min-h-screen bg-gray-100 p-6">
         {loading && summaries.length === 0 ? (
           <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <p className="text-gray-600">Cargando dashboard de salud...</p>
+            <p className="text-gray-600">{t('health.loadingDashboard')}</p>
           </div>
         ) : (
           <>
             <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">
-                  Dashboard de Salud ISO
+                  {t('health.title')}
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  KPIs, evidencias, causas raíz, remediación, trazabilidad y estado de controles por empresa y norma.
+                  {t('health.subtitle')}
                 </p>
               </div>
 
@@ -1249,7 +1279,7 @@ export default function HealthDashboardPage() {
                   disabled={refreshing}
                   className="rounded-xl bg-[#1b2733] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#24384a] disabled:opacity-60"
                 >
-                  {refreshing ? 'Recalculando...' : 'Recalcular salud'}
+                  {refreshing ? t('health.recalculating') : t('health.recalculateHealth')}
                 </button>
               </div>
             </div>
@@ -1266,7 +1296,7 @@ export default function HealthDashboardPage() {
                   <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-500">
-                        Empresa seleccionada
+                        {t('health.selectedCompany')}
                       </p>
                       <h2 className="mt-1 text-2xl font-bold text-gray-900">
                         {selectedSummary.tenant_name}
@@ -1277,13 +1307,13 @@ export default function HealthDashboardPage() {
                             selectedSummary.tenant_health_status
                           )}`}
                         >
-                          {statusLabel(selectedSummary.tenant_health_status)}
+                          {statusLabel(selectedSummary.tenant_health_status, t)}
                         </span>
                         <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
-                          {selectedSummary.total_controls} controles
+                          {t('health.controlsCount', { count: selectedSummary.total_controls })}
                         </span>
                         <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
-                          {selectedSummary.total_evidences} evidencias
+                          {t('health.evidenceCount', { count: selectedSummary.total_evidences })}
                         </span>
                       </div>
                     </div>
@@ -1291,7 +1321,7 @@ export default function HealthDashboardPage() {
                     <div className="w-full max-w-md">
                       <div className="mb-2 flex items-center justify-between text-sm">
                         <span className="font-medium text-gray-600">
-                          Salud general
+                          {t('health.generalHealth')}
                         </span>
                         <span className="font-bold text-gray-900">
                           {score.toFixed(2)}%
@@ -1314,10 +1344,10 @@ export default function HealthDashboardPage() {
                     <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div>
                         <p className="text-sm font-medium text-slate-500">
-                          Análisis inteligente
+                          {t('health.intelligentAnalysis')}
                         </p>
                         <h3 className="mt-1 text-2xl font-bold text-slate-900">
-                          Causa principal de deterioro
+                          {t('health.mainDeteriorationCause')}
                         </h3>
 
                         <div className="mt-3 flex flex-wrap gap-2">
@@ -1326,11 +1356,11 @@ export default function HealthDashboardPage() {
                               mainCause?.cause_key
                             )}`}
                           >
-                            {mainCause?.cause_label || 'Sin causa identificada'}
+                            {mainCause?.cause_label || t('health.noCause')}
                           </span>
 
                           <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                            {toNumber(mainCause?.affected_controls).toFixed(0)} controles afectados
+                            {t('health.affectedControls', { count: toNumber(mainCause?.affected_controls).toFixed(0) })}
                           </span>
                         </div>
                       </div>
@@ -1342,34 +1372,40 @@ export default function HealthDashboardPage() {
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
                       <CauseMiniCard
-                        title="Evidencias"
+                        title={t('health.cause.evidence')}
                         value={selectedRootCause.controls_with_evidence_gap}
                         max="30 pts"
+                        maxLabel={t('health.maxExpected')}
                       />
                       <CauseMiniCard
-                        title="Cumplimiento"
+                        title={t('health.cause.compliance')}
                         value={selectedRootCause.controls_with_compliance_gap}
                         max="25 pts"
+                        maxLabel={t('health.maxExpected')}
                       />
                       <CauseMiniCard
-                        title="Hallazgos"
+                        title={t('health.cause.findings')}
                         value={selectedRootCause.controls_with_findings_gap}
                         max="15 pts"
+                        maxLabel={t('health.maxExpected')}
                       />
                       <CauseMiniCard
-                        title="Acciones"
+                        title={t('health.cause.actions')}
                         value={selectedRootCause.controls_with_action_gap}
                         max="10 pts"
+                        maxLabel={t('health.maxExpected')}
                       />
                       <CauseMiniCard
-                        title="Riesgos"
+                        title={t('health.cause.risks')}
                         value={selectedRootCause.controls_with_risk_gap}
                         max="10 pts"
+                        maxLabel={t('health.maxExpected')}
                       />
                       <CauseMiniCard
-                        title="Revisión"
+                        title={t('health.cause.review')}
                         value={selectedRootCause.controls_with_review_gap}
                         max="10 pts"
+                        maxLabel={t('health.maxExpected')}
                       />
                     </div>
                   </div>
@@ -1380,49 +1416,49 @@ export default function HealthDashboardPage() {
                     <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div>
                         <p className="text-sm font-medium text-slate-500">
-                          Ejecutivo de remediación
+                          {t('health.remediationExecutive')}
                         </p>
                         <h3 className="mt-1 text-2xl font-bold text-slate-900">
-                          Estado operativo de acciones y evidencias
+                          {t('health.remediationStatus')}
                         </h3>
                         <p className="mt-1 text-sm text-slate-500">
-                          Seguimiento de acciones abiertas, vencidas, evidencias pendientes y controles recuperados.
+                          {t('health.remediationSubtitle')}
                         </p>
                       </div>
 
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-500">
-                          Porcentaje de cierre
+                          {t('health.closurePercentage')}
                         </p>
                         <p className="mt-2 text-4xl font-bold text-emerald-700">
                           {toNumber(selectedRemediationExecutive.completion_percentage).toFixed(2)}%
                         </p>
                         <p className="mt-1 text-xs text-emerald-700">
-                          Última actualización: {formatDate(selectedRemediationExecutive.last_action_update)}
+                          {t('health.lastUpdate')}: {formatDate(selectedRemediationExecutive.last_action_update)}
                         </p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <Card
-                        title="Acciones abiertas"
+                        title={t('health.openActions')}
                         value={String(selectedRemediationExecutive.open_actions || '0')}
-                        subtitle={`${selectedRemediationExecutive.in_progress_actions || '0'} en progreso`}
+                        subtitle={t('health.inProgressCount', { count: selectedRemediationExecutive.in_progress_actions || '0' })}
                       />
                       <Card
-                        title="Acciones vencidas"
+                        title={t('health.overdueActions')}
                         value={String(selectedRemediationExecutive.overdue_actions || '0')}
-                        subtitle={`${selectedRemediationExecutive.high_open_actions || '0'} altas abiertas`}
+                        subtitle={t('health.highOpenCount', { count: selectedRemediationExecutive.high_open_actions || '0' })}
                       />
                       <Card
-                        title="Completadas"
+                        title={t('health.completedActions')}
                         value={String(selectedRemediationExecutive.completed_actions || '0')}
-                        subtitle={`${selectedRemediationExecutive.controls_with_completed_actions || '0'} controles con cierre`}
+                        subtitle={t('health.controlsClosedCount', { count: selectedRemediationExecutive.controls_with_completed_actions || '0' })}
                       />
                       <Card
-                        title="Evidencias pendientes"
+                        title={t('health.pendingEvidence')}
                         value={String(selectedRemediationExecutive.pending_evidences || '0')}
-                        subtitle={`${selectedRemediationExecutive.approved_evidences || '0'} aprobadas`}
+                        subtitle={t('health.approvedCount', { count: selectedRemediationExecutive.approved_evidences || '0' })}
                       />
                     </div>
 
@@ -1431,10 +1467,10 @@ export default function HealthDashboardPage() {
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <div>
                             <h4 className="font-bold text-slate-900">
-                              Evidencias pendientes de aprobación
+                              {t('health.pendingEvidenceApproval')}
                             </h4>
                             <p className="text-xs text-slate-500">
-                              Últimas evidencias pendientes o no validadas.
+                              {t('health.pendingEvidenceSubtitle')}
                             </p>
                           </div>
 
@@ -1443,18 +1479,18 @@ export default function HealthDashboardPage() {
                             onClick={() => openEvidence(undefined, selectedStandardCode)}
                             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                           >
-                            Ver evidencias
+                            {t('health.viewEvidence')}
                           </button>
                         </div>
 
                         <div className="space-y-3">
                           {loadingRemediation ? (
                             <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                              Cargando evidencias pendientes...
+                              {t('health.loadingPendingEvidence')}
                             </div>
                           ) : evidenceApprovalQueue.length === 0 ? (
                             <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                              No hay evidencias pendientes para esta selección.
+                              {t('health.noPendingEvidence')}
                             </div>
                           ) : (
                             evidenceApprovalQueue.slice(0, 6).map((item) => (
@@ -1465,10 +1501,10 @@ export default function HealthDashboardPage() {
                                 <div className="flex flex-wrap items-start justify-between gap-2">
                                   <div>
                                     <div className="font-semibold text-slate-900">
-                                      {item.file_name || 'Evidencia sin archivo'}
+                                      {item.file_name || t('health.evidenceWithoutFile')}
                                     </div>
                                     <div className="mt-1 text-xs text-slate-500">
-                                      {item.standard_code} · Cláusula {item.clause || 'N/A'}
+                                      {item.standard_code} · {t('common.clause')} {item.clause || 'N/A'}
                                     </div>
                                   </div>
 
@@ -1477,12 +1513,12 @@ export default function HealthDashboardPage() {
                                       item.status
                                     )}`}
                                   >
-                                    {item.status || 'pendiente'}
+                                    {translateStatus(item.status || 'pendiente', t)}
                                   </span>
                                 </div>
 
                                 <div className="mt-2 text-xs leading-5 text-slate-600">
-                                  {item.control_description || item.evidence_description || 'Sin descripción'}
+                                  {item.control_description || item.evidence_description || t('header.noDescription')}
                                 </div>
 
                                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1491,7 +1527,7 @@ export default function HealthDashboardPage() {
                                     onClick={() => openEvidence(item.evidence_id, item.standard_code)}
                                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                                   >
-                                    Abrir evidencia
+                                    {t('health.openEvidence')}
                                   </button>
 
                                   {item.action_plan_id && (
@@ -1500,7 +1536,7 @@ export default function HealthDashboardPage() {
                                       onClick={() => openPlan(item.action_plan_id, item.standard_code)}
                                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                     >
-                                      Ver plan
+                                      {t('health.viewPlan')}
                                     </button>
                                   )}
                                 </div>
@@ -1514,10 +1550,10 @@ export default function HealthDashboardPage() {
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <div>
                             <h4 className="font-bold text-slate-900">
-                              Controles recuperados
+                              {t('health.recoveredControls')}
                             </h4>
                             <p className="text-xs text-slate-500">
-                              Controles que tienen evidencia aprobada y plan completado en la bitácora.
+                              {t('health.recoveredControlsSubtitle')}
                             </p>
                           </div>
                         </div>
@@ -1525,11 +1561,11 @@ export default function HealthDashboardPage() {
                         <div className="space-y-3">
                           {loadingRemediation ? (
                             <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                              Cargando controles recuperados...
+                              {t('health.loadingRecoveredControls')}
                             </div>
                           ) : controlsRecovered.length === 0 ? (
                             <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                              No hay controles recuperados para esta selección.
+                              {t('health.noRecoveredControls')}
                             </div>
                           ) : (
                             controlsRecovered.slice(0, 6).map((item) => (
@@ -1540,10 +1576,10 @@ export default function HealthDashboardPage() {
                                 <div className="flex flex-wrap items-start justify-between gap-2">
                                   <div>
                                     <div className="font-semibold text-slate-900">
-                                      {item.control_description || 'Control recuperado'}
+                                      {item.control_description || t('health.recoveredControl')}
                                     </div>
                                     <div className="mt-1 text-xs text-slate-500">
-                                      {item.iso_code} · Cláusula {item.clause || 'N/A'}
+                                      {item.iso_code} · {t('common.clause')} {item.clause || 'N/A'}
                                     </div>
                                   </div>
 
@@ -1552,16 +1588,16 @@ export default function HealthDashboardPage() {
                                       item.event_label
                                     )}`}
                                   >
-                                    {item.event_label || 'Recuperado'}
+                                    {item.event_label || t('health.recovered')}
                                   </span>
                                 </div>
 
                                 <div className="mt-2 text-xs leading-5 text-slate-600">
-                                  Plan: {item.action_plan_title || 'Plan completado'}
+                                  {t('health.plan')}: {item.action_plan_title || t('health.completedPlan')}
                                 </div>
 
                                 <div className="mt-1 text-xs text-slate-500">
-                                  Recuperado: {formatDateTime(item.recovered_at)}
+                                  {t('health.recovered')}: {formatDateTime(item.recovered_at)}
                                 </div>
 
                                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1571,7 +1607,7 @@ export default function HealthDashboardPage() {
                                       onClick={() => openPlan(item.action_plan_id, item.iso_code)}
                                       className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
                                     >
-                                      Ver plan
+                                      {t('health.viewPlan')}
                                     </button>
                                   )}
 
@@ -1581,7 +1617,7 @@ export default function HealthDashboardPage() {
                                       onClick={() => openEvidence(item.evidence_id, item.iso_code)}
                                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                     >
-                                      Ver evidencia
+                                      {t('health.viewEvidence')}
                                     </button>
                                   )}
                                 </div>
@@ -1598,46 +1634,46 @@ export default function HealthDashboardPage() {
                   <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <p className="text-sm font-medium text-slate-500">
-                        Trazabilidad
+                        {t('health.traceability')}
                       </p>
                       <h3 className="mt-1 text-2xl font-bold text-slate-900">
-                        Bitácora operativa del sistema
+                        {t('health.operationalLog')}
                       </h3>
                       <p className="mt-1 text-sm text-slate-500">
-                        Registro reciente de creación, cambios, aprobaciones y cierres relacionados con Health.
+                        {t('health.operationalLogSubtitle')}
                       </p>
                     </div>
 
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        Filtro aplicado
+                        {t('health.appliedFilter')}
                       </p>
                       <p className="mt-2 text-sm font-semibold text-slate-800">
-                        {selectedStandardCode || 'Todas las normas'}
+                        {selectedStandardCode || t('health.allStandards')}
                       </p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <Card
-                      title="Eventos recientes"
+                      title={t('health.recentEvents')}
                       value={String(auditSummary.totalEvents)}
-                      subtitle="Timeline combinado"
+                      subtitle={t('health.combinedTimeline')}
                     />
                     <Card
-                      title="Eventos de planes"
+                      title={t('health.planEvents')}
                       value={String(auditSummary.planEvents)}
-                      subtitle="Creaciones, cambios y cierres"
+                      subtitle={t('health.planEventsSubtitle')}
                     />
                     <Card
-                      title="Eventos de evidencias"
+                      title={t('health.evidenceEvents')}
                       value={String(auditSummary.evidenceEvents)}
-                      subtitle="Carga, validación y aprobación"
+                      subtitle={t('health.evidenceEventsSubtitle')}
                     />
                     <Card
-                      title="Recuperaciones"
+                      title={t('health.recoveries')}
                       value={String(auditSummary.recoveredEvents)}
-                      subtitle="Controles con cierre trazable"
+                      subtitle={t('health.recoveriesSubtitle')}
                     />
                   </div>
 
@@ -1645,21 +1681,21 @@ export default function HealthDashboardPage() {
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 xl:col-span-1">
                       <div className="mb-3">
                         <h4 className="font-bold text-slate-900">
-                          Timeline general
+                          {t('health.generalTimeline')}
                         </h4>
                         <p className="text-xs text-slate-500">
-                          Últimos eventos relevantes del sistema.
+                          {t('health.generalTimelineSubtitle')}
                         </p>
                       </div>
 
                       <div className="space-y-3">
                         {loadingAudit ? (
                           <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                            Cargando bitácora...
+                            {t('health.loadingLog')}
                           </div>
                         ) : auditLog.length === 0 ? (
                           <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                            No hay eventos recientes para esta selección.
+                            {t('health.noRecentEvents')}
                           </div>
                         ) : (
                           auditLog.slice(0, 8).map((item) => (
@@ -1674,9 +1710,9 @@ export default function HealthDashboardPage() {
                                   )}`}
                                 >
                                   {item.event_source === 'action_plan'
-                                    ? 'Plan'
+                                    ? t('health.plan')
                                     : item.event_source === 'evidence'
-                                    ? 'Evidencia'
+                                    ? t('health.evidence')
                                     : item.event_source}
                                 </span>
 
@@ -1690,7 +1726,7 @@ export default function HealthDashboardPage() {
                               </div>
 
                               <div className="mt-2 font-semibold text-slate-900">
-                                {item.primary_label || 'Evento'}
+                                {item.primary_label || t('health.event')}
                               </div>
 
                               <div className="mt-1 text-xs leading-5 text-slate-600">
@@ -1700,7 +1736,7 @@ export default function HealthDashboardPage() {
                               <div className="mt-2 text-[11px] text-slate-500">
                                 {item.iso_code
                                   ? `${item.iso_code}${item.clause ? ` · ${item.clause}` : ''}`
-                                  : 'Sin norma'}{' '}
+                                  : t('health.noStandard')}{' '}
                                 · {formatDateTime(item.changed_at)}
                               </div>
 
@@ -1711,7 +1747,7 @@ export default function HealthDashboardPage() {
                                     onClick={() => openPlan(item.action_plan_id, item.iso_code)}
                                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                   >
-                                    Ver plan
+                                    {t('health.viewPlan')}
                                   </button>
                                 )}
 
@@ -1721,7 +1757,7 @@ export default function HealthDashboardPage() {
                                     onClick={() => openEvidence(item.evidence_id, item.iso_code)}
                                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                   >
-                                    Ver evidencia
+                                    {t('health.viewEvidence')}
                                   </button>
                                 )}
                               </div>
@@ -1734,21 +1770,21 @@ export default function HealthDashboardPage() {
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <div className="mb-3">
                         <h4 className="font-bold text-slate-900">
-                          Cambios en planes de acción
+                          {t('health.actionPlanChanges')}
                         </h4>
                         <p className="text-xs text-slate-500">
-                          Bitácora de creación, actualización y cierre de acciones.
+                          {t('health.actionPlanChangesSubtitle')}
                         </p>
                       </div>
 
                       <div className="space-y-3">
                         {loadingAudit ? (
                           <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                            Cargando eventos de planes...
+                            {t('health.loadingPlanEvents')}
                           </div>
                         ) : auditActionPlans.length === 0 ? (
                           <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                            No hay eventos de planes para esta selección.
+                            {t('health.noPlanEvents')}
                           </div>
                         ) : (
                           auditActionPlans.slice(0, 8).map((item) => (
@@ -1771,13 +1807,13 @@ export default function HealthDashboardPage() {
                                       item.new_status
                                     )}`}
                                   >
-                                    {item.new_status}
+                                    {translateStatus(item.new_status, t)}
                                   </span>
                                 )}
                               </div>
 
                               <div className="mt-2 font-semibold text-slate-900">
-                                {item.action_plan_title || 'Plan de acción'}
+                                {item.action_plan_title || t('health.actionPlan')}
                               </div>
 
                               <div className="mt-1 text-xs leading-5 text-slate-600">
@@ -1786,12 +1822,12 @@ export default function HealthDashboardPage() {
 
                               {(item.old_status || item.new_status) && (
                                 <div className="mt-2 text-[11px] text-slate-500">
-                                  Estado: {item.old_status || '—'} → {item.new_status || '—'}
+                                  {t('common.status')}: {translateStatus(item.old_status, t)} → {translateStatus(item.new_status, t)}
                                 </div>
                               )}
 
                               <div className="mt-2 text-[11px] text-slate-500">
-                                {item.iso_code || 'Sin norma'} · {formatDateTime(item.changed_at)}
+                                {item.iso_code || t('health.noStandard')} · {formatDateTime(item.changed_at)}
                               </div>
 
                               <div className="mt-3 flex flex-wrap gap-2">
@@ -1801,7 +1837,7 @@ export default function HealthDashboardPage() {
                                     onClick={() => openPlan(item.action_plan_id, item.iso_code)}
                                     className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
                                   >
-                                    Abrir plan
+                                    {t('health.openPlan')}
                                   </button>
                                 )}
                               </div>
@@ -1814,21 +1850,21 @@ export default function HealthDashboardPage() {
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <div className="mb-3">
                         <h4 className="font-bold text-slate-900">
-                          Cambios en evidencias
+                          {t('health.evidenceChanges')}
                         </h4>
                         <p className="text-xs text-slate-500">
-                          Bitácora de carga, validación, aprobación y rechazo.
+                          {t('health.evidenceChangesSubtitle')}
                         </p>
                       </div>
 
                       <div className="space-y-3">
                         {loadingAudit ? (
                           <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                            Cargando eventos de evidencias...
+                            {t('health.loadingEvidenceEvents')}
                           </div>
                         ) : auditEvidences.length === 0 ? (
                           <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                            No hay eventos de evidencias para esta selección.
+                            {t('health.noEvidenceEvents')}
                           </div>
                         ) : (
                           auditEvidences.slice(0, 8).map((item) => (
@@ -1851,13 +1887,13 @@ export default function HealthDashboardPage() {
                                       item.new_status
                                     )}`}
                                   >
-                                    {item.new_status}
+                                    {translateStatus(item.new_status, t)}
                                   </span>
                                 )}
                               </div>
 
                               <div className="mt-2 font-semibold text-slate-900">
-                                {item.file_name || item.evidence_description || 'Evidencia'}
+                                {item.file_name || item.evidence_description || t('health.evidence')}
                               </div>
 
                               <div className="mt-1 text-xs leading-5 text-slate-600">
@@ -1867,7 +1903,7 @@ export default function HealthDashboardPage() {
                               <div className="mt-2 text-[11px] text-slate-500">
                                 {item.iso_code
                                   ? `${item.iso_code}${item.clause ? ` · ${item.clause}` : ''}`
-                                  : 'Sin norma'}{' '}
+                                  : t('health.noStandard')}{' '}
                                 · {formatDateTime(item.changed_at)}
                               </div>
 
@@ -1878,7 +1914,7 @@ export default function HealthDashboardPage() {
                                     onClick={() => openEvidence(item.evidence_id, item.iso_code)}
                                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                                   >
-                                    Abrir evidencia
+                                    {t('health.openEvidence')}
                                   </button>
                                 )}
 
@@ -1888,7 +1924,7 @@ export default function HealthDashboardPage() {
                                     onClick={() => openPlan(item.action_plan_id, item.iso_code)}
                                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                   >
-                                    Ver plan
+                                    {t('health.viewPlan')}
                                   </button>
                                 )}
                               </div>
@@ -1904,13 +1940,13 @@ export default function HealthDashboardPage() {
                   <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <p className="text-sm font-medium text-slate-500">
-                        Plan sugerido
+                        {t('health.suggestedPlan')}
                       </p>
                       <h3 className="mt-1 text-2xl font-bold text-slate-900">
-                        Remediación priorizada
+                        {t('health.prioritizedRemediation')}
                       </h3>
                       <p className="mt-1 text-sm text-slate-500">
-                        Acciones recomendadas automáticamente según la salud real de controles.
+                        {t('health.prioritizedRemediationSubtitle')}
                       </p>
 
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -1920,11 +1956,11 @@ export default function HealthDashboardPage() {
                           )}`}
                         >
                           {mainRemediationGap?.main_gap_label ||
-                            'Sin brecha principal'}
+                            t('health.noMainGap')}
                         </span>
 
                         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                          Próximo vencimiento:{' '}
+                          {t('health.nextDueDate')}:{' '}
                           {formatDate(selectedRemediationSummary?.nearest_due_date)}
                         </span>
                       </div>
@@ -1933,7 +1969,7 @@ export default function HealthDashboardPage() {
                     <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-2xl xl:grid-cols-4">
                       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Acciones
+                          {t('common.actions')}
                         </p>
                         <p className="mt-2 text-3xl font-bold text-slate-900">
                           {selectedRemediationSummary?.total_suggested_actions ||
@@ -1943,7 +1979,7 @@ export default function HealthDashboardPage() {
 
                       <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-red-400">
-                          Urgentes
+                          {t('health.priority.urgentPlural')}
                         </p>
                         <p className="mt-2 text-3xl font-bold text-red-700">
                           {selectedRemediationSummary?.urgent_actions || '0'}
@@ -1952,7 +1988,7 @@ export default function HealthDashboardPage() {
 
                       <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-orange-400">
-                          Altas
+                          {t('health.priority.highPlural')}
                         </p>
                         <p className="mt-2 text-3xl font-bold text-orange-700">
                           {selectedRemediationSummary?.high_actions || '0'}
@@ -1961,7 +1997,7 @@ export default function HealthDashboardPage() {
 
                       <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">
-                          Evidencia
+                          {t('health.evidence')}
                         </p>
                         <p className="mt-2 text-3xl font-bold text-blue-700">
                           {selectedRemediationSummary?.evidence_actions || '0'}
@@ -1978,11 +2014,11 @@ export default function HealthDashboardPage() {
                       }
                       className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm"
                     >
-                      <option value="">Todas las prioridades</option>
-                      <option value="urgente">Urgente</option>
-                      <option value="alta">Alta</option>
-                      <option value="media">Media</option>
-                      <option value="baja">Baja</option>
+                      <option value="">{t('health.allPriorities')}</option>
+                      <option value="urgente">{t('health.priority.urgent')}</option>
+                      <option value="alta">{t('health.priority.high')}</option>
+                      <option value="media">{t('health.priority.medium')}</option>
+                      <option value="baja">{t('health.priority.low')}</option>
                     </select>
 
                     <select
@@ -1990,16 +2026,16 @@ export default function HealthDashboardPage() {
                       onChange={(e) => setRemediationGapFilter(e.target.value)}
                       className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm"
                     >
-                      <option value="">Todas las brechas</option>
-                      <option value="evidence">Brecha de evidencias</option>
-                      <option value="compliance">Brecha de cumplimiento</option>
-                      <option value="findings">Brecha de hallazgos</option>
-                      <option value="actions">Brecha de acciones</option>
+                      <option value="">{t('health.allGaps')}</option>
+                      <option value="evidence">{t('health.gap.evidence')}</option>
+                      <option value="compliance">{t('health.gap.compliance')}</option>
+                      <option value="findings">{t('health.gap.findings')}</option>
+                      <option value="actions">{t('health.gap.actions')}</option>
                       <option value="action_followup">
-                        Seguimiento de acciones
+                        {t('health.gap.actionFollowup')}
                       </option>
-                      <option value="risk">Brecha de riesgos</option>
-                      <option value="review">Brecha de revisión</option>
+                      <option value="risk">{t('health.gap.risk')}</option>
+                      <option value="review">{t('health.gap.review')}</option>
                     </select>
 
                     <button
@@ -2010,7 +2046,7 @@ export default function HealthDashboardPage() {
                       }}
                       className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
                     >
-                      Limpiar filtros de remediación
+                      {t('health.clearRemediationFilters')}
                     </button>
                   </div>
 
@@ -2018,19 +2054,19 @@ export default function HealthDashboardPage() {
                     <table className="w-full min-w-[1550px] text-left text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
-                          <th className="w-[110px] py-3 pr-4">Prioridad</th>
-                          <th className="w-[140px] py-3 pr-4">Norma</th>
-                          <th className="w-[90px] py-3 pr-4">Cláusula</th>
+                          <th className="w-[110px] py-3 pr-4">{t('common.priority')}</th>
+                          <th className="w-[140px] py-3 pr-4">{t('common.standard')}</th>
+                          <th className="w-[90px] py-3 pr-4">{t('common.clause')}</th>
                           <th className="min-w-[390px] py-3 pr-4">
-                            Acción sugerida
+                            {t('health.suggestedAction')}
                           </th>
-                          <th className="min-w-[190px] py-3 pr-4">Brecha</th>
+                          <th className="min-w-[190px] py-3 pr-4">{t('health.gapLabel')}</th>
                           <th className="min-w-[290px] py-3 pr-4">
-                            Responsable sugerido
+                            {t('health.suggestedOwner')}
                           </th>
-                          <th className="w-[120px] py-3 pr-4">Vence</th>
-                          <th className="w-[110px] py-3 pr-4">Salud</th>
-                          <th className="w-[120px] py-3 pr-4">Acción</th>
+                          <th className="w-[120px] py-3 pr-4">{t('common.dueDate')}</th>
+                          <th className="w-[110px] py-3 pr-4">{t('health.health')}</th>
+                          <th className="w-[120px] py-3 pr-4">{t('common.actions')}</th>
                         </tr>
                       </thead>
 
@@ -2038,13 +2074,13 @@ export default function HealthDashboardPage() {
                         {loadingRemediation ? (
                           <tr>
                             <td className="py-6 text-gray-500" colSpan={9}>
-                              Cargando plan de remediación...
+                              {t('health.loadingRemediationPlan')}
                             </td>
                           </tr>
                         ) : remediationPlan.length === 0 ? (
                           <tr>
                             <td className="py-6 text-gray-500" colSpan={9}>
-                              No hay acciones de remediación para los filtros seleccionados.
+                              {t('health.noRemediationActions')}
                             </td>
                           </tr>
                         ) : (
@@ -2063,7 +2099,7 @@ export default function HealthDashboardPage() {
                                       item.remediation_priority
                                     )}`}
                                   >
-                                    {priorityLabel(item.remediation_priority)}
+                                    {priorityLabel(item.remediation_priority, t)}
                                   </span>
                                 </td>
 
@@ -2083,7 +2119,7 @@ export default function HealthDashboardPage() {
                                     {item.suggested_action_description}
                                   </div>
                                   <div className="mt-1 text-xs leading-5 text-slate-400">
-                                    Control: {item.control_description}
+                                    {t('controls.control')}: {item.control_description}
                                   </div>
                                 </td>
 
@@ -2093,7 +2129,7 @@ export default function HealthDashboardPage() {
                                       item.main_gap_key
                                     )}`}
                                   >
-                                    {item.main_gap_label || 'Sin brecha'}
+                                    {item.main_gap_label || t('health.noGap')}
                                   </span>
                                 </td>
 
@@ -2124,7 +2160,7 @@ export default function HealthDashboardPage() {
                                     disabled={isCreating}
                                     className="inline-flex min-w-[92px] items-center justify-center rounded-xl bg-[#1b2733] px-3 py-2 text-center text-xs font-semibold leading-tight text-white shadow-sm transition hover:bg-[#24384a] disabled:cursor-not-allowed disabled:opacity-60"
                                   >
-                                    {isCreating ? 'Creando...' : 'Crear plan'}
+                                    {isCreating ? t('health.creating') : t('health.createPlan')}
                                   </button>
                                 </td>
                               </tr>
@@ -2140,10 +2176,10 @@ export default function HealthDashboardPage() {
                   <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="mb-4">
                       <h3 className="text-xl font-bold text-gray-900">
-                        Remediación por norma
+                        {t('health.remediationByStandard')}
                       </h3>
                       <p className="text-sm text-gray-500">
-                        Distribución de acciones, vencimientos y evidencias por estándar.
+                        {t('health.remediationByStandardSubtitle')}
                       </p>
                     </div>
 
@@ -2151,14 +2187,14 @@ export default function HealthDashboardPage() {
                       <table className="w-full min-w-[1050px] text-left text-sm">
                         <thead>
                           <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
-                            <th className="py-3 pr-4">Norma</th>
+                            <th className="py-3 pr-4">{t('common.standard')}</th>
                             <th className="py-3 pr-4">Total</th>
-                            <th className="py-3 pr-4">Abiertas</th>
-                            <th className="py-3 pr-4">En progreso</th>
-                            <th className="py-3 pr-4">Vencidas</th>
-                            <th className="py-3 pr-4">Completadas</th>
-                            <th className="py-3 pr-4">% cierre</th>
-                            <th className="py-3 pr-4">Evidencias pendientes</th>
+                            <th className="py-3 pr-4">{t('health.open')}</th>
+                            <th className="py-3 pr-4">{t('audits.status.inProgress')}</th>
+                            <th className="py-3 pr-4">{t('health.overdue')}</th>
+                            <th className="py-3 pr-4">{t('audits.status.completed')}</th>
+                            <th className="py-3 pr-4">% {t('health.closure')}</th>
+                            <th className="py-3 pr-4">{t('health.pendingEvidence')}</th>
                           </tr>
                         </thead>
 
@@ -2212,51 +2248,51 @@ export default function HealthDashboardPage() {
 
                 <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <Card
-                    title="Salud general"
+                    title={t('health.generalHealth')}
                     value={`${score.toFixed(2)}%`}
-                    subtitle="Promedio de controles"
+                    subtitle={t('health.controlAverage')}
                     color={selectedSummary.kpi_health_color}
                   />
                   <Card
-                    title="Cobertura de evidencias"
+                    title={t('health.evidenceCoverage')}
                     value={`${evidenceCoverage.toFixed(2)}%`}
-                    subtitle={`${selectedSummary.total_evidences} evidencias cargadas`}
+                    subtitle={t('health.loadedEvidenceCount', { count: selectedSummary.total_evidences })}
                     color={selectedSummary.kpi_evidence_coverage_color}
                   />
                   <Card
-                    title="Controles deteriorados"
+                    title={t('health.deterioratedControls')}
                     value={`${deteriorated.toFixed(2)}%`}
-                    subtitle={`${selectedSummary.deteriorated_controls} deteriorados / ${selectedSummary.critical_controls} críticos`}
+                    subtitle={t('health.deterioratedCriticalCount', { deteriorated: selectedSummary.deteriorated_controls, critical: selectedSummary.critical_controls })}
                     color={selectedSummary.kpi_deteriorated_controls_color}
                   />
                   <Card
-                    title="Controles saludables"
+                    title={t('health.healthyControls')}
                     value={`${selectedSummary.healthy_percentage}%`}
-                    subtitle={`${selectedSummary.healthy_controls} saludables`}
+                    subtitle={t('health.healthyCount', { count: selectedSummary.healthy_controls })}
                     color={selectedSummary.kpi_health_color}
                   />
                 </div>
 
                 <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
                   <Card
-                    title="Saludables"
+                    title={t('health.healthy')}
                     value={selectedSummary.healthy_controls}
-                    subtitle="Controles en verde"
+                    subtitle={t('health.greenControls')}
                   />
                   <Card
-                    title="En atención"
+                    title={t('health.needsAttention')}
                     value={selectedSummary.attention_controls}
-                    subtitle="Controles en amarillo"
+                    subtitle={t('health.yellowControls')}
                   />
                   <Card
-                    title="Deteriorados"
+                    title={t('health.deteriorated')}
                     value={selectedSummary.deteriorated_controls}
-                    subtitle="Controles deteriorados"
+                    subtitle={t('health.deterioratedControls')}
                   />
                   <Card
-                    title="Críticos"
+                    title={t('health.critical')}
                     value={selectedSummary.critical_controls}
-                    subtitle="Prioridad inmediata"
+                    subtitle={t('health.immediatePriority')}
                   />
                 </div>
               </>
@@ -2266,10 +2302,10 @@ export default function HealthDashboardPage() {
               <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">
-                    Salud por norma
+                    {t('health.healthByStandard')}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    Estado consolidado de cada estándar activo para la empresa.
+                    {t('health.healthByStandardSubtitle')}
                   </p>
                 </div>
 
@@ -2278,7 +2314,7 @@ export default function HealthDashboardPage() {
                   onChange={(e) => setSelectedStandardCode(e.target.value)}
                   className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm"
                 >
-                  <option value="">Todas las normas</option>
+                  <option value="">{t('health.allStandards')}</option>
                   {standards.map((item) => (
                     <option
                       key={item.standard_code}
@@ -2294,13 +2330,13 @@ export default function HealthDashboardPage() {
                 <table className="w-full min-w-[1050px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
-                      <th className="py-3 pr-4">Norma</th>
-                      <th className="py-3 pr-4">Controles</th>
-                      <th className="py-3 pr-4">Salud</th>
-                      <th className="py-3 pr-4">Estado</th>
-                      <th className="py-3 pr-4">Evidencias</th>
-                      <th className="py-3 pr-4">Deteriorados</th>
-                      <th className="py-3 pr-4">Causa principal</th>
+                      <th className="py-3 pr-4">{t('common.standard')}</th>
+                      <th className="py-3 pr-4">{t('sidebar.controls')}</th>
+                      <th className="py-3 pr-4">{t('health.health')}</th>
+                      <th className="py-3 pr-4">{t('common.status')}</th>
+                      <th className="py-3 pr-4">{t('sidebar.evidence')}</th>
+                      <th className="py-3 pr-4">{t('health.deteriorated')}</th>
+                      <th className="py-3 pr-4">{t('health.mainCause')}</th>
                     </tr>
                   </thead>
 
@@ -2353,7 +2389,7 @@ export default function HealthDashboardPage() {
                                 item.standard_health_status
                               )}`}
                             >
-                              {statusLabel(item.standard_health_status)}
+                              {statusLabel(item.standard_health_status, t)}
                             </span>
                           </td>
 
@@ -2390,7 +2426,7 @@ export default function HealthDashboardPage() {
                               )}`}
                             >
                               {mainStandardCause?.cause_label ||
-                                'Sin causa identificada'}
+                                t('health.noCause')}
                             </span>
                           </td>
                         </tr>
@@ -2400,7 +2436,7 @@ export default function HealthDashboardPage() {
                     {standards.length === 0 && (
                       <tr>
                         <td className="py-6 text-gray-500" colSpan={7}>
-                          No hay normas disponibles para esta empresa.
+                          {t('health.noStandards')}
                         </td>
                       </tr>
                     )}
@@ -2412,10 +2448,10 @@ export default function HealthDashboardPage() {
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <div className="mb-4">
                 <h3 className="text-xl font-bold text-gray-900">
-                  Controles con mayor riesgo
+                  {t('health.highestRiskControls')}
                 </h3>
                 <p className="text-sm text-gray-500">
-                  Primeros 100 controles deteriorados o críticos para la empresa seleccionada.
+                  {t('health.highestRiskControlsSubtitle')}
                 </p>
               </div>
 
@@ -2423,13 +2459,13 @@ export default function HealthDashboardPage() {
                 <table className="w-full min-w-[1200px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
-                      <th className="py-3 pr-4">Norma</th>
-                      <th className="py-3 pr-4">Cláusula</th>
-                      <th className="py-3 pr-4">Control</th>
-                      <th className="py-3 pr-4">Estado control</th>
-                      <th className="py-3 pr-4">Evidencias</th>
-                      <th className="py-3 pr-4">Salud</th>
-                      <th className="py-3 pr-4">Cálculo</th>
+                      <th className="py-3 pr-4">{t('common.standard')}</th>
+                      <th className="py-3 pr-4">{t('common.clause')}</th>
+                      <th className="py-3 pr-4">{t('controls.control')}</th>
+                      <th className="py-3 pr-4">{t('health.controlStatus')}</th>
+                      <th className="py-3 pr-4">{t('sidebar.evidence')}</th>
+                      <th className="py-3 pr-4">{t('health.health')}</th>
+                      <th className="py-3 pr-4">{t('health.calculation')}</th>
                     </tr>
                   </thead>
 
@@ -2458,7 +2494,7 @@ export default function HealthDashboardPage() {
 
                         <td className="py-4 pr-4">
                           <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
-                            {item.control_status}
+                            {translateStatus(item.control_status, t)}
                           </span>
                         </td>
 
@@ -2479,22 +2515,22 @@ export default function HealthDashboardPage() {
                         <td className="py-4 pr-4">
                           <div className="grid min-w-[320px] grid-cols-3 gap-2 text-xs">
                             <span className="rounded-lg bg-blue-50 px-2 py-1 text-blue-700">
-                              Ev: {toNumber(item.evidence_score).toFixed(0)}
+                              {t('health.short.evidence')}: {toNumber(item.evidence_score).toFixed(0)}
                             </span>
                             <span className="rounded-lg bg-orange-50 px-2 py-1 text-orange-700">
-                              Cump: {toNumber(item.compliance_score).toFixed(0)}
+                              {t('health.short.compliance')}: {toNumber(item.compliance_score).toFixed(0)}
                             </span>
                             <span className="rounded-lg bg-red-50 px-2 py-1 text-red-700">
-                              Hall: {toNumber(item.findings_score).toFixed(0)}
+                              {t('health.short.findings')}: {toNumber(item.findings_score).toFixed(0)}
                             </span>
                             <span className="rounded-lg bg-amber-50 px-2 py-1 text-amber-700">
-                              Acc: {toNumber(item.action_score).toFixed(0)}
+                              {t('health.short.actions')}: {toNumber(item.action_score).toFixed(0)}
                             </span>
                             <span className="rounded-lg bg-purple-50 px-2 py-1 text-purple-700">
-                              Ries: {toNumber(item.risk_score).toFixed(0)}
+                              {t('health.short.risk')}: {toNumber(item.risk_score).toFixed(0)}
                             </span>
                             <span className="rounded-lg bg-slate-50 px-2 py-1 text-slate-700">
-                              Rev: {toNumber(item.review_score).toFixed(0)}
+                              {t('health.short.review')}: {toNumber(item.review_score).toFixed(0)}
                             </span>
                           </div>
                         </td>
@@ -2504,7 +2540,7 @@ export default function HealthDashboardPage() {
                     {filteredRiskControls.length === 0 && (
                       <tr>
                         <td className="py-6 text-gray-500" colSpan={7}>
-                          No hay controles deteriorados para esta empresa o norma.
+                          {t('health.noDeterioratedControls')}
                         </td>
                       </tr>
                     )}
