@@ -1380,7 +1380,8 @@
       "red": "Rojo",
       "gray": "Sin dato"
     },
-    "periodLabel": "Periodo"
+    "periodLabel": "Periodo",
+    "alertLabel": "ALERTA"
   },
   "kpiAdmin": {
     "title": "Administrar KPIs",

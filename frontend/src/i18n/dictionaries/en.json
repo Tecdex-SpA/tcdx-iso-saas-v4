@@ -1242,7 +1242,7 @@
     "systemHealth": "Overall system health",
     "greenCount": "{{count}} green",
     "requireAction": "Require action",
-    "manualCount": "{{count}} manual",
+    "manualCount": "{{count}} manual entries",
     "health": "Health",
     "kpiAlert": "{{red}} critical KPI(s) and {{gray}} with no data.",
     "recalculating": "Recalculating...",
@@ -1380,7 +1380,8 @@
       "red": "Red",
       "gray": "No Data"
     },
-    "periodLabel": "Period"
+    "periodLabel": "Period",
+    "alertLabel": "ALERT"
   },
   "kpiAdmin": {
     "title": "KPI Administration",
