@@ -1389,8 +1389,7 @@ export default function DashboardPage() {
                       {t('dashboard.kpiView')}
                     </h2>
                     <p className="mt-1 text-slate-500">
-                      KPIs reales del sistema, snapshots calculados, semáforos, Health y
-                      seguimiento por norma.
+                      {t('dashboardKpi.kpiViewSubtitle')}
                     </p>
                   </div>
 
@@ -1494,8 +1493,7 @@ export default function DashboardPage() {
                           {t('dashboardKpi.healthEngineTitle')}
                         </h2>
                         <p className="mt-1 text-sm text-slate-600">
-                          Datos reales desde snapshots del motor Health: salud general,
-                          cobertura de evidencias y deterioro de controles.
+                          {t('dashboardKpi.healthEngineSubtitle')}
                         </p>
                       </div>
 
