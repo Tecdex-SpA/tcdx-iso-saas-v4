@@ -1466,7 +1466,7 @@ export default function CicloVidaPage() {
                     type="button"
                     onClick={() => setRightPanelCollapsed(false)}
                     className="flex h-full min-h-[220px] w-16 flex-col items-center justify-center gap-4 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-                    title="Mostrar panel lateral"
+                    title={t('lifecycle.showSidePanel')}
                   >
                     <svg
                       className="h-5 w-5"
@@ -1501,7 +1501,7 @@ export default function CicloVidaPage() {
                     >
                       <path d="M15 18l-6-6 6-6" />
                     </svg>
-                    Ocultar panel
+                    {t('lifecycle.hideSidePanel')}
                   </button>
                 </div>
 

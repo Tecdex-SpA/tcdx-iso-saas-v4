@@ -1183,7 +1183,7 @@
       "suspendida_fuera_alcance": "Suspended / Out of Scope"
     },
     "hideSidePanel": "Hide panel",
-    "showSidePanel": "Show panel"
+    "showSidePanel": "Show side panel"
   },
   "dashboardKpi": {
     "executiveDashboard": "Executive Dashboard",
@@ -1252,14 +1252,14 @@
     "kpisCount": "{{count}} KPI(s)",
     "targetAchieved": "Target achieved",
     "monitoringRequired": "Monitoring required",
-    "actionRecommended": "Action recommended",
-    "loadOrCalculationPending": "Data entry or calculation pending",
+    "actionRecommended": "Recommended action",
+    "loadOrCalculationPending": "Input or calculation pending",
     "categoryDistribution": "Distribution by Category",
     "manage": "Manage",
     "redCount": "{{count}} red",
-    "noRedKpis": "No KPIs are currently red.",
-    "featuredKpis": "Featured KPIs",
-    "noGreenKpis": "No KPIs have been calculated in green yet.",
+    "noRedKpis": "There are no red KPIs at the moment.",
+    "featuredKpis": "Highlighted KPIs",
+    "noGreenKpis": "There are no green KPIs calculated yet.",
     "allKpis": "All KPIs",
     "openAdministration": "Open administration",
     "noKpis": "No KPIs available for this tenant.",
@@ -1358,7 +1358,13 @@
       "automatico": "Automatic",
       "manual": "Manual",
       "hibrido": "Hybrid"
-    }
+    },
+    "noDataStatus": "No Data",
+    "kpiHealthTitle": "Health KPIs",
+    "healthEngineTitle": "Health KPIs connected to the health engine",
+    "healthEngineSubtitle": "Real snapshots from the Health engine: overall health, evidence coverage, and control deterioration.",
+    "noHealthKpis": "No Health KPIs are available yet. Run “Recalculate KPIs” to generate current snapshots.",
+    "pendingNoData": "{{count}} no data"
   },
   "kpiAdmin": {
     "title": "KPI Administration",

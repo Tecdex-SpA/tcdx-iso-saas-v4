@@ -1183,7 +1183,7 @@
       "suspendida_fuera_alcance": "Suspendida / Fuera de alcance"
     },
     "hideSidePanel": "Ocultar panel",
-    "showSidePanel": "Mostrar panel"
+    "showSidePanel": "Mostrar panel lateral"
   },
   "dashboardKpi": {
     "executiveDashboard": "Dashboard Ejecutivo",
@@ -1240,7 +1240,7 @@
     "riskPercent": "% Riesgo",
     "kpiViewSubtitle": "KPIs unificados, transversales a normas ISO, con semáforos y seguimiento histórico.",
     "systemHealth": "Salud general del sistema",
-    "greenCount": "{{count}} verdes",
+    "greenCount": "{{count}} en verde",
     "requireAction": "Requieren acción",
     "manualCount": "{{count}} manuales",
     "health": "Health",
@@ -1358,7 +1358,13 @@
       "automatico": "automático",
       "manual": "manual",
       "hibrido": "híbrido"
-    }
+    },
+    "noDataStatus": "Sin dato",
+    "kpiHealthTitle": "KPIs Health",
+    "healthEngineTitle": "KPIs Health conectados al motor de salud",
+    "healthEngineSubtitle": "Datos reales de snapshots del motor Health: salud general, cobertura de evidencias y deterioro de controles.",
+    "noHealthKpis": "Aún no hay KPIs Health disponibles. Ejecuta “Recalcular KPIs” para generar snapshots actuales.",
+    "pendingNoData": "{{count}} sin dato"
   },
   "kpiAdmin": {
     "title": "Administrar KPIs",
