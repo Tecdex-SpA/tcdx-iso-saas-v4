@@ -869,6 +869,19 @@ function AuditoriasPageContent() {
     };
   }, [filteredAudits, findingsByAudit, actionsByAudit, auditSummary]);
 
+  const auditSummaryNote = useMemo(() => {
+    const note = String(auditSummary?.note || '').trim();
+
+    if (
+      note ===
+      'Las auditorías en ejecución son trazabilidad operativa y no deterioran KPI hasta existir resultado formal.'
+    ) {
+      return t('audits.summaryNoteInProgress');
+    }
+
+    return note;
+  }, [auditSummary?.note, t]);
+
   const getAuditStatusColor = (status?: string) => {
     const normalized = normalizeAuditStatus(status);
 
@@ -1004,9 +1017,9 @@ function AuditoriasPageContent() {
                 {t('audits.subtitle')}
               </p>
 
-              {auditSummary?.note && (
+              {auditSummaryNote && (
                 <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
-                  {auditSummary.note}
+                  {auditSummaryNote}
                 </div>
               )}
             </div>

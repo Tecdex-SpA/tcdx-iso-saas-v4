@@ -549,6 +549,7 @@
     "eyebrow": "Internal and External Audits",
     "badge": "planning · execution · closure",
     "subtitle": "Schedule audits, track progress, manage the final report, and turn results into traceable findings and action plans.",
+    "summaryNoteInProgress": "Audits in progress provide operational traceability and do not affect KPIs until a formal result exists.",
     "loading": "Loading audits...",
     "loadingStandards": "Loading operational standards...",
     "noOperationalStandards": "No operational standards are available for this company",

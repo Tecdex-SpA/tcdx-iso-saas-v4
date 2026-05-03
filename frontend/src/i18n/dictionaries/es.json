@@ -549,6 +549,7 @@
     "eyebrow": "Auditoría interna y externa",
     "badge": "planificación · ejecución · cierre",
     "subtitle": "Programa auditorías, controla su avance, gestiona el informe final y convierte resultados en hallazgos y planes de acción trazables.",
+    "summaryNoteInProgress": "Las auditorías en ejecución son trazabilidad operativa y no deterioran KPI hasta existir resultado formal.",
     "loading": "Cargando auditorías...",
     "loadingStandards": "Cargando normas operativas...",
     "noOperationalStandards": "No hay normas operativas para esta empresa",
