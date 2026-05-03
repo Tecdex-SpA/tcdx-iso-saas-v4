@@ -2184,7 +2184,7 @@ function AiAuditorPanel({
           <div className="mt-4 space-y-2 text-sm text-white/86">
             <div className="flex items-center gap-2">
               <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
-              Detecté {weakControls} controles con baja efectividad.
+              {dashboardRuntimeText('dashboard.iaAuditorLowEffectiveness', { count: weakControls })}
             </div>
             <div className="flex items-center gap-2">
               <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
