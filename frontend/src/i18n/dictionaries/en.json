@@ -275,6 +275,137 @@
       "default": "Premium executive report."
     }
   },
+  "controls": {
+    "title": "Controls",
+    "eyebrow": "Operational Controls",
+    "badge": "standard · operation · evidence · remediation",
+    "subtitle": "Manage controls enabled by operation, their actual status, linked evidence, and quick handoffs to nonconformities, findings, and action plans.",
+    "loading": "Loading controls...",
+    "catalogMode": "Catalog Mode",
+    "activeOperation": "Active Operation",
+    "standard": "Standard",
+    "operation": "Operation",
+    "health": "Health",
+    "priority": "Priority",
+    "dueDate": "Due Date",
+    "applicability": "Applicability",
+    "ownerEmail": "Owner (email)",
+    "noOperationalStandards": "No operational standards",
+    "noActiveOperation": "No active operation",
+    "allStatuses": "All statuses",
+    "searchPlaceholder": "Clause, description, owner...",
+    "withoutEvidence": "Without evidence",
+    "averageHealth": "Average Health",
+    "directOpen": "Opened directly from search",
+    "applies": "Applies",
+    "catalog": {
+      "generic": "Generic",
+      "personalized": "Personalized",
+      "mixed": "Mixed"
+    }
+  },
+  "evidence": {
+    "title": "Evidence Audit",
+    "subtitle": "Upload, review, and intelligently assess ISO evidence.",
+    "loading": "Loading evidence...",
+    "loadingStandards": "Loading available standards...",
+    "noOperationalStandards": "No operational standards are available for this company",
+    "noOperationalStandardsHelp": "You first need an active standard with at least one active associated operation.",
+    "allStatuses": "All statuses",
+    "recalculating": "Recalculating...",
+    "recalculateHealth": "Recalculate health",
+    "linkedToPlan": "Linked to plan",
+    "aiRecommended": "AI recommended",
+    "descriptionPlaceholder": "Evidence description",
+    "optionalExpiration": "Optional expiration date",
+    "types": {
+      "document": "Document",
+      "photo": "Photo",
+      "screenshot": "Screenshot",
+      "record": "Record",
+      "other": "Other"
+    }
+  },
+  "findings": {
+    "title": "Findings",
+    "eyebrow": "Findings Management",
+    "badge": "Traceability + AI + corrective action",
+    "subtitle": "Register, classify, analyze, and turn findings into action plans while keeping the link to standards, controls, audits, risks, and evidence.",
+    "loadingStandards": "Loading operational standards...",
+    "loadingControls": "Loading controls...",
+    "noOperationalStandards": "No operational standards are available for this company",
+    "noOperationalStandardsHelp": "You first need an active standard with at least one assigned active operation.",
+    "nonconformities": "Nonconformities",
+    "opportunitiesStrengths": "Opportunities / strengths",
+    "allTypes": "All types",
+    "allStatuses": "All statuses",
+    "availableControls": "Available controls",
+    "controlsCount": "control(s)",
+    "directOpen": "Opened directly from search",
+    "searchingAcrossStandards": "Searching for the requested finding across the other operational standards...",
+    "improvements": "Improvements",
+    "withLinkedAction": "With linked action",
+    "readOnly": "Read only",
+    "create": "Create finding",
+    "createHelp": "An associated control is required to ensure traceability with actions, evidence, and control health.",
+    "selectAssociatedControl": "Select the associated control",
+    "noControlsForStandard": "No controls are available for this standard.",
+    "types": {
+      "nonconformity": "Nonconformity",
+      "observation": "Observation",
+      "improvement": "Improvement opportunity",
+      "strength": "Strength"
+    },
+    "statuses": {
+      "actionDefined": "Action Defined"
+    },
+    "fields": {
+      "title": "Title",
+      "description": "Description",
+      "associatedControl": "Associated Control",
+      "type": "Type",
+      "severity": "Severity",
+      "owner": "Owner",
+      "detectedBy": "Detected by",
+      "dueDate": "Due Date"
+    },
+    "placeholders": {
+      "title": "Finding title",
+      "description": "Finding description",
+      "owner": "Owner",
+      "detectedBy": "Detected by"
+    }
+  },
+  "actionPlan": {
+    "title": "Action Plans",
+    "eyebrow": "Execution and Follow-Up",
+    "badge": "Plans + evidence + closure",
+    "subtitle": "Manage corrective actions, progress follow-up, associated evidence, and closure approval workflows when required.",
+    "loadingStandards": "Loading operational standards...",
+    "noOperationalStandards": "No operational standards are available for this company",
+    "noOperationalStandardsHelp": "You first need an active standard with at least one assigned active operation.",
+    "pendingApproval": "Pending Approval",
+    "allStatuses": "All statuses",
+    "createManual": "Create manual action",
+    "createManualHelp": "Use this for actions that are not automatically derived from findings, risks, audits, or controls.",
+    "statuses": {
+      "inProgress": "In Progress",
+      "blocked": "Blocked",
+      "completed": "Completed"
+    },
+    "fields": {
+      "title": "Title",
+      "description": "Description",
+      "priority": "Priority",
+      "owner": "Owner",
+      "dueDate": "Due Date"
+    },
+    "placeholders": {
+      "title": "Plan title",
+      "description": "Description",
+      "owner": "Owner"
+    }
+  },
   "statuses": {
     "controls": {
       "saludable": "Healthy",

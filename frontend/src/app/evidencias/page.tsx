@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -403,6 +404,7 @@ export default function EvidenciasPage() {
 }
 
 function EvidenciasPageContent() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
 
   const focusId = searchParams.get('id');
@@ -901,7 +903,7 @@ function EvidenciasPageContent() {
   if (loadingStandards) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando normas disponibles...</div>
+        <div className="p-6">{t('evidence.loadingStandards')}</div>
       </AppLayout>
     );
   }
@@ -910,15 +912,15 @@ function EvidenciasPageContent() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">Auditoría de Evidencias</h1>
+          <h1 className="text-2xl font-bold">{t('evidence.title')}</h1>
 
           <div className="bg-yellow-50 border border-yellow-200 p-6 rounded shadow">
             <h2 className="text-lg font-semibold mb-2">
-              No hay normas operativas para esta empresa
+              {t('evidence.noOperationalStandards')}
             </h2>
 
             <p className="text-sm text-gray-700">
-              Primero debes tener una norma activa con al menos una operación activa asociada.
+              {t('evidence.noOperationalStandardsHelp')}
             </p>
           </div>
         </div>
@@ -929,7 +931,7 @@ function EvidenciasPageContent() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando evidencias...</div>
+        <div className="p-6">{t('evidence.loading')}</div>
       </AppLayout>
     );
   }
@@ -940,10 +942,10 @@ function EvidenciasPageContent() {
         <div className="flex flex-wrap justify-between items-center gap-3">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">
-              Auditoría de Evidencias
+              {t('evidence.title')}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Carga, revisión manual y evaluación inteligente de evidencias ISO.
+              {t('evidence.subtitle')}
             </p>
           </div>
 
@@ -971,10 +973,10 @@ function EvidenciasPageContent() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="border border-slate-200 bg-white px-3 py-2 rounded-xl shadow-sm"
             >
-              <option value="">Todos los estados</option>
-              <option value="pendiente">Pendientes</option>
-              <option value="aprobada">Aprobadas</option>
-              <option value="rechazada">Rechazadas</option>
+              <option value="">{t('evidence.allStatuses')}</option>
+              <option value="pendiente">{t('statuses.evidence.pendiente')}</option>
+              <option value="aprobada">{t('statuses.evidence.aprobada')}</option>
+              <option value="rechazada">{t('statuses.evidence.rechazada')}</option>
             </select>
 
             <button
@@ -982,7 +984,7 @@ function EvidenciasPageContent() {
               onClick={refresh}
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              Refrescar
+              {t('common.refresh')}
             </button>
 
             <button
@@ -991,18 +993,18 @@ function EvidenciasPageContent() {
               disabled={healthRefreshing}
               className="rounded-xl bg-[#1b2733] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#24384a] disabled:opacity-60"
             >
-              {healthRefreshing ? 'Recalculando...' : 'Recalcular salud'}
+              {healthRefreshing ? t('evidence.recalculating') : t('evidence.recalculateHealth')}
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
-          <MetricCard title="Total" value={metrics.total} />
-          <MetricCard title="Pendientes" value={metrics.pendientes} />
-          <MetricCard title="Aprobadas" value={metrics.aprobadas} />
-          <MetricCard title="Rechazadas" value={metrics.rechazadas} />
-          <MetricCard title="Ligadas a plan" value={metrics.vinculadasPlan} />
-          <MetricCard title="Recomendadas IA" value={metrics.recomendadasIa} />
+          <MetricCard title={t('common.all')} value={metrics.total} />
+          <MetricCard title={t('statuses.evidence.pendiente')} value={metrics.pendientes} />
+          <MetricCard title={t('statuses.evidence.aprobada')} value={metrics.aprobadas} />
+          <MetricCard title={t('statuses.evidence.rechazada')} value={metrics.rechazadas} />
+          <MetricCard title={t('evidence.linkedToPlan')} value={metrics.vinculadasPlan} />
+          <MetricCard title={t('evidence.aiRecommended')} value={metrics.recomendadasIa} />
         </div>
 
         {isRemediationMode && (
@@ -1082,7 +1084,7 @@ function EvidenciasPageContent() {
                   description: e.target.value,
                 }))
               }
-              placeholder="Descripción de la evidencia"
+              placeholder={t('evidence.descriptionPlaceholder')}
               className="min-h-[90px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
             />
 
@@ -1097,11 +1099,11 @@ function EvidenciasPageContent() {
                 }
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2"
               >
-                <option value="documento">Documento</option>
-                <option value="foto">Foto</option>
-                <option value="captura">Captura</option>
-                <option value="registro">Registro</option>
-                <option value="otro">Otro</option>
+                <option value="documento">{t('evidence.types.document')}</option>
+                <option value="foto">{t('evidence.types.photo')}</option>
+                <option value="captura">{t('evidence.types.screenshot')}</option>
+                <option value="registro">{t('evidence.types.record')}</option>
+                <option value="otro">{t('evidence.types.other')}</option>
               </select>
 
               <input
@@ -1114,7 +1116,7 @@ function EvidenciasPageContent() {
                   }))
                 }
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2"
-                title="Fecha de expiración opcional"
+                title={t('evidence.optionalExpiration')}
               />
 
               <input

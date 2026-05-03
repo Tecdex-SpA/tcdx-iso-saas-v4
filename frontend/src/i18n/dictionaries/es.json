@@ -275,6 +275,137 @@
       "default": "Reporte ejecutivo premium."
     }
   },
+  "controls": {
+    "title": "Controles",
+    "eyebrow": "Controles operativos",
+    "badge": "norma · operación · evidencia · remediación",
+    "subtitle": "Gestiona los controles habilitados por operación, su estado real, su evidencia asociada y las derivaciones rápidas a no conformidades, hallazgos y planes de acción.",
+    "loading": "Cargando controles...",
+    "catalogMode": "Modo catálogo",
+    "activeOperation": "Operación activa",
+    "standard": "Norma",
+    "operation": "Operación",
+    "health": "Salud",
+    "priority": "Prioridad",
+    "dueDate": "Vencimiento",
+    "applicability": "Aplicabilidad",
+    "ownerEmail": "Responsable (email)",
+    "noOperationalStandards": "Sin normas operativas",
+    "noActiveOperation": "Sin operación activa",
+    "allStatuses": "Todos los estados",
+    "searchPlaceholder": "Cláusula, descripción, responsable...",
+    "withoutEvidence": "Sin evidencia",
+    "averageHealth": "Health promedio",
+    "directOpen": "Apertura directa desde búsqueda",
+    "applies": "Aplica",
+    "catalog": {
+      "generic": "Genérico",
+      "personalized": "Personalizado",
+      "mixed": "Mixto"
+    }
+  },
+  "evidence": {
+    "title": "Auditoría de Evidencias",
+    "subtitle": "Carga, revisión manual y evaluación inteligente de evidencias ISO.",
+    "loading": "Cargando evidencias...",
+    "loadingStandards": "Cargando normas disponibles...",
+    "noOperationalStandards": "No hay normas operativas para esta empresa",
+    "noOperationalStandardsHelp": "Primero debes tener una norma activa con al menos una operación activa asociada.",
+    "allStatuses": "Todos los estados",
+    "recalculating": "Recalculando...",
+    "recalculateHealth": "Recalcular salud",
+    "linkedToPlan": "Ligadas a plan",
+    "aiRecommended": "Recomendadas IA",
+    "descriptionPlaceholder": "Descripción de la evidencia",
+    "optionalExpiration": "Fecha de expiración opcional",
+    "types": {
+      "document": "Documento",
+      "photo": "Foto",
+      "screenshot": "Captura",
+      "record": "Registro",
+      "other": "Otro"
+    }
+  },
+  "findings": {
+    "title": "Hallazgos",
+    "eyebrow": "Gestión de hallazgos",
+    "badge": "Trazabilidad + IA + acción correctiva",
+    "subtitle": "Registra, clasifica, analiza y transforma hallazgos en planes de acción sin perder el vínculo con norma, control, auditoría, riesgo o evidencia.",
+    "loadingStandards": "Cargando normas operativas...",
+    "loadingControls": "Cargando controles...",
+    "noOperationalStandards": "No hay normas operativas para esta empresa",
+    "noOperationalStandardsHelp": "Primero debes tener una norma activa con al menos una operación activa asignada.",
+    "nonconformities": "No conformidades",
+    "opportunitiesStrengths": "Oportunidades / fortalezas",
+    "allTypes": "Todos los tipos",
+    "allStatuses": "Todos los estados",
+    "availableControls": "Controles disponibles",
+    "controlsCount": "control(es)",
+    "directOpen": "Apertura directa desde búsqueda",
+    "searchingAcrossStandards": "Buscando el hallazgo solicitado en las demás normas operativas...",
+    "improvements": "Mejoras",
+    "withLinkedAction": "Con acción vinculada",
+    "readOnly": "Solo lectura",
+    "create": "Crear hallazgo",
+    "createHelp": "El control asociado es obligatorio para asegurar trazabilidad con acciones, evidencias y salud de controles.",
+    "selectAssociatedControl": "Selecciona el control asociado",
+    "noControlsForStandard": "No hay controles disponibles para esta norma.",
+    "types": {
+      "nonconformity": "No conformidad",
+      "observation": "Observación",
+      "improvement": "Oportunidad de mejora",
+      "strength": "Fortaleza"
+    },
+    "statuses": {
+      "actionDefined": "Acción definida"
+    },
+    "fields": {
+      "title": "Título",
+      "description": "Descripción",
+      "associatedControl": "Control asociado",
+      "type": "Tipo",
+      "severity": "Severidad",
+      "owner": "Responsable",
+      "detectedBy": "Detectado por",
+      "dueDate": "Vencimiento"
+    },
+    "placeholders": {
+      "title": "Título del hallazgo",
+      "description": "Descripción del hallazgo",
+      "owner": "Responsable",
+      "detectedBy": "Detectado por"
+    }
+  },
+  "actionPlan": {
+    "title": "Plan de Acción",
+    "eyebrow": "Ejecución y seguimiento",
+    "badge": "Planes + evidencias + cierre",
+    "subtitle": "Gestiona acciones correctivas, seguimiento de avance, evidencias asociadas y flujo de cierre con aprobación cuando corresponda.",
+    "loadingStandards": "Cargando normas operativas...",
+    "noOperationalStandards": "No hay normas operativas para esta empresa",
+    "noOperationalStandardsHelp": "Primero debes tener una norma activa con al menos una operación activa asignada.",
+    "pendingApproval": "Pendientes aprobación",
+    "allStatuses": "Todos los estados",
+    "createManual": "Crear acción manual",
+    "createManualHelp": "Úsalo para acciones no derivadas automáticamente desde hallazgos, riesgos, auditorías o controles.",
+    "statuses": {
+      "inProgress": "En progreso",
+      "blocked": "Bloqueado",
+      "completed": "Completado"
+    },
+    "fields": {
+      "title": "Título",
+      "description": "Descripción",
+      "priority": "Prioridad",
+      "owner": "Responsable",
+      "dueDate": "Vencimiento"
+    },
+    "placeholders": {
+      "title": "Título del plan",
+      "description": "Descripción",
+      "owner": "Responsable"
+    }
+  },
   "statuses": {
     "controls": {
       "saludable": "Saludable",

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -112,6 +113,7 @@ export default function HallazgosPage() {
 }
 
 function HallazgosPageContent() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
@@ -2377,7 +2379,7 @@ function HallazgosPageContent() {
   if (loadingStandards) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando normas operativas...</div>
+        <div className="p-6">{t('findings.loadingStandards')}</div>
       </AppLayout>
     );
   }
@@ -2386,16 +2388,15 @@ function HallazgosPageContent() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">Hallazgos</h1>
+          <h1 className="text-2xl font-bold">{t('findings.title')}</h1>
 
           <div className="rounded-[28px] border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
             <h2 className="mb-2 text-lg font-semibold">
-              No hay normas operativas para esta empresa
+              {t('findings.noOperationalStandards')}
             </h2>
 
             <p className="text-sm text-gray-700">
-              Primero debes tener una norma activa con al menos una operación activa
-              asignada.
+              {t('findings.noOperationalStandardsHelp')}
             </p>
           </div>
         </div>
@@ -2411,29 +2412,27 @@ function HallazgosPageContent() {
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                  Gestión de hallazgos
+                  {t('findings.eyebrow')}
                 </span>
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Trazabilidad + IA + acción correctiva
+                  {t('findings.badge')}
                 </span>
               </div>
 
               <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                Hallazgos
+                {t('findings.title')}
               </h1>
 
               <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
-                Registra, clasifica, analiza y transforma hallazgos en planes de
-                acción sin perder el vínculo con norma, control, auditoría, riesgo o
-                evidencia.
+                {t('findings.subtitle')}
               </p>
             </div>
 
             <div className="grid min-w-[320px] grid-cols-1 gap-3 md:grid-cols-3">
-              <MetricCard title="Total" value={metrics.total} tone="slate" />
-              <MetricCard title="No conformidades" value={metrics.nc} tone="red" />
+              <MetricCard title={t('common.all')} value={metrics.total} tone="slate" />
+              <MetricCard title={t('findings.nonconformities')} value={metrics.nc} tone="red" />
               <MetricCard
-                title="Oportunidades / fortalezas"
+                title={t('findings.opportunitiesStrengths')}
                 value={metrics.mejoras + metrics.fortalezas}
                 tone="emerald"
               />
@@ -2441,7 +2440,7 @@ function HallazgosPageContent() {
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3 xl:grid-cols-4">
-            <FilterCard label="Norma">
+            <FilterCard label={t('dashboard.standard')}>
               <select
                 value={selectedISO}
                 onChange={(e) => {
@@ -2461,37 +2460,37 @@ function HallazgosPageContent() {
               </select>
             </FilterCard>
 
-            <FilterCard label="Tipo">
+            <FilterCard label={t('findings.fields.type')}>
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
               >
-                <option value="">Todos los tipos</option>
-                <option value="no conformidad">No conformidad</option>
-                <option value="observacion">Observación</option>
-                <option value="oportunidad de mejora">Oportunidad de mejora</option>
-                <option value="fortaleza">Fortaleza</option>
+                <option value="">{t('findings.allTypes')}</option>
+                <option value="no conformidad">{t('findings.types.nonconformity')}</option>
+                <option value="observacion">{t('findings.types.observation')}</option>
+                <option value="oportunidad de mejora">{t('findings.types.improvement')}</option>
+                <option value="fortaleza">{t('findings.types.strength')}</option>
               </select>
             </FilterCard>
 
-            <FilterCard label="Estado">
+            <FilterCard label={t('common.status')}>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
               >
-                <option value="">Todos los estados</option>
-                <option value="abierto">Abierto</option>
-                <option value="en revision">En revisión</option>
-                <option value="accion definida">Acción definida</option>
-                <option value="cerrado">Cerrado</option>
+                <option value="">{t('findings.allStatuses')}</option>
+                <option value="abierto">{t('statuses.findings.abierto')}</option>
+                <option value="en revision">{t('statuses.findings.en_revision')}</option>
+                <option value="accion definida">{t('findings.statuses.actionDefined')}</option>
+                <option value="cerrado">{t('statuses.findings.cerrado')}</option>
               </select>
             </FilterCard>
 
-            <FilterCard label="Controles disponibles">
+            <FilterCard label={t('findings.availableControls')}>
               <div className="rounded-2xl bg-slate-100 px-3 py-3 text-sm font-medium text-slate-700">
-                {loadingControls ? 'Cargando...' : `${controls.length} control(es)`}
+                {loadingControls ? t('common.loading') : `${controls.length} ${t('findings.controlsCount')}`}
               </div>
             </FilterCard>
           </div>
@@ -2499,7 +2498,7 @@ function HallazgosPageContent() {
 
         {focusMessage && (
           <div className="rounded-[24px] border border-indigo-200 bg-indigo-50 px-5 py-4 text-indigo-900 shadow-sm">
-            <div className="font-semibold">Apertura directa desde búsqueda</div>
+            <div className="font-semibold">{t('findings.directOpen')}</div>
             <div className="mt-1 text-sm">{focusMessage}</div>
           </div>
         )}
@@ -2512,22 +2511,22 @@ function HallazgosPageContent() {
 
         {autoFindingFocus && (
           <div className="rounded-[24px] border border-slate-200 bg-white p-4 text-slate-600 shadow-sm">
-            Buscando el hallazgo solicitado en las demás normas operativas...
+            {t('findings.searchingAcrossStandards')}
           </div>
         )}
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-          <MetricCard title="Observaciones" value={metrics.observaciones} tone="amber" />
-          <MetricCard title="Mejoras" value={metrics.mejoras} tone="blue" />
-          <MetricCard title="Fortalezas" value={metrics.fortalezas} tone="emerald" />
+          <MetricCard title={t('findings.types.observation')} value={metrics.observaciones} tone="amber" />
+          <MetricCard title={t('findings.improvements')} value={metrics.mejoras} tone="blue" />
+          <MetricCard title={t('findings.types.strength')} value={metrics.fortalezas} tone="emerald" />
           <MetricCard
-            title="Con acción vinculada"
+            title={t('findings.withLinkedAction')}
             value={Object.keys(actionsByFinding).length}
             tone="violet"
           />
           <MetricCard
-            title="Solo lectura"
-            value={isReadOnly ? 'Sí' : 'No'}
+            title={t('findings.readOnly')}
+            value={isReadOnly ? t('common.yes') : t('common.no')}
             tone="slate"
           />
         </div>
@@ -2536,35 +2535,34 @@ function HallazgosPageContent() {
           <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
             <div className="mb-5">
               <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                Crear hallazgo
+                {t('findings.create')}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                El control asociado es obligatorio para asegurar trazabilidad con
-                acciones, evidencias y salud de controles.
+                {t('findings.createHelp')}
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div className="space-y-4">
-                <FieldBlock label="Título">
+                <FieldBlock label={t('findings.fields.title')}>
                   <input
-                    placeholder="Título del hallazgo"
+                    placeholder={t('findings.placeholders.title')}
                     value={form.title}
                     onChange={(e) => setForm({ ...form, title: e.target.value })}
                     className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
                   />
                 </FieldBlock>
 
-                <FieldBlock label="Descripción">
+                <FieldBlock label={t('findings.fields.description')}>
                   <textarea
-                    placeholder="Descripción del hallazgo"
+                    placeholder={t('findings.placeholders.description')}
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     className="min-h-[120px] w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
                   />
                 </FieldBlock>
 
-                <FieldBlock label="Control asociado">
+                <FieldBlock label={t('findings.fields.associatedControl')}>
                   <select
                     value={form.tenant_control_id}
                     onChange={(e) =>
@@ -2575,8 +2573,8 @@ function HallazgosPageContent() {
                   >
                     <option value="">
                       {loadingControls
-                        ? 'Cargando controles...'
-                        : 'Selecciona el control asociado'}
+                        ? t('findings.loadingControls')
+                        : t('findings.selectAssociatedControl')}
                     </option>
 
                     {controls.map((control: any) => (
@@ -2592,7 +2590,7 @@ function HallazgosPageContent() {
 
                   {controls.length === 0 && !loadingControls && (
                     <div className="mt-2 text-xs text-red-600">
-                      No hay controles disponibles para esta norma.
+                      {t('findings.noControlsForStandard')}
                     </div>
                   )}
                 </FieldBlock>
@@ -2600,7 +2598,7 @@ function HallazgosPageContent() {
 
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <FieldBlock label="Tipo">
+                  <FieldBlock label={t('findings.fields.type')}>
                     <select
                       value={form.finding_type}
                       onChange={(e) =>
@@ -2609,31 +2607,31 @@ function HallazgosPageContent() {
                       className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                       disabled={creatingFinding}
                     >
-                      <option value="no conformidad">No conformidad</option>
-                      <option value="observacion">Observación</option>
+                      <option value="no conformidad">{t('findings.types.nonconformity')}</option>
+                      <option value="observacion">{t('findings.types.observation')}</option>
                       <option value="oportunidad de mejora">
-                        Oportunidad de mejora
+                        {t('findings.types.improvement')}
                       </option>
-                      <option value="fortaleza">Fortaleza</option>
+                      <option value="fortaleza">{t('findings.types.strength')}</option>
                     </select>
                   </FieldBlock>
 
-                  <FieldBlock label="Severidad">
+                  <FieldBlock label={t('findings.fields.severity')}>
                     <select
                       value={form.severity}
                       onChange={(e) => setForm({ ...form, severity: e.target.value })}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                       disabled={creatingFinding}
                     >
-                      <option value="alta">Alta</option>
-                      <option value="media">Media</option>
-                      <option value="baja">Baja</option>
+                      <option value="alta">{t('statuses.findings.alto')}</option>
+                      <option value="media">{t('statuses.findings.medio')}</option>
+                      <option value="baja">{t('statuses.findings.bajo')}</option>
                     </select>
                   </FieldBlock>
 
-                  <FieldBlock label="Responsable">
+                  <FieldBlock label={t('findings.fields.owner')}>
                     <input
-                      placeholder="Responsable"
+                      placeholder={t('findings.placeholders.owner')}
                       value={form.owner}
                       onChange={(e) => setForm({ ...form, owner: e.target.value })}
                       className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
@@ -2641,9 +2639,9 @@ function HallazgosPageContent() {
                     />
                   </FieldBlock>
 
-                  <FieldBlock label="Detectado por">
+                  <FieldBlock label={t('findings.fields.detectedBy')}>
                     <input
-                      placeholder="Detectado por"
+                      placeholder={t('findings.placeholders.detectedBy')}
                       value={form.detected_by}
                       onChange={(e) =>
                         setForm({ ...form, detected_by: e.target.value })
@@ -2654,7 +2652,7 @@ function HallazgosPageContent() {
                   </FieldBlock>
                 </div>
 
-                <FieldBlock label="Vencimiento">
+                <FieldBlock label={t('findings.fields.dueDate')}>
                   <input
                     type="date"
                     value={form.due_date}

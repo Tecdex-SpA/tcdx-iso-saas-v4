@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -472,6 +473,7 @@ export default function PlanAccionPage() {
 }
 
 function PlanAccionPageContent() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
 
   const focusId = searchParams.get('id') || '';
@@ -982,7 +984,7 @@ function PlanAccionPageContent() {
   if (loadingStandards) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando normas operativas...</div>
+        <div className="p-6">{t('actionPlan.loadingStandards')}</div>
       </AppLayout>
     );
   }
@@ -991,16 +993,15 @@ function PlanAccionPageContent() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">Plan de Acción</h1>
+          <h1 className="text-2xl font-bold">{t('actionPlan.title')}</h1>
 
           <div className="rounded-[28px] border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
             <h2 className="mb-2 text-lg font-semibold">
-              No hay normas operativas para esta empresa
+              {t('actionPlan.noOperationalStandards')}
             </h2>
 
             <p className="text-sm text-gray-700">
-              Primero debes tener una norma activa con al menos una operación activa
-              asignada.
+              {t('actionPlan.noOperationalStandardsHelp')}
             </p>
           </div>
         </div>
@@ -1016,28 +1017,27 @@ function PlanAccionPageContent() {
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                  Ejecución y seguimiento
+                  {t('actionPlan.eyebrow')}
                 </span>
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Planes + evidencias + cierre
+                  {t('actionPlan.badge')}
                 </span>
               </div>
 
               <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                Plan de Acción
+                {t('actionPlan.title')}
               </h1>
 
               <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
-                Gestiona acciones correctivas, seguimiento de avance, evidencias
-                asociadas y flujo de cierre con aprobación cuando corresponda.
+                {t('actionPlan.subtitle')}
               </p>
             </div>
 
             <div className="grid min-w-[320px] grid-cols-1 gap-3 md:grid-cols-3">
-              <MetricCard title="Total" value={metrics.total} tone="slate" />
-              <MetricCard title="En progreso" value={metrics.progreso} tone="blue" />
+              <MetricCard title={t('common.all')} value={metrics.total} tone="slate" />
+              <MetricCard title={t('actionPlan.statuses.inProgress')} value={metrics.progreso} tone="blue" />
               <MetricCard
-                title="Pendientes aprobación"
+                title={t('actionPlan.pendingApproval')}
                 value={metrics.aprobacionPendiente}
                 tone="amber"
               />
@@ -1045,7 +1045,7 @@ function PlanAccionPageContent() {
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-4 xl:grid-cols-5">
-            <FilterCard label="Norma">
+            <FilterCard label={t('dashboard.standard')}>
               <select
                 value={selectedISO}
                 onChange={(e) => setSelectedISO(e.target.value)}
@@ -1059,24 +1059,24 @@ function PlanAccionPageContent() {
               </select>
             </FilterCard>
 
-            <FilterCard label="Estado">
+            <FilterCard label={t('common.status')}>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
               >
-                <option value="">Todos los estados</option>
-                <option value="abierto">Abierto</option>
-                <option value="en progreso">En progreso</option>
-                <option value="bloqueado">Bloqueado</option>
-                <option value="completado">Completado</option>
-                <option value="cancelado">Cancelado</option>
+                <option value="">{t('actionPlan.allStatuses')}</option>
+                <option value="abierto">{t('statuses.findings.abierto')}</option>
+                <option value="en progreso">{t('actionPlan.statuses.inProgress')}</option>
+                <option value="bloqueado">{t('actionPlan.statuses.blocked')}</option>
+                <option value="completado">{t('actionPlan.statuses.completed')}</option>
+                <option value="cancelado">{t('statuses.audits.cancelada')}</option>
               </select>
             </FilterCard>
 
-            <MetricInline label="Abiertos" value={metrics.abiertos} />
-            <MetricInline label="Completados" value={metrics.completados} />
-            <MetricInline label="Bloqueados" value={metrics.bloqueados} />
+            <MetricInline label={t('statuses.findings.abierto')} value={metrics.abiertos} />
+            <MetricInline label={t('actionPlan.statuses.completed')} value={metrics.completados} />
+            <MetricInline label={t('actionPlan.statuses.blocked')} value={metrics.bloqueados} />
           </div>
         </section>
 
@@ -1107,28 +1107,27 @@ function PlanAccionPageContent() {
           <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
             <div className="mb-5">
               <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                Crear acción manual
+                {t('actionPlan.createManual')}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Úsalo para acciones no derivadas automáticamente desde hallazgos,
-                riesgos, auditorías o controles.
+                {t('actionPlan.createManualHelp')}
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div className="space-y-4">
-                <FieldBlock label="Título">
+                <FieldBlock label={t('actionPlan.fields.title')}>
                   <input
-                    placeholder="Título del plan"
+                    placeholder={t('actionPlan.placeholders.title')}
                     value={form.title}
                     onChange={(e) => setForm({ ...form, title: e.target.value })}
                     className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
                   />
                 </FieldBlock>
 
-                <FieldBlock label="Descripción">
+                <FieldBlock label={t('actionPlan.fields.description')}>
                   <textarea
-                    placeholder="Descripción"
+                    placeholder={t('actionPlan.placeholders.description')}
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     className="min-h-[120px] w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
@@ -1138,21 +1137,21 @@ function PlanAccionPageContent() {
 
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <FieldBlock label="Prioridad">
+                  <FieldBlock label={t('actionPlan.fields.priority')}>
                     <select
                       value={form.priority}
                       onChange={(e) => setForm({ ...form, priority: e.target.value })}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                     >
-                      <option value="alta">Alta</option>
-                      <option value="media">Media</option>
-                      <option value="baja">Baja</option>
+                      <option value="alta">{t('statuses.findings.alto')}</option>
+                      <option value="media">{t('statuses.findings.medio')}</option>
+                      <option value="baja">{t('statuses.findings.bajo')}</option>
                     </select>
                   </FieldBlock>
 
-                  <FieldBlock label="Responsable">
+                  <FieldBlock label={t('actionPlan.fields.owner')}>
                     <input
-                      placeholder="Responsable"
+                      placeholder={t('actionPlan.placeholders.owner')}
                       value={form.owner}
                       onChange={(e) => setForm({ ...form, owner: e.target.value })}
                       className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none"
@@ -1160,7 +1159,7 @@ function PlanAccionPageContent() {
                   </FieldBlock>
                 </div>
 
-                <FieldBlock label="Vencimiento">
+                <FieldBlock label={t('actionPlan.fields.dueDate')}>
                   <input
                     type="date"
                     value={form.due_date}

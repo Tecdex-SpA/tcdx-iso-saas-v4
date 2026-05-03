@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -281,6 +282,7 @@ export default function ControlesPage() {
 }
 
 function ControlesPageContent() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -1133,7 +1135,7 @@ function ControlesPageContent() {
   if (loadingScope) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando controles...</div>
+        <div className="p-6">{t('controls.loading')}</div>
       </AppLayout>
     );
   }
@@ -1146,28 +1148,26 @@ function ControlesPageContent() {
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                  Controles operativos
+                  {t('controls.eyebrow')}
                 </span>
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  norma · operación · evidencia · remediación
+                  {t('controls.badge')}
                 </span>
               </div>
 
               <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                Controles
+                {t('controls.title')}
               </h1>
 
               <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
-                Gestiona los controles habilitados por operación, su estado real,
-                su evidencia asociada y las derivaciones rápidas a no conformidades,
-                hallazgos y planes de acción.
+                {t('controls.subtitle')}
               </p>
             </div>
 
             <div className="grid min-w-[320px] grid-cols-1 gap-3 md:grid-cols-2">
-              <MetricCard title="Modo catálogo" value={mode} tone="blue" />
+              <MetricCard title={t('controls.catalogMode')} value={mode} tone="blue" />
               <MetricCard
-                title="Operación activa"
+                title={t('controls.activeOperation')}
                 value={
                   availableOperations.find((o) => o.id === selectedOperationId)?.name || '—'
                 }
@@ -1177,14 +1177,14 @@ function ControlesPageContent() {
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.2fr)]">
-            <FilterCard label="Norma">
+            <FilterCard label={t('controls.standard')}>
               <select
                 value={selectedISO}
                 onChange={(e) => setSelectedISO(e.target.value)}
                 className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none"
               >
                 {availableStandards.length === 0 ? (
-                  <option value="">Sin normas operativas</option>
+                  <option value="">{t('controls.noOperationalStandards')}</option>
                 ) : (
                   availableStandards.map((s: ScopeStandard) => (
                     <option key={s.code} value={s.code}>
@@ -1195,7 +1195,7 @@ function ControlesPageContent() {
               </select>
             </FilterCard>
 
-            <FilterCard label="Operación">
+            <FilterCard label={t('controls.operation')}>
               <select
                 value={selectedOperationId}
                 onChange={(e) => setSelectedOperationId(e.target.value)}
@@ -1203,7 +1203,7 @@ function ControlesPageContent() {
                 disabled={availableOperations.length === 0}
               >
                 {availableOperations.length === 0 ? (
-                  <option value="">Sin operación activa</option>
+                  <option value="">{t('controls.noActiveOperation')}</option>
                 ) : (
                   availableOperations.map((op: OperationItem) => (
                     <option key={op.id} value={op.id}>
@@ -1214,20 +1214,20 @@ function ControlesPageContent() {
               </select>
             </FilterCard>
 
-            <FilterCard label="Modo catálogo">
+            <FilterCard label={t('controls.catalogMode')}>
               <select
                 value={mode}
                 onChange={(e) => void updateCatalogMode(e.target.value)}
                 className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none"
                 disabled={!selectedISO}
               >
-                <option value="generic">Genérico</option>
-                <option value="personalized">Personalizado</option>
-                <option value="mixed">Mixto</option>
+                <option value="generic">{t('controls.catalog.generic')}</option>
+                <option value="personalized">{t('controls.catalog.personalized')}</option>
+                <option value="mixed">{t('controls.catalog.mixed')}</option>
               </select>
             </FilterCard>
 
-            <FilterCard label="Salud">
+            <FilterCard label={t('controls.health')}>
               <select
                 value={healthFilter}
                 onChange={(e) =>
@@ -1237,18 +1237,18 @@ function ControlesPageContent() {
                 }
                 className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none"
               >
-                <option value="todos">Todos los estados</option>
-                <option value="saludable">Saludable</option>
-                <option value="atencion">Atención</option>
-                <option value="deteriorado">Deteriorado</option>
+                <option value="todos">{t('controls.allStatuses')}</option>
+                <option value="saludable">{t('statuses.controls.saludable')}</option>
+                <option value="atencion">{t('statuses.controls.atencion')}</option>
+                <option value="deteriorado">{t('statuses.controls.deteriorado')}</option>
               </select>
             </FilterCard>
 
-            <FilterCard label="Buscar">
+            <FilterCard label={t('common.search')}>
               <input
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                placeholder="Cláusula, descripción, responsable..."
+                placeholder={t('controls.searchPlaceholder')}
                 className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none"
               />
             </FilterCard>
@@ -1256,21 +1256,21 @@ function ControlesPageContent() {
 
           {summary && (
             <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-              <MetricCard title="Total" value={summary.total_controls} tone="slate" />
-              <MetricCard title="Saludables" value={summary.healthy_controls} tone="green" />
-              <MetricCard title="Atención" value={summary.attention_controls} tone="amber" />
+              <MetricCard title={t('common.all')} value={summary.total_controls} tone="slate" />
+              <MetricCard title={t('statuses.controls.saludable')} value={summary.healthy_controls} tone="green" />
+              <MetricCard title={t('statuses.controls.atencion')} value={summary.attention_controls} tone="amber" />
               <MetricCard
-                title="Deteriorados"
+                title={t('statuses.controls.deteriorado')}
                 value={summary.deteriorated_controls}
                 tone="red"
               />
               <MetricCard
-                title="Sin evidencia"
+                title={t('controls.withoutEvidence')}
                 value={summary.controls_without_evidence}
                 tone="violet"
               />
               <MetricCard
-                title="Health promedio"
+                title={t('controls.averageHealth')}
                 value={summary.average_health_score}
                 tone="blue"
               />
@@ -1280,7 +1280,7 @@ function ControlesPageContent() {
 
         {focusMessage && (
           <div className="rounded-[24px] border border-indigo-200 bg-indigo-50 px-5 py-4 text-indigo-900 shadow-sm">
-            <div className="font-semibold">Apertura directa desde búsqueda</div>
+            <div className="font-semibold">{t('controls.directOpen')}</div>
             <div className="mt-1 text-sm">{focusMessage}</div>
           </div>
         )}
@@ -1529,7 +1529,7 @@ function ControlesPageContent() {
                                 </div>
 
                                 <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                  <FieldBlock label="Estado">
+                                  <FieldBlock label={t('common.status')}>
                                     <select
                                       value={draft.status}
                                       onChange={(e) =>
@@ -1544,8 +1544,8 @@ function ControlesPageContent() {
                                       className="w-full rounded-2xl border border-slate-200 p-3 text-sm"
                                       disabled={isReadOnly}
                                     >
-                                      <option value="pendiente">Pendiente</option>
-                                      <option value="parcial">Parcial</option>
+                                      <option value="pendiente">{t('statuses.controls.pendiente')}</option>
+                                      <option value="parcial">{t('statuses.controls.parcial')}</option>
                                       <option value="cumple">Cumple</option>
                                       <option value="no cumple">No cumple</option>
                                     </select>
@@ -1571,7 +1571,7 @@ function ControlesPageContent() {
                                     />
                                   </FieldBlock>
 
-                                  <FieldBlock label="Prioridad">
+                                  <FieldBlock label={t('controls.priority')}>
                                     <select
                                       value={draft.priority}
                                       onChange={(e) =>
@@ -1586,13 +1586,13 @@ function ControlesPageContent() {
                                       className="w-full rounded-2xl border border-slate-200 p-3 text-sm"
                                       disabled={isReadOnly}
                                     >
-                                      <option value="alta">Alta</option>
-                                      <option value="media">Media</option>
-                                      <option value="baja">Baja</option>
+                                      <option value="alta">{t('statuses.findings.alto')}</option>
+                                      <option value="media">{t('statuses.findings.medio')}</option>
+                                      <option value="baja">{t('statuses.findings.bajo')}</option>
                                     </select>
                                   </FieldBlock>
 
-                                  <FieldBlock label="Vencimiento">
+                                  <FieldBlock label={t('controls.dueDate')}>
                                     <input
                                       type="date"
                                       value={draft.due_date}
@@ -1610,7 +1610,7 @@ function ControlesPageContent() {
                                     />
                                   </FieldBlock>
 
-                                  <FieldBlock label="Aplicabilidad">
+                                  <FieldBlock label={t('controls.applicability')}>
                                     <select
                                       value={draft.applicability}
                                       onChange={(e) =>
@@ -1625,13 +1625,13 @@ function ControlesPageContent() {
                                       className="w-full rounded-2xl border border-slate-200 p-3 text-sm"
                                       disabled={isReadOnly}
                                     >
-                                      <option value="aplica">Aplica</option>
-                                      <option value="no_aplica">No aplica</option>
-                                      <option value="parcial">Parcial</option>
+                                      <option value="aplica">{t('controls.applies')}</option>
+                                      <option value="no_aplica">{t('statuses.controls.no_aplica')}</option>
+                                      <option value="parcial">{t('statuses.controls.parcial')}</option>
                                     </select>
                                   </FieldBlock>
 
-                                  <FieldBlock label="Responsable (email)">
+                                  <FieldBlock label={t('controls.ownerEmail')}>
                                     <input
                                       value={draft.responsible_user_id}
                                       onChange={(e) =>
