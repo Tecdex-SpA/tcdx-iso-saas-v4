@@ -200,7 +200,18 @@
     "deterioratedControls": "Deteriorated Controls",
     "latestActivity": "Recent Activity",
     "openFindings": "Open Findings",
-    "controlHealth": "Control Health"
+    "controlHealth": "Control Health",
+    "ofTotal": "{{value}}% of total",
+    "mediumCount": "{{count}} medium",
+    "mediumCountPlural": "{{count}} medium",
+    "overdueCount": "{{count}} overdue",
+    "iaAuditorTitle": "AI Auditor",
+    "iaAuditorBeta": "Beta",
+    "iaAuditorIntro": "Your intelligent assistant analyzed the data and detected focus areas to strengthen your management system.",
+    "iaAuditorLowEffectiveness": "Detected {{count}} controls with low effectiveness.",
+    "iaAuditorCriticalRisks": "{{count}} risks remain at a critical level.",
+    "iaAuditorUpcomingActions": "There are {{count}} upcoming actions or evidence items.",
+    "iaAuditorReviewSuggestions": "Review suggestions"
   },
   "exports": {
     "title": "Premium Executive Reports",

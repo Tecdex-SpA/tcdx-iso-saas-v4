@@ -200,7 +200,18 @@
     "deterioratedControls": "Controles Deteriorados",
     "latestActivity": "Actividad reciente",
     "openFindings": "Hallazgos abiertos",
-    "controlHealth": "Salud de controles"
+    "controlHealth": "Salud de controles",
+    "ofTotal": "{{value}}% del total",
+    "mediumCount": "{{count}} medio",
+    "mediumCountPlural": "{{count}} medios",
+    "overdueCount": "{{count}} atrasados",
+    "iaAuditorTitle": "IA Auditor",
+    "iaAuditorBeta": "Beta",
+    "iaAuditorIntro": "Tu asistente inteligente analizó los datos y detectó focos para fortalecer tu sistema de gestión.",
+    "iaAuditorLowEffectiveness": "Detectó {{count}} controles con baja efectividad.",
+    "iaAuditorCriticalRisks": "{{count}} riesgos se mantienen en nivel crítico.",
+    "iaAuditorUpcomingActions": "Hay {{count}} acciones o evidencias próximas.",
+    "iaAuditorReviewSuggestions": "Revisar sugerencias"
   },
   "exports": {
     "title": "Exportes ejecutivos premium",

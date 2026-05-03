@@ -368,6 +368,53 @@ function getKpiStatusClass(color?: string | null) {
 }
 
 
+
+function dashboardRuntimeText(key: string, params?: Record<string, string | number>) {
+  const lang =
+    typeof document !== 'undefined' && document.documentElement.lang === 'en'
+      ? 'en'
+      : 'es';
+
+  const labels: Record<string, { es: string; en: string }> = {
+    'dashboard.iaAuditorTitle': {
+      es: 'IA Auditor',
+      en: 'AI Auditor',
+    },
+    'dashboard.iaAuditorBeta': {
+      es: 'Beta',
+      en: 'Beta',
+    },
+    'dashboard.iaAuditorIntro': {
+      es: 'Tu asistente inteligente analizó los datos y detectó focos para fortalecer tu sistema de gestión.',
+      en: 'Your intelligent assistant analyzed the data and detected focus areas to strengthen your management system.',
+    },
+    'dashboard.iaAuditorLowEffectiveness': {
+      es: 'Detectó {{count}} controles con baja efectividad.',
+      en: 'Detected {{count}} controls with low effectiveness.',
+    },
+    'dashboard.iaAuditorCriticalRisks': {
+      es: '{{count}} riesgos se mantienen en nivel crítico.',
+      en: '{{count}} risks remain at a critical level.',
+    },
+    'dashboard.iaAuditorUpcomingActions': {
+      es: 'Hay {{count}} acciones o evidencias próximas.',
+      en: 'There are {{count}} upcoming actions or evidence items.',
+    },
+    'dashboard.iaAuditorReviewSuggestions': {
+      es: 'Revisar sugerencias',
+      en: 'Review suggestions',
+    },
+  };
+
+  let value = labels[key]?.[lang] || key;
+
+  for (const [paramKey, paramValue] of Object.entries(params || {})) {
+    value = value.replaceAll(`{{${paramKey}}}`, String(paramValue));
+  }
+
+  return value;
+}
+
 function getRuntimePeriodLabel() {
   if (typeof document !== 'undefined' && document.documentElement.lang === 'en') {
     return 'Period';
@@ -1040,7 +1087,7 @@ export default function DashboardPage() {
                       value={`${cumple} / ${totalControls || 0}`}
                       subtitle={t('dashboard.healthyControlsSubtitle')}
                       accent="indigo"
-                      change={`${completionPct}% del total`}
+                      change={t('dashboard.ofTotal', { value: completionPct })}
                       changeHint={t('dashboard.currentAssessment')}
                       icon={<TcdxIcon name="activity" className="h-6 w-6" />}
                     />
@@ -1050,7 +1097,7 @@ export default function DashboardPage() {
                       value={highRisks}
                       subtitle={t('dashboard.criticalRisksSubtitle')}
                       accent="red"
-                      change={`${mediumRisks} medios`}
+                      change={t('dashboard.mediumCountPlural', { count: mediumRisks })}
                       changeHint={t('dashboard.currentOverview')}
                       icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                     />
@@ -1060,7 +1107,7 @@ export default function DashboardPage() {
                       value={activeActionPlans}
                       subtitle={t('dashboard.actionPlansSubtitle')}
                       accent="green"
-                      change={`${overdueActionPlans} atrasados`}
+                      change={t('dashboard.overdueCount', { count: overdueActionPlans })}
                       changeHint={t('dashboard.operationalFocus')}
                       icon={<TcdxIcon name="plan" className="h-6 w-6" />}
                     />
@@ -2125,14 +2172,14 @@ function AiAuditorPanel({
         <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#2563eb] text-white">
           <TcdxIcon name="ai" className="h-6 w-6" />
         </span>
-        <div className="text-xl font-bold">IA Auditor</div>
-        <span className="rounded-md bg-white/12 px-2 py-1 text-xs font-bold text-blue-100">Beta</span>
+        <div className="text-xl font-bold">{dashboardRuntimeText('dashboard.iaAuditorTitle')}</div>
+        <span className="rounded-md bg-white/12 px-2 py-1 text-xs font-bold text-blue-100">{dashboardRuntimeText('dashboard.iaAuditorBeta')}</span>
       </div>
 
       <div className="relative z-10 mt-5 grid gap-5 md:grid-cols-[minmax(0,1fr)_150px]">
         <div>
           <p className="text-sm leading-6 text-white/80">
-            Tu asistente inteligente analizó los datos y detectó focos para fortalecer tu sistema de gestión.
+            {dashboardRuntimeText('dashboard.iaAuditorIntro')}
           </p>
           <div className="mt-4 space-y-2 text-sm text-white/86">
             <div className="flex items-center gap-2">
@@ -2141,11 +2188,11 @@ function AiAuditorPanel({
             </div>
             <div className="flex items-center gap-2">
               <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
-              {raisedRisks} riesgos se mantienen en nivel crítico.
+              {dashboardRuntimeText('dashboard.iaAuditorCriticalRisks', { count: raisedRisks })}
             </div>
             <div className="flex items-center gap-2">
               <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
-              Hay {upcomingEvidence} acciones o evidencias próximas.
+              {dashboardRuntimeText('dashboard.iaAuditorUpcomingActions', { count: upcomingEvidence })}
             </div>
           </div>
 
@@ -2153,7 +2200,7 @@ function AiAuditorPanel({
             href="/ia-compliance/sugerencias"
             className="mt-5 inline-flex items-center gap-3 rounded-lg bg-[#f97316] px-5 py-3 text-sm font-bold text-white shadow-[0_10px_24px_rgba(249,115,22,0.35)] transition hover:bg-[#ea580c]"
           >
-            Revisar sugerencias
+            {dashboardRuntimeText('dashboard.iaAuditorReviewSuggestions')}
             <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
           </a>
         </div>
