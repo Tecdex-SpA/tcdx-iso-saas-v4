@@ -39,6 +39,13 @@ function replacePhrasesEn(value) {
   let text = String(value || '');
 
   const replacements = [
+    ['Criterio auditor: la respuesta usa fuente Company internal information con confianza medium.', 'Auditor criterion: the answer uses source Company internal information with medium confidence.'],
+    ['Criterio auditor: la respuesta usa fuente Company internal information con confianza high.', 'Auditor criterion: the answer uses source Company internal information with high confidence.'],
+    ['Criterio auditor: la respuesta usa fuente Company internal information con confianza low.', 'Auditor criterion: the answer uses source Company internal information with low confidence.'],
+    ['Criterio auditor: la respuesta usa fuente TCDX Knowledge Base con confianza medium.', 'Auditor criterion: the answer uses source TCDX Knowledge Base with medium confidence.'],
+    ['Criterio auditor: la respuesta usa fuente TCDX Knowledge Base con confianza high.', 'Auditor criterion: the answer uses source TCDX Knowledge Base with high confidence.'],
+    ['Criterio auditor: la respuesta usa fuente TCDX Knowledge Base con confianza low.', 'Auditor criterion: the answer uses source TCDX Knowledge Base with low confidence.'],
+    ['No se observan brechas criticas con la informacion disponible.', 'No critical gaps are observed with the available information.'],
     [' con confianza medium.', ' with medium confidence.'],
     [' con confianza high.', ' with high confidence.'],
     [' con confianza low.', ' with low confidence.'],
