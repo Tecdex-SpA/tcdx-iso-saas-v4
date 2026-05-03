@@ -1307,6 +1307,22 @@
         "name": "Avance de remediación de controles",
         "description": "Mide el avance de acciones de remediación asociadas a salud de controles y brechas de cumplimiento."
       }
+    },
+    "healthEngine": {
+      "title": "KPIs Health conectados al motor de salud",
+      "subtitle": "Datos reales de snapshots del motor Health: salud general, cobertura de evidencias y deterioro de controles.",
+      "viewDetail": "Ver detalle Health"
+    },
+    "generalStatus": {
+      "title": "Estado General KPI"
+    },
+    "criticalKpisTitle": "KPIs Críticos",
+    "highlightedKpisTitle": "KPIs Destacados",
+    "statusHelp": {
+      "green": "Objetivo logrado",
+      "yellow": "Monitoreo requerido",
+      "red": "Acción recomendada",
+      "gray": "Carga o cálculo pendiente"
     }
   },
   "kpiAdmin": {

@@ -1307,6 +1307,22 @@
         "name": "Control Remediation Progress",
         "description": "Measures progress on remediation actions associated with control health and compliance gaps."
       }
+    },
+    "healthEngine": {
+      "title": "Health KPIs connected to the health engine",
+      "subtitle": "Real snapshots from the Health engine: overall health, evidence coverage, and control deterioration.",
+      "viewDetail": "View Health detail"
+    },
+    "generalStatus": {
+      "title": "Overall KPI Status"
+    },
+    "criticalKpisTitle": "Critical KPIs",
+    "highlightedKpisTitle": "Highlighted KPIs",
+    "statusHelp": {
+      "green": "Target achieved",
+      "yellow": "Monitoring required",
+      "red": "Recommended action",
+      "gray": "Input or calculation pending"
     }
   },
   "kpiAdmin": {
