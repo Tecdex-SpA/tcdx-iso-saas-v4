@@ -1371,6 +1371,228 @@ function markAiAuditorFallback(fallback, error) {
 }
 
 
+
+// =========================================================
+// Fase 3K - Historial persistente IA Auditor Senior
+// =========================================================
+function normalizeAiAuditorHistoryLimit(value) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 10;
+  return Math.min(parsed, 50);
+}
+
+function normalizeAiAuditorHistoryOffset(value) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return parsed;
+}
+
+function compactHistoryError(error) {
+  const code = error?.code ? ` (${error.code})` : '';
+  return String(error?.message || 'history_save_failed').slice(0, 220) + code;
+}
+
+function buildAiAuditorSuggestionsSnapshot(result) {
+  return {
+    findings_suggestions: Array.isArray(result?.findings_suggestions) ? result.findings_suggestions : [],
+    nonconformity_suggestions: Array.isArray(result?.nonconformity_suggestions) ? result.nonconformity_suggestions : [],
+    evidence_requests: Array.isArray(result?.evidence_requests) ? result.evidence_requests : [],
+    action_plan_suggestions: Array.isArray(result?.action_plan_suggestions) ? result.action_plan_suggestions : [],
+    control_recommendations: Array.isArray(result?.control_recommendations) ? result.control_recommendations : [],
+    risk_recommendations: Array.isArray(result?.risk_recommendations) ? result.risk_recommendations : [],
+    next_steps: Array.isArray(result?.next_steps) ? result.next_steps : [],
+  };
+}
+
+async function saveAiAuditorRunHistory({ req, tenantId, locale, result }) {
+  try {
+    if (!tenantId || !result || result.ok === false) {
+      return { saved: false, error: 'history_skipped_invalid_payload' };
+    }
+
+    const summary = result.summary || {};
+    const coverage = result.coverage || {};
+    const suggestions = buildAiAuditorSuggestionsSnapshot(result);
+    const trace = { ...(result.trace || {}), db_write: false, history_saved: true };
+
+    const insert = await pool.query(
+      `
+      INSERT INTO ai_auditor_runs (
+        tenant_id, user_id, locale, standard_code, audit_focus, depth, score,
+        readiness_level, ai_engine_used, human_review_required, can_create_records,
+        db_write, history_saved, summary_json, coverage_json, suggestions_json,
+        full_result_json, trace_json
+      )
+      VALUES (
+        $1::uuid, $2::uuid, $3::text, $4::text, $5::text, $6::text, $7::numeric,
+        $8::text, $9::boolean, true, false, false, true,
+        $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb
+      )
+      RETURNING id
+      `,
+      [
+        tenantId,
+        getUserId(req.user),
+        locale || 'es',
+        req.body?.standard_code || result?.scope?.standard_code || null,
+        req.body?.audit_focus || result?.trace?.audit_focus || null,
+        req.body?.depth || result?.trace?.depth || null,
+        Number.isFinite(Number(summary.score)) ? Number(summary.score) : null,
+        summary.readiness_level || null,
+        result?.trace?.ai_engine_used === true,
+        JSON.stringify(summary || {}),
+        JSON.stringify(coverage || {}),
+        JSON.stringify(suggestions || {}),
+        JSON.stringify(result || {}),
+        JSON.stringify(trace || {}),
+      ]
+    );
+
+    return { saved: true, id: insert.rows[0]?.id || null };
+  } catch (error) {
+    const message = compactHistoryError(error);
+    console.warn('AI AUDITOR HISTORY SAVE WARN:', message);
+    return { saved: false, error: error?.code === '42P01' ? 'history_table_missing' : message };
+  }
+}
+
+function attachAiAuditorHistorySaveMiddleware(req, res, next) {
+  const originalJson = res.json.bind(res);
+  res.json = async function patchedAiAuditorAnalyzeJson(payload) {
+    try {
+      if (payload && payload.ok !== false && payload.summary) {
+        const locale = normalizeAiAuditorLocale(req);
+        const tenantId = resolveAiAuditorTenantId(req);
+        const history = await saveAiAuditorRunHistory({ req, tenantId, locale, result: payload });
+        payload.trace = { ...(payload.trace || {}), db_write: false, history_saved: history.saved === true };
+        if (history.saved && history.id) payload.trace.history_run_id = history.id;
+        if (!history.saved && history.error) payload.trace.history_error = history.error;
+      }
+    } catch (error) {
+      payload.trace = { ...(payload.trace || {}), db_write: false, history_saved: false, history_error: compactHistoryError(error) };
+    }
+    return originalJson(payload);
+  };
+  return next();
+}
+
+async function listAiAuditorHistory(req, res) {
+  const locale = normalizeAiAuditorLocale(req);
+  const tenantId = resolveAiAuditorTenantId(req);
+  if (!tenantId || !ensureTenantAccess(req, tenantId)) {
+    return res.status(403).json(errorDetail('AI_AUDITOR_FORBIDDEN', locale, { message: locale === 'en' ? 'Tenant access denied.' : 'Acceso al tenant denegado.' }));
+  }
+
+  const limit = normalizeAiAuditorHistoryLimit(req.query.limit);
+  const offset = normalizeAiAuditorHistoryOffset(req.query.offset);
+  const standardCode = safeText(req.query.standard_code || '');
+  const auditFocus = safeText(req.query.audit_focus || '');
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT id, tenant_id, user_id, locale, standard_code, audit_focus, depth,
+        score, readiness_level, ai_engine_used, human_review_required,
+        can_create_records, db_write, history_saved, summary_json, coverage_json,
+        trace_json, created_at, COUNT(*) OVER()::int AS total_count
+      FROM ai_auditor_runs
+      WHERE tenant_id = $1::uuid
+        AND deleted_at IS NULL
+        AND ($2::text = '' OR standard_code = $2::text)
+        AND ($3::text = '' OR audit_focus = $3::text)
+      ORDER BY created_at DESC
+      LIMIT $4::int OFFSET $5::int
+      `,
+      [tenantId, standardCode, auditFocus, limit, offset]
+    );
+
+    const items = result.rows.map((row) => ({
+      id: row.id,
+      created_at: row.created_at,
+      user_id: row.user_id,
+      standard_code: row.standard_code,
+      audit_focus: row.audit_focus,
+      depth: row.depth,
+      score: row.score === null ? null : Number(row.score),
+      readiness_level: row.readiness_level,
+      ai_engine_used: row.ai_engine_used === true,
+      human_review_required: row.human_review_required === true,
+      can_create_records: row.can_create_records === true,
+      db_write: row.db_write === true,
+      history_saved: row.history_saved === true,
+      summary_preview: String(row.summary_json?.executive_summary || '').slice(0, 420),
+      coverage: row.coverage_json || {},
+      trace: row.trace_json || {},
+    }));
+
+    return res.json({ ok: true, locale, tenant_id: tenantId, items, pagination: { limit, offset, count: result.rows[0]?.total_count || 0 } });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.json({ ok: true, locale, tenant_id: tenantId, items: [], pagination: { limit, offset, count: 0 }, warning: 'history_table_missing' });
+    }
+    console.error('AI AUDITOR HISTORY LIST ERROR:', error);
+    return res.status(500).json(errorDetail('AI_AUDITOR_HISTORY_ERROR', locale, { message: locale === 'en' ? 'Could not load AI Auditor history.' : 'No fue posible cargar el historial de IA Auditor.' }));
+  }
+}
+
+async function getAiAuditorHistoryDetail(req, res) {
+  const locale = normalizeAiAuditorLocale(req);
+  const tenantId = resolveAiAuditorTenantId(req);
+  const runId = req.params.id;
+  if (!tenantId || !ensureTenantAccess(req, tenantId)) {
+    return res.status(403).json(errorDetail('AI_AUDITOR_FORBIDDEN', locale, { message: locale === 'en' ? 'Tenant access denied.' : 'Acceso al tenant denegado.' }));
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ai_auditor_runs WHERE id = $1::uuid AND tenant_id = $2::uuid AND deleted_at IS NULL LIMIT 1`,
+      [runId, tenantId]
+    );
+    if (!result.rows.length) {
+      return res.status(404).json(errorDetail('AI_AUDITOR_HISTORY_NOT_FOUND', locale, { message: locale === 'en' ? 'History run was not found.' : 'No se encontró la ejecución histórica.' }));
+    }
+    const row = result.rows[0];
+    return res.json({
+      ok: true,
+      locale,
+      tenant_id: tenantId,
+      item: {
+        id: row.id,
+        tenant_id: row.tenant_id,
+        user_id: row.user_id,
+        locale: row.locale,
+        standard_code: row.standard_code,
+        audit_focus: row.audit_focus,
+        depth: row.depth,
+        score: row.score === null ? null : Number(row.score),
+        readiness_level: row.readiness_level,
+        ai_engine_used: row.ai_engine_used === true,
+        human_review_required: row.human_review_required === true,
+        can_create_records: row.can_create_records === true,
+        db_write: row.db_write === true,
+        history_saved: row.history_saved === true,
+        summary_json: row.summary_json || {},
+        coverage_json: row.coverage_json || {},
+        suggestions_json: row.suggestions_json || {},
+        full_result_json: row.full_result_json || {},
+        trace_json: row.trace_json || {},
+        created_at: row.created_at,
+      },
+    });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.status(404).json(errorDetail('AI_AUDITOR_HISTORY_NOT_AVAILABLE', locale, { message: locale === 'en' ? 'History table is not available.' : 'La tabla de historial no está disponible.' }));
+    }
+    console.error('AI AUDITOR HISTORY DETAIL ERROR:', error);
+    return res.status(500).json(errorDetail('AI_AUDITOR_HISTORY_ERROR', locale, { message: locale === 'en' ? 'Could not load AI Auditor history detail.' : 'No fue posible cargar el detalle histórico de IA Auditor.' }));
+  }
+}
+
+router.use('/analyze', auth, attachAiAuditorHistorySaveMiddleware);
+router.get('/history', auth, listAiAuditorHistory);
+router.get('/history/:id', auth, getAiAuditorHistoryDetail);
+
+
 router.get('/scope', auth, async (req, res) => {
   try {
     const locale = normalizeAiAuditorLocale(req);

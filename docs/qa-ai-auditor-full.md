@@ -90,3 +90,7 @@ El QA mantiene el principio de no destructividad:
 - no crea evidencias;
 - no crea no conformidades;
 - solo usa `scope`, `analyze`, `suggestions/:type/prepare` y rutas HTTP de frontend.
+
+## Historial Fase 3K
+
+Validar `GET /api/ai-auditor/history`, `trace.history_saved`, `trace.history_run_id` y detalle histórico cuando existe. Si la migración aún no está aplicada, reportar WARN, no FAIL, siempre que el análisis siga operativo.

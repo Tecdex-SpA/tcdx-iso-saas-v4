@@ -79,3 +79,12 @@ Validar módulos destino:
 - Permisos finos por rol.
 - Exportes ejecutivos desde análisis IA Auditor.
 - Registro de aceptación/rechazo de recomendaciones.
+
+## Historial persistente Fase 3K
+
+- [ ] Migración `ai_auditor_runs` aplicada.
+- [ ] `POST /api/ai-auditor/analyze` agrega `trace.history_saved=true`.
+- [ ] `trace.history_run_id` existe cuando se guarda historial.
+- [ ] `GET /api/ai-auditor/history` lista ejecuciones del tenant.
+- [ ] `GET /api/ai-auditor/history/:id` valida tenant y devuelve detalle.
+- [ ] El historial no crea hallazgos, planes, evidencias ni no conformidades.
