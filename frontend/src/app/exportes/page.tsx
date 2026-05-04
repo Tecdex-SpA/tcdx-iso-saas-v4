@@ -87,6 +87,19 @@ function formatDate(value?: string, locale = 'es') {
   }).format(new Date(value));
 }
 
+
+function getReportTypeName(report: ReportType, t: (key: string) => string) {
+  const key = `exports.reportTypes.${report.code}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : report.name;
+}
+
+function getReportTypeDescription(report: ReportType, t: (key: string) => string) {
+  const key = `exports.reportTypes.${report.code}.description`;
+  const translated = t(key);
+  return translated !== key ? translated : report.description;
+}
+
 function getReportIcon(code: string): TcdxIconName {
   if (code === 'executive_summary') return 'kpi';
   if (code === 'audit_report') return 'audit';
@@ -772,11 +785,11 @@ export default function ExportesPage() {
 
                           <div className="mt-5">
                             <h3 className="text-base font-bold text-slate-900">
-                              {report.name}
+                              {getReportTypeName(report, t)}
                             </h3>
 
                             <p className="mt-2 text-sm leading-6 text-slate-500">
-                              {report.description}
+                              {getReportTypeDescription(report, t)}
                             </p>
                           </div>
 
@@ -857,13 +870,13 @@ export default function ExportesPage() {
                         </div>
 
                         <h3 className="mt-3 text-lg font-bold text-slate-900">
-                          {selectedReport.name}
+                          {getReportTypeName(selectedReport, t)}
                         </h3>
                       </div>
                     </div>
 
                     <p className="text-sm leading-6 text-slate-500">
-                      {selectedReport.description}
+                      {getReportTypeDescription(selectedReport, t)}
                     </p>
 
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1050,7 +1063,7 @@ export default function ExportesPage() {
                   <option value="">{t('exports.allTypes')}</option>
                   {reportTypes.map((report) => (
                     <option key={report.code} value={report.code}>
-                      {report.name}
+                      {getReportTypeName(report, t)}
                     </option>
                   ))}
                 </select>

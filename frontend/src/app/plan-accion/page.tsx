@@ -184,6 +184,11 @@ function normalizeApproval(value?: string | null) {
   return 'no_requerida';
 }
 
+
+function getApprovalStatusLabel(value: string | null | undefined, t: (key: string) => string) {
+  return getActionPlanStatusLabel(normalizeApproval(value), t);
+}
+
 function formatDate(value?: string | null) {
   if (!value) return '-';
 
@@ -1213,9 +1218,9 @@ function PlanAccionPageContent() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Tag tone="slate">{row.iso_code}</Tag>
-                        <Tag tone="blue">{getSourceLabel(row)}</Tag>
-                        <Tag tone="violet">{normalizeStatus(row.status)}</Tag>
-                        <Tag tone="amber">{row.priority || 'media'}</Tag>
+                        <Tag tone="blue">{getCategoryLabel(getSourceLabel(row), t)}</Tag>
+                        <Tag tone="violet">{getActionPlanStatusLabel(normalizeStatus(row.status), t)}</Tag>
+                        <Tag tone="amber">{getPriorityLabel(row.priority || 'media', t)}</Tag>
                         <Tag tone="emerald">
                           Progreso {Number(row.latest_progress_percent || 0)}%
                         </Tag>
@@ -1227,7 +1232,7 @@ function PlanAccionPageContent() {
                             row.approval_status
                           )}`}
                         >
-                          {normalizeApproval(row.approval_status)}
+                          {getApprovalStatusLabel(row.approval_status, t)}
                         </span>
                       </div>
 
@@ -1269,11 +1274,11 @@ function PlanAccionPageContent() {
                     <FieldBlock label="Estado">
                       {isReadOnly ? (
                         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                          {normalizeStatus(row.status)}
+                          {getActionPlanStatusLabel(normalizeStatus(row.status), t)}
                         </div>
                       ) : (
                         <select
-                          value={normalizeStatus(row.status)}
+                          value={getActionPlanStatusLabel(normalizeStatus(row.status), t)}
                           onChange={(e) => updatePlan(row, { status: e.target.value })}
                           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                         >
@@ -1347,7 +1352,7 @@ function PlanAccionPageContent() {
                           row.approval_status
                         )}`}
                       >
-                        {normalizeApproval(row.approval_status)}
+                        {getApprovalStatusLabel(row.approval_status, t)}
                       </div>
                     </FieldBlock>
                   </div>
@@ -1422,7 +1427,7 @@ function PlanAccionPageContent() {
                           Contexto del plan
                         </div>
 
-                        <DetailRow label="Fuente" value={getSourceLabel(row)} />
+                        <DetailRow label="Fuente" value={getCategoryLabel(getSourceLabel(row), t)} />
                         <DetailRow label="Detalle fuente" value={getSourceDetail(row)} />
                         <DetailRow
                           label="Control vinculado"

@@ -245,7 +245,24 @@
       "pdf": "Downloadable PDFs",
       "commercial": "Executive business output"
     },
-    "reportTypes": "Report Types",
+    "reportTypes": {
+      "executive_summary": {
+        "name": "Executive Report",
+        "description": "Executive summary of compliance, KPIs, risks, findings, and management recommendations."
+      },
+      "control_status": {
+        "name": "Control Status Report",
+        "description": "Operational status of controls, evidence, risks, findings, due dates, and priorities."
+      },
+      "audit_report": {
+        "name": "Audit Report",
+        "description": "Audit-oriented report covering controls, evidence, findings, and traceability."
+      },
+      "platform_client_monthly": {
+        "name": "Monthly Platform Report",
+        "description": "Monthly summary of platform usage, activity, compliance, and service management."
+      }
+    },
     "availableByProfile": "Available by profile",
     "reportsToday": "Reports Today",
     "generatedToday": "Generated today",
@@ -1680,7 +1697,12 @@
       "inProgress": "In progress",
       "completed": "Completed",
       "cancelled": "Cancelled",
-      "overdue": "Overdue"
+      "overdue": "Overdue",
+      "blocked": "Blocked",
+      "notRequired": "Not required",
+      "pendingApproval": "Pending approval",
+      "approved": "Approved",
+      "returned": "Returned"
     },
     "audit": {
       "pending": "Pending",
@@ -1709,7 +1731,18 @@
       "observation": "Observation",
       "evidence": "Evidence",
       "finding": "Finding",
-      "correctiveAction": "Corrective action"
+      "correctiveAction": "Corrective action",
+      "manual": "Manual",
+      "control": "Control",
+      "audit": "Audit",
+      "risk": "Risk"
+    }
+  },
+  "actionPlanLabels": {
+    "buttons": {
+      "viewDetail": "View details",
+      "viewEvidence": "View evidence",
+      "delete": "Delete"
     }
   }
 }

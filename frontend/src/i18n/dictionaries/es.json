@@ -245,7 +245,24 @@
       "pdf": "PDFs descargables",
       "commercial": "Salida ejecutiva comercial"
     },
-    "reportTypes": "Tipos de informe",
+    "reportTypes": {
+      "executive_summary": {
+        "name": "Informe para Gerencia",
+        "description": "Resumen ejecutivo de cumplimiento, KPIs, riesgos, hallazgos y recomendaciones para gerencia."
+      },
+      "control_status": {
+        "name": "Informe de Control de Estado",
+        "description": "Estado operativo de controles, evidencias, riesgos, hallazgos, vencimientos y prioridades."
+      },
+      "audit_report": {
+        "name": "Informe para Auditoría",
+        "description": "Informe orientado a revisión de auditoría, controles, evidencias, hallazgos y trazabilidad."
+      },
+      "platform_client_monthly": {
+        "name": "Informe Mensual de Plataforma",
+        "description": "Resumen mensual de uso, actividad, cumplimiento y gestión del servicio."
+      }
+    },
     "availableByProfile": "Disponibles según perfil",
     "reportsToday": "Informes hoy",
     "generatedToday": "Generados en la jornada",
@@ -1680,7 +1697,12 @@
       "inProgress": "En ejecución",
       "completed": "Completado",
       "cancelled": "Cancelado",
-      "overdue": "Vencido"
+      "overdue": "Vencido",
+      "blocked": "Bloqueado",
+      "notRequired": "No requerida",
+      "pendingApproval": "Pendiente de aprobación",
+      "approved": "Aprobada",
+      "returned": "Devuelta"
     },
     "audit": {
       "pending": "Pendiente",
@@ -1709,7 +1731,18 @@
       "observation": "Observación",
       "evidence": "Evidencia",
       "finding": "Hallazgo",
-      "correctiveAction": "Acción correctiva"
+      "correctiveAction": "Acción correctiva",
+      "manual": "Manual",
+      "control": "Control",
+      "audit": "Auditoría",
+      "risk": "Riesgo"
+    }
+  },
+  "actionPlanLabels": {
+    "buttons": {
+      "viewDetail": "Ver detalle",
+      "viewEvidence": "Ver evidencias",
+      "delete": "Eliminar"
     }
   }
 }
