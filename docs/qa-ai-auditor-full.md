@@ -1,0 +1,76 @@
+# QA IA Auditor Senior completo
+
+## Objetivo
+
+`scripts/qa-ai-auditor-full.sh` valida el flujo IA Auditor Senior end-to-end desde la Mac contra las VMs del sistema.
+
+## Qué valida
+
+- Login y obtención de token.
+- `GET /api/ai-auditor/scope`.
+- Scope filtrado por `ISO27001` e `ISO9001`.
+- `POST /api/ai-auditor/analyze` en inglés y español.
+- Trazabilidad:
+  - `trace.ai_engine_used`.
+  - `trace.db_write=false`.
+- Seguridad:
+  - `human_review_required=true`.
+  - `can_create_records=false`.
+- `POST /api/ai-auditor/suggestions/:type/prepare` para:
+  - finding.
+  - action_plan.
+  - evidence.
+  - nonconformity.
+- Deep links hacia módulos destino.
+- Rutas frontend:
+  - `/ia-auditor`.
+  - `/hallazgos`.
+  - `/plan-accion`.
+  - `/evidencias`.
+  - `/no-conformidades`.
+
+## Qué NO valida
+
+- No valida visualmente que sessionStorage prellene formularios.
+- No crea registros reales.
+- No sube archivos.
+- No guarda hallazgos, planes, evidencias ni no conformidades.
+- No modifica datos.
+
+## Ejecución
+
+Desde la raíz del repo:
+
+```bash
+API_URL=http://192.168.100.120:3000 \
+FRONTEND_URL=http://192.168.100.130:3000 \
+EMAIL=admin@rieltec.com \
+PASSWORD=123456 \
+bash ./scripts/qa-ai-auditor-full.sh
+```
+
+## Resultados
+
+El script genera:
+
+- `qa-results/qa-ai-auditor-full-YYYYMMDD_HHMMSS.txt`
+- `qa-results/qa-ai-auditor-full-YYYYMMDD_HHMMSS.json`
+- `qa-results/qa-ai-auditor-full-YYYYMMDD_HHMMSS.md`
+
+## Interpretación
+
+- `PASS`: validación correcta.
+- `WARN`: condición aceptable que debe revisarse, por ejemplo fallback seguro si ai-engine no responde.
+- `FAIL`: error que impide cerrar la fase.
+
+## Seguridad
+
+El script solo usa endpoints seguros:
+
+- login;
+- scope;
+- analyze;
+- suggestions prepare;
+- GET/HEAD de frontend.
+
+No ejecuta endpoints destructivos.

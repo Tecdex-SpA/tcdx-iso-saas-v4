@@ -314,3 +314,15 @@ El módulo lee `draft_key`, valida el payload temporal y muestra una tarjeta de 
 - No se crean no conformidades automáticamente.
 - El usuario puede descartar el borrador.
 - El payload de cliente no se traduce.
+
+
+## QA automatizado
+
+La Fase 3H agrega el script:
+
+```bash
+scripts/qa-ai-auditor-full.sh
+```
+
+Este QA valida el flujo IA Auditor Senior end-to-end sin crear registros ni modificar datos.
+Ver detalle en `docs/qa-ai-auditor-full.md`.
