@@ -1604,5 +1604,112 @@
       "deterioratedControls": "Controles deteriorados",
       "pendingEvidences": "Evidencias pendientes"
     }
+  },
+  "status": {
+    "generic": {
+      "pending": "Pendiente",
+      "open": "Abierto",
+      "closed": "Cerrado",
+      "completed": "Completado",
+      "cancelled": "Cancelado",
+      "inProgress": "En ejecución",
+      "planned": "Planificado",
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "enabled": "Habilitado",
+      "disabled": "Deshabilitado",
+      "approved": "Aprobado",
+      "rejected": "Rechazado",
+      "validated": "Validado",
+      "expired": "Expirado",
+      "overdue": "Vencido",
+      "delayed": "Atrasado",
+      "noData": "Sin datos"
+    },
+    "compliance": {
+      "compliant": "Cumple",
+      "nonCompliant": "No cumple",
+      "partiallyCompliant": "Parcialmente cumple",
+      "notApplicable": "No aplica"
+    },
+    "health": {
+      "healthy": "Saludable",
+      "attention": "Atención",
+      "deteriorated": "Deteriorado",
+      "critical": "Crítico",
+      "noData": "Sin datos"
+    },
+    "priority": {
+      "low": "Baja",
+      "medium": "Media",
+      "high": "Alta",
+      "critical": "Crítica"
+    },
+    "severity": {
+      "low": "Baja",
+      "medium": "Media",
+      "high": "Alta",
+      "critical": "Crítica",
+      "minor": "Menor",
+      "major": "Mayor"
+    },
+    "risk": {
+      "low": "Bajo",
+      "medium": "Medio",
+      "high": "Alto",
+      "critical": "Crítico"
+    },
+    "evidence": {
+      "pending": "Pendiente",
+      "uploaded": "Subida",
+      "approved": "Aprobada",
+      "rejected": "Rechazada",
+      "validated": "Validada",
+      "expired": "Vencida",
+      "deleted": "Eliminada"
+    },
+    "finding": {
+      "open": "Abierto",
+      "closed": "Cerrado",
+      "inProgress": "En ejecución",
+      "pending": "Pendiente",
+      "overdue": "Vencido"
+    },
+    "actionPlan": {
+      "open": "Abierto",
+      "inProgress": "En ejecución",
+      "completed": "Completado",
+      "cancelled": "Cancelado",
+      "overdue": "Vencido"
+    },
+    "audit": {
+      "pending": "Pendiente",
+      "planned": "Planificada",
+      "inProgress": "En ejecución",
+      "completed": "Completada",
+      "cancelled": "Cancelada",
+      "withReport": "Con informe",
+      "withoutReport": "Sin informe"
+    },
+    "notification": {
+      "info": "Información",
+      "warning": "Advertencia",
+      "critical": "Crítica",
+      "success": "Éxito"
+    },
+    "kpi": {
+      "green": "Verde",
+      "yellow": "Amarillo",
+      "red": "Rojo",
+      "gray": "Gris",
+      "noData": "Sin datos"
+    },
+    "category": {
+      "nonConformity": "No conformidad",
+      "observation": "Observación",
+      "evidence": "Evidencia",
+      "finding": "Hallazgo",
+      "correctiveAction": "Acción correctiva"
+    }
   }
 }

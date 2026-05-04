@@ -6,6 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import ObjectivesPanel from '@/components/objectives/ObjectivesPanel';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 
 type StageDef = {
   code: string;
