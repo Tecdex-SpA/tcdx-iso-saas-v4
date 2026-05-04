@@ -1192,7 +1192,7 @@ function PlanAccionPageContent() {
                 </FieldBlock>
 
                 <div className="rounded-[24px] border border-indigo-100 bg-indigo-50/70 p-4 text-sm text-slate-700">
-                  Norma seleccionada: <strong>{selectedISO || '—'}</strong>
+                  {t('actionPlanLabels.fields.selectedStandard')}: <strong>{selectedISO || '—'}</strong>
                 </div>
 
                 <button
@@ -1239,10 +1239,10 @@ function PlanAccionPageContent() {
                         <Tag tone="violet">{getActionPlanStatusLabel(normalizeStatus(row.status), t)}</Tag>
                         <Tag tone="amber">{getPriorityLabel(row.priority || 'media', t)}</Tag>
                         <Tag tone="emerald">
-                          Progreso {Number(row.latest_progress_percent || 0)}%
+                          {t('actionPlanLabels.fields.progress')} {Number(row.latest_progress_percent || 0)}%
                         </Tag>
                         <Tag tone="rose">
-                          Evidencias {Number(row.evidence_count || 0)}
+                          {t('actionPlanLabels.fields.pendingEvidence')} {Number(row.evidence_count || 0)}
                         </Tag>
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${approvalBadge(

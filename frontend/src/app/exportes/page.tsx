@@ -145,6 +145,29 @@ function getCategoryBadgeClass(category: string) {
   return styles[category] || 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
+
+function localizeReportType(report: ReportType, t: (key: string) => string): ReportType {
+  return {
+    ...report,
+    name: getReportTypeName(report, t),
+    description: getReportTypeDescription(report, t),
+  };
+}
+
+function localizeExportHistoryItem(item: ReportExport, t: (key: string) => string): ReportExport {
+  const key = `exports.reportTypes.${item.report_type_code}.name`;
+  const translated = t(key);
+  const label = translated !== key
+    ? translated
+    : item.report_type_name || item.report_title || item.report_type_code;
+
+  return {
+    ...item,
+    report_type_name: label,
+    report_title: label,
+  };
+}
+
 function getStatusLabel(status: string | undefined, t: (key: string) => string) {
   const raw = String(status || '').toLowerCase();
 
@@ -370,7 +393,7 @@ export default function ExportesPage() {
         throw new Error(json?.error || t('exports.loadHistoryError'));
       }
 
-      setExportsHistory(json?.data || []);
+      setExportsHistory((json?.data || []).map((item: ReportExport) => localizeExportHistoryItem(item, t)));
     } catch (err: any) {
       console.error('ERROR LOAD REPORT HISTORY:', err);
       setError(err.message || t('exports.loadHistoryError'));
@@ -419,7 +442,7 @@ export default function ExportesPage() {
         const loadedReports = typesJson?.data || [];
         const loadedClients = clientsJson?.data || [];
 
-        setReportTypes(loadedReports);
+        setReportTypes(loadedReports.map((report: ReportType) => localizeReportType(report, t)));
         setClients(loadedClients);
 
         if (loadedClients.length > 0) {

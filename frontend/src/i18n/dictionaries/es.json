@@ -1742,7 +1742,25 @@
     "buttons": {
       "viewDetail": "Ver detalle",
       "viewEvidence": "Ver evidencias",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "savePlan": "Guardar plan"
+    },
+    "fields": {
+      "selectedStandard": "Norma seleccionada",
+      "status": "Estado",
+      "responsible": "Responsable",
+      "dueDate": "Vencimiento",
+      "closingApproval": "Aprobación cierre",
+      "priority": "Prioridad",
+      "lastUpdate": "Último update",
+      "progress": "Progreso",
+      "approvedEvidence": "Evidencias aprobadas",
+      "pendingEvidence": "Evidencias pendientes",
+      "followUps": "Seguimientos"
+    },
+    "badges": {
+      "progress": "Progreso {{value}} %",
+      "evidence": "Evidencias {{count}}"
     }
   }
 }

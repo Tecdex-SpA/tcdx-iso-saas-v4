@@ -1742,7 +1742,25 @@
     "buttons": {
       "viewDetail": "View details",
       "viewEvidence": "View evidence",
-      "delete": "Delete"
+      "delete": "Delete",
+      "savePlan": "Save plan"
+    },
+    "fields": {
+      "selectedStandard": "Selected standard",
+      "status": "Status",
+      "responsible": "Responsible",
+      "dueDate": "Due date",
+      "closingApproval": "Closing approval",
+      "priority": "Priority",
+      "lastUpdate": "Last update",
+      "progress": "Progress",
+      "approvedEvidence": "Approved evidence",
+      "pendingEvidence": "Pending evidence",
+      "followUps": "Follow-ups"
+    },
+    "badges": {
+      "progress": "Progress {{value}}%",
+      "evidence": "Evidence {{count}}"
     }
   }
 }
