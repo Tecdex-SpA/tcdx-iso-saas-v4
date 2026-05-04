@@ -1779,7 +1779,14 @@
       "controlStatus": "Control status",
       "lastComment": "Last comment",
       "lastBlock": "Last block",
-      "lastEvidenceStatus": "Latest evidence status"
+      "lastEvidenceStatus": "Latest evidence status",
+      "sourceDetail": "Source detail",
+      "linkedControl": "Linked control",
+      "latestEvidence": "Latest evidence",
+      "latestEvidenceStatus": "Latest evidence status",
+      "approvalRequest": "Approval request",
+      "approvalReview": "Approval review",
+      "approvalComment": "Approval comment"
     },
     "badges": {
       "progress": "Progress {{value}}%",
@@ -1792,7 +1799,8 @@
     "sections": {
       "evidenceAndFollowUp": "Evidence and follow-up",
       "latestFollowUps": "Latest follow-ups",
-      "recentEvidence": "Recent evidence"
+      "recentEvidence": "Recent evidence",
+      "planContext": "Plan context"
     }
   }
 }

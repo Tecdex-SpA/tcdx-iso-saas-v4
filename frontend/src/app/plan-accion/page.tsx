@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
-import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
+import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getComplianceStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -1436,14 +1436,12 @@ function PlanAccionPageContent() {
                       <ActionPlanAiTraceCard row={row} />
 
                       <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-4 space-y-3">
-                        <div className="text-xs uppercase tracking-[0.16em] text-slate-400 font-bold">
-                          Contexto del plan
-                        </div>
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-400 font-bold">{t('actionPlanLabels.sections.planContext')}</div>
 
-                        <DetailRow label="Fuente" value={getCategoryLabel(getSourceLabel(row), t)} />
-                        <DetailRow label="Detalle fuente" value={getSourceDetail(row)} />
+                        <DetailRow label={t('actionPlanLabels.fields.source')} value={getCategoryLabel(getSourceLabel(row), t)} />
+                        <DetailRow label={t('actionPlanLabels.fields.sourceDetail')} value={getSourceDetail(row)} />
                         <DetailRow
-                          label="Control vinculado"
+                          label={t('actionPlanLabels.fields.linkedControl')}
                           value={
                             row.control_description || row.control_clause
                               ? `${row.control_iso || row.iso_code} ${row.control_clause || ''} — ${row.control_description || 'Control'}`
@@ -1452,7 +1450,7 @@ function PlanAccionPageContent() {
                         />
                         <DetailRow
                           label={t('actionPlanLabels.fields.controlStatus')}
-                          value={getActionPlanStatusLabel(row.tenant_control_status, t) || '-'}
+                          value={getComplianceStatusLabel(row.tenant_control_status, t) || '-'}
                         />
                         <DetailRow
                           label={t('actionPlanLabels.fields.lastComment')}
@@ -1463,22 +1461,20 @@ function PlanAccionPageContent() {
                           value={row.latest_blocked_reason || '-'}
                         />
                         <DetailRow
-                          label="Creado"
+                          label={t('actionPlanLabels.fields.createdAt')}
                           value={formatDateTime(row.created_at)}
                         />
                         <DetailRow
-                          label="Actualizado"
+                          label={t('actionPlanLabels.fields.updatedAt')}
                           value={formatDateTime(row.updated_at)}
                         />
                       </div>
 
                       <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-4 space-y-3">
-                        <div className="text-xs uppercase tracking-[0.16em] text-slate-400 font-bold">
-                          Evidencias y seguimiento
-                        </div>
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-400 font-bold">{t('actionPlanLabels.sections.evidenceAndFollowUp')}</div>
 
                         <DetailRow
-                          label="Última evidencia"
+                          label={t('actionPlanLabels.fields.latestEvidence')}
                           value={formatDateTime(row.latest_evidence_at)}
                         />
                         <DetailRow
@@ -1486,23 +1482,21 @@ function PlanAccionPageContent() {
                           value={getEvidenceStatusLabel(row.latest_evidence_status, t) || '-'}
                         />
                         <DetailRow
-                          label="Solicitud aprobación"
+                          label={t('actionPlanLabels.fields.approvalRequest')}
                           value={formatDateTime(row.approval_requested_at)}
                         />
                         <DetailRow
-                          label="Revisión aprobación"
+                          label={t('actionPlanLabels.fields.approvalReview')}
                           value={formatDateTime(row.approval_reviewed_at)}
                         />
                         <DetailRow
-                          label="Comentario aprobación"
+                          label={t('actionPlanLabels.fields.approvalComment')}
                           value={row.approval_comment || '-'}
                         />
 
                         {Array.isArray(row.updates_json) && row.updates_json.length > 0 && (
                           <div className="pt-2">
-                            <div className="mb-2 text-sm font-semibold text-slate-700">
-                              Últimos seguimientos
-                            </div>
+                            <div className="mb-2 text-sm font-semibold text-slate-700">{t('actionPlanLabels.sections.latestFollowUps')}</div>
                             <div className="space-y-2">
                               {row.updates_json.slice(0, 3).map((upd) => (
                                 <div
@@ -1525,9 +1519,7 @@ function PlanAccionPageContent() {
 
                         {Array.isArray(row.evidences_json) && row.evidences_json.length > 0 && (
                           <div className="pt-2">
-                            <div className="mb-2 text-sm font-semibold text-slate-700">
-                              Evidencias recientes
-                            </div>
+                            <div className="mb-2 text-sm font-semibold text-slate-700">{t('actionPlanLabels.sections.recentEvidence')}</div>
                             <div className="space-y-2">
                               {row.evidences_json.slice(0, 3).map((ev) => (
                                 <div

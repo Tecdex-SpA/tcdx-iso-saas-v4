@@ -1763,7 +1763,7 @@
       "followUps": "Seguimientos",
       "standard": "Norma",
       "control": "Control",
-      "source": "Origen",
+      "source": "Fuente",
       "description": "Descripción",
       "createdAt": "Creado",
       "updatedAt": "Actualizado",
@@ -1779,7 +1779,14 @@
       "controlStatus": "Estado control",
       "lastComment": "Último comentario",
       "lastBlock": "Último bloqueo",
-      "lastEvidenceStatus": "Estado última evidencia"
+      "lastEvidenceStatus": "Estado última evidencia",
+      "sourceDetail": "Detalle fuente",
+      "linkedControl": "Control vinculado",
+      "latestEvidence": "Última evidencia",
+      "latestEvidenceStatus": "Estado última evidencia",
+      "approvalRequest": "Solicitud aprobación",
+      "approvalReview": "Revisión aprobación",
+      "approvalComment": "Comentario aprobación"
     },
     "badges": {
       "progress": "Progreso {{value}} %",
@@ -1792,7 +1799,8 @@
     "sections": {
       "evidenceAndFollowUp": "Evidencias y seguimiento",
       "latestFollowUps": "Últimos seguimientos",
-      "recentEvidence": "Evidencias recientes"
+      "recentEvidence": "Evidencias recientes",
+      "planContext": "Contexto del plan"
     }
   }
 }

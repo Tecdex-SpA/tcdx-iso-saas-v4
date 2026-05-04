@@ -352,6 +352,10 @@ export function getSeverityLabel(value: unknown, t: TranslationFn) {
   return getScopedLabel(value, t, 'severity');
 }
 
+export function getComplianceStatusLabel(value: unknown, t: TranslationFn) {
+  return getScopedLabel(value, t, 'compliance');
+}
+
 export function getHealthStatusLabel(value: unknown, t: TranslationFn) {
   return getScopedLabel(value, t, 'health');
 }
