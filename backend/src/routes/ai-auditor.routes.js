@@ -666,6 +666,8 @@ function translateAiAuditor(locale) {
 }
 
 async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
+  const warnings = [];
+
   const standards = await safeRows(
     'active_standards',
     `
@@ -678,16 +680,90 @@ async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
     [tenantId]
   );
 
-  const controlsTotal = await safeCount(
-    'controls_total',
+  const healthByStandard = await safeRows(
+    'health_by_standard',
     `
-    SELECT COUNT(*)::int AS total
-    FROM tenant_controls
+    SELECT
+      standard_code,
+      COUNT(*)::int AS controls,
+      ROUND(AVG(COALESCE(health_score, 0))::numeric, 2)::float AS avg_health_score,
+      SUM(CASE WHEN COALESCE(health_score, 0) < 50 THEN 1 ELSE 0 END)::int AS deteriorated,
+      SUM(CASE WHEN COALESCE(health_score, 0) >= 50 AND COALESCE(health_score, 0) < 80 THEN 1 ELSE 0 END)::int AS attention,
+      SUM(CASE WHEN COALESCE(health_score, 0) >= 80 THEN 1 ELSE 0 END)::int AS healthy
+    FROM control_health_scores
     WHERE tenant_id = $1::uuid
       AND ($2::text IS NULL OR standard_code = $2::text)
+    GROUP BY standard_code
+    ORDER BY standard_code
     `,
     [tenantId, standardCode]
   );
+
+  let controlsSource = 'control_health_scores';
+  let controlsByStandard = (healthByStandard || [])
+    .filter((row) => row?.standard_code)
+    .map((row) => ({
+      standard_code: row.standard_code,
+      controls: Number(row.controls || 0),
+      source: 'control_health_scores',
+    }))
+    .filter((row) => row.controls > 0);
+
+  let controlsTotal = controlsByStandard.reduce(
+    (acc, item) => acc + Number(item.controls || 0),
+    0
+  );
+
+  if (controlsTotal <= 0) {
+    const hasTenantControlsStandardCode = await tableHasColumn('tenant_controls', 'standard_code');
+    const hasTenantControlsIsoCode = await tableHasColumn('tenant_controls', 'iso_code');
+    const hasTenantControlsIso = await tableHasColumn('tenant_controls', 'iso');
+
+    if (hasTenantControlsStandardCode || hasTenantControlsIsoCode || hasTenantControlsIso) {
+      const standardExpression = hasTenantControlsStandardCode
+        ? 'standard_code'
+        : hasTenantControlsIsoCode
+          ? 'iso_code'
+          : 'iso';
+
+      controlsByStandard = await safeRows(
+        'controls_by_standard_tenant_controls',
+        `
+        SELECT
+          ${standardExpression} AS standard_code,
+          COUNT(*)::int AS controls
+        FROM tenant_controls
+        WHERE tenant_id = $1::uuid
+          AND ($2::text IS NULL OR ${standardExpression} = $2::text)
+        GROUP BY ${standardExpression}
+        ORDER BY ${standardExpression}
+        `,
+        [tenantId, standardCode]
+      );
+
+      controlsByStandard = controlsByStandard
+        .filter((row) => row?.standard_code)
+        .map((row) => ({
+          standard_code: row.standard_code,
+          controls: Number(row.controls || 0),
+          source: 'tenant_controls',
+        }))
+        .filter((row) => row.controls > 0);
+
+      controlsTotal = controlsByStandard.reduce(
+        (acc, item) => acc + Number(item.controls || 0),
+        0
+      );
+      controlsSource = 'tenant_controls';
+    } else {
+      warnings.push('tenant_controls has no standard_code/iso_code/iso column usable for scope counts');
+    }
+  }
+
+  if (controlsTotal <= 0) {
+    warnings.push('controls_total could not be resolved from control_health_scores or tenant_controls');
+    controlsSource = 'unresolved';
+  }
 
   const evidenceTotal = await safeCount(
     'evidence_total',
@@ -742,25 +818,6 @@ async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
     [tenantId]
   );
 
-  const healthByStandard = await safeRows(
-    'health_by_standard',
-    `
-    SELECT
-      standard_code,
-      COUNT(*)::int AS controls,
-      ROUND(AVG(COALESCE(health_score, 0))::numeric, 2)::float AS avg_health_score,
-      SUM(CASE WHEN COALESCE(health_score, 0) < 50 THEN 1 ELSE 0 END)::int AS deteriorated,
-      SUM(CASE WHEN COALESCE(health_score, 0) >= 50 AND COALESCE(health_score, 0) < 80 THEN 1 ELSE 0 END)::int AS attention,
-      SUM(CASE WHEN COALESCE(health_score, 0) >= 80 THEN 1 ELSE 0 END)::int AS healthy
-    FROM control_health_scores
-    WHERE tenant_id = $1::uuid
-      AND ($2::text IS NULL OR standard_code = $2::text)
-    GROUP BY standard_code
-    ORDER BY standard_code
-    `,
-    [tenantId, standardCode]
-  );
-
   const auditsRecent = await safeRows(
     'audits_recent',
     `
@@ -806,10 +863,15 @@ async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
         )
       : 0;
 
+  const resolvedStandards = standards.map((row) => row.standard_code).filter(Boolean);
+  const standardsFromControls = controlsByStandard.map((row) => row.standard_code).filter(Boolean);
+  const mergedStandards = Array.from(new Set([...resolvedStandards, ...standardsFromControls]));
+
   return {
     tenant_id: tenantId,
     standard_code: standardCode,
-    standards: standards.map((row) => row.standard_code).filter(Boolean),
+    standards: mergedStandards,
+    controls_by_standard: controlsByStandard,
     counts: {
       controls_total: controlsTotal,
       evidence_total: evidenceTotal,
@@ -820,6 +882,10 @@ async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
       audits_recent: auditsRecent.length,
       lifecycle_recent: lifecycleRecent.length,
       health_average: healthAverage,
+    },
+    sources: {
+      controls_source: controlsSource,
+      warnings,
     },
     health_by_standard: healthByStandard,
     findings_open: findingsOpen,
@@ -832,7 +898,17 @@ async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
 
 function buildGlobalSeniorAuditAnalysis(scope, locale, options = {}) {
   const t = translateAiAuditor(locale);
-  const counts = scope.counts || {};
+  const counts = { ...(scope.counts || {}) };
+  const controlsFromStandards = Array.isArray(scope.controls_by_standard)
+    ? scope.controls_by_standard.reduce((acc, item) => acc + Number(item.controls || 0), 0)
+    : 0;
+  const controlsFromHealth = Array.isArray(scope.health_by_standard)
+    ? scope.health_by_standard.reduce((acc, item) => acc + Number(item.controls || 0), 0)
+    : 0;
+
+  if (!Number(counts.controls_total || 0)) {
+    counts.controls_total = controlsFromStandards || controlsFromHealth || 0;
+  }
   const healthAverage = Number(counts.health_average || 0);
   const deterioratedControls = (scope.health_by_standard || []).reduce(
     (acc, item) => acc + Number(item.deteriorated || 0),
@@ -1032,6 +1108,10 @@ function compactAiAuditorScope(scope) {
     standard_code: safe.standard_code,
     standards: Array.isArray(safe.standards) ? safe.standards.slice(0, 12) : [],
     counts: safe.counts || {},
+    controls_by_standard: Array.isArray(safe.controls_by_standard)
+      ? safe.controls_by_standard.slice(0, 20)
+      : [],
+    sources: safe.sources || {},
     health_by_standard: Array.isArray(safe.health_by_standard)
       ? safe.health_by_standard.slice(0, 20)
       : [],

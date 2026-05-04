@@ -119,3 +119,46 @@ Si se usa fallback:
   }
 }
 ```
+
+
+## Fase 3C — Scope normalizado
+
+El scope global del IA Auditor normaliza ahora el conteo de controles para evitar inconsistencias entre `counts.controls_total`, `health_by_standard` y `coverage`.
+
+### Fuente de controles
+
+El backend calcula `controls_total` con prioridad:
+
+1. `control_health_scores`, usando la suma de `health_by_standard.controls`.
+2. `tenant_controls`, si existe una columna usable para norma:
+   - `standard_code`
+   - `iso_code`
+   - `iso`
+3. fallback seguro con advertencia.
+
+La respuesta incluye:
+
+```json
+{
+  "controls_by_standard": [
+    {
+      "standard_code": "ISO27001",
+      "controls": 48,
+      "source": "control_health_scores"
+    }
+  ],
+  "sources": {
+    "controls_source": "control_health_scores",
+    "warnings": []
+  }
+}
+```
+
+### Reglas
+
+- No escribe en base de datos.
+- No modifica datos históricos.
+- No cambia endpoints.
+- Mantiene fallback si ai-engine falla.
+- Mantiene `human_review_required=true`.
+- Mantiene `can_create_records=false`.
