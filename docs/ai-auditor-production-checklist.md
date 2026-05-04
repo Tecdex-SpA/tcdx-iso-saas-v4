@@ -95,3 +95,11 @@ Validar módulos destino:
 - [ ] El detalle histórico se puede abrir.
 - [ ] El historial se refresca después de análisis con `history_saved=true`.
 - [ ] Si historial falla, el análisis sigue operativo.
+
+## Reporte PDF Fase 3L
+
+- [ ] PDF desde análisis actual funciona.
+- [ ] PDF desde historial funciona.
+- [ ] PDF no crea registros críticos.
+- [ ] PDF incluye revisión humana requerida.
+- [ ] PDF mantiene formato ejecutivo TCDX by Tecdex.

@@ -342,6 +342,76 @@ if [ -n "$TOKEN" ]; then
     [ "$(json_check "$HISTORY_DETAIL" "get('ok') is True and isinstance(get('item'), dict)")" = "true" ] && pass "history.detail.ok" "History detail OK" || fail "history.detail.ok" "History detail failed"
   fi
 
+
+  # Alias defensivo para archivo JSON de análisis EN usado por validaciones PDF
+  if [ -z "${AI_EN:-}" ]; then
+    if [ -n "${ANALYZE_EN:-}" ]; then
+      AI_EN="$ANALYZE_EN"
+    elif [ -n "${AI_EN_FILE:-}" ]; then
+      AI_EN="$AI_EN_FILE"
+    elif [ -n "${AI_EN_JSON:-}" ]; then
+      AI_EN="$AI_EN_JSON"
+    fi
+  fi
+
+  # PDF report validation - Fase 3L
+  if [ -n "$HISTORY_RUN_ID" ]; then
+    PDF_HISTORY="$RESULT_DIR/qa-ai-auditor-history-report-$TS.pdf"
+    PDF_HISTORY_HEADERS="$RESULT_DIR/qa-ai-auditor-history-report-$TS.headers"
+
+    HTTP_CODE="$(curl -s -L -D "$PDF_HISTORY_HEADERS" -o "$PDF_HISTORY" -w "%{http_code}" \
+      "$API_URL/api/ai-auditor/history/$HISTORY_RUN_ID/report" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "x-tcdx-locale: en" || true)"
+
+    PDF_SIZE="$(wc -c < "$PDF_HISTORY" 2>/dev/null || echo 0)"
+    if [ "$HTTP_CODE" = "200" ] && [ "${PDF_SIZE:-0}" -gt 5000 ]; then
+      pass "ai_auditor.pdf.history" "Historical PDF OK (${PDF_SIZE} bytes)"
+    else
+      fail "ai_auditor.pdf.history" "Historical PDF failed HTTP=$HTTP_CODE bytes=$PDF_SIZE"
+    fi
+  else
+    warn "ai_auditor.pdf.history" "Skipped; no history_run_id"
+  fi
+
+  PDF_CURRENT="$RESULT_DIR/qa-ai-auditor-current-report-$TS.pdf"
+  PDF_CURRENT_PAYLOAD="$RESULT_DIR/qa-ai-auditor-current-report-payload-$TS.json"
+
+  if [ -z "${AI_EN:-}" ] || [ ! -f "${AI_EN:-}" ]; then
+    warn "ai_auditor.pdf.current" "Skipped; analyze EN JSON file not found"
+  else
+  python3 - "${AI_EN:-}" "$PDF_CURRENT_PAYLOAD" <<'PY'
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, encoding='utf-8') as f:
+    analysis = json.load(f)
+payload = {
+    "locale": "en",
+    "analysis": analysis,
+    "scope": analysis.get("scope") or {},
+    "standard_code": None,
+    "audit_focus": "general",
+    "depth": "executive"
+}
+with open(dst, "w", encoding="utf-8") as f:
+    json.dump(payload, f)
+PY
+
+  HTTP_CODE="$(curl -s -L -o "$PDF_CURRENT" -w "%{http_code}" \
+    "$API_URL/api/ai-auditor/report" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -H "x-tcdx-locale: en" \
+    --data-binary "@$PDF_CURRENT_PAYLOAD" || true)"
+
+  PDF_SIZE="$(wc -c < "$PDF_CURRENT" 2>/dev/null || echo 0)"
+  if [ "$HTTP_CODE" = "200" ] && [ "${PDF_SIZE:-0}" -gt 5000 ]; then
+    pass "ai_auditor.pdf.current" "Current analysis PDF OK (${PDF_SIZE} bytes)"
+  else
+    fail "ai_auditor.pdf.current" "Current analysis PDF failed HTTP=$HTTP_CODE bytes=$PDF_SIZE"
+  fi
+  fi
+
   # Analyze ES
   ANALYZE_ES="$RESULT_DIR/qa-ai-auditor-analyze-es-$TS.json"
   curl -s -X POST "$API_URL/api/ai-auditor/analyze" \

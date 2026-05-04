@@ -62,3 +62,7 @@ EMAIL=admin@rieltec.com \
 PASSWORD=123456 \
 bash ./scripts/qa-ai-auditor-full.sh
 ```
+
+## Reporte PDF desde historial
+
+Cada ejecución histórica puede exportarse mediante `GET /api/ai-auditor/history/:id/report`, validando tenant desde JWT.

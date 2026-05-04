@@ -401,3 +401,7 @@ IA Auditor Senior guarda ejecuciones en `ai_auditor_runs` cuando la migración e
 ## Fase 3K.2 — Frontend historial
 
 `/ia-auditor` muestra historial reciente de ejecuciones guardadas en `ai_auditor_runs`, permite abrir detalle y no bloquea el análisis si el historial no está disponible.
+
+## Fase 3L — Reporte PDF
+
+IA Auditor Senior puede generar PDF ejecutivo desde análisis actual o desde historial persistente. El PDF no crea registros críticos y conserva las marcas `human_review_required=true`, `can_create_records=false` y `trace.db_write=false`.

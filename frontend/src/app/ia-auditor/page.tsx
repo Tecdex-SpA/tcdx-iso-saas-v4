@@ -97,6 +97,9 @@ function localText(locale: string) {
     viewHistoryDetail: en ? 'View detail' : 'Ver detalle',
     closeHistoryDetail: en ? 'Close detail' : 'Cerrar detalle',
     historyRunId: en ? 'History run ID' : 'ID historial',
+    generatePdf: en ? 'Generate PDF' : 'Generar PDF',
+    downloadHistoricalPdf: en ? 'Download historical PDF' : 'Descargar PDF histórico',
+    pdfError: en ? 'Could not generate PDF report.' : 'No fue posible generar el PDF.',
   };
 }
 
@@ -225,6 +228,8 @@ export default function SeniorAiAuditorPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [selectedHistory, setSelectedHistory] = useState<any>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState('');
 
   const [selectedStandard, setSelectedStandard] = useState('all');
   const [selectedFocus, setSelectedFocus] = useState('general');
@@ -307,6 +312,77 @@ export default function SeniorAiAuditorPage() {
       setError(err?.message || copy.error);
     } finally {
       setLoading(false);
+    }
+  };
+
+
+
+  const downloadBlobAsFile = (blob: Blob, filename: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadCurrentAnalysisPdf = async () => {
+    if (!token || !analysis) return;
+
+    try {
+      setPdfLoading(true);
+      setPdfError('');
+
+      const res = await fetch(`${API_URL}/api/ai-auditor/report`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'x-tcdx-locale': locale,
+        },
+        body: JSON.stringify({
+          locale,
+          analysis,
+          scope: analysis.scope || scope,
+          standard_code: selectedStandard === 'all' ? null : selectedStandard,
+          audit_focus: selectedFocus,
+          depth: selectedDepth,
+        }),
+      });
+
+      if (!res.ok) throw new Error(copy.pdfError);
+      const blob = await res.blob();
+      downloadBlobAsFile(blob, `tcdx-ai-auditor-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err: any) {
+      setPdfError(err?.message || copy.pdfError);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const downloadHistoryPdf = async (historyId: string) => {
+    if (!token || !historyId) return;
+
+    try {
+      setPdfLoading(true);
+      setPdfError('');
+
+      const res = await fetch(`${API_URL}/api/ai-auditor/history/${historyId}/report`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-tcdx-locale': locale,
+        },
+      });
+
+      if (!res.ok) throw new Error(copy.pdfError);
+      const blob = await res.blob();
+      downloadBlobAsFile(blob, `tcdx-ai-auditor-${historyId}.pdf`);
+    } catch (err: any) {
+      setPdfError(err?.message || copy.pdfError);
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -559,6 +635,12 @@ export default function SeniorAiAuditorPage() {
           </div>
         </section>
 
+        {pdfError && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {pdfError}
+          </div>
+        )}
+
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             {error}
@@ -708,12 +790,21 @@ export default function SeniorAiAuditorPage() {
                     {copy.historyRunId}: {selectedHistory.id}
                   </p>
                 </div>
-                <button
-                  onClick={() => setSelectedHistory(null)}
-                  className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-700"
-                >
-                  {copy.closeHistoryDetail}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => downloadHistoryPdf(selectedHistory.id)}
+                    disabled={pdfLoading}
+                    className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    {pdfLoading ? '...' : copy.downloadHistoricalPdf}
+                  </button>
+                  <button
+                    onClick={() => setSelectedHistory(null)}
+                    className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-700"
+                  >
+                    {copy.closeHistoryDetail}
+                  </button>
+                </div>
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -748,6 +839,18 @@ export default function SeniorAiAuditorPage() {
           )}
         </section>
 
+
+        {analysis && (
+          <div className="flex justify-end">
+            <button
+              onClick={downloadCurrentAnalysisPdf}
+              disabled={pdfLoading}
+              className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+            >
+              {pdfLoading ? '...' : copy.generatePdf}
+            </button>
+          </div>
+        )}
 
         {analysis && (
           <>
