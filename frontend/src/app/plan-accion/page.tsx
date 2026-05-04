@@ -1200,7 +1200,7 @@ function PlanAccionPageContent() {
                   disabled={creating}
                   className="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
                 >
-                  {creating ? 'Guardando...' : 'Guardar plan'}
+                  {creating ? t('common.saving') : t('actionPlanLabels.buttons.savePlan')}
                 </button>
               </div>
             </div>
@@ -1267,35 +1267,35 @@ function PlanAccionPageContent() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 xl:min-w-[300px]">
-                      <MiniInfoCard label="Responsable" value={row.owner || '-'} />
+                      <MiniInfoCard label={t('actionPlanLabels.fields.responsible')} value={row.owner || '-'} />
                       <MiniInfoCard
-                        label="Vencimiento"
+                        label={t('actionPlanLabels.fields.dueDate')}
                         value={row.due_date ? String(row.due_date).slice(0, 10) : '-'}
                       />
                       <MiniInfoCard
-                        label="Prioridad"
+                        label={t('actionPlanLabels.fields.priority')}
                         value={
                           <span className={priorityColor(row.priority)}>
-                            {row.priority || '-'}
+                            {getPriorityLabel(row.priority, t) || '-'}
                           </span>
                         }
                       />
                       <MiniInfoCard
-                        label="Último update"
+                        label={t('actionPlanLabels.fields.lastUpdate')}
                         value={formatDate(row.latest_update_at || row.updated_at)}
                       />
                     </div>
                   </div>
 
                   <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-4">
-                    <FieldBlock label="Estado">
+                    <FieldBlock label={t('actionPlanLabels.fields.status')}>
                       {isReadOnly ? (
                         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
                           {getActionPlanStatusLabel(normalizeStatus(row.status), t)}
                         </div>
                       ) : (
                         <select
-                          value={getActionPlanStatusLabel(normalizeStatus(row.status), t)}
+                          value={normalizeStatus(row.status)}
                           onChange={(e) => updatePlan(row, { status: e.target.value })}
                           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                         >
@@ -1308,7 +1308,7 @@ function PlanAccionPageContent() {
                       )}
                     </FieldBlock>
 
-                    <FieldBlock label="Responsable">
+                    <FieldBlock label={t('actionPlanLabels.fields.responsible')}>
                       {isReadOnly ? (
                         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
                           {row.owner || '-'}
@@ -1334,7 +1334,7 @@ function PlanAccionPageContent() {
                       )}
                     </FieldBlock>
 
-                    <FieldBlock label="Vencimiento">
+                    <FieldBlock label={t('actionPlanLabels.fields.dueDate')}>
                       {isReadOnly ? (
                         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
                           {row.due_date ? String(row.due_date).slice(0, 10) : '-'}
@@ -1363,7 +1363,7 @@ function PlanAccionPageContent() {
                       )}
                     </FieldBlock>
 
-                    <FieldBlock label="Aprobación cierre">
+                    <FieldBlock label={t('actionPlanLabels.fields.closingApproval')}>
                       <div
                         className={`rounded-2xl px-4 py-3 text-sm font-semibold ${approvalBadge(
                           row.approval_status
@@ -1376,19 +1376,19 @@ function PlanAccionPageContent() {
 
                   <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-4">
                     <ProgressStat
-                      label="Progreso"
+                      label={t('actionPlanLabels.fields.progress')}
                       value={`${Number(row.latest_progress_percent || 0)}%`}
                     />
                     <ProgressStat
-                      label="Evidencias aprobadas"
+                      label={t('actionPlanLabels.fields.approvedEvidence')}
                       value={Number(row.approved_evidence_count || 0)}
                     />
                     <ProgressStat
-                      label="Evidencias pendientes"
+                      label={t('actionPlanLabels.fields.pendingEvidence')}
                       value={Number(row.pending_evidence_count || 0)}
                     />
                     <ProgressStat
-                      label="Seguimientos"
+                      label={t('actionPlanLabels.fields.followUps')}
                       value={Number(row.updates_count || 0)}
                     />
                   </div>
@@ -1401,7 +1401,7 @@ function PlanAccionPageContent() {
                       }
                       className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
-                      {isExpanded ? 'Ocultar detalle' : 'Ver detalle'}
+                      {isExpanded ? t('actionPlanLabels.buttons.hideDetail') : t('actionPlanLabels.buttons.viewDetail')}
                     </button>
 
                     {row.id && (
@@ -1451,15 +1451,15 @@ function PlanAccionPageContent() {
                           }
                         />
                         <DetailRow
-                          label="Estado control"
-                          value={row.tenant_control_status || '-'}
+                          label={t('actionPlanLabels.fields.controlStatus')}
+                          value={getActionPlanStatusLabel(row.tenant_control_status, t) || '-'}
                         />
                         <DetailRow
-                          label="Último comentario"
+                          label={t('actionPlanLabels.fields.lastComment')}
                           value={row.latest_update_comment || '-'}
                         />
                         <DetailRow
-                          label="Último bloqueo"
+                          label={t('actionPlanLabels.fields.lastBlock')}
                           value={row.latest_blocked_reason || '-'}
                         />
                         <DetailRow
@@ -1482,8 +1482,8 @@ function PlanAccionPageContent() {
                           value={formatDateTime(row.latest_evidence_at)}
                         />
                         <DetailRow
-                          label="Estado última evidencia"
-                          value={row.latest_evidence_status || '-'}
+                          label={t('actionPlanLabels.fields.lastEvidenceStatus')}
+                          value={getEvidenceStatusLabel(row.latest_evidence_status, t) || '-'}
                         />
                         <DetailRow
                           label="Solicitud aprobación"
@@ -1513,8 +1513,8 @@ function PlanAccionPageContent() {
                                     {upd.comment || 'Sin comentario'}
                                   </div>
                                   <div className="mt-1 text-xs text-slate-500">
-                                    {formatDateTime(upd.created_at)} · Estado:{' '}
-                                    {upd.status_after || '-'} · Progreso:{' '}
+                                    {formatDateTime(upd.created_at)} · {t('actionPlanLabels.fields.status')}:{' '}
+                                    {getActionPlanStatusLabel(upd.status_after, t) || '-'} · {t('actionPlanLabels.fields.progress')}:{' '}
                                     {Number(upd.progress_percent || 0)}%
                                   </div>
                                 </div>
@@ -1538,8 +1538,8 @@ function PlanAccionPageContent() {
                                     {ev.file_name || ev.description || 'Evidencia'}
                                   </div>
                                   <div className="mt-1 text-xs text-slate-500">
-                                    {formatDateTime(ev.created_at)} · Estado:{' '}
-                                    {ev.status || '-'}
+                                    {formatDateTime(ev.created_at)} · {t('actionPlanLabels.fields.status')}:{' '}
+                                    {getEvidenceStatusLabel(ev.status, t) || '-'}
                                   </div>
                                 </div>
                               ))}

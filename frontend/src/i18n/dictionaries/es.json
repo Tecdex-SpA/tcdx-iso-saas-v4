@@ -68,7 +68,8 @@
       "EVIDENCE_NOT_FOUND": "Evidencia no encontrada.",
       "FINDING_NOT_FOUND": "Hallazgo no encontrado.",
       "ACTION_PLAN_NOT_FOUND": "Plan de acción no encontrado."
-    }
+    },
+    "saving": "Guardando..."
   },
   "login": {
     "secureAccess": "Acceso seguro",
@@ -1745,7 +1746,8 @@
       "delete": "Eliminar",
       "savePlan": "Guardar plan",
       "close": "Cerrar",
-      "save": "Guardar"
+      "save": "Guardar",
+      "hideDetail": "Ocultar detalle"
     },
     "fields": {
       "selectedStandard": "Norma seleccionada",
@@ -1773,7 +1775,11 @@
       "details": "Detalle",
       "owner": "Dueño",
       "approval": "Aprobación",
-      "completion": "Cumplimiento"
+      "completion": "Cumplimiento",
+      "controlStatus": "Estado control",
+      "lastComment": "Último comentario",
+      "lastBlock": "Último bloqueo",
+      "lastEvidenceStatus": "Estado última evidencia"
     },
     "badges": {
       "progress": "Progreso {{value}} %",
@@ -1782,6 +1788,11 @@
     "detail": {
       "title": "Detalle del plan de acción",
       "subtitle": "Información operativa y trazabilidad del plan."
+    },
+    "sections": {
+      "evidenceAndFollowUp": "Evidencias y seguimiento",
+      "latestFollowUps": "Últimos seguimientos",
+      "recentEvidence": "Evidencias recientes"
     }
   }
 }

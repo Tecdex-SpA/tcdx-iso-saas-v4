@@ -68,7 +68,8 @@
       "EVIDENCE_NOT_FOUND": "Evidence not found.",
       "FINDING_NOT_FOUND": "Finding not found.",
       "ACTION_PLAN_NOT_FOUND": "Action plan not found."
-    }
+    },
+    "saving": "Saving..."
   },
   "login": {
     "secureAccess": "Secure Access",
@@ -1745,7 +1746,8 @@
       "delete": "Delete",
       "savePlan": "Save plan",
       "close": "Close",
-      "save": "Save"
+      "save": "Save",
+      "hideDetail": "Hide details"
     },
     "fields": {
       "selectedStandard": "Selected standard",
@@ -1773,7 +1775,11 @@
       "details": "Details",
       "owner": "Owner",
       "approval": "Approval",
-      "completion": "Completion"
+      "completion": "Completion",
+      "controlStatus": "Control status",
+      "lastComment": "Last comment",
+      "lastBlock": "Last block",
+      "lastEvidenceStatus": "Latest evidence status"
     },
     "badges": {
       "progress": "Progress {{value}}%",
@@ -1782,6 +1788,11 @@
     "detail": {
       "title": "Action plan details",
       "subtitle": "Operational information and traceability for the plan."
+    },
+    "sections": {
+      "evidenceAndFollowUp": "Evidence and follow-up",
+      "latestFollowUps": "Latest follow-ups",
+      "recentEvidence": "Recent evidence"
     }
   }
 }
