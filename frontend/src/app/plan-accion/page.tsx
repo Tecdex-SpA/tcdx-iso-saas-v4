@@ -185,6 +185,23 @@ function normalizeApproval(value?: string | null) {
 }
 
 
+
+function getApprovalDisplayLabel(value: string | null | undefined, t: (key: string) => string) {
+  const normalized = normalizeApproval(value);
+  const keyByStatus: Record<string, string> = {
+    no_requerida: 'status.actionPlan.notRequired',
+    pendiente_aprobacion: 'status.actionPlan.pendingApproval',
+    aprobada: 'status.actionPlan.approved',
+    devuelta: 'status.actionPlan.returned',
+  };
+
+  const key = keyByStatus[normalized];
+  if (!key) return String(value || '');
+
+  const translated = t(key);
+  return translated !== key ? translated : String(value || '');
+}
+
 function getApprovalStatusLabel(value: string | null | undefined, t: (key: string) => string) {
   return getActionPlanStatusLabel(normalizeApproval(value), t);
 }
@@ -1232,7 +1249,7 @@ function PlanAccionPageContent() {
                             row.approval_status
                           )}`}
                         >
-                          {getApprovalStatusLabel(row.approval_status, t)}
+                          {getApprovalDisplayLabel(row.approval_status, t)}
                         </span>
                       </div>
 
@@ -1282,11 +1299,11 @@ function PlanAccionPageContent() {
                           onChange={(e) => updatePlan(row, { status: e.target.value })}
                           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                         >
-                          <option value="abierto">Abierto</option>
-                          <option value="en progreso">En progreso</option>
-                          <option value="bloqueado">Bloqueado</option>
-                          <option value="completado">Completado</option>
-                          <option value="cancelado">Cancelado</option>
+                          <option value="abierto">{getActionPlanStatusLabel('abierto', t)}</option>
+                          <option value="en progreso">{getActionPlanStatusLabel('en progreso', t)}</option>
+                          <option value="bloqueado">{getActionPlanStatusLabel('bloqueado', t)}</option>
+                          <option value="completado">{getActionPlanStatusLabel('completado', t)}</option>
+                          <option value="cancelado">{getActionPlanStatusLabel('cancelado', t)}</option>
                         </select>
                       )}
                     </FieldBlock>
@@ -1352,7 +1369,7 @@ function PlanAccionPageContent() {
                           row.approval_status
                         )}`}
                       >
-                        {getApprovalStatusLabel(row.approval_status, t)}
+                        {getApprovalDisplayLabel(row.approval_status, t)}
                       </div>
                     </FieldBlock>
                   </div>
@@ -1397,18 +1414,14 @@ function PlanAccionPageContent() {
                             : ''
                         }`}
                         className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
-                      >
-                        Ver evidencias
-                      </a>
+                      >{t('actionPlanLabels.buttons.viewEvidence')}</a>
                     )}
 
                     {!isReadOnly && (
                       <button
                         onClick={() => void deletePlan(row.id)}
                         className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
-                      >
-                        Eliminar
-                      </button>
+                      >{t('actionPlanLabels.buttons.delete')}</button>
                     )}
 
                     {savingId === row.id && (

@@ -88,6 +88,19 @@ function formatDate(value?: string, locale = 'es') {
 }
 
 
+
+function getExportHistoryReportName(item: ReportExport, t: (key: string) => string) {
+  const key = `exports.reportTypes.${item.report_type_code}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : item.report_type_name || item.report_title || item.report_type_code;
+}
+
+function getExportHistoryReportTitle(item: ReportExport, t: (key: string) => string) {
+  const key = `exports.reportTypes.${item.report_type_code}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : item.report_title || item.report_type_name || item.report_type_code;
+}
+
 function getReportTypeName(report: ReportType, t: (key: string) => string) {
   const key = `exports.reportTypes.${report.code}.name`;
   const translated = t(key);
@@ -988,7 +1001,7 @@ export default function ExportesPage() {
                     recentByType.map((item) => (
                       <div key={item.code} className="flex items-center justify-between gap-3">
                         <div className="min-w-0 text-sm font-medium text-slate-700">
-                          {item.name}
+                          {getReportTypeName({ code: item.code, name: item.name, description: '', category: '', default_format: 'pdf', template_key: '', can_generate: false, can_schedule: false }, t)}
                         </div>
                         <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
                           {item.total}
