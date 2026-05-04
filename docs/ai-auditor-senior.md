@@ -346,3 +346,50 @@ La integración es solo de navegación y acceso visual. El análisis sigue ejecu
 - `human_review_required=true`;
 - `can_create_records=false`;
 - `trace.db_write=false`.
+
+
+## Fase 3J — Cierre funcional y hardening
+
+IA Auditor Senior queda cerrado como primera versión productiva no destructiva.
+
+### Garantías funcionales
+
+- No crea registros automáticamente.
+- No cierra hallazgos.
+- No aprueba planes.
+- No modifica evidencias.
+- No escribe en base de datos durante análisis.
+- Mantiene `human_review_required=true`.
+- Mantiene `can_create_records=false`.
+- Mantiene `trace.db_write=false` en análisis.
+
+### Drafts IA Auditor
+
+Los borradores preparados se transportan por `sessionStorage` usando `draft_key`.
+
+El helper `frontend/src/utils/aiAuditorDraft.ts` valida:
+
+- origen `ai_auditor_senior`;
+- `human_review_required=true`;
+- `can_create_records=false`;
+- tamaño máximo del payload;
+- tipos permitidos;
+- recorte de campos largos.
+
+### Módulos integrados
+
+- `/ia-auditor`
+- `/hallazgos`
+- `/plan-accion`
+- `/evidencias`
+- `/no-conformidades`
+- `/dashboard`
+- `/auditorias`
+
+### QA
+
+La validación operacional se realiza con:
+
+```bash
+scripts/qa-ai-auditor-full.sh
+```

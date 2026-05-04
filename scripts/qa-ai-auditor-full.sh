@@ -345,7 +345,7 @@ if [ -n "$TOKEN" ]; then
 fi
 
 # Frontend HTTP
-for route in /ia-auditor /hallazgos /plan-accion /evidencias /no-conformidades; do
+for route in /dashboard /auditorias /ia-auditor /hallazgos /plan-accion /evidencias /no-conformidades; do
   code="$(http_code "$FRONTEND_URL$route")"
   case "$code" in
     200|301|302|307|308) pass "frontend$route" "HTTP $code" ;;

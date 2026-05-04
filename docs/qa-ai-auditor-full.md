@@ -74,3 +74,19 @@ El script solo usa endpoints seguros:
 - GET/HEAD de frontend.
 
 No ejecuta endpoints destructivos.
+
+
+## Hardening Fase 3J
+
+La validación incluye también rutas de integración visual:
+
+- `/dashboard`
+- `/auditorias`
+
+El QA mantiene el principio de no destructividad:
+
+- no crea hallazgos;
+- no crea planes;
+- no crea evidencias;
+- no crea no conformidades;
+- solo usa `scope`, `analyze`, `suggestions/:type/prepare` y rutas HTTP de frontend.
