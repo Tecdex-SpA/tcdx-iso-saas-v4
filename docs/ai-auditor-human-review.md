@@ -38,3 +38,9 @@ Body:
 ## Validación
 
 El QA `scripts/qa-ai-auditor-full.sh` valida el endpoint de revisión y luego consulta el detalle histórico para confirmar persistencia.
+
+## Uso en PDF ejecutivo
+
+Desde Fase 3N, el PDF histórico de IA Auditor muestra el estado de revisión humana, comentario, revisor y fecha de revisión.
+
+Esta información documenta gobernanza sobre el análisis IA, pero no representa aprobación automática de controles ni cierre formal de auditoría.

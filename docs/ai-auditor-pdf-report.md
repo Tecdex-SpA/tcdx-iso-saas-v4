@@ -59,3 +59,18 @@ El curl post-fase 3L valida:
 - tamaño PDF mayor a 5 KB;
 - análisis no destructivo;
 - descarga desde histórico.
+
+## Fase 3N — Revisión humana y gobernanza en PDF
+
+El PDF ejecutivo incluye una sección específica de revisión humana cuando el reporte se genera desde una ejecución histórica.
+
+Incluye:
+
+- estado de revisión humana;
+- comentario de revisión;
+- usuario/identificador del revisor cuando está disponible;
+- fecha de revisión;
+- advertencia de que la revisión humana del informe IA no equivale a cierre formal de auditoría;
+- confirmación de que IA Auditor no crea registros críticos automáticamente.
+
+El reporte sigue siendo un entregable documental y no reemplaza la validación formal del auditor humano.

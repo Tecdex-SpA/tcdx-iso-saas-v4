@@ -111,3 +111,11 @@ Validar módulos destino:
 - [ ] `/ia-auditor` muestra estado de revisión.
 - [ ] No se crean registros críticos.
 - [ ] PDF histórico sigue funcionando.
+
+## PDF con gobernanza Fase 3N
+
+- [ ] PDF histórico incluye estado de revisión humana.
+- [ ] PDF histórico incluye comentario humano si existe.
+- [ ] PDF indica que la revisión humana no equivale a cierre formal.
+- [ ] PDF actual funciona aunque no exista revisión humana.
+- [ ] PDF histórico y actual siguen superando validación HTTP 200 y tamaño mínimo.

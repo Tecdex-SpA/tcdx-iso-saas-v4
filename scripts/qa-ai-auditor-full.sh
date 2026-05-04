@@ -393,7 +393,7 @@ if [ -n "$TOKEN" ]; then
 
     PDF_SIZE="$(wc -c < "$PDF_HISTORY" 2>/dev/null || echo 0)"
     if [ "$HTTP_CODE" = "200" ] && [ "${PDF_SIZE:-0}" -gt 5000 ]; then
-      pass "ai_auditor.pdf.history" "Historical PDF OK (${PDF_SIZE} bytes)"
+      pass "ai_auditor.pdf.history" "Historical PDF OK (${PDF_SIZE} bytes) - Fase 3N governance PDF validation"
     else
       fail "ai_auditor.pdf.history" "Historical PDF failed HTTP=$HTTP_CODE bytes=$PDF_SIZE"
     fi

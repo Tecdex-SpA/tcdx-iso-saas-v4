@@ -409,3 +409,7 @@ IA Auditor Senior puede generar PDF ejecutivo desde análisis actual o desde his
 ## Fase 3M — Revisión humana
 
 Las ejecuciones históricas de IA Auditor pueden marcarse como revisadas, aceptadas, rechazadas o pendientes de más evidencia. Esto deja trazabilidad humana sin cerrar ni aprobar controles automáticamente.
+
+## Fase 3N — PDF con gobernanza
+
+El reporte PDF de IA Auditor incluye revisión humana, gobernanza y trazabilidad reforzada. Mantiene explícitamente que la IA no crea, cierra ni aprueba registros críticos.

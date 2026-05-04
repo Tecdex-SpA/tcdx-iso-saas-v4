@@ -1797,12 +1797,131 @@ function addAiAuditorPdfBullets(doc, locale, items, mapper) {
   });
 }
 
+
+// =========================================================
+// Fase 3N - PDF gobernanza y revisión humana
+// =========================================================
+
+function aiAuditorPdfGovernanceText(locale, key) {
+  const en = String(locale || '').toLowerCase().startsWith('en');
+
+  const dict = {
+    humanReviewSection: en ? 'Human review status' : 'Estado de revisión humana',
+    reviewStatus: en ? 'Review status' : 'Estado de revisión',
+    reviewComment: en ? 'Review comment' : 'Comentario de revisión',
+    reviewedBy: en ? 'Reviewed by' : 'Revisado por',
+    reviewedAt: en ? 'Reviewed at' : 'Revisado el',
+    pending: en ? 'Pending human review' : 'Pendiente de revisión humana',
+    reviewed: en ? 'Reviewed' : 'Revisado',
+    accepted: en ? 'Accepted by human reviewer' : 'Aceptado por revisor humano',
+    rejected: en ? 'Rejected by human reviewer' : 'Rechazado por revisor humano',
+    needsMoreEvidence: en ? 'Needs more evidence' : 'Requiere más evidencia',
+    governance: en ? 'Governance and traceability' : 'Gobernanza y trazabilidad',
+    criticalRecordsWrite: en ? 'Critical records write' : 'Escritura de registros críticos',
+    historyReviewWrite: en ? 'History review write' : 'Escritura de revisión histórica',
+    noFormalClosure: en
+      ? 'Human review of this AI report does not imply formal audit closure or control approval.'
+      : 'La revisión humana de este informe IA no implica cierre formal de auditoría ni aprobación de controles.',
+    governanceText: en
+      ? 'This report separates AI-generated recommendations from human governance. AI Auditor does not create findings, close action plans, approve controls, or modify evidence automatically.'
+      : 'Este informe separa las recomendaciones generadas por IA de la gobernanza humana. IA Auditor no crea hallazgos, no cierra planes, no aprueba controles ni modifica evidencias automáticamente.',
+    aiGeneratedHumanValidated: en
+      ? 'AI-generated assessment, subject to human validation.'
+      : 'Evaluación generada por IA, sujeta a validación humana.',
+  };
+
+  return dict[key] || key;
+}
+
+function aiAuditorReviewStatusLabel(locale, status) {
+  const normalized = String(status || 'pending').trim().toLowerCase();
+
+  if (normalized === 'accepted') return aiAuditorPdfGovernanceText(locale, 'accepted');
+  if (normalized === 'rejected') return aiAuditorPdfGovernanceText(locale, 'rejected');
+  if (normalized === 'needs_more_evidence') return aiAuditorPdfGovernanceText(locale, 'needsMoreEvidence');
+  if (normalized === 'reviewed') return aiAuditorPdfGovernanceText(locale, 'reviewed');
+
+  return aiAuditorPdfGovernanceText(locale, 'pending');
+}
+
+function formatAiAuditorPdfDate(value) {
+  if (!value) return '-';
+
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return String(value);
+  }
+}
+
+function getAiAuditorPdfReview(analysis = {}, historyRow = null, override = null) {
+  const source = override || analysis?.__pdf_review || analysis || {};
+  const metadata =
+    source.human_review_metadata ||
+    historyRow?.human_review_metadata ||
+    {};
+
+  const status =
+    source.human_review_status ||
+    historyRow?.human_review_status ||
+    'pending';
+
+  return {
+    human_review_status: status,
+    human_review_comment:
+      source.human_review_comment ||
+      historyRow?.human_review_comment ||
+      '',
+    human_reviewed_by:
+      source.human_reviewed_by ||
+      historyRow?.human_reviewed_by ||
+      null,
+    human_reviewed_at:
+      source.human_reviewed_at ||
+      historyRow?.human_reviewed_at ||
+      null,
+    human_review_metadata: metadata,
+    history_review_write: Boolean(metadata?.history_review_write),
+    critical_records_write: Boolean(metadata?.critical_records_write),
+  };
+}
+
+function addAiAuditorHumanReviewPdfSection(doc, locale, review) {
+  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfGovernanceText(locale, 'humanReviewSection'));
+
+  addAiAuditorPdfBullets(doc, locale, [
+    `${aiAuditorPdfGovernanceText(locale, 'reviewStatus')}: ${aiAuditorReviewStatusLabel(locale, review?.human_review_status)}`,
+    `${aiAuditorPdfGovernanceText(locale, 'reviewComment')}: ${safePdfValue(review?.human_review_comment, '-')}`,
+    `${aiAuditorPdfGovernanceText(locale, 'reviewedBy')}: ${safePdfValue(review?.human_reviewed_by, '-')}`,
+    `${aiAuditorPdfGovernanceText(locale, 'reviewedAt')}: ${formatAiAuditorPdfDate(review?.human_reviewed_at)}`,
+    aiAuditorPdfGovernanceText(locale, 'noFormalClosure'),
+  ]);
+}
+
+function addAiAuditorGovernancePdfSection(doc, locale, analysis, review) {
+  const trace = getAiAuditorPdfTrace(analysis);
+
+  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfGovernanceText(locale, 'governance'));
+
+  addAiAuditorPdfBullets(doc, locale, [
+    aiAuditorPdfGovernanceText(locale, 'governanceText'),
+    aiAuditorPdfGovernanceText(locale, 'aiGeneratedHumanValidated'),
+    `${aiAuditorPdfText(locale, 'humanReview')}: ${safePdfValue(analysis?.human_review_required, true)}`,
+    `${aiAuditorPdfText(locale, 'noAutoCreate')}: ${String(analysis?.can_create_records === false)}`,
+    `${aiAuditorPdfGovernanceText(locale, 'criticalRecordsWrite')}: ${safePdfValue(trace?.db_write, false)}`,
+    `${aiAuditorPdfGovernanceText(locale, 'historyReviewWrite')}: ${safePdfValue(review?.history_review_write, false)}`,
+    aiAuditorPdfGovernanceText(locale, 'noFormalClosure'),
+  ]);
+}
+
+
 function streamAiAuditorPdfReport({ res, locale, tenant, analysis, fileName }) {
   const summary = getAiAuditorPdfSummary(analysis);
   const coverage = getAiAuditorPdfCoverage(analysis);
   const trace = getAiAuditorPdfTrace(analysis);
   const suggestions = getAiAuditorPdfSuggestions(analysis);
   const scope = analysis?.scope || {};
+  const review = getAiAuditorPdfReview(analysis, null, analysis?.__pdf_review);
   const doc = new PDFDocument({
     size: 'LETTER',
     margins: { top: 50, bottom: 54, left: 50, right: 50 },
@@ -1873,6 +1992,9 @@ function streamAiAuditorPdfReport({ res, locale, tenant, analysis, fileName }) {
   addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'nextSteps'));
   addAiAuditorPdfBullets(doc, locale, suggestions.next_steps);
 
+  addAiAuditorHumanReviewPdfSection(doc, locale, review);
+  addAiAuditorGovernancePdfSection(doc, locale, analysis, review);
+
   addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'traceability'));
   addAiAuditorPdfBullets(doc, locale, [
     `ai_engine_used: ${safePdfValue(trace.ai_engine_used, false)}`,
@@ -1899,6 +2021,7 @@ router.post('/report', auth, async (req, res) => {
     const tenant = await getAiAuditorTenantForPdf(tenantId);
     const analysis = req.body?.analysis || {};
     const safeAnalysis = { ...analysis, human_review_required: true, can_create_records: false, trace: { ...(analysis.trace || {}), db_write: false } };
+    safeAnalysis.__pdf_review = getAiAuditorPdfReview(safeAnalysis, null);
     return streamAiAuditorPdfReport({ res, locale, tenant, analysis: safeAnalysis, fileName: `tcdx-ai-auditor-${new Date().toISOString().slice(0, 10)}` });
   } catch (error) {
     console.error('AI AUDITOR PDF REPORT ERROR:', error);
@@ -2047,12 +2170,13 @@ router.get('/history/:id/report', auth, async (req, res) => {
     const tenant = await getAiAuditorTenantForPdf(tenantId);
     const analysis = pickAiAuditorPdfAnalysisFromHistory(row);
     analysis.trace = { ...(analysis.trace || row.trace_json || {}), history_run_id: row.id, history_saved: true, db_write: false };
+    analysis.__pdf_review = getAiAuditorPdfReview(analysis, row);
     return streamAiAuditorPdfReport({
       res,
       locale,
       tenant,
       analysis,
-      fileName: `tcdx-ai-auditor-${row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)}`,
+      fileName: `tcdx-ai-auditor-${row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)}-${row.id ? String(row.id).slice(0, 8) : 'history'}`,
     });
   } catch (error) {
     console.error('AI AUDITOR HISTORY PDF REPORT ERROR:', error);
