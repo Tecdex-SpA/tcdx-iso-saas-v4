@@ -1500,7 +1500,10 @@ router.post('/', auth, async (req, res) => {
       }
     }
 
-    answer = enhanceAnswerWithSeniorAuditor(question, answer);
+    answer = polishEnglishExecutiveSummary(
+      localizeAiAnswerPayload(enhanceAnswerWithSeniorAuditor(question, answer), locale),
+      locale
+    );
 
     const sourceOrder = ['tenant_internal'];
 
