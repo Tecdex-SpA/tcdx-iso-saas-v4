@@ -90,6 +90,13 @@ function localText(locale: string) {
     safeModeText: en
       ? 'The module only prepares advisory findings and deep links. It does not create operational records.'
       : 'El módulo solo prepara recomendaciones y enlaces. No crea registros operativos.',
+    historyTitle: en ? 'Recent AI Auditor history' : 'Historial reciente IA Auditor',
+    historySubtitle: en ? 'Persistent, non-destructive trace of previous analyses.' : 'Trazabilidad persistente y no destructiva de análisis anteriores.',
+    refreshHistory: en ? 'Refresh history' : 'Actualizar historial',
+    historyUnavailable: en ? 'History is not available yet.' : 'Historial no disponible todavía.',
+    viewHistoryDetail: en ? 'View detail' : 'Ver detalle',
+    closeHistoryDetail: en ? 'Close detail' : 'Cerrar detalle',
+    historyRunId: en ? 'History run ID' : 'ID historial',
   };
 }
 
@@ -214,6 +221,10 @@ export default function SeniorAiAuditorPage() {
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [selectedHistory, setSelectedHistory] = useState<any>(null);
 
   const [selectedStandard, setSelectedStandard] = useState('all');
   const [selectedFocus, setSelectedFocus] = useState('general');
@@ -299,6 +310,70 @@ export default function SeniorAiAuditorPage() {
     }
   };
 
+
+  const loadHistory = async () => {
+    if (!token) return;
+
+    try {
+      setHistoryLoading(true);
+      setHistoryError('');
+
+      const params = new URLSearchParams();
+      params.set('limit', '8');
+
+      if (selectedStandard !== 'all') {
+        params.set('standard_code', selectedStandard);
+      }
+
+      const res = await fetch(`${API_URL}/api/ai-auditor/history?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-tcdx-locale': locale,
+        },
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || copy.historyUnavailable);
+      }
+
+      setHistoryItems(Array.isArray(json.items) ? json.items : []);
+      setHistoryError(json.warning || '');
+    } catch (err: any) {
+      setHistoryError(err?.message || copy.historyUnavailable);
+      setHistoryItems([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const loadHistoryDetail = async (id: string) => {
+    if (!token || !id) return;
+
+    try {
+      setHistoryError('');
+
+      const res = await fetch(`${API_URL}/api/ai-auditor/history/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-tcdx-locale': locale,
+        },
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || copy.historyUnavailable);
+      }
+
+      setSelectedHistory(json.item || null);
+    } catch (err: any) {
+      setHistoryError(err?.message || copy.historyUnavailable);
+    }
+  };
+
+
   const runAnalysis = async () => {
     if (!token) return;
 
@@ -336,6 +411,9 @@ export default function SeniorAiAuditorPage() {
 
       setAnalysis(json);
       setScope(json.scope || scope);
+      if (json?.trace?.history_saved === true) {
+        void loadHistory();
+      }
     } catch (err: any) {
       setError(err?.message || copy.error);
     } finally {
@@ -550,6 +628,126 @@ export default function SeniorAiAuditorPage() {
             </div>
           </div>
         </section>
+
+
+        <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">{copy.historyTitle}</h2>
+              <p className="mt-1 text-sm text-slate-500">{copy.historySubtitle}</p>
+            </div>
+            <button
+              onClick={loadHistory}
+              disabled={historyLoading}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {historyLoading ? '...' : copy.refreshHistory}
+            </button>
+          </div>
+
+          {historyError && (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+              {historyError}
+            </div>
+          )}
+
+          <div className="mt-5 grid gap-3 xl:grid-cols-2">
+            {historyItems.map((item) => (
+              <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                      {item.standard_code || copy.allStandards} · {item.audit_focus || '-'} · {item.depth || '-'}
+                    </div>
+                    <div className="mt-2 text-sm font-black text-slate-900">
+                      {item.created_at ? new Date(item.created_at).toLocaleString() : '-'}
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      {item.summary_preview || copy.noData}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Pill value={item.ai_engine_used}>{copy.engineUsed}: {item.ai_engine_used ? copy.yes : copy.no}</Pill>
+                      <Pill value={false}>{copy.noRecords}</Pill>
+                      <Pill value={item.human_review_required}>{copy.humanReview}</Pill>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 flex-col gap-2 text-right">
+                    <div className={`rounded-2xl border px-4 py-3 ${scoreTone(Number(item.score || 0))}`}>
+                      <div className="text-2xl font-black">{item.score ?? 0}%</div>
+                      <div className="text-[10px] font-black uppercase tracking-[0.12em]">
+                        {item.readiness_level || '-'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => loadHistoryDetail(item.id)}
+                      className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-700"
+                    >
+                      {copy.viewHistoryDetail}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {historyItems.length === 0 && !historyError && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                {copy.historyUnavailable}
+              </div>
+            )}
+          </div>
+
+          {selectedHistory && (
+            <div className="mt-5 rounded-[26px] border border-indigo-100 bg-indigo-50 p-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    {copy.viewHistoryDetail}
+                  </h3>
+                  <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                    {copy.historyRunId}: {selectedHistory.id}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedHistory(null)}
+                  className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-700"
+                >
+                  {copy.closeHistoryDetail}
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <TraceItem label={copy.score} value={selectedHistory.score ?? '-'} />
+                <TraceItem label={copy.readiness} value={selectedHistory.readiness_level || '-'} />
+                <TraceItem label={copy.engineUsed} value={selectedHistory.ai_engine_used ? copy.yes : copy.no} />
+                <TraceItem label={copy.dbWrite} value={String(selectedHistory.db_write ?? false)} />
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-white p-4">
+                <div className="text-sm font-black text-slate-900">{copy.summary}</div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {selectedHistory.summary_json?.executive_summary || copy.noData}
+                </p>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl bg-white p-4">
+                  <div className="text-sm font-black text-slate-900">{copy.gaps}</div>
+                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs text-slate-600">
+                    {JSON.stringify(selectedHistory.summary_json?.main_gaps || [], null, 2)}
+                  </pre>
+                </div>
+                <div className="rounded-2xl bg-white p-4">
+                  <div className="text-sm font-black text-slate-900">{copy.nextSteps}</div>
+                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs text-slate-600">
+                    {JSON.stringify(selectedHistory.suggestions_json?.next_steps || selectedHistory.full_result_json?.next_steps || [], null, 2)}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
 
         {analysis && (
           <>

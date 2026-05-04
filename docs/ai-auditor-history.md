@@ -1,49 +1,64 @@
 # IA Auditor Senior — Historial persistente
 
-## Objetivo
+## Estado Fase 3K.2
 
-La Fase 3K agrega trazabilidad persistente para las ejecuciones de IA Auditor Senior.
+El historial persistente queda visible en `/ia-auditor` y validado por QA.
 
-## Tabla
+## Qué guarda
 
-`ai_auditor_runs`
+La tabla `ai_auditor_runs` registra ejecuciones de IA Auditor Senior por tenant:
 
-Migración:
-
-`database/migrations/20260504_3k_ai_auditor_runs.sql`
-
-## Seguridad
-
-El historial no equivale a creación de registros críticos.
-
-IA Auditor mantiene:
-
-- `human_review_required=true`
-- `can_create_records=false`
-- `trace.db_write=false`
-
-Cuando se guarda historial, el análisis agrega:
-
-- `trace.history_saved=true`
-- `trace.history_run_id=<uuid>`
+- usuario ejecutor;
+- locale;
+- norma;
+- foco auditor;
+- profundidad;
+- score;
+- readiness;
+- uso de ai-engine;
+- resumen;
+- cobertura;
+- sugerencias;
+- resultado completo;
+- trace.
 
 ## Endpoints
 
 - `GET /api/ai-auditor/history`
 - `GET /api/ai-auditor/history/:id`
 
-## Aplicación de migración
+## Seguridad
+
+El historial no crea registros críticos.
+
+Se mantiene:
+
+- `human_review_required=true`;
+- `can_create_records=false`;
+- `trace.db_write=false`.
+
+El guardado histórico se marca aparte:
+
+- `trace.history_saved=true`;
+- `trace.history_run_id=<uuid>`.
+
+## UI
+
+`/ia-auditor` muestra:
+
+- historial reciente;
+- detalle de ejecución;
+- resumen ejecutivo;
+- brechas principales;
+- próximos pasos;
+- trazabilidad.
+
+## Validación
 
 ```bash
-scp database/migrations/20260504_3k_ai_auditor_runs.sql tecdex@192.168.100.110:/tmp/
-ssh tecdex@192.168.100.110
-psql -U tecdex -d tecdex_saas -f /tmp/20260504_3k_ai_auditor_runs.sql
+API_URL=http://192.168.100.120:3000 \
+FRONTEND_URL=http://192.168.100.130:3000 \
+EMAIL=admin@rieltec.com \
+PASSWORD=123456 \
+bash ./scripts/qa-ai-auditor-full.sh
 ```
-
-Ajustar usuario/base si el ambiente usa otros nombres.
-
-## Limitaciones
-
-- No crea hallazgos, planes, evidencias ni no conformidades.
-- No incluye PDF IA Auditor.
-- No incluye workflow de revisión/aprobación.

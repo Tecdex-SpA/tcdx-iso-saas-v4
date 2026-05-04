@@ -397,3 +397,7 @@ scripts/qa-ai-auditor-full.sh
 ## Fase 3K — Historial persistente
 
 IA Auditor Senior guarda ejecuciones en `ai_auditor_runs` cuando la migración está aplicada. El guardado es no destructivo y no crea registros críticos. Si el guardado falla o la tabla no existe, el análisis sigue funcionando y la traza informa `history_saved=false`.
+
+## Fase 3K.2 — Frontend historial
+
+`/ia-auditor` muestra historial reciente de ejecuciones guardadas en `ai_auditor_runs`, permite abrir detalle y no bloquea el análisis si el historial no está disponible.

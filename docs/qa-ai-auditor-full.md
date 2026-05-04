@@ -94,3 +94,7 @@ El QA mantiene el principio de no destructividad:
 ## Historial Fase 3K
 
 Validar `GET /api/ai-auditor/history`, `trace.history_saved`, `trace.history_run_id` y detalle histórico cuando existe. Si la migración aún no está aplicada, reportar WARN, no FAIL, siempre que el análisis siga operativo.
+
+## Fase 3K.2
+
+El QA valida historial antes/después de análisis, `trace.history_saved`, `trace.history_run_id` y detalle histórico si existe run id.

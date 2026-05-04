@@ -88,3 +88,10 @@ Validar módulos destino:
 - [ ] `GET /api/ai-auditor/history` lista ejecuciones del tenant.
 - [ ] `GET /api/ai-auditor/history/:id` valida tenant y devuelve detalle.
 - [ ] El historial no crea hallazgos, planes, evidencias ni no conformidades.
+
+## Frontend historial Fase 3K.2
+
+- [ ] `/ia-auditor` muestra historial reciente.
+- [ ] El detalle histórico se puede abrir.
+- [ ] El historial se refresca después de análisis con `history_saved=true`.
+- [ ] Si historial falla, el análisis sigue operativo.

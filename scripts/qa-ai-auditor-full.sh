@@ -300,6 +300,48 @@ if [ -n "$TOKEN" ]; then
     fail "analyze.en.ai_engine" "No hay ai_engine ni fallback seguro"
   fi
 
+
+
+  # History validations - Fase 3K.2
+  HISTORY_BEFORE="$RESULT_DIR/qa-ai-auditor-history-before-$TS.json"
+  curl -s "$API_URL/api/ai-auditor/history?limit=5" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "x-tcdx-locale: en" > "$HISTORY_BEFORE"
+
+  if [ "$(json_check "$HISTORY_BEFORE" "get('ok') is True")" = "true" ]; then
+    pass "history.before.ok" "History endpoint OK"
+  else
+    warn "history.before.ok" "History endpoint unavailable; verify migration/backend"
+  fi
+
+  HISTORY_RUN_ID="$(json_get "$ANALYZE_EN" "trace.history_run_id")"
+
+  if [ "$(json_check "$ANALYZE_EN" "get('trace.history_saved') is True")" = "true" ] && [ -n "$HISTORY_RUN_ID" ]; then
+    pass "history.analyze.saved" "history_run_id=$HISTORY_RUN_ID"
+  else
+    warn "history.analyze.saved" "History not saved; expected only if migration is not applied"
+  fi
+
+  HISTORY_AFTER="$RESULT_DIR/qa-ai-auditor-history-after-$TS.json"
+  curl -s "$API_URL/api/ai-auditor/history?limit=5" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "x-tcdx-locale: en" > "$HISTORY_AFTER"
+
+  if [ "$(json_check "$HISTORY_AFTER" "get('ok') is True")" = "true" ]; then
+    pass "history.after.ok" "History list after analyze OK"
+  else
+    warn "history.after.ok" "History list after analyze unavailable"
+  fi
+
+  if [ -n "$HISTORY_RUN_ID" ]; then
+    HISTORY_DETAIL="$RESULT_DIR/qa-ai-auditor-history-detail-$TS.json"
+    curl -s "$API_URL/api/ai-auditor/history/$HISTORY_RUN_ID" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "x-tcdx-locale: en" > "$HISTORY_DETAIL"
+
+    [ "$(json_check "$HISTORY_DETAIL" "get('ok') is True and isinstance(get('item'), dict)")" = "true" ] && pass "history.detail.ok" "History detail OK" || fail "history.detail.ok" "History detail failed"
+  fi
+
   # Analyze ES
   ANALYZE_ES="$RESULT_DIR/qa-ai-auditor-analyze-es-$TS.json"
   curl -s -X POST "$API_URL/api/ai-auditor/analyze" \
