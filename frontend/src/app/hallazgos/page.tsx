@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 
@@ -118,6 +119,9 @@ function HallazgosPageContent() {
   const searchParams = useSearchParams();
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
+  const aiAuditorDraftKey = searchParams.get('draft_key');
+  const aiAuditorDraftSource = searchParams.get('source');
+  const aiAuditorDraftMode = searchParams.get('draft');
 
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -142,6 +146,8 @@ function HallazgosPageContent() {
   const [savingId, setSavingId] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<string>('');
   const [creatingFinding, setCreatingFinding] = useState(false);
+  const [aiAuditorDraft, setAiAuditorDraft] = useState<AiAuditorDraftPayload | null>(null);
+  const [aiAuditorDraftMessage, setAiAuditorDraftMessage] = useState('');
 
   const [focusedFindingId, setFocusedFindingId] = useState<string>('');
   const [focusMessage, setFocusMessage] = useState('');
@@ -182,6 +188,49 @@ function HallazgosPageContent() {
   const operationalStandardCodes = useMemo(() => {
     return new Set(operationalStandards.map((s) => s.code).filter(Boolean));
   }, [operationalStandards]);
+
+
+  useEffect(() => {
+    if (aiAuditorDraftSource !== 'ai-auditor' || aiAuditorDraftMode !== '1') return;
+    if (!aiAuditorDraftKey) return;
+
+    const draft = readAiAuditorDraftFromSession(aiAuditorDraftKey);
+
+    if (!draft) {
+      setAiAuditorDraftMessage('No fue posible leer el borrador preparado por IA Auditor Senior.');
+      return;
+    }
+
+    setAiAuditorDraft(draft);
+    setAiAuditorDraftMessage('Borrador preparado por IA Auditor Senior. Revísalo antes de guardar.');
+
+    setForm((prev) => ({
+      ...prev,
+      title: draft.title || prev.title,
+      description: formatAiAuditorDraftDescription(draft) || prev.description,
+      severity: normalizeAiAuditorDraftPriority(draft.severity || draft.priority),
+      tenant_control_id: draft.tenant_control_id || prev.tenant_control_id,
+    }));
+
+    const draftISO = draft.standard_code || draft.iso_code;
+    if (draftISO) {
+      setSelectedISO(draftISO);
+    }
+  }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey]);
+
+  const discardAiAuditorDraft = () => {
+    clearAiAuditorDraft(aiAuditorDraftKey);
+    setAiAuditorDraft(null);
+    setAiAuditorDraftMessage('');
+    setForm((prev) => ({
+      ...prev,
+      title: '',
+      description: '',
+      severity: 'media',
+      tenant_control_id: '',
+    }));
+  };
+
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');

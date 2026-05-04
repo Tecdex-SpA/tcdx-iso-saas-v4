@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getComplianceStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 
@@ -503,6 +504,9 @@ function PlanAccionPageContent() {
   const focusISO = searchParams.get('iso') || '';
   const focusTenantControlId = searchParams.get('tenant_control_id') || '';
   const focusControlId = searchParams.get('control_id') || '';
+  const aiAuditorDraftKey = searchParams.get('draft_key');
+  const aiAuditorDraftSource = searchParams.get('source');
+  const aiAuditorDraftMode = searchParams.get('draft');
 
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -524,6 +528,8 @@ function PlanAccionPageContent() {
   const [openingFromControl, setOpeningFromControl] = useState(false);
   const [highlightPlanId, setHighlightPlanId] = useState('');
   const [expandedPlanId, setExpandedPlanId] = useState('');
+  const [aiAuditorDraft, setAiAuditorDraft] = useState<AiAuditorDraftPayload | null>(null);
+  const [aiAuditorDraftMessage, setAiAuditorDraftMessage] = useState('');
 
   const alreadyTriggeredQuickOpen = useRef(false);
 
@@ -541,6 +547,47 @@ function PlanAccionPageContent() {
   const operationalStandards = useMemo(() => {
     return (scope.standards || []).filter(isOperationalStandard);
   }, [scope.standards]);
+
+
+  useEffect(() => {
+    if (aiAuditorDraftSource !== 'ai-auditor' || aiAuditorDraftMode !== '1') return;
+    if (!aiAuditorDraftKey) return;
+
+    const draft = readAiAuditorDraftFromSession(aiAuditorDraftKey);
+
+    if (!draft) {
+      setAiAuditorDraftMessage('No fue posible leer el borrador preparado por IA Auditor Senior.');
+      return;
+    }
+
+    setAiAuditorDraft(draft);
+    setAiAuditorDraftMessage('Borrador preparado por IA Auditor Senior. Revísalo antes de guardar.');
+
+    setForm((prev) => ({
+      ...prev,
+      title: draft.title || prev.title,
+      description: formatAiAuditorDraftDescription(draft) || prev.description,
+      priority: normalizeAiAuditorDraftPriority(draft.priority || draft.severity),
+    }));
+
+    const draftISO = draft.standard_code || draft.iso_code;
+    if (draftISO) {
+      setSelectedISO(draftISO);
+    }
+  }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey]);
+
+  const discardAiAuditorDraft = () => {
+    clearAiAuditorDraft(aiAuditorDraftKey);
+    setAiAuditorDraft(null);
+    setAiAuditorDraftMessage('');
+    setForm((prev) => ({
+      ...prev,
+      title: '',
+      description: '',
+      priority: 'media',
+    }));
+  };
+
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');

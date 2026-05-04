@@ -247,3 +247,35 @@ La respuesta incluye:
 - No crea planes.
 - No aprueba ni cierra registros.
 - La aprobación humana sigue siendo obligatoria.
+
+
+## Fase 3F — Prefill seguro en módulos destino
+
+El flujo de sugerencias accionables ahora permite que `/hallazgos` y `/plan-accion` lean borradores temporales preparados por IA Auditor Senior.
+
+### Flujo
+
+1. `/ia-auditor` prepara una sugerencia.
+2. El frontend guarda el `prepared_payload` en `sessionStorage`.
+3. El usuario es redirigido con `draft_key`.
+4. El módulo destino lee `sessionStorage[draft_key]`.
+5. Se muestra un banner de revisión humana.
+6. Se prellenan campos del formulario.
+7. No se guarda automáticamente.
+
+### Módulos soportados en 3F
+
+- `/hallazgos`
+- `/plan-accion`
+
+### Pendientes
+
+- `/evidencias`
+- `/no-conformidades`
+
+### Seguridad
+
+- No hay POST/PUT automático.
+- No se crean registros automáticamente.
+- No se modifican datos existentes.
+- El payload se borra solo si el usuario descarta el borrador o lo limpia manualmente.
