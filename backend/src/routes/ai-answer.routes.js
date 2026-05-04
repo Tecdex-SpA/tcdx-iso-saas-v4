@@ -9,6 +9,44 @@ const { localizeAiAnswerPayload } = require('../utils/aiAnswerLocale');
 const { tenantInternalSearch } = require('./ai-tenant-search.routes');
 const { benchmarkSearch } = require('./ai-benchmark.routes');
 
+
+function polishEnglishExecutiveSummary(answer, locale) {
+  if (String(locale || '').toLowerCase().split('-')[0] !== 'en') {
+    return answer;
+  }
+
+  if (!answer || typeof answer !== 'object') {
+    return answer;
+  }
+
+  if (typeof answer.executive_summary !== 'string') {
+    return answer;
+  }
+
+  answer.executive_summary = answer.executive_summary
+    .replace(
+      /Criterio auditor: la respuesta usa fuente ([^.]+?) con confianza (alta|media|baja|high|medium|low)\./g,
+      (_, source, confidence) => {
+        const confidenceMap = {
+          alta: 'high',
+          media: 'medium',
+          baja: 'low',
+          high: 'high',
+          medium: 'medium',
+          low: 'low',
+        };
+
+        return `Auditor criterion: the answer uses source ${source} with ${confidenceMap[confidence] || confidence} confidence.`;
+      }
+    )
+    .replace(
+      /No se observan brechas cr[ií]ticas con la informaci[oó]n disponible\./g,
+      'No critical gaps are observed with the available information.'
+    );
+
+  return answer;
+}
+
 function normalizeRole(role) {
   return String(role || '').toLowerCase();
 }
@@ -1361,7 +1399,7 @@ router.post('/', auth, async (req, res) => {
     let benchmarkResult = null;
     let externalLookupResult = null;
     let answer = buildAnswerFromTenantSearch(question, tenantSearch);
-    answer = localizeAiAnswerPayload(answer, locale);
+    answer = polishEnglishExecutiveSummary(localizeAiAnswerPayload(answer, locale), locale);
 
     const needsTcdxKnowledge = questionNeedsTcdxKnowledge(question);
 
@@ -1394,7 +1432,7 @@ router.post('/', auth, async (req, res) => {
 
       if (Number(knowledgeSearch?.total || 0) > 0 && knowledgeIsUseful) {
         answer = buildAnswerFromTcdxKnowledge(question, tenantSearch, knowledgeSearch);
-    answer = localizeAiAnswerPayload(answer, locale);
+    answer = polishEnglishExecutiveSummary(localizeAiAnswerPayload(answer, locale), locale);
       }
     }
 
@@ -1427,7 +1465,7 @@ router.post('/', auth, async (req, res) => {
           knowledgeSearch,
           benchmarkResult
         );
-    answer = localizeAiAnswerPayload(answer, locale);
+    answer = polishEnglishExecutiveSummary(localizeAiAnswerPayload(answer, locale), locale);
       }
     }
 
@@ -1458,7 +1496,7 @@ router.post('/', auth, async (req, res) => {
           benchmarkResult,
           externalLookupResult
         );
-    answer = localizeAiAnswerPayload(answer, locale);
+    answer = polishEnglishExecutiveSummary(localizeAiAnswerPayload(answer, locale), locale);
       }
     }
 
