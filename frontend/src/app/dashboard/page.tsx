@@ -416,6 +416,38 @@ function dashboardRuntimeText(key: string, params?: Record<string, string | numb
   return value;
 }
 
+
+function AiAuditorDashboardCta({ t }: { t: (key: string) => string }) {
+  return (
+    <section className="mb-6 rounded-[30px] border border-indigo-100 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 text-white shadow-[0_20px_55px_rgba(15,23,42,0.16)]">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-indigo-200">
+            {t('aiAuditor.shortTitle')}
+          </div>
+          <h2 className="mt-2 text-2xl font-black tracking-tight">
+            {t('aiAuditor.dashboardCtaTitle')}
+          </h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-300">
+            {t('aiAuditor.dashboardCtaDescription')}
+          </p>
+          <p className="mt-2 text-xs font-semibold text-amber-100">
+            {t('aiAuditor.humanReviewNote')}
+          </p>
+        </div>
+
+        <a
+          href="/ia-auditor"
+          className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 shadow-sm transition hover:bg-indigo-50"
+        >
+          {t('aiAuditor.runAnalysis')}
+        </a>
+      </div>
+    </section>
+  );
+}
+
+
 function getRuntimePeriodLabel() {
   if (typeof document !== 'undefined' && document.documentElement.lang === 'en') {
     return 'Period';
@@ -981,6 +1013,7 @@ export default function DashboardPage() {
 
   return (
     <AppLayout>
+      <AiAuditorDashboardCta t={t} />
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef4ff_0%,#f5f7fb_42%,#edf2f7_100%)]">
         <div className="mx-auto max-w-[1720px] space-y-6">
           <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">

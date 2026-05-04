@@ -182,6 +182,40 @@ export default function AuditoriasPage() {
   );
 }
 
+
+function AiAuditorAuditCta({ t, iso }: { t: (key: string) => string; iso?: string }) {
+  const href = iso ? `/ia-auditor?standard_code=${encodeURIComponent(iso)}` : '/ia-auditor';
+
+  return (
+    <section className="rounded-[28px] border border-indigo-100 bg-indigo-50 p-5 text-indigo-950 shadow-sm">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-indigo-600">
+            {t('aiAuditor.shortTitle')}
+          </div>
+          <h2 className="mt-1 text-xl font-black">
+            {t('aiAuditor.auditCtaTitle')}
+          </h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-indigo-800">
+            {t('aiAuditor.auditCtaDescription')}
+          </p>
+          <p className="mt-2 text-xs font-semibold text-indigo-700">
+            {t('aiAuditor.humanReviewNote')}
+          </p>
+        </div>
+
+        <a
+          href={href}
+          className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-indigo-700"
+        >
+          {t('aiAuditor.auditCtaButton')}
+        </a>
+      </div>
+    </section>
+  );
+}
+
+
 function AuditoriasPageContent() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
@@ -1139,6 +1173,8 @@ function AuditoriasPageContent() {
             </div>
           </div>
         </section>
+
+        <AiAuditorAuditCta t={t} iso={iso} />
 
         {errorMessage && (
           <div className="rounded-[24px] border border-red-200 bg-red-50 px-5 py-4 text-red-700 shadow-sm">

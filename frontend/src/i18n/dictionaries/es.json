@@ -128,7 +128,8 @@
     "expandMenu": "Expandir menú",
     "collapseMenu": "Contraer menú",
     "poweredBy": "Powered by Tecdex",
-    "description": "Gobierno ISO operativo por rol, módulos contratados y alcance activo."
+    "description": "Gobierno ISO operativo por rol, módulos contratados y alcance activo.",
+    "aiAuditor": "IA Auditor"
   },
   "header": {
     "openMenu": "Abrir menú",
@@ -1802,5 +1803,18 @@
       "recentEvidence": "Evidencias recientes",
       "planContext": "Contexto del plan"
     }
+  },
+  "aiAuditor": {
+    "title": "IA Auditor Senior",
+    "shortTitle": "IA Auditor",
+    "description": "Ejecuta una revisión auditora sobre controles, evidencias, hallazgos y planes.",
+    "runAnalysis": "Ejecutar análisis",
+    "openModule": "Abrir IA Auditor",
+    "humanReviewNote": "No reemplaza la auditoría humana y no crea registros automáticamente.",
+    "dashboardCtaTitle": "IA Auditor Senior",
+    "dashboardCtaDescription": "Revisión auditora inteligente sobre controles, evidencias, hallazgos y planes de acción.",
+    "auditCtaTitle": "Analizar con IA Auditor Senior",
+    "auditCtaDescription": "Usa IA Auditor como apoyo consultivo para revisar el estado real de auditorías, hallazgos, evidencias y acciones.",
+    "auditCtaButton": "Abrir IA Auditor"
   }
 }

@@ -326,3 +326,23 @@ scripts/qa-ai-auditor-full.sh
 
 Este QA valida el flujo IA Auditor Senior end-to-end sin crear registros ni modificar datos.
 Ver detalle en `docs/qa-ai-auditor-full.md`.
+
+
+## Fase 3I — Integración en navegación, dashboard y auditorías
+
+IA Auditor Senior queda integrado como módulo formal del sistema:
+
+- acceso desde el sidebar como `IA Auditor` / `AI Auditor`;
+- CTA ejecutivo en dashboard;
+- CTA contextual en auditorías humanas;
+- ruta `/ia-auditor` protegida bajo el módulo de auditorías;
+- no ejecuta análisis automáticamente desde dashboard ni auditorías;
+- no crea registros ni modifica datos.
+
+### Seguridad
+
+La integración es solo de navegación y acceso visual. El análisis sigue ejecutándose manualmente desde `/ia-auditor` y conserva:
+
+- `human_review_required=true`;
+- `can_create_records=false`;
+- `trace.db_write=false`.

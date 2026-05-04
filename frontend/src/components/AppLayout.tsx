@@ -84,7 +84,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         },
         {
           module_key: 'audits',
-          routes: ['/auditorias'],
+          routes: ['/auditorias', '/ia-auditor'],
           fallback: '/dashboard',
           label: t('sidebar.audits'),
         },

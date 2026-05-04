@@ -417,6 +417,18 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         ),
       },
       {
+        href: '/ia-auditor',
+        label: t('sidebar.aiAuditor'),
+        show: !isClientReadOnly && hasModule('audits'),
+        icon: (
+          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M12 3l7 4v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V7l7-4z" />
+            <path d="M9 12l2 2 4-5" />
+            <path d="M8 18h8" />
+          </svg>
+        ),
+      },
+      {
         href: '/auditorias',
         label: t('sidebar.audits'),
         show: hasModule('audits'),

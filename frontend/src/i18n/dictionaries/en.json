@@ -128,7 +128,8 @@
     "expandMenu": "Expand menu",
     "collapseMenu": "Collapse menu",
     "poweredBy": "Powered by Tecdex",
-    "description": "Operational ISO governance by role, contracted modules, and active scope."
+    "description": "Operational ISO governance by role, contracted modules, and active scope.",
+    "aiAuditor": "AI Auditor"
   },
   "header": {
     "openMenu": "Open menu",
@@ -1802,5 +1803,18 @@
       "recentEvidence": "Recent evidence",
       "planContext": "Plan context"
     }
+  },
+  "aiAuditor": {
+    "title": "Senior AI Auditor",
+    "shortTitle": "AI Auditor",
+    "description": "Run an audit review over controls, evidence, findings, and action plans.",
+    "runAnalysis": "Run analysis",
+    "openModule": "Open AI Auditor",
+    "humanReviewNote": "It does not replace human auditing and does not create records automatically.",
+    "dashboardCtaTitle": "Senior AI Auditor",
+    "dashboardCtaDescription": "Intelligent audit review over controls, evidence, findings, and action plans.",
+    "auditCtaTitle": "Analyze with Senior AI Auditor",
+    "auditCtaDescription": "Use AI Auditor as advisory support to review the real status of audits, findings, evidence, and actions.",
+    "auditCtaButton": "Open AI Auditor"
   }
 }
