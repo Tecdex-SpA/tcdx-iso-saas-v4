@@ -279,3 +279,38 @@ El flujo de sugerencias accionables ahora permite que `/hallazgos` y `/plan-acci
 - No se crean registros automáticamente.
 - No se modifican datos existentes.
 - El payload se borra solo si el usuario descarta el borrador o lo limpia manualmente.
+
+
+## Fase 3G — Prefill seguro en Evidencias y No Conformidades
+
+El flujo de borradores IA Auditor se extendió a:
+
+- `/evidencias`
+- `/no-conformidades`
+
+### Evidencias
+
+El módulo lee `draft_key`, valida el payload temporal y prellena la descripción/contexto de carga.
+
+Limitación deliberada:
+
+- No adjunta archivos automáticamente.
+- El usuario debe adjuntar archivo o evidencia antes de guardar.
+- No ejecuta subida automática.
+
+### No conformidades
+
+El módulo lee `draft_key`, valida el payload temporal y muestra una tarjeta de borrador con:
+
+- título sugerido;
+- prioridad/severidad;
+- norma;
+- descripción preparada.
+
+### Seguridad
+
+- No hay POST/PUT automático.
+- No se crean evidencias automáticamente.
+- No se crean no conformidades automáticamente.
+- El usuario puede descartar el borrador.
+- El payload de cliente no se traduce.

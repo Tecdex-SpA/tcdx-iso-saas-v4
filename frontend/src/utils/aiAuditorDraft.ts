@@ -72,3 +72,18 @@ export function normalizeAiAuditorDraftPriority(value?: string | null) {
 
   return 'media';
 }
+
+
+export function formatAiAuditorDraftEvidenceDescription(payload: AiAuditorDraftPayload) {
+  const parts = [
+    payload.title ? `Título IA: ${payload.title}` : '',
+    payload.description,
+    payload.recommended_action ? `Acción recomendada IA: ${payload.recommended_action}` : '',
+    payload.reason ? `Motivo IA: ${payload.reason}` : '',
+    'Nota: debe adjuntar archivo o evidencia antes de guardar.',
+  ]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+
+  return parts.join('\n\n');
+}

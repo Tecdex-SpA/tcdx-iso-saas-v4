@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { clearAiAuditorDraft, formatAiAuditorDraftEvidenceDescription, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 
@@ -416,6 +417,9 @@ function EvidenciasPageContent() {
   const tenantControlIdFromUrl = searchParams.get('tenant_control_id');
   const actionPlanIdFromUrl = searchParams.get('action_plan_id');
   const clauseFromUrl = searchParams.get('clause');
+  const aiAuditorDraftKey = searchParams.get('draft_key');
+  const aiAuditorDraftSource = searchParams.get('source');
+  const aiAuditorDraftMode = searchParams.get('draft');
 
   const [data, setData] = useState<EvidenceRow[]>([]);
   const [standards, setStandards] = useState<ScopeStandard[]>([]);
@@ -431,6 +435,8 @@ function EvidenciasPageContent() {
   const [user, setUser] = useState<any>(null);
 
   const [focusedEvidenceId, setFocusedEvidenceId] = useState('');
+  const [aiAuditorDraft, setAiAuditorDraft] = useState<AiAuditorDraftPayload | null>(null);
+  const [aiAuditorDraftMessage, setAiAuditorDraftMessage] = useState('');
   const [focusMessage, setFocusMessage] = useState('');
 
   const [uploadForm, setUploadForm] = useState({
@@ -454,6 +460,44 @@ function EvidenciasPageContent() {
 
   const isRemediationMode = Boolean(tenantControlIdFromUrl || actionPlanIdFromUrl);
   const tenantId = resolveTenantId(user);
+
+
+  useEffect(() => {
+    if (aiAuditorDraftSource !== 'ai-auditor' || aiAuditorDraftMode !== '1') return;
+    if (!aiAuditorDraftKey) return;
+
+    const draft = readAiAuditorDraftFromSession(aiAuditorDraftKey);
+
+    if (!draft) {
+      setAiAuditorDraftMessage('No fue posible leer el borrador preparado por IA Auditor Senior.');
+      return;
+    }
+
+    setAiAuditorDraft(draft);
+    setAiAuditorDraftMessage('Borrador preparado por IA Auditor Senior. Revísalo antes de guardar.');
+
+    setUploadForm((prev) => ({
+      ...prev,
+      description: formatAiAuditorDraftEvidenceDescription(draft) || prev.description,
+      evidence_type: prev.evidence_type || 'documento',
+    }));
+
+    const draftISO = draft.standard_code || draft.iso_code;
+    if (draftISO) {
+      setIso(draftISO);
+    }
+  }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey]);
+
+  const discardAiAuditorDraft = () => {
+    clearAiAuditorDraft(aiAuditorDraftKey);
+    setAiAuditorDraft(null);
+    setAiAuditorDraftMessage('');
+    setUploadForm((prev) => ({
+      ...prev,
+      description: '',
+    }));
+  };
+
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');
@@ -1155,6 +1199,35 @@ function EvidenciasPageContent() {
             </div>
             <div className="mt-1 text-sm text-slate-500">
               {t('evidence.directUploadHelp')}
+            </div>
+          </div>
+        )}
+
+
+        {aiAuditorDraft && (
+          <div className="mb-5 rounded-[26px] border border-indigo-200 bg-indigo-50 p-4 text-indigo-950">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-indigo-600">
+                  IA Auditor Senior
+                </div>
+                <div className="mt-1 text-sm font-bold">
+                  {aiAuditorDraftMessage || 'Borrador preparado por IA Auditor Senior'}
+                </div>
+                <div className="mt-1 text-sm leading-6 text-indigo-800">
+                  Debe ser revisado y confirmado por un humano antes de guardar. No se creó ninguna evidencia automáticamente.
+                </div>
+                <div className="mt-2 text-sm font-semibold text-indigo-900">
+                  Debe adjuntar archivo o evidencia antes de guardar.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={discardAiAuditorDraft}
+                className="rounded-2xl border border-indigo-200 bg-white px-4 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100"
+              >
+                Descartar borrador
+              </button>
             </div>
           </div>
         )}

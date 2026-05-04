@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -319,6 +321,24 @@ function AiOrchestrationTrace({ result }: { result?: any }) {
 
 
 export default function NoConformidadesPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppLayout>
+          <div className="p-6">Cargando...</div>
+        </AppLayout>
+      }
+    >
+      <NoConformidadesPageContent />
+    </Suspense>
+  );
+}
+
+function NoConformidadesPageContent() {
+  const searchParams = useSearchParams();
+  const aiAuditorDraftKey = searchParams.get('draft_key');
+  const aiAuditorDraftSource = searchParams.get('source');
+  const aiAuditorDraftMode = searchParams.get('draft');
   const [data, setData] = useState<any[]>([]);
   const [actions, setActions] = useState<ActionPlanRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -339,6 +359,8 @@ export default function NoConformidadesPage() {
     Record<string, AiNcDraftResponse>
   >({});
   const [expandedNcId, setExpandedNcId] = useState<string>('');
+  const [aiAuditorDraft, setAiAuditorDraft] = useState<AiAuditorDraftPayload | null>(null);
+  const [aiAuditorDraftMessage, setAiAuditorDraftMessage] = useState('');
 
   const isAuditor = resolveRole(user) === 'auditor';
   const tenantId = resolveTenantId(user);
@@ -692,6 +714,34 @@ export default function NoConformidadesPage() {
     }
   };
 
+
+  useEffect(() => {
+    if (aiAuditorDraftSource !== 'ai-auditor' || aiAuditorDraftMode !== '1') return;
+    if (!aiAuditorDraftKey) return;
+
+    const draft = readAiAuditorDraftFromSession(aiAuditorDraftKey);
+
+    if (!draft) {
+      setAiAuditorDraftMessage('No fue posible leer el borrador preparado por IA Auditor Senior.');
+      return;
+    }
+
+    setAiAuditorDraft(draft);
+    setAiAuditorDraftMessage('Borrador preparado por IA Auditor Senior. Revísalo antes de guardar.');
+
+    const draftISO = draft.standard_code || draft.iso_code;
+    if (draftISO) {
+      setIso(draftISO);
+    }
+  }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey]);
+
+  const discardAiAuditorDraft = () => {
+    clearAiAuditorDraft(aiAuditorDraftKey);
+    setAiAuditorDraft(null);
+    setAiAuditorDraftMessage('');
+  };
+
+
   useEffect(() => {
     const authToken = localStorage.getItem('token');
     const u = getUserFromToken();
@@ -893,6 +943,70 @@ export default function NoConformidadesPage() {
   return (
     <AppLayout>
       <div className="mx-auto max-w-[1700px] space-y-6">
+
+        {aiAuditorDraft && (
+          <div className="rounded-[26px] border border-indigo-200 bg-indigo-50 p-4 text-indigo-950">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-indigo-600">
+                  IA Auditor Senior
+                </div>
+                <div className="mt-1 text-sm font-bold">
+                  {aiAuditorDraftMessage || 'Borrador preparado por IA Auditor Senior'}
+                </div>
+                <div className="mt-1 text-sm leading-6 text-indigo-800">
+                  Debe ser revisado y confirmado por un humano antes de guardar. No se creó ninguna no conformidad automáticamente.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={discardAiAuditorDraft}
+                className="rounded-2xl border border-indigo-200 bg-white px-4 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100"
+              >
+                Descartar borrador
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-3">
+              <div className="rounded-2xl border border-indigo-100 bg-white p-4">
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                  Título sugerido
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-800">
+                  {aiAuditorDraft.title || '-'}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-indigo-100 bg-white p-4">
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                  Prioridad / severidad
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-800">
+                  {normalizeAiAuditorDraftPriority(aiAuditorDraft.priority || aiAuditorDraft.severity)}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-indigo-100 bg-white p-4">
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                  Norma
+                </div>
+                <div className="mt-2 text-sm font-bold text-slate-800">
+                  {aiAuditorDraft.standard_code || aiAuditorDraft.iso_code || '-'}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-2xl border border-indigo-100 bg-white p-4">
+              <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                Descripción preparada
+              </div>
+              <pre className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                {formatAiAuditorDraftDescription(aiAuditorDraft)}
+              </pre>
+            </div>
+          </div>
+        )}
+
         <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">
