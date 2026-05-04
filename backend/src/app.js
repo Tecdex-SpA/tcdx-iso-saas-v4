@@ -47,10 +47,16 @@ const objectivesRoutes = require('./routes/objectives.routes');
 
 const app = express();
 
-const allowedCorsOrigins = String(process.env.CORS_ORIGINS || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const defaultFrontendUrl = 'http://192.168.100.130:8080';
+const allowedCorsOrigins = Array.from(new Set([
+  ...String(process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  process.env.CORS_ORIGIN,
+  process.env.FRONTEND_URL,
+  defaultFrontendUrl,
+].filter(Boolean)));
 
 app.use(cors({
   origin(origin, callback) {
@@ -118,6 +124,8 @@ app.get('/', (req, res) => {
   res.send('API funcionando 🚀');
 });
 
-app.listen(process.env.PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${process.env.PORT}`);
+const port = Number(process.env.PORT || 3000);
+
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on port ${port}`);
 });

@@ -88,3 +88,9 @@ texto.txt
 
 # QA generated reports
 qa-results/
+.env.local
+.env.production
+.env.development
+frontend/.env.local
+backend/.env
+ai-engine/.env

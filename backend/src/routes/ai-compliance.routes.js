@@ -198,7 +198,7 @@ const {
 } = require('../services/seniorAuditorSuggestions.service');
 
 const AI_ENGINE_URL =
-  process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
+  process.env.AI_ENGINE_URL || 'http://192.168.100.140:8000';
 
 function getUserTenantId(user) {
   return (
