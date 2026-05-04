@@ -1,6 +1,142 @@
 const express = require('express');
 const router = express.Router();
 
+function localizeOutgoingSeniorAuditorView(body) {
+  if (!body || typeof body !== 'object') {
+    return body;
+  }
+
+  const locale = String(
+    body.locale ||
+    body?.answer?.locale ||
+    body?.answer?.response_language ||
+    ''
+  ).toLowerCase();
+
+  const isEnglish =
+    locale === 'en' ||
+    locale === 'english' ||
+    body?.answer?.response_language === 'English';
+
+  if (!isEnglish || !body.answer || typeof body.answer !== 'object') {
+    return body;
+  }
+
+  const answer = body.answer;
+  const view = answer.senior_auditor_view;
+
+  if (view && typeof view === 'object') {
+    if (typeof view.diagnostic === 'string') {
+      view.diagnostic = view.diagnostic
+        .replace(/Criterio auditor:\s*la respuesta usa fuente/gi, 'Auditor criterion: the answer uses source')
+        .replace(/con confianza alta/gi, 'with high confidence')
+        .replace(/con confianza media/gi, 'with medium confidence')
+        .replace(/con confianza baja/gi, 'with low confidence')
+        .replace(/con confianza medium/gi, 'with medium confidence')
+        .replace(/No se observan brechas críticas con la información disponible\./gi, 'No critical gaps are observed with the available information.')
+        .replace(/No se observan brechas criticas con la informacion disponible\./gi, 'No critical gaps are observed with the available information.');
+    }
+
+    if (Array.isArray(view.recommended_actions)) {
+      view.recommended_actions = view.recommended_actions.map((item) => {
+        if (typeof item !== 'string') return item;
+
+        return item
+          .replace(
+            /Registrar decisión del auditor humano y fundamento de aceptación, rechazo o solicitud de complemento\./gi,
+            'Record the human auditor decision and the rationale for acceptance, rejection, or request for additional evidence.'
+          )
+          .replace(
+            /Registrar decision del auditor humano y fundamento de aceptacion, rechazo o solicitud de complemento\./gi,
+            'Record the human auditor decision and the rationale for acceptance, rejection, or request for additional evidence.'
+          );
+      });
+    }
+
+    if (Array.isArray(view.review_questions)) {
+      view.review_questions = view.review_questions.map((item) => {
+        if (typeof item !== 'string') return item;
+
+        return item
+          .replace(
+            /¿La evidencia corresponde al periodo y alcance auditado\?/gi,
+            'Does the evidence correspond to the audited period and scope?'
+          )
+          .replace(
+            /¿Existe responsable\/aprobador identificable y fecha de revisión\?/gi,
+            'Is there an identifiable owner/approver and review date?'
+          )
+          .replace(
+            /¿Existe responsable\/aprobador identificable y fecha de revision\?/gi,
+            'Is there an identifiable owner/approver and review date?'
+          );
+      });
+    }
+
+    if (typeof view.approval_policy === 'string') {
+      view.approval_policy = view.approval_policy
+        .replace(
+          /La IA puede anticipar brechas y sugerir acciones, pero no aprueba, cierra ni crea registros críticos sin validación humana\./gi,
+          'AI can anticipate gaps and suggest actions, but it does not approve, close, or create critical records without human validation.'
+        )
+        .replace(
+          /La IA puede anticipar brechas y sugerir acciones, pero no aprueba, cierra ni crea registros criticos sin validacion humana\./gi,
+          'AI can anticipate gaps and suggest actions, but it does not approve, close, or create critical records without human validation.'
+        );
+    }
+  }
+
+  if (Array.isArray(answer.recommended_actions)) {
+    answer.recommended_actions = answer.recommended_actions.map((item) => {
+      if (typeof item !== 'string') return item;
+
+      return item
+        .replace(
+          /Registrar decisión del auditor humano y fundamento de aceptación, rechazo o solicitud de complemento\./gi,
+          'Record the human auditor decision and the rationale for acceptance, rejection, or request for additional evidence.'
+        )
+        .replace(
+          /Registrar decision del auditor humano y fundamento de aceptacion, rechazo o solicitud de complemento\./gi,
+          'Record the human auditor decision and the rationale for acceptance, rejection, or request for additional evidence.'
+        );
+    });
+  }
+
+  if (Array.isArray(answer.auditor_review_questions)) {
+    answer.auditor_review_questions = answer.auditor_review_questions.map((item) => {
+      if (typeof item !== 'string') return item;
+
+      return item
+        .replace(
+          /¿La evidencia corresponde al periodo y alcance auditado\?/gi,
+          'Does the evidence correspond to the audited period and scope?'
+        )
+        .replace(
+          /¿Existe responsable\/aprobador identificable y fecha de revisión\?/gi,
+          'Is there an identifiable owner/approver and review date?'
+        )
+        .replace(
+          /¿Existe responsable\/aprobador identificable y fecha de revision\?/gi,
+          'Is there an identifiable owner/approver and review date?'
+        );
+    });
+  }
+
+  return body;
+}
+
+router.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+
+  res.json = (body) => {
+    return originalJson(localizeOutgoingSeniorAuditorView(body));
+  };
+
+  next();
+});
+
+
+
 function normalizeOutgoingAiValidationError(body, req) {
   if (!body || typeof body !== 'object') {
     return body;
