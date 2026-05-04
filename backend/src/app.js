@@ -60,6 +60,114 @@ const allowedCorsOrigins = Array.from(new Set([
   defaultFrontendUrl,
   defaultFrontendInternalUrl,
 ].filter(Boolean)));
+// =============================
+// FASE 4B SECURITY HARDENING
+// =============================
+const jsonBodyLimit = process.env.JSON_BODY_LIMIT || '2mb';
+const rateLimitWindowMs = Math.max(1000, Number(process.env.SECURITY_RATE_LIMIT_WINDOW_MS || 60000));
+const defaultRateLimitMax = Math.max(1, Number(process.env.SECURITY_RATE_LIMIT_MAX || 300));
+const authRateLimitMax = Math.max(1, Number(process.env.AUTH_RATE_LIMIT_MAX || 30));
+const aiRateLimitMax = Math.max(1, Number(process.env.AI_RATE_LIMIT_MAX || 60));
+const rateLimitStore = new Map();
+
+function sanitizeRateLimitKeyPart(value) {
+  return String(value || 'unknown').replace(/[^a-zA-Z0-9:._-]/g, '_').slice(0, 160);
+}
+
+function getClientIp(req) {
+  const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwardedFor || req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function createMemoryRateLimiter({ name, max = defaultRateLimitMax, windowMs = rateLimitWindowMs } = {}) {
+  const bucketName = sanitizeRateLimitKeyPart(name || 'default');
+
+  return function memoryRateLimiter(req, res, next) {
+    const now = Date.now();
+    const key = `${bucketName}:${sanitizeRateLimitKeyPart(getClientIp(req))}`;
+    const current = rateLimitStore.get(key);
+
+    if (!current || current.resetAt <= now) {
+      rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+      res.setHeader('X-RateLimit-Limit', String(max));
+      res.setHeader('X-RateLimit-Remaining', String(Math.max(0, max - 1)));
+      return next();
+    }
+
+    current.count += 1;
+    const remaining = Math.max(0, max - current.count);
+    res.setHeader('X-RateLimit-Limit', String(max));
+    res.setHeader('X-RateLimit-Remaining', String(remaining));
+
+    if (current.count > max) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((current.resetAt - now) / 1000));
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      return res.status(429).json({
+        ok: false,
+        error_code: 'RATE_LIMITED',
+        code: 'RATE_LIMITED',
+        message: 'Demasiadas solicitudes. Intenta nuevamente más tarde.',
+        error: 'Demasiadas solicitudes. Intenta nuevamente más tarde.',
+        request_id: req.requestId || null,
+      });
+    }
+
+    return next();
+  };
+}
+
+function cleanupRateLimitStore() {
+  const now = Date.now();
+  for (const [key, value] of rateLimitStore.entries()) {
+    if (!value || value.resetAt <= now) {
+      rateLimitStore.delete(key);
+    }
+  }
+}
+
+setInterval(cleanupRateLimitStore, Math.max(rateLimitWindowMs, 60000)).unref?.();
+
+function buildRequestId() {
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+app.use((req, res, next) => {
+  const incomingRequestId = String(req.headers['x-request-id'] || '').trim();
+  req.requestId = incomingRequestId || buildRequestId();
+  res.setHeader('X-Request-Id', req.requestId);
+  next();
+});
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
+const authLimiter = createMemoryRateLimiter({ name: 'auth', max: authRateLimitMax });
+const aiLimiter = createMemoryRateLimiter({ name: 'ai', max: aiRateLimitMax });
+const defaultLimiter = createMemoryRateLimiter({ name: 'default', max: defaultRateLimitMax });
+
+app.use((req, res, next) => {
+  if (req.path === '/api/auth/login') {
+    return authLimiter(req, res, next);
+  }
+
+  if (
+    req.path.startsWith('/api/ai') ||
+    req.path.startsWith('/ai-external-lookup') ||
+    req.path.startsWith('/api/search') ||
+    req.path.includes('/report')
+  ) {
+    return aiLimiter(req, res, next);
+  }
+
+  return defaultLimiter(req, res, next);
+});
+// FIN FASE 4B SECURITY HARDENING
 
 app.use(cors({
   origin(origin, callback) {
@@ -67,7 +175,10 @@ app.use(cors({
       return callback(null, true);
     }
 
-    return callback(new Error('Origen no permitido por CORS'));
+    const corsError = new Error('Origen no permitido por CORS');
+    corsError.status = 403;
+    corsError.code = 'CORS_ORIGIN_DENIED';
+    return callback(corsError);
   },
   credentials: true,
 }));
@@ -76,9 +187,10 @@ app.use('/uploads/profiles', express.static(path.join(__dirname, '..', 'uploads'
 app.use('/uploads/reports', express.static(path.join(__dirname, '..', 'uploads', 'reports')));
 app.use('/uploads/tenants', express.static(path.join(__dirname, '..', 'uploads', 'tenants')));
 app.use('/uploads/tenant-logos', express.static(path.join(__dirname, '..', 'uploads', 'tenant-logos')));
-app.use('/api/auth', express.json(), authRoutes);
+app.use('/api/auth', express.json({ limit: jsonBodyLimit }), authRoutes);
 app.use('/api', auth, enforceApiAccess);
-app.use(express.json());
+app.use(express.json({ limit: jsonBodyLimit }));
+app.use(express.urlencoded({ extended: true, limit: jsonBodyLimit }));
 app.use('/api/reports', reportsRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/user', userRoutes);
@@ -126,6 +238,38 @@ app.use('/api/objectives', objectivesRoutes);
 app.get('/', (req, res) => {
   res.send('API funcionando 🚀');
 });
+
+
+function securityErrorHandler(err, req, res, next) {
+  if (!err) return next();
+
+  const status = Number(err.status || err.statusCode || (err.type === 'entity.too.large' ? 413 : 500));
+  const safeStatus = status >= 400 && status < 600 ? status : 500;
+  const code = err.code || (safeStatus === 413 ? 'PAYLOAD_TOO_LARGE' : 'SERVER_ERROR');
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (!isProduction) {
+    console.error('REQUEST ERROR:', {
+      request_id: req.requestId || null,
+      code,
+      status: safeStatus,
+      path: req.path,
+      method: req.method,
+      message: err.message,
+    });
+  }
+
+  return res.status(safeStatus).json({
+    ok: false,
+    error_code: code,
+    code,
+    message: safeStatus === 500 ? 'Error procesando solicitud' : (err.message || 'Solicitud inválida'),
+    error: safeStatus === 500 ? 'Error procesando solicitud' : (err.message || 'Solicitud inválida'),
+    request_id: req.requestId || null,
+  });
+}
+
+app.use(securityErrorHandler);
 
 const port = Number(process.env.PORT || 3000);
 

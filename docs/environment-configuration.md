@@ -101,3 +101,17 @@ bash scripts/env-check.sh
 ## Regla
 
 Los archivos `.env.example` se pueden versionar. Los `.env` reales no.
+
+## Seguridad básica Fase 4B
+
+Variables backend opcionales:
+
+```env
+SECURITY_RATE_LIMIT_WINDOW_MS=60000
+SECURITY_RATE_LIMIT_MAX=300
+AUTH_RATE_LIMIT_MAX=30
+AI_RATE_LIMIT_MAX=60
+JSON_BODY_LIMIT=2mb
+```
+
+Estas variables controlan rate limiting en memoria y límite de payload JSON. No reemplazan WAF/API Gateway en producción cloud.
