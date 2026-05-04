@@ -90,6 +90,27 @@ function replacePhrasesEn(value) {
     text = text.split(source).join(target);
   }
 
+  text = text
+    .replace(
+      /Criterio auditor: la respuesta usa fuente ([^.]+?) con confianza (alta|media|baja|high|medium|low)\./g,
+      (_, source, confidence) => {
+        const confidenceMap = {
+          alta: 'high',
+          media: 'medium',
+          baja: 'low',
+          high: 'high',
+          medium: 'medium',
+          low: 'low',
+        };
+
+        return `Auditor criterion: the answer uses source ${source} with ${confidenceMap[confidence] || confidence} confidence.`;
+      }
+    )
+    .replace(
+      /No se observan brechas cr[ií]ticas con la informaci[oó]n disponible\./g,
+      'No critical gaps are observed with the available information.'
+    );
+
   return text;
 }
 
