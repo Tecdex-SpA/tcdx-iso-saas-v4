@@ -72,3 +72,50 @@ POST /api/ai-auditor/analyze
 ## Límite de Fase 3 inicial
 
 Esta fase no toca DB, no toca PDF y no obliga a ai-engine. Deja una base segura para evolucionar hacia análisis IA más profundo.
+
+
+## Fase 3B — Conexión con ai-engine
+
+El endpoint `POST /api/ai-auditor/analyze` ahora intenta enriquecer el análisis usando ai-engine mediante:
+
+- `POST /api/ai/auditor/analyze` en la VM IA.
+- Header interno `X-AI-Token`.
+- Header `x-tcdx-locale`.
+
+El backend conserva el análisis determinístico como fallback.
+
+### Reglas de seguridad
+
+- Si ai-engine falla, responde lento o devuelve JSON inválido, el backend retorna fallback sin error HTTP.
+- `human_review_required` siempre queda en `true`.
+- `can_create_records` siempre queda en `false`.
+- No escribe en base de datos.
+- No crea hallazgos.
+- No cierra planes.
+- No modifica evidencias.
+- No toca PDF.
+
+### Trazabilidad
+
+La respuesta incluye:
+
+```json
+{
+  "trace": {
+    "ai_engine_used": true,
+    "source": "ai_engine_senior_auditor",
+    "endpoint": "/api/ai/auditor/analyze"
+  }
+}
+```
+
+Si se usa fallback:
+
+```json
+{
+  "trace": {
+    "ai_engine_used": false,
+    "ai_engine_error": "..."
+  }
+}
+```

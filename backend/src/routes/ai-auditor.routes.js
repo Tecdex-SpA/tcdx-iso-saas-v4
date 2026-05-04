@@ -1011,6 +1011,286 @@ function buildGlobalSeniorAuditAnalysis(scope, locale, options = {}) {
   };
 }
 
+
+function getAiAuditorEngineBaseUrl() {
+  return String(
+    process.env.AI_ENGINE_URL ||
+    process.env.AI_ENGINE_BASE_URL ||
+    'http://192.168.100.140:8000'
+  ).replace(/\/+$/, '');
+}
+
+function getAiAuditorEngineToken() {
+  return process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
+}
+
+function compactAiAuditorScope(scope) {
+  const safe = scope && typeof scope === 'object' ? scope : {};
+
+  return {
+    tenant_id: safe.tenant_id,
+    standard_code: safe.standard_code,
+    standards: Array.isArray(safe.standards) ? safe.standards.slice(0, 12) : [],
+    counts: safe.counts || {},
+    health_by_standard: Array.isArray(safe.health_by_standard)
+      ? safe.health_by_standard.slice(0, 20)
+      : [],
+    findings_open: Array.isArray(safe.findings_open)
+      ? safe.findings_open.slice(0, 20)
+      : [],
+    action_plans_open: Array.isArray(safe.action_plans_open)
+      ? safe.action_plans_open.slice(0, 20)
+      : [],
+    action_plans_overdue: Array.isArray(safe.action_plans_overdue)
+      ? safe.action_plans_overdue.slice(0, 20)
+      : [],
+    audits_recent: Array.isArray(safe.audits_recent)
+      ? safe.audits_recent.slice(0, 10)
+      : [],
+    lifecycle_recent: Array.isArray(safe.lifecycle_recent)
+      ? safe.lifecycle_recent.slice(0, 10)
+      : [],
+  };
+}
+
+function buildAiAuditorEnginePayload({ tenantId, standardCode, locale, scope, fallback, body }) {
+  return {
+    locale,
+    language: locale,
+    response_language: locale,
+    tenant_context: {
+      tenant_id: tenantId,
+    },
+    standard_code: standardCode || null,
+    audit_focus: body?.audit_focus || 'general',
+    depth: body?.depth || 'executive',
+    scope: compactAiAuditorScope(scope),
+    fallback_summary: fallback?.summary || {},
+    safety_rules: {
+      human_review_required: true,
+      can_create_records: false,
+      no_auto_approval: true,
+      no_auto_close: true,
+      no_db_write: true,
+      do_not_translate_customer_data: true,
+    },
+  };
+}
+
+async function callAiAuditorEngine(payload, locale) {
+  const baseUrl = getAiAuditorEngineBaseUrl();
+  const token = getAiAuditorEngineToken();
+
+  if (!baseUrl) {
+    throw new Error('AI_ENGINE_URL no configurado');
+  }
+
+  if (!token) {
+    throw new Error('AI_INTERNAL_TOKEN no configurado');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    Number(process.env.AI_AUDITOR_ENGINE_TIMEOUT_MS || 25000)
+  );
+
+  try {
+    const response = await fetch(`${baseUrl}/api/ai/auditor/analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-AI-Token': token,
+        'x-tcdx-locale': locale,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    const text = await response.text();
+    let json = null;
+
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch (parseError) {
+      throw new Error(`ai-engine JSON inválido: ${String(text || '').slice(0, 180)}`);
+    }
+
+    if (!response.ok) {
+      const detail = json?.detail || json?.error || response.statusText;
+      throw new Error(`ai-engine HTTP ${response.status}: ${detail}`);
+    }
+
+    return json;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function clampAiAuditorScore(value, fallbackValue = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return Number(fallbackValue || 0);
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function normalizeAiAuditorReadiness(value, fallbackValue = 'medium') {
+  const normalized = String(value || '').trim().toLowerCase();
+
+  if (['critical', 'critico', 'crítico'].includes(normalized)) return 'critical';
+  if (['low', 'bajo', 'baja'].includes(normalized)) return 'low';
+  if (['medium', 'medio', 'media'].includes(normalized)) return 'medium';
+  if (['high', 'alto', 'alta'].includes(normalized)) return 'high';
+
+  return fallbackValue || 'medium';
+}
+
+function safeAiAuditorArray(value, fallbackValue = []) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(fallbackValue)) return fallbackValue;
+  return [];
+}
+
+function sanitizeAiAuditorEngineResponse(engineJson, fallback, locale, scope) {
+  const source =
+    engineJson?.answer && typeof engineJson.answer === 'object'
+      ? engineJson.answer
+      : engineJson && typeof engineJson === 'object'
+        ? engineJson
+        : {};
+
+  const sourceSummary =
+    source.summary && typeof source.summary === 'object'
+      ? source.summary
+      : {};
+
+  const fallbackSummary = fallback?.summary || {};
+
+  const score = clampAiAuditorScore(
+    sourceSummary.score ?? source.readiness_score ?? fallbackSummary.score,
+    fallbackSummary.score
+  );
+
+  const readinessLevel = normalizeAiAuditorReadiness(
+    sourceSummary.readiness_level ?? source.readiness_level,
+    fallbackSummary.readiness_level || 'medium'
+  );
+
+  const executiveSummary =
+    sourceSummary.executive_summary ||
+    source.executive_summary ||
+    fallbackSummary.executive_summary;
+
+  const auditorOpinion =
+    sourceSummary.auditor_opinion ||
+    source.auditor_opinion ||
+    source.human_approval_note ||
+    fallbackSummary.auditor_opinion;
+
+  const mainGaps = safeAiAuditorArray(
+    sourceSummary.main_gaps,
+    safeAiAuditorArray(source.evidence_gaps, fallbackSummary.main_gaps)
+  );
+
+  const mainRisks = safeAiAuditorArray(
+    sourceSummary.main_risks,
+    safeAiAuditorArray(source.critical_controls, fallbackSummary.main_risks)
+  );
+
+  const recommendedFocus = safeAiAuditorArray(
+    sourceSummary.recommended_focus,
+    safeAiAuditorArray(source.suggested_next_steps, fallbackSummary.recommended_focus)
+  );
+
+  const coverage = {
+    ...(fallback?.coverage || {}),
+    ...(source.coverage && typeof source.coverage === 'object' ? source.coverage : {}),
+  };
+
+  const trace = {
+    ...(fallback?.trace || {}),
+    ...(source.trace && typeof source.trace === 'object' ? source.trace : {}),
+    source: 'ai_engine_senior_auditor',
+    endpoint: '/api/ai/auditor/analyze',
+    ai_engine_used: true,
+    generated_at: new Date().toISOString(),
+    db_write: false,
+  };
+
+  return {
+    ...fallback,
+    ok: true,
+    locale,
+    tenant_id: fallback?.tenant_id || scope?.tenant_id,
+    summary: {
+      ...fallbackSummary,
+      score,
+      readiness_level: readinessLevel,
+      executive_summary: executiveSummary,
+      auditor_opinion: auditorOpinion,
+      main_risks: mainRisks,
+      main_gaps: mainGaps,
+      recommended_focus: recommendedFocus,
+    },
+    coverage,
+    findings_suggestions: safeAiAuditorArray(
+      source.findings_suggestions,
+      safeAiAuditorArray(source.recommended_findings, fallback?.findings_suggestions)
+    ),
+    nonconformity_suggestions: safeAiAuditorArray(
+      source.nonconformity_suggestions,
+      fallback?.nonconformity_suggestions
+    ),
+    evidence_requests: safeAiAuditorArray(
+      source.evidence_requests,
+      safeAiAuditorArray(source.recommended_evidence_requests, fallback?.evidence_requests)
+    ),
+    action_plan_suggestions: safeAiAuditorArray(
+      source.action_plan_suggestions,
+      safeAiAuditorArray(source.recommended_actions, fallback?.action_plan_suggestions)
+    ),
+    control_recommendations: safeAiAuditorArray(
+      source.control_recommendations,
+      fallback?.control_recommendations
+    ),
+    risk_recommendations: safeAiAuditorArray(
+      source.risk_recommendations,
+      fallback?.risk_recommendations
+    ),
+    next_steps: safeAiAuditorArray(
+      source.next_steps,
+      safeAiAuditorArray(source.suggested_next_steps, fallback?.next_steps)
+    ),
+    human_review_required: true,
+    can_create_records: false,
+    scope: fallback?.scope || scope,
+    disclaimer:
+      source.disclaimer ||
+      source.recommended_use ||
+      fallback?.disclaimer,
+    trace,
+  };
+}
+
+function markAiAuditorFallback(fallback, error) {
+  const message = error?.name === 'AbortError'
+    ? 'ai-engine timeout'
+    : String(error?.message || error || 'ai-engine unavailable').slice(0, 240);
+
+  return {
+    ...fallback,
+    human_review_required: true,
+    can_create_records: false,
+    trace: {
+      ...(fallback?.trace || {}),
+      ai_engine_used: false,
+      ai_engine_error: message,
+      generated_at: new Date().toISOString(),
+      db_write: false,
+    },
+  };
+}
+
+
 router.get('/scope', auth, async (req, res) => {
   try {
     const locale = normalizeAiAuditorLocale(req);
@@ -1099,12 +1379,29 @@ router.post('/analyze', auth, async (req, res) => {
     }
 
     const scope = await buildGlobalAiAuditorScope(tenantId, standardCode);
-    const analysis = buildGlobalSeniorAuditAnalysis(scope, locale, {
+    const fallback = buildGlobalSeniorAuditAnalysis(scope, locale, {
       audit_focus: req.body?.audit_focus,
       depth: req.body?.depth,
     });
 
-    return res.json(analysis);
+    try {
+      const enginePayload = buildAiAuditorEnginePayload({
+        tenantId,
+        standardCode,
+        locale,
+        scope,
+        fallback,
+        body: req.body,
+      });
+
+      const engineJson = await callAiAuditorEngine(enginePayload, locale);
+      const analysis = sanitizeAiAuditorEngineResponse(engineJson, fallback, locale, scope);
+
+      return res.json(analysis);
+    } catch (engineError) {
+      console.warn('AI AUDITOR ENGINE FALLBACK:', engineError.message);
+      return res.json(markAiAuditorFallback(fallback, engineError));
+    }
   } catch (error) {
     console.error('ERROR AI AUDITOR GLOBAL ANALYZE:', error);
     return res.status(500).json({
