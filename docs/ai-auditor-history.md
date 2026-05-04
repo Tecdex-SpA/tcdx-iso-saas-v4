@@ -66,3 +66,7 @@ bash ./scripts/qa-ai-auditor-full.sh
 ## Reporte PDF desde historial
 
 Cada ejecución histórica puede exportarse mediante `GET /api/ai-auditor/history/:id/report`, validando tenant desde JWT.
+
+## Revisión humana Fase 3M
+
+El historial IA Auditor permite registrar revisión humana mediante `PATCH /api/ai-auditor/history/:id/review`. Esta operación solo actualiza `ai_auditor_runs` y no crea ni modifica registros críticos.

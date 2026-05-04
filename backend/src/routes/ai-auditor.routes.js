@@ -1592,6 +1592,54 @@ async function getAiAuditorHistoryDetail(req, res) {
 router.use('/analyze', auth, attachAiAuditorHistorySaveMiddleware);
 router.get('/history', auth, listAiAuditorHistory);
 
+
+// =========================================================
+// Fase 3M - Revisión humana del historial IA Auditor Senior
+// =========================================================
+
+const AI_AUDITOR_HUMAN_REVIEW_STATUSES = new Set([
+  'pending',
+  'reviewed',
+  'accepted',
+  'rejected',
+  'needs_more_evidence',
+]);
+
+function normalizeAiAuditorHumanReviewStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return AI_AUDITOR_HUMAN_REVIEW_STATUSES.has(normalized) ? normalized : 'reviewed';
+}
+
+function sanitizeAiAuditorHumanReviewComment(value) {
+  return String(value || '')
+    .replace(/[<>]/g, '')
+    .replace(/\s+\n/g, '\n')
+    .trim()
+    .slice(0, 2000);
+}
+
+function getAiAuditorReviewUserId(req) {
+  return (
+    req?.user?.id ||
+    req?.user?.user_id ||
+    req?.user?.sub ||
+    req?.user?.uuid ||
+    req?.auth?.user_id ||
+    null
+  );
+}
+
+function pickAiAuditorReviewFields(row) {
+  return {
+    human_review_status: row?.human_review_status || 'pending',
+    human_review_comment: row?.human_review_comment || '',
+    human_reviewed_by: row?.human_reviewed_by || null,
+    human_reviewed_at: row?.human_reviewed_at || null,
+    human_review_metadata: row?.human_review_metadata || {},
+  };
+}
+
+
 // =========================================================
 // Fase 3L - Reporte PDF ejecutivo IA Auditor Senior
 // =========================================================
@@ -1849,6 +1897,117 @@ router.post('/report', auth, async (req, res) => {
     }));
   }
 });
+
+
+router.patch('/history/:id/review', auth, async (req, res) => {
+  const locale = normalizeAiAuditorLocale(req);
+  const tenantId = resolveAiAuditorTenantId(req);
+  const runId = req.params.id;
+  const reviewStatus = normalizeAiAuditorHumanReviewStatus(req.body?.review_status || req.body?.human_review_status);
+  const reviewComment = sanitizeAiAuditorHumanReviewComment(req.body?.comment || req.body?.human_review_comment);
+  const userId = getAiAuditorReviewUserId(req);
+
+  try {
+    if (!tenantId || !ensureTenantAccess(req, tenantId)) {
+      return res.status(403).json(errorDetail('AI_AUDITOR_FORBIDDEN', locale, {
+        message: locale === 'en' ? 'Tenant access denied.' : 'Acceso al tenant denegado.',
+      }));
+    }
+
+    const existing = await pool.query(
+      `
+      SELECT id
+      FROM ai_auditor_runs
+      WHERE id = $1::uuid
+        AND tenant_id = $2::uuid
+        AND deleted_at IS NULL
+      LIMIT 1
+      `,
+      [runId, tenantId]
+    );
+
+    if (!existing.rows.length) {
+      return res.status(404).json(errorDetail('AI_AUDITOR_HISTORY_NOT_FOUND', locale, {
+        message: locale === 'en' ? 'History run was not found.' : 'No se encontró la ejecución histórica.',
+      }));
+    }
+
+    const reviewedBySql = userId ? '$4::uuid' : 'NULL';
+
+    const updated = await pool.query(
+      `
+      UPDATE ai_auditor_runs
+      SET
+        human_review_status = $1,
+        human_review_comment = $2,
+        human_reviewed_at = CASE WHEN $1 = 'pending' THEN NULL ELSE now() END,
+        human_reviewed_by = CASE WHEN $1 = 'pending' THEN NULL ELSE ${reviewedBySql} END,
+        human_review_metadata = COALESCE(human_review_metadata, '{}'::jsonb) || $3::jsonb
+      WHERE id = $5::uuid
+        AND tenant_id = $6::uuid
+        AND deleted_at IS NULL
+      RETURNING
+        id,
+        tenant_id,
+        user_id,
+        locale,
+        standard_code,
+        audit_focus,
+        depth,
+        score,
+        readiness_level,
+        ai_engine_used,
+        human_review_required,
+        can_create_records,
+        db_write,
+        history_saved,
+        created_at,
+        summary_json,
+        coverage_json,
+        suggestions_json,
+        trace_json,
+        human_review_status,
+        human_review_comment,
+        human_reviewed_by,
+        human_reviewed_at,
+        human_review_metadata
+      `,
+      [
+        reviewStatus,
+        reviewComment,
+        JSON.stringify({
+          source: 'ai_auditor_human_review',
+          updated_at: new Date().toISOString(),
+          history_review_write: true,
+          critical_records_write: false,
+        }),
+        userId,
+        runId,
+        tenantId,
+      ]
+    );
+
+    const row = updated.rows[0];
+
+    return res.json({
+      ok: true,
+      locale,
+      tenant_id: tenantId,
+      history_review_write: true,
+      critical_records_write: false,
+      item: {
+        ...row,
+        ...pickAiAuditorReviewFields(row),
+      },
+    });
+  } catch (error) {
+    console.error('AI AUDITOR HUMAN REVIEW ERROR:', error);
+    return res.status(500).json(errorDetail('AI_AUDITOR_HISTORY_REVIEW_ERROR', locale, {
+      message: locale === 'en' ? 'Could not save human review.' : 'No fue posible guardar la revisión humana.',
+    }));
+  }
+});
+
 
 router.get('/history/:id/report', auth, async (req, res) => {
   const locale = normalizeAiAuditorLocale(req);

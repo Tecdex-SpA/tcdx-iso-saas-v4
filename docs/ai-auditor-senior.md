@@ -405,3 +405,7 @@ IA Auditor Senior guarda ejecuciones en `ai_auditor_runs` cuando la migración e
 ## Fase 3L — Reporte PDF
 
 IA Auditor Senior puede generar PDF ejecutivo desde análisis actual o desde historial persistente. El PDF no crea registros críticos y conserva las marcas `human_review_required=true`, `can_create_records=false` y `trace.db_write=false`.
+
+## Fase 3M — Revisión humana
+
+Las ejecuciones históricas de IA Auditor pueden marcarse como revisadas, aceptadas, rechazadas o pendientes de más evidencia. Esto deja trazabilidad humana sin cerrar ni aprobar controles automáticamente.

@@ -98,3 +98,7 @@ Validar `GET /api/ai-auditor/history`, `trace.history_saved`, `trace.history_run
 ## Fase 3K.2
 
 El QA valida historial antes/después de análisis, `trace.history_saved`, `trace.history_run_id` y detalle histórico si existe run id.
+
+## Validación revisión humana
+
+El QA ejecuta una revisión controlada sobre un `history_run_id` generado por el propio análisis y valida que el detalle histórico devuelva `human_review_status=accepted`.

@@ -354,6 +354,33 @@ if [ -n "$TOKEN" ]; then
     fi
   fi
 
+
+  # Human review validation - Fase 3M
+  if [ -n "$HISTORY_RUN_ID" ]; then
+    REVIEW_JSON="$RESULT_DIR/qa-ai-auditor-history-review-$TS.json"
+
+    curl -s -X PATCH "$API_URL/api/ai-auditor/history/$HISTORY_RUN_ID/review" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -H "x-tcdx-locale: en" \
+      -d '{"review_status":"accepted","comment":"Controlled human review QA phase 3M"}' > "$REVIEW_JSON"
+
+    assert_json "$REVIEW_JSON" "ai_auditor.history.review.ok" "get('ok') is True" "Review endpoint OK"
+    assert_json "$REVIEW_JSON" "ai_auditor.history.review.status" "get('item.human_review_status') == 'accepted'" "Review status accepted"
+    assert_json "$REVIEW_JSON" "ai_auditor.history.review.comment" "bool(get('item.human_review_comment'))" "Review comment persisted"
+    assert_json "$REVIEW_JSON" "ai_auditor.history.review.at" "bool(get('item.human_reviewed_at'))" "Review timestamp persisted"
+
+    REVIEW_DETAIL_JSON="$RESULT_DIR/qa-ai-auditor-history-review-detail-$TS.json"
+    curl -s "$API_URL/api/ai-auditor/history/$HISTORY_RUN_ID" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "x-tcdx-locale: en" > "$REVIEW_DETAIL_JSON"
+
+    assert_json "$REVIEW_DETAIL_JSON" "ai_auditor.history.review.detail.status" "get('item.human_review_status') == 'accepted'" "Detail includes review status"
+  else
+    warn "ai_auditor.history.review" "Skipped; no history_run_id"
+  fi
+
+
   # PDF report validation - Fase 3L
   if [ -n "$HISTORY_RUN_ID" ]; then
     PDF_HISTORY="$RESULT_DIR/qa-ai-auditor-history-report-$TS.pdf"

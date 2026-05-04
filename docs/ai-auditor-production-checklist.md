@@ -103,3 +103,11 @@ Validar módulos destino:
 - [ ] PDF no crea registros críticos.
 - [ ] PDF incluye revisión humana requerida.
 - [ ] PDF mantiene formato ejecutivo TCDX by Tecdex.
+
+## Revisión humana Fase 3M
+
+- [ ] Endpoint `PATCH /api/ai-auditor/history/:id/review` funciona.
+- [ ] La revisión solo actualiza `ai_auditor_runs`.
+- [ ] `/ia-auditor` muestra estado de revisión.
+- [ ] No se crean registros críticos.
+- [ ] PDF histórico sigue funcionando.

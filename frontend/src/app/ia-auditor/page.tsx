@@ -99,6 +99,18 @@ function localText(locale: string) {
     historyRunId: en ? 'History run ID' : 'ID historial',
     generatePdf: en ? 'Generate PDF' : 'Generar PDF',
     downloadHistoricalPdf: en ? 'Download historical PDF' : 'Descargar PDF histórico',
+    humanReviewTitle: en ? 'Human review' : 'Revisión humana',
+    humanReviewStatus: en ? 'Review status' : 'Estado de revisión',
+    humanReviewComment: en ? 'Review comment' : 'Comentario de revisión',
+    saveHumanReview: en ? 'Save human review' : 'Guardar revisión humana',
+    humanReviewSaved: en ? 'Human review saved.' : 'Revisión humana guardada.',
+    pending: en ? 'Pending' : 'Pendiente',
+    reviewed: en ? 'Reviewed' : 'Revisado',
+    accepted: en ? 'Accepted' : 'Aceptado',
+    rejected: en ? 'Rejected' : 'Rechazado',
+    needsMoreEvidence: en ? 'Needs more evidence' : 'Requiere más evidencia',
+    reviewedBy: en ? 'Reviewed by' : 'Revisado por',
+    reviewedAt: en ? 'Reviewed at' : 'Revisado el',
     pdfError: en ? 'Could not generate PDF report.' : 'No fue posible generar el PDF.',
   };
 }
@@ -230,6 +242,10 @@ export default function SeniorAiAuditorPage() {
   const [selectedHistory, setSelectedHistory] = useState<any>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState('');
+  const [reviewStatus, setReviewStatus] = useState('reviewed');
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewMessage, setReviewMessage] = useState('');
 
   const [selectedStandard, setSelectedStandard] = useState('all');
   const [selectedFocus, setSelectedFocus] = useState('general');
@@ -327,6 +343,71 @@ export default function SeniorAiAuditorPage() {
     link.remove();
     window.URL.revokeObjectURL(url);
   };
+
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return '-';
+
+    try {
+      return new Date(value).toLocaleString();
+    } catch {
+      return String(value);
+    }
+  };
+
+  const reviewLabel = (status?: string) => {
+    const key = String(status || 'pending');
+    if (key === 'accepted') return copy.accepted;
+    if (key === 'rejected') return copy.rejected;
+    if (key === 'needs_more_evidence') return copy.needsMoreEvidence;
+    if (key === 'reviewed') return copy.reviewed;
+    return copy.pending;
+  };
+
+  const openHistoryDetailForReview = (item: any) => {
+    setSelectedHistory(item);
+    setReviewStatus(item?.human_review_status || 'reviewed');
+    setReviewComment(item?.human_review_comment || '');
+    setReviewMessage('');
+  };
+
+  const saveHumanReview = async () => {
+    if (!token || !selectedHistory?.id) return;
+
+    try {
+      setReviewLoading(true);
+      setReviewMessage('');
+
+      const res = await fetch(`${API_URL}/api/ai-auditor/history/${selectedHistory.id}/review`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'x-tcdx-locale': locale,
+        },
+        body: JSON.stringify({
+          review_status: reviewStatus,
+          comment: reviewComment,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(data?.message || data?.error?.message || copy.pdfError);
+      }
+
+      setSelectedHistory(data.item || selectedHistory);
+      setReviewStatus(data.item?.human_review_status || reviewStatus);
+      setReviewComment(data.item?.human_review_comment || reviewComment);
+      setReviewMessage(copy.humanReviewSaved);
+      await loadHistory();
+    } catch (err: any) {
+      setReviewMessage(err?.message || copy.pdfError);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
 
   const downloadCurrentAnalysisPdf = async () => {
     if (!token || !analysis) return;
@@ -790,6 +871,62 @@ export default function SeniorAiAuditorPage() {
                     {copy.historyRunId}: {selectedHistory.id}
                   </p>
                 </div>
+
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="mb-3">
+                  <h4 className="text-sm font-black text-amber-900">{copy.humanReviewTitle}</h4>
+                  <p className="text-xs font-semibold text-amber-800">
+                    {copy.safeModeText}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="text-xs font-bold text-slate-700">
+                    {copy.humanReviewStatus}
+                    <select
+                      value={reviewStatus}
+                      onChange={(e) => setReviewStatus(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900"
+                    >
+                      <option value="pending">{copy.pending}</option>
+                      <option value="reviewed">{copy.reviewed}</option>
+                      <option value="accepted">{copy.accepted}</option>
+                      <option value="rejected">{copy.rejected}</option>
+                      <option value="needs_more_evidence">{copy.needsMoreEvidence}</option>
+                    </select>
+                  </label>
+
+                  <div className="rounded-xl border border-amber-100 bg-white p-3 text-xs text-slate-700">
+                    <div><b>{copy.reviewedBy}:</b> {selectedHistory?.human_reviewed_by || '-'}</div>
+                    <div><b>{copy.reviewedAt}:</b> {formatDate(selectedHistory?.human_reviewed_at)}</div>
+                  </div>
+                </div>
+
+                <label className="mt-3 block text-xs font-bold text-slate-700">
+                  {copy.humanReviewComment}
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                </label>
+
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={saveHumanReview}
+                    disabled={reviewLoading}
+                    className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-black text-white shadow-sm hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {reviewLoading ? '...' : copy.saveHumanReview}
+                  </button>
+                  {reviewMessage && (
+                    <span className="text-xs font-bold text-amber-900">{reviewMessage}</span>
+                  )}
+                </div>
+              </div>
+
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => downloadHistoryPdf(selectedHistory.id)}
