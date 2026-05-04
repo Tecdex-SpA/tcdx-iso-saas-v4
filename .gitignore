@@ -85,3 +85,6 @@ temp/
 *.backup_*
 texto.txt
 **/texto.txt
+
+# QA generated reports
+qa-results/
