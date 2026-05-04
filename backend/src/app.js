@@ -47,7 +47,7 @@ const objectivesRoutes = require('./routes/objectives.routes');
 
 const app = express();
 
-const defaultFrontendUrl = 'http://192.168.100.130:8080';
+const defaultFrontendUrl = 'http://192.168.100.130:3000';\nconst defaultFrontendInternalUrl = 'http://192.168.100.130:8080';
 const allowedCorsOrigins = Array.from(new Set([
   ...String(process.env.CORS_ORIGINS || '')
     .split(',')

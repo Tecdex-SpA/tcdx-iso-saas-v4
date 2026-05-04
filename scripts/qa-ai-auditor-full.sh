@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 API_URL="${API_URL:-http://192.168.100.120:3000}"
-FRONTEND_URL="${FRONTEND_URL:-http://192.168.100.130:8080}"
+FRONTEND_URL="${FRONTEND_URL:-http://192.168.100.130:3000}"
 EMAIL="${EMAIL:-admin@rieltec.com}"
 PASSWORD="${PASSWORD:-123456}"
 QA_STRICT="${QA_STRICT:-false}"
@@ -226,7 +226,7 @@ echo "======================================"
 # Repo
 [ -d backend ] && [ -d frontend ] && [ -d scripts ] && pass "repo.root" "Estructura detectada" || fail "repo.root" "No parece raíz del repo"
 
-if git status --porcelain | grep -E '\.env|env.local|env.production|env.development' >/dev/null 2>&1; then
+if git status --porcelain | grep -E '(^|/)\.env$|(^|/)\.env\.local$|(^|/)\.env\.production$|(^|/)\.env\.development$|bak_' >/dev/null 2>&1; then
   fail "git.env" "Hay .env en cambios"
 else
   pass "git.env" "No hay .env en cambios"
