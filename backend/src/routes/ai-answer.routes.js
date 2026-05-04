@@ -1,5 +1,57 @@
 const express = require('express');
 const router = express.Router();
+
+function normalizeOutgoingAiValidationError(body, req) {
+  if (!body || typeof body !== 'object') {
+    return body;
+  }
+
+  const rawError = String(body.error || body.message || '').trim().toLowerCase();
+
+  if (
+    body.ok === false &&
+    !body.error_code &&
+    (
+      rawError === 'question es obligatorio' ||
+      rawError === 'la pregunta es requerida' ||
+      rawError === 'pregunta requerida' ||
+      rawError === 'question requerido'
+    )
+  ) {
+    const locale = String(
+      body.locale ||
+      req?.body?.locale ||
+      req?.headers?.['x-tcdx-locale'] ||
+      'es'
+    ).toLowerCase().split('-')[0];
+
+    const message = body.message || body.error || 'question es obligatorio';
+
+    return {
+      ...body,
+      ok: false,
+      error_code: 'VALIDATION_ERROR',
+      code: 'VALIDATION_ERROR',
+      message,
+      error: message,
+      locale: ['es', 'en'].includes(locale) ? locale : 'es',
+    };
+  }
+
+  return body;
+}
+
+router.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+
+  res.json = (body) => {
+    return originalJson(normalizeOutgoingAiValidationError(body, req));
+  };
+
+  next();
+});
+
+
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
