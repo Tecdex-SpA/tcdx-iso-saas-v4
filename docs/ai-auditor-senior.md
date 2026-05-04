@@ -162,3 +162,42 @@ La respuesta incluye:
 - Mantiene fallback si ai-engine falla.
 - Mantiene `human_review_required=true`.
 - Mantiene `can_create_records=false`.
+
+
+## Fase 3D — UI ejecutiva
+
+La vista `/ia-auditor` incorpora una experiencia ejecutiva para demo y operación:
+
+- selector dinámico de norma;
+- selector de foco auditor;
+- selector de profundidad;
+- trazabilidad visible de ai-engine;
+- fuente normalizada de controles;
+- controles por norma;
+- advertencia permanente de revisión humana;
+- confirmación visual de que no se crean registros automáticamente.
+
+### Filtros
+
+La UI envía al backend:
+
+```json
+{
+  "standard_code": "ISO27001",
+  "audit_focus": "general",
+  "depth": "executive",
+  "locale": "en"
+}
+```
+
+### Criterio de demo
+
+El usuario debe poder ejecutar análisis con:
+
+- todas las normas;
+- ISO27001;
+- ISO9001;
+- idioma español;
+- idioma inglés.
+
+El módulo sigue siendo no destructivo.
