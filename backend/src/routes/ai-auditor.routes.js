@@ -596,6 +596,589 @@ function buildAnalysis({ audit, checklist, evidenceStats, relations }) {
   };
 }
 
+
+async function safeRows(name, query, params = []) {
+  try {
+    const result = await pool.query(query, params);
+    return result.rows || [];
+  } catch (error) {
+    console.warn(`AI AUDITOR SAFE QUERY WARN [${name}]:`, error.message);
+    return [];
+  }
+}
+
+async function safeCount(name, query, params = []) {
+  try {
+    const result = await pool.query(query, params);
+    return Number(result.rows[0]?.total || 0);
+  } catch (error) {
+    console.warn(`AI AUDITOR SAFE COUNT WARN [${name}]:`, error.message);
+    return 0;
+  }
+}
+
+function resolveAiAuditorTenantId(req) {
+  const tokenTenantId = getUserTenantId(req.user);
+  const requestedTenantId = req.body?.tenant_id || req.query?.tenant_id || tokenTenantId;
+
+  if (isPlatform(req.user)) {
+    return requestedTenantId || tokenTenantId;
+  }
+
+  return tokenTenantId;
+}
+
+function normalizeAiAuditorLocale(req) {
+  return resolveLocale(req);
+}
+
+function translateAiAuditor(locale) {
+  const en = locale === 'en';
+
+  return {
+    executiveSummary: en
+      ? 'Senior AI Auditor reviewed available tenant compliance data and produced a non-destructive audit-oriented assessment.'
+      : 'IA Auditor Senior revisó los datos disponibles del tenant y generó una evaluación orientada a auditoría sin modificar registros.',
+    auditorOpinionHigh: en
+      ? 'The compliance posture is acceptable based on the available evidence, but human auditor review is still required.'
+      : 'La postura de cumplimiento es aceptable según la evidencia disponible, pero requiere revisión del auditor humano.',
+    auditorOpinionMedium: en
+      ? 'The compliance posture requires management attention before considering audit readiness.'
+      : 'La postura de cumplimiento requiere atención de gestión antes de considerarse lista para auditoría.',
+    auditorOpinionLow: en
+      ? 'The compliance posture shows relevant gaps that should be remediated before audit closure.'
+      : 'La postura de cumplimiento presenta brechas relevantes que deberían corregirse antes del cierre de auditoría.',
+    noCriticalGaps: en
+      ? 'No critical structural gaps were detected with the available data.'
+      : 'No se detectaron brechas estructurales críticas con los datos disponibles.',
+    humanReview: en
+      ? 'This assessment is advisory. AI does not approve, close, or create critical records without human validation.'
+      : 'Esta evaluación es consultiva. La IA no aprueba, cierra ni crea registros críticos sin validación humana.',
+    evidenceGap: en ? 'Evidence coverage gap' : 'Brecha de cobertura de evidencias',
+    openFindings: en ? 'Open findings require review' : 'Hallazgos abiertos requieren revisión',
+    overdueActions: en ? 'Overdue action plans require treatment' : 'Planes de acción vencidos requieren tratamiento',
+    deterioratedHealth: en ? 'Deteriorated controls require prioritization' : 'Controles deteriorados requieren priorización',
+    assignOwners: en ? 'Assign owners and due dates to critical actions.' : 'Asignar responsables y vencimientos a acciones críticas.',
+    reviewEvidence: en ? 'Review evidence sufficiency and traceability.' : 'Revisar suficiencia y trazabilidad de evidencias.',
+    prioritizeRisks: en ? 'Prioritize high exposure risks and related controls.' : 'Priorizar riesgos de alta exposición y controles relacionados.',
+    prepareFindings: en ? 'Prepare findings only after human auditor validation.' : 'Preparar hallazgos solo después de validación del auditor humano.',
+  };
+}
+
+async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
+  const standards = await safeRows(
+    'active_standards',
+    `
+    SELECT standard_code
+    FROM tenant_standards
+    WHERE tenant_id = $1::uuid
+      AND COALESCE(is_active, true) = true
+    ORDER BY standard_code
+    `,
+    [tenantId]
+  );
+
+  const controlsTotal = await safeCount(
+    'controls_total',
+    `
+    SELECT COUNT(*)::int AS total
+    FROM tenant_controls
+    WHERE tenant_id = $1::uuid
+      AND ($2::text IS NULL OR standard_code = $2::text)
+    `,
+    [tenantId, standardCode]
+  );
+
+  const evidenceTotal = await safeCount(
+    'evidence_total',
+    `
+    SELECT COUNT(*)::int AS total
+    FROM evidences
+    WHERE tenant_id = $1::uuid
+      AND COALESCE(status, '') <> 'deleted'
+    `,
+    [tenantId]
+  );
+
+  const findingsOpen = await safeRows(
+    'findings_open',
+    `
+    SELECT id, title, severity, status, iso_code, tenant_control_id, created_at
+    FROM findings
+    WHERE tenant_id = $1::uuid
+      AND COALESCE(status, '') NOT IN ('cerrado','cerrada','closed','completado','completada','resolved')
+      AND ($2::text IS NULL OR iso_code = $2::text)
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT 20
+    `,
+    [tenantId, standardCode]
+  );
+
+  const actionPlansOpen = await safeRows(
+    'action_plans_open',
+    `
+    SELECT id, title, priority, status, due_date, tenant_control_id, created_at
+    FROM action_plans
+    WHERE tenant_id = $1::uuid
+      AND COALESCE(status, '') NOT IN ('cerrado','cerrada','closed','completado','completada','resolved')
+    ORDER BY due_date ASC NULLS LAST, created_at DESC NULLS LAST
+    LIMIT 20
+    `,
+    [tenantId]
+  );
+
+  const overdueActions = await safeRows(
+    'action_plans_overdue',
+    `
+    SELECT id, title, priority, status, due_date, tenant_control_id
+    FROM action_plans
+    WHERE tenant_id = $1::uuid
+      AND due_date IS NOT NULL
+      AND due_date < CURRENT_DATE
+      AND COALESCE(status, '') NOT IN ('cerrado','cerrada','closed','completado','completada','resolved')
+    ORDER BY due_date ASC
+    LIMIT 20
+    `,
+    [tenantId]
+  );
+
+  const healthByStandard = await safeRows(
+    'health_by_standard',
+    `
+    SELECT
+      standard_code,
+      COUNT(*)::int AS controls,
+      ROUND(AVG(COALESCE(health_score, 0))::numeric, 2)::float AS avg_health_score,
+      SUM(CASE WHEN COALESCE(health_score, 0) < 50 THEN 1 ELSE 0 END)::int AS deteriorated,
+      SUM(CASE WHEN COALESCE(health_score, 0) >= 50 AND COALESCE(health_score, 0) < 80 THEN 1 ELSE 0 END)::int AS attention,
+      SUM(CASE WHEN COALESCE(health_score, 0) >= 80 THEN 1 ELSE 0 END)::int AS healthy
+    FROM control_health_scores
+    WHERE tenant_id = $1::uuid
+      AND ($2::text IS NULL OR standard_code = $2::text)
+    GROUP BY standard_code
+    ORDER BY standard_code
+    `,
+    [tenantId, standardCode]
+  );
+
+  const auditsRecent = await safeRows(
+    'audits_recent',
+    `
+    SELECT id, iso, status, auditor_name, start_date, end_date, created_at
+    FROM audits
+    WHERE tenant_id = $1::uuid
+      AND ($2::text IS NULL OR iso = $2::text)
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT 10
+    `,
+    [tenantId, standardCode]
+  );
+
+  const assetsTotal = await safeCount(
+    'assets_total',
+    `
+    SELECT COUNT(*)::int AS total
+    FROM assets
+    WHERE tenant_id = $1::uuid
+    `,
+    [tenantId]
+  );
+
+  const lifecycleRecent = await safeRows(
+    'lifecycle_recent',
+    `
+    SELECT id, standard_code, from_stage, to_stage, status, created_at
+    FROM lifecycle_transitions
+    WHERE tenant_id = $1::uuid
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT 10
+    `,
+    [tenantId]
+  );
+
+  const healthAverage =
+    healthByStandard.length > 0
+      ? Math.round(
+          healthByStandard.reduce(
+            (acc, item) => acc + Number(item.avg_health_score || 0),
+            0
+          ) / healthByStandard.length
+        )
+      : 0;
+
+  return {
+    tenant_id: tenantId,
+    standard_code: standardCode,
+    standards: standards.map((row) => row.standard_code).filter(Boolean),
+    counts: {
+      controls_total: controlsTotal,
+      evidence_total: evidenceTotal,
+      findings_open: findingsOpen.length,
+      action_plans_open: actionPlansOpen.length,
+      action_plans_overdue: overdueActions.length,
+      assets_total: assetsTotal,
+      audits_recent: auditsRecent.length,
+      lifecycle_recent: lifecycleRecent.length,
+      health_average: healthAverage,
+    },
+    health_by_standard: healthByStandard,
+    findings_open: findingsOpen,
+    action_plans_open: actionPlansOpen,
+    action_plans_overdue: overdueActions,
+    audits_recent: auditsRecent,
+    lifecycle_recent: lifecycleRecent,
+  };
+}
+
+function buildGlobalSeniorAuditAnalysis(scope, locale, options = {}) {
+  const t = translateAiAuditor(locale);
+  const counts = scope.counts || {};
+  const healthAverage = Number(counts.health_average || 0);
+  const deterioratedControls = (scope.health_by_standard || []).reduce(
+    (acc, item) => acc + Number(item.deteriorated || 0),
+    0
+  );
+
+  let score = 100;
+  score -= Number(counts.findings_open || 0) * 4;
+  score -= Number(counts.action_plans_overdue || 0) * 6;
+  score -= deterioratedControls * 3;
+
+  if (healthAverage > 0 && healthAverage < 80) {
+    score -= Math.round((80 - healthAverage) / 2);
+  }
+
+  if (Number(counts.controls_total || 0) > 0 && Number(counts.evidence_total || 0) === 0) {
+    score -= 20;
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  let readinessLevel = 'high';
+  let auditorOpinion = t.auditorOpinionHigh;
+
+  if (score < 50) {
+    readinessLevel = 'critical';
+    auditorOpinion = t.auditorOpinionLow;
+  } else if (score < 65) {
+    readinessLevel = 'low';
+    auditorOpinion = t.auditorOpinionLow;
+  } else if (score < 80) {
+    readinessLevel = 'medium';
+    auditorOpinion = t.auditorOpinionMedium;
+  }
+
+  const mainGaps = [];
+
+  if (Number(counts.evidence_total || 0) === 0 && Number(counts.controls_total || 0) > 0) {
+    mainGaps.push({
+      type: 'evidence',
+      severity: 'high',
+      title: t.evidenceGap,
+      detail: locale === 'en'
+        ? 'Controls exist but no usable evidence was found in the current scope.'
+        : 'Existen controles, pero no se encontró evidencia utilizable en el alcance actual.',
+    });
+  }
+
+  if (Number(counts.findings_open || 0) > 0) {
+    mainGaps.push({
+      type: 'finding',
+      severity: 'medium',
+      title: t.openFindings,
+      detail: locale === 'en'
+        ? `${counts.findings_open} open findings should be reviewed before audit closure.`
+        : `${counts.findings_open} hallazgos abiertos deberían revisarse antes del cierre de auditoría.`,
+    });
+  }
+
+  if (Number(counts.action_plans_overdue || 0) > 0) {
+    mainGaps.push({
+      type: 'action_plan',
+      severity: 'high',
+      title: t.overdueActions,
+      detail: locale === 'en'
+        ? `${counts.action_plans_overdue} overdue action plans require treatment.`
+        : `${counts.action_plans_overdue} planes vencidos requieren tratamiento.`,
+    });
+  }
+
+  if (deterioratedControls > 0) {
+    mainGaps.push({
+      type: 'health',
+      severity: 'high',
+      title: t.deterioratedHealth,
+      detail: locale === 'en'
+        ? `${deterioratedControls} controls are deteriorated according to the health engine.`
+        : `${deterioratedControls} controles están deteriorados según el motor Health.`,
+    });
+  }
+
+  if (!mainGaps.length) {
+    mainGaps.push({
+      type: 'positive',
+      severity: 'low',
+      title: t.noCriticalGaps,
+      detail: t.noCriticalGaps,
+    });
+  }
+
+  const evidenceRequests = (scope.health_by_standard || [])
+    .filter((item) => Number(item.deteriorated || 0) > 0 || Number(item.attention || 0) > 0)
+    .slice(0, 6)
+    .map((item) => ({
+      standard_code: item.standard_code,
+      priority: Number(item.deteriorated || 0) > 0 ? 'high' : 'medium',
+      title: locale === 'en'
+        ? `Request updated evidence for ${item.standard_code}`
+        : `Solicitar evidencia actualizada para ${item.standard_code}`,
+      reason: locale === 'en'
+        ? 'Health engine shows controls requiring attention or remediation.'
+        : 'El motor Health muestra controles que requieren atención o remediación.',
+    }));
+
+  const actionPlanSuggestions = (scope.action_plans_overdue || []).slice(0, 8).map((item) => ({
+    source_id: item.id,
+    priority: item.priority || 'high',
+    title: item.title,
+    recommended_action: locale === 'en'
+      ? 'Review overdue status, assign accountable owner, and define a revised due date.'
+      : 'Revisar estado vencido, asignar responsable y definir nueva fecha comprometida.',
+    deep_link: `/plan-accion?id=${item.id}`,
+  }));
+
+  const findingsSuggestions = (scope.findings_open || []).slice(0, 8).map((item) => ({
+    source_id: item.id,
+    severity: item.severity || 'medium',
+    title: item.title,
+    recommended_action: locale === 'en'
+      ? 'Review finding classification, evidence, root cause, and closure criteria.'
+      : 'Revisar clasificación, evidencia, causa raíz y criterio de cierre del hallazgo.',
+    deep_link: `/hallazgos?id=${item.id}`,
+  }));
+
+  const nextSteps = [
+    t.reviewEvidence,
+    t.prioritizeRisks,
+    t.assignOwners,
+    t.prepareFindings,
+  ];
+
+  return {
+    ok: true,
+    locale,
+    tenant_id: scope.tenant_id,
+    summary: {
+      score,
+      readiness_level: readinessLevel,
+      executive_summary: t.executiveSummary,
+      auditor_opinion: auditorOpinion,
+      main_risks: mainGaps.filter((item) => ['high', 'critical'].includes(item.severity)),
+      main_gaps: mainGaps,
+      recommended_focus: nextSteps,
+    },
+    coverage: {
+      standards: scope.standards || [],
+      controls_reviewed: Number(counts.controls_total || 0),
+      evidences_reviewed: Number(counts.evidence_total || 0),
+      findings_reviewed: Number(counts.findings_open || 0),
+      risks_reviewed: 0,
+      actions_reviewed: Number(counts.action_plans_open || 0),
+      audits_reviewed: Number(counts.audits_recent || 0),
+      lifecycle_events_reviewed: Number(counts.lifecycle_recent || 0),
+    },
+    findings_suggestions: findingsSuggestions,
+    nonconformity_suggestions: findingsSuggestions
+      .filter((item) => String(item.severity || '').toLowerCase().includes('crit'))
+      .map((item) => ({ ...item, recommended_record: 'nonconformity' })),
+    evidence_requests: evidenceRequests,
+    action_plan_suggestions: actionPlanSuggestions,
+    control_recommendations: mainGaps,
+    risk_recommendations: mainGaps.filter((item) => item.type === 'health'),
+    next_steps: nextSteps,
+    human_review_required: true,
+    can_create_records: false,
+    trace: {
+      source: 'backend_ai_auditor_senior_safe_v1',
+      generated_at: new Date().toISOString(),
+      audit_focus: options.audit_focus || 'general',
+      depth: options.depth || 'executive',
+      include_internet: false,
+      db_write: false,
+    },
+    scope,
+    disclaimer: t.humanReview,
+  };
+}
+
+router.get('/scope', auth, async (req, res) => {
+  try {
+    const locale = normalizeAiAuditorLocale(req);
+    res.set('x-tcdx-locale', locale);
+
+    if (!canRead(req.user)) {
+      return res.status(403).json({ ok: false, code: 'RBAC_DENIED', error: 'No autorizado' });
+    }
+
+    const tenantId = resolveAiAuditorTenantId(req);
+    const standardCode = req.query?.standard_code ? String(req.query.standard_code) : null;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'TENANT_REQUIRED',
+        code: 'TENANT_REQUIRED',
+        message: 'tenant_id requerido',
+        error: 'tenant_id requerido',
+        locale,
+      });
+    }
+
+    if (!ensureTenantAccess(req, tenantId)) {
+      return res.status(403).json({
+        ok: false,
+        code: 'RBAC_DENIED',
+        error: 'No autorizado para este tenant',
+        locale,
+      });
+    }
+
+    const scope = await buildGlobalAiAuditorScope(tenantId, standardCode);
+
+    return res.json({
+      ok: true,
+      locale,
+      tenant_id: tenantId,
+      scope,
+    });
+  } catch (error) {
+    console.error('ERROR AI AUDITOR GLOBAL SCOPE:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo scope IA Auditor',
+      ...errorDetail(error),
+    });
+  }
+});
+
+router.post('/analyze', auth, async (req, res) => {
+  try {
+    const locale = normalizeAiAuditorLocale(req);
+    res.set('x-tcdx-locale', locale);
+
+    if (!canAnalyze(req.user)) {
+      return res.status(403).json({
+        ok: false,
+        code: 'RBAC_DENIED',
+        error: 'No autorizado para ejecutar IA Auditor',
+        locale,
+      });
+    }
+
+    const tenantId = resolveAiAuditorTenantId(req);
+    const standardCode = req.body?.standard_code ? String(req.body.standard_code) : null;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'TENANT_REQUIRED',
+        code: 'TENANT_REQUIRED',
+        message: 'tenant_id requerido',
+        error: 'tenant_id requerido',
+        locale,
+      });
+    }
+
+    if (!ensureTenantAccess(req, tenantId)) {
+      return res.status(403).json({
+        ok: false,
+        code: 'RBAC_DENIED',
+        error: 'No autorizado para este tenant',
+        locale,
+      });
+    }
+
+    const scope = await buildGlobalAiAuditorScope(tenantId, standardCode);
+    const analysis = buildGlobalSeniorAuditAnalysis(scope, locale, {
+      audit_focus: req.body?.audit_focus,
+      depth: req.body?.depth,
+    });
+
+    return res.json(analysis);
+  } catch (error) {
+    console.error('ERROR AI AUDITOR GLOBAL ANALYZE:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error ejecutando IA Auditor global',
+      ...errorDetail(error),
+    });
+  }
+});
+
+router.post('/suggestions/:type/prepare', auth, async (req, res) => {
+  try {
+    const locale = normalizeAiAuditorLocale(req);
+    res.set('x-tcdx-locale', locale);
+
+    if (!canAnalyze(req.user)) {
+      return res.status(403).json({
+        ok: false,
+        code: 'RBAC_DENIED',
+        error: 'No autorizado para preparar sugerencias',
+        locale,
+      });
+    }
+
+    const type = String(req.params.type || '').toLowerCase();
+    const suggestion = req.body?.suggestion || {};
+    const allowed = ['finding', 'nonconformity', 'evidence', 'action_plan'];
+
+    if (!allowed.includes(type)) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'VALIDATION_ERROR',
+        code: 'VALIDATION_ERROR',
+        message: 'Tipo de sugerencia no soportado',
+        error: 'Tipo de sugerencia no soportado',
+        locale,
+      });
+    }
+
+    const links = {
+      finding: '/hallazgos',
+      nonconformity: '/no-conformidades',
+      evidence: '/evidencias',
+      action_plan: '/plan-accion',
+    };
+
+    return res.json({
+      ok: true,
+      locale,
+      type,
+      can_create_records: false,
+      human_review_required: true,
+      deep_link: links[type],
+      prepared_payload: {
+        title: suggestion.title || '',
+        description:
+          suggestion.detail ||
+          suggestion.reason ||
+          suggestion.recommended_action ||
+          '',
+        priority: suggestion.priority || suggestion.severity || 'medium',
+        source: 'ai_auditor_senior',
+      },
+    });
+  } catch (error) {
+    console.error('ERROR AI AUDITOR PREPARE SUGGESTION:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error preparando sugerencia IA Auditor',
+      ...errorDetail(error),
+    });
+  }
+});
+
 router.get('/context/:audit_id', auth, async (req, res) => {
   try {
     const locale = resolveLocale(req);
