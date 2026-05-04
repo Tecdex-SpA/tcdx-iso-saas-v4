@@ -1743,7 +1743,9 @@
       "viewDetail": "View details",
       "viewEvidence": "View evidence",
       "delete": "Delete",
-      "savePlan": "Save plan"
+      "savePlan": "Save plan",
+      "close": "Close",
+      "save": "Save"
     },
     "fields": {
       "selectedStandard": "Selected standard",
@@ -1756,11 +1758,30 @@
       "progress": "Progress",
       "approvedEvidence": "Approved evidence",
       "pendingEvidence": "Pending evidence",
-      "followUps": "Follow-ups"
+      "followUps": "Follow-ups",
+      "standard": "Standard",
+      "control": "Control",
+      "source": "Source",
+      "description": "Description",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
+      "title": "Title",
+      "type": "Type",
+      "evidence": "Evidence",
+      "comments": "Comments",
+      "metadata": "Metadata",
+      "details": "Details",
+      "owner": "Owner",
+      "approval": "Approval",
+      "completion": "Completion"
     },
     "badges": {
       "progress": "Progress {{value}}%",
       "evidence": "Evidence {{count}}"
+    },
+    "detail": {
+      "title": "Action plan details",
+      "subtitle": "Operational information and traceability for the plan."
     }
   }
 }

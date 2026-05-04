@@ -1743,7 +1743,9 @@
       "viewDetail": "Ver detalle",
       "viewEvidence": "Ver evidencias",
       "delete": "Eliminar",
-      "savePlan": "Guardar plan"
+      "savePlan": "Guardar plan",
+      "close": "Cerrar",
+      "save": "Guardar"
     },
     "fields": {
       "selectedStandard": "Norma seleccionada",
@@ -1756,11 +1758,30 @@
       "progress": "Progreso",
       "approvedEvidence": "Evidencias aprobadas",
       "pendingEvidence": "Evidencias pendientes",
-      "followUps": "Seguimientos"
+      "followUps": "Seguimientos",
+      "standard": "Norma",
+      "control": "Control",
+      "source": "Origen",
+      "description": "Descripción",
+      "createdAt": "Creado",
+      "updatedAt": "Actualizado",
+      "title": "Título",
+      "type": "Tipo",
+      "evidence": "Evidencia",
+      "comments": "Comentarios",
+      "metadata": "Metadatos",
+      "details": "Detalle",
+      "owner": "Dueño",
+      "approval": "Aprobación",
+      "completion": "Cumplimiento"
     },
     "badges": {
       "progress": "Progreso {{value}} %",
       "evidence": "Evidencias {{count}}"
+    },
+    "detail": {
+      "title": "Detalle del plan de acción",
+      "subtitle": "Información operativa y trazabilidad del plan."
     }
   }
 }
