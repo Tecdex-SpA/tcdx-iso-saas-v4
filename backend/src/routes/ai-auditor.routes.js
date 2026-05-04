@@ -1492,6 +1492,146 @@ router.post('/analyze', auth, async (req, res) => {
   }
 });
 
+
+function sanitizeAiAuditorDraftText(value, maxLength = 1200) {
+  return String(value || '')
+    .replace(/\u0000/g, '')
+    .replace(/[<>]/g, '')
+    .trim()
+    .slice(0, maxLength);
+}
+
+function normalizeAiAuditorDraftPriority(value) {
+  const raw = String(value || '').toLowerCase().trim();
+
+  if (['critica', 'crítica', 'critical', 'alta', 'high'].includes(raw)) return raw.includes('crit') ? 'critical' : 'high';
+  if (['media', 'medium', 'medio'].includes(raw)) return 'medium';
+  if (['baja', 'low', 'minor'].includes(raw)) return 'low';
+
+  return 'medium';
+}
+
+function buildAiAuditorDraftKey() {
+  const random = Math.random().toString(36).slice(2, 10);
+  return `tcdx_ai_auditor_draft_${Date.now()}_${random}`;
+}
+
+function buildAiAuditorDraftDeepLink(type, storageKey) {
+  const base = {
+    finding: '/hallazgos',
+    nonconformity: '/no-conformidades',
+    evidence: '/evidencias',
+    action_plan: '/plan-accion',
+  }[type];
+
+  const params = new URLSearchParams({
+    source: 'ai-auditor',
+    draft: '1',
+    draft_key: storageKey,
+  });
+
+  return `${base}?${params.toString()}`;
+}
+
+function buildAiAuditorPreparedPayload(type, suggestion, req) {
+  const title =
+    sanitizeAiAuditorDraftText(
+      suggestion.title ||
+      suggestion.name ||
+      suggestion.control_title ||
+      suggestion.standard_code ||
+      'AI Auditor suggestion',
+      240
+    ) || 'AI Auditor suggestion';
+
+  const description = sanitizeAiAuditorDraftText(
+    suggestion.description ||
+    suggestion.detail ||
+    suggestion.reason ||
+    suggestion.why ||
+    suggestion.recommended_action ||
+    suggestion.recommended_next_step ||
+    '',
+    2200
+  );
+
+  const recommendedAction = sanitizeAiAuditorDraftText(
+    suggestion.recommended_action ||
+    suggestion.recommended_next_step ||
+    suggestion.action ||
+    '',
+    1600
+  );
+
+  const reason = sanitizeAiAuditorDraftText(
+    suggestion.reason ||
+    suggestion.why ||
+    suggestion.detail ||
+    '',
+    1600
+  );
+
+  const standardCode = sanitizeAiAuditorDraftText(
+    suggestion.standard_code ||
+    suggestion.iso_code ||
+    suggestion.iso ||
+    req.body?.standard_code ||
+    '',
+    80
+  );
+
+  const tenantControlId = sanitizeAiAuditorDraftText(
+    suggestion.tenant_control_id ||
+    suggestion.control_id ||
+    suggestion.control_ref ||
+    '',
+    120
+  );
+
+  const payload = {
+    source: 'ai_auditor_senior',
+    source_label: 'IA Auditor Senior',
+    type,
+    title,
+    description,
+    priority: normalizeAiAuditorDraftPriority(suggestion.priority || suggestion.severity),
+    severity: sanitizeAiAuditorDraftText(suggestion.severity || suggestion.priority || 'medium', 80),
+    standard_code: standardCode,
+    control_ref: sanitizeAiAuditorDraftText(suggestion.control_ref || suggestion.control_code || '', 120),
+    tenant_control_id: tenantControlId,
+    source_id: sanitizeAiAuditorDraftText(suggestion.source_id || suggestion.id || '', 120),
+    recommended_action: recommendedAction,
+    reason,
+    human_review_required: true,
+    can_create_records: false,
+    created_by: 'ai_auditor_prepare_endpoint',
+    created_at: new Date().toISOString(),
+  };
+
+  if (type === 'evidence') {
+    payload.evidence_request = true;
+    payload.description = description || reason || recommendedAction || title;
+  }
+
+  if (type === 'action_plan') {
+    payload.action_plan_request = true;
+    payload.description = description || recommendedAction || reason || title;
+  }
+
+  if (type === 'nonconformity') {
+    payload.nonconformity_request = true;
+    payload.description = description || reason || recommendedAction || title;
+  }
+
+  if (type === 'finding') {
+    payload.finding_request = true;
+    payload.description = description || reason || recommendedAction || title;
+  }
+
+  return payload;
+}
+
+
 router.post('/suggestions/:type/prepare', auth, async (req, res) => {
   try {
     const locale = normalizeAiAuditorLocale(req);
@@ -1507,10 +1647,27 @@ router.post('/suggestions/:type/prepare', auth, async (req, res) => {
     }
 
     const type = String(req.params.type || '').toLowerCase();
-    const suggestion = req.body?.suggestion || {};
+    const suggestion = req.body?.suggestion && typeof req.body.suggestion === 'object'
+      ? req.body.suggestion
+      : {};
+
+    const aliases = {
+      finding: 'finding',
+      hallazgo: 'finding',
+      nonconformity: 'nonconformity',
+      non_conformity: 'nonconformity',
+      no_conformidad: 'nonconformity',
+      evidence: 'evidence',
+      evidencia: 'evidence',
+      action: 'action_plan',
+      action_plan: 'action_plan',
+      plan: 'action_plan',
+    };
+
+    const normalizedType = aliases[type] || type;
     const allowed = ['finding', 'nonconformity', 'evidence', 'action_plan'];
 
-    if (!allowed.includes(type)) {
+    if (!allowed.includes(normalizedType)) {
       return res.status(400).json({
         ok: false,
         error_code: 'VALIDATION_ERROR',
@@ -1521,30 +1678,19 @@ router.post('/suggestions/:type/prepare', auth, async (req, res) => {
       });
     }
 
-    const links = {
-      finding: '/hallazgos',
-      nonconformity: '/no-conformidades',
-      evidence: '/evidencias',
-      action_plan: '/plan-accion',
-    };
+    const storageKey = buildAiAuditorDraftKey();
+    const preparedPayload = buildAiAuditorPreparedPayload(normalizedType, suggestion, req);
+    const deepLink = buildAiAuditorDraftDeepLink(normalizedType, storageKey);
 
     return res.json({
       ok: true,
       locale,
-      type,
+      type: normalizedType,
       can_create_records: false,
       human_review_required: true,
-      deep_link: links[type],
-      prepared_payload: {
-        title: suggestion.title || '',
-        description:
-          suggestion.detail ||
-          suggestion.reason ||
-          suggestion.recommended_action ||
-          '',
-        priority: suggestion.priority || suggestion.severity || 'medium',
-        source: 'ai_auditor_senior',
-      },
+      deep_link: deepLink,
+      storage_key: storageKey,
+      prepared_payload: preparedPayload,
     });
   } catch (error) {
     console.error('ERROR AI AUDITOR PREPARE SUGGESTION:', error);
@@ -1555,6 +1701,7 @@ router.post('/suggestions/:type/prepare', auth, async (req, res) => {
     });
   }
 });
+
 
 router.get('/context/:audit_id', auth, async (req, res) => {
   try {

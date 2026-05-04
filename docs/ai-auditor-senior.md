@@ -201,3 +201,49 @@ El usuario debe poder ejecutar análisis con:
 - idioma inglés.
 
 El módulo sigue siendo no destructivo.
+
+
+## Fase 3E — Sugerencias accionables
+
+El módulo permite preparar sugerencias sin crear registros.
+
+### Endpoint
+
+`POST /api/ai-auditor/suggestions/:type/prepare`
+
+Tipos soportados:
+
+- `finding`
+- `nonconformity`
+- `evidence`
+- `action_plan`
+
+La respuesta incluye:
+
+```json
+{
+  "ok": true,
+  "can_create_records": false,
+  "human_review_required": true,
+  "deep_link": "/hallazgos?source=ai-auditor&draft=1&draft_key=...",
+  "storage_key": "tcdx_ai_auditor_draft_...",
+  "prepared_payload": {}
+}
+```
+
+### Flujo frontend
+
+1. El usuario ejecuta IA Auditor.
+2. Elige una sugerencia.
+3. Presiona preparar.
+4. El frontend guarda el payload temporal en `sessionStorage`.
+5. El usuario es redirigido al módulo correspondiente.
+6. No se crea registro automáticamente.
+
+### Seguridad
+
+- No escribe en base de datos.
+- No crea hallazgos.
+- No crea planes.
+- No aprueba ni cierra registros.
+- La aprobación humana sigue siendo obligatoria.

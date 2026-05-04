@@ -51,6 +51,11 @@ function localText(locale: string) {
     humanReview: en ? 'Human review required' : 'Revisión humana requerida',
     noData: en ? 'No data available yet.' : 'Sin datos disponibles todavía.',
     openModule: en ? 'Open module' : 'Abrir módulo',
+    prepare: en ? 'Prepare' : 'Preparar',
+    prepareFinding: en ? 'Prepare finding' : 'Preparar hallazgo',
+    prepareEvidence: en ? 'Prepare evidence' : 'Preparar evidencia',
+    prepareActionPlan: en ? 'Prepare action plan' : 'Preparar plan',
+    prepareError: en ? 'Could not prepare the suggestion.' : 'No fue posible preparar la sugerencia.',
     error: en ? 'Could not run Senior AI Auditor.' : 'No fue posible ejecutar IA Auditor Senior.',
     scope: en ? 'Audit scope' : 'Alcance auditado',
     standard: en ? 'Standard' : 'Norma',
@@ -338,6 +343,49 @@ export default function SeniorAiAuditorPage() {
     }
   };
 
+
+  const prepareSuggestion = async (type: string, suggestion: any) => {
+    if (!token) return;
+
+    try {
+      setError('');
+
+      const res = await fetch(`${API_URL}/api/ai-auditor/suggestions/${type}/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'x-tcdx-locale': locale,
+        },
+        body: JSON.stringify({
+          locale,
+          standard_code: selectedStandard !== 'all' ? selectedStandard : suggestion?.standard_code,
+          suggestion,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || copy.prepareError);
+      }
+
+      const storageKey = json.storage_key;
+      const deepLink = json.deep_link;
+
+      if (storageKey && json.prepared_payload) {
+        sessionStorage.setItem(storageKey, JSON.stringify(json.prepared_payload));
+      }
+
+      if (deepLink) {
+        window.location.href = deepLink;
+      }
+    } catch (err: any) {
+      setError(err?.message || copy.prepareError);
+    }
+  };
+
+
   useEffect(() => {
     if (token) void loadScope();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -570,6 +618,12 @@ export default function SeniorAiAuditorPage() {
                     </div>
                     <h3 className="mt-2 font-bold">{item.title}</h3>
                     <p className="mt-2 text-sm leading-6">{item.reason}</p>
+                    <button
+                      onClick={() => prepareSuggestion('evidence', item)}
+                      className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-bold"
+                    >
+                      {copy.prepareEvidence}
+                    </button>
                   </div>
                 )}
               />
@@ -585,14 +639,22 @@ export default function SeniorAiAuditorPage() {
                     </div>
                     <h3 className="mt-2 font-bold">{item.title}</h3>
                     <p className="mt-2 text-sm leading-6">{item.recommended_action}</p>
-                    {item.deep_link && (
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <button
-                        onClick={() => window.location.href = item.deep_link}
-                        className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-bold"
+                        onClick={() => prepareSuggestion('finding', item)}
+                        className="rounded-xl bg-white px-3 py-2 text-xs font-bold"
                       >
-                        {copy.openModule}
+                        {copy.prepareFinding}
                       </button>
-                    )}
+                      {item.deep_link && (
+                        <button
+                          onClick={() => window.location.href = item.deep_link}
+                          className="rounded-xl bg-white px-3 py-2 text-xs font-bold"
+                        >
+                          {copy.openModule}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               />
@@ -608,14 +670,22 @@ export default function SeniorAiAuditorPage() {
                     </div>
                     <h3 className="mt-2 font-bold">{item.title}</h3>
                     <p className="mt-2 text-sm leading-6">{item.recommended_action}</p>
-                    {item.deep_link && (
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <button
-                        onClick={() => window.location.href = item.deep_link}
-                        className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-bold"
+                        onClick={() => prepareSuggestion('action_plan', item)}
+                        className="rounded-xl bg-white px-3 py-2 text-xs font-bold"
                       >
-                        {copy.openModule}
+                        {copy.prepareActionPlan}
                       </button>
-                    )}
+                      {item.deep_link && (
+                        <button
+                          onClick={() => window.location.href = item.deep_link}
+                          className="rounded-xl bg-white px-3 py-2 text-xs font-bold"
+                        >
+                          {copy.openModule}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               />
