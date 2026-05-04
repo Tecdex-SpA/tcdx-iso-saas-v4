@@ -1,5 +1,7 @@
 const db = require('../config/db');
 const { resolveLocale } = require('../utils/locale');
+const { sendError } = require('../utils/errorResponse');
+const { ERROR_CODES } = require('../utils/errorCodes');
 
 function normalizeRole(role) {
   return String(role || '').trim().toLowerCase();
@@ -291,6 +293,7 @@ async function syncNotificationsForTenant(tenantId) {
       href: '/plan-accion',
       level: 'critical',
       dedupeKey: 'system:overdue-plans',
+      messageCode: 'notifications.system.overduePlans',
       active: Number(overduePlansRes.rows[0].total || 0) > 0,
     },
     {
@@ -300,6 +303,7 @@ async function syncNotificationsForTenant(tenantId) {
       href: '/hallazgos',
       level: 'critical',
       dedupeKey: 'system:overdue-findings',
+      messageCode: 'notifications.system.overdueFindings',
       active: Number(overdueFindingsRes.rows[0].total || 0) > 0,
     },
     {
@@ -309,6 +313,7 @@ async function syncNotificationsForTenant(tenantId) {
       href: '/activos',
       level: 'critical',
       dedupeKey: 'system:high-risks',
+      messageCode: 'notifications.system.highRisks',
       active: Number(highRisksRes.rows[0].total || 0) > 0,
     },
     {
@@ -318,6 +323,7 @@ async function syncNotificationsForTenant(tenantId) {
       href: '/auditorias',
       level: 'warning',
       dedupeKey: 'system:upcoming-audits',
+      messageCode: 'notifications.system.upcomingAudits',
       active: Number(upcomingAuditsRes.rows[0].total || 0) > 0,
     },
     {
@@ -327,6 +333,7 @@ async function syncNotificationsForTenant(tenantId) {
       href: '/controles',
       level: 'warning',
       dedupeKey: 'system:deteriorated-controls',
+      messageCode: 'notifications.system.deterioratedControls',
       active: Number(deterioratedControlsRes.rows[0].total || 0) > 0,
     },
     {
@@ -336,6 +343,7 @@ async function syncNotificationsForTenant(tenantId) {
       href: '/evidencias',
       level: 'info',
       dedupeKey: 'system:pending-evidences',
+      messageCode: 'notifications.system.pendingEvidences',
       active: Number(pendingEvidenceRes.rows[0].total || 0) > 0,
     },
   ];
@@ -357,11 +365,21 @@ async function getNotifications(req, res) {
     const { tenantId } = req.params;
 
     if (!tenantId) {
-      return res.status(400).json({ error: 'tenantId requerido' });
+      return sendError(res, {
+        status: 400,
+        code: ERROR_CODES.TENANT_REQUIRED,
+        message: 'tenantId requerido',
+        locale,
+      });
     }
 
     if (!(await ensureTenantAccess(req, tenantId))) {
-      return res.status(403).json({ error: 'No autorizado para este tenant' });
+      return sendError(res, {
+        status: 403,
+        code: ERROR_CODES.AUTH_FORBIDDEN,
+        message: 'No autorizado para este tenant',
+        locale,
+      });
     }
 
     await syncNotificationsForTenant(tenantId);
@@ -401,7 +419,12 @@ async function getNotifications(req, res) {
     });
   } catch (err) {
     console.error('GET NOTIFICATIONS ERROR:', err);
-    return res.status(500).json({ error: 'Error obteniendo notificaciones' });
+    return sendError(res, {
+      status: 500,
+      code: ERROR_CODES.SERVER_ERROR,
+      message: 'Error obteniendo notificaciones',
+      locale: 'es',
+    });
   }
 }
 
@@ -423,13 +446,23 @@ async function markNotificationRead(req, res) {
     );
 
     if (current.rowCount === 0) {
-      return res.status(404).json({ error: 'Notificación no encontrada' });
+      return sendError(res, {
+      status: 404,
+      code: ERROR_CODES.NOTIFICATION_NOT_FOUND,
+      message: 'Notificación no encontrada',
+      locale,
+    });
     }
 
     const notification = current.rows[0];
 
     if (!(await ensureTenantAccess(req, notification.tenant_id))) {
-      return res.status(403).json({ error: 'No autorizado para esta notificación' });
+      return sendError(res, {
+      status: 403,
+      code: ERROR_CODES.AUTH_FORBIDDEN,
+      message: 'No autorizado para esta notificación',
+      locale,
+    });
     }
 
     await db.query(
@@ -445,7 +478,12 @@ async function markNotificationRead(req, res) {
     return res.json({ ok: true, locale });
   } catch (err) {
     console.error('MARK NOTIFICATION READ ERROR:', err);
-    return res.status(500).json({ error: 'Error marcando notificación' });
+    return sendError(res, {
+      status: 500,
+      code: ERROR_CODES.SERVER_ERROR,
+      message: 'Error marcando notificación',
+      locale: 'es',
+    });
   }
 }
 
@@ -457,11 +495,21 @@ async function markAllNotificationsRead(req, res) {
     const { tenantId } = req.params;
 
     if (!tenantId) {
-      return res.status(400).json({ error: 'tenantId requerido' });
+      return sendError(res, {
+        status: 400,
+        code: ERROR_CODES.TENANT_REQUIRED,
+        message: 'tenantId requerido',
+        locale,
+      });
     }
 
     if (!(await ensureTenantAccess(req, tenantId))) {
-      return res.status(403).json({ error: 'No autorizado para este tenant' });
+      return sendError(res, {
+        status: 403,
+        code: ERROR_CODES.AUTH_FORBIDDEN,
+        message: 'No autorizado para este tenant',
+        locale,
+      });
     }
 
     await db.query(
@@ -478,7 +526,12 @@ async function markAllNotificationsRead(req, res) {
     return res.json({ ok: true, locale });
   } catch (err) {
     console.error('MARK ALL NOTIFICATIONS READ ERROR:', err);
-    return res.status(500).json({ error: 'Error marcando notificaciones' });
+    return sendError(res, {
+      status: 500,
+      code: ERROR_CODES.SERVER_ERROR,
+      message: 'Error marcando notificaciones',
+      locale: 'es',
+    });
   }
 }
 

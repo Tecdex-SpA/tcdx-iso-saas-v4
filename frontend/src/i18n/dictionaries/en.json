@@ -46,7 +46,29 @@
     "priority": "Priority",
     "dueDate": "Due Date",
     "date": "Date",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "errors": {
+      "GENERIC": "Error processing request.",
+      "AUTH_UNAUTHORIZED": "Unauthorized. Please sign in again.",
+      "AUTH_FORBIDDEN": "You do not have permission to perform this action.",
+      "AUTH_INVALID_CREDENTIALS": "Invalid credentials.",
+      "AUTH_SESSION_EXPIRED": "The session has expired. Please sign in again.",
+      "VALIDATION_ERROR": "Please review the entered data.",
+      "NOT_FOUND": "The requested resource was not found.",
+      "SERVER_ERROR": "Internal server error.",
+      "NETWORK_ERROR": "Connection error. Please try again.",
+      "TENANT_REQUIRED": "A company or tenant must be selected.",
+      "LOCALE_UNSUPPORTED": "Unsupported language.",
+      "REPORT_GENERATION_FAILED": "The report could not be generated.",
+      "REPORT_NOT_FOUND": "Report not found.",
+      "AI_REQUEST_FAILED": "The AI request could not be completed.",
+      "AI_INSUFFICIENT_CONTEXT": "There is not enough context to answer safely.",
+      "NOTIFICATION_NOT_FOUND": "Notification not found.",
+      "CONTROL_NOT_FOUND": "Control not found.",
+      "EVIDENCE_NOT_FOUND": "Evidence not found.",
+      "FINDING_NOT_FOUND": "Finding not found.",
+      "ACTION_PLAN_NOT_FOUND": "Action plan not found."
+    }
   },
   "login": {
     "secureAccess": "Secure Access",
@@ -1571,6 +1593,16 @@
       "completed": "Generated",
       "processing": "In Progress",
       "error": "Error"
+    }
+  },
+  "notifications": {
+    "system": {
+      "overduePlans": "Overdue plans",
+      "overdueFindings": "Overdue findings",
+      "highRisks": "Critical risks",
+      "upcomingAudits": "Upcoming audits",
+      "deterioratedControls": "Deteriorated controls",
+      "pendingEvidences": "Pending evidence"
     }
   }
 }

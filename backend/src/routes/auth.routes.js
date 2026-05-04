@@ -4,6 +4,9 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const authService = require('../services/auth.service');
+const { resolveLocale } = require('../utils/locale');
+const { sendError } = require('../utils/errorResponse');
+const { ERROR_CODES } = require('../utils/errorCodes');
 
 function normalizeRole(role) {
   return String(role || '').trim().toLowerCase();
@@ -66,9 +69,13 @@ function buildSessionFromToken(token) {
 router.post('/register', async (req, res) => {
   try {
     if (process.env.ENABLE_PUBLIC_REGISTER !== 'true') {
-      return res.status(403).json({
-        error: 'Registro público deshabilitado',
-        code: 'PUBLIC_REGISTER_DISABLED',
+      const locale = resolveLocale(req);
+      res.set('x-tcdx-locale', locale);
+      return sendError(res, {
+        status: 403,
+        code: ERROR_CODES.AUTH_FORBIDDEN,
+        message: 'Registro público deshabilitado',
+        locale,
       });
     }
 
@@ -77,7 +84,14 @@ router.post('/register', async (req, res) => {
     const tenant = req.body?.tenant || null;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email y password son requeridos' });
+      const locale = resolveLocale(req);
+      res.set('x-tcdx-locale', locale);
+      return sendError(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: 'Email y password son requeridos',
+        locale,
+      });
     }
 
     const user = await authService.register(email, password, tenant);
@@ -85,7 +99,14 @@ router.post('/register', async (req, res) => {
     return res.json(user);
   } catch (err) {
     console.error('REGISTER ERROR:', err);
-    return res.status(500).json({ error: 'Error registrando usuario' });
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
+    return sendError(res, {
+      status: 500,
+      code: ERROR_CODES.SERVER_ERROR,
+      message: 'Error registrando usuario',
+      locale,
+    });
   }
 });
 
@@ -98,19 +119,40 @@ router.post('/login', async (req, res) => {
     const password = String(req.body?.password || '');
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email y password son requeridos' });
+      const locale = resolveLocale(req);
+      res.set('x-tcdx-locale', locale);
+      return sendError(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: 'Email y password son requeridos',
+        locale,
+      });
     }
 
     const token = await authService.login(email, password);
 
     if (!token) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+      const locale = resolveLocale(req);
+      res.set('x-tcdx-locale', locale);
+      return sendError(res, {
+        status: 401,
+        code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
+        message: 'Credenciales inválidas',
+        locale,
+      });
     }
 
     return res.json(buildSessionFromToken(token));
   } catch (err) {
     console.error('LOGIN ERROR:', err);
-    return res.status(401).json({ error: 'Credenciales inválidas' });
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
+    return sendError(res, {
+      status: 401,
+      code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
+      message: 'Credenciales inválidas',
+      locale,
+    });
   }
 });
 
@@ -126,7 +168,14 @@ router.get('/validate', auth, async (req, res) => {
     });
   } catch (err) {
     console.error('VALIDATE ERROR:', err);
-    return res.status(500).json({ error: 'Error validando sesión' });
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
+    return sendError(res, {
+      status: 500,
+      code: ERROR_CODES.SERVER_ERROR,
+      message: 'Error validando sesión',
+      locale,
+    });
   }
 });
 

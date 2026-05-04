@@ -46,7 +46,29 @@
     "priority": "Prioridad",
     "dueDate": "Vencimiento",
     "date": "Fecha",
-    "clearFilters": "Limpiar filtros"
+    "clearFilters": "Limpiar filtros",
+    "errors": {
+      "GENERIC": "Error procesando solicitud.",
+      "AUTH_UNAUTHORIZED": "No autorizado. Inicia sesión nuevamente.",
+      "AUTH_FORBIDDEN": "No tienes permisos para realizar esta acción.",
+      "AUTH_INVALID_CREDENTIALS": "Credenciales inválidas.",
+      "AUTH_SESSION_EXPIRED": "La sesión expiró. Inicia sesión nuevamente.",
+      "VALIDATION_ERROR": "Revisa los datos ingresados.",
+      "NOT_FOUND": "No se encontró el recurso solicitado.",
+      "SERVER_ERROR": "Error interno del servidor.",
+      "NETWORK_ERROR": "Error de conexión. Intenta nuevamente.",
+      "TENANT_REQUIRED": "Falta seleccionar la empresa o tenant.",
+      "LOCALE_UNSUPPORTED": "Idioma no soportado.",
+      "REPORT_GENERATION_FAILED": "No se pudo generar el reporte.",
+      "REPORT_NOT_FOUND": "Reporte no encontrado.",
+      "AI_REQUEST_FAILED": "No se pudo completar la solicitud de IA.",
+      "AI_INSUFFICIENT_CONTEXT": "No hay contexto suficiente para responder con seguridad.",
+      "NOTIFICATION_NOT_FOUND": "Notificación no encontrada.",
+      "CONTROL_NOT_FOUND": "Control no encontrado.",
+      "EVIDENCE_NOT_FOUND": "Evidencia no encontrada.",
+      "FINDING_NOT_FOUND": "Hallazgo no encontrado.",
+      "ACTION_PLAN_NOT_FOUND": "Plan de acción no encontrado."
+    }
   },
   "login": {
     "secureAccess": "Acceso seguro",
@@ -1571,6 +1593,16 @@
       "completed": "Generado",
       "processing": "En proceso",
       "error": "Error"
+    }
+  },
+  "notifications": {
+    "system": {
+      "overduePlans": "Planes atrasados",
+      "overdueFindings": "Hallazgos vencidos",
+      "highRisks": "Riesgos críticos",
+      "upcomingAudits": "Auditorías próximas",
+      "deterioratedControls": "Controles deteriorados",
+      "pendingEvidences": "Evidencias pendientes"
     }
   }
 }
