@@ -102,3 +102,7 @@ El QA valida historial antes/después de análisis, `trace.history_saved`, `trac
 ## Validación revisión humana
 
 El QA ejecuta una revisión controlada sobre un `history_run_id` generado por el propio análisis y valida que el detalle histórico devuelva `human_review_status=accepted`.
+
+## Cierre Fase 3O
+
+El QA IA Auditor es la validación principal para cierre productivo inicial. Debe ejecutarse después del deploy y terminar con `FAIL: 0`.

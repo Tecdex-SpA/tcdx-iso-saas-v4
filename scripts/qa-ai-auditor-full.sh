@@ -115,6 +115,20 @@ except Exception:
 PY
 }
 
+
+assert_json() {
+  local file="$1"
+  local name="$2"
+  local expression="$3"
+  local details="$4"
+
+  if [ "$(json_check "$file" "$expression")" = "true" ]; then
+    pass "$name" "$details"
+  else
+    fail "$name" "$details"
+  fi
+}
+
 http_code() {
   curl -s -o /dev/null -w "%{http_code}" "$1" || true
 }

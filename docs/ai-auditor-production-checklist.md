@@ -119,3 +119,13 @@ Validar módulos destino:
 - [ ] PDF indica que la revisión humana no equivale a cierre formal.
 - [ ] PDF actual funciona aunque no exista revisión humana.
 - [ ] PDF histórico y actual siguen superando validación HTTP 200 y tamaño mínimo.
+
+## Cierre Fase 3O
+
+- [ ] QA IA Auditor FAIL 0.
+- [ ] Curl final Fase 3O FAIL 0.
+- [ ] PDF actual e histórico funcionan.
+- [ ] Historial y revisión humana funcionan.
+- [ ] Prepare/drafts funcionan.
+- [ ] No se crean registros críticos automáticamente.
+- [ ] Documentos finales creados.
