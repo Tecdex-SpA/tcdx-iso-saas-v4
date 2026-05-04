@@ -753,6 +753,148 @@ function enrichAiResponseWithOrchestrator(aiResponse, enhancedResult) {
 }
 
 
+
+// =========================================================
+// IA Compliance health hardening
+// - Endpoint health no debe tumbar toda la vista si ai-engine
+//   no responde o si cambia path/método.
+// - No escribe DB ni crea registros.
+// =========================================================
+
+async function checkLocalBackendDbConnection() {
+  try {
+    await pool.query('SELECT 1');
+    return true;
+  } catch (error) {
+    console.error('IA COMPLIANCE LOCAL DB HEALTH ERROR:', error.message);
+    return false;
+  }
+}
+
+async function probeAiEngineHealthEndpoint(path, method = 'GET') {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-tcdx-locale': 'es',
+    };
+
+    const internalToken = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
+    if (internalToken) {
+      headers['X-AI-Token'] = internalToken;
+    }
+
+    const response = await fetch(`${AI_ENGINE_URL}${path}`, {
+      method,
+      headers,
+      body: method === 'POST' ? JSON.stringify({ ping: true, locale: 'es' }) : undefined,
+      signal: controller.signal,
+    });
+
+    const text = await response.text().catch(() => '');
+    let data = null;
+
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        path,
+        method,
+        error: data?.detail || data?.error || `HTTP ${response.status}`,
+      };
+    }
+
+    return {
+      ok: true,
+      status: response.status,
+      path,
+      method,
+      data,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      path,
+      method,
+      error: error?.name === 'AbortError' ? 'timeout' : (error?.message || 'AI Engine unavailable'),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function getRobustAiComplianceEngineHealth() {
+  const localDbOk = await checkLocalBackendDbConnection();
+
+  const probes = [
+    ['/health', 'GET'],
+    ['/api/health', 'GET'],
+    ['/api/ai/health', 'GET'],
+    ['/health', 'POST'],
+    ['/api/health', 'POST'],
+    ['/api/ai/health', 'POST'],
+  ];
+
+  const attempts = [];
+
+  for (const [path, method] of probes) {
+    const result = await probeAiEngineHealthEndpoint(path, method);
+    attempts.push(result);
+
+    if (result.ok) {
+      const engineData = result.data || {};
+
+      return {
+        ok: true,
+        data: {
+          ok: true,
+          service: engineData.service || engineData.name || 'ai-engine',
+          env: engineData.env || engineData.environment || process.env.NODE_ENV || 'production',
+          db_connection:
+            engineData.db_connection ??
+            engineData.database_ok ??
+            engineData.db_ok ??
+            localDbOk,
+          backend_db_connection: localDbOk,
+          engine_url: AI_ENGINE_URL,
+          health_path: result.path,
+          health_method: result.method,
+          degraded: false,
+        },
+        diagnostics: {
+          attempts,
+        },
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    data: {
+      ok: false,
+      service: 'ai-engine',
+      env: process.env.NODE_ENV || 'production',
+      db_connection: false,
+      backend_db_connection: localDbOk,
+      engine_url: AI_ENGINE_URL,
+      degraded: true,
+      error: attempts.find((item) => item.error)?.error || 'AI Engine unavailable',
+    },
+    diagnostics: {
+      attempts,
+    },
+  };
+}
+
+
 async function callAiEngine(path, payload) {
   const locale = normalizeAiLocale(payload?.locale || payload?.language || payload?.response_language);
   const payloadWithLocale = {
@@ -1487,6 +1629,34 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
 
   return result.rows[0];
 }
+
+
+router.get('/engine-health', auth, async (req, res) => {
+  try {
+    const health = await getRobustAiComplianceEngineHealth();
+
+    return res.json({
+      ...health,
+      locale: resolveLocale(req),
+    });
+  } catch (error) {
+    console.error('IA COMPLIANCE ENGINE HEALTH SAFE ERROR:', error.message);
+
+    return res.json({
+      ok: true,
+      locale: resolveLocale(req),
+      data: {
+        ok: false,
+        service: 'ai-engine',
+        env: process.env.NODE_ENV || 'production',
+        db_connection: false,
+        backend_db_connection: false,
+        degraded: true,
+        error: error.message || 'AI Engine unavailable',
+      },
+    });
+  }
+});
 
 router.get('/engine-health', auth, async (_req, res) => {
   try {

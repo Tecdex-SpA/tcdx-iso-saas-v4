@@ -4,9 +4,142 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+
+const IA_COMPLIANCE_COPY = {
+  es: {
+    title: 'IA Compliance',
+    subtitle: '{copy.subtitle}',
+    refresh: '{copy.refresh}',
+    executiveBrief: '{copy.managementSummary}',
+    generating: 'Generando...',
+    loading: '{copy.loading}',
+    sessionError: 'No se pudo obtener la sesión del usuario.',
+    genericError: 'No fue posible cargar IA Compliance.',
+    engineWarning: 'No fue posible conectar con AI Engine. Se muestran datos internos disponibles.',
+    executiveBriefError: 'No fue posible generar el resumen gerencial IA.',
+    engine: 'Motor IA',
+    engineDb: 'Conexión BD motor',
+    activeControls: 'Controles activos',
+    attentionControls: 'Controles en atención',
+    pendingEvidence: 'Evidencias pendientes',
+    healthTitle: '{copy.healthTitle}',
+    healthSubtitle: '{copy.healthSubtitle}',
+    company: 'Empresa',
+    activeStandards: '{copy.activeStandards}',
+    noStandards: 'Sin normas activas',
+    noSummary: 'Sin resumen IA disponible.',
+    deterioratedControls: 'Controles deteriorados',
+    criticalFindings: 'Hallazgos críticos',
+    recommendations: '{copy.recommendations}',
+    noRecommendations: '{copy.noRecommendations}',
+    quickAccess: 'Accesos rápidos',
+    quickAccessSubtitle: '{copy.quickAccessSubtitle}',
+    findings: 'Hallazgos',
+    findingsDesc: 'Analizar y aplicar IA sobre hallazgos.',
+    nonconformities: 'No conformidades',
+    nonconformitiesDesc: 'Redacción IA y creación de acción desde borrador.',
+    actionPlan: 'Plan de acción',
+    actionPlanDesc: 'Aplicar planes sugeridos IA al plan real.',
+    savedSuggestions: 'Sugerencias IA guardadas',
+    savedSuggestionsDesc: 'Revisar borradores, trazabilidad y aplicar.',
+    recentSuggestions: '{copy.recentSuggestions}',
+    pending: 'Pendientes',
+    applied: 'Aplicadas',
+    confidence: 'Confianza',
+    managementSummary: '{copy.managementSummary}',
+    priorities: '{copy.priorities}',
+    managementActions: '{copy.managementActions}',
+    latestSuggestions: '{copy.latestSuggestions}',
+    latestSuggestionsSubtitle: '{copy.latestSuggestionsSubtitle}',
+    viewAll: '{copy.viewAll}',
+    noSavedSuggestions: '{copy.noSavedSuggestions}',
+    ok: 'OK',
+    error: 'Error',
+    draft: 'draft',
+    findingAnalysis: 'Análisis de hallazgo',
+    suggestedPlan: 'Plan sugerido',
+    seniorAuditorTask: 'Tarea auditor senior',
+    seniorRiskAlert: 'Alerta riesgo senior',
+    seniorEvidenceGap: 'Brecha evidencia senior',
+    seniorInsight: 'Insight auditor senior',
+    ncDraft: 'Borrador NC',
+    suggestion: 'Sugerencia',
+    aiAnalysis: 'Análisis IA',
+    aiSuggestedPlan: 'Plan sugerido IA',
+    seniorAuditorSuggestion: 'Sugerencia auditor senior',
+    aiDraft: 'Borrador IA',
+  },
+  en: {
+    title: 'AI Compliance',
+    subtitle: 'Intelligent support center for compliance, remediation, and executive follow-up.',
+    refresh: 'Refresh',
+    executiveBrief: 'AI executive brief',
+    generating: 'Generating...',
+    loading: 'Loading AI Compliance...',
+    sessionError: 'Could not obtain the user session.',
+    genericError: 'AI Compliance could not be loaded.',
+    engineWarning: 'AI Engine could not be reached. Available internal data is shown.',
+    executiveBriefError: 'The AI executive brief could not be generated.',
+    engine: 'AI Engine',
+    engineDb: 'Engine DB connection',
+    activeControls: 'Active controls',
+    attentionControls: 'Controls requiring attention',
+    pendingEvidence: 'Pending evidence',
+    healthTitle: 'AI health summary',
+    healthSubtitle: 'Executive interpretation of the current tenant status.',
+    company: 'Company',
+    activeStandards: 'Active standards',
+    noStandards: 'No active standards',
+    noSummary: 'No AI summary available.',
+    deterioratedControls: 'Deteriorated controls',
+    criticalFindings: 'Critical findings',
+    recommendations: 'AI recommendations',
+    noRecommendations: 'No recommendations available.',
+    quickAccess: 'Quick access',
+    quickAccessSubtitle: 'Shortcuts to modules where AI is already integrated.',
+    findings: 'Findings',
+    findingsDesc: 'Analyze and apply AI to findings.',
+    nonconformities: 'Nonconformities',
+    nonconformitiesDesc: 'AI drafting and action creation from draft.',
+    actionPlan: 'Action plans',
+    actionPlanDesc: 'Apply AI-suggested plans to the real action plan.',
+    savedSuggestions: 'Saved AI suggestions',
+    savedSuggestionsDesc: 'Review drafts, traceability, and apply.',
+    recentSuggestions: 'Recent suggestions',
+    pending: 'Pending',
+    applied: 'Applied',
+    confidence: 'Confidence',
+    managementSummary: 'AI executive brief',
+    priorities: 'Priorities',
+    managementActions: 'Management actions',
+    latestSuggestions: 'Latest saved suggestions',
+    latestSuggestionsSubtitle: 'Quick view of recent AI module activity.',
+    viewAll: 'View all',
+    noSavedSuggestions: 'There are no saved suggestions yet.',
+    ok: 'OK',
+    error: 'Error',
+    draft: 'draft',
+    findingAnalysis: 'Finding analysis',
+    suggestedPlan: 'Suggested plan',
+    seniorAuditorTask: 'Senior auditor task',
+    seniorRiskAlert: 'Senior risk alert',
+    seniorEvidenceGap: 'Senior evidence gap',
+    seniorInsight: 'Senior auditor insight',
+    ncDraft: 'NC draft',
+    suggestion: 'Suggestion',
+    aiAnalysis: 'AI analysis',
+    aiSuggestedPlan: 'AI suggested plan',
+    seniorAuditorSuggestion: 'Senior auditor suggestion',
+    aiDraft: 'AI draft',
+  },
+};
+
+type IaComplianceCopy = typeof IA_COMPLIANCE_COPY.es;
+
 
 type EngineHealthResponse = {
   ok: boolean;
@@ -63,6 +196,8 @@ type SuggestionRow = {
 };
 
 export default function IaCompliancePage() {
+  const { locale } = useTranslation();
+  const copy: IaComplianceCopy = locale === 'en' ? IA_COMPLIANCE_COPY.en : IA_COMPLIANCE_COPY.es;
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
 
@@ -84,7 +219,7 @@ export default function IaCompliancePage() {
 
     if (!authToken || !u?.tenant_id) {
       setLoading(false);
-      setError('No se pudo obtener la sesión del usuario.');
+      setError(copy.sessionError);
       return;
     }
 
@@ -102,6 +237,7 @@ export default function IaCompliancePage() {
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${authToken}`,
+        'x-tcdx-locale': locale,
       },
     });
 
@@ -126,18 +262,50 @@ export default function IaCompliancePage() {
       setLoading(true);
       setError('');
 
-      const [engine, health, drafts] = await Promise.all([
+      const [engineResult, healthResult, draftsResult] = await Promise.allSettled([
         getWithAuth(`${API_URL}/api/ai-compliance/engine-health`),
         getWithAuth(`${API_URL}/api/ai-compliance/health-summary`),
         getWithAuth(`${API_URL}/api/ai-compliance/suggestions`),
       ]);
 
-      setEngineHealth(engine);
-      setHealthSummary(health);
-      setSuggestions(Array.isArray(drafts?.data) ? drafts.data.slice(0, 6) : []);
+      if (engineResult.status === 'fulfilled') {
+        setEngineHealth(engineResult.value);
+      } else {
+        setEngineHealth({
+          ok: true,
+          data: {
+            ok: false,
+            service: 'ai-engine',
+            env: 'unknown',
+            db_connection: false,
+          },
+        });
+      }
+
+      if (healthResult.status === 'fulfilled') {
+        setHealthSummary(healthResult.value);
+      }
+
+      if (draftsResult.status === 'fulfilled') {
+        setSuggestions(Array.isArray(draftsResult.value?.data) ? draftsResult.value.data.slice(0, 6) : []);
+      } else {
+        setSuggestions([]);
+      }
+
+      if (
+        engineResult.status === 'rejected' &&
+        healthResult.status === 'rejected' &&
+        draftsResult.status === 'rejected'
+      ) {
+        throw engineResult.reason || healthResult.reason || draftsResult.reason;
+      }
+
+      if (engineResult.status === 'rejected') {
+        setError(copy.engineWarning);
+      }
     } catch (err: any) {
       console.error('ERROR LOAD IA COMPLIANCE DASHBOARD:', err);
-      setError(err.message || 'No fue posible cargar IA Compliance.');
+      setError(err.message || copy.genericError);
     } finally {
       setLoading(false);
     }
@@ -149,13 +317,13 @@ export default function IaCompliancePage() {
       setError('');
 
       const brief = await getWithAuth(
-        `${API_URL}/api/ai-compliance/executive-brief?period=Periodo%20actual`
+        `${API_URL}/api/ai-compliance/executive-brief?period=current`
       );
 
       setExecutiveBrief(brief);
     } catch (err: any) {
       console.error('ERROR LOAD EXECUTIVE BRIEF IA COMPLIANCE:', err);
-      setError(err.message || 'No fue posible generar el resumen gerencial IA.');
+      setError(err.message || copy.executiveBriefError);
     } finally {
       setBriefLoading(false);
     }
@@ -176,9 +344,9 @@ export default function IaCompliancePage() {
   }, [suggestions]);
 
   const standardsLabel = useMemo(() => {
-    if (!healthContext?.standards?.length) return 'Sin normas activas';
+    if (!healthContext?.standards?.length) return copy.noStandards;
     return healthContext.standards.join(' · ');
-  }, [healthContext]);
+  }, [healthContext, copy.noStandards]);
 
   const isSeniorAuditorSuggestionType = (value: string) =>
     [
@@ -191,23 +359,23 @@ export default function IaCompliancePage() {
   const getSuggestionTypeLabel = (value: string) => {
     switch (value) {
       case 'finding_analysis':
-        return 'Análisis de hallazgo';
+        return copy.findingAnalysis;
       case 'action_plan_suggestion':
-        return 'Plan sugerido';
+        return copy.suggestedPlan;
       case 'senior_auditor_task':
-        return 'Tarea auditor senior';
+        return copy.seniorAuditorTask;
       case 'senior_auditor_risk_alert':
-        return 'Alerta riesgo senior';
+        return copy.seniorRiskAlert;
       case 'senior_auditor_evidence_gap':
-        return 'Brecha evidencia senior';
+        return copy.seniorEvidenceGap;
       case 'senior_auditor_insight':
-        return 'Insight auditor senior';
+        return copy.seniorInsight;
       case 'nonconformity_draft':
-        return 'Borrador NC';
+        return copy.ncDraft;
       case 'executive_brief':
-        return 'Resumen gerencial';
+        return copy.managementSummary;
       default:
-        return value || 'Sugerencia';
+        return value || copy.suggestion;
     }
   };
 
@@ -235,11 +403,11 @@ export default function IaCompliancePage() {
     const output = row.output_payload || {};
 
     if (row.suggestion_type === 'finding_analysis') {
-      return String(output.summary || row.title || 'Análisis IA');
+      return String(output.summary || row.title || copy.aiAnalysis);
     }
 
     if (row.suggestion_type === 'action_plan_suggestion') {
-      return String(output.objective || row.title || 'Plan sugerido IA');
+      return String(output.objective || row.title || copy.aiSuggestedPlan);
     }
 
     if (isSeniorAuditorSuggestionType(row.suggestion_type)) {
@@ -248,19 +416,19 @@ export default function IaCompliancePage() {
           output.recommended_action ||
           output.summary ||
           row.title ||
-          'Sugerencia auditor senior'
+          copy.seniorAuditorSuggestion
       );
     }
 
     if (row.suggestion_type === 'nonconformity_draft') {
-      return String(output.statement || row.title || 'Borrador IA');
+      return String(output.statement || row.title || copy.aiDraft);
     }
 
     if (row.suggestion_type === 'executive_brief') {
-      return String(output.headline || row.title || 'Resumen gerencial');
+      return String(output.headline || row.title || copy.managementSummary);
     }
 
-    return String(row.title || 'Sugerencia IA');
+    return String(row.title || copy.suggestion);
   };
 
   const formatDateTime = (value: string | null | undefined) => {
@@ -269,7 +437,7 @@ export default function IaCompliancePage() {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
 
-    return date.toLocaleString('es-CL', {
+    return date.toLocaleString(locale === 'en' ? 'en-US' : 'es-CL', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -283,13 +451,13 @@ export default function IaCompliancePage() {
       <div className="min-h-screen bg-[#f5f7fb] p-6 space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">IA Compliance</h1>
+            <h1 className="text-3xl font-bold text-slate-900">{copy.title}</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Centro de apoyo inteligente para cumplimiento, remediación y seguimiento ejecutivo.
+              {copy.subtitle}
             </p>
             {healthContext?.tenant_name && (
               <p className="mt-2 text-sm text-slate-700">
-                Empresa: <span className="font-semibold">{healthContext.tenant_name}</span>
+                {copy.company}: <span className="font-semibold">{healthContext.tenant_name}</span>
               </p>
             )}
           </div>
@@ -300,7 +468,7 @@ export default function IaCompliancePage() {
               onClick={loadAll}
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              Refrescar
+              {copy.refresh}
             </button>
 
             <button
@@ -308,7 +476,7 @@ export default function IaCompliancePage() {
               onClick={loadExecutiveBrief}
               className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
             >
-              {briefLoading ? 'Generando...' : 'Resumen gerencial IA'}
+              {briefLoading ? copy.generating : copy.executiveBrief}
             </button>
           </div>
         </div>
@@ -321,32 +489,32 @@ export default function IaCompliancePage() {
 
         {loading ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-slate-500">
-            Cargando IA Compliance...
+            {copy.loading}
           </div>
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
               <MetricCard
-                title="Motor IA"
-                value={engineOk ? 'OK' : 'Error'}
+                title={copy.engine}
+                value={engineOk ? copy.ok : copy.error}
                 tone={engineOk ? 'green' : 'red'}
               />
               <MetricCard
-                title="Conexión BD motor"
-                value={engineDbOk ? 'OK' : 'Error'}
+                title={copy.engineDb}
+                value={engineDbOk ? copy.ok : copy.error}
                 tone={engineDbOk ? 'green' : 'red'}
               />
               <MetricCard
-                title="Controles activos"
+                title={copy.activeControls}
                 value={String(healthContext?.controls_total || 0)}
               />
               <MetricCard
-                title="Controles en atención"
+                title={copy.attentionControls}
                 value={String(healthContext?.controls_warning || 0)}
                 tone="amber"
               />
               <MetricCard
-                title="Evidencias pendientes"
+                title={copy.pendingEvidence}
                 value={String(healthContext?.evidences_pending || 0)}
                 tone="blue"
               />
@@ -357,23 +525,23 @@ export default function IaCompliancePage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 className="text-xl font-bold text-slate-900">
-                      Resumen de salud IA
+                      {copy.healthTitle}
                     </h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      Interpretación ejecutiva del estado actual del tenant.
+                      {copy.healthSubtitle}
                     </p>
                   </div>
 
                   {healthAi?.confidence && (
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                      Confianza: {healthAi.confidence}
+                      {copy.confidence}: {healthAi.confidence}
                     </span>
                   )}
                 </div>
 
                 <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
                   <div className="text-xs uppercase tracking-wide text-slate-400">
-                    Normas activas
+                    {copy.activeStandards}
                   </div>
                   <div className="mt-1 text-sm font-semibold text-slate-800">
                     {standardsLabel}
@@ -381,17 +549,17 @@ export default function IaCompliancePage() {
                 </div>
 
                 <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-sm leading-7 text-slate-700">
-                  {healthAi?.summary || 'Sin resumen IA disponible.'}
+                  {healthAi?.summary || copy.noSummary}
                 </div>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <InfoCard
-                    title="Controles deteriorados"
+                    title={copy.deterioratedControls}
                     value={String(healthContext?.controls_critical || 0)}
                     tone="red"
                   />
                   <InfoCard
-                    title="Hallazgos críticos"
+                    title={copy.criticalFindings}
                     value={String(healthContext?.findings_critical || 0)}
                     tone="red"
                   />
@@ -399,7 +567,7 @@ export default function IaCompliancePage() {
 
                 <div className="mt-4">
                   <div className="text-sm font-semibold text-slate-900 mb-2">
-                    Recomendaciones IA
+                    {copy.recommendations}
                   </div>
 
                   {Array.isArray(healthAi?.suggestions) && healthAi.suggestions.length > 0 ? (
@@ -410,50 +578,50 @@ export default function IaCompliancePage() {
                     </ul>
                   ) : (
                     <div className="text-sm text-slate-500">
-                      Sin recomendaciones disponibles.
+                      {copy.noRecommendations}
                     </div>
                   )}
                 </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-xl font-bold text-slate-900">Accesos rápidos</h2>
+                <h2 className="text-xl font-bold text-slate-900">{copy.quickAccess}</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Atajos a los módulos donde IA ya está integrada.
+                  {copy.quickAccessSubtitle}
                 </p>
 
                 <div className="mt-4 space-y-3">
                   <QuickLink
                     href="/hallazgos"
-                    title="Hallazgos"
-                    description="Analizar y aplicar IA sobre hallazgos."
+                    title={copy.findings}
+                    description={copy.findingsDesc}
                   />
                   <QuickLink
                     href="/no-conformidades"
-                    title="No conformidades"
-                    description="Redacción IA y creación de acción desde borrador."
+                    title={copy.nonconformities}
+                    description={copy.nonconformitiesDesc}
                   />
                   <QuickLink
                     href="/plan-accion"
-                    title="Plan de acción"
-                    description="Aplicar planes sugeridos IA al plan real."
+                    title={copy.actionPlan}
+                    description={copy.actionPlanDesc}
                   />
                   <QuickLink
                     href="/ia-compliance/sugerencias"
-                    title="Sugerencias IA guardadas"
-                    description="Revisar borradores, trazabilidad y aplicar."
+                    title={copy.savedSuggestions}
+                    description={copy.savedSuggestionsDesc}
                   />
                 </div>
 
                 <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50 p-4">
                   <div className="text-sm font-semibold text-slate-900">
-                    Sugerencias recientes
+                    {copy.recentSuggestions}
                   </div>
                   <div className="mt-2 text-sm text-slate-600">
-                    Pendientes: <span className="font-semibold">{suggestionMetrics.drafts}</span>
+                    {copy.pending}: <span className="font-semibold">{suggestionMetrics.drafts}</span>
                   </div>
                   <div className="text-sm text-slate-600">
-                    Aplicadas: <span className="font-semibold">{suggestionMetrics.applied}</span>
+                    {copy.applied}: <span className="font-semibold">{suggestionMetrics.applied}</span>
                   </div>
                 </div>
               </div>
@@ -464,7 +632,7 @@ export default function IaCompliancePage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-xs uppercase tracking-[0.16em] text-violet-500 font-bold">
-                      Resumen gerencial IA
+                      {copy.managementSummary}
                     </div>
                     <h2 className="mt-1 text-xl font-bold text-slate-900">
                       {executiveData.headline}
@@ -473,7 +641,7 @@ export default function IaCompliancePage() {
 
                   {executiveData.confidence && (
                     <span className="rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-semibold text-violet-700">
-                      Confianza: {executiveData.confidence}
+                      {copy.confidence}: {executiveData.confidence}
                     </span>
                   )}
                 </div>
@@ -485,7 +653,7 @@ export default function IaCompliancePage() {
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-xl border border-violet-100 bg-white p-4">
                     <div className="text-sm font-semibold text-slate-900 mb-2">
-                      Prioridades
+                      {copy.priorities}
                     </div>
                     <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1">
                       {(executiveData.top_priorities || []).map(
@@ -498,7 +666,7 @@ export default function IaCompliancePage() {
 
                   <div className="rounded-xl border border-violet-100 bg-white p-4">
                     <div className="text-sm font-semibold text-slate-900 mb-2">
-                      Acciones de gerencia
+                      {copy.managementActions}
                     </div>
                     <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1">
                       {(executiveData.management_actions || []).map(
@@ -516,10 +684,10 @@ export default function IaCompliancePage() {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-slate-900">
-                    Últimas sugerencias guardadas
+                    {copy.latestSuggestions}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Vista rápida de actividad reciente del módulo IA.
+                    {copy.latestSuggestionsSubtitle}
                   </p>
                 </div>
 
@@ -527,13 +695,13 @@ export default function IaCompliancePage() {
                   href="/ia-compliance/sugerencias"
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  Ver todas
+                  {copy.viewAll}
                 </Link>
               </div>
 
               {suggestions.length === 0 ? (
                 <div className="mt-4 text-sm text-slate-500">
-                  Aún no hay sugerencias guardadas.
+                  {copy.noSavedSuggestions}
                 </div>
               ) : (
                 <div className="mt-4 space-y-3">
@@ -554,7 +722,7 @@ export default function IaCompliancePage() {
                             </span>
 
                             <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                              {row.status || 'draft'}
+                              {row.status || copy.draft}
                             </span>
                           </div>
 
