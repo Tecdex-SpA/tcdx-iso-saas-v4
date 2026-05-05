@@ -235,7 +235,7 @@ function shouldSkipElement(element: Element | null) {
   if (!element) return true;
 
   const tag = element.tagName.toLowerCase();
-  return ['script', 'style', 'textarea', 'input', 'select', 'option', 'code', 'pre'].includes(tag);
+  return ['script', 'style', 'textarea', 'input', 'code', 'pre'].includes(tag);
 }
 
 function translateNode(root: ParentNode) {
