@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -42,17 +43,172 @@ type SavedQuote = {
   created_at?: string;
 };
 
-function money(value: any) {
+const ui = {
+  es: {
+    loading: 'Cargando cotizador...',
+    unauthorized: 'No autorizado. Esta vista es solo para superusuario y dealer.',
+    badge: 'Cotizador SaaS',
+    title: 'Cotizador comercial TCDX',
+    subtitle:
+      'Genera estimaciones mensuales para pymes y clientes B2B usando planes, normas activas, módulos premium y cuotas IA. Los usuarios no se cobran.',
+    quoteData: 'Datos de la cotización',
+    quoteHelp: 'Completa el escenario comercial. El cálculo se actualiza automáticamente.',
+    prospectName: 'Empresa / prospecto',
+    rut: 'RUT',
+    contactEmail: 'Email contacto',
+    activeStandards: 'Normas',
+    premiumModules: 'Módulos premium',
+    aiQuota: 'Cuota IA incluida',
+    discount: 'Descuento',
+    crmReference: 'Referencia CRM futura',
+    commercialNotes: 'Notas comerciales',
+    saveQuote: 'Guardar cotización',
+    saving: 'Guardando...',
+    estimatedResult: 'Resultado estimado',
+    estimatedHelp: 'Total mensual referencial. No incluye factura legal.',
+    totalMonthly: 'Total mensual',
+    subtotal: 'Subtotal',
+    users: 'Usuarios',
+    unlimited: 'Ilimitados',
+    concept: 'Concepto',
+    quantity: 'Cantidad',
+    unitPrice: 'Precio unitario',
+    type: 'Tipo',
+    billable: 'Facturable',
+    informative: 'Informativa',
+    savedQuotes: 'Cotizaciones guardadas',
+    dealerListHelp: 'Solo ves tus cotizaciones.',
+    superadminListHelp: 'Superusuario ve todas las cotizaciones.',
+    refresh: 'Refrescar',
+    plan: 'Plan',
+    standardsShort: 'normas',
+    modulesShort: 'módulos',
+    quoteRequired: 'Ingresa el nombre del prospecto o empresa.',
+    quoteSaved: (quoteNumber: string) => `Cotización guardada: ${quoteNumber}`,
+    quoteSaveError: 'Error guardando cotización',
+    onlySuperadminConvert: 'Solo superadmin puede convertir cotizaciones en empresa/contrato.',
+    associatedCompanyConfirm: (quoteNumber: string) =>
+      `La cotización ${quoteNumber} ya tiene una empresa asociada.\n\nAceptar = usar empresa existente.\nCancelar = intentar crear empresa nueva desde la cotización.`,
+    createCompanyConfirm: (quote: SavedQuote, amount: string) =>
+      `Convertir la cotización ${quote.quote_number} creando una empresa nueva?\n\nProspecto: ${quote.prospect_name}\nPlan: ${quote.plan_key}\nTotal mensual: ${amount}`,
+    finalConvertConfirm: (mode: string, quote: SavedQuote, amount: string) =>
+      `Confirmar conversión\n\nModo: ${mode}\nCotización: ${quote.quote_number}\nProspecto: ${quote.prospect_name}\nPlan: ${quote.plan_key}\nTotal mensual: ${amount}`,
+    useExistingCompany: 'usar empresa existente',
+    createNewCompany: 'crear empresa nueva',
+    convertSuccess: 'Cotización convertida correctamente en empresa/contrato SaaS.',
+    convertError: 'Error convirtiendo cotización',
+    updateStatusError: 'Error actualizando estado',
+    draft: 'Borrador',
+    sent: 'Enviada',
+    accepted: 'Aceptada',
+    rejected: 'Rechazada',
+    expired: 'Expirada',
+    converting: 'Convirtiendo...',
+    alreadyConverted: 'Ya convertida / aceptada',
+    convertToCompany: 'Convertir en empresa',
+    noQuotes: 'No hay cotizaciones guardadas.',
+  },
+  en: {
+    loading: 'Loading quote builder...',
+    unauthorized: 'Unauthorized. This view is only for superuser and dealer roles.',
+    badge: 'SaaS Quote Builder',
+    title: 'TCDX Commercial Quote Builder',
+    subtitle:
+      'Generate monthly estimates for SMBs and B2B clients using plans, active standards, premium modules, and AI quotas. Users are not billed.',
+    quoteData: 'Quote details',
+    quoteHelp: 'Complete the commercial scenario. The calculation updates automatically.',
+    prospectName: 'Company / prospect',
+    rut: 'Tax ID',
+    contactEmail: 'Contact email',
+    activeStandards: 'Standards',
+    premiumModules: 'Premium modules',
+    aiQuota: 'Included AI quota',
+    discount: 'Discount',
+    crmReference: 'Future CRM reference',
+    commercialNotes: 'Commercial notes',
+    saveQuote: 'Save quote',
+    saving: 'Saving...',
+    estimatedResult: 'Estimated result',
+    estimatedHelp: 'Reference monthly total. It does not include a legal invoice.',
+    totalMonthly: 'Monthly total',
+    subtotal: 'Subtotal',
+    users: 'Users',
+    unlimited: 'Unlimited',
+    concept: 'Concept',
+    quantity: 'Quantity',
+    unitPrice: 'Unit price',
+    type: 'Type',
+    billable: 'Billable',
+    informative: 'Informational',
+    savedQuotes: 'Saved quotes',
+    dealerListHelp: 'You only see your quotes.',
+    superadminListHelp: 'Superuser sees all quotes.',
+    refresh: 'Refresh',
+    plan: 'Plan',
+    standardsShort: 'standards',
+    modulesShort: 'modules',
+    quoteRequired: 'Enter the prospect or company name.',
+    quoteSaved: (quoteNumber: string) => `Quote saved: ${quoteNumber}`,
+    quoteSaveError: 'Error saving quote',
+    onlySuperadminConvert: 'Only superadmin can convert quotes into a company/contract.',
+    associatedCompanyConfirm: (quoteNumber: string) =>
+      `Quote ${quoteNumber} already has an associated company.\n\nAccept = use existing company.\nCancel = try to create a new company from the quote.`,
+    createCompanyConfirm: (quote: SavedQuote, amount: string) =>
+      `Convert quote ${quote.quote_number} by creating a new company?\n\nProspect: ${quote.prospect_name}\nPlan: ${quote.plan_key}\nMonthly total: ${amount}`,
+    finalConvertConfirm: (mode: string, quote: SavedQuote, amount: string) =>
+      `Confirm conversion\n\nMode: ${mode}\nQuote: ${quote.quote_number}\nProspect: ${quote.prospect_name}\nPlan: ${quote.plan_key}\nMonthly total: ${amount}`,
+    useExistingCompany: 'use existing company',
+    createNewCompany: 'create new company',
+    convertSuccess: 'Quote successfully converted into a SaaS company/contract.',
+    convertError: 'Error converting quote',
+    updateStatusError: 'Error updating status',
+    draft: 'Draft',
+    sent: 'Sent',
+    accepted: 'Accepted',
+    rejected: 'Rejected',
+    expired: 'Expired',
+    converting: 'Converting...',
+    alreadyConverted: 'Already converted / accepted',
+    convertToCompany: 'Convert to company',
+    noQuotes: 'No saved quotes.',
+  },
+} as const;
+
+function money(value: any, locale = 'es') {
   const n = Number(value || 0);
 
-  return new Intl.NumberFormat('es-CL', {
+  return new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'es-CL', {
     style: 'currency',
     currency: 'CLP',
     maximumFractionDigits: 0,
   }).format(n);
 }
 
+function translateLineText(value: string | undefined, locale: 'es' | 'en') {
+  const original = String(value || '').trim();
+  if (!original || locale !== 'en') return original;
+
+  const dictionary: Record<string, string> = {
+    demo: 'Demo',
+    pyme: 'SMB',
+    empresa: 'Company',
+    enterprise: 'Enterprise',
+    'plan base': 'Base plan',
+    'normas activas': 'Active standards',
+    'módulos premium': 'Premium modules',
+    'modulos premium': 'Premium modules',
+    'cuota ia': 'AI quota',
+    descuento: 'Discount',
+  };
+
+  return dictionary[original.toLowerCase()] || original;
+}
+
 export default function CotizadorPage() {
+  const { locale } = useTranslation();
+  const lang = locale === 'en' ? 'en' : 'es';
+  const copy = ui[lang];
+
   const [token, setToken] = useState('');
   const [user, setUser] = useState<any>(null);
 
@@ -104,7 +260,7 @@ export default function CotizadorPage() {
     const json = await res.json().catch(() => null);
 
     if (!res.ok || json?.ok === false) {
-      throw new Error(json?.error || `Error HTTP ${res.status}`);
+      throw new Error(json?.error || `HTTP error ${res.status}`);
     }
 
     return json;
@@ -126,7 +282,7 @@ export default function CotizadorPage() {
 
   async function saveQuote() {
     if (!form.prospect_name.trim()) {
-      alert('Ingresa el nombre del prospecto o empresa.');
+      alert(copy.quoteRequired);
       return;
     }
 
@@ -152,37 +308,29 @@ export default function CotizadorPage() {
 
       setCalculation(null);
 
-      alert(`Cotización guardada: ${json.data?.quote_number || ''}`);
+      alert(copy.quoteSaved(json.data?.quote_number || ''));
     } catch (err: any) {
-      alert(err.message || 'Error guardando cotización');
+      alert(err.message || copy.quoteSaveError);
     } finally {
       setSaving('');
     }
   }
 
-
   async function convertQuoteToTenant(quote: SavedQuote) {
     if (role !== 'superadmin') {
-      alert('Solo superadmin puede convertir cotizaciones en empresa/contrato.');
+      alert(copy.onlySuperadminConvert);
       return;
     }
 
     let conversionMode: 'create_new' | 'use_existing' = 'create_new';
 
     if (quote.tenant_id) {
-      const useExisting = window.confirm(
-        `La cotización ${quote.quote_number} ya tiene una empresa asociada.\n\n` +
-          `Aceptar = usar empresa existente.\n` +
-          `Cancelar = intentar crear empresa nueva desde la cotización.`
-      );
+      const useExisting = window.confirm(copy.associatedCompanyConfirm(quote.quote_number));
 
       conversionMode = useExisting ? 'use_existing' : 'create_new';
     } else {
       const createNew = window.confirm(
-        `Convertir la cotización ${quote.quote_number} creando una empresa nueva?\n\n` +
-          `Prospecto: ${quote.prospect_name}\n` +
-          `Plan: ${quote.plan_key}\n` +
-          `Total mensual: ${money(quote.total_monthly_amount)}`
+        copy.createCompanyConfirm(quote, money(quote.total_monthly_amount, lang))
       );
 
       if (!createNew) return;
@@ -191,12 +339,11 @@ export default function CotizadorPage() {
     }
 
     const ok = window.confirm(
-      `Confirmar conversión\n\n` +
-        `Modo: ${conversionMode === 'use_existing' ? 'usar empresa existente' : 'crear empresa nueva'}\n` +
-        `Cotización: ${quote.quote_number}\n` +
-        `Prospecto: ${quote.prospect_name}\n` +
-        `Plan: ${quote.plan_key}\n` +
-        `Total mensual: ${money(quote.total_monthly_amount)}`
+      copy.finalConvertConfirm(
+        conversionMode === 'use_existing' ? copy.useExistingCompany : copy.createNewCompany,
+        quote,
+        money(quote.total_monthly_amount, lang)
+      )
     );
 
     if (!ok) return;
@@ -219,14 +366,13 @@ export default function CotizadorPage() {
 
       await loadQuotes();
 
-      alert('Cotización convertida correctamente en empresa/contrato SaaS.');
+      alert(copy.convertSuccess);
     } catch (err: any) {
-      alert(err.message || 'Error convirtiendo cotización');
+      alert(err.message || copy.convertError);
     } finally {
       setSaving('');
     }
   }
-
 
   async function updateQuoteStatus(id: string, status: string) {
     try {
@@ -239,7 +385,7 @@ export default function CotizadorPage() {
 
       await loadQuotes();
     } catch (err: any) {
-      alert(err.message || 'Error actualizando estado');
+      alert(err.message || copy.updateStatusError);
     } finally {
       setSaving('');
     }
@@ -294,7 +440,7 @@ export default function CotizadorPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando cotizador...</div>
+        <div className="p-6">{copy.loading}</div>
       </AppLayout>
     );
   }
@@ -302,7 +448,7 @@ export default function CotizadorPage() {
   if (!canUse) {
     return (
       <AppLayout>
-        <div className="p-6">No autorizado. Esta vista es solo para superusuario y dealer.</div>
+        <div className="p-6">{copy.unauthorized}</div>
       </AppLayout>
     );
   }
@@ -312,43 +458,42 @@ export default function CotizadorPage() {
       <div className="space-y-6 p-6">
         <div className="rounded-2xl bg-[#1b2733] p-6 text-white shadow-sm">
           <div className="text-sm font-semibold uppercase tracking-wide text-blue-200">
-            Cotizador SaaS
+            {copy.badge}
           </div>
           <h1 className="mt-2 text-2xl font-bold">
-            Cotizador comercial TCDX
+            {copy.title}
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-200">
-            Genera estimaciones mensuales para pymes y clientes B2B usando planes,
-            normas activas, módulos premium y cuotas IA. Los usuarios no se cobran.
+            {copy.subtitle}
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[420px_1fr]">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-900">Datos de la cotización</h2>
+            <h2 className="text-lg font-bold text-slate-900">{copy.quoteData}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Completa el escenario comercial. El cálculo se actualiza automáticamente.
+              {copy.quoteHelp}
             </p>
 
             <div className="mt-5 space-y-3">
               <input
                 value={form.prospect_name}
                 onChange={(e) => setForm({ ...form, prospect_name: e.target.value })}
-                placeholder="Empresa / prospecto"
+                placeholder={copy.prospectName}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
               />
 
               <input
                 value={form.prospect_rut}
                 onChange={(e) => setForm({ ...form, prospect_rut: e.target.value })}
-                placeholder="RUT"
+                placeholder={copy.rut}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
               />
 
               <input
                 value={form.prospect_email}
                 onChange={(e) => setForm({ ...form, prospect_email: e.target.value })}
-                placeholder="Email contacto"
+                placeholder={copy.contactEmail}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
               />
 
@@ -358,15 +503,15 @@ export default function CotizadorPage() {
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
               >
                 <option value="demo">Demo</option>
-                <option value="pyme">Pyme</option>
-                <option value="empresa">Empresa</option>
+                <option value="pyme">{lang === 'en' ? 'SMB' : 'Pyme'}</option>
+                <option value="empresa">{lang === 'en' ? 'Company' : 'Empresa'}</option>
                 <option value="enterprise">Enterprise</option>
               </select>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-bold uppercase text-slate-400">
-                    Normas
+                    {copy.activeStandards}
                   </label>
                   <input
                     type="number"
@@ -381,7 +526,7 @@ export default function CotizadorPage() {
 
                 <div>
                   <label className="mb-1 block text-xs font-bold uppercase text-slate-400">
-                    Módulos premium
+                    {copy.premiumModules}
                   </label>
                   <input
                     type="number"
@@ -398,7 +543,7 @@ export default function CotizadorPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-bold uppercase text-slate-400">
-                    Cuota IA incluida
+                    {copy.aiQuota}
                   </label>
                   <input
                     type="number"
@@ -413,7 +558,7 @@ export default function CotizadorPage() {
 
                 <div>
                   <label className="mb-1 block text-xs font-bold uppercase text-slate-400">
-                    Descuento
+                    {copy.discount}
                   </label>
                   <input
                     type="number"
@@ -430,14 +575,14 @@ export default function CotizadorPage() {
               <input
                 value={form.crm_reference}
                 onChange={(e) => setForm({ ...form, crm_reference: e.target.value })}
-                placeholder="Referencia CRM futura"
+                placeholder={copy.crmReference}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
               />
 
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Notas comerciales"
+                placeholder={copy.commercialNotes}
                 rows={3}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
               />
@@ -448,7 +593,7 @@ export default function CotizadorPage() {
                 disabled={saving === 'quote'}
                 className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                {saving === 'quote' ? 'Guardando...' : 'Guardar cotización'}
+                {saving === 'quote' ? copy.saving : copy.saveQuote}
               </button>
             </div>
           </div>
@@ -457,38 +602,38 @@ export default function CotizadorPage() {
             <div className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Resultado estimado</h2>
+                  <h2 className="text-lg font-bold text-slate-900">{copy.estimatedResult}</h2>
                   <p className="text-sm text-slate-500">
-                    Total mensual referencial. No incluye factura legal.
+                    {copy.estimatedHelp}
                   </p>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xs uppercase text-slate-400">Total mensual</div>
+                  <div className="text-xs uppercase text-slate-400">{copy.totalMonthly}</div>
                   <div className="text-3xl font-bold text-blue-700">
-                    {money(calculation?.total_monthly_amount || 0)}
+                    {money(calculation?.total_monthly_amount || 0, lang)}
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="text-xs text-slate-500">Subtotal</div>
+                  <div className="text-xs text-slate-500">{copy.subtotal}</div>
                   <div className="font-bold text-slate-900">
-                    {money(calculation?.subtotal_amount || 0)}
+                    {money(calculation?.subtotal_amount || 0, lang)}
                   </div>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="text-xs text-slate-500">Descuento</div>
+                  <div className="text-xs text-slate-500">{copy.discount}</div>
                   <div className="font-bold text-slate-900">
-                    {money(calculation?.discount_amount || 0)}
+                    {money(calculation?.discount_amount || 0, lang)}
                   </div>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="text-xs text-slate-500">Usuarios</div>
-                  <div className="font-bold text-slate-900">Ilimitados</div>
+                  <div className="text-xs text-slate-500">{copy.users}</div>
+                  <div className="font-bold text-slate-900">{copy.unlimited}</div>
                 </div>
               </div>
 
@@ -496,11 +641,11 @@ export default function CotizadorPage() {
                 <table className="w-full min-w-[720px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 text-xs uppercase text-slate-500">
-                      <th className="py-3 pr-4">Concepto</th>
-                      <th className="py-3 pr-4">Cantidad</th>
-                      <th className="py-3 pr-4">Precio unitario</th>
-                      <th className="py-3 pr-4">Subtotal</th>
-                      <th className="py-3 pr-4">Tipo</th>
+                      <th className="py-3 pr-4">{copy.concept}</th>
+                      <th className="py-3 pr-4">{copy.quantity}</th>
+                      <th className="py-3 pr-4">{copy.unitPrice}</th>
+                      <th className="py-3 pr-4">{copy.subtotal}</th>
+                      <th className="py-3 pr-4">{copy.type}</th>
                     </tr>
                   </thead>
 
@@ -508,14 +653,14 @@ export default function CotizadorPage() {
                     {(calculation?.lines || []).map((line) => (
                       <tr key={`${line.line_type}-${line.line_key}`} className="border-b border-slate-100">
                         <td className="py-4 pr-4">
-                          <div className="font-semibold text-slate-900">{line.line_name}</div>
-                          <div className="text-xs text-slate-500">{line.line_description}</div>
+                          <div className="font-semibold text-slate-900">{translateLineText(line.line_name, lang)}</div>
+                          <div className="text-xs text-slate-500">{translateLineText(line.line_description, lang)}</div>
                         </td>
                         <td className="py-4 pr-4">{line.quantity}</td>
-                        <td className="py-4 pr-4">{money(line.unit_price)}</td>
-                        <td className="py-4 pr-4 font-bold">{money(line.subtotal_amount)}</td>
+                        <td className="py-4 pr-4">{money(line.unit_price, lang)}</td>
+                        <td className="py-4 pr-4 font-bold">{money(line.subtotal_amount, lang)}</td>
                         <td className="py-4 pr-4">
-                          {line.is_billable ? 'Facturable' : 'Informativa'}
+                          {line.is_billable ? copy.billable : copy.informative}
                         </td>
                       </tr>
                     ))}
@@ -527,11 +672,9 @@ export default function CotizadorPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Cotizaciones guardadas</h2>
+                  <h2 className="text-lg font-bold text-slate-900">{copy.savedQuotes}</h2>
                   <p className="text-sm text-slate-500">
-                    {role === 'dealer'
-                      ? 'Solo ves tus cotizaciones.'
-                      : 'Superusuario ve todas las cotizaciones.'}
+                    {role === 'dealer' ? copy.dealerListHelp : copy.superadminListHelp}
                   </p>
                 </div>
 
@@ -540,7 +683,7 @@ export default function CotizadorPage() {
                   onClick={loadQuotes}
                   className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  Refrescar
+                  {copy.refresh}
                 </button>
               </div>
 
@@ -553,14 +696,14 @@ export default function CotizadorPage() {
                           {quote.quote_number} · {quote.prospect_name}
                         </div>
                         <div className="text-xs text-slate-500">
-                          Plan {quote.plan_key} · {quote.active_standards_count} normas ·{' '}
-                          {quote.premium_modules_count} módulos · {quote.status}
+                          {copy.plan} {translateLineText(quote.plan_key, lang)} · {quote.active_standards_count} {copy.standardsShort} ·{' '}
+                          {quote.premium_modules_count} {copy.modulesShort} · {translateLineText(quote.status, lang)}
                         </div>
                       </div>
 
                       <div className="text-right">
                         <div className="font-bold text-blue-700">
-                          {money(quote.total_monthly_amount)}
+                          {money(quote.total_monthly_amount, lang)}
                         </div>
                         <div className="mt-2 flex flex-col gap-2">
                           <select
@@ -569,11 +712,11 @@ export default function CotizadorPage() {
                             disabled={saving === quote.id}
                             className="rounded-xl border border-slate-200 px-3 py-2 text-xs"
                           >
-                            <option value="draft">Borrador</option>
-                            <option value="sent">Enviada</option>
-                            <option value="accepted">Aceptada</option>
-                            <option value="rejected">Rechazada</option>
-                            <option value="expired">Expirada</option>
+                            <option value="draft">{copy.draft}</option>
+                            <option value="sent">{copy.sent}</option>
+                            <option value="accepted">{copy.accepted}</option>
+                            <option value="rejected">{copy.rejected}</option>
+                            <option value="expired">{copy.expired}</option>
                           </select>
 
                           {role === 'superadmin' && (
@@ -584,10 +727,10 @@ export default function CotizadorPage() {
                               className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                             >
                               {saving === `convert-${quote.id}`
-                                ? 'Convirtiendo...'
+                                ? copy.converting
                                 : quote.status === 'accepted'
-                                  ? 'Ya convertida / aceptada'
-                                  : 'Convertir en empresa'}
+                                  ? copy.alreadyConverted
+                                  : copy.convertToCompany}
                             </button>
                           )}
                         </div>
@@ -598,7 +741,7 @@ export default function CotizadorPage() {
 
                 {quotes.length === 0 && (
                   <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-                    No hay cotizaciones guardadas.
+                    {copy.noQuotes}
                   </div>
                 )}
               </div>
