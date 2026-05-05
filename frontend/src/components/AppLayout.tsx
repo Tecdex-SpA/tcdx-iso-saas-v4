@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import EnglishVisualTextGuard from './EnglishVisualTextGuard';
 import {
   getHomePathByRole,
   getUserFromToken,
@@ -384,6 +385,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-[#06173a]">
+      <EnglishVisualTextGuard />
       <div className="hidden lg:block">
         <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       </div>
