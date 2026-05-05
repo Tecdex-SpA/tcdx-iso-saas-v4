@@ -13,7 +13,7 @@ Esta fase no incorpora herramientas pesadas. Usa scripts versionados, `curl`, sy
 | Frontend externo lab | `http://192.168.100.130:3000/login` |
 | Next interno | `http://127.0.0.1:8080/login` desde VM frontend |
 | Backend | `http://192.168.100.120:3000/` |
-| AI Engine | `http://192.168.100.140:8000/health` |
+| AI Engine | `http://192.168.100.140:8001/health` |
 | IA Auditor | `/api/ai-auditor/scope` con token |
 | IA Compliance | `/api/ai-compliance/engine-health` con token |
 | Nginx | `systemctl status nginx` y proxy 3000 |
@@ -28,7 +28,7 @@ Esta fase no incorpora herramientas pesadas. Usa scripts versionados, `curl`, sy
 ```bash
 API_URL=http://192.168.100.120:3000 \
 FRONTEND_URL=http://192.168.100.130:3000 \
-AI_ENGINE_URL=http://192.168.100.140:8000 \
+AI_ENGINE_URL=http://192.168.100.140:8001 \
 EMAIL=admin@rieltec.com \
 PASSWORD=123456 \
 bash scripts/monitor-runtime.sh
@@ -61,7 +61,7 @@ En Mac puede producir advertencias porque no existen `systemctl` o `journalctl`.
 ```bash
 API_URL=http://192.168.100.120:3000 \
 FRONTEND_URL=http://192.168.100.130:3000 \
-AI_ENGINE_URL=http://192.168.100.140:8000 \
+AI_ENGINE_URL=http://192.168.100.140:8001 \
 EMAIL=admin@rieltec.com \
 PASSWORD=123456 \
 bash scripts/qa-observability.sh
@@ -111,7 +111,7 @@ curl -I http://127.0.0.1:3000/
 
 ```bash
 sudo systemctl status ai-engine --no-pager
-curl -I http://127.0.0.1:8000/health
+curl -I http://127.0.0.1:8001/health
 ```
 
 ### DB
@@ -142,3 +142,14 @@ docs/continuity-operations-runbook.md
 ```
 
 para diagnóstico y recuperación.
+
+
+## Nota de puerto AI Engine laboratorio
+
+El estado real validado del laboratorio es:
+
+```text
+AI Engine: http://192.168.100.140:8001
+```
+
+El objetivo futuro puede normalizarse a `8000`, pero no es bloqueo operativo mientras backend, IA Auditor e IA Compliance validen contra `8001`.

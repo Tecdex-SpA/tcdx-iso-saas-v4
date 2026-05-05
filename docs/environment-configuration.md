@@ -115,3 +115,14 @@ JSON_BODY_LIMIT=2mb
 ```
 
 Estas variables controlan rate limiting en memoria y límite de payload JSON. No reemplazan WAF/API Gateway en producción cloud.
+
+
+## Nota operativa AI Engine 8001
+
+Aunque la arquitectura objetivo puede normalizar AI Engine en `8000`, el laboratorio actual validado opera en:
+
+```text
+AI_ENGINE_URL=http://192.168.100.140:8001
+```
+
+La normalización a `8000` queda como pendiente controlado para una fase posterior.

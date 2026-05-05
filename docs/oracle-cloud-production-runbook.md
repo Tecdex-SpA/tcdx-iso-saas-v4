@@ -133,3 +133,15 @@ API_URL=<api-url> FRONTEND_URL=<frontend-url> AI_ENGINE_URL=<ai-engine-url> EMAI
 ```
 
 En producción avanzada se recomienda complementar con Oracle Monitoring, métricas de Nginx, logs centralizados y alertas.
+
+
+## Cierre Fase 4 y nota AI Engine 8001
+
+El laboratorio validado mantiene AI Engine en `192.168.100.140:8001`.
+
+Para Oracle Cloud se recomienda decidir explícitamente antes del cutover:
+
+1. mantener `8001` y documentarlo como estándar operativo; o
+2. normalizar a `8000` actualizando systemd, `.env`, backend y QA.
+
+Esta decisión queda como riesgo residual controlado, no como bloqueo de Fase 4.
