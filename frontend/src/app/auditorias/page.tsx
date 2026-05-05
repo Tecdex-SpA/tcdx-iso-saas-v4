@@ -6,6 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
+import { translateDisplayText, translateStatusLabel, translatePriorityLabel, translateSeverityLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -217,7 +218,7 @@ function AiAuditorAuditCta({ t, iso }: { t: (key: string) => string; iso?: strin
 
 
 function AuditoriasPageContent() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
@@ -1349,7 +1350,7 @@ function AuditoriasPageContent() {
                         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <InfoPill tone="slate">{audit.iso}</InfoPill>
+                              <InfoPill tone="slate">{translateStandardLabel(audit.iso, locale)}</InfoPill>
                               <span
                                 className={`rounded-full border px-3 py-1 text-xs font-semibold ${getAuditStatusColor(
                                   audit.status
@@ -1365,7 +1366,7 @@ function AuditoriasPageContent() {
                             </div>
 
                             <h3 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900">
-                              {t('audits.auditLabel')} {audit.auditor_type || t('audits.noType')} · {formatDate(audit.start_date)} → {formatDate(audit.end_date)}
+                              {t('audits.auditLabel')} {translateDisplayText(audit.auditor_type || t('audits.noType'), locale, 'audit')} · {formatDate(audit.start_date)} → {formatDate(audit.end_date)}
                             </h3>
 
                             <div className="mt-2 text-sm text-slate-500">
@@ -1376,7 +1377,7 @@ function AuditoriasPageContent() {
 
                           <div className="grid grid-cols-2 gap-3 xl:min-w-[320px]">
                             <InfoBox label={t('audits.auditor')} value={audit.auditor_name || '-'} />
-                            <InfoBox label={t('audits.fields.auditorTypeShort')} value={audit.auditor_type || '-'} />
+                            <InfoBox label={t('audits.fields.auditorTypeShort')} value={translateDisplayText(audit.auditor_type || '-', locale, 'audit')} />
                             <InfoBox label={t('audits.report')} value={hasReport ? t('common.yes') : t('common.no')} />
                             <InfoBox
                               label={t('audits.lastUpdated')}
@@ -1504,12 +1505,12 @@ function AuditoriasPageContent() {
                         {isExpanded && (
                           <div className="mt-5 grid gap-4 xl:grid-cols-3">
                             <SectionCard title={t('audits.detail.summary')}>
-                              <DetailRow label="ISO" value={audit.iso} />
+                              <DetailRow label="ISO" value={translateStandardLabel(audit.iso, locale)} />
                               <DetailRow label={t('audits.fields.startDateShort')} value={formatDateTime(audit.start_date)} />
                               <DetailRow label={t('audits.fields.endDateShort')} value={formatDateTime(audit.end_date)} />
                               <DetailRow label={t('audits.requester')} value={audit.requester_name || '-'} />
                               <DetailRow label={t('audits.auditor')} value={audit.auditor_name || '-'} />
-                              <DetailRow label={t('audits.fields.auditorTypeShort')} value={audit.auditor_type || '-'} />
+                              <DetailRow label={t('audits.fields.auditorTypeShort')} value={translateDisplayText(audit.auditor_type || '-', locale, 'audit')} />
                               <DetailRow label={t('common.status')} value={getAuditStatusLabel(audit.status)} />
                               <DetailRow label={t('audits.report')} value={hasReport ? t('audits.loaded') : t('statuses.controls.pendiente')} />
                             </SectionCard>
@@ -1532,20 +1533,20 @@ function AuditoriasPageContent() {
                                             finding.finding_type
                                           )}`}
                                         >
-                                          {finding.finding_type || 'observacion'}
+                                          {translateDisplayText(finding.finding_type || 'observacion', locale, 'finding')}
                                         </span>
 
                                         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                                          {finding.severity || 'media'}
+                                          {translateSeverityLabel(finding.severity || 'media', locale)}
                                         </span>
 
                                         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                                          {finding.status || 'abierto'}
+                                          {translateStatusLabel(finding.status || 'abierto', locale)}
                                         </span>
                                       </div>
 
                                       <div className="mt-2 text-sm font-semibold text-slate-900">
-                                          {finding.title || t('audits.detail.untitledFinding')}
+                                          {translateDisplayText(finding.title || t('audits.detail.untitledFinding'), locale, 'finding')}
                                       </div>
 
                                       <div className="mt-1 text-xs text-slate-500">
@@ -1583,16 +1584,16 @@ function AuditoriasPageContent() {
                                             action.status
                                           )}`}
                                         >
-                                          {action.status || 'abierto'}
+                                          {translateStatusLabel(action.status || 'abierto', locale)}
                                         </span>
 
                                         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                                          {t('audits.priority')} {action.priority || 'media'}
+                                          {t('audits.priority')} {translatePriorityLabel(action.priority || 'media', locale)}
                                         </span>
                                       </div>
 
                                       <div className="mt-2 text-sm font-semibold text-slate-900">
-                                        {action.title || t('audits.detail.untitledAction')}
+                                        {translateDisplayText(action.title || t('audits.detail.untitledAction'), locale, 'actionPlan')}
                                       </div>
 
                                       <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">

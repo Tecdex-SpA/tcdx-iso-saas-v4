@@ -149,3 +149,21 @@ Vistas integradas con render visual seguro para datos provenientes desde BD:
 - `frontend/src/app/plan-accion/page.tsx`
 
 La integración se limita a etiquetas visibles: cláusulas, normas, controles, categorías, estados, descripciones reconocibles, planes vinculados y evidencias asociadas. No se alteran valores internos, estados de formularios ni payloads enviados al backend.
+
+
+## Integración Fase 5A.2.2
+
+Se extendió la traducción visual no destructiva a:
+
+- `frontend/src/app/hallazgos/page.tsx`
+- `frontend/src/app/no-conformidades/page.tsx`
+- `frontend/src/app/auditorias/page.tsx`
+- `frontend/src/app/auditorias/ejecucion/page.tsx`
+
+Reglas aplicadas:
+
+- traducir solo render visual;
+- mantener `value` de selects intacto;
+- no alterar payloads enviados al backend;
+- traducir estados, severidades, prioridades, tipos, normas, cláusulas, títulos y descripciones reconocibles;
+- mantener fallback al original para texto libre no reconocido.

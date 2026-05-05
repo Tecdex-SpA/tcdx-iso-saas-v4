@@ -126,3 +126,20 @@ Ver detalle en:
 MD
 
 test "$FAIL" -eq 0
+
+
+grep -q "translateDisplayText" frontend/src/app/hallazgos/page.tsx \
+  && pass "hallazgos usa displayText" \
+  || warn "hallazgos no usa displayText"
+
+grep -q "translateDisplayText" frontend/src/app/no-conformidades/page.tsx \
+  && pass "no-conformidades usa displayText" \
+  || warn "no-conformidades no usa displayText"
+
+grep -q "translateDisplayText" frontend/src/app/auditorias/page.tsx \
+  && pass "auditorias usa displayText" \
+  || warn "auditorias no usa displayText"
+
+grep -q "translateDisplayText" frontend/src/app/auditorias/ejecucion/page.tsx \
+  && pass "auditorias ejecucion usa displayText" \
+  || warn "auditorias ejecucion no usa displayText"

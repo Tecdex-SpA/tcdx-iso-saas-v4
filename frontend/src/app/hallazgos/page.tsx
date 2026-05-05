@@ -7,6 +7,7 @@ import { getUserFromToken } from '@/utils/auth';
 import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
+import { translateDisplayText, translateStatusLabel, translateSeverityLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -115,7 +116,7 @@ export default function HallazgosPage() {
 }
 
 function HallazgosPageContent() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
@@ -2306,7 +2307,7 @@ function HallazgosPageContent() {
     setFocusedFindingId(row.id);
     setFocusResolved(true);
     setFocusMessage(
-      `Resultado abierto desde búsqueda: ${row.title} (${iso || row.iso_code || 'Sin norma'})`
+      `Resultado abierto desde búsqueda: ${translateDisplayText(row.title, locale, 'finding')} (${translateStandardLabel(iso || row.iso_code || 'Sin norma', locale)})`
     );
 
     setTimeout(() => {
@@ -2767,16 +2768,16 @@ function HallazgosPageContent() {
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Tag tone="slate">{row.iso_code}</Tag>
-                        <Tag tone="blue">{getSourceLabel(row)}</Tag>
-                        <Tag tone="violet">{row.status}</Tag>
-                        <Tag tone="amber">{row.finding_type}</Tag>
-                        <Tag tone="rose">{row.severity}</Tag>
+                        <Tag tone="slate">{translateStandardLabel(row.iso_code, locale)}</Tag>
+                        <Tag tone="blue">{translateDisplayText(getSourceLabel(row), locale, 'finding')}</Tag>
+                        <Tag tone="violet">{translateStatusLabel(row.status, locale)}</Tag>
+                        <Tag tone="amber">{translateDisplayText(row.finding_type, locale, 'finding')}</Tag>
+                        <Tag tone="rose">{translateSeverityLabel(row.severity, locale)}</Tag>
                         {linkedAction && <Tag tone="emerald">Con acción</Tag>}
                       </div>
 
                       <h3 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900">
-                        {row.title}
+                        {translateDisplayText(row.title, locale, 'finding')}
                       </h3>
 
                       <div className="mt-2 text-sm text-slate-500">
@@ -2820,7 +2821,7 @@ function HallazgosPageContent() {
                   </div>
 
                   <div className="mt-5 rounded-[24px] border border-slate-100 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-                    {row.description || 'Sin descripción'}
+                    {translateDisplayText(row.description || 'Sin descripción', locale, 'finding')}
                   </div>
 
                   <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-4">
@@ -2858,7 +2859,7 @@ function HallazgosPageContent() {
                     <FieldBlock label="Estado">
                       {isReadOnly ? (
                         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                          {row.status}
+                          {translateStatusLabel(row.status, locale)}
                         </div>
                       ) : (
                         <select

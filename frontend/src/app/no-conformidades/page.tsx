@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
+import { useTranslation } from '@/hooks/useTranslation';
+import { translateDisplayText, translateStatusLabel, translatePriorityLabel, translateStandardLabel, translateClauseLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -335,6 +337,7 @@ export default function NoConformidadesPage() {
 }
 
 function NoConformidadesPageContent() {
+  const { locale } = useTranslation();
   const searchParams = useSearchParams();
   const aiAuditorDraftKey = searchParams.get('draft_key');
   const aiAuditorDraftSource = searchParams.get('source');
@@ -1044,7 +1047,7 @@ function NoConformidadesPageContent() {
               >
                 {operationalStandards.map((s) => (
                   <option key={s.code} value={s.code}>
-                    {s.code} - {s.name}
+                    {translateStandardLabel(s.code, locale)} - {translateDisplayText(s.name, locale, 'standard')}
                   </option>
                 ))}
               </select>
@@ -1086,29 +1089,29 @@ function NoConformidadesPageContent() {
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Tag tone="slate">{getNcIso(nc)}</Tag>
-                        <Tag tone="amber">{nc.clause || 'Sin cláusula'}</Tag>
-                        <StatusChip status={nc.status} />
+                        <Tag tone="slate">{translateStandardLabel(getNcIso(nc), locale)}</Tag>
+                        <Tag tone="amber">{translateClauseLabel(nc.clause || 'Sin cláusula', locale)}</Tag>
+                        <StatusChip status={nc.status} locale={locale} />
                         {openLinkedAction && <Tag tone="emerald">Con acción activa</Tag>}
                       </div>
 
                       <h3 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900">
-                        {getNcTitle(nc)}
+                        {translateDisplayText(getNcTitle(nc), locale, 'nonconformity')}
                       </h3>
 
                       <div className="mt-2 text-sm text-slate-500">
-                        Categoría: {nc.category || 'General'}
+                        Categoría: {translateDisplayText(nc.category || 'General', locale, 'category')}
                       </div>
 
                       <div className="mt-4 rounded-[24px] border border-slate-100 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-                        {getNcDescription(nc)}
+                        {translateDisplayText(getNcDescription(nc), locale, 'nonconformity')}
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 xl:min-w-[300px]">
                       <MiniInfoCard label="Detectada" value={formatDate(nc.detected_at)} />
                       <MiniInfoCard label="Resuelta" value={formatDate(nc.resolved_at)} />
-                      <MiniInfoCard label="Operación" value={nc.operation_name || '-'} />
+                      <MiniInfoCard label="Operación" value={translateDisplayText(nc.operation_name || '-', locale, 'operation')} />
                       <MiniInfoCard label="Código op." value={nc.operation_code || '-'} />
                     </div>
                   </div>
@@ -1187,10 +1190,10 @@ function NoConformidadesPageContent() {
                         onChange={(e) => update(nc.id, e.target.value)}
                         className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                       >
-                        <option value="abierta">No resuelta</option>
-                        <option value="en progreso">En progreso</option>
-                        <option value="pendiente_aprobacion">Pendiente aprobación</option>
-                        <option value="resuelta">Resuelta</option>
+                        <option value="abierta">{translateStatusLabel('No resuelta', locale)}</option>
+                        <option value="en progreso">{translateStatusLabel('en progreso', locale)}</option>
+                        <option value="pendiente_aprobacion">{translateStatusLabel('pendiente aprobacion', locale)}</option>
+                        <option value="resuelta">{translateStatusLabel('resuelta', locale)}</option>
                       </select>
                     )}
                   </div>
@@ -1204,7 +1207,7 @@ function NoConformidadesPageContent() {
                       {openLinkedAction ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <Tag tone="emerald">
-                            Plan activo: {openLinkedAction.title || openLinkedAction.id}
+                            Plan activo: {translateDisplayText(openLinkedAction.title || openLinkedAction.id, locale, 'actionPlan')}
                           </Tag>
 
                           <span
@@ -1212,11 +1215,11 @@ function NoConformidadesPageContent() {
                               openLinkedAction.status
                             )}`}
                           >
-                            {normalizeActionStatus(openLinkedAction.status)}
+                            {translateStatusLabel(normalizeActionStatus(openLinkedAction.status), locale)}
                           </span>
 
                           <Tag tone="slate">
-                            Prioridad: {openLinkedAction.priority || 'media'}
+                            Prioridad: {translatePriorityLabel(openLinkedAction.priority || 'media', locale)}
                           </Tag>
 
                           <Tag tone="slate">
@@ -1236,7 +1239,7 @@ function NoConformidadesPageContent() {
                       ) : latestLinkedAction ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <Tag tone="slate">
-                            Última acción: {latestLinkedAction.title || latestLinkedAction.id}
+                            Última acción: {translateDisplayText(latestLinkedAction.title || latestLinkedAction.id, locale, 'actionPlan')}
                           </Tag>
 
                           <span
@@ -1244,7 +1247,7 @@ function NoConformidadesPageContent() {
                               latestLinkedAction.status
                             )}`}
                           >
-                            {normalizeActionStatus(latestLinkedAction.status)}
+                            {translateStatusLabel(normalizeActionStatus(latestLinkedAction.status), locale)}
                           </span>
 
                           <Tag tone="amber">Cierre anterior detectado</Tag>
@@ -1256,12 +1259,12 @@ function NoConformidadesPageContent() {
                   {expanded && (
                     <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
                       <SectionCard title="Detalle de la no conformidad">
-                        <DetailRow label="Norma" value={getNcIso(nc)} />
-                        <DetailRow label="Cláusula" value={nc.clause || '-'} />
-                        <DetailRow label="Categoría" value={nc.category || 'General'} />
-                        <DetailRow label="Estado" value={nc.status || '-'} />
-                        <DetailRow label="Operación" value={nc.operation_name || '-'} />
-                        <DetailRow label="Tipo operación" value={nc.operation_type || '-'} />
+                        <DetailRow label="Norma" value={translateStandardLabel(getNcIso(nc), locale)} />
+                        <DetailRow label="Cláusula" value={translateClauseLabel(nc.clause || '-', locale)} />
+                        <DetailRow label="Categoría" value={translateDisplayText(nc.category || 'General', locale, 'category')} />
+                        <DetailRow label="Estado" value={translateStatusLabel(nc.status || '-', locale)} />
+                        <DetailRow label="Operación" value={translateDisplayText(nc.operation_name || '-', locale, 'operation')} />
+                        <DetailRow label="Tipo operación" value={translateDisplayText(nc.operation_type || '-', locale, 'operation')} />
                         <DetailRow label="Detección" value={formatDateTime(nc.detected_at)} />
                         <DetailRow label="Resolución" value={formatDateTime(nc.resolved_at)} />
                       </SectionCard>
@@ -1438,7 +1441,7 @@ function Tag({
   );
 }
 
-function StatusChip({ status }: { status: string }) {
+function StatusChip({ status, locale = 'es' }: { status: string; locale?: string }) {
   const styles =
     status === 'resuelta'
       ? 'bg-green-100 text-green-700 border-green-200'
@@ -1450,7 +1453,7 @@ function StatusChip({ status }: { status: string }) {
 
   return (
     <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${styles}`}>
-      {status}
+      {translateStatusLabel(status, locale)}
     </span>
   );
 }

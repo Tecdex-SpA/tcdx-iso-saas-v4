@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translateDisplayText, translateStatusLabel, translateClauseLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -79,7 +80,7 @@ export default function AuditExecutionPage() {
 }
 
 function AuditExecutionContent() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const params = useSearchParams();
   const auditId = params.get('id') || '';
 
@@ -209,7 +210,7 @@ function AuditExecutionContent() {
 
           {audit && (
             <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-6">
-              <Metric label="ISO" value={audit.iso || '-'} />
+              <Metric label="ISO" value={translateDisplayText(audit.iso || '-', locale, 'standard')} />
               <Metric label={t('auditExecution.metrics.total')} value={summary.total} />
               <Metric label={t('auditExecution.metrics.compliant')} value={summary.conformes} />
               <Metric label={t('auditExecution.metrics.observations')} value={summary.observaciones} />
@@ -238,21 +239,21 @@ function AuditExecutionContent() {
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id} className="border-b align-top">
-                      <td className="px-3 py-3 font-semibold text-slate-700">{row.clause || '-'}</td>
+                      <td className="px-3 py-3 font-semibold text-slate-700">{translateClauseLabel(row.clause || '-', locale)}</td>
                       <td className="px-3 py-3">
-                        <div className="font-bold text-slate-900">{friendlyControlTitle(row)}</div>
+                        <div className="font-bold text-slate-900">{translateDisplayText(friendlyControlTitle(row), locale, 'control')}</div>
                         <div className="mt-1 max-w-xl text-xs font-semibold text-indigo-600">
-                          {friendlyControlMeta(row)}
+                          {translateDisplayText(friendlyControlMeta(row), locale, 'control')}
                         </div>
                         {row.initial_health_status && (
                           <div className="mt-1 text-[11px] text-slate-400">
-                            {t('auditExecution.initialHealth')}: {row.initial_health_status}
+                            {t('auditExecution.initialHealth')}: {translateStatusLabel(row.initial_health_status, locale)}
                           </div>
                         )}
                       </td>
                       <td className="px-3 py-3 text-xs text-slate-600">
-                        <div>{row.initial_status || '-'}</div>
-                        <div>{row.initial_health_status || '-'}</div>
+                        <div>{translateStatusLabel(row.initial_status || '-', locale)}</div>
+                        <div>{translateStatusLabel(row.initial_health_status || '-', locale)}</div>
                       </td>
                       <td className="px-3 py-3">
                         <select
