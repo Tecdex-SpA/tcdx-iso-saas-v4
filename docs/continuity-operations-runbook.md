@@ -163,3 +163,24 @@ API_URL=http://192.168.100.120:3000 FRONTEND_URL=http://192.168.100.130:3000 EMA
 - [ ] logs preservados;
 - [ ] acciones preventivas definidas;
 - [ ] cliente informado si corresponde.
+
+## Observabilidad operativa Fase 4F
+
+La fase 4F agrega:
+
+```bash
+bash scripts/monitor-runtime.sh
+bash scripts/collect-ops-logs.sh
+bash scripts/qa-observability.sh
+```
+
+Uso recomendado post-deploy:
+
+```bash
+API_URL=http://192.168.100.120:3000 \
+FRONTEND_URL=http://192.168.100.130:3000 \
+AI_ENGINE_URL=http://192.168.100.140:8000 \
+EMAIL=<admin> \
+PASSWORD=<password> \
+bash scripts/qa-observability.sh
+```

@@ -121,3 +121,15 @@ API_URL=https://api.tcdx.cl FRONTEND_URL=https://compliance.tcdx.cl EMAIL=<admin
 2. Si el cutover falla, revertir DNS al endpoint anterior.
 3. Restaurar DB desde último backup validado si hubo escritura en cloud.
 4. Mantener servicios lab encendidos hasta cerrar ventana de estabilización.
+
+## Observabilidad inicial
+
+Antes de cutover a Oracle Cloud ejecutar:
+
+```bash
+bash scripts/qa-cloud-readiness.sh
+bash scripts/qa-backup-readiness.sh
+API_URL=<api-url> FRONTEND_URL=<frontend-url> AI_ENGINE_URL=<ai-engine-url> EMAIL=<admin> PASSWORD=<password> bash scripts/qa-observability.sh
+```
+
+En producción avanzada se recomienda complementar con Oracle Monitoring, métricas de Nginx, logs centralizados y alertas.

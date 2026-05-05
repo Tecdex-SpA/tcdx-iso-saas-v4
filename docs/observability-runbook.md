@@ -1,0 +1,144 @@
+# Observability Runbook — TCDX ISO SaaS
+
+## Objetivo
+
+Definir una capa operativa básica de observabilidad para detectar si el SaaS ISO/TCDX está sano, degradado o caído.
+
+Esta fase no incorpora herramientas pesadas. Usa scripts versionados, `curl`, systemd, Nginx, health checks y logs.
+
+## Componentes monitoreados
+
+| Componente | Validación |
+|---|---|
+| Frontend externo lab | `http://192.168.100.130:3000/login` |
+| Next interno | `http://127.0.0.1:8080/login` desde VM frontend |
+| Backend | `http://192.168.100.120:3000/` |
+| AI Engine | `http://192.168.100.140:8000/health` |
+| IA Auditor | `/api/ai-auditor/scope` con token |
+| IA Compliance | `/api/ai-compliance/engine-health` con token |
+| Nginx | `systemctl status nginx` y proxy 3000 |
+| Systemd | servicios `tecdex-backend`, `tecdex-frontend`, `ai-engine` |
+| Disco | `df -h` |
+| Puertos | `ss -ltnp` |
+
+## Scripts
+
+### Monitor runtime
+
+```bash
+API_URL=http://192.168.100.120:3000 \
+FRONTEND_URL=http://192.168.100.130:3000 \
+AI_ENGINE_URL=http://192.168.100.140:8000 \
+EMAIL=admin@rieltec.com \
+PASSWORD=123456 \
+bash scripts/monitor-runtime.sh
+```
+
+Salida:
+
+```text
+qa-results/runtime-monitor-YYYYMMDD_HHMMSS.txt
+qa-results/runtime-monitor-YYYYMMDD_HHMMSS.json
+qa-results/runtime-monitor-YYYYMMDD_HHMMSS.md
+```
+
+### Snapshot de logs operativos
+
+```bash
+bash scripts/collect-ops-logs.sh
+```
+
+Salida:
+
+```text
+qa-results/ops-logs-YYYYMMDD_HHMMSS.txt
+```
+
+En Mac puede producir advertencias porque no existen `systemctl` o `journalctl`. En VM recopila más información.
+
+### QA observability
+
+```bash
+API_URL=http://192.168.100.120:3000 \
+FRONTEND_URL=http://192.168.100.130:3000 \
+AI_ENGINE_URL=http://192.168.100.140:8000 \
+EMAIL=admin@rieltec.com \
+PASSWORD=123456 \
+bash scripts/qa-observability.sh
+```
+
+## Interpretación PASS / WARN / FAIL
+
+| Estado | Interpretación |
+|---|---|
+| PASS | Validación correcta |
+| WARN | Degradación o información no disponible, sin cortar operación necesariamente |
+| FAIL | Debe revisarse antes de avanzar a deploy/cutover |
+
+## AI Engine requerido u opcional
+
+Por defecto, el monitor permite que AI Engine caído sea `WARN`:
+
+```bash
+REQUIRE_AI_ENGINE=false bash scripts/monitor-runtime.sh
+```
+
+Para exigirlo como crítico:
+
+```bash
+REQUIRE_AI_ENGINE=true bash scripts/monitor-runtime.sh
+```
+
+## Comandos por VM
+
+### Frontend
+
+```bash
+sudo systemctl status tecdex-frontend --no-pager
+sudo systemctl status nginx --no-pager
+curl -I http://127.0.0.1:8080/login
+curl -I http://127.0.0.1:3000/login
+```
+
+### Backend
+
+```bash
+sudo systemctl status tecdex-backend --no-pager
+curl -I http://127.0.0.1:3000/
+```
+
+### AI Engine
+
+```bash
+sudo systemctl status ai-engine --no-pager
+curl -I http://127.0.0.1:8000/health
+```
+
+### DB
+
+```bash
+sudo systemctl status postgresql --no-pager
+sudo -u postgres psql -d tecdex_saas -c "SELECT now();"
+```
+
+## Propuesta futura
+
+Para producción avanzada:
+
+- Prometheus Node Exporter;
+- Grafana;
+- Loki o journald centralizado;
+- alertas por correo/Slack;
+- uptime externo;
+- Oracle Monitoring;
+- WAF/Load Balancer metrics.
+
+## Relación con continuidad
+
+Ante un `FAIL`, usar:
+
+```text
+docs/continuity-operations-runbook.md
+```
+
+para diagnóstico y recuperación.
