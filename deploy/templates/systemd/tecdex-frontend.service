@@ -1,0 +1,20 @@
+[Unit]
+Description=TCDX Frontend Next.js
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tecdex
+Group=tecdex
+WorkingDirectory=/home/tecdex/frontend
+EnvironmentFile=-/home/tecdex/frontend/.env
+Environment=NODE_ENV=production
+Environment=PORT=8080
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

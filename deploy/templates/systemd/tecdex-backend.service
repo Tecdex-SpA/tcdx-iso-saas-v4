@@ -1,0 +1,20 @@
+[Unit]
+Description=TCDX Backend Node.js
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tecdex
+Group=tecdex
+WorkingDirectory=/home/tecdex/backend
+EnvironmentFile=-/home/tecdex/backend/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/usr/bin/node /home/tecdex/backend/src/app.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
