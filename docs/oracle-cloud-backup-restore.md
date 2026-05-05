@@ -39,3 +39,16 @@ chmod -R 600 /home/tecdex/secure-backups/env-$TS/*
 ```
 
 No subir estos archivos a Git.
+
+## Integración Fase 4E
+
+La fase 4E agrega scripts operativos versionados para backup/restore-test:
+
+```bash
+bash ./scripts/backup-runtime.sh
+DRY_RUN=true bash ./scripts/restore-test.sh
+bash ./scripts/collect-runtime-inventory.sh
+bash ./scripts/qa-backup-readiness.sh
+```
+
+Regla de seguridad: `restore-test.sh` nunca debe restaurar sobre `tecdx_saas`; siempre usa una base temporal `tecdx_saas_restore_test_*`.
