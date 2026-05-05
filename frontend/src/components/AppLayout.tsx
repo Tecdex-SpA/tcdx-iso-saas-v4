@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import EnglishVisualTextGuard from './EnglishVisualTextGuard';
+import EnglishDbDisplayTextGuard from '@/components/EnglishDbDisplayTextGuard';
 import EnglishFindingsTextGuard from './EnglishFindingsTextGuard';
 import EnglishAdminSaasTextGuard from './EnglishAdminSaasTextGuard';
 import {
@@ -388,6 +389,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-[#06173a]">
       <EnglishVisualTextGuard />
+      <EnglishDbDisplayTextGuard />
       {pathname.startsWith('/hallazgos') && <EnglishFindingsTextGuard />}
       {pathname.startsWith('/admin-saas') && <EnglishAdminSaasTextGuard />}
       <div className="hidden lg:block">

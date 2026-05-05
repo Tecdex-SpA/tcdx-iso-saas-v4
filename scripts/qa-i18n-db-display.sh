@@ -179,3 +179,17 @@ do
     echo "[WARN] $FILE no usa capa visual i18n BD"
   fi
 done
+
+echo ""
+echo "Cobertura Fase 5A.3:"
+[ -f frontend/src/components/EnglishDbDisplayTextGuard.tsx ] \
+  && pass "EnglishDbDisplayTextGuard existe" \
+  || fail "Falta EnglishDbDisplayTextGuard"
+
+grep -q "EnglishDbDisplayTextGuard" frontend/src/components/AppLayout.tsx \
+  && pass "EnglishDbDisplayTextGuard montado en AppLayout" \
+  || fail "EnglishDbDisplayTextGuard no montado en AppLayout"
+
+grep -q "phase5aResidualMap" frontend/src/i18n/displayText.ts \
+  && pass "displayText incluye phase5aResidualMap" \
+  || warn "displayText no incluye phase5aResidualMap"

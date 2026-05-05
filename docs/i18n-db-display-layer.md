@@ -192,3 +192,17 @@ Se extiende la capa visual i18n BD a vistas de diagnóstico, riesgo, SoA, export
 - `frontend/src/app/ia-compliance/page.tsx`
 
 La regla se mantiene: solo render visual, sin modificar BD, payloads ni valores internos.
+
+## Fase 5A.3 — Depuración de residuos visuales reales
+
+Se agregó `EnglishDbDisplayTextGuard` como red de seguridad visual para residuos dinámicos que provienen desde BD, catálogos o textos semiestructurados no capturados por los renders directos.
+
+Reglas:
+
+- Solo opera cuando `locale === 'en'`.
+- No toca BD.
+- No toca backend.
+- No modifica payloads.
+- No altera inputs, textareas, scripts, estilos, código ni contenido editable.
+- Conserva fallback al texto original si no hay coincidencia segura.
+- Mantiene `displayText.ts` como fuente central para mapeos determinísticos.
