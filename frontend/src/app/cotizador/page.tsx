@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
+import { translateDisplayText, translateStatusLabel, translateStandardLabel, translateBillingConceptLabel } from '@/i18n/displayText';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
@@ -707,7 +708,7 @@ export default function CotizadorPage() {
                         </div>
                         <div className="mt-2 flex flex-col gap-2">
                           <select
-                            value={quote.status}
+                            value={translateStatusLabel(quote.status, locale)}
                             onChange={(e) => updateQuoteStatus(quote.id, e.target.value)}
                             disabled={saving === quote.id}
                             className="rounded-xl border border-slate-200 px-3 py-2 text-xs"

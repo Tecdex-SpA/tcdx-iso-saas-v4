@@ -6,6 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
+import { translateDisplayText, translateStatusLabel, translateStandardLabel } from '@/i18n/displayText';
 import {
   PieChart,
   Pie,
@@ -1550,7 +1551,7 @@ function formatKpiValue(value: number | string | null | undefined, unit?: string
 }
 
 function KpiRow({ item }: { item: KpiDashboardItem }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const status = item.latest_snapshot?.status_color || 'gray';
 
   return (

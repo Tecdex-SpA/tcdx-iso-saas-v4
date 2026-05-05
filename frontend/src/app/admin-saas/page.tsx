@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useTranslation } from '@/hooks/useTranslation';
+import { useLanguage } from '@/context/LanguageContext';
+import { translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -346,6 +349,7 @@ function SectionTitle({
 }
 
 export default function AdminSaasPage() {
+  const { locale } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
 
   const [governance, setGovernance] = useState<any>(null);
@@ -3624,7 +3628,7 @@ async function uploadSelectedTenantLogo(file: File) {
                                     {standard.code}
                                   </div>
                                   <div className="text-xs text-slate-500">
-                                    {standard.name}
+                                    {translateStandardLabel(standard.name, locale)}
                                   </div>
                                 </td>
 

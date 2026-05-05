@@ -143,3 +143,22 @@ grep -q "translateDisplayText" frontend/src/app/auditorias/page.tsx \
 grep -q "translateDisplayText" frontend/src/app/auditorias/ejecucion/page.tsx \
   && pass "auditorias ejecucion usa displayText" \
   || warn "auditorias ejecucion no usa displayText"
+echo ""
+echo "Cobertura Fase 5A.2.3:"
+for FILE in \
+  frontend/src/app/admin-saas/page.tsx \
+  frontend/src/app/prefacturacion/page.tsx \
+  frontend/src/app/cotizador/page.tsx \
+  frontend/src/app/dashboard-kpi/page.tsx \
+  frontend/src/app/administrar-kpis/page.tsx
+do
+  if [ -f "$FILE" ]; then
+    if grep -q "translateDisplayText\|translateStatusLabel\|translateStandardLabel\|translateBillingConceptLabel\|translateModuleLabel" "$FILE"; then
+      pass "$FILE usa capa visual i18n BD"
+    else
+      warn "$FILE no usa capa visual i18n BD"
+    fi
+  else
+    warn "$FILE no existe"
+  fi
+done

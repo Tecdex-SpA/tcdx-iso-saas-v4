@@ -167,3 +167,15 @@ Reglas aplicadas:
 - no alterar payloads enviados al backend;
 - traducir estados, severidades, prioridades, tipos, normas, cláusulas, títulos y descripciones reconocibles;
 - mantener fallback al original para texto libre no reconocido.
+
+## Integración Fase 5A.2.3
+
+Se extiende la capa visual de traducción a vistas administrativas y comerciales:
+
+- Administración SaaS;
+- Prefacturación;
+- Cotizador;
+- Dashboard KPI;
+- Administración de KPIs.
+
+La regla se mantiene: traducir únicamente labels visibles. No se modifican valores internos, payloads, contratos de API, BD ni scripts de deploy.
