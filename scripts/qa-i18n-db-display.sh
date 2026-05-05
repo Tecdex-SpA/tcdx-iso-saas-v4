@@ -222,3 +222,15 @@ else
   echo "[FAIL] EnglishDbDisplayTextGuard no usa translateDisplayText"
   FAIL=$((FAIL+1))
 fi
+
+
+echo ""
+echo "Cobertura Fase 5A.5 residuos visuales críticos:"
+for NEEDLE in   "To be defined"   "Control owner"   "Applicability or exclusion justification"   "Current diagnostic status"   "Objective evidence"   "Proposed wording"   "Health summary"   "Relevant signals"   "Recommended priorities"
+do
+  if grep -q "$NEEDLE" frontend/src/i18n/displayText.ts; then
+    pass "mapeo residual crítico presente: $NEEDLE"
+  else
+    fail "falta mapeo residual crítico: $NEEDLE"
+  fi
+done

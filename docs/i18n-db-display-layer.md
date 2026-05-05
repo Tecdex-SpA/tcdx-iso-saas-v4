@@ -218,3 +218,15 @@ Se amplía la capa visual para cubrir residuos detectados manualmente en English
 - IA Compliance: resumen, recomendaciones, brechas y frases semiestructuradas generadas en español.
 
 La corrección sigue siendo visual y no destructiva. No modifica BD, payloads, valores internos ni texto libre no reconocido.
+
+
+## Fase 5A.5 — Depuración profunda de residuos visuales
+
+Se amplió la corrección visual para residuos reales detectados manualmente en English:
+
+- SOA: opciones, placeholders, estado de implementación, justificación, notas y cláusulas.
+- Evidencias: Central AI summary, sugerencias de evidencia, próximos pasos, narrativa IA y frases semiestructuradas.
+- Plan de Acción: redacciones propuestas, evidencia objetiva, riesgo/impacto y acción correctiva sugerida.
+- IA Compliance: resumen de salud, señales relevantes y prioridades recomendadas.
+
+La solución sigue siendo visual-only. No modifica valores internos, payloads, BD ni backend.
