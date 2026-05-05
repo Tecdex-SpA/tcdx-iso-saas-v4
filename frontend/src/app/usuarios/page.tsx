@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
 
 const API_URL =
@@ -17,21 +18,106 @@ type RoleOption = {
   label: string;
 };
 
-const ADMIN_ROLE_OPTIONS: RoleOption[] = [
-  { value: 'admin', label: 'Admin empresa' },
-  { value: 'auditor', label: 'Auditor' },
-  { value: 'operativo', label: 'Operativo' },
-  { value: 'viewer', label: 'Solo lectura / Ejecutivo' },
-];
-
-const SUPERADMIN_ROLE_OPTIONS: RoleOption[] = [
-  { value: 'superadmin', label: 'Superadmin' },
-  { value: 'dealer', label: 'Dealer' },
-  { value: 'admin', label: 'Admin empresa' },
-  { value: 'auditor', label: 'Auditor' },
-  { value: 'operativo', label: 'Operativo' },
-  { value: 'viewer', label: 'Solo lectura / Ejecutivo' },
-];
+const ui = {
+  es: {
+    roles: {
+      admin: 'Admin empresa',
+      auditor: 'Auditor',
+      operativo: 'Operativo',
+      viewer: 'Solo lectura / Ejecutivo',
+      superadmin: 'Superadmin',
+      dealer: 'Dealer',
+    },
+    unauthorized: 'No autorizado.',
+    loading: 'Cargando usuarios...',
+    title: 'Gestión de Usuarios',
+    subtitle: 'Administra usuarios por empresa, manteniendo roles controlados para el SaaS.',
+    currentRole: 'Rol actual',
+    notAvailable: 'N/D',
+    superadminHelp:
+      'Selecciona primero una empresa para listar y crear usuarios dentro de ese tenant. Los roles Superadmin y Dealer solo puede gestionarlos un Superadmin.',
+    adminHelp:
+      'Solo ves y administras usuarios de tu propia empresa. No puedes crear Superadmin ni Dealer.',
+    selectedCompany: 'Empresa seleccionada',
+    selectCompany: 'Seleccionar empresa',
+    listedUsersHelp: 'Usuarios listados y nuevos usuarios quedarán asociados a:',
+    createUser: 'Crear usuario',
+    company: 'Empresa',
+    currentCompany: 'Empresa actual',
+    name: 'Nombre',
+    email: 'Email',
+    password: 'Password',
+    role: 'Rol',
+    users: 'Usuarios',
+    total: 'Total',
+    showingCompany: (name: string) => `Mostrando solo usuarios de ${name}`,
+    selectCompanyToList: 'Selecciona una empresa para listar usuarios',
+    showingOwnCompany: 'Mostrando usuarios de tu empresa',
+    noUsers: 'No hay usuarios para mostrar en esta empresa.',
+    newPassword: 'Nueva contraseña',
+    passwordHint: 'Dejar vacío para no cambiar',
+    created: 'Creado',
+    saving: 'Guardando...',
+    saveChanges: 'Guardar cambios',
+    chooseCompany: 'Primero selecciona una empresa.',
+    completeFields: 'Completa todos los campos',
+    cannotCreateRole: 'No tienes permisos para crear ese tipo de usuario.',
+    cannotAssignRole: 'No tienes permisos para asignar ese rol.',
+    createError: 'Error creando usuario',
+    updateError: 'Error actualizando usuario',
+    createSuccess: 'Usuario creado correctamente',
+    updateSuccess: 'Usuario actualizado correctamente',
+  },
+  en: {
+    roles: {
+      admin: 'Company admin',
+      auditor: 'Auditor',
+      operativo: 'Operator',
+      viewer: 'Read-only / Executive',
+      superadmin: 'Superadmin',
+      dealer: 'Dealer',
+    },
+    unauthorized: 'Unauthorized.',
+    loading: 'Loading users...',
+    title: 'User Management',
+    subtitle: 'Manage users by company while keeping controlled SaaS roles.',
+    currentRole: 'Current role',
+    notAvailable: 'N/A',
+    superadminHelp:
+      'Select a company first to list and create users within that tenant. Superadmin and Dealer roles can only be managed by a Superadmin.',
+    adminHelp:
+      'You only see and manage users from your own company. You cannot create Superadmin or Dealer users.',
+    selectedCompany: 'Selected company',
+    selectCompany: 'Select company',
+    listedUsersHelp: 'Listed users and new users will be associated with:',
+    createUser: 'Create user',
+    company: 'Company',
+    currentCompany: 'Current company',
+    name: 'Name',
+    email: 'Email',
+    password: 'Password',
+    role: 'Role',
+    users: 'Users',
+    total: 'Total',
+    showingCompany: (name: string) => `Showing only users from ${name}`,
+    selectCompanyToList: 'Select a company to list users',
+    showingOwnCompany: 'Showing users from your company',
+    noUsers: 'There are no users to show for this company.',
+    newPassword: 'New password',
+    passwordHint: 'Leave blank to keep unchanged',
+    created: 'Created',
+    saving: 'Saving...',
+    saveChanges: 'Save changes',
+    chooseCompany: 'Select a company first.',
+    completeFields: 'Complete all fields',
+    cannotCreateRole: 'You do not have permission to create this user type.',
+    cannotAssignRole: 'You do not have permission to assign this role.',
+    createError: 'Error creating user',
+    updateError: 'Error updating user',
+    createSuccess: 'User created successfully',
+    updateSuccess: 'User updated successfully',
+  },
+} as const;
 
 function normalizeRole(role: any) {
   return String(role || '').toLowerCase().trim();
@@ -70,7 +156,35 @@ function resolveTenantId(user: any) {
   );
 }
 
+function getRoleOptions(copy: typeof ui.es | typeof ui.en, isSuperAdmin: boolean): RoleOption[] {
+  const adminOptions: RoleOption[] = [
+    { value: 'admin', label: copy.roles.admin },
+    { value: 'auditor', label: copy.roles.auditor },
+    { value: 'operativo', label: copy.roles.operativo },
+    { value: 'viewer', label: copy.roles.viewer },
+  ];
+
+  if (!isSuperAdmin) return adminOptions;
+
+  return [
+    { value: 'superadmin', label: copy.roles.superadmin },
+    { value: 'dealer', label: copy.roles.dealer },
+    ...adminOptions,
+  ];
+}
+
+function getRoleLabel(role: any, copy: typeof ui.es | typeof ui.en) {
+  const normalized = normalizeRole(role);
+  const options = getRoleOptions(copy, true);
+
+  return options.find((option) => option.value === normalized)?.label || String(role || copy.notAvailable);
+}
+
 export default function UsuariosPage() {
+  const { locale } = useTranslation();
+  const lang = locale === 'en' ? 'en' : 'es';
+  const copy = ui[lang];
+
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
 
@@ -92,7 +206,7 @@ export default function UsuariosPage() {
   const isSuperAdmin = isSuperAdminRole(normalizedRole);
   const isAdmin = isAdminRole(normalizedRole);
 
-  const roleOptions = isSuperAdmin ? SUPERADMIN_ROLE_OPTIONS : ADMIN_ROLE_OPTIONS;
+  const roleOptions = getRoleOptions(copy, isSuperAdmin);
 
   const selectedTenant = useMemo(() => {
     return tenants.find((tenant) => tenant.id === selectedTenantId) || null;
@@ -215,17 +329,17 @@ export default function UsuariosPage() {
     const targetTenantId = isSuperAdmin ? selectedTenantId : resolveTenantId(user);
 
     if (!targetTenantId && form.role !== 'dealer' && form.role !== 'superadmin') {
-      alert('Primero selecciona una empresa.');
+      alert(copy.chooseCompany);
       return;
     }
 
     if (!form.name || !form.email || !form.password || !form.role) {
-      alert('Completa todos los campos');
+      alert(copy.completeFields);
       return;
     }
 
     if (!isSuperAdmin && ['superadmin', 'dealer'].includes(form.role)) {
-      alert('No tienes permisos para crear ese tipo de usuario.');
+      alert(copy.cannotCreateRole);
       return;
     }
 
@@ -247,7 +361,7 @@ export default function UsuariosPage() {
     const json = await res.json();
 
     if (!res.ok) {
-      alert(json.error || 'Error creando usuario');
+      alert(json.error || copy.createError);
       return;
     }
 
@@ -259,14 +373,14 @@ export default function UsuariosPage() {
     });
 
     await loadUsers(token, targetTenantId);
-    alert('Usuario creado correctamente');
+    alert(copy.createSuccess);
   };
 
   const updateUser = async (row: any) => {
     if (!token) return;
 
     if (!isSuperAdmin && ['superadmin', 'dealer'].includes(row.role)) {
-      alert('No tienes permisos para asignar ese rol.');
+      alert(copy.cannotAssignRole);
       return;
     }
 
@@ -289,7 +403,7 @@ export default function UsuariosPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error actualizando usuario');
+        alert(json.error || copy.updateError);
         return;
       }
 
@@ -305,10 +419,10 @@ export default function UsuariosPage() {
         )
       );
 
-      alert('Usuario actualizado correctamente');
+      alert(copy.updateSuccess);
     } catch (err) {
       console.error('ERROR UPDATE USER:', err);
-      alert('Error actualizando usuario');
+      alert(copy.updateError);
     } finally {
       setSavingId('');
     }
@@ -317,7 +431,7 @@ export default function UsuariosPage() {
   if (!isAdmin && !isSuperAdmin) {
     return (
       <AppLayout>
-        <div className="p-6">No autorizado.</div>
+        <div className="p-6">{copy.unauthorized}</div>
       </AppLayout>
     );
   }
@@ -325,7 +439,7 @@ export default function UsuariosPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando usuarios...</div>
+        <div className="p-6">{copy.loading}</div>
       </AppLayout>
     );
   }
@@ -335,33 +449,31 @@ export default function UsuariosPage() {
       <div className="p-6 space-y-6">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Gestión de Usuarios</h1>
+            <h1 className="text-2xl font-bold">{copy.title}</h1>
             <p className="mt-1 text-sm text-gray-500">
-              Administra usuarios por empresa, manteniendo roles controlados para el SaaS.
+              {copy.subtitle}
             </p>
           </div>
 
           <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600">
-            Rol actual: {user?.role || 'N/D'}
+            {copy.currentRole}: {getRoleLabel(user?.role, copy)}
           </div>
         </div>
 
         <div className="bg-blue-50 p-4 rounded text-sm text-gray-700">
-          {isSuperAdmin
-            ? 'Selecciona primero una empresa para listar y crear usuarios dentro de ese tenant. Los roles Superadmin y Dealer solo puede gestionarlos un Superadmin.'
-            : 'Solo ves y administras usuarios de tu propia empresa. No puedes crear Superadmin ni Dealer.'}
+          {isSuperAdmin ? copy.superadminHelp : copy.adminHelp}
         </div>
 
         {isSuperAdmin && (
           <div className="bg-white p-4 rounded shadow space-y-3">
-            <div className="font-semibold">Empresa seleccionada</div>
+            <div className="font-semibold">{copy.selectedCompany}</div>
 
             <select
               value={selectedTenantId}
               onChange={(e) => setSelectedTenantId(e.target.value)}
               className="border p-2 rounded w-full"
             >
-              <option value="">Seleccionar empresa</option>
+              <option value="">{copy.selectCompany}</option>
               {tenants.map((tenant) => (
                 <option key={tenant.id} value={tenant.id}>
                   {tenant.name}
@@ -371,7 +483,7 @@ export default function UsuariosPage() {
 
             {selectedTenant && (
               <div className="text-sm text-gray-600">
-                Usuarios listados y nuevos usuarios quedarán asociados a:{' '}
+                {copy.listedUsersHelp}{' '}
                 <b>{selectedTenant.name}</b>
               </div>
             )}
@@ -379,26 +491,26 @@ export default function UsuariosPage() {
         )}
 
         <div className="bg-white p-4 rounded shadow space-y-3">
-          <div className="font-semibold">Crear usuario</div>
+          <div className="font-semibold">{copy.createUser}</div>
 
           <div className="rounded bg-gray-50 border p-3 text-sm text-gray-700">
-            Empresa:{' '}
+            {copy.company}:{' '}
             <b>
               {isSuperAdmin
-                ? selectedTenant?.name || 'Selecciona una empresa'
-                : 'Empresa actual'}
+                ? selectedTenant?.name || copy.selectCompany
+                : copy.currentCompany}
             </b>
           </div>
 
           <input
-            placeholder="Nombre"
+            placeholder={copy.name}
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             className="border p-2 rounded w-full"
           />
 
           <input
-            placeholder="Email"
+            placeholder={copy.email}
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             className="border p-2 rounded w-full"
@@ -406,7 +518,7 @@ export default function UsuariosPage() {
 
           <input
             type="password"
-            placeholder="Password"
+            placeholder={copy.password}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             className="border p-2 rounded w-full"
@@ -429,40 +541,40 @@ export default function UsuariosPage() {
             disabled={isSuperAdmin && !selectedTenantId && !['superadmin', 'dealer'].includes(form.role)}
             className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
           >
-            Crear usuario
+            {copy.createUser}
           </button>
         </div>
 
         <div className="bg-white rounded shadow overflow-hidden">
           <div className="border-b p-4 flex items-center justify-between">
             <div>
-              <div className="font-semibold">Usuarios</div>
+              <div className="font-semibold">{copy.users}</div>
               <div className="text-xs text-gray-500">
                 {isSuperAdmin
                   ? selectedTenant
-                    ? `Mostrando solo usuarios de ${selectedTenant.name}`
-                    : 'Selecciona una empresa para listar usuarios'
-                  : 'Mostrando usuarios de tu empresa'}
+                    ? copy.showingCompany(selectedTenant.name)
+                    : copy.selectCompanyToList
+                  : copy.showingOwnCompany}
               </div>
             </div>
 
             <div className="text-xs text-gray-500">
-              Total: {users.length}
+              {copy.total}: {users.length}
             </div>
           </div>
 
           {users.length === 0 ? (
             <div className="p-6 text-gray-500">
               {selectedTenantId
-                ? 'No hay usuarios para mostrar en esta empresa.'
-                : 'Selecciona una empresa para listar usuarios.'}
+                ? copy.noUsers
+                : copy.selectCompanyToList}
             </div>
           ) : (
             users.map((row) => (
               <div key={row.id} className="border-b p-4 space-y-3">
                 <div className="grid md:grid-cols-5 gap-3">
                   <div>
-                    <label className="text-sm text-gray-600 block mb-1">Nombre</label>
+                    <label className="text-sm text-gray-600 block mb-1">{copy.name}</label>
                     <input
                       value={row.name || ''}
                       onChange={(e) =>
@@ -477,19 +589,19 @@ export default function UsuariosPage() {
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-600 block mb-1">Email</label>
+                    <label className="text-sm text-gray-600 block mb-1">{copy.email}</label>
                     <div className="border p-2 rounded bg-gray-50">{row.email}</div>
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-600 block mb-1">Empresa</label>
+                    <label className="text-sm text-gray-600 block mb-1">{copy.company}</label>
                     <div className="border p-2 rounded bg-gray-50">
-                      {row.tenant_name || selectedTenant?.name || row.tenant_id || 'Empresa actual'}
+                      {row.tenant_name || selectedTenant?.name || row.tenant_id || copy.currentCompany}
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-600 block mb-1">Rol</label>
+                    <label className="text-sm text-gray-600 block mb-1">{copy.role}</label>
                     <select
                       value={row.role}
                       onChange={(e) =>
@@ -511,11 +623,11 @@ export default function UsuariosPage() {
 
                   <div>
                     <label className="text-sm text-gray-600 block mb-1">
-                      Nueva contraseña
+                      {copy.newPassword}
                     </label>
                     <input
                       type="password"
-                      placeholder="Dejar vacío para no cambiar"
+                      placeholder={copy.passwordHint}
                       value={row.newPassword || ''}
                       onChange={(e) =>
                         setUsers((prev) =>
@@ -533,7 +645,7 @@ export default function UsuariosPage() {
 
                 <div className="flex justify-between items-center">
                   <div className="text-xs text-gray-500">
-                    Creado: {row.created_at ? String(row.created_at).slice(0, 10) : '-'}
+                    {copy.created}: {row.created_at ? String(row.created_at).slice(0, 10) : '-'}
                   </div>
 
                   <button
@@ -541,7 +653,7 @@ export default function UsuariosPage() {
                     disabled={savingId === row.id}
                     className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
                   >
-                    {savingId === row.id ? 'Guardando...' : 'Guardar cambios'}
+                    {savingId === row.id ? copy.saving : copy.saveChanges}
                   </button>
                 </div>
               </div>
