@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
+import { getStatusLabel } from '@/i18n/statusLabels';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -67,6 +69,153 @@ const emptyForm: ObjectiveForm = {
   notes: '',
 };
 
+const ui = {
+  es: {
+    kpiCode: 'KPI-01',
+    systemObjectives: 'Objetivos del sistema de gestión',
+    systemObjectivesTitle: 'Objetivos del Sistema de Gestión',
+    intro:
+      'Define objetivos por norma, responsable, período y avance. Estos registros alimentan el KPI-01 Cumplimiento de Objetivos. El sistema ajusta automáticamente el estado si el avance llega a 100% o si la fecha de término venció.',
+    newObjective: 'Nuevo objetivo',
+    editObjective: 'Editar objetivo',
+    closeForm: 'Cerrar formulario',
+    refresh: 'Actualizar',
+    refreshing: 'Actualizando...',
+    activeObjectives: 'Objetivos activos',
+    completed: 'Cumplidos',
+    inProgress: 'En progreso',
+    overdue: 'Atrasados',
+    compliance: 'Cumplimiento',
+    standard: 'Norma',
+    allStandards: 'Todas',
+    status: 'Estado',
+    allStatuses: 'Todos',
+    clearFilters: 'Limpiar filtros',
+    formHelp: 'El avance puede calcularse por meta/valor actual o ingresarse manualmente.',
+    cancel: 'Cancelar',
+    title: 'Título',
+    owner: 'Responsable',
+    suggestedStatus: 'Estado sugerido',
+    period: 'Periodo',
+    periodStart: 'Inicio',
+    periodEnd: 'Fin',
+    target: 'Meta',
+    actual: 'Valor actual',
+    progress: 'Avance %',
+    progressShort: 'avance',
+    evidenceUrl: 'URL evidencia',
+    description: 'Descripción',
+    notes: 'Notas',
+    saveObjective: 'Guardar objetivo',
+    saving: 'Guardando...',
+    objectivesList: 'Listado de objetivos',
+    loadingObjectives: 'Cargando objetivos...',
+    emptyObjectives: 'No hay objetivos registrados. Crea al menos un objetivo para alimentar KPI-01.',
+    records: 'registro(s)',
+    noDate: 'Sin fecha',
+    noDescription: 'Sin descripción',
+    notAvailable: 'N/D',
+    global: 'Global',
+    created: 'Creado',
+    updated: 'Actualizado',
+    createdBy: 'Creado por',
+    updatedBy: 'Actualizado por',
+    evidence: 'Evidencia',
+    edit: 'Editar',
+    deleteConfirm: (title: string) => `¿Eliminar/cancelar el objetivo "${title}"?`,
+    titleRequired: 'El título del objetivo es obligatorio.',
+    loadError: 'Error cargando objetivos',
+    saveError: 'Error guardando objetivo',
+    deleteError: 'Error eliminando objetivo',
+    kpiNoTenant: 'No existe tenant_id para recalcular KPI-01.',
+    kpiRecalculateError: 'No se pudo recalcular KPI-01.',
+    kpiRecalculateException: 'Error recalculando KPI-01.',
+    kpiUpdated: 'KPI-01 actualizado correctamente.',
+    savedWithKpi: 'Objetivo guardado correctamente y KPI-01 actualizado.',
+    savedWithoutKpi: (message: string) =>
+      `Objetivo guardado correctamente, pero no se pudo recalcular KPI-01: ${message}`,
+    cancelledWithKpi: 'Objetivo cancelado correctamente y KPI-01 actualizado.',
+    cancelledWithoutKpi: (message: string) =>
+      `Objetivo cancelado correctamente, pero no se pudo recalcular KPI-01: ${message}`,
+    periodMonthly: 'Mensual',
+    periodQuarterly: 'Trimestral',
+    periodSemiannual: 'Semestral',
+    periodAnnual: 'Anual',
+  },
+  en: {
+    kpiCode: 'KPI-01',
+    systemObjectives: 'Management system objectives',
+    systemObjectivesTitle: 'Management System Objectives',
+    intro:
+      'Define objectives by standard, owner, period, and progress. These records feed KPI-01 Objectives Compliance. The system automatically adjusts the status when progress reaches 100% or when the end date is overdue.',
+    newObjective: 'New objective',
+    editObjective: 'Edit objective',
+    closeForm: 'Close form',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing...',
+    activeObjectives: 'Active objectives',
+    completed: 'Completed',
+    inProgress: 'In progress',
+    overdue: 'Overdue',
+    compliance: 'Compliance',
+    standard: 'Standard',
+    allStandards: 'All',
+    status: 'Status',
+    allStatuses: 'All',
+    clearFilters: 'Clear filters',
+    formHelp: 'Progress can be calculated from target/current value or entered manually.',
+    cancel: 'Cancel',
+    title: 'Title',
+    owner: 'Owner',
+    suggestedStatus: 'Suggested status',
+    period: 'Period',
+    periodStart: 'Start',
+    periodEnd: 'End',
+    target: 'Target',
+    actual: 'Actual value',
+    progress: 'Progress %',
+    progressShort: 'progress',
+    evidenceUrl: 'Evidence URL',
+    description: 'Description',
+    notes: 'Notes',
+    saveObjective: 'Save objective',
+    saving: 'Saving...',
+    objectivesList: 'Objective list',
+    loadingObjectives: 'Loading objectives...',
+    emptyObjectives: 'No objectives have been registered. Create at least one objective to feed KPI-01.',
+    records: 'record(s)',
+    noDate: 'No date',
+    noDescription: 'No description',
+    notAvailable: 'N/A',
+    global: 'Global',
+    created: 'Created',
+    updated: 'Updated',
+    createdBy: 'Created by',
+    updatedBy: 'Updated by',
+    evidence: 'Evidence',
+    edit: 'Edit',
+    deleteConfirm: (title: string) => `Delete/cancel the objective "${title}"?`,
+    titleRequired: 'The objective title is required.',
+    loadError: 'Error loading objectives',
+    saveError: 'Error saving objective',
+    deleteError: 'Error deleting objective',
+    kpiNoTenant: 'No tenant_id is available to recalculate KPI-01.',
+    kpiRecalculateError: 'KPI-01 could not be recalculated.',
+    kpiRecalculateException: 'Error recalculating KPI-01.',
+    kpiUpdated: 'KPI-01 updated successfully.',
+    savedWithKpi: 'Objective saved successfully and KPI-01 updated.',
+    savedWithoutKpi: (message: string) =>
+      `Objective saved successfully, but KPI-01 could not be recalculated: ${message}`,
+    cancelledWithKpi: 'Objective cancelled successfully and KPI-01 updated.',
+    cancelledWithoutKpi: (message: string) =>
+      `Objective cancelled successfully, but KPI-01 could not be recalculated: ${message}`,
+    periodMonthly: 'Monthly',
+    periodQuarterly: 'Quarterly',
+    periodSemiannual: 'Semiannual',
+    periodAnnual: 'Annual',
+  },
+} as const;
+
 function getToken() {
   if (typeof window === 'undefined') return '';
   return localStorage.getItem('token') || '';
@@ -78,24 +227,13 @@ function formatPct(value: any) {
   return `${Math.round(n)}%`;
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return 'Sin fecha';
+function formatDate(value?: string | null, locale = 'es') {
+  if (!value) return null;
   try {
-    return new Date(value).toLocaleDateString('es-CL');
+    return new Date(value).toLocaleDateString(locale === 'en' ? 'en-US' : 'es-CL');
   } catch {
-    return 'Sin fecha';
+    return null;
   }
-}
-
-function statusLabel(status: string) {
-  const s = String(status || '').toLowerCase();
-
-  if (s === 'cumplido') return 'Cumplido';
-  if (s === 'pendiente') return 'Pendiente';
-  if (s === 'atrasado') return 'Atrasado';
-  if (s === 'cancelado') return 'Cancelado';
-
-  return 'En progreso';
 }
 
 function statusClass(status: string) {
@@ -114,6 +252,34 @@ function toNumber(value: any) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function displayText(value: string | number | null | undefined, locale: 'es' | 'en') {
+  const original = String(value ?? '').trim();
+  if (!original) return original;
+
+  if (locale !== 'en') return original;
+
+  const dictionary: Record<string, string> = {
+    'sin descripción': 'No description',
+    'sin descripcion': 'No description',
+    'objetivo de continuidad operacional': 'Operational continuity objective',
+    'cumplimiento de objetivos': 'Objectives compliance',
+    'kpi-01 cumplimiento de objetivos': 'KPI-01 Objectives compliance',
+  };
+
+  return dictionary[original.toLowerCase()] || original;
+}
+
+function standardLabel(value: string | null | undefined) {
+  if (!value) return '';
+  const normalized = String(value).replace(/\s+/g, '').toUpperCase();
+  if (normalized === 'ISO9001') return 'ISO 9001';
+  if (normalized === 'ISO27001') return 'ISO 27001';
+  if (normalized === 'ISO22301') return 'ISO 22301';
+  if (normalized === 'ISO14001') return 'ISO 14001';
+  if (normalized === 'ISO20000-1' || normalized === 'ISO200001') return 'ISO 20000-1';
+  return String(value);
+}
+
 export default function ObjectivesPanel({
   tenantId,
   standards,
@@ -121,6 +287,10 @@ export default function ObjectivesPanel({
   tenantId: string;
   standards: StandardOption[];
 }) {
+  const { locale, t } = useTranslation();
+  const lang = locale === 'en' ? 'en' : 'es';
+  const copy = ui[lang];
+
   const [items, setItems] = useState<ObjectiveItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState('');
@@ -129,6 +299,8 @@ export default function ObjectivesPanel({
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [form, setForm] = useState<ObjectiveForm>(emptyForm);
   const [showForm, setShowForm] = useState(false);
+
+  const renderDate = (value?: string | null) => formatDate(value, lang) || copy.noDate;
 
   const loadData = async () => {
     if (!tenantId) return;
@@ -155,12 +327,12 @@ export default function ObjectivesPanel({
       const json = await res.json();
 
       if (!res.ok || json.ok === false) {
-        throw new Error(json.error || 'Error cargando objetivos');
+        throw new Error(json.error || copy.loadError);
       }
 
       setItems(Array.isArray(json.data) ? json.data : []);
     } catch (err: any) {
-      setError(err.message || 'Error cargando objetivos');
+      setError(err.message || copy.loadError);
       setItems([]);
     } finally {
       setLoading(false);
@@ -170,7 +342,7 @@ export default function ObjectivesPanel({
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId, standardFilter, statusFilter]);
+  }, [tenantId, standardFilter, statusFilter, lang]);
 
   const stats = useMemo(() => {
     const active = items.filter((item) => item.is_active);
@@ -229,7 +401,7 @@ export default function ObjectivesPanel({
     if (!tenantId) {
       return {
         ok: false,
-        message: 'No existe tenant_id para recalcular KPI-01.',
+        message: copy.kpiNoTenant,
       };
     }
 
@@ -248,18 +420,18 @@ export default function ObjectivesPanel({
       if (!res.ok) {
         return {
           ok: false,
-          message: json.error || json.detail || 'No se pudo recalcular KPI-01.',
+          message: json.error || json.detail || copy.kpiRecalculateError,
         };
       }
 
       return {
         ok: true,
-        message: 'KPI-01 actualizado correctamente.',
+        message: copy.kpiUpdated,
       };
     } catch (err: any) {
       return {
         ok: false,
-        message: err.message || 'Error recalculando KPI-01.',
+        message: err.message || copy.kpiRecalculateException,
       };
     }
   };
@@ -270,7 +442,7 @@ export default function ObjectivesPanel({
     const cleanTitle = form.title.trim();
 
     if (!cleanTitle) {
-      alert('El título del objetivo es obligatorio.');
+      alert(copy.titleRequired);
       return;
     }
 
@@ -312,7 +484,7 @@ export default function ObjectivesPanel({
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || json.ok === false) {
-        throw new Error(json.error || 'Error guardando objetivo');
+        throw new Error(json.error || copy.saveError);
       }
 
       const recalcResult = await recalculateKpisAfterObjectiveChange();
@@ -321,20 +493,20 @@ export default function ObjectivesPanel({
       resetForm();
 
       if (recalcResult.ok) {
-        alert('Objetivo guardado correctamente y KPI-01 actualizado.');
+        alert(copy.savedWithKpi);
       } else {
-        alert(`Objetivo guardado correctamente, pero no se pudo recalcular KPI-01: ${recalcResult.message}`);
+        alert(copy.savedWithoutKpi(recalcResult.message));
       }
     } catch (err: any) {
-      setError(err.message || 'Error guardando objetivo');
-      alert(err.message || 'Error guardando objetivo');
+      setError(err.message || copy.saveError);
+      alert(err.message || copy.saveError);
     } finally {
       setSaving('');
     }
   };
 
   const deleteObjective = async (item: ObjectiveItem) => {
-    const ok = window.confirm(`¿Eliminar/cancelar el objetivo "${item.title}"?`);
+    const ok = window.confirm(copy.deleteConfirm(item.title));
     if (!ok) return;
 
     try {
@@ -350,7 +522,7 @@ export default function ObjectivesPanel({
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || json.ok === false) {
-        throw new Error(json.error || 'Error eliminando objetivo');
+        throw new Error(json.error || copy.deleteError);
       }
 
       const recalcResult = await recalculateKpisAfterObjectiveChange();
@@ -358,12 +530,12 @@ export default function ObjectivesPanel({
       await loadData();
 
       if (recalcResult.ok) {
-        alert('Objetivo cancelado correctamente y KPI-01 actualizado.');
+        alert(copy.cancelledWithKpi);
       } else {
-        alert(`Objetivo cancelado correctamente, pero no se pudo recalcular KPI-01: ${recalcResult.message}`);
+        alert(copy.cancelledWithoutKpi(recalcResult.message));
       }
     } catch (err: any) {
-      alert(err.message || 'Error eliminando objetivo');
+      alert(err.message || copy.deleteError);
     } finally {
       setSaving('');
     }
@@ -376,21 +548,19 @@ export default function ObjectivesPanel({
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                KPI-01
+                {copy.kpiCode}
               </span>
               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Objetivos del sistema de gestión
+                {copy.systemObjectives}
               </span>
             </div>
 
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-              Objetivos del Sistema de Gestión
+              {copy.systemObjectivesTitle}
             </h2>
 
             <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-              Define objetivos por norma, responsable, período y avance. Estos registros
-              alimentan el KPI-01 Cumplimiento de Objetivos. El sistema ajusta automáticamente
-              el estado si el avance llega a 100% o si la fecha de término venció.
+              {copy.intro}
             </p>
           </div>
 
@@ -400,7 +570,7 @@ export default function ObjectivesPanel({
               onClick={() => setShowForm((prev) => !prev)}
               className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
             >
-              {showForm ? 'Cerrar formulario' : 'Nuevo objetivo'}
+              {showForm ? copy.closeForm : copy.newObjective}
             </button>
 
             <button
@@ -409,17 +579,17 @@ export default function ObjectivesPanel({
               disabled={loading}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
             >
-              {loading ? 'Actualizando...' : 'Actualizar'}
+              {loading ? copy.refreshing : copy.refresh}
             </button>
           </div>
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <MetricCard title="Objetivos activos" value={stats.total} />
-          <MetricCard title="Cumplidos" value={stats.completed} />
-          <MetricCard title="En progreso" value={stats.inProgress} />
-          <MetricCard title="Atrasados" value={stats.overdue} />
-          <MetricCard title="Cumplimiento" value={`${stats.compliancePct}%`} />
+          <MetricCard title={copy.activeObjectives} value={stats.total} />
+          <MetricCard title={copy.completed} value={stats.completed} />
+          <MetricCard title={copy.inProgress} value={stats.inProgress} />
+          <MetricCard title={copy.overdue} value={stats.overdue} />
+          <MetricCard title={copy.compliance} value={`${stats.compliancePct}%`} />
         </div>
       </section>
 
@@ -427,17 +597,17 @@ export default function ObjectivesPanel({
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div>
             <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Norma
+              {copy.standard}
             </label>
             <select
               value={standardFilter}
               onChange={(e) => setStandardFilter(e.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
             >
-              <option value="ALL">Todas</option>
+              <option value="ALL">{copy.allStandards}</option>
               {standards.map((standard) => (
                 <option key={standard.code} value={standard.code}>
-                  {standard.code}
+                  {standardLabel(standard.code)}
                 </option>
               ))}
             </select>
@@ -445,19 +615,19 @@ export default function ObjectivesPanel({
 
           <div>
             <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Estado
+              {copy.status}
             </label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
             >
-              <option value="ALL">Todos</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="en_progreso">En progreso</option>
-              <option value="cumplido">Cumplido</option>
-              <option value="atrasado">Atrasado</option>
-              <option value="cancelado">Cancelado</option>
+              <option value="ALL">{copy.allStatuses}</option>
+              <option value="pendiente">{getStatusLabel('pendiente', t)}</option>
+              <option value="en_progreso">{getStatusLabel('en_progreso', t)}</option>
+              <option value="cumplido">{getStatusLabel('cumplido', t)}</option>
+              <option value="atrasado">{getStatusLabel('atrasado', t)}</option>
+              <option value="cancelado">{getStatusLabel('cancelado', t)}</option>
             </select>
           </div>
 
@@ -470,7 +640,7 @@ export default function ObjectivesPanel({
               }}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
-              Limpiar filtros
+              {copy.clearFilters}
             </button>
           </div>
         </div>
@@ -481,10 +651,10 @@ export default function ObjectivesPanel({
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <h3 className="text-xl font-bold text-slate-900">
-                {form.id ? 'Editar objetivo' : 'Nuevo objetivo'}
+                {form.id ? copy.editObjective : copy.newObjective}
               </h3>
               <p className="mt-1 text-sm text-slate-600">
-                El avance puede calcularse por meta/valor actual o ingresarse manualmente.
+                {copy.formHelp}
               </p>
             </div>
 
@@ -493,59 +663,59 @@ export default function ObjectivesPanel({
               onClick={resetForm}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
             >
-              Cancelar
+              {copy.cancel}
             </button>
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <Input label="Título" value={form.title} onChange={(v) => setForm({ ...form, title: v })} />
-            <Input label="Responsable" value={form.owner} onChange={(v) => setForm({ ...form, owner: v })} />
+            <Input label={copy.title} value={form.title} onChange={(v) => setForm({ ...form, title: v })} />
+            <Input label={copy.owner} value={form.owner} onChange={(v) => setForm({ ...form, owner: v })} />
 
             <Select
-              label="Norma"
+              label={copy.standard}
               value={form.standard_code}
               onChange={(v) => setForm({ ...form, standard_code: v })}
               options={[
-                { value: '', label: 'Global' },
-                ...standards.map((s) => ({ value: s.code, label: s.code })),
+                { value: '', label: copy.global },
+                ...standards.map((s) => ({ value: s.code, label: standardLabel(s.code) })),
               ]}
             />
 
             <Select
-              label="Estado sugerido"
+              label={copy.suggestedStatus}
               value={form.status}
               onChange={(v) => setForm({ ...form, status: v })}
               options={[
-                { value: 'pendiente', label: 'Pendiente' },
-                { value: 'en_progreso', label: 'En progreso' },
-                { value: 'cumplido', label: 'Cumplido' },
-                { value: 'atrasado', label: 'Atrasado' },
-                { value: 'cancelado', label: 'Cancelado' },
+                { value: 'pendiente', label: getStatusLabel('pendiente', t) },
+                { value: 'en_progreso', label: getStatusLabel('en_progreso', t) },
+                { value: 'cumplido', label: getStatusLabel('cumplido', t) },
+                { value: 'atrasado', label: getStatusLabel('atrasado', t) },
+                { value: 'cancelado', label: getStatusLabel('cancelado', t) },
               ]}
             />
 
             <Select
-              label="Periodo"
+              label={copy.period}
               value={form.period_type}
               onChange={(v) => setForm({ ...form, period_type: v })}
               options={[
-                { value: 'mensual', label: 'Mensual' },
-                { value: 'trimestral', label: 'Trimestral' },
-                { value: 'semestral', label: 'Semestral' },
-                { value: 'anual', label: 'Anual' },
+                { value: 'mensual', label: copy.periodMonthly },
+                { value: 'trimestral', label: copy.periodQuarterly },
+                { value: 'semestral', label: copy.periodSemiannual },
+                { value: 'anual', label: copy.periodAnnual },
               ]}
             />
 
-            <Input label="Inicio" type="date" value={form.period_start} onChange={(v) => setForm({ ...form, period_start: v })} />
-            <Input label="Fin" type="date" value={form.period_end} onChange={(v) => setForm({ ...form, period_end: v })} />
-            <Input label="Meta" type="number" value={form.target_value} onChange={(v) => setForm({ ...form, target_value: v })} />
-            <Input label="Valor actual" type="number" value={form.actual_value} onChange={(v) => setForm({ ...form, actual_value: v })} />
-            <Input label="Avance %" type="number" value={form.progress_percent} onChange={(v) => setForm({ ...form, progress_percent: v })} />
-            <Input label="URL evidencia" value={form.evidence_url} onChange={(v) => setForm({ ...form, evidence_url: v })} />
+            <Input label={copy.periodStart} type="date" value={form.period_start} onChange={(v) => setForm({ ...form, period_start: v })} />
+            <Input label={copy.periodEnd} type="date" value={form.period_end} onChange={(v) => setForm({ ...form, period_end: v })} />
+            <Input label={copy.target} type="number" value={form.target_value} onChange={(v) => setForm({ ...form, target_value: v })} />
+            <Input label={copy.actual} type="number" value={form.actual_value} onChange={(v) => setForm({ ...form, actual_value: v })} />
+            <Input label={copy.progress} type="number" value={form.progress_percent} onChange={(v) => setForm({ ...form, progress_percent: v })} />
+            <Input label={copy.evidenceUrl} value={form.evidence_url} onChange={(v) => setForm({ ...form, evidence_url: v })} />
 
             <div className="md:col-span-2 xl:col-span-4">
               <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Descripción
+                {copy.description}
               </label>
               <textarea
                 value={form.description}
@@ -557,7 +727,7 @@ export default function ObjectivesPanel({
 
             <div className="md:col-span-2 xl:col-span-4">
               <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Notas
+                {copy.notes}
               </label>
               <textarea
                 value={form.notes}
@@ -575,7 +745,7 @@ export default function ObjectivesPanel({
               disabled={saving === 'save'}
               className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
             >
-              {saving === 'save' ? 'Guardando...' : 'Guardar objetivo'}
+              {saving === 'save' ? copy.saving : copy.saveObjective}
             </button>
           </div>
         </section>
@@ -590,20 +760,20 @@ export default function ObjectivesPanel({
       <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-xl font-bold text-slate-900">
-            Listado de objetivos
+            {copy.objectivesList}
           </h3>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-            {items.length} registro(s)
+            {items.length} {copy.records}
           </span>
         </div>
 
         {loading ? (
           <div className="rounded-2xl bg-slate-50 p-5 text-slate-500">
-            Cargando objetivos...
+            {copy.loadingObjectives}
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-700">
-            No hay objetivos registrados. Crea al menos un objetivo para alimentar KPI-01.
+            {copy.emptyObjectives}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -616,19 +786,19 @@ export default function ObjectivesPanel({
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white">
-                        {item.standard_code || 'GLOBAL'}
+                        {item.standard_code ? standardLabel(item.standard_code) : copy.global}
                       </span>
                       <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass(item.status)}`}>
-                        {statusLabel(item.status)}
+                        {getStatusLabel(item.status, t)}
                       </span>
                     </div>
 
                     <h4 className="mt-3 text-lg font-bold text-slate-900">
-                      {item.title}
+                      {displayText(item.title, lang)}
                     </h4>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      {item.description || 'Sin descripción'}
+                      {item.description ? displayText(item.description, lang) : copy.noDescription}
                     </p>
                   </div>
 
@@ -636,7 +806,7 @@ export default function ObjectivesPanel({
                     <div className="text-3xl font-bold text-slate-900">
                       {formatPct(item.progress_percent)}
                     </div>
-                    <div className="text-xs text-slate-500">avance</div>
+                    <div className="text-xs text-slate-500">{copy.progressShort}</div>
                   </div>
                 </div>
 
@@ -650,14 +820,14 @@ export default function ObjectivesPanel({
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                  <SmallStat label="Responsable" value={item.owner || 'N/D'} />
-                  <SmallStat label="Inicio" value={formatDate(item.period_start)} />
-                  <SmallStat label="Fin" value={formatDate(item.period_end)} />
-                  <SmallStat label="Meta" value={item.target_value ?? 'N/D'} />
-                  <SmallStat label="Creado" value={formatDate(item.created_at)} />
-                  <SmallStat label="Actualizado" value={formatDate(item.updated_at)} />
-                  <SmallStat label="Creado por" value={item.created_by_name || 'N/D'} />
-                  <SmallStat label="Actualizado por" value={item.updated_by_name || 'N/D'} />
+                  <SmallStat label={copy.owner} value={item.owner || copy.notAvailable} />
+                  <SmallStat label={copy.periodStart} value={renderDate(item.period_start)} />
+                  <SmallStat label={copy.periodEnd} value={renderDate(item.period_end)} />
+                  <SmallStat label={copy.target} value={item.target_value ?? copy.notAvailable} />
+                  <SmallStat label={copy.created} value={renderDate(item.created_at)} />
+                  <SmallStat label={copy.updated} value={renderDate(item.updated_at)} />
+                  <SmallStat label={copy.createdBy} value={item.created_by_name || copy.notAvailable} />
+                  <SmallStat label={copy.updatedBy} value={item.updated_by_name || copy.notAvailable} />
                 </div>
 
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
@@ -668,7 +838,7 @@ export default function ObjectivesPanel({
                       rel="noreferrer"
                       className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                     >
-                      Evidencia
+                      {copy.evidence}
                     </a>
                   )}
 
@@ -677,7 +847,7 @@ export default function ObjectivesPanel({
                     onClick={() => editItem(item)}
                     className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
                   >
-                    Editar
+                    {copy.edit}
                   </button>
 
                   <button
@@ -686,7 +856,7 @@ export default function ObjectivesPanel({
                     disabled={saving === `delete-${item.id}`}
                     className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
                   >
-                    Cancelar
+                    {copy.cancel}
                   </button>
                 </div>
               </div>
