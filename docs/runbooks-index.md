@@ -44,3 +44,5 @@
 - `docs/pilot-demo-checklist.md`
 - `docs/phase-4-risk-register.md`
 - `docs/phase-4-qa-matrix.md`
+
+- [Fase 5A — Capa i18n visual para datos BD](./i18n-db-display-layer.md)

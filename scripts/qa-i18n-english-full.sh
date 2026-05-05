@@ -77,7 +77,26 @@ PY
 
   {
     echo ""
-    echo "Resumen:"
+
+
+echo ""
+echo "======================================"
+echo " QA I18N DB DISPLAY FASE 5A"
+echo "======================================"
+
+if [ -x scripts/qa-i18n-db-display.sh ]; then
+  if bash scripts/qa-i18n-db-display.sh; then
+    echo "[PASS] qa-i18n-db-display.sh"
+  else
+    echo "[FAIL] qa-i18n-db-display.sh"
+    FAIL=$((FAIL+1))
+  fi
+else
+  echo "[WARN] scripts/qa-i18n-db-display.sh no existe o no es ejecutable"
+  WARN=$((WARN+1))
+fi
+
+echo "Resumen:"
     echo "PASS: $PASS"
     echo "WARN: $WARN"
     echo "FAIL: $FAIL"

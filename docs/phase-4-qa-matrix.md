@@ -16,3 +16,9 @@
 | `scripts/collect-runtime-inventory.sh` | Inventario | Auditoría técnica | `bash scripts/collect-runtime-inventory.sh` | Archivo generado |
 | `scripts/collect-ops-logs.sh` | Logs snapshot | Incidente/soporte | `bash scripts/collect-ops-logs.sh` | Archivo generado |
 | `scripts/qa-phase4-final.sh` | Cierre final Fase 4 | Antes de cerrar fase | `API_URL=... FRONTEND_URL=... AI_ENGINE_URL=... EMAIL=... PASSWORD=... bash scripts/qa-phase4-final.sh` | FAIL 0 |
+
+## Extensión Fase 5A
+
+| QA | Objetivo |
+|---|---|
+| `scripts/qa-i18n-db-display.sh` | Valida la capa visual de traducción para datos provenientes desde BD. |

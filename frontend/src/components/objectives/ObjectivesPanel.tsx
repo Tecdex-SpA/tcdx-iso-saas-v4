@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel } from '@/i18n/statusLabels';
+import { translateDisplayText } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -253,20 +254,7 @@ function toNumber(value: any) {
 }
 
 function displayText(value: string | number | null | undefined, locale: 'es' | 'en') {
-  const original = String(value ?? '').trim();
-  if (!original) return original;
-
-  if (locale !== 'en') return original;
-
-  const dictionary: Record<string, string> = {
-    'sin descripción': 'No description',
-    'sin descripcion': 'No description',
-    'objetivo de continuidad operacional': 'Operational continuity objective',
-    'cumplimiento de objetivos': 'Objectives compliance',
-    'kpi-01 cumplimiento de objetivos': 'KPI-01 Objectives compliance',
-  };
-
-  return dictionary[original.toLowerCase()] || original;
+  return translateDisplayText(value, locale, 'objective');
 }
 
 function standardLabel(value: string | null | undefined) {

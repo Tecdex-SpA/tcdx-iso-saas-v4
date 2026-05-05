@@ -80,3 +80,15 @@ API_URL=http://192.168.100.120:3000 FRONTEND_URL=http://192.168.100.130:3000 EMA
 - English no muestra residuos críticos en vistas priorizadas.
 - Spanish sigue funcionando como idioma base.
 - IA Auditor, IA Compliance, RBAC y seguridad no se degradan.
+
+## Fase 5A — Traducción visual de datos BD
+
+Se agrega una capa central no destructiva para traducir visualmente datos provenientes desde BD cuando el usuario usa English.
+
+Referencia:
+
+- `docs/i18n-db-display-layer.md`
+- `frontend/src/i18n/displayText.ts`
+- `scripts/qa-i18n-db-display.sh`
+
+Esta fase no modifica BD, no altera payloads internos y mantiene los guards visuales como red de seguridad.

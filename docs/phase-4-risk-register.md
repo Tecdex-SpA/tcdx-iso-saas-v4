@@ -12,3 +12,9 @@
 | SSL/DNS pendiente en cloud real | Alto | Alta | Pendiente | Resolver en cutover cloud con Nginx/Certbot/DNS | Técnico |
 | IA no reemplaza revisión humana | Alto | Alta | Controlado | Mensajes, PDF, revisión humana y disclaimers | Producto |
 | Scripts QA dependen de usuario admin demo | Medio | Media | Controlado | Mantener credenciales fuera de Git y documentar usuario QA por ambiente | Operaciones |
+
+## Riesgo Fase 5A — Texto libre no reconocido
+
+**Riesgo:** texto libre ingresado por clientes puede permanecer en español en modo English si no corresponde a catálogos, estados, frases conocidas o patrones seguros.
+
+**Mitigación:** aplicar `translateDisplayText` solo como capa visual determinística con fallback al original. La traducción IA/caché/revisión humana queda para fase posterior.
