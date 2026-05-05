@@ -2,10 +2,66 @@
 
 import { useEffect, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+
+const ui = {
+  es: {
+    tenantRequired:
+      'Prefacturación requiere un tenant seleccionado. Ingresa como administrador de empresa, dealer o superadmin.',
+    dealerLoadError: 'No fue posible cargar clientes asignados al dealer.',
+    dealerNoClients: 'No tienes clientes asignados para consultar prefacturación.',
+    tenantsLoadError: 'No fue posible cargar empresas para prefacturación.',
+    tenantsEmpty: 'No hay empresas disponibles para prefacturación.',
+    preinvoiceLoadError: 'Error obteniendo prefacturación',
+    preinvoiceSaveError: 'Error guardando prefacturación',
+    preinvoiceSaved: 'Prefacturación guardada correctamente',
+    badge: 'Administración SaaS',
+    title: 'Prefacturación mensual',
+    subtitle:
+      'Referencia comercial mensual del tenant. El modelo no cobra por usuarios: considera base SaaS, normas activas, módulos activos y consumo IA adicional.',
+    calculating: 'Calculando...',
+    recalculate: 'Recalcular',
+    savePreinvoice: 'Guardar prefacturación',
+    plan: 'Plan',
+    activeStandards: 'Normas activas',
+    activeModules: 'Módulos activos',
+    totalUf: 'Total UF',
+    detail: 'Detalle referencial',
+    baseMonthly: 'Base mensual SaaS',
+    aiExtra: 'Consumo IA adicional',
+    estimatedTotal: 'Total estimado',
+  },
+  en: {
+    tenantRequired:
+      'Pre-invoicing requires a selected tenant. Sign in as a company administrator, dealer, or superadmin.',
+    dealerLoadError: 'Assigned dealer clients could not be loaded.',
+    dealerNoClients: 'You do not have assigned clients available for pre-invoicing review.',
+    tenantsLoadError: 'Companies for pre-invoicing could not be loaded.',
+    tenantsEmpty: 'There are no companies available for pre-invoicing.',
+    preinvoiceLoadError: 'Error loading pre-invoicing data',
+    preinvoiceSaveError: 'Error saving pre-invoicing data',
+    preinvoiceSaved: 'Pre-invoicing saved successfully',
+    badge: 'SaaS Administration',
+    title: 'Monthly pre-invoicing',
+    subtitle:
+      'Monthly commercial reference for the tenant. The model does not charge per user: it considers the SaaS base, active standards, active modules, and additional AI usage.',
+    calculating: 'Calculating...',
+    recalculate: 'Recalculate',
+    savePreinvoice: 'Save pre-invoicing',
+    plan: 'Plan',
+    activeStandards: 'Active standards',
+    activeModules: 'Active modules',
+    totalUf: 'Total UF',
+    detail: 'Reference detail',
+    baseMonthly: 'Monthly SaaS base',
+    aiExtra: 'Additional AI usage',
+    estimatedTotal: 'Estimated total',
+  },
+} as const;
 
 function resolveTenantId(user: any) {
   return user?.tenant_id || user?.tenantId || user?.tenant || '';
@@ -36,7 +92,31 @@ function isPlatformRole(role: string) {
   ].includes(role);
 }
 
+function translateCommercialNote(value: any, lang: 'es' | 'en') {
+  const text = String(value || '').trim();
+  if (!text || lang !== 'en') return text;
+
+  const dictionary: Record<string, string> = {
+    'referencia comercial mensual': 'Monthly commercial reference',
+    'no constituye factura': 'does not constitute an invoice',
+    'no incluye impuestos': 'does not include taxes',
+    'consumo ia adicional': 'additional AI usage',
+    'usuarios no se cobran': 'users are not billed',
+  };
+
+  let translated = text;
+  Object.entries(dictionary).forEach(([source, target]) => {
+    translated = translated.replace(new RegExp(source, 'gi'), target);
+  });
+
+  return translated;
+}
+
 export default function PrefacturacionPage() {
+  const { locale } = useTranslation();
+  const lang = locale === 'en' ? 'en' : 'es';
+  const copy = ui[lang];
+
   const [token, setToken] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [role, setRole] = useState('');
@@ -66,11 +146,9 @@ export default function PrefacturacionPage() {
     setRole(role);
 
     if (!tid && role !== 'dealer' && !isPlatformRole(role)) {
-      setMessage(
-        'Prefacturación requiere un tenant seleccionado. Ingresa como administrador de empresa, dealer o superadmin.'
-      );
+      setMessage(copy.tenantRequired);
     }
-  }, []);
+  }, [copy.tenantRequired]);
 
   useEffect(() => {
     const loadDealerTenants = async () => {
@@ -84,7 +162,7 @@ export default function PrefacturacionPage() {
         const json = await res.json();
 
         if (!res.ok || json?.ok === false) {
-          setMessage(json?.error || 'No fue posible cargar clientes asignados al dealer.');
+          setMessage(json?.error || copy.dealerLoadError);
           return;
         }
 
@@ -96,17 +174,17 @@ export default function PrefacturacionPage() {
         }
 
         if (rows.length === 0) {
-          setMessage('No tienes clientes asignados para consultar prefacturación.');
+          setMessage(copy.dealerNoClients);
         } else {
           setMessage('');
         }
       } catch {
-        setMessage('No fue posible cargar clientes asignados al dealer.');
+        setMessage(copy.dealerLoadError);
       }
     };
 
     void loadDealerTenants();
-  }, [token, role, tenantId]);
+  }, [token, role, tenantId, copy.dealerLoadError, copy.dealerNoClients]);
 
   useEffect(() => {
     const loadPlatformTenants = async () => {
@@ -120,7 +198,7 @@ export default function PrefacturacionPage() {
         const json = await res.json();
 
         if (!res.ok || !Array.isArray(json)) {
-          setMessage('No fue posible cargar empresas para prefacturación.');
+          setMessage(copy.tenantsLoadError);
           return;
         }
 
@@ -136,17 +214,17 @@ export default function PrefacturacionPage() {
         }
 
         if (rows.length === 0) {
-          setMessage('No hay empresas disponibles para prefacturación.');
+          setMessage(copy.tenantsEmpty);
         } else {
           setMessage('');
         }
       } catch {
-        setMessage('No fue posible cargar empresas para prefacturación.');
+        setMessage(copy.tenantsLoadError);
       }
     };
 
     void loadPlatformTenants();
-  }, [token, role, tenantId]);
+  }, [token, role, tenantId, copy.tenantsLoadError, copy.tenantsEmpty]);
 
   const load = async () => {
     if (!token || !tenantId) return;
@@ -161,7 +239,7 @@ export default function PrefacturacionPage() {
       const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
-        alert(json.error || 'Error obteniendo prefacturación');
+        alert(json.error || copy.preinvoiceLoadError);
         return;
       }
 
@@ -186,11 +264,11 @@ export default function PrefacturacionPage() {
     const json = await res.json();
 
     if (!res.ok || json?.ok === false) {
-      alert(json.error || 'Error guardando prefacturación');
+      alert(json.error || copy.preinvoiceSaveError);
       return;
     }
 
-    alert('Prefacturación guardada correctamente');
+    alert(copy.preinvoiceSaved);
     setData(json.preinvoice);
   };
 
@@ -208,16 +286,15 @@ export default function PrefacturacionPage() {
       <div className="mx-auto max-w-[1500px] space-y-6">
         <section className="rounded-[34px] border border-white/70 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
           <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-700">
-            Administración SaaS
+            {copy.badge}
           </span>
 
           <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900">
-            Prefacturación mensual
+            {copy.title}
           </h1>
 
           <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-600">
-            Referencia comercial mensual del tenant. El modelo no cobra por usuarios:
-            considera base SaaS, normas activas, módulos activos y consumo IA adicional.
+            {copy.subtitle}
           </p>
 
           <div className="mt-6 flex flex-col gap-3 md:flex-row">
@@ -261,14 +338,14 @@ export default function PrefacturacionPage() {
               disabled={loading}
               className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
             >
-              {loading ? 'Calculando...' : 'Recalcular'}
+              {loading ? copy.calculating : copy.recalculate}
             </button>
 
             <button
               onClick={materialize}
               className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700"
             >
-              Guardar prefacturación
+              {copy.savePreinvoice}
             </button>
           </div>
         </section>
@@ -276,29 +353,29 @@ export default function PrefacturacionPage() {
         {data && (
           <>
             <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
-              <Metric label="Plan" value={settings.plan_code || '-'} />
-              <Metric label="Normas activas" value={usage.active_standards_count || 0} />
-              <Metric label="Módulos activos" value={usage.active_modules_count || 0} />
-              <Metric label="Total UF" value={amounts.total_uf || 0} />
+              <Metric label={copy.plan} value={settings.plan_code || '-'} />
+              <Metric label={copy.activeStandards} value={usage.active_standards_count || 0} />
+              <Metric label={copy.activeModules} value={usage.active_modules_count || 0} />
+              <Metric label={copy.totalUf} value={amounts.total_uf || 0} />
             </section>
 
             <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-slate-900">Detalle referencial</h2>
+              <h2 className="text-xl font-bold text-slate-900">{copy.detail}</h2>
 
               <div className="mt-5 overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <tbody>
-                    <Row label="Base mensual SaaS" value={`${amounts.base_monthly_uf || 0} UF`} />
-                    <Row label="Normas activas" value={`${amounts.standards_uf || 0} UF`} />
-                    <Row label="Módulos activos" value={`${amounts.modules_uf || 0} UF`} />
-                    <Row label="Consumo IA adicional" value={`${amounts.ai_extra_uf || 0} UF`} />
-                    <Row label="Total estimado" value={`${amounts.total_uf || 0} UF`} strong />
+                    <Row label={copy.baseMonthly} value={`${amounts.base_monthly_uf || 0} UF`} />
+                    <Row label={copy.activeStandards} value={`${amounts.standards_uf || 0} UF`} />
+                    <Row label={copy.activeModules} value={`${amounts.modules_uf || 0} UF`} />
+                    <Row label={copy.aiExtra} value={`${amounts.ai_extra_uf || 0} UF`} />
+                    <Row label={copy.estimatedTotal} value={`${amounts.total_uf || 0} UF`} strong />
                   </tbody>
                 </table>
               </div>
 
               <p className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
-                {data.commercial_note}
+                {translateCommercialNote(data.commercial_note, lang)}
               </p>
             </section>
           </>
