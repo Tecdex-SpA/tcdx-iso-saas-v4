@@ -162,3 +162,20 @@ do
     warn "$FILE no existe"
   fi
 done
+
+echo ""
+echo "Cobertura Fase 5A.2.4:"
+for FILE in \
+  frontend/src/app/diagnostico/page.tsx \
+  frontend/src/app/matriz-riesgo/page.tsx \
+  frontend/src/app/soa/page.tsx \
+  frontend/src/app/exportes/page.tsx \
+  frontend/src/app/ia-auditor/page.tsx \
+  frontend/src/app/ia-compliance/page.tsx
+do
+  if [ -f "$FILE" ] && grep -q "translateDisplayText\|translateClauseLabel\|translateStatusLabel\|translateStandardLabel" "$FILE"; then
+    echo "[PASS] $FILE usa capa visual i18n BD"
+  else
+    echo "[WARN] $FILE no usa capa visual i18n BD"
+  fi
+done

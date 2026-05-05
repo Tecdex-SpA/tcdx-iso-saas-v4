@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useLanguage } from '@/context/LanguageContext';
 import { getUserFromToken } from '@/utils/auth';
+import { translateDisplayText, translateClauseLabel, translateStatusLabel } from '@/i18n/displayText';
 
 const SOA_STANDARDS = [
   'ISO27001',
@@ -12,6 +14,7 @@ const SOA_STANDARDS = [
 ];
 
 export default function SoAPage() {
+  const { locale } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
 
@@ -407,10 +410,10 @@ export default function SoAPage() {
 
         <div className="grid grid-cols-5 gap-4">
           <MetricCard title="Total" value={metrics.total} />
-          <MetricCard title="Aplican" value={metrics.applicable} />
-          <MetricCard title="No aplican" value={metrics.notApplicable} />
-          <MetricCard title="Implementados" value={metrics.implemented} />
-          <MetricCard title="Pendientes" value={metrics.pending} />
+          <MetricCard title={translateDisplayText("Aplican", locale, "generic")} value={metrics.applicable} />
+          <MetricCard title={translateDisplayText("No aplican", locale, "generic")} value={metrics.notApplicable} />
+          <MetricCard title={translateDisplayText("Implementados", locale, "generic")} value={metrics.implemented} />
+          <MetricCard title={translateStatusLabel("Pendiente", locale)} value={metrics.pending} />
         </div>
 
         <div className="space-y-4">
@@ -419,13 +422,13 @@ export default function SoAPage() {
 
               <div>
                 <div className="font-semibold">
-                  {row.clause} — {row.category || 'General'}
+                  {translateClauseLabel(row.clause, locale)} — {translateDisplayText(row.category || 'General', locale, 'category')}
                 </div>
                 <div className="text-sm text-gray-700 mt-1">
-                  {row.description}
+                  {translateDisplayText(row.description, locale, 'control')}
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  Estado diagnóstico actual: {row.diagnostic_status || 'pendiente'}
+                  Estado diagnóstico actual: {translateStatusLabel(row.diagnostic_status || 'pendiente', locale)}
                 </div>
               </div>
 

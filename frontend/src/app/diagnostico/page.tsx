@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getComplianceStatusLabel } from '@/i18n/statusLabels';
+import { translateDisplayText, translateClauseLabel } from '@/i18n/displayText';
 import { getUserFromToken } from '@/utils/auth';
 
 const API_URL =
@@ -748,15 +749,15 @@ export default function DiagnosticoPage() {
               >
                 <div className="flex-1">
                   <div className="font-semibold">
-                    {c.clause} — {translateKnownSystemText(c.category, lang)}
+                    {translateClauseLabel(c.clause, locale)} — {translateDisplayText(c.category, locale, 'category')}
                   </div>
 
                   <div className="text-sm text-gray-600">
-                    {translateKnownSystemText(c.description, lang)}
+                    {translateDisplayText(c.description, locale, 'control')}
                   </div>
 
                   <div className="text-xs text-gray-500 mt-1">
-                    {copy.operation}: {translateKnownSystemText(c.operation_name, lang) || copy.noOperation}
+                    {copy.operation}: {translateDisplayText(c.operation_name, locale, 'adminSaas') || copy.noOperation}
                   </div>
 
                   {c.has_open_nonconformity && (

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translateDisplayText, translatePriorityLabel, translateSeverityLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -1037,9 +1038,9 @@ export default function SeniorAiAuditorPage() {
                 render={(item, index) => (
                   <div key={index} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-                      {item.type} · {item.severity}
+                      {translateDisplayText(item.type, locale, 'audit')} · {translateSeverityLabel(item.severity, locale)}
                     </div>
-                    <h3 className="mt-2 font-bold text-slate-900">{item.title}</h3>
+                    <h3 className="mt-2 font-bold text-slate-900">{translateDisplayText(item.title, locale, 'finding')}</h3>
                     <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
                   </div>
                 )}
@@ -1052,9 +1053,9 @@ export default function SeniorAiAuditorPage() {
                 render={(item, index) => (
                   <div key={index} className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
                     <div className="text-xs font-bold uppercase tracking-[0.12em]">
-                      {item.standard_code || '-'} · {item.priority || '-'}
+                      {translateStandardLabel(item.standard_code || '-', locale)} · {translatePriorityLabel(item.priority || '-', locale)}
                     </div>
-                    <h3 className="mt-2 font-bold">{item.title}</h3>
+                    <h3 className="mt-2 font-bold">{translateDisplayText(item.title, locale, 'actionPlan')}</h3>
                     <p className="mt-2 text-sm leading-6">{item.reason}</p>
                     <button
                       onClick={() => prepareSuggestion('evidence', item)}
@@ -1073,9 +1074,9 @@ export default function SeniorAiAuditorPage() {
                 render={(item, index) => (
                   <div key={index} className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-900">
                     <div className="text-xs font-bold uppercase tracking-[0.12em]">
-                      {item.severity || '-'}
+                      {translateSeverityLabel(item.severity || '-', locale)}
                     </div>
-                    <h3 className="mt-2 font-bold">{item.title}</h3>
+                    <h3 className="mt-2 font-bold">{translateDisplayText(item.title, locale, 'actionPlan')}</h3>
                     <p className="mt-2 text-sm leading-6">{item.recommended_action}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
@@ -1104,9 +1105,9 @@ export default function SeniorAiAuditorPage() {
                 render={(item, index) => (
                   <div key={index} className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-indigo-900">
                     <div className="text-xs font-bold uppercase tracking-[0.12em]">
-                      {item.priority || '-'}
+                      {translatePriorityLabel(item.priority || '-', locale)}
                     </div>
-                    <h3 className="mt-2 font-bold">{item.title}</h3>
+                    <h3 className="mt-2 font-bold">{translateDisplayText(item.title, locale, 'actionPlan')}</h3>
                     <p className="mt-2 text-sm leading-6">{item.recommended_action}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button

@@ -7,6 +7,7 @@ import { getUserFromToken } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
+import { translateDisplayText, translateClauseLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -58,7 +59,7 @@ function isOperationalStandard(s: ScopeStandard) {
 }
 
 export default function RiskMatrixPage() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
 
   return (
     <Suspense
@@ -74,7 +75,7 @@ export default function RiskMatrixPage() {
 }
 
 function RiskMatrixPageContent() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
@@ -303,8 +304,8 @@ function RiskMatrixPageContent() {
     setFocusedControlId(control.id);
     setSelectedLevel(control.nivel || null);
     setFocusMessage(
-      `${t('riskMatrix.directOpen')}: ${control.iso} · ${t('riskMatrix.clause').toLowerCase()} ${
-        control.clause || 'N/A'
+      `${t('riskMatrix.directOpen')}: ${translateStandardLabel(control.iso, locale)} · ${t('riskMatrix.clause').toLowerCase()} ${
+        translateClauseLabel(control.clause || 'N/A', locale)
       } · ${t('dashboard.risk').toLowerCase()} ${riskLevelLabel(control.nivel)}`
     );
     focusAppliedRef.current = true;

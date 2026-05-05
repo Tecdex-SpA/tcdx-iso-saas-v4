@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translateDisplayText, translateStatusLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -718,16 +719,16 @@ export default function IaCompliancePage() {
                                 row.suggestion_type
                               )}`}
                             >
-                              {getSuggestionTypeLabel(row.suggestion_type)}
+                              {translateDisplayText(getSuggestionTypeLabel(row.suggestion_type), locale, 'audit')}
                             </span>
 
                             <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                              {row.status || copy.draft}
+                              {translateStatusLabel(row.status || copy.draft, locale)}
                             </span>
                           </div>
 
                           <div className="mt-3 text-sm font-semibold text-slate-900">
-                            {getSuggestionPreview(row)}
+                            {translateDisplayText(getSuggestionPreview(row), locale, 'audit')}
                           </div>
                         </div>
 

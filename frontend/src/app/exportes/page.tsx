@@ -6,6 +6,7 @@ import { getUserRoleFromToken } from '@/utils/auth';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel as getCatalogStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel as getCatalogCategoryLabel } from '@/i18n/statusLabels';
+import { translateDisplayText, translateStatusLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -101,16 +102,16 @@ function getExportHistoryReportTitle(item: ReportExport, t: (key: string) => str
   return translated !== key ? translated : item.report_title || item.report_type_name || item.report_type_code;
 }
 
-function getReportTypeName(report: ReportType, t: (key: string) => string) {
+function getReportTypeName(report: ReportType, t: (key: string) => string, locale: string = 'es') {
   const key = `exports.reportTypes.${report.code}.name`;
   const translated = t(key);
-  return translated !== key ? translated : report.name;
+  return translated !== key ? translated : translateDisplayText(report.name, locale, 'billing');
 }
 
-function getReportTypeDescription(report: ReportType, t: (key: string) => string) {
+function getReportTypeDescription(report: ReportType, t: (key: string) => string, locale: string = 'es') {
   const key = `exports.reportTypes.${report.code}.description`;
   const translated = t(key);
-  return translated !== key ? translated : report.description;
+  return translated !== key ? translated : translateDisplayText(report.description, locale, 'billing');
 }
 
 function getReportIcon(code: string): TcdxIconName {
@@ -146,11 +147,11 @@ function getCategoryBadgeClass(category: string) {
 }
 
 
-function localizeReportType(report: ReportType, t: (key: string) => string): ReportType {
+function localizeReportType(report: ReportType, t: (key: string) => string, locale: string = 'es'): ReportType {
   return {
     ...report,
-    name: getReportTypeName(report, t),
-    description: getReportTypeDescription(report, t),
+    name: getReportTypeName(report, t, locale),
+    description: getReportTypeDescription(report, t, locale),
   };
 }
 
@@ -442,7 +443,7 @@ export default function ExportesPage() {
         const loadedReports = typesJson?.data || [];
         const loadedClients = clientsJson?.data || [];
 
-        setReportTypes(loadedReports.map((report: ReportType) => localizeReportType(report, t)));
+        setReportTypes(loadedReports.map((report: ReportType) => localizeReportType(report, t, locale)));
         setClients(loadedClients);
 
         if (loadedClients.length > 0) {
@@ -821,11 +822,11 @@ export default function ExportesPage() {
 
                           <div className="mt-5">
                             <h3 className="text-base font-bold text-slate-900">
-                              {getReportTypeName(report, t)}
+                              {getReportTypeName(report, t, locale)}
                             </h3>
 
                             <p className="mt-2 text-sm leading-6 text-slate-500">
-                              {getReportTypeDescription(report, t)}
+                              {getReportTypeDescription(report, t, locale)}
                             </p>
                           </div>
 
@@ -906,13 +907,13 @@ export default function ExportesPage() {
                         </div>
 
                         <h3 className="mt-3 text-lg font-bold text-slate-900">
-                          {getReportTypeName(selectedReport, t)}
+                          {getReportTypeName(selectedReport, t, locale)}
                         </h3>
                       </div>
                     </div>
 
                     <p className="text-sm leading-6 text-slate-500">
-                      {getReportTypeDescription(selectedReport, t)}
+                      {getReportTypeDescription(selectedReport, t, locale)}
                     </p>
 
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1099,7 +1100,7 @@ export default function ExportesPage() {
                   <option value="">{t('exports.allTypes')}</option>
                   {reportTypes.map((report) => (
                     <option key={report.code} value={report.code}>
-                      {getReportTypeName(report, t)}
+                      {getReportTypeName(report, t, locale)}
                     </option>
                   ))}
                 </select>
@@ -1185,7 +1186,7 @@ export default function ExportesPage() {
 
                               <div>
                                 <div className="font-bold text-slate-800">
-                                  {report.report_type_name || report.report_title}
+                                  {translateDisplayText(report.report_type_name || report.report_title, locale, 'billing')}
                                 </div>
                                 <div className="text-xs text-slate-400">
                                   {report.report_type_code}
@@ -1199,7 +1200,7 @@ export default function ExportesPage() {
 
                           <td className="px-4 py-3 align-top text-slate-600">
                             <div className="font-medium text-slate-700">
-                              {report.tenant_name || '-'}
+                              {translateDisplayText(report.tenant_name || '-', locale, 'adminSaas')}
                             </div>
                           </td>
 

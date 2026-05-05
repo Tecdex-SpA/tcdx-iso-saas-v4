@@ -179,3 +179,16 @@ Se extiende la capa visual de traducción a vistas administrativas y comerciales
 - Administración de KPIs.
 
 La regla se mantiene: traducir únicamente labels visibles. No se modifican valores internos, payloads, contratos de API, BD ni scripts de deploy.
+
+## Cobertura Fase 5A.2.4
+
+Se extiende la capa visual i18n BD a vistas de diagnóstico, riesgo, SoA, exportes e IA:
+
+- `frontend/src/app/diagnostico/page.tsx`
+- `frontend/src/app/matriz-riesgo/page.tsx`
+- `frontend/src/app/soa/page.tsx`
+- `frontend/src/app/exportes/page.tsx`
+- `frontend/src/app/ia-auditor/page.tsx`
+- `frontend/src/app/ia-compliance/page.tsx`
+
+La regla se mantiene: solo render visual, sin modificar BD, payloads ni valores internos.
