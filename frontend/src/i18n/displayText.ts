@@ -269,6 +269,107 @@ const exactMap: Record<string, string> = {
   'riesgo': 'Risk',
   'estrategico': 'Strategic',
   'operacional': 'Operational',
+
+  // Phase 5A.4 residuals from manual English review
+  'declaración de aplicabilidad': 'Statement of Applicability',
+  'estado de implementacion': 'Implementation status',
+  'estado de implementación': 'Implementation status',
+  'fecha revision': 'Review date',
+  'fecha revisión': 'Review date',
+  'fecha de revision': 'Review date',
+  'fecha de revisión': 'Review date',
+  'justificacion': 'Justification',
+  'justificación': 'Justification',
+  'notas': 'Notes',
+  'crear accion': 'Create action',
+  'crear acción': 'Create action',
+  'aplica': 'Applies',
+  'implementados': 'Implemented',
+  'implementadas': 'Implemented',
+  'parcialmente implementado': 'Partially implemented',
+  'parcialmente implementada': 'Partially implemented',
+  'pendiente de implementacion': 'Pending implementation',
+  'pendiente de implementación': 'Pending implementation',
+  'fuera de alcance': 'Out of scope',
+  'en alcance': 'In scope',
+  'aplicabilidad': 'Applicability',
+  'razon de aplicabilidad': 'Applicability rationale',
+  'razón de aplicabilidad': 'Applicability rationale',
+  'riesgos detectados': 'Detected risks',
+  'riesgo detectado': 'Detected risk',
+  'proximo paso': 'Next step',
+  'próximo paso': 'Next step',
+  'siguiente paso': 'Next step',
+  'pasos siguientes': 'Next steps',
+  'accion sugerida': 'Suggested action',
+  'acción sugerida': 'Suggested action',
+  'acciones sugeridas': 'Suggested actions',
+  'acciones recomendadas': 'Recommended actions',
+  'evidencia requerida': 'Required evidence',
+  'evidencias requeridas': 'Required evidence',
+  'evidencia faltante': 'Missing evidence',
+  'hallazgos relacionados': 'Related findings',
+  'control asociado': 'Associated control',
+  'control vinculado': 'Linked control',
+  'plan vinculado': 'Linked plan',
+  'riesgo residual': 'Residual risk',
+  'riesgo inherente': 'Inherent risk',
+  'nivel de riesgo': 'Risk level',
+  'probabilidad': 'Likelihood',
+  'impacto': 'Impact',
+  'resumen': 'Summary',
+  'recomendaciones': 'Recommendations',
+  'recomendacion': 'Recommendation',
+  'recomendación': 'Recommendation',
+  'brechas detectadas': 'Detected gaps',
+  'brecha detectada': 'Detected gap',
+  'oportunidades de mejora': 'Improvement opportunities',
+  'analisis de cumplimiento': 'Compliance analysis',
+  'análisis de cumplimiento': 'Compliance analysis',
+  'cumplimiento actual': 'Current compliance',
+  'estado actual': 'Current status',
+  'prioridad recomendada': 'Recommended priority',
+  'sugerencia ia': 'AI suggestion',
+  'sugerencias ia': 'AI suggestions',
+  'fuente de datos': 'Data source',
+  'contexto': 'Context',
+  'observaciones': 'Observations',
+  'acciones': 'Actions',
+  'accion': 'Action',
+  'acción': 'Action',
+  'politica de seguridad de la informacion': 'Information security policy',
+  'política de seguridad de la información': 'Information security policy',
+  'organizacion de la seguridad de la informacion': 'Organization of information security',
+  'organización de la seguridad de la información': 'Organization of information security',
+  'seguridad de recursos humanos': 'Human resources security',
+  'gestión de activos': 'Asset management',
+  'control de acceso': 'Access control',
+  'criptografia': 'Cryptography',
+  'criptografía': 'Cryptography',
+  'seguridad fisica y ambiental': 'Physical and environmental security',
+  'seguridad física y ambiental': 'Physical and environmental security',
+  'seguridad de las operaciones': 'Operations security',
+  'seguridad de las comunicaciones': 'Communications security',
+  'adquisicion desarrollo y mantenimiento de sistemas': 'System acquisition, development and maintenance',
+  'adquisición desarrollo y mantenimiento de sistemas': 'System acquisition, development and maintenance',
+  'relacion con proveedores': 'Supplier relationships',
+  'relación con proveedores': 'Supplier relationships',
+  'gestion de incidentes de seguridad de la informacion': 'Information security incident management',
+  'gestión de incidentes de seguridad de la información': 'Information security incident management',
+  'gestion de accesos': 'Access management',
+  'gestión de accesos': 'Access management',
+  'revision de accesos': 'Access review',
+  'revisión de accesos': 'Access review',
+  'respaldo de informacion': 'Information backup',
+  'respaldo de información': 'Information backup',
+  'clasificacion de la informacion': 'Information classification',
+  'clasificación de la información': 'Information classification',
+  'gestion de vulnerabilidades': 'Vulnerability management',
+  'gestión de vulnerabilidades': 'Vulnerability management',
+  'segregacion de funciones': 'Segregation of duties',
+  'segregación de funciones': 'Segregation of duties',
+  'registro y monitoreo': 'Logging and monitoring',
+  'monitoreo de logs': 'Log monitoring',
 };
 
 const standardCodeMap: Record<string, string> = {
@@ -371,6 +472,54 @@ function applyPatterns(original: string) {
   output = output.replace(/Auditoria/gi, 'Audit');
   output = output.replace(/Diagnóstico/gi, 'Diagnostic');
   output = output.replace(/Diagnostico/gi, 'Diagnostic');
+
+  // Phase 5A.4 residual phrase replacements
+  output = output.replace(/Estado de implementación/gi, 'Implementation status');
+  output = output.replace(/Estado de implementacion/gi, 'Implementation status');
+  output = output.replace(/Fecha de revisión/gi, 'Review date');
+  output = output.replace(/Fecha revisión/gi, 'Review date');
+  output = output.replace(/Fecha de revision/gi, 'Review date');
+  output = output.replace(/Fecha revision/gi, 'Review date');
+  output = output.replace(/Justificación/gi, 'Justification');
+  output = output.replace(/Justificacion/gi, 'Justification');
+  output = output.replace(/Notas/gi, 'Notes');
+  output = output.replace(/Crear acción/gi, 'Create action');
+  output = output.replace(/Crear accion/gi, 'Create action');
+  output = output.replace(/Declaración de aplicabilidad/gi, 'Statement of Applicability');
+  output = output.replace(/Declaracion de aplicabilidad/gi, 'Statement of Applicability');
+  output = output.replace(/Riesgos detectados/gi, 'Detected risks');
+  output = output.replace(/Riesgo detectado/gi, 'Detected risk');
+  output = output.replace(/Próximo paso/gi, 'Next step');
+  output = output.replace(/Proximo paso/gi, 'Next step');
+  output = output.replace(/Siguiente paso/gi, 'Next step');
+  output = output.replace(/Acciones recomendadas/gi, 'Recommended actions');
+  output = output.replace(/Acción sugerida/gi, 'Suggested action');
+  output = output.replace(/Accion sugerida/gi, 'Suggested action');
+  output = output.replace(/Evidencia requerida/gi, 'Required evidence');
+  output = output.replace(/Evidencia faltante/gi, 'Missing evidence');
+  output = output.replace(/Resumen/gi, 'Summary');
+  output = output.replace(/Recomendaciones/gi, 'Recommendations');
+  output = output.replace(/Recomendación/gi, 'Recommendation');
+  output = output.replace(/Recomendacion/gi, 'Recommendation');
+  output = output.replace(/Brechas detectadas/gi, 'Detected gaps');
+  output = output.replace(/Brecha detectada/gi, 'Detected gap');
+  output = output.replace(/Oportunidades de mejora/gi, 'Improvement opportunities');
+  output = output.replace(/Análisis de cumplimiento/gi, 'Compliance analysis');
+  output = output.replace(/Analisis de cumplimiento/gi, 'Compliance analysis');
+  output = output.replace(/Cumplimiento actual/gi, 'Current compliance');
+  output = output.replace(/Estado actual/gi, 'Current status');
+  output = output.replace(/Se recomienda/gi, 'It is recommended to');
+  output = output.replace(/Se sugiere/gi, 'It is suggested to');
+  output = output.replace(/Se detecta/gi, 'Detected');
+  output = output.replace(/Se detectan/gi, 'Detected');
+  output = output.replace(/Debe revisarse/gi, 'Must be reviewed');
+  output = output.replace(/Debe actualizarse/gi, 'Must be updated');
+  output = output.replace(/Debe implementarse/gi, 'Must be implemented');
+  output = output.replace(/Pendiente de implementación/gi, 'Pending implementation');
+  output = output.replace(/Pendiente de implementacion/gi, 'Pending implementation');
+  output = output.replace(/No implementado/gi, 'Not implemented');
+  output = output.replace(/Parcialmente implementado/gi, 'Partially implemented');
+  output = output.replace(/Implementado/gi, 'Implemented');
 
   return output;
 }

@@ -206,3 +206,15 @@ Reglas:
 - No altera inputs, textareas, scripts, estilos, código ni contenido editable.
 - Conserva fallback al texto original si no hay coincidencia segura.
 - Mantiene `displayText.ts` como fuente central para mapeos determinísticos.
+
+
+## Fase 5A.4 — Depuración manual de residuos reales
+
+Se amplía la capa visual para cubrir residuos detectados manualmente en English:
+
+- SOA: menú desplegable, estado de implementación, fecha de revisión, justificación, notas y crear acción.
+- Controles: nombres frecuentes de controles/categorías que seguían en español.
+- Evidencias: detected risks, next step, acciones sugeridas y evidencia requerida.
+- IA Compliance: resumen, recomendaciones, brechas y frases semiestructuradas generadas en español.
+
+La corrección sigue siendo visual y no destructiva. No modifica BD, payloads, valores internos ni texto libre no reconocido.

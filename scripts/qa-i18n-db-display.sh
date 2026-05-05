@@ -193,3 +193,32 @@ grep -q "EnglishDbDisplayTextGuard" frontend/src/components/AppLayout.tsx \
 grep -q "phase5aResidualMap" frontend/src/i18n/displayText.ts \
   && pass "displayText incluye phase5aResidualMap" \
   || warn "displayText no incluye phase5aResidualMap"
+
+
+echo ""
+echo "Cobertura Fase 5A.4 residuos manuales:"
+for NEEDLE in \
+  "Implementation status" \
+  "Review date" \
+  "Justification" \
+  "Notes" \
+  "Create action" \
+  "Detected risks" \
+  "Next step" \
+  "Recommendations" \
+  "Statement of Applicability"
+do
+  if grep -q "$NEEDLE" frontend/src/i18n/displayText.ts; then
+    echo "[PASS] mapeo residual presente: $NEEDLE"
+  else
+    echo "[FAIL] falta mapeo residual: $NEEDLE"
+    FAIL=$((FAIL+1))
+  fi
+done
+
+if [ -f frontend/src/components/EnglishDbDisplayTextGuard.tsx ] && grep -q "translateDisplayText" frontend/src/components/EnglishDbDisplayTextGuard.tsx; then
+  echo "[PASS] EnglishDbDisplayTextGuard usa translateDisplayText"
+else
+  echo "[FAIL] EnglishDbDisplayTextGuard no usa translateDisplayText"
+  FAIL=$((FAIL+1))
+fi

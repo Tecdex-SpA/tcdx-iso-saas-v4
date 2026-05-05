@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 import { translateDisplayText } from '@/i18n/displayText';
 
+// Phase 5A.4: SELECT/OPTION labels are allowed; option values are not modified.
 const SKIP_TAGS = new Set([
   'SCRIPT',
   'STYLE',
