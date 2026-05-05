@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useTranslation } from '@/hooks/useTranslation';
+import { getComplianceStatusLabel } from '@/i18n/statusLabels';
 import { getUserFromToken } from '@/utils/auth';
 
 const API_URL =
@@ -52,6 +54,101 @@ type DiagnosticItem = {
   operation_type?: string | null;
 };
 
+const ui = {
+  es: {
+    title: 'Diagnóstico',
+    loadingScope: 'Cargando alcance operativo...',
+    loadingDiagnostic: 'Cargando diagnóstico...',
+    scopeLoadError: 'No fue posible cargar el alcance operativo.',
+    scopeGenericError: 'Error cargando el alcance operativo.',
+    diagnosticLoadError: 'No fue posible cargar el diagnóstico.',
+    diagnosticGenericError: 'Error cargando diagnóstico.',
+    updateError: 'Error actualizando diagnóstico',
+    noOperationalStandardsTitle: 'No hay normas operativas para esta empresa',
+    noOperationalStandardsHelp:
+      'Primero debes dejar una norma activa con al menos una operación activa asignada.',
+    noOperationsTitle: 'La norma seleccionada no tiene operaciones activas',
+    noOperationsHelp: 'Activa una operación para esta norma desde el alcance del tenant.',
+    compliance: 'Cumplimiento',
+    compliant: 'Cumple',
+    partial: 'Parcial',
+    nonCompliant: 'No cumple',
+    pending: 'Pendiente',
+    notApplicable: 'No aplica',
+    noControls: 'Esta combinación de norma y operación no tiene controles disponibles aún.',
+    operation: 'Operación',
+    noOperation: 'Sin operación',
+    hasOpenNc: 'Tiene no conformidad abierta',
+    creating: 'Creando...',
+    createFinding: 'Crear hallazgo',
+    createAction: 'Crear acción',
+    openNc: 'Abrir NC',
+    findingTitlePrompt: (clause: string) => `Título del hallazgo para ${clause}`,
+    findingTitleDefault: (clause: string) => `Hallazgo en control ${clause}`.trim(),
+    findingDescriptionPrompt: 'Descripción del hallazgo',
+    findingCreateError: 'Error creando hallazgo',
+    findingDuplicate:
+      'Ya existía un hallazgo reciente equivalente. Se reutilizó el existente.',
+    findingCreated: 'Hallazgo creado correctamente',
+    actionTitlePrompt: (clause: string) => `Título del plan de acción para ${clause}`,
+    actionTitleDefault: (clause: string) => `Acción para control ${clause}`.trim(),
+    actionDescriptionPrompt: 'Descripción del plan de acción',
+    actionOwnerPrompt: 'Responsable del plan de acción',
+    actionCreateError: 'Error creando plan de acción',
+    actionCreated: 'Plan de acción creado correctamente',
+    ncAlreadyOpen:
+      'Este control ya está en "no cumple". Si no existe una NC abierta, el backend la controlará en el flujo normal.',
+    ncConfirm:
+      'Esto cambiará el estado del control a "no cumple" y abrirá o reutilizará una no conformidad abierta. ¿Continuar?',
+  },
+  en: {
+    title: 'Assessment',
+    loadingScope: 'Loading operational scope...',
+    loadingDiagnostic: 'Loading assessment...',
+    scopeLoadError: 'The operational scope could not be loaded.',
+    scopeGenericError: 'Error loading the operational scope.',
+    diagnosticLoadError: 'The assessment could not be loaded.',
+    diagnosticGenericError: 'Error loading assessment.',
+    updateError: 'Error updating assessment',
+    noOperationalStandardsTitle: 'No operational standards are available for this company',
+    noOperationalStandardsHelp:
+      'You first need an active standard with at least one active assigned operation.',
+    noOperationsTitle: 'The selected standard has no active operations',
+    noOperationsHelp: 'Activate an operation for this standard from the tenant scope.',
+    compliance: 'Compliance',
+    compliant: 'Compliant',
+    partial: 'Partial',
+    nonCompliant: 'Non-compliant',
+    pending: 'Pending',
+    notApplicable: 'Not applicable',
+    noControls: 'This standard and operation combination does not have available controls yet.',
+    operation: 'Operation',
+    noOperation: 'No operation',
+    hasOpenNc: 'Has an open nonconformity',
+    creating: 'Creating...',
+    createFinding: 'Create finding',
+    createAction: 'Create action',
+    openNc: 'Open NC',
+    findingTitlePrompt: (clause: string) => `Finding title for ${clause}`,
+    findingTitleDefault: (clause: string) => `Finding for control ${clause}`.trim(),
+    findingDescriptionPrompt: 'Finding description',
+    findingCreateError: 'Error creating finding',
+    findingDuplicate:
+      'An equivalent recent finding already existed. The existing record was reused.',
+    findingCreated: 'Finding created successfully',
+    actionTitlePrompt: (clause: string) => `Action plan title for ${clause}`,
+    actionTitleDefault: (clause: string) => `Action for control ${clause}`.trim(),
+    actionDescriptionPrompt: 'Action plan description',
+    actionOwnerPrompt: 'Action plan owner',
+    actionCreateError: 'Error creating action plan',
+    actionCreated: 'Action plan created successfully',
+    ncAlreadyOpen:
+      'This control is already non-compliant. If there is no open NC, the backend will handle it in the normal flow.',
+    ncConfirm:
+      'This will change the control status to non-compliant and open or reuse an open nonconformity. Continue?',
+  },
+} as const;
+
 function resolveTenantId(user: any): string {
   return (
     user?.tenant_id ||
@@ -76,7 +173,57 @@ function isOperationalStandard(s: ScopeStandard) {
   );
 }
 
+function translateKnownSystemText(value: string | null | undefined, locale: 'es' | 'en') {
+  const original = String(value || '').trim();
+  if (!original || locale !== 'en') return original;
+
+  const dictionary: Record<string, string> = {
+    'sin operacion': 'No operation',
+    'sin operación': 'No operation',
+    operaciones: 'Operations',
+    operacion: 'Operation',
+    operación: 'Operation',
+    general: 'General',
+    cumplimiento: 'Compliance',
+    seguridad: 'Security',
+    continuidad: 'Continuity',
+    calidad: 'Quality',
+    evidencia: 'Evidence',
+    riesgo: 'Risk',
+    riesgos: 'Risks',
+    control: 'Control',
+    controles: 'Controls',
+    auditoria: 'Audit',
+    auditoría: 'Audit',
+    hallazgo: 'Finding',
+    hallazgos: 'Findings',
+    'no conformidad': 'Nonconformity',
+    'no conformidades': 'Nonconformities',
+  };
+
+  return dictionary[original.toLowerCase()] || original;
+}
+
+function standardLabel(code?: string | null, name?: string | null) {
+  const standardCode = String(code || '').replace(/\s+/g, '').toUpperCase();
+  const normalizedName = String(name || '').trim();
+
+  if (standardCode === 'ISO9001') return normalizedName || 'ISO 9001';
+  if (standardCode === 'ISO27001') return normalizedName || 'ISO 27001';
+  if (standardCode === 'ISO22301') return normalizedName || 'ISO 22301';
+  if (standardCode === 'ISO14001') return normalizedName || 'ISO 14001';
+  if (standardCode === 'ISO20000-1' || standardCode === 'ISO200001') {
+    return normalizedName || 'ISO 20000-1';
+  }
+
+  return normalizedName ? `${code} - ${normalizedName}` : String(code || '');
+}
+
 export default function DiagnosticoPage() {
+  const { locale, t } = useTranslation();
+  const lang = locale === 'en' ? 'en' : 'es';
+  const copy = ui[lang];
+
   const [data, setData] = useState<DiagnosticItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingScope, setLoadingScope] = useState(true);
@@ -98,6 +245,11 @@ export default function DiagnosticoPage() {
   const role = resolveRole(user);
   const isReadOnly = role === 'auditor';
 
+  const diagnosticStatusLabel = (status?: string | null) => {
+    if (status === 'pendiente') return copy.pending;
+    return getComplianceStatusLabel(status, t);
+  };
+
   const loadScope = async (tenant_id: string, authToken: string) => {
     try {
       setLoadingScope(true);
@@ -117,7 +269,7 @@ export default function DiagnosticoPage() {
         setScope({ operations: [], standards: [] });
         setSelectedISO('');
         setSelectedOperationId('');
-        setErrorMessage('No fue posible cargar el alcance operativo.');
+        setErrorMessage(copy.scopeLoadError);
         return;
       }
 
@@ -130,7 +282,7 @@ export default function DiagnosticoPage() {
       setScope({ operations: [], standards: [] });
       setSelectedISO('');
       setSelectedOperationId('');
-      setErrorMessage('Error cargando el alcance operativo.');
+      setErrorMessage(copy.scopeGenericError);
     } finally {
       setLoadingScope(false);
     }
@@ -171,7 +323,8 @@ export default function DiagnosticoPage() {
       setLoading(false);
       setLoadingScope(false);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
 
   useEffect(() => {
     if (operationalStandards.length === 0) {
@@ -228,7 +381,7 @@ export default function DiagnosticoPage() {
       if (!res.ok) {
         console.error('ERROR LOAD DIAGNOSTIC:', json);
         setData([]);
-        setErrorMessage(json?.error || 'No fue posible cargar el diagnóstico.');
+        setErrorMessage(json?.error || copy.diagnosticLoadError);
         return;
       }
 
@@ -236,7 +389,7 @@ export default function DiagnosticoPage() {
     } catch (err) {
       console.error('ERROR LOAD DIAGNOSTIC:', err);
       setData([]);
-      setErrorMessage('Error cargando diagnóstico.');
+      setErrorMessage(copy.diagnosticGenericError);
     } finally {
       setLoading(false);
     }
@@ -251,7 +404,8 @@ export default function DiagnosticoPage() {
     }
 
     void loadDiagnostic(tenantId, token, selectedISO, selectedOperationId);
-  }, [token, tenantId, selectedISO, selectedOperationId, loadingScope]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, tenantId, selectedISO, selectedOperationId, loadingScope, lang]);
 
   const update = async (id: string, status: string) => {
     const authToken = localStorage.getItem('token');
@@ -276,7 +430,7 @@ export default function DiagnosticoPage() {
       if (!res.ok) {
         console.error('ERROR UPDATE DIAGNOSTIC:', json);
         setData(previous);
-        alert(json.error || 'Error actualizando diagnóstico');
+        alert(json.error || copy.updateError);
         return;
       }
 
@@ -303,22 +457,23 @@ export default function DiagnosticoPage() {
     } catch (err) {
       console.error('ERROR UPDATE DIAGNOSTIC:', err);
       setData(previous);
-      alert('Error actualizando diagnóstico');
+      alert(copy.updateError);
     }
   };
 
   const createFinding = async (control: DiagnosticItem) => {
     if (!token || !tenantId) return;
 
+    const controlRef = control.clause || control.id;
     const title = window.prompt(
-      `Título del hallazgo para ${control.clause || control.id}`,
-      `Hallazgo en control ${control.clause || ''}`.trim()
+      copy.findingTitlePrompt(controlRef),
+      copy.findingTitleDefault(control.clause || '')
     );
 
     if (!title) return;
 
     const description =
-      window.prompt('Descripción del hallazgo', control.description || '') || '';
+      window.prompt(copy.findingDescriptionPrompt, control.description || '') || '';
 
     const findingType =
       control.status === 'no cumple'
@@ -358,18 +513,18 @@ export default function DiagnosticoPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando hallazgo');
+        alert(json.error || copy.findingCreateError);
         return;
       }
 
       alert(
         json?.duplicate_prevented
-          ? 'Ya existía un hallazgo reciente equivalente. Se reutilizó el existente.'
-          : 'Hallazgo creado correctamente'
+          ? copy.findingDuplicate
+          : copy.findingCreated
       );
     } catch (err) {
       console.error('ERROR CREATE FINDING:', err);
-      alert('Error creando hallazgo');
+      alert(copy.findingCreateError);
     } finally {
       setActionLoading('');
     }
@@ -378,17 +533,18 @@ export default function DiagnosticoPage() {
   const createActionPlan = async (control: DiagnosticItem) => {
     if (!token || !tenantId) return;
 
+    const controlRef = control.clause || control.id;
     const title = window.prompt(
-      `Título del plan de acción para ${control.clause || control.id}`,
-      `Acción para control ${control.clause || ''}`.trim()
+      copy.actionTitlePrompt(controlRef),
+      copy.actionTitleDefault(control.clause || '')
     );
 
     if (!title) return;
 
     const description =
-      window.prompt('Descripción del plan de acción', control.description || '') || '';
+      window.prompt(copy.actionDescriptionPrompt, control.description || '') || '';
 
-    const owner = window.prompt('Responsable del plan de acción', '') || '';
+    const owner = window.prompt(copy.actionOwnerPrompt, '') || '';
 
     const priority =
       control.status === 'no cumple'
@@ -421,14 +577,14 @@ export default function DiagnosticoPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando plan de acción');
+        alert(json.error || copy.actionCreateError);
         return;
       }
 
-      alert('Plan de acción creado correctamente');
+      alert(copy.actionCreated);
     } catch (err) {
       console.error('ERROR CREATE ACTION PLAN:', err);
-      alert('Error creando plan de acción');
+      alert(copy.actionCreateError);
     } finally {
       setActionLoading('');
     }
@@ -436,15 +592,11 @@ export default function DiagnosticoPage() {
 
   const openNonconformity = async (control: DiagnosticItem) => {
     if (control.status === 'no cumple') {
-      alert(
-        'Este control ya está en "no cumple". Si no existe una NC abierta, el backend la controlará en el flujo normal.'
-      );
+      alert(copy.ncAlreadyOpen);
       return;
     }
 
-    const ok = window.confirm(
-      'Esto cambiará el estado del control a "no cumple" y abrirá o reutilizará una no conformidad abierta. ¿Continuar?'
-    );
+    const ok = window.confirm(copy.ncConfirm);
 
     if (!ok) return;
 
@@ -470,7 +622,7 @@ export default function DiagnosticoPage() {
   if (loadingScope) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando alcance operativo...</div>
+        <div className="p-6">{copy.loadingScope}</div>
       </AppLayout>
     );
   }
@@ -479,16 +631,15 @@ export default function DiagnosticoPage() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">Diagnóstico</h1>
+          <h1 className="text-2xl font-bold">{copy.title}</h1>
 
           <div className="bg-yellow-50 border border-yellow-200 p-6 rounded shadow">
             <h2 className="text-lg font-semibold mb-2">
-              No hay normas operativas para esta empresa
+              {copy.noOperationalStandardsTitle}
             </h2>
 
             <p className="text-sm text-gray-700">
-              Primero debes dejar una norma activa con al menos una operación activa
-              asignada.
+              {copy.noOperationalStandardsHelp}
             </p>
           </div>
         </div>
@@ -500,15 +651,15 @@ export default function DiagnosticoPage() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">Diagnóstico</h1>
+          <h1 className="text-2xl font-bold">{copy.title}</h1>
 
           <div className="bg-yellow-50 border border-yellow-200 p-6 rounded shadow">
             <h2 className="text-lg font-semibold mb-2">
-              La norma seleccionada no tiene operaciones activas
+              {copy.noOperationsTitle}
             </h2>
 
             <p className="text-sm text-gray-700">
-              Activa una operación para esta norma desde el alcance del tenant.
+              {copy.noOperationsHelp}
             </p>
           </div>
         </div>
@@ -519,7 +670,7 @@ export default function DiagnosticoPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando diagnóstico...</div>
+        <div className="p-6">{copy.loadingDiagnostic}</div>
       </AppLayout>
     );
   }
@@ -528,7 +679,7 @@ export default function DiagnosticoPage() {
     <AppLayout>
       <div className="p-6 space-y-6">
         <div className="flex flex-wrap justify-between items-center gap-3">
-          <h1 className="text-2xl font-bold">Diagnóstico</h1>
+          <h1 className="text-2xl font-bold">{copy.title}</h1>
 
           <div className="flex gap-2 flex-wrap">
             <select
@@ -538,7 +689,7 @@ export default function DiagnosticoPage() {
             >
               {operationalStandards.map((s) => (
                 <option key={s.code} value={s.code}>
-                  {s.code} - {s.name}
+                  {standardLabel(s.code, s.name)}
                 </option>
               ))}
             </select>
@@ -550,7 +701,7 @@ export default function DiagnosticoPage() {
             >
               {availableOperations.map((op) => (
                 <option key={op.id} value={op.id}>
-                  {op.name}
+                  {translateKnownSystemText(op.name, lang)}
                 </option>
               ))}
             </select>
@@ -565,29 +716,29 @@ export default function DiagnosticoPage() {
 
         <div className="grid md:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded shadow">
-            <div className="text-sm text-gray-500">Cumplimiento</div>
+            <div className="text-sm text-gray-500">{copy.compliance}</div>
             <div className="text-2xl font-bold text-blue-600">
               {cumplimiento}%
             </div>
           </div>
 
           <div className="bg-green-100 p-4 rounded text-green-700">
-            Cumple: {cumple}
+            {copy.compliant}: {cumple}
           </div>
 
           <div className="bg-yellow-100 p-4 rounded text-yellow-700">
-            Parcial: {parcial}
+            {copy.partial}: {parcial}
           </div>
 
           <div className="bg-red-100 p-4 rounded text-red-700">
-            No cumple: {noCumple}
+            {copy.nonCompliant}: {noCumple}
           </div>
         </div>
 
         <div className="bg-white rounded-xl shadow overflow-hidden">
           {data.length === 0 ? (
             <div className="p-6 text-gray-500">
-              Esta combinación de norma y operación no tiene controles disponibles aún.
+              {copy.noControls}
             </div>
           ) : (
             data.map((c) => (
@@ -597,20 +748,20 @@ export default function DiagnosticoPage() {
               >
                 <div className="flex-1">
                   <div className="font-semibold">
-                    {c.clause} — {c.category}
+                    {c.clause} — {translateKnownSystemText(c.category, lang)}
                   </div>
 
                   <div className="text-sm text-gray-600">
-                    {c.description}
+                    {translateKnownSystemText(c.description, lang)}
                   </div>
 
                   <div className="text-xs text-gray-500 mt-1">
-                    Operación: {c.operation_name || 'Sin operación'}
+                    {copy.operation}: {translateKnownSystemText(c.operation_name, lang) || copy.noOperation}
                   </div>
 
                   {c.has_open_nonconformity && (
                     <div className="inline-block mt-2 text-xs px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200">
-                      Tiene no conformidad abierta
+                      {copy.hasOpenNc}
                     </div>
                   )}
 
@@ -622,8 +773,8 @@ export default function DiagnosticoPage() {
                         className="bg-blue-600 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
                       >
                         {actionLoading === `finding-${c.id}`
-                          ? 'Creando...'
-                          : 'Crear hallazgo'}
+                          ? copy.creating
+                          : copy.createFinding}
                       </button>
 
                       <button
@@ -632,15 +783,15 @@ export default function DiagnosticoPage() {
                         className="bg-purple-600 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
                       >
                         {actionLoading === `action-${c.id}`
-                          ? 'Creando...'
-                          : 'Crear acción'}
+                          ? copy.creating
+                          : copy.createAction}
                       </button>
 
                       <button
                         onClick={() => openNonconformity(c)}
                         className="bg-red-600 text-white px-3 py-1 rounded text-sm"
                       >
-                        Abrir NC
+                        {copy.openNc}
                       </button>
                     </div>
                   )}
@@ -654,11 +805,11 @@ export default function DiagnosticoPage() {
                     isReadOnly ? 'opacity-70 cursor-not-allowed' : ''
                   }`}
                 >
-                  <option value="pendiente">Pendiente</option>
-                  <option value="cumple">Cumple</option>
-                  <option value="parcial">Parcial</option>
-                  <option value="no cumple">No cumple</option>
-                  <option value="no aplica">No aplica</option>
+                  <option value="pendiente">{diagnosticStatusLabel('pendiente')}</option>
+                  <option value="cumple">{diagnosticStatusLabel('cumple')}</option>
+                  <option value="parcial">{diagnosticStatusLabel('parcial')}</option>
+                  <option value="no cumple">{diagnosticStatusLabel('no cumple')}</option>
+                  <option value="no aplica">{diagnosticStatusLabel('no aplica')}</option>
                 </select>
               </div>
             ))
