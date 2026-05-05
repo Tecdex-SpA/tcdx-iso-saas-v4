@@ -44,8 +44,10 @@ const aiExternalLookupRoutes = require('./routes/ai-external-lookup.routes');
 const aiTracesRoutes = require('./routes/ai-traces.routes');
 const quotesRoutes = require('./routes/quotes.routes');
 const objectivesRoutes = require('./routes/objectives.routes');
+const { aiLocaleResponseGuard } = require('./middleware/aiLocaleResponseGuard');
 
 const app = express();
+app.use(aiLocaleResponseGuard);
 
 const defaultFrontendUrl = 'http://192.168.100.130:3000';
 const defaultFrontendInternalUrl = 'http://192.168.100.130:8080';

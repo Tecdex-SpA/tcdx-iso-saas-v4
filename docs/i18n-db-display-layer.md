@@ -230,3 +230,32 @@ Se amplió la corrección visual para residuos reales detectados manualmente en 
 - IA Compliance: resumen de salud, señales relevantes y prioridades recomendadas.
 
 La solución sigue siendo visual-only. No modifica valores internos, payloads, BD ni backend.
+
+## Fase 5B — Language enforcement IA/backend
+
+Esta fase agrega una capa no destructiva en backend para mejorar consistencia de idioma en respuestas narrativas provenientes de IA, evidencias, planes de acción, reportes y módulos relacionados.
+
+Reglas:
+
+- Solo actúa cuando `locale=en` o `x-tcdx-locale: en`.
+- No modifica BD.
+- No modifica `.env`.
+- No cambia códigos internos, UUIDs, URLs, emails, tokens ni enums.
+- No altera payloads enviados desde frontend.
+- Traduce visualmente/narrativamente respuestas JSON antes de enviarlas al frontend.
+- Agrega helpers de instrucción de idioma para ai-engine.
+
+Archivos principales:
+
+- `backend/src/utils/aiLocaleText.js`
+- `backend/src/middleware/aiLocaleResponseGuard.js`
+- `ai-engine/app/services/language_service.py`
+- `scripts/qa-ai-locale-consistency.sh`
+
+QA:
+
+```bash
+bash scripts/qa-ai-locale-consistency.sh
+```
+
+Límite conocido: la traducción sigue siendo determinística. Texto libre no reconocido o respuestas IA muy variables pueden requerir una fase posterior con prompts específicos por endpoint o traducción IA controlada con caché/revisión humana.

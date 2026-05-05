@@ -201,3 +201,27 @@ def localize_ai_response(value: Any, locale: Any = None) -> Any:
         return out
 
     return value
+
+# TCDX_PHASE5B_LANGUAGE_ENFORCEMENT
+# Non-destructive language helpers for AI-generated narratives.
+# These helpers do not mutate database values or internal enum/code values.
+def normalize_tcdx_locale(locale: str | None = None) -> str:
+    raw = str(locale or "").lower()
+    return "en" if raw.startswith("en") else "es"
+
+
+def build_tcdx_language_instruction(locale: str | None = None) -> str:
+    resolved = normalize_tcdx_locale(locale)
+    if resolved == "en":
+        return (
+            "LANGUAGE REQUIREMENT: Respond only in English. "
+            "Do not mix Spanish and English. "
+            "Translate system labels, recommendations, detected risks, evidence summaries, "
+            "action-plan wording and audit narratives into English. "
+            "Keep technical identifiers, ISO codes, UUIDs, URLs, emails, enum values and internal codes unchanged."
+        )
+    return (
+        "REQUISITO DE IDIOMA: Responde solo en español. "
+        "No mezcles español e inglés. "
+        "Mantén identificadores técnicos, códigos ISO, UUIDs, URLs, emails, enums y códigos internos sin cambios."
+    )
