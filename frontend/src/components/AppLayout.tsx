@@ -6,6 +6,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import EnglishVisualTextGuard from './EnglishVisualTextGuard';
 import EnglishFindingsTextGuard from './EnglishFindingsTextGuard';
+import EnglishAdminSaasTextGuard from './EnglishAdminSaasTextGuard';
 import {
   getHomePathByRole,
   getUserFromToken,
@@ -388,6 +389,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex h-[100dvh] overflow-hidden bg-[#06173a]">
       <EnglishVisualTextGuard />
       {pathname.startsWith('/hallazgos') && <EnglishFindingsTextGuard />}
+      {pathname.startsWith('/admin-saas') && <EnglishAdminSaasTextGuard />}
       <div className="hidden lg:block">
         <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       </div>
