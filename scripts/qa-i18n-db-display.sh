@@ -58,6 +58,17 @@ grep -q "EnglishAdminSaasTextGuard" frontend/src/components/AppLayout.tsx \
   && pass "EnglishAdminSaasTextGuard montado en AppLayout" \
   || warn "EnglishAdminSaasTextGuard no detectado en AppLayout"
 
+# Fase 5A.2.1: vistas con datos BD
+for VIEW in   frontend/src/app/controles/page.tsx   frontend/src/app/evidencias/page.tsx   frontend/src/app/plan-accion/page.tsx
+ do
+  if grep -q "@/i18n/displayText" "$VIEW"; then
+    pass "$(basename "$(dirname "$VIEW")") usa displayText"
+  else
+    fail "$(basename "$(dirname "$VIEW")") no importa displayText"
+  fi
+ done
+
+
 for NEEDLE in \
   "Clause 8: Operation" \
   "Evaluated suppliers" \

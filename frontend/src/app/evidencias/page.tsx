@@ -7,6 +7,7 @@ import { getUserFromToken } from '@/utils/auth';
 import { clearAiAuditorDraft, formatAiAuditorDraftEvidenceDescription, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
+import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStatusLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -409,7 +410,7 @@ export default function EvidenciasPage() {
 }
 
 function EvidenciasPageContent() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
 
   const focusId = searchParams.get('id');
@@ -1273,16 +1274,16 @@ function EvidenciasPageContent() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-bold text-slate-900">
-                      {e.iso || iso || t('evidence.noStandard')} — {t('evidence.clause')} {e.clause || 'N/A'}
+                      {translateStandardLabel(e.iso || iso || t('evidence.noStandard'), locale)} — {translateClauseLabel(e.clause || 'N/A', locale)}
                     </div>
 
                     <div className="mt-1 text-sm text-slate-600">
-                      {e.control_description || t('findings.fields.associatedControl')}
+                      {translateControlLabel(e.control_description, locale) || t('findings.fields.associatedControl')}
                     </div>
 
                     {e.action_plan_title && (
                       <div className="mt-2 text-sm text-indigo-700">
-                        {t('evidence.linkedPlan')}: {e.action_plan_title}
+                        {t('evidence.linkedPlan')}: {translateDisplayText(e.action_plan_title, locale, 'actionPlan')}
                       </div>
                     )}
                   </div>
@@ -1293,7 +1294,7 @@ function EvidenciasPageContent() {
                         e.status || 'pendiente'
                       )}`}
                     >
-                      {t('common.status')}: {normalizedStatus}
+                      {t('common.status')}: {translateStatusLabel(normalizedStatus, locale)}
                     </div>
 
                     <div
@@ -1381,7 +1382,7 @@ function EvidenciasPageContent() {
                   )}
 
                 {e.description && (
-                  <div className="text-sm text-gray-600">{e.description}</div>
+                  <div className="text-sm text-gray-600">{translateDisplayText(e.description, locale, 'evidence')}</div>
                 )}
 
                 {e.ai_narrative && (
@@ -1395,7 +1396,7 @@ function EvidenciasPageContent() {
 
                 {e.rejection_reason && (
                   <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                    {t('evidence.rejectionReason')}: {e.rejection_reason}
+                    {t('evidence.rejectionReason')}: {translateDisplayText(e.rejection_reason, locale, 'evidence')}
                   </div>
                 )}
 
@@ -1406,7 +1407,7 @@ function EvidenciasPageContent() {
                 )}
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                  <InfoBox label={t('evidence.type')} value={e.evidence_type || t('evidence.types.document')} />
+                  <InfoBox label={t('evidence.type')} value={translateDisplayText(e.evidence_type || t('evidence.types.document'), locale, 'evidence')} />
                   <InfoBox label={t('evidence.validated')} value={e.validated ? t('common.yes') : t('common.no')} />
                   <InfoBox label={t('evidence.created')} value={formatDate(e.created_at)} />
                   <InfoBox label={t('evidence.reviewed')} value={formatDate(e.reviewed_at)} />

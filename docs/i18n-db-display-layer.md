@@ -138,3 +138,14 @@ bash scripts/qa-i18n-db-display.sh
 - no se modifican payloads;
 - español sigue intacto;
 - English mejora textos de sistema reconocibles.
+
+
+## Integración Fase 5A.2.1
+
+Vistas integradas con render visual seguro para datos provenientes desde BD:
+
+- `frontend/src/app/controles/page.tsx`
+- `frontend/src/app/evidencias/page.tsx`
+- `frontend/src/app/plan-accion/page.tsx`
+
+La integración se limita a etiquetas visibles: cláusulas, normas, controles, categorías, estados, descripciones reconocibles, planes vinculados y evidencias asociadas. No se alteran valores internos, estados de formularios ni payloads enviados al backend.

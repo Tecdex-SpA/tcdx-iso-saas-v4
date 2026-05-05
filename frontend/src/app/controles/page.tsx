@@ -6,6 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
+import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStatusLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -283,7 +284,7 @@ export default function ControlesPage() {
 }
 
 function ControlesPageContent() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -1344,8 +1345,8 @@ function ControlesPageContent() {
                         className="flex w-full items-center justify-between bg-slate-50 px-4 py-4 text-left"
                       >
                         <div>
-                          <div className="font-semibold text-slate-900">{clause}</div>
-                          <div className="text-xs text-slate-500">{items.length} controles</div>
+                          <div className="font-semibold text-slate-900">{translateClauseLabel(clause, locale)}</div>
+                          <div className="text-xs text-slate-500">{items.length} {translateDisplayText('controles', locale, 'control')}</div>
                         </div>
                         <div className="text-sm text-slate-500">
                           {collapsed ? t('controls.expand') : t('controls.collapse')}
@@ -1359,10 +1360,10 @@ function ControlesPageContent() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="space-y-2">
                                   <div className="font-medium text-slate-900">
-                                    {item.description || t('controls.noDescription')}
+                                    {translateControlLabel(item.description, locale) || t('controls.noDescription')}
                                   </div>
                                   <div className="text-sm text-slate-500">
-                                    {item.category || t('controls.noCategory')}
+                                    {translateDisplayText(item.category, locale, 'category') || t('controls.noCategory')}
                                   </div>
 
                                   {(item.also_valid_for || []).length > 0 && (
@@ -1433,8 +1434,8 @@ function ControlesPageContent() {
                         className="flex w-full items-center justify-between bg-slate-50 px-4 py-4 text-left"
                       >
                         <div>
-                          <div className="font-semibold text-slate-900">{clause}</div>
-                          <div className="text-xs text-slate-500">{items.length} controles</div>
+                          <div className="font-semibold text-slate-900">{translateClauseLabel(clause, locale)}</div>
+                          <div className="text-xs text-slate-500">{items.length} {translateDisplayText('controles', locale, 'control')}</div>
                         </div>
                         <div className="text-sm text-slate-500">
                           {collapsed ? t('controls.expand') : t('controls.collapse')}
@@ -1495,10 +1496,10 @@ function ControlesPageContent() {
 
                                     <div>
                                       <h3 className="text-xl font-semibold tracking-tight text-slate-900">
-                                        {item.clause || 'Sin cláusula'} · {item.description}
+                                        {translateClauseLabel(item.clause || 'Sin cláusula', locale)} · {translateControlLabel(item.description, locale)}
                                       </h3>
                                       <div className="mt-1 text-sm text-slate-500">
-                                        {item.category || t('controls.noCategory')} · {t('controls.operation')}:{' '}
+                                        {translateDisplayText(item.category, locale, 'category') || t('controls.noCategory')} · {t('controls.operation')}:{' '}
                                         {item.operation_name || '—'}
                                       </div>
                                     </div>
@@ -1793,7 +1794,7 @@ function ControlesPageContent() {
                                                 {evidence.file_name || t('controls.unnamedFile')}
                                               </div>
                                               <div className="text-sm text-slate-500">
-                                                {evidence.description || t('controls.noDescription')}
+                                                {translateDisplayText(evidence.description, locale, 'evidence') || t('controls.noDescription')}
                                               </div>
                                               <div className="mt-1 text-xs text-slate-400">
                                                 {t('controls.uploadedAt')}: {formatDateTime(evidence.created_at)}
@@ -1806,7 +1807,7 @@ function ControlesPageContent() {
                                                   evidence.status
                                                 )}`}
                                               >
-                                                {evidence.status || 'pendiente'}
+                                                {translateStatusLabel(evidence.status || 'pendiente', locale)}
                                               </span>
 
                                               {evidence.ai_acceptance_pct !== undefined &&

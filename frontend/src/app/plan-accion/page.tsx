@@ -7,6 +7,7 @@ import { getUserFromToken } from '@/utils/auth';
 import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getComplianceStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
+import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
@@ -497,7 +498,7 @@ export default function PlanAccionPage() {
 }
 
 function PlanAccionPageContent() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
 
   const focusId = searchParams.get('id') || '';
@@ -1281,7 +1282,7 @@ function PlanAccionPageContent() {
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Tag tone="slate">{row.iso_code}</Tag>
+                        <Tag tone="slate">{translateStandardLabel(row.iso_code, locale)}</Tag>
                         <Tag tone="blue">{getCategoryLabel(getSourceLabel(row), t)}</Tag>
                         <Tag tone="violet">{getActionPlanStatusLabel(normalizeStatus(row.status), t)}</Tag>
                         <Tag tone="amber">{getPriorityLabel(row.priority || 'media', t)}</Tag>
@@ -1301,7 +1302,7 @@ function PlanAccionPageContent() {
                       </div>
 
                       <h3 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900">
-                        {row.title}
+                        {translateDisplayText(row.title, locale, 'actionPlan')}
                       </h3>
 
                       <div className="mt-2 text-sm text-slate-500">
@@ -1309,7 +1310,7 @@ function PlanAccionPageContent() {
                       </div>
 
                       <div className="mt-4 rounded-[24px] border border-slate-100 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-                        {row.description || 'Sin descripción'}
+                        {translateDisplayText(row.description || 'Sin descripción', locale, 'actionPlan')}
                       </div>
                     </div>
 
@@ -1486,12 +1487,12 @@ function PlanAccionPageContent() {
                         <div className="text-xs uppercase tracking-[0.16em] text-slate-400 font-bold">{t('actionPlanLabels.sections.planContext')}</div>
 
                         <DetailRow label={t('actionPlanLabels.fields.source')} value={getCategoryLabel(getSourceLabel(row), t)} />
-                        <DetailRow label={t('actionPlanLabels.fields.sourceDetail')} value={getSourceDetail(row)} />
+                        <DetailRow label={t('actionPlanLabels.fields.sourceDetail')} value={translateDisplayText(getSourceDetail(row), locale, 'actionPlan')} />
                         <DetailRow
                           label={t('actionPlanLabels.fields.linkedControl')}
                           value={
                             row.control_description || row.control_clause
-                              ? `${row.control_iso || row.iso_code} ${row.control_clause || ''} — ${row.control_description || 'Control'}`
+                              ? `${translateStandardLabel(row.control_iso || row.iso_code, locale)} ${translateClauseLabel(row.control_clause || '', locale)} — ${translateControlLabel(row.control_description || 'Control', locale)}`
                               : '-'
                           }
                         />
@@ -1501,11 +1502,11 @@ function PlanAccionPageContent() {
                         />
                         <DetailRow
                           label={t('actionPlanLabels.fields.lastComment')}
-                          value={row.latest_update_comment || '-'}
+                          value={translateDisplayText(row.latest_update_comment || '-', locale, 'actionPlan')}
                         />
                         <DetailRow
                           label={t('actionPlanLabels.fields.lastBlock')}
-                          value={row.latest_blocked_reason || '-'}
+                          value={translateDisplayText(row.latest_blocked_reason || '-', locale, 'actionPlan')}
                         />
                         <DetailRow
                           label={t('actionPlanLabels.fields.createdAt')}
@@ -1574,7 +1575,7 @@ function PlanAccionPageContent() {
                                   className="rounded-2xl border border-slate-200 bg-white p-3"
                                 >
                                   <div className="text-sm font-medium text-slate-800">
-                                    {ev.file_name || ev.description || 'Evidencia'}
+                                    {ev.file_name || translateDisplayText(ev.description || 'Evidencia', locale, 'evidence')}
                                   </div>
                                   <div className="mt-1 text-xs text-slate-500">
                                     {formatDateTime(ev.created_at)} · {t('actionPlanLabels.fields.status')}:{' '}
