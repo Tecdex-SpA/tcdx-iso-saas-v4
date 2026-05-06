@@ -70,6 +70,11 @@ const API_RULES = [
     read: TENANT_READ_ROLES,
     write: [],
   },
+  {
+    prefix: '/api/iso-control-mapping',
+    read: TENANT_READ_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
 
   // Dashboard y lectura ejecutiva
   {
