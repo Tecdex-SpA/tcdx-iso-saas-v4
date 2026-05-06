@@ -15,6 +15,19 @@ const STANDARD_ALIASES = {
   ISO42001: ['ISO42001', 'ISOIEC42001', '42001'],
 };
 
+const AUTO_APPLY_VERSION_KEYS = new Set([
+  'ISO9001:2015',
+  'ISO27001:2022',
+]);
+
+const AUTO_APPLY_RELATIONSHIP_TYPES = new Set([
+  'equivalent',
+  'partial',
+  'supports',
+  'related',
+  'legacy_catalog',
+]);
+
 function publicError(status, code, message) {
   const error = new Error(message);
   error.status = status;
@@ -49,6 +62,13 @@ function normalizeComparable(value) {
     .replace(/[^A-Z0-9]/g, '');
 }
 
+function normalizeUuidOrNull(value) {
+  const text = String(value || '').trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
+    ? text
+    : null;
+}
+
 function assertStandard(standardCode) {
   const normalized = normalizeStandardCode(standardCode);
 
@@ -71,6 +91,10 @@ function assertVersion(standardCode, versionCode) {
     standardCode: normalizedStandard,
     versionCode: normalizedVersion,
   };
+}
+
+function canAutoApplyVersion(standardCode, versionCode) {
+  return AUTO_APPLY_VERSION_KEYS.has(`${standardCode}:${versionCode}`);
 }
 
 function sanitizeConfidence(value, fallback = 0.75) {
@@ -519,16 +543,25 @@ async function getMappingSuggestions({
       const isTransition9001 =
         suggestion.standard_code === 'ISO9001' &&
         suggestion.version_code === '2026_FDIS';
+      const allowedAutoApplyVersion = canAutoApplyVersion(
+        suggestion.standard_code,
+        suggestion.version_code
+      );
+      const allowedRelationship = AUTO_APPLY_RELATIONSHIP_TYPES.has(
+        suggestion.suggested_relationship_type
+      );
 
       return {
         ...suggestion,
         can_auto_apply:
           suggestion.confidence >= 0.85 &&
           !hasEquivalentConflict &&
-          (!isTransition9001 || suggestion.suggested_relationship_type === 'transition'),
+          allowedAutoApplyVersion &&
+          allowedRelationship &&
+          !isTransition9001,
         conflict_reason: hasEquivalentConflict
           ? 'catalog_control_has_active_equivalent_link'
-          : null,
+          : (!allowedAutoApplyVersion ? 'standard_version_requires_human_review' : null),
       };
     })
     .sort((a, b) => {
@@ -599,11 +632,223 @@ async function updateControlsCatalogSyncStatus(client, standardCode, versionCode
   );
 }
 
+function summarizeSuggestions(suggestions = [], appliedCount = 0) {
+  const candidatesTotal = suggestions.length;
+  const canAutoApply = suggestions.filter((item) => item.can_auto_apply).length;
+  const conflicts = suggestions.filter((item) => item.conflict_reason).length;
+
+  return {
+    candidates_total: candidatesTotal,
+    can_auto_apply: canAutoApply,
+    would_apply: canAutoApply,
+    applied: appliedCount,
+    skipped: Math.max(candidatesTotal - canAutoApply, 0),
+    conflicts,
+  };
+}
+
+async function logApplyRun(clientOrPool, {
+  standardCode,
+  versionCode,
+  dryRun,
+  minConfidence,
+  summary,
+  requestedBy = null,
+  requestedRole = null,
+  requestPayload = {},
+} = {}) {
+  const executor = clientOrPool || pool;
+
+  try {
+    await executor.query(
+      `
+      INSERT INTO iso_control_mapping_apply_log (
+        standard_code,
+        version_code,
+        dry_run,
+        min_confidence,
+        candidates_total,
+        can_auto_apply_count,
+        applied_count,
+        skipped_count,
+        conflict_count,
+        requested_by,
+        requested_role,
+        request_payload,
+        result_summary
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb)
+      `,
+      [
+        standardCode,
+        versionCode,
+        dryRun === true,
+        minConfidence,
+        summary?.candidates_total || 0,
+        summary?.can_auto_apply || 0,
+        summary?.applied || 0,
+        summary?.skipped || 0,
+        summary?.conflicts || 0,
+        normalizeUuidOrNull(requestedBy),
+        requestedRole || null,
+        JSON.stringify(requestPayload || {}),
+        JSON.stringify(summary || {}),
+      ]
+    );
+  } catch (error) {
+    if (error.code === '42P01') {
+      console.warn('iso_control_mapping_apply_log no existe; omitiendo log de apply-suggestions');
+      return;
+    }
+
+    throw error;
+  }
+}
+
+async function getReviewQueue({
+  standardCode,
+  versionCode,
+  minConfidence = 0.75,
+  maxConfidence = null,
+  includeAutoApplicable = false,
+} = {}) {
+  const params = standardCode && versionCode
+    ? assertVersion(standardCode, versionCode)
+    : {
+        standardCode: standardCode ? assertStandard(standardCode) : null,
+        versionCode: versionCode ? normalizeVersionCode(versionCode) : null,
+      };
+  const threshold = sanitizeConfidence(minConfidence, 0.75);
+  const maxThreshold = maxConfidence === null || maxConfidence === undefined || String(maxConfidence).trim() === ''
+    ? null
+    : sanitizeConfidence(maxConfidence, 0.99);
+  const pairs = params.standardCode && params.versionCode
+    ? [params]
+    : [
+        { standardCode: 'ISO9001', versionCode: '2015' },
+        { standardCode: 'ISO9001', versionCode: '2026_FDIS' },
+        { standardCode: 'ISO27001', versionCode: '2022' },
+        { standardCode: 'ISO42001', versionCode: '2023' },
+      ].filter((pair) => {
+        if (params.standardCode && pair.standardCode !== params.standardCode) return false;
+        if (params.versionCode && pair.versionCode !== params.versionCode) return false;
+        return true;
+      });
+  const rows = [];
+
+  for (const pair of pairs) {
+    const suggestions = await getMappingSuggestions({
+      standardCode: pair.standardCode,
+      versionCode: pair.versionCode,
+      minConfidence: threshold,
+    });
+
+    for (const suggestion of suggestions) {
+      if (!includeAutoApplicable && suggestion.can_auto_apply) continue;
+      if (maxThreshold !== null && suggestion.confidence > maxThreshold) continue;
+
+      rows.push({
+        ...suggestion,
+        review_reason: suggestion.conflict_reason ||
+          (suggestion.can_auto_apply ? 'auto_applicable' : 'requires_human_review'),
+      });
+    }
+  }
+
+  return rows.sort((a, b) => {
+    if (a.standard_code !== b.standard_code) return a.standard_code.localeCompare(b.standard_code);
+    if (a.version_code !== b.version_code) return a.version_code.localeCompare(b.version_code);
+    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+    return a.control_code.localeCompare(b.control_code);
+  });
+}
+
+async function getApplicationSummary() {
+  const [coverage, syncStatus, linksByRelationship, linksBySource, unlinkedIso, unlinkedCatalog, recentRuns] = await Promise.all([
+    listCoverage(),
+    listSyncStatus(),
+    pool.query(`
+      SELECT
+        standard_code,
+        version_code,
+        relationship_type,
+        COUNT(*)::integer AS links
+      FROM iso_control_catalog_links
+      WHERE is_active IS DISTINCT FROM false
+      GROUP BY standard_code, version_code, relationship_type
+      ORDER BY standard_code, version_code, relationship_type
+    `),
+    pool.query(`
+      SELECT
+        standard_code,
+        version_code,
+        mapping_source,
+        COUNT(*)::integer AS links
+      FROM iso_control_catalog_links
+      WHERE is_active IS DISTINCT FROM false
+      GROUP BY standard_code, version_code, mapping_source
+      ORDER BY standard_code, version_code, mapping_source
+    `),
+    pool.query(`
+      SELECT
+        standard_code,
+        version_code,
+        COUNT(*)::integer AS controls_without_link
+      FROM v_iso_controls_without_catalog_link
+      GROUP BY standard_code, version_code
+      ORDER BY standard_code, version_code
+    `),
+    pool.query(`
+      SELECT
+        COALESCE(catalog_iso, catalog_standard_code, 'UNKNOWN') AS catalog_scope,
+        COUNT(*)::integer AS controls_without_link
+      FROM v_catalog_controls_without_iso_link
+      WHERE tenant_id IS NULL
+      GROUP BY COALESCE(catalog_iso, catalog_standard_code, 'UNKNOWN')
+      ORDER BY catalog_scope
+    `),
+    pool.query(`
+      SELECT
+        standard_code,
+        version_code,
+        dry_run,
+        min_confidence,
+        candidates_total,
+        can_auto_apply_count,
+        applied_count,
+        skipped_count,
+        conflict_count,
+        requested_by,
+        requested_role,
+        created_at
+      FROM iso_control_mapping_apply_log
+      ORDER BY created_at DESC
+      LIMIT 10
+    `).catch((error) => {
+      if (error.code === '42P01') return { rows: [] };
+      throw error;
+    }),
+  ]);
+
+  return {
+    coverage,
+    sync_status: syncStatus,
+    links_by_relationship_type: linksByRelationship.rows,
+    links_by_mapping_source: linksBySource.rows,
+    unlinked_iso_controls: unlinkedIso.rows,
+    unlinked_catalog_controls: unlinkedCatalog.rows,
+    recent_apply_runs: recentRuns.rows,
+  };
+}
+
 async function applySuggestions({
   standardCode,
   versionCode,
   minConfidence = 0.85,
   dryRun = true,
+  requestedBy = null,
+  requestedRole = null,
+  requestPayload = {},
 } = {}) {
   const params = assertVersion(standardCode, versionCode);
   const threshold = sanitizeConfidence(minConfidence, 0.85);
@@ -613,18 +858,58 @@ async function applySuggestions({
     minConfidence: threshold,
   });
   const applicable = suggestions.filter((suggestion) => suggestion.can_auto_apply);
+  const baseSummary = summarizeSuggestions(suggestions, 0);
 
   if (dryRun !== false) {
+    await logApplyRun(pool, {
+      standardCode: params.standardCode,
+      versionCode: params.versionCode,
+      dryRun: true,
+      minConfidence: threshold,
+      summary: baseSummary,
+      requestedBy,
+      requestedRole,
+      requestPayload,
+    });
+
     return {
+      success: true,
       dry_run: true,
       standard_code: params.standardCode,
       version_code: params.versionCode,
       min_confidence: threshold,
-      suggested_count: suggestions.length,
-      applicable_count: applicable.length,
-      applied_count: 0,
-      suggestions: applicable,
+      summary: baseSummary,
+      items: applicable,
     };
+  }
+
+  if (!canAutoApplyVersion(params.standardCode, params.versionCode)) {
+    const blockedSummary = {
+      ...baseSummary,
+      would_apply: 0,
+      applied: 0,
+      skipped: suggestions.length,
+    };
+
+    await logApplyRun(pool, {
+      standardCode: params.standardCode,
+      versionCode: params.versionCode,
+      dryRun: false,
+      minConfidence: threshold,
+      summary: blockedSummary,
+      requestedBy,
+      requestedRole,
+      requestPayload: {
+        ...requestPayload,
+        blocked_reason: 'standard_version_requires_human_review',
+      },
+    });
+
+    throw publicError(
+      400,
+      'ISO_MAPPING_APPLY_BLOCKED',
+      'Esta norma/version requiere revision humana y no permite aplicacion automatica en esta fase'
+    );
   }
 
   const client = await pool.connect();
@@ -680,17 +965,27 @@ async function applySuggestions({
     }
 
     await updateControlsCatalogSyncStatus(client, params.standardCode, params.versionCode);
+    const appliedSummary = summarizeSuggestions(suggestions, applicable.length);
+    await logApplyRun(client, {
+      standardCode: params.standardCode,
+      versionCode: params.versionCode,
+      dryRun: false,
+      minConfidence: threshold,
+      summary: appliedSummary,
+      requestedBy,
+      requestedRole,
+      requestPayload,
+    });
     await client.query('COMMIT');
 
     return {
+      success: true,
       dry_run: false,
       standard_code: params.standardCode,
       version_code: params.versionCode,
       min_confidence: threshold,
-      suggested_count: suggestions.length,
-      applicable_count: applicable.length,
-      applied_count: applicable.length,
-      suggestions: applicable,
+      summary: appliedSummary,
+      items: applicable,
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -709,5 +1004,7 @@ module.exports = {
   listCatalogLinks,
   listSyncStatus,
   getMappingSuggestions,
+  getReviewQueue,
+  getApplicationSummary,
   applySuggestions,
 };

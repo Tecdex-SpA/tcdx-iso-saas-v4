@@ -27,6 +27,20 @@ function sendData(res, data, extra = {}) {
   });
 }
 
+function summarizeSuggestions(rows = []) {
+  const canAutoApply = rows.filter((row) => row.can_auto_apply).length;
+  const conflicts = rows.filter((row) => row.conflict_reason).length;
+
+  return {
+    candidates_total: rows.length,
+    can_auto_apply: canAutoApply,
+    would_apply: canAutoApply,
+    applied: 0,
+    skipped: Math.max(rows.length - canAutoApply, 0),
+    conflicts,
+  };
+}
+
 function handleError(res, error) {
   const status = error.status || 500;
 
@@ -119,7 +133,41 @@ router.get('/suggestions', async (req, res) => {
       minConfidence: req.query.min_confidence,
     });
     return sendData(res, rows, {
+      success: true,
       min_confidence: req.query.min_confidence || '0.75',
+      summary: summarizeSuggestions(rows),
+      items: rows,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.get('/review-queue', async (req, res) => {
+  try {
+    const includeAutoApplicable =
+      String(req.query.include_auto_applicable || 'false').toLowerCase() === 'true';
+    const rows = await isoControlMapping.getReviewQueue({
+      standardCode: req.query.standard_code,
+      versionCode: req.query.version_code,
+      minConfidence: req.query.min_confidence,
+      maxConfidence: req.query.max_confidence,
+      includeAutoApplicable,
+    });
+    return sendData(res, rows, {
+      success: true,
+      include_auto_applicable: includeAutoApplicable,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.get('/application-summary', async (req, res) => {
+  try {
+    const data = await isoControlMapping.getApplicationSummary();
+    return sendData(res, data, {
+      success: true,
     });
   } catch (error) {
     return handleError(res, error);
@@ -128,13 +176,31 @@ router.get('/suggestions', async (req, res) => {
 
 router.post('/apply-suggestions', requireAdmin, async (req, res) => {
   try {
+    const requestedRole = normalizeRole(
+      req.user?.role ||
+        req.user?.user_role ||
+        req.user?.userRole ||
+        ''
+    );
     const data = await isoControlMapping.applySuggestions({
       standardCode: req.body?.standard_code,
       versionCode: req.body?.version_code,
       minConfidence: req.body?.min_confidence,
       dryRun: req.body?.dry_run !== false,
+      requestedBy: req.user?.user_id || req.user?.id || null,
+      requestedRole,
+      requestPayload: {
+        standard_code: req.body?.standard_code || null,
+        version_code: req.body?.version_code || null,
+        min_confidence: req.body?.min_confidence ?? null,
+        dry_run: req.body?.dry_run !== false,
+      },
     });
-    return sendData(res, data);
+    return res.json({
+      ok: true,
+      success: true,
+      ...data,
+    });
   } catch (error) {
     return handleError(res, error);
   }

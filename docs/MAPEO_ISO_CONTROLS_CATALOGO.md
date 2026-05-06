@@ -217,3 +217,181 @@ En fases siguientes, diagnostico, IA Auditor y reportes podran:
 - Puede haber controles operativos personalizados con `tenant_id`; la API los excluye.
 - ISO42001 puede requerir catalogo operativo nuevo antes de uso comercial pleno.
 - ISO9001 2026_FDIS debe mantenerse fuera de flujos de certificacion final.
+
+## Aplicacion controlada de sugerencias
+
+La fase 1.3 refuerza `POST /api/iso-control-mapping/apply-suggestions` para convertir candidatos confiables en links reales bajo gobierno. El endpoint ya existia desde la fase 1.2; ahora queda con resumen de aplicacion, bloqueo explicito de normas en revision y log de ejecucion.
+
+Endpoint:
+
+```bash
+curl -s -X POST "$API/api/iso-control-mapping/apply-suggestions" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"standard_code":"ISO9001","version_code":"2015","min_confidence":0.85,"dry_run":true}' | jq
+```
+
+Respuesta esperada:
+
+```json
+{
+  "ok": true,
+  "success": true,
+  "dry_run": true,
+  "standard_code": "ISO9001",
+  "version_code": "2015",
+  "min_confidence": 0.85,
+  "summary": {
+    "candidates_total": 0,
+    "can_auto_apply": 0,
+    "would_apply": 0,
+    "applied": 0,
+    "skipped": 0,
+    "conflicts": 0
+  },
+  "items": []
+}
+```
+
+### Dry-run vs apply real
+
+`dry_run=true`:
+
+- No escribe en `iso_control_catalog_links`.
+- No actualiza `iso_catalog_sync_status`.
+- Registra una fila liviana en `iso_control_mapping_apply_log` para trazabilidad.
+- Devuelve cuantas sugerencias podria aplicar.
+
+`dry_run=false`:
+
+- Solo aplica sugerencias con `can_auto_apply=true`.
+- Solo escribe en `iso_control_catalog_links`.
+- Actualiza `iso_catalog_sync_status` para `sync_target='controls_catalog'`.
+- Registra resultado en `iso_control_mapping_apply_log`.
+- No toca tablas operativas ni datos de tenants.
+
+### Roles necesarios
+
+Los endpoints `GET` usan RBAC de lectura para usuarios autenticados con acceso API.
+
+`POST /apply-suggestions` requiere rol administrador:
+
+- `admin`
+- `tenant_admin`
+- roles plataforma equivalentes
+
+La regla RBAC de `/api/iso-control-mapping` mantiene GET para lectura y POST para roles administrativos.
+
+### Normas con autoaplicacion permitida
+
+En esta fase solo se permite apply real para:
+
+- `ISO9001 / 2015`
+- `ISO27001 / 2022`
+
+Condiciones:
+
+- `confidence >= 0.85`
+- `can_auto_apply=true`
+- sin conflicto de `catalog_control_id` vinculado como `equivalent` a otro `iso_control_id`
+- `relationship_type` permitido: `equivalent`, `partial`, `supports`, `related`, `legacy_catalog`
+
+### Normas en revision
+
+`ISO9001 / 2026_FDIS`:
+
+- Solo dry-run.
+- No se trata como certificable.
+- No se aplica como `equivalent`.
+- Cualquier mapeo futuro debe ser `transition` o `related` y con revision humana.
+
+`ISO42001 / 2023`:
+
+- Queda en revision.
+- No se autoaplica en esta fase aunque existan candidatos.
+- Requiere curaduria y posiblemente nuevos controles operativos.
+
+## Cola de revision
+
+```bash
+curl -s "$API/api/iso-control-mapping/review-queue?min_confidence=0.75" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Parametros:
+
+- `standard_code`
+- `version_code`
+- `min_confidence`
+- `max_confidence`
+- `include_auto_applicable=true|false`
+
+Por defecto devuelve candidatos no autoaplicables o que requieren revision humana.
+
+## Resumen de aplicacion
+
+```bash
+curl -s "$API/api/iso-control-mapping/application-summary" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Incluye:
+
+- cobertura por norma/version;
+- links por `relationship_type`;
+- links por `mapping_source`;
+- `sync_status`;
+- controles ISO sin link;
+- controles de catalogo global sin link;
+- ultimas ejecuciones de apply/dry-run.
+
+## Migracion de log
+
+Aplicar:
+
+```bash
+psql "$DATABASE_URL_ADMIN" -v ON_ERROR_STOP=1 -f database/migrations/20260506_iso_control_mapping_apply_log.sql
+```
+
+Permisos si el backend usa `tecdex_user`:
+
+```bash
+psql "$DATABASE_URL_ADMIN" -v ON_ERROR_STOP=1 -c "GRANT INSERT, UPDATE ON iso_control_catalog_links, iso_catalog_sync_status TO tecdex_user;"
+psql "$DATABASE_URL_ADMIN" -v ON_ERROR_STOP=1 -c "GRANT SELECT, INSERT ON iso_control_mapping_apply_log TO tecdex_user;"
+```
+
+## Validacion fase 1.3
+
+Dry-run:
+
+```bash
+export API="http://192.168.100.120:3000"
+export TOKEN="TOKEN_VALIDO"
+export APPLY_REAL="false"
+export MIN_CONFIDENCE="0.85"
+
+bash scripts/validate-iso-control-mapping.sh
+```
+
+Apply real controlado:
+
+```bash
+export APPLY_REAL="true"
+bash scripts/validate-iso-control-mapping.sh
+```
+
+Con `APPLY_REAL=true`, el script solo aplica ISO9001:2015 e ISO27001:2022. No aplica ISO9001:2026_FDIS ni ISO42001.
+
+## Rollback logico
+
+No borrar links. Si un mapeo debe desactivarse:
+
+```sql
+UPDATE iso_control_catalog_links
+SET is_active = false,
+    updated_at = now(),
+    notes = coalesce(notes, '') || ' | desactivado por revision humana'
+WHERE id = 'UUID_DEL_LINK';
+```
+
+Esta operacion solo afecta tabla `iso_*` y conserva trazabilidad historica.
