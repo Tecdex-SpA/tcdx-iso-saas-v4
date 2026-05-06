@@ -22,7 +22,8 @@ if command -v jq >/dev/null 2>&1; then
 fi
 
 tmp_body="$(mktemp)"
-trap 'rm -f "$tmp_body"' EXIT
+tmp_options="$(mktemp)"
+trap 'rm -f "$tmp_body" "$tmp_options"' EXIT
 
 request() {
   local method="$1"
@@ -63,26 +64,64 @@ generate_payload() {
     "$standard" "$version" "$run_type" "$dry_run"
 }
 
+option_available() {
+  local standard="$1"
+  local version="$2"
+
+  if [ "$HAS_JQ" != true ]; then
+    return 0
+  fi
+
+  jq -e \
+    --arg standard "$standard" \
+    --arg version "$version" \
+    '.data.options[]? | select(.standard_code == $standard and .version_code == $version)' \
+    "$tmp_options" >/dev/null
+}
+
+generate_dry_run_if_available() {
+  local standard="$1"
+  local version="$2"
+  local run_type="$3"
+  local required="${4:-false}"
+
+  if ! option_available "$standard" "$version"; then
+    if [ "$required" = "true" ]; then
+      echo "ERROR: $standard $version no aparece en options para este tenant" >&2
+      exit 1
+    fi
+
+    echo "SKIP: $standard $version no esta disponible para este tenant."
+    return 0
+  fi
+
+  request POST "/api/iso-risk-matrix/$TENANT_ID/generate" "$(generate_payload "$standard" "$version" "$run_type" true)"
+  assert_ok
+}
+
 echo "Validando ISO Risk Matrix API en $API"
 
 request GET "/api/iso-risk-matrix/$TENANT_ID/options"
 assert_ok
+cp "$tmp_body" "$tmp_options"
 
-request POST "/api/iso-risk-matrix/$TENANT_ID/generate" "$(generate_payload ISO9001 2015 automated true)"
+generate_dry_run_if_available ISO9001 2015 automated true
 assert_ok
 if [ "$HAS_JQ" = true ]; then
   jq -e '.data.dry_run == true' "$tmp_body" >/dev/null
 fi
 
-request POST "/api/iso-risk-matrix/$TENANT_ID/generate" "$(generate_payload ISO27001 2022 automated true)"
-assert_ok
+generate_dry_run_if_available ISO27001 2022 automated false
 
-request POST "/api/iso-risk-matrix/$TENANT_ID/generate" "$(generate_payload ISO42001 2023 automated true)"
-assert_ok
+generate_dry_run_if_available ISO42001 2023 automated false
 
-request POST "/api/iso-risk-matrix/$TENANT_ID/generate" "$(generate_payload ISO9001 2026_FDIS transition_readiness true)"
-assert_ok
-if [ "$HAS_JQ" = true ]; then
+if option_available ISO9001 2026_FDIS; then
+  request POST "/api/iso-risk-matrix/$TENANT_ID/generate" "$(generate_payload ISO9001 2026_FDIS transition_readiness true)"
+  assert_ok
+elif [ "$HAS_JQ" = true ]; then
+  echo "SKIP: ISO9001 2026_FDIS no esta disponible para este tenant."
+fi
+if [ "$HAS_JQ" = true ] && option_available ISO9001 2026_FDIS; then
   jq -e '.data.run.certifiable_version == false' "$tmp_body" >/dev/null || {
     echo "ERROR: ISO9001 2026_FDIS no devolvio certifiable_version=false" >&2
     jq . "$tmp_body" >&2
@@ -92,6 +131,10 @@ fi
 
 if [ "$APPLY_REAL" = "true" ]; then
   echo "APPLY_REAL=true: generando matriz real ISO9001 2015"
+  if ! option_available ISO9001 2015; then
+    echo "ERROR: ISO9001 2015 no esta disponible para este tenant; no se aplica matriz real." >&2
+    exit 1
+  fi
   request POST "/api/iso-risk-matrix/$TENANT_ID/generate" "$(generate_payload ISO9001 2015 automated false)"
   assert_ok
 else
