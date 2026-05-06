@@ -115,7 +115,15 @@ request POST "/api/iso-express-diagnostic/$TENANT_ID/calculate" \
   "$FDIS_JSON"
 
 if [ "$HAS_JQ" = true ]; then
-  FDIS_CERTIFIABLE="$(jq -r '.data.assessment.certifiable_version // .data.summary.certifiable // empty' "$FDIS_JSON")"
+  FDIS_CERTIFIABLE="$(jq -r '
+    if (.data.assessment | has("certifiable_version")) then
+      .data.assessment.certifiable_version
+    elif (.data.summary | has("certifiable")) then
+      .data.summary.certifiable
+    else
+      empty
+    end
+  ' "$FDIS_JSON")"
   FDIS_TYPE="$(jq -r '.data.assessment.assessment_type // empty' "$FDIS_JSON")"
 
   if [ "$FDIS_CERTIFIABLE" != "false" ]; then
