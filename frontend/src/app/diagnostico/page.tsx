@@ -55,6 +55,65 @@ type DiagnosticItem = {
   operation_type?: string | null;
 };
 
+type ExpressDiagnosticOption = {
+  standard_code: string;
+  version_code: string;
+  display_name: string;
+  certifiable: boolean;
+  publication_status: string;
+  assessment_type: string;
+  catalog_coverage_pct: number;
+  sync_status?: string;
+  recommended?: boolean;
+  warnings?: string[];
+};
+
+type ExpressDiagnosticResult = {
+  assessment?: {
+    id: string;
+    standard_code: string;
+    version_code: string;
+    assessment_type: string;
+    certifiable_version: boolean;
+    readiness_score: string | number;
+    readiness_level?: string;
+    total_iso_controls?: number;
+    mapped_controls_count?: number;
+    evaluated_controls_count?: number;
+    controls_with_evidence_count?: number;
+    controls_without_evidence_count?: number;
+    gaps_count?: number;
+    critical_gaps_count?: number;
+    high_gaps_count?: number;
+    medium_gaps_count?: number;
+    low_gaps_count?: number;
+  };
+  gaps?: Array<{
+    id?: string;
+    gap_type: string;
+    severity: string;
+    title: string;
+    recommendation?: string;
+    control_code?: string | null;
+  }>;
+  summary?: {
+    display_name?: string;
+    certifiable?: boolean;
+    publication_status?: string;
+    coverage_pct?: number;
+    coverage_warning?: string | null;
+    top_gaps?: Array<{
+      title: string;
+      severity: string;
+      recommendation?: string;
+      control_code?: string | null;
+    }>;
+  };
+  plan_30?: Array<{ title: string; recommendation?: string; control_code?: string | null }>;
+  plan_60?: Array<{ title: string; recommendation?: string; control_code?: string | null }>;
+  plan_90?: Array<{ title: string; recommendation?: string; control_code?: string | null }>;
+};
+
 const ui = {
   es: {
     title: 'Diagnóstico',
@@ -101,6 +160,27 @@ const ui = {
       'Este control ya está en "no cumple". Si no existe una NC abierta, el backend la controlará en el flujo normal.',
     ncConfirm:
       'Esto cambiará el estado del control a "no cumple" y abrirá o reutilizará una no conformidad abierta. ¿Continuar?',
+    expressTitle: 'Diagnóstico ISO Express',
+    expressSubtitle: 'Evalúa preparación por norma con iso_* y mapeos gobernados.',
+    expressLoading: 'Cargando opciones express...',
+    expressRun: 'Ejecutar diagnóstico express',
+    expressRunning: 'Calculando...',
+    expressNoOptions: 'No hay normas evaluables para diagnóstico express.',
+    expressError: 'No fue posible ejecutar el diagnóstico express.',
+    readiness: 'Preparación',
+    readinessLevel: 'Nivel',
+    evaluatedControls: 'Controles evaluados',
+    withEvidence: 'Con evidencia',
+    gaps: 'Brechas',
+    criticalHigh: 'Críticas/altas',
+    plan30: '30 días',
+    plan60: '60 días',
+    plan90: '90 días',
+    mainGaps: 'Brechas principales',
+    latestExpress: 'Historial express',
+    certifiable: 'Certificable',
+    notCertifiable: 'No certificable',
+    coverage: 'Cobertura',
   },
   en: {
     title: 'Assessment',
@@ -147,6 +227,27 @@ const ui = {
       'This control is already non-compliant. If there is no open NC, the backend will handle it in the normal flow.',
     ncConfirm:
       'This will change the control status to non-compliant and open or reuse an open nonconformity. Continue?',
+    expressTitle: 'ISO Express Assessment',
+    expressSubtitle: 'Evaluate readiness by standard with iso_* and governed mappings.',
+    expressLoading: 'Loading express options...',
+    expressRun: 'Run express assessment',
+    expressRunning: 'Calculating...',
+    expressNoOptions: 'No standards are available for express assessment.',
+    expressError: 'The express assessment could not be calculated.',
+    readiness: 'Readiness',
+    readinessLevel: 'Level',
+    evaluatedControls: 'Evaluated controls',
+    withEvidence: 'With evidence',
+    gaps: 'Gaps',
+    criticalHigh: 'Critical/high',
+    plan30: '30 days',
+    plan60: '60 days',
+    plan90: '90 days',
+    mainGaps: 'Main gaps',
+    latestExpress: 'Express history',
+    certifiable: 'Certifiable',
+    notCertifiable: 'Not certifiable',
+    coverage: 'Coverage',
   },
 } as const;
 
@@ -241,6 +342,13 @@ export default function DiagnosticoPage() {
 
   const [selectedISO, setSelectedISO] = useState('');
   const [selectedOperationId, setSelectedOperationId] = useState('');
+  const [expressOptions, setExpressOptions] = useState<ExpressDiagnosticOption[]>([]);
+  const [selectedExpressKey, setSelectedExpressKey] = useState('');
+  const [expressLoading, setExpressLoading] = useState(false);
+  const [expressRunning, setExpressRunning] = useState(false);
+  const [expressError, setExpressError] = useState('');
+  const [expressResult, setExpressResult] = useState<ExpressDiagnosticResult | null>(null);
+  const [expressLatest, setExpressLatest] = useState<ExpressDiagnosticResult['assessment'][]>([]);
 
   const tenantId = resolveTenantId(user);
   const role = resolveRole(user);
@@ -289,6 +397,60 @@ export default function DiagnosticoPage() {
     }
   };
 
+  const loadExpressOptions = async (tenant_id: string, authToken: string) => {
+    try {
+      setExpressLoading(true);
+      setExpressError('');
+
+      const res = await fetch(
+        `${API_URL}/api/iso-express-diagnostic/options/${tenant_id}`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error('ERROR LOAD ISO EXPRESS OPTIONS:', json);
+        setExpressOptions([]);
+        setExpressError(json?.error || copy.expressError);
+        return;
+      }
+
+      const options = Array.isArray(json?.data?.options) ? json.data.options : [];
+      setExpressOptions(options);
+    } catch (err) {
+      console.error('ERROR LOAD ISO EXPRESS OPTIONS:', err);
+      setExpressOptions([]);
+      setExpressError(copy.expressError);
+    } finally {
+      setExpressLoading(false);
+    }
+  };
+
+  const loadExpressLatest = async (tenant_id: string, authToken: string) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/iso-express-diagnostic/${tenant_id}/latest`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error('ERROR LOAD ISO EXPRESS LATEST:', json);
+        setExpressLatest([]);
+        return;
+      }
+
+      setExpressLatest(Array.isArray(json?.data) ? json.data : []);
+    } catch (err) {
+      console.error('ERROR LOAD ISO EXPRESS LATEST:', err);
+      setExpressLatest([]);
+    }
+  };
+
   const operationalStandards = useMemo(() => {
     return (scope.standards || []).filter(isOperationalStandard);
   }, [scope.standards]);
@@ -319,6 +481,8 @@ export default function DiagnosticoPage() {
       setToken(authToken);
       setUser(u);
       void loadScope(resolveTenantId(u), authToken);
+      void loadExpressOptions(resolveTenantId(u), authToken);
+      void loadExpressLatest(resolveTenantId(u), authToken);
     } catch (err) {
       console.error('ERROR GENERAL DIAGNOSTICO:', err);
       setLoading(false);
@@ -326,6 +490,24 @@ export default function DiagnosticoPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
+
+  useEffect(() => {
+    if (expressOptions.length === 0) {
+      setSelectedExpressKey('');
+      return;
+    }
+
+    setSelectedExpressKey((prev) => {
+      const exists = expressOptions.some(
+        (option) => `${option.standard_code}:${option.version_code}` === prev
+      );
+      if (exists) return prev;
+
+      const preferred =
+        expressOptions.find((option) => option.recommended) || expressOptions[0];
+      return `${preferred.standard_code}:${preferred.version_code}`;
+    });
+  }, [expressOptions]);
 
   useEffect(() => {
     if (operationalStandards.length === 0) {
@@ -604,6 +786,53 @@ export default function DiagnosticoPage() {
     await update(control.id, 'no cumple');
   };
 
+  const runExpressDiagnostic = async () => {
+    if (!token || !tenantId || !selectedExpressKey) return;
+
+    const selected = expressOptions.find(
+      (option) => `${option.standard_code}:${option.version_code}` === selectedExpressKey
+    );
+
+    if (!selected) return;
+
+    try {
+      setExpressRunning(true);
+      setExpressError('');
+
+      const res = await fetch(
+        `${API_URL}/api/iso-express-diagnostic/${tenantId}/calculate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            standard_code: selected.standard_code,
+            version_code: selected.version_code,
+            assessment_type: selected.assessment_type || 'express',
+            answers: [],
+          }),
+        }
+      );
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error('ERROR RUN ISO EXPRESS:', json);
+        setExpressError(json?.error || copy.expressError);
+        return;
+      }
+
+      setExpressResult(json?.data || null);
+      void loadExpressLatest(tenantId, token);
+    } catch (err) {
+      console.error('ERROR RUN ISO EXPRESS:', err);
+      setExpressError(copy.expressError);
+    } finally {
+      setExpressRunning(false);
+    }
+  };
+
   const getColor = (status?: string | null) => {
     if (status === 'cumple') return 'bg-green-100 text-green-700';
     if (status === 'parcial') return 'bg-yellow-100 text-yellow-700';
@@ -619,6 +848,201 @@ export default function DiagnosticoPage() {
   const noCumple = data.filter((c) => c.status === 'no cumple').length;
 
   const cumplimiento = total > 0 ? Math.round((cumple / total) * 100) : 0;
+
+  const selectedExpressOption = expressOptions.find(
+    (option) => `${option.standard_code}:${option.version_code}` === selectedExpressKey
+  );
+
+  const renderPlan = (
+    title: string,
+    items: ExpressDiagnosticResult['plan_30'] | undefined
+  ) => (
+    <div className="border rounded p-3 bg-slate-50">
+      <div className="font-semibold text-sm mb-2">{title}</div>
+      {items && items.length > 0 ? (
+        <ul className="space-y-2 text-sm text-gray-700">
+          {items.slice(0, 5).map((item, index) => (
+            <li key={`${title}-${index}`}>
+              <span className="font-medium">{item.title}</span>
+              {item.recommendation && (
+                <div className="text-xs text-gray-500">{item.recommendation}</div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="text-sm text-gray-500">-</div>
+      )}
+    </div>
+  );
+
+  const renderExpressPanel = () => (
+    <div className="bg-white rounded-xl shadow p-5 space-y-4">
+      <div className="flex flex-wrap justify-between items-start gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">{copy.expressTitle}</h2>
+          <p className="text-sm text-gray-500">{copy.expressSubtitle}</p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={selectedExpressKey}
+            onChange={(e) => setSelectedExpressKey(e.target.value)}
+            disabled={expressLoading || expressOptions.length === 0}
+            className="border p-2 rounded min-w-[260px]"
+          >
+            {expressOptions.map((option) => (
+              <option
+                key={`${option.standard_code}:${option.version_code}`}
+                value={`${option.standard_code}:${option.version_code}`}
+              >
+                {option.display_name} · {Number(option.catalog_coverage_pct || 0).toFixed(2)}%
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={runExpressDiagnostic}
+            disabled={!selectedExpressKey || expressLoading || expressRunning}
+            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+          >
+            {expressRunning ? copy.expressRunning : copy.expressRun}
+          </button>
+        </div>
+      </div>
+
+      {expressLoading && <div className="text-sm text-gray-500">{copy.expressLoading}</div>}
+
+      {!expressLoading && expressOptions.length === 0 && (
+        <div className="text-sm text-gray-500">{copy.expressNoOptions}</div>
+      )}
+
+      {expressError && (
+        <div className="bg-red-50 border border-red-200 p-3 rounded text-sm text-red-700">
+          {expressError}
+        </div>
+      )}
+
+      {selectedExpressOption && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="px-2 py-1 rounded bg-slate-100 text-slate-700">
+            {selectedExpressOption.publication_status}
+          </span>
+          <span
+            className={`px-2 py-1 rounded ${
+              selectedExpressOption.certifiable
+                ? 'bg-green-100 text-green-700'
+                : 'bg-yellow-100 text-yellow-800'
+            }`}
+          >
+            {selectedExpressOption.certifiable ? copy.certifiable : copy.notCertifiable}
+          </span>
+          <span className="px-2 py-1 rounded bg-blue-50 text-blue-700">
+            {copy.coverage}: {Number(selectedExpressOption.catalog_coverage_pct || 0).toFixed(2)}%
+          </span>
+          {selectedExpressOption.warnings?.map((warning, index) => (
+            <span
+              key={`${selectedExpressOption.standard_code}-warning-${index}`}
+              className="px-2 py-1 rounded bg-yellow-50 text-yellow-800 border border-yellow-200"
+            >
+              {warning}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {expressResult?.assessment && (
+        <div className="space-y-4">
+          <div className="grid md:grid-cols-5 gap-3">
+            <div className="bg-blue-50 p-3 rounded">
+              <div className="text-xs text-blue-700">{copy.readiness}</div>
+              <div className="text-2xl font-bold text-blue-800">
+                {Math.round(Number(expressResult.assessment.readiness_score || 0))}%
+              </div>
+            </div>
+            <div className="bg-slate-50 p-3 rounded">
+              <div className="text-xs text-gray-500">{copy.readinessLevel}</div>
+              <div className="font-semibold">{expressResult.assessment.readiness_level || '-'}</div>
+            </div>
+            <div className="bg-slate-50 p-3 rounded">
+              <div className="text-xs text-gray-500">{copy.evaluatedControls}</div>
+              <div className="font-semibold">
+                {expressResult.assessment.evaluated_controls_count || 0}/
+                {expressResult.assessment.total_iso_controls || 0}
+              </div>
+            </div>
+            <div className="bg-slate-50 p-3 rounded">
+              <div className="text-xs text-gray-500">{copy.withEvidence}</div>
+              <div className="font-semibold">
+                {expressResult.assessment.controls_with_evidence_count || 0}
+              </div>
+            </div>
+            <div className="bg-slate-50 p-3 rounded">
+              <div className="text-xs text-gray-500">{copy.criticalHigh}</div>
+              <div className="font-semibold">
+                {(expressResult.assessment.critical_gaps_count || 0) +
+                  (expressResult.assessment.high_gaps_count || 0)}
+              </div>
+            </div>
+          </div>
+
+          {expressResult.summary?.coverage_warning && (
+            <div className="bg-yellow-50 border border-yellow-200 p-3 rounded text-sm text-yellow-800">
+              {expressResult.summary.coverage_warning}
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-3 gap-3">
+            {renderPlan(copy.plan30, expressResult.plan_30)}
+            {renderPlan(copy.plan60, expressResult.plan_60)}
+            {renderPlan(copy.plan90, expressResult.plan_90)}
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-2">{copy.mainGaps}</h3>
+            <div className="space-y-2">
+              {(expressResult.summary?.top_gaps || expressResult.gaps || [])
+                .slice(0, 6)
+                .map((gap, index) => (
+                  <div key={`express-gap-${index}`} className="border rounded p-3 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span className="font-medium">{gap.title}</span>
+                      <span className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">
+                        {gap.severity}
+                      </span>
+                    </div>
+                    {gap.recommendation && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {gap.recommendation}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {expressLatest.length > 0 && (
+        <div>
+          <h3 className="font-semibold mb-2">{copy.latestExpress}</h3>
+          <div className="grid md:grid-cols-3 gap-2">
+            {expressLatest.slice(0, 6).map((assessment) => (
+              <div key={assessment?.id} className="border rounded p-3 text-sm">
+                <div className="font-medium">
+                  {assessment?.standard_code} {assessment?.version_code}
+                </div>
+                <div className="text-gray-500">
+                  {copy.readiness}: {Math.round(Number(assessment?.readiness_score || 0))}% ·{' '}
+                  {assessment?.readiness_level || '-'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   if (loadingScope) {
     return (
@@ -643,6 +1067,8 @@ export default function DiagnosticoPage() {
               {copy.noOperationalStandardsHelp}
             </p>
           </div>
+
+          {renderExpressPanel()}
         </div>
       </AppLayout>
     );
@@ -663,6 +1089,8 @@ export default function DiagnosticoPage() {
               {copy.noOperationsHelp}
             </p>
           </div>
+
+          {renderExpressPanel()}
         </div>
       </AppLayout>
     );
@@ -714,6 +1142,8 @@ export default function DiagnosticoPage() {
             {errorMessage}
           </div>
         )}
+
+        {renderExpressPanel()}
 
         <div className="grid md:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded shadow">
