@@ -65,6 +65,11 @@ const API_RULES = [
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,
   },
+  {
+    prefix: '/api/iso-knowledge',
+    read: TENANT_READ_ROLES,
+    write: [],
+  },
 
   // Dashboard y lectura ejecutiva
   {
