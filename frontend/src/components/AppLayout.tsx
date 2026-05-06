@@ -237,6 +237,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           '/health',
           '/exportes',
           '/auditorias',
+          '/acciones-recomendadas',
           '/perfil',
         ];
 
