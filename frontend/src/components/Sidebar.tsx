@@ -405,6 +405,19 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         ),
       },
       {
+        href: '/ejecucion-iso',
+        label: 'Ejecución ISO',
+        show: !isClientReadOnly,
+        icon: (
+          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M4 6h16" />
+            <path d="M4 12h10" />
+            <path d="M4 18h7" />
+            <path d="M16 14l2 2 4-5" />
+          </svg>
+        ),
+      },
+      {
         href: '/no-conformidades',
         label: t('sidebar.nonconformities'),
         show: !isClientReadOnly,
