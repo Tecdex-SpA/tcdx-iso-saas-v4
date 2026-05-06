@@ -38,6 +38,77 @@ type RiskControlRow = {
   nivel?: 'BAJO' | 'MEDIO' | 'ALTO';
 };
 
+type IsoRiskMatrixOption = {
+  standard_code: string;
+  version_code: string;
+  display_name?: string;
+  certifiable?: boolean;
+  publication_status?: string;
+  run_type?: string;
+  catalog_coverage_pct?: number;
+  sync_status?: string;
+  latest_run_id?: string | null;
+  latest_risk_posture?: string | null;
+  latest_residual_risk_avg?: number | string | null;
+  latest_assessment_id?: string | null;
+  assets_count?: number;
+  risk_templates_count?: number;
+  recommended?: boolean;
+  warnings?: string[];
+};
+
+type IsoRiskMatrixRun = {
+  id?: string;
+  run_id?: string;
+  standard_code?: string;
+  version_code?: string;
+  run_type?: string;
+  certifiable_version?: boolean;
+  coverage_warning?: string | null;
+  suggested_risks_count?: number;
+  critical_risks_count?: number;
+  high_risks_count?: number;
+  medium_risks_count?: number;
+  low_risks_count?: number;
+  inherent_risk_avg?: number | string;
+  residual_risk_avg?: number | string;
+  risk_posture?: string;
+  summary_json?: any;
+};
+
+type IsoRiskMatrixItem = {
+  id?: string;
+  risk_title: string;
+  risk_description?: string | null;
+  risk_category?: string | null;
+  asset_name?: string | null;
+  asset_type?: string | null;
+  asset_criticality?: string | null;
+  likelihood?: number;
+  impact?: number;
+  inherent_risk_score?: number;
+  inherent_risk_level?: string;
+  residual_risk_score?: number;
+  residual_risk_level?: string;
+  treatment_strategy?: string;
+  status?: string;
+  confidence?: number | string;
+};
+
+type IsoRiskMatrixAction = {
+  id?: string;
+  risk_title?: string;
+  action_title?: string;
+  title?: string;
+  action_description?: string;
+  description?: string;
+  priority?: string;
+  suggested_owner_role?: string;
+  owner_role?: string;
+  suggested_due_days?: number;
+  due_days?: number;
+};
+
 function resolveTenantId(user: any): string {
   return (
     user?.tenant_id ||
@@ -83,6 +154,15 @@ function RiskMatrixPageContent() {
   const [controls, setControls] = useState<RiskControlRow[]>([]);
   const [iso, setIso] = useState('');
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+  const [matrixOptions, setMatrixOptions] = useState<IsoRiskMatrixOption[]>([]);
+  const [selectedMatrixKey, setSelectedMatrixKey] = useState('');
+  const [matrixRun, setMatrixRun] = useState<IsoRiskMatrixRun | null>(null);
+  const [matrixItems, setMatrixItems] = useState<IsoRiskMatrixItem[]>([]);
+  const [matrixActions, setMatrixActions] = useState<IsoRiskMatrixAction[]>([]);
+  const [loadingMatrix, setLoadingMatrix] = useState(false);
+  const [generatingMatrix, setGeneratingMatrix] = useState(false);
+  const [matrixError, setMatrixError] = useState('');
+  const [matrixDryRun, setMatrixDryRun] = useState(true);
 
   const [scope, setScope] = useState<ScopeResponse>({ operations: [], standards: [] });
   const [loadingStandards, setLoadingStandards] = useState(true);
@@ -100,6 +180,41 @@ function RiskMatrixPageContent() {
   const activeStandardCodes = useMemo(() => {
     return new Set(operationalStandards.map((s) => s.code).filter(Boolean));
   }, [operationalStandards]);
+
+  const selectedMatrixOption = useMemo(() => {
+    return matrixOptions.find((option) => `${option.standard_code}:${option.version_code}` === selectedMatrixKey) || null;
+  }, [matrixOptions, selectedMatrixKey]);
+
+  const matrixSummary = useMemo(() => {
+    return matrixRun?.summary_json || matrixRun || {};
+  }, [matrixRun]);
+
+  const topMatrixItems = useMemo(() => {
+    return [...matrixItems]
+      .sort((a, b) => Number(b.residual_risk_score || 0) - Number(a.residual_risk_score || 0))
+      .slice(0, 12);
+  }, [matrixItems]);
+
+  const riskLevelClass = (level?: string | null) => {
+    const value = String(level || '').toLowerCase();
+    if (value === 'critico') return 'bg-red-600 text-white';
+    if (value === 'alto') return 'bg-orange-500 text-white';
+    if (value === 'medio') return 'bg-amber-400 text-amber-950';
+    return 'bg-emerald-100 text-emerald-800';
+  };
+
+  const riskPostureClass = (posture?: string | null) => {
+    const value = String(posture || '').toLowerCase();
+    if (value === 'critica') return 'bg-red-50 text-red-800 border-red-200';
+    if (value === 'alta') return 'bg-orange-50 text-orange-800 border-orange-200';
+    if (value === 'moderada') return 'bg-amber-50 text-amber-800 border-amber-200';
+    return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+  };
+
+  const formatNumber = (value: any) => {
+    const n = Number(value || 0);
+    return Number.isFinite(n) ? n.toFixed(2).replace('.00', '') : '0';
+  };
 
   const loadScope = async () => {
     const token = localStorage.getItem('token');
@@ -155,6 +270,162 @@ function RiskMatrixPageContent() {
       setIso('');
     } finally {
       setLoadingStandards(false);
+    }
+  };
+
+  const loadMatrixOptions = async () => {
+    const token = localStorage.getItem('token');
+    const user = getUserFromToken();
+    const tenantId = resolveTenantId(user);
+
+    if (!token || !tenantId) return;
+
+    try {
+      setLoadingMatrix(true);
+      setMatrixError('');
+
+      const res = await fetch(`${API_URL}/api/iso-risk-matrix/${tenantId}/options`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.error || 'No fue posible cargar opciones de matriz');
+      }
+
+      const options = Array.isArray(json?.data?.options) ? json.data.options : [];
+      setMatrixOptions(options);
+
+      setSelectedMatrixKey((prev) => {
+        if (prev && options.some((option: IsoRiskMatrixOption) => `${option.standard_code}:${option.version_code}` === prev)) {
+          return prev;
+        }
+
+        const recommended = options.find((option: IsoRiskMatrixOption) => option.recommended);
+        const first = recommended || options[0];
+        return first ? `${first.standard_code}:${first.version_code}` : '';
+      });
+    } catch (err: any) {
+      console.error('ERROR LOAD ISO RISK MATRIX OPTIONS:', err);
+      setMatrixError(err?.message || 'Error cargando matriz automatizada');
+    } finally {
+      setLoadingMatrix(false);
+    }
+  };
+
+  const loadLatestMatrix = async (option?: IsoRiskMatrixOption | null) => {
+    const token = localStorage.getItem('token');
+    const user = getUserFromToken();
+    const tenantId = resolveTenantId(user);
+    const target = option || selectedMatrixOption;
+
+    if (!token || !tenantId || !target) return;
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/iso-risk-matrix/${tenantId}/latest?standard_code=${encodeURIComponent(target.standard_code)}&version_code=${encodeURIComponent(target.version_code)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const json = await res.json();
+
+      if (!res.ok) return;
+
+      if (json?.data?.run) {
+        setMatrixRun(json.data.run);
+        setMatrixItems(Array.isArray(json.data.items) ? json.data.items : []);
+        setMatrixActions(Array.isArray(json.data.actions) ? json.data.actions : []);
+        setMatrixDryRun(false);
+      }
+    } catch (err) {
+      console.error('ERROR LOAD LATEST ISO RISK MATRIX:', err);
+    }
+  };
+
+  const generateMatrix = async (dryRun: boolean) => {
+    const token = localStorage.getItem('token');
+    const user = getUserFromToken();
+    const tenantId = resolveTenantId(user);
+    const target = selectedMatrixOption;
+
+    if (!token || !tenantId || !target) return;
+
+    try {
+      setGeneratingMatrix(true);
+      setMatrixError('');
+
+      const res = await fetch(`${API_URL}/api/iso-risk-matrix/${tenantId}/generate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          standard_code: target.standard_code,
+          version_code: target.version_code,
+          run_type: target.version_code === '2026_FDIS' ? 'transition_readiness' : 'automated',
+          include_assets: true,
+          include_diagnostic_gaps: true,
+          include_existing_asset_risks: true,
+          dry_run: dryRun,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.error || 'No fue posible generar la matriz');
+      }
+
+      const data = json?.data || {};
+      setMatrixRun({
+        ...(data.run || {}),
+        summary_json: data.summary || data.run?.summary_json || {},
+      });
+      setMatrixItems(Array.isArray(data.items) ? data.items : []);
+      setMatrixActions(Array.isArray(data.actions) ? data.actions : []);
+      setMatrixDryRun(dryRun);
+
+      if (!dryRun) {
+        await loadMatrixOptions();
+      }
+    } catch (err: any) {
+      console.error('ERROR GENERATE ISO RISK MATRIX:', err);
+      setMatrixError(err?.message || 'Error generando matriz de riesgos');
+    } finally {
+      setGeneratingMatrix(false);
+    }
+  };
+
+  const reviewRiskItem = async (itemId: string | undefined, status: 'accepted' | 'rejected') => {
+    const token = localStorage.getItem('token');
+    const user = getUserFromToken();
+    const tenantId = resolveTenantId(user);
+
+    if (!token || !tenantId || !itemId) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/iso-risk-matrix/${tenantId}/items/${itemId}/review`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status,
+          review_comment: status === 'accepted' ? 'Aceptado desde matriz de riesgos.' : 'Rechazado desde matriz de riesgos.',
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.error || 'No fue posible revisar el riesgo');
+      }
+
+      setMatrixItems((prev) => prev.map((item) => (
+        item.id === itemId ? { ...item, status } : item
+      )));
+    } catch (err: any) {
+      console.error('ERROR REVIEW RISK ITEM:', err);
+      setMatrixError(err?.message || 'Error revisando riesgo');
     }
   };
 
@@ -230,7 +501,14 @@ function RiskMatrixPageContent() {
 
   useEffect(() => {
     void loadScope();
+    void loadMatrixOptions();
   }, []);
+
+  useEffect(() => {
+    if (selectedMatrixOption) {
+      void loadLatestMatrix(selectedMatrixOption);
+    }
+  }, [selectedMatrixKey]);
 
   useEffect(() => {
     focusAppliedRef.current = false;
@@ -403,6 +681,273 @@ function RiskMatrixPageContent() {
             </option>
           ))}
         </select>
+
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+          <div className="border-b border-gray-100 px-5 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white">
+                  <TcdxIcon name="risk" className="h-5 w-5" />
+                </span>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-950">
+                    Matriz automatizada ISO
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Riesgos sugeridos desde ISO, activos, diagnostico express, controles y evidencias.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <select
+                value={selectedMatrixKey}
+                onChange={(e) => {
+                  setSelectedMatrixKey(e.target.value);
+                  setMatrixError('');
+                }}
+                className="border border-gray-300 px-3 py-2 rounded text-sm min-w-[260px]"
+                disabled={loadingMatrix}
+              >
+                <option value="">Seleccionar norma/version</option>
+                {matrixOptions.map((option) => (
+                  <option
+                    key={`${option.standard_code}:${option.version_code}`}
+                    value={`${option.standard_code}:${option.version_code}`}
+                  >
+                    {option.standard_code} {option.version_code} · {option.display_name || 'Matriz ISO'}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => generateMatrix(true)}
+                disabled={!selectedMatrixOption || generatingMatrix}
+                className="px-4 py-2 rounded border border-gray-300 text-gray-800 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                Simular
+              </button>
+
+              <button
+                type="button"
+                onClick={() => generateMatrix(false)}
+                disabled={!selectedMatrixOption || generatingMatrix}
+                className="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
+              >
+                Generar matriz
+              </button>
+            </div>
+          </div>
+
+          {matrixError && (
+            <div className="mx-5 mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {matrixError}
+            </div>
+          )}
+
+          {selectedMatrixOption && (
+            <div className="px-5 py-4 bg-slate-50 border-b border-gray-100 grid gap-3 lg:grid-cols-[1.3fr_0.7fr]">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-900">
+                    {selectedMatrixOption.standard_code} {selectedMatrixOption.version_code}
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded border ${
+                    selectedMatrixOption.certifiable ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}>
+                    {selectedMatrixOption.certifiable ? 'Certificable' : 'No certificable'}
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded border border-gray-200 bg-white text-gray-700">
+                    Cobertura {formatNumber(selectedMatrixOption.catalog_coverage_pct)}%
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded border border-gray-200 bg-white text-gray-700">
+                    Activos {selectedMatrixOption.assets_count || 0}
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded border border-gray-200 bg-white text-gray-700">
+                    Templates {selectedMatrixOption.risk_templates_count || 0}
+                  </span>
+                </div>
+
+                {(selectedMatrixOption.warnings || []).length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    {(selectedMatrixOption.warnings || []).map((warning) => (
+                      <div key={warning} className="text-sm text-amber-800">
+                        {warning}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className={`rounded border px-4 py-3 ${riskPostureClass(String(matrixSummary.risk_posture || selectedMatrixOption.latest_risk_posture || 'controlada'))}`}>
+                <div className="text-xs uppercase tracking-wide opacity-80">Postura de riesgo</div>
+                <div className="text-2xl font-bold capitalize">
+                  {String(matrixSummary.risk_posture || selectedMatrixOption.latest_risk_posture || 'sin matriz').replace('_', ' ')}
+                </div>
+                <div className="text-xs mt-1">
+                  Residual promedio {formatNumber(matrixSummary.residual_risk_avg || selectedMatrixOption.latest_residual_risk_avg)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {generatingMatrix || loadingMatrix ? (
+            <div className="px-5 py-8 text-sm text-gray-500">
+              Procesando matriz de riesgos...
+            </div>
+          ) : matrixRun ? (
+            <div className="p-5 space-y-5">
+              <div className="grid gap-3 md:grid-cols-5">
+                {[
+                  ['Riesgos', matrixSummary.suggested_risks_count || matrixItems.length, 'bg-gray-950 text-white'],
+                  ['Criticos', matrixSummary.critical_risks_count || 0, 'bg-red-600 text-white'],
+                  ['Altos', matrixSummary.high_risks_count || 0, 'bg-orange-500 text-white'],
+                  ['Medios', matrixSummary.medium_risks_count || 0, 'bg-amber-400 text-amber-950'],
+                  ['Bajos', matrixSummary.low_risks_count || 0, 'bg-emerald-100 text-emerald-800'],
+                ].map(([label, value, className]) => (
+                  <div key={String(label)} className="border border-gray-200 rounded-lg p-4">
+                    <div className="text-xs text-gray-500">{label}</div>
+                    <div className={`mt-2 inline-flex min-w-12 justify-center rounded px-3 py-1 text-xl font-bold ${className}`}>
+                      {value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {matrixRun.coverage_warning && (
+                <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  {matrixRun.coverage_warning}
+                </div>
+              )}
+
+              {matrixDryRun && (
+                <div className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                  Simulacion sin escritura. Usa “Generar matriz” para guardar la corrida y habilitar revision de sugerencias.
+                </div>
+              )}
+
+              <div className="grid gap-5 xl:grid-cols-[1.5fr_0.8fr]">
+                <div className="overflow-hidden rounded-lg border border-gray-200">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">Riesgos priorizados</h3>
+                    <span className="text-xs text-gray-500">
+                      Inherente {formatNumber(matrixSummary.inherent_risk_avg)} · Residual {formatNumber(matrixSummary.residual_risk_avg)}
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="px-4 py-3">Riesgo</th>
+                          <th className="px-4 py-3">Activo</th>
+                          <th className="px-4 py-3">Inherente</th>
+                          <th className="px-4 py-3">Residual</th>
+                          <th className="px-4 py-3">Tratamiento</th>
+                          <th className="px-4 py-3">Revision</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {topMatrixItems.map((item, index) => (
+                          <tr key={item.id || `${item.risk_title}-${index}`} className="align-top">
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-gray-950">{item.risk_title}</div>
+                              <div className="text-xs text-gray-500 mt-1 line-clamp-2">{item.risk_description}</div>
+                              <div className="text-xs text-gray-400 mt-1">
+                                Confianza {formatNumber(Number(item.confidence || 0) * 100)}%
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-gray-700">
+                              <div>{item.asset_name || 'Sin activo especifico'}</div>
+                              <div className="text-xs text-gray-500">{item.asset_type || item.asset_criticality || ''}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex rounded px-2 py-1 text-xs font-semibold ${riskLevelClass(item.inherent_risk_level)}`}>
+                                {item.inherent_risk_score || 0} · {item.inherent_risk_level || 'bajo'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex rounded px-2 py-1 text-xs font-semibold ${riskLevelClass(item.residual_risk_level)}`}>
+                                {item.residual_risk_score || 0} · {item.residual_risk_level || 'bajo'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 capitalize text-gray-700">
+                              {item.treatment_strategy || 'monitorear'}
+                            </td>
+                            <td className="px-4 py-3">
+                              {item.id ? (
+                                <div className="flex flex-col gap-2">
+                                  <span className="text-xs text-gray-500 capitalize">{item.status || 'suggested'}</span>
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => reviewRiskItem(item.id, 'accepted')}
+                                      className="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                                    >
+                                      Aceptar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => reviewRiskItem(item.id, 'rejected')}
+                                      className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
+                                    >
+                                      Rechazar
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">Disponible al guardar</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <h3 className="font-semibold text-gray-900">Acciones sugeridas</h3>
+                  </div>
+                  <div className="divide-y divide-gray-100 max-h-[520px] overflow-y-auto">
+                    {matrixActions.slice(0, 12).map((action, index) => (
+                      <div key={action.id || `${action.title || action.action_title}-${index}`} className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-medium text-gray-950">
+                              {action.action_title || action.title}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {action.risk_title || action.action_description || action.description}
+                            </div>
+                          </div>
+                          <span className="text-xs rounded bg-gray-100 px-2 py-1 text-gray-700 capitalize">
+                            {action.priority || 'media'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2">
+                          {action.suggested_owner_role || action.owner_role || 'Responsable'} · {action.suggested_due_days || action.due_days || 30} dias
+                        </div>
+                      </div>
+                    ))}
+                    {matrixActions.length === 0 && (
+                      <div className="p-4 text-sm text-gray-500">
+                        Sin acciones sugeridas para mostrar.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="px-5 py-8 text-sm text-gray-500">
+              Selecciona una norma y simula la matriz para ver riesgos por activo, brecha y control.
+            </div>
+          )}
+        </div>
 
         {!iso && (
           <div className="bg-white p-6 rounded shadow space-y-3">
