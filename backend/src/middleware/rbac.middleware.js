@@ -80,6 +80,11 @@ const API_RULES = [
     read: TENANT_READ_ROLES,
     write: TENANT_OPERATE_ROLES,
   },
+  {
+    prefix: '/api/iso-document-generator',
+    read: TENANT_READ_ROLES,
+    write: TENANT_OPERATE_ROLES,
+  },
 
   // Dashboard y lectura ejecutiva
   {
