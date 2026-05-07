@@ -66,7 +66,12 @@ async function safeQuery(sql, params, notes, label, fallback = []) {
     const result = await pool.query(sql, params);
     return result.rows;
   } catch (error) {
-    notes.push(`No se pudo consultar ${label}: ${error.code || error.message}`);
+    console.error('ERROR DASHBOARD V2 SAFE QUERY:', {
+      label,
+      code: error.code,
+      message: error.message,
+    });
+    notes.push(`No fue posible cargar ${label}.`);
     return fallback;
   }
 }
@@ -84,6 +89,20 @@ async function tableExists(tableName) {
   );
 
   return result.rowCount > 0;
+}
+
+async function tableColumns(tableName) {
+  const result = await pool.query(
+    `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = $1
+    `,
+    [tableName]
+  );
+
+  return new Set(result.rows.map((row) => row.column_name));
 }
 
 const DASHBOARD_V2_KEY = 'dashboard_v2';
@@ -141,27 +160,63 @@ function normalizeLayout(layout) {
 }
 
 async function getTenant(tenantId, notes) {
-  const rows = await safeQuery(
-    `
-    SELECT id, name, legal_name, service_status, updated_at
-    FROM tenants
-    WHERE id = $1::uuid
-    LIMIT 1
-    `,
-    [tenantId],
-    notes,
-    'tenant',
-    []
-  );
+  try {
+    const columns = await tableColumns('tenants');
+    const select = ['id'];
+    [
+      'name',
+      'business_name',
+      'legal_name',
+      'company_name',
+      'razon_social',
+      'service_status',
+      'status',
+      'updated_at',
+      'created_at',
+      'logo_url',
+      'logo',
+    ].forEach((column) => {
+      if (columns.has(column)) select.push(column);
+    });
 
-  const tenant = rows[0] || {};
+    const result = await pool.query(
+      `
+      SELECT ${select.map((column) => `"${column}"`).join(', ')}
+      FROM tenants
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [tenantId]
+    );
+    const tenant = result.rows[0] || {};
 
-  return {
-    id: tenantId,
-    name: tenant.name || tenant.legal_name || 'Empresa',
-    service_status: tenant.service_status || null,
-    updated_at: tenant.updated_at || null,
-  };
+    return {
+      id: tenantId,
+      name: tenant.name ||
+        tenant.business_name ||
+        tenant.legal_name ||
+        tenant.company_name ||
+        tenant.razon_social ||
+        'Empresa',
+      service_status: tenant.service_status || tenant.status || null,
+      updated_at: tenant.updated_at || tenant.created_at || null,
+      logo_url: tenant.logo_url || tenant.logo || null,
+    };
+  } catch (error) {
+    console.error('ERROR DASHBOARD V2 TENANT LOOKUP:', {
+      tenant_id: tenantId,
+      code: error.code,
+      message: error.message,
+    });
+    notes.push('No fue posible cargar todos los datos del tenant. Revisa configuracion del cliente.');
+    return {
+      id: tenantId,
+      name: 'Empresa',
+      service_status: null,
+      updated_at: null,
+      logo_url: null,
+    };
+  }
 }
 
 async function getKpiSummary(tenantId, notes) {
@@ -169,7 +224,11 @@ async function getKpiSummary(tenantId, notes) {
   try {
     hasKpiSnapshots = await tableExists('kpi_snapshots');
   } catch (error) {
-    notes.push(`No se pudo verificar kpi_snapshots: ${error.code || error.message}`);
+    console.error('ERROR DASHBOARD V2 KPI TABLE CHECK:', {
+      code: error.code,
+      message: error.message,
+    });
+    notes.push('No fue posible verificar KPIs.');
   }
 
   if (!hasKpiSnapshots) {
@@ -242,11 +301,19 @@ function compactRowsByDashboardStandards(rows = [], standards = []) {
 
 async function getActionsPanelForTenant(tenantId, standards, notes) {
   const hasSuggestions = await tableExists('iso_operational_suggestions').catch((error) => {
-    notes.push(`No se pudo verificar iso_operational_suggestions: ${error.code || error.message}`);
+    console.error('ERROR DASHBOARD V2 SUGGESTIONS TABLE CHECK:', {
+      code: error.code,
+      message: error.message,
+    });
+    notes.push('No fue posible verificar acciones recomendadas.');
     return false;
   });
   const hasConversions = await tableExists('iso_recommended_action_conversions').catch((error) => {
-    notes.push(`No se pudo verificar iso_recommended_action_conversions: ${error.code || error.message}`);
+    console.error('ERROR DASHBOARD V2 CONVERSIONS TABLE CHECK:', {
+      code: error.code,
+      message: error.message,
+    });
+    notes.push('No fue posible verificar conversiones de acciones.');
     return false;
   });
   const hasActionPlans = await tableExists('action_plans').catch(() => false);
@@ -512,7 +579,11 @@ async function getActionsPanelForTenant(tenantId, standards, notes) {
 
 async function getRisksPanelForTenant(tenantId, standards, notes) {
   const hasRisks = await tableExists('iso_risk_matrix_items').catch((error) => {
-    notes.push(`No se pudo verificar iso_risk_matrix_items: ${error.code || error.message}`);
+    console.error('ERROR DASHBOARD V2 RISKS TABLE CHECK:', {
+      code: error.code,
+      message: error.message,
+    });
+    notes.push('No fue posible verificar matriz de riesgos.');
     return false;
   });
 
@@ -643,7 +714,11 @@ async function getRisksPanelForTenant(tenantId, standards, notes) {
 
 async function getKpisPanelForTenant(tenantId, standards, notes) {
   const hasSnapshots = await tableExists('kpi_snapshots').catch((error) => {
-    notes.push(`No se pudo verificar kpi_snapshots: ${error.code || error.message}`);
+    console.error('ERROR DASHBOARD V2 KPI SNAPSHOTS TABLE CHECK:', {
+      code: error.code,
+      message: error.message,
+    });
+    notes.push('No fue posible verificar KPIs.');
     return false;
   });
   const hasDefinitions = await tableExists('kpi_definitions').catch(() => false);
