@@ -50,6 +50,13 @@ export type DashboardV2ActionItem = {
   status?: string | null;
   suggested_owner?: string | null;
   suggested_due_date?: string | null;
+  operation_id?: string | null;
+  tenant_control_id?: string | null;
+  source_entity_type?: string | null;
+  source_entity_id?: string | null;
+  source_reason?: string | null;
+  payload_json?: Record<string, unknown> | null;
+  source_trace_json?: Record<string, unknown> | null;
   created_record_type?: string | null;
   created_record_id?: string | null;
   created_at?: string | null;

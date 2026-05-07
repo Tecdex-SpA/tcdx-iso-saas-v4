@@ -413,6 +413,13 @@ async function getActionsPanelForTenant(tenantId, standards, notes) {
         status,
         suggested_owner,
         suggested_due_date,
+        operation_id,
+        tenant_control_id,
+        source_entity_type,
+        source_entity_id,
+        source_reason,
+        payload_json,
+        source_trace_json,
         created_record_type,
         created_record_id,
         created_at,
@@ -1052,7 +1059,9 @@ function buildTabs(unified, kpis) {
 }
 
 function normalizeStandardCards(cards) {
-  return cards.map((standard) => ({
+  return cards
+    .filter((standard) => !(standard.standard_code === 'ISO9001' && standard.version_code === '2026_FDIS'))
+    .map((standard) => ({
     standard_code: standard.standard_code,
     version_code: standard.version_code,
     display_name: standard.display_name,

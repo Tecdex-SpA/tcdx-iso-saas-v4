@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Bar,
   BarChart,
@@ -32,6 +32,10 @@ import {
   priorityClass,
   statusLabel,
 } from './utils';
+import { getStoredValidToken, getTenantIdFromToken, getUserRoleFromToken } from '@/utils/auth';
+import RecommendedActionDetailModal from '@/components/acciones-recomendadas/RecommendedActionDetailModal';
+import type { JsonObject, RecommendedAction } from '@/components/acciones-recomendadas/types';
+import { canMutate, targetLabel } from '@/components/acciones-recomendadas/utils';
 
 const KPI_COLORS: Record<string, string> = {
   green: '#059669',
@@ -40,10 +44,55 @@ const KPI_COLORS: Record<string, string> = {
   gray: '#94a3b8',
 };
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  'http://192.168.100.120:3000';
+
 type Props = {
   activeTab: string;
   data: DashboardV2Response;
 };
+
+type ApiEnvelope = {
+  ok?: boolean;
+  error?: string;
+  data?: unknown;
+};
+
+function asJsonObject(value: unknown): JsonObject {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as JsonObject
+    : {};
+}
+
+function toRecommendedAction(action: DashboardV2ActionItem): RecommendedAction {
+  return {
+    id: action.id,
+    standard_code: action.standard_code,
+    operation_id: action.operation_id,
+    tenant_control_id: action.tenant_control_id,
+    source_module: action.source_module || 'dashboard_v2',
+    source_entity_type: action.source_entity_type,
+    source_entity_id: action.source_entity_id,
+    source_reason: action.source_reason,
+    suggestion_type: action.suggestion_type || 'operational_task',
+    target_record_type: action.target_record_type || 'action_plan',
+    title: action.title,
+    description: action.description,
+    rationale: action.rationale,
+    priority: action.priority || 'media',
+    status: action.status || 'pending',
+    suggested_owner: action.suggested_owner,
+    suggested_due_date: action.suggested_due_date,
+    payload_json: action.payload_json || {},
+    source_trace_json: action.source_trace_json || {},
+    created_record_type: action.created_record_type,
+    created_record_id: action.created_record_id,
+    created_at: action.created_at,
+    updated_at: action.updated_at,
+  };
+}
 
 export default function DashboardV2Panel({ activeTab, data }: Props) {
   if (activeTab === 'acciones') {
@@ -125,10 +174,170 @@ export default function DashboardV2Panel({ activeTab, data }: Props) {
 
 function ActionsPanel({ data }: { data: DashboardV2Response }) {
   const [expanded, setExpanded] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [role, setRole] = useState('');
+  const [localActions, setLocalActions] = useState<DashboardV2ActionItem[]>([]);
+  const [selected, setSelected] = useState<RecommendedAction | null>(null);
+  const [conversionPreview, setConversionPreview] = useState<JsonObject | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ kind: 'info' | 'success' | 'warning' | 'error'; message: string } | null>(null);
   const panel = data.operational_panels?.actions;
   const summary = panel?.summary;
-  const recent = panel?.recent || [];
-  const visible = expanded ? recent : recent.slice(0, 5);
+  const recent = useMemo(() => panel?.recent || [], [panel?.recent]);
+  const visible = expanded ? localActions : localActions.slice(0, 5);
+  const readonly = !canMutate(role);
+
+  useEffect(() => {
+    setToken(getStoredValidToken());
+    setTenantId(getTenantIdFromToken());
+    setRole(getUserRoleFromToken());
+  }, []);
+
+  useEffect(() => {
+    setLocalActions(recent);
+  }, [recent]);
+
+  const requestJson = useCallback(async (path: string, options: RequestInit = {}) => {
+    if (!token) throw new Error('No hay sesion activa.');
+
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    });
+    const text = await response.text();
+    let json: ApiEnvelope | null = null;
+    try {
+      json = text ? JSON.parse(text) as ApiEnvelope : null;
+    } catch {
+      throw new Error(`Respuesta invalida del backend (${response.status}).`);
+    }
+
+    if (!response.ok || json?.ok === false || !json) {
+      throw new Error(json?.error || 'No fue posible procesar la solicitud.');
+    }
+    return json;
+  }, [token]);
+
+  const patchLocalStatus = (id: string, status: string) => {
+    setLocalActions((current) => current.map((item) =>
+      item.id === id
+        ? { ...item, status, updated_at: new Date().toISOString() }
+        : item
+    ));
+  };
+
+  const handleDryRun = async (action: RecommendedAction) => {
+    try {
+      setBusyId(action.id);
+      setFeedback(null);
+      const result = await requestJson(`/api/iso-recommended-actions/${action.id}/dry-run-convert`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          target_type: action.target_record_type,
+          options: {},
+        }),
+      });
+      const resultData = asJsonObject(result.data);
+      setSelected(action);
+      setConversionPreview(resultData);
+      const blocked = Array.isArray(resultData.blocked_reasons)
+        ? resultData.blocked_reasons.filter(Boolean).join(' | ')
+        : '';
+      setFeedback({
+        kind: resultData.can_convert === false ? 'warning' : 'info',
+        message: resultData.can_convert === false
+          ? `Conversion bloqueada: ${blocked || 'requiere revision manual.'}`
+          : `Dry-run OK: se podria crear ${targetLabel(String(resultData.target_type || action.target_record_type))}.`,
+      });
+    } catch (error) {
+      setFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'No fue posible simular conversion.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleConvert = async (action: RecommendedAction) => {
+    try {
+      setBusyId(action.id);
+      setFeedback(null);
+      const dryRun = await requestJson(`/api/iso-recommended-actions/${action.id}/dry-run-convert`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          target_type: action.target_record_type,
+          options: {},
+        }),
+      });
+      const dryRunData = asJsonObject(dryRun.data);
+      setSelected(action);
+      setConversionPreview(dryRunData);
+
+      if (dryRunData.can_convert === false) {
+        const blocked = Array.isArray(dryRunData.blocked_reasons)
+          ? dryRunData.blocked_reasons.filter(Boolean).join(' | ')
+          : '';
+        setFeedback({ kind: 'warning', message: `Conversion bloqueada: ${blocked || 'requiere revision manual.'}` });
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `El backend puede crear ${targetLabel(String(dryRunData.target_type || action.target_record_type))}. Confirmas la conversion real?`
+      );
+      if (!confirmed) {
+        setFeedback({ kind: 'info', message: 'Conversion cancelada despues del dry-run. No se escribieron datos operativos.' });
+        return;
+      }
+
+      await requestJson(`/api/iso-recommended-actions/${action.id}/convert`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          target_type: action.target_record_type,
+          confirmed: true,
+          options: {},
+        }),
+      });
+      patchLocalStatus(action.id, 'applied');
+      setSelected(null);
+      setConversionPreview(null);
+      setFeedback({ kind: 'success', message: 'Sugerencia convertida correctamente desde Dashboard.' });
+    } catch (error) {
+      setFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'No fue posible convertir la sugerencia.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDismiss = async (action: RecommendedAction) => {
+    const reason = window.prompt('Motivo opcional para descartar la sugerencia:') || '';
+    const confirmed = window.confirm('Confirmas descartar esta sugerencia?');
+    if (!confirmed) return;
+
+    try {
+      setBusyId(action.id);
+      await requestJson(`/api/iso-operational-execution/${action.id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          rejection_comment: reason || undefined,
+        }),
+      });
+      patchLocalStatus(action.id, 'rejected');
+      setSelected(null);
+      setConversionPreview(null);
+      setFeedback({ kind: 'success', message: 'Sugerencia descartada correctamente.' });
+    } catch (error) {
+      setFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'No fue posible descartar la sugerencia.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <Panel title="Acciones recomendadas y trabajo pendiente" actionHref="/acciones-recomendadas">
@@ -139,6 +348,20 @@ function ActionsPanel({ data }: { data: DashboardV2Response }) {
         <Metric label="Por aprobar" value={summary?.pending_approval || 0} />
         <Metric label="Convertidas" value={summary?.converted || 0} tone="success" />
       </div>
+
+      {feedback && (
+        <div
+          className={[
+            'mt-4 rounded-lg border px-4 py-3 text-sm',
+            feedback.kind === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : '',
+            feedback.kind === 'error' ? 'border-red-200 bg-red-50 text-red-800' : '',
+            feedback.kind === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-900' : '',
+            feedback.kind === 'info' ? 'border-blue-200 bg-blue-50 text-blue-800' : '',
+          ].join(' ')}
+        >
+          {feedback.message}
+        </div>
+      )}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <div>
@@ -155,7 +378,18 @@ function ActionsPanel({ data }: { data: DashboardV2Response }) {
           <div className="space-y-2">
             {visible.length === 0 && <Empty text="Sin acciones recomendadas para las normas contratadas." />}
             {visible.map((action) => (
-              <ActionRow key={action.id} action={action} />
+              <ActionRow
+                key={action.id}
+                action={action}
+                busy={busyId === action.id}
+                readonly={readonly}
+                onSelect={() => {
+                  setSelected(toRecommendedAction(action));
+                  setConversionPreview(null);
+                }}
+                onDryRun={() => handleDryRun(toRecommendedAction(action))}
+                onConvert={() => handleConvert(toRecommendedAction(action))}
+              />
             ))}
           </div>
         </div>
@@ -168,19 +402,62 @@ function ActionsPanel({ data }: { data: DashboardV2Response }) {
             <MiniMetric label="No conformidades" value={summary?.open_nonconformities || 0} route="/no-conformidades" />
           </div>
           <p className="mt-4 text-xs leading-5 text-slate-500">
-            La conversion sigue ocurriendo en Acciones Recomendadas con dry-run, preview y confirmacion explicita.
+            La conversion usa el mismo flujo seguro: dry-run, preview y confirmacion explicita antes de escribir.
           </p>
         </div>
       </div>
+
+      <RecommendedActionDetailModal
+        action={selected}
+        conversionPreview={conversionPreview}
+        readonly={readonly}
+        busy={Boolean(selected && busyId === selected.id)}
+        onClose={() => {
+          setSelected(null);
+          setConversionPreview(null);
+        }}
+        onAccept={handleDryRun}
+        onConvert={handleConvert}
+        onDismiss={handleDismiss}
+      />
     </Panel>
   );
 }
 
 function RisksPanel({ data }: { data: DashboardV2Response }) {
   const [showAll, setShowAll] = useState(false);
+  const [standardFilter, setStandardFilter] = useState('ALL');
+  const [levelFilter, setLevelFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const panel = data.operational_panels?.risks;
   const summary = panel?.summary;
-  const risks = showAll ? panel?.all_risks || [] : panel?.priority_risks || [];
+  const standardOptions = useMemo(() => {
+    const values = new Set<string>();
+    (panel?.by_standard || []).forEach((row) => {
+      if (row.standard_code) values.add(String(row.standard_code));
+    });
+    (panel?.all_risks || []).forEach((risk) => {
+      if (risk.standard_code) values.add(String(risk.standard_code));
+    });
+    return Array.from(values).sort();
+  }, [panel?.all_risks, panel?.by_standard]);
+  const filteredRisks = useMemo(() => {
+    return (panel?.all_risks || []).filter((risk) => {
+      if (standardFilter !== 'ALL' && risk.standard_code !== standardFilter) return false;
+      if (levelFilter !== 'ALL' && String(risk.residual_risk_level || '').toLowerCase() !== levelFilter) return false;
+      if (statusFilter !== 'ALL' && String(risk.status || '').toLowerCase() !== statusFilter) return false;
+      return true;
+    });
+  }, [levelFilter, panel?.all_risks, standardFilter, statusFilter]);
+  const priorityRisks = useMemo(() => {
+    return (panel?.priority_risks || []).filter((risk) => {
+      if (standardFilter !== 'ALL' && risk.standard_code !== standardFilter) return false;
+      if (levelFilter !== 'ALL' && String(risk.residual_risk_level || '').toLowerCase() !== levelFilter) return false;
+      if (statusFilter !== 'ALL' && String(risk.status || '').toLowerCase() !== statusFilter) return false;
+      return true;
+    });
+  }, [levelFilter, panel?.priority_risks, standardFilter, statusFilter]);
+  const risks = showAll ? filteredRisks : priorityRisks;
 
   return (
     <Panel title="Riesgos ISO prioritarios" actionHref="/matriz-riesgo">
@@ -208,6 +485,38 @@ function RisksPanel({ data }: { data: DashboardV2Response }) {
           >
             {showAll ? 'Ver prioritarios' : 'Ver todos los riesgos ISO'}
           </button>
+        </div>
+        <div className="mb-4 grid gap-2 md:grid-cols-3">
+          <select
+            value={standardFilter}
+            onChange={(event) => setStandardFilter(event.target.value)}
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+          >
+            <option value="ALL">Todas las normas</option>
+            {standardOptions.map((code) => <option key={code} value={code}>{code}</option>)}
+          </select>
+          <select
+            value={levelFilter}
+            onChange={(event) => setLevelFilter(event.target.value)}
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+          >
+            <option value="ALL">Todos los niveles</option>
+            <option value="critico">Critico</option>
+            <option value="alto">Alto</option>
+            <option value="medio">Medio</option>
+            <option value="bajo">Bajo</option>
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+          >
+            <option value="ALL">Todos los estados</option>
+            <option value="suggested">Sugerido</option>
+            <option value="accepted">Aceptado</option>
+            <option value="needs_review">Requiere revision</option>
+            <option value="rejected">Rechazado</option>
+          </select>
         </div>
         <div className="overflow-hidden rounded-lg border border-slate-200">
           <div className="max-h-[560px] overflow-auto">
@@ -430,9 +739,23 @@ function AlertsPanel({ data }: { data: DashboardV2Response }) {
   );
 }
 
-function ActionRow({ action }: { action: DashboardV2ActionItem }) {
+function ActionRow({
+  action,
+  busy,
+  readonly,
+  onSelect,
+  onDryRun,
+  onConvert,
+}: {
+  action: DashboardV2ActionItem;
+  busy: boolean;
+  readonly: boolean;
+  onSelect: () => void;
+  onDryRun: () => void;
+  onConvert: () => void;
+}) {
   return (
-    <a href={`/acciones-recomendadas?id=${encodeURIComponent(action.id)}`} className="block rounded-lg border border-slate-200 bg-white p-3 transition hover:border-blue-200 hover:bg-blue-50/30">
+    <div className="rounded-lg border border-slate-200 bg-white p-3 transition hover:border-blue-200 hover:bg-blue-50/30">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex flex-wrap gap-2">
@@ -455,7 +778,32 @@ function ActionRow({ action }: { action: DashboardV2ActionItem }) {
           {formatDateTime(action.suggested_due_date || action.updated_at || action.created_at)}
         </div>
       </div>
-    </a>
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          onClick={onSelect}
+          className="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Ver detalle
+        </button>
+        <button
+          type="button"
+          onClick={onDryRun}
+          disabled={readonly || busy || action.status !== 'pending'}
+          className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-45"
+        >
+          {busy ? 'Validando...' : 'Dry-run'}
+        </button>
+        <button
+          type="button"
+          onClick={onConvert}
+          disabled={readonly || busy || action.status !== 'pending'}
+          className="rounded bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+        >
+          Convertir
+        </button>
+      </div>
+    </div>
   );
 }
 

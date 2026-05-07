@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { DragEvent } from 'react';
 import { getStoredValidToken, getTenantIdFromToken, getUserRoleFromToken } from '@/utils/auth';
 import { chipClass, formatDateTime, formatNumber, formatPercent, scoreClass, statusLabel } from './utils';
 
@@ -73,6 +74,12 @@ type HistoryRow = {
   reviewed_at: string | null;
 };
 
+type DragPayload = {
+  standard_code: string;
+  operation_id: string;
+  from_stage_code: string;
+};
+
 async function fetchJson(path: string, token: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -107,6 +114,8 @@ export default function DashboardV2LifecycleSection() {
   const [selectedStandard, setSelectedStandard] = useState('ALL');
   const [selectedOperation, setSelectedOperation] = useState('ALL');
   const [selectedCard, setSelectedCard] = useState<LifecycleCard | null>(null);
+  const [dragging, setDragging] = useState<DragPayload | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -114,7 +123,7 @@ export default function DashboardV2LifecycleSection() {
   const [message, setMessage] = useState('');
 
   const isViewer = ['viewer', 'cliente', 'client', 'solo_lectura', 'read_only', 'readonly', 'ejecutivo'].includes(role);
-  const canRequestMove = !isViewer && role !== 'auditor';
+  const canRequestMove = !isViewer;
   const canReview = ['admin', 'tenant_admin', 'superadmin', 'auditor'].includes(role);
 
   const activeStandards = useMemo(
@@ -252,6 +261,55 @@ export default function DashboardV2LifecycleSection() {
     }
   }
 
+  function handleDragStart(card: LifecycleCard) {
+    if (!canRequestMove || card.is_pending_confirmation || actionLoading) {
+      setError('Tu rol no permite mover esta tarjeta o existe una confirmacion pendiente.');
+      return;
+    }
+
+    setDragging({
+      standard_code: card.standard_code,
+      operation_id: card.operation_id,
+      from_stage_code: card.display_stage_code || card.effective_stage_code,
+    });
+    setMessage('');
+    setError('');
+  }
+
+  function handleDragEnd() {
+    setDragging(null);
+    setDropTarget(null);
+  }
+
+  function handleDragOver(stageCode: string, event: DragEvent<HTMLDivElement>) {
+    if (!dragging) return;
+    event.preventDefault();
+    setDropTarget(stageCode);
+  }
+
+  async function handleDrop(stageCode: string, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (!dragging) return;
+
+    const card = allCards.find((item) =>
+      item.standard_code === dragging.standard_code &&
+      item.operation_id === dragging.operation_id
+    );
+
+    setDropTarget(null);
+
+    if (!card || dragging.from_stage_code === stageCode) {
+      setDragging(null);
+      return;
+    }
+
+    try {
+      await requestMove(card, stageCode);
+    } finally {
+      setDragging(null);
+    }
+  }
+
   async function reviewRequest(card: LifecycleCard, action: 'confirmar' | 'rechazar') {
     if (!token || !card.pending_request_row_id) return;
     const confirmed = window.confirm(`${action === 'confirmar' ? 'Confirmar' : 'Rechazar'} movimiento pendiente?`);
@@ -335,7 +393,17 @@ export default function DashboardV2LifecycleSection() {
 
             <div className="grid gap-4 xl:grid-cols-4 2xl:grid-cols-7">
               {filteredColumns.map((column) => (
-                <div key={column.stage_code} className="min-h-[220px] rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div
+                  key={column.stage_code}
+                  onDragOver={(event) => handleDragOver(column.stage_code, event)}
+                  onDrop={(event) => handleDrop(column.stage_code, event)}
+                  className={[
+                    'min-h-[220px] rounded-lg border bg-slate-50 p-3 transition',
+                    dropTarget === column.stage_code
+                      ? 'border-blue-400 ring-2 ring-blue-100'
+                      : 'border-slate-200',
+                  ].join(' ')}
+                >
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <div className="text-xs font-semibold text-slate-700">{column.stage_name}</div>
                     <span className="rounded bg-white px-2 py-1 text-xs font-semibold text-slate-600">{column.items.length}</span>
@@ -347,8 +415,17 @@ export default function DashboardV2LifecycleSection() {
                       <button
                         key={card.id}
                         type="button"
+                        draggable={canRequestMove && !card.is_pending_confirmation && !actionLoading}
+                        onDragStart={() => handleDragStart(card)}
+                        onDragEnd={handleDragEnd}
                         onClick={() => setSelectedCard(card)}
-                        className="w-full rounded border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-blue-300"
+                        className={[
+                          'w-full rounded border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-blue-300',
+                          canRequestMove && !card.is_pending_confirmation ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+                          dragging?.standard_code === card.standard_code && dragging?.operation_id === card.operation_id
+                            ? 'scale-[0.99] opacity-60'
+                            : '',
+                        ].join(' ')}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
