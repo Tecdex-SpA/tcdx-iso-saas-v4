@@ -13,6 +13,8 @@ const { buildReportData } = require('../reports/services/reportData.service');
 const {
   renderExecutivePremiumTemplate,
 } = require('../reports/templates/executivePremium.template');
+const { renderControlHealthPremiumTemplate } = require('../reports/templates/controlHealthPremium.template');
+const { renderMaturityGapDiagnosticPremiumTemplate } = require('../reports/templates/maturityGapDiagnosticPremium.template');
 const {
   persistSeniorAuditorSuggestions,
   summarizeSeniorSuggestionSync,
@@ -362,6 +364,26 @@ async function getTenantById(tenantId) {
 
   return result.rowCount > 0 ? result.rows[0] : null;
 }
+
+
+function renderReportHtmlByType(reportData) {
+  const code = String(
+    reportData?.metadata?.resolved_report_type_code ||
+    reportData?.report_type_code ||
+    ''
+  ).trim();
+
+  if (code === 'control_health_report' || code === 'control_status') {
+    return renderControlHealthPremiumTemplate(reportData);
+  }
+
+  if (code === 'maturity_gap_diagnostic') {
+    return renderMaturityGapDiagnosticPremiumTemplate(reportData);
+  }
+
+  return renderExecutivePremiumTemplate(reportData);
+}
+
 
 function buildReportTitle(reportType, reportTypeCode, period, locale = 'es', profileContext = null) {
   const fallbackTitlesEs = {
@@ -2579,7 +2601,7 @@ router.post('/generate', auth, async (req, res) => {
       ...enrichedReportMetadata,
     };
 
-const html = renderExecutivePremiumTemplate(reportData, { locale });
+const html = renderReportHtmlByType(reportData);
 
     const reportTitle = buildReportTitle(reportType, resolvedReportTypeCode || report_type_code, period, locale, profileContext);
     const tenantFolder = path.join(
