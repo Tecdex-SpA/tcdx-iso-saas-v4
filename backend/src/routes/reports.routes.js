@@ -20,10 +20,41 @@ const {
 
 const {
   listCoverageForTenant,
+  getCoverageForTenantStandard,
+  assertCanGenerateReportByCoverage,
 } = require('../reports/services/reportCoverage.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
+
+const REPORT_TYPE_ALIASES = {
+  executive_summary: 'executive_iso_status',
+  control_status: 'control_health_report',
+  audit_report: 'internal_audit_report',
+};
+
+function resolveReportTypeCode(reportTypeCode) {
+  const code = String(reportTypeCode || '').trim();
+  return REPORT_TYPE_ALIASES[code] || code;
+}
+
+function getLegacyReportTypeCode(reportTypeCode) {
+  const code = String(reportTypeCode || '').trim();
+
+  const reverseAliases = Object.entries(REPORT_TYPE_ALIASES).reduce(
+    (acc, [legacyCode, premiumCode]) => {
+      acc[premiumCode] = legacyCode;
+      return acc;
+    },
+    {}
+  );
+
+  return reverseAliases[code] || code;
+}
+
+function isPremiumReportTypeCode(reportTypeCode) {
+  return Object.values(REPORT_TYPE_ALIASES).includes(String(reportTypeCode || '').trim());
+}
 
 const CHROME_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -188,6 +219,9 @@ function firstExistingPath(paths) {
 }
 
 async function getReportType(reportTypeCode) {
+  const requestedCode = String(reportTypeCode || '').trim();
+  const legacyFallbackCode = getLegacyReportTypeCode(requestedCode);
+
   const result = await pool.query(
     `
     SELECT
@@ -205,14 +239,50 @@ async function getReportType(reportTypeCode) {
       AND is_active = TRUE
     LIMIT 1
     `,
-    [reportTypeCode]
+    [requestedCode]
   );
 
-  return result.rowCount > 0 ? result.rows[0] : null;
+  if (result.rowCount > 0) {
+    return result.rows[0];
+  }
+
+  if (legacyFallbackCode && legacyFallbackCode !== requestedCode) {
+    const fallback = await pool.query(
+      `
+      SELECT
+        code,
+        name,
+        description,
+        category,
+        default_format,
+        template_key,
+        is_active,
+        sort_order,
+        metadata
+      FROM report_types
+      WHERE code = $1
+        AND is_active = TRUE
+      LIMIT 1
+      `,
+      [legacyFallbackCode]
+    );
+
+    if (fallback.rowCount > 0) {
+      return {
+        ...fallback.rows[0],
+        requested_code: requestedCode,
+        resolved_from_legacy: true,
+      };
+    }
+  }
+
+  return null;
 }
 
 async function getReportAccess(reportTypeCode, role) {
   const normalizedRole = normalizeRole(role);
+  const requestedCode = String(reportTypeCode || '').trim();
+  const legacyFallbackCode = getLegacyReportTypeCode(requestedCode);
 
   const result = await pool.query(
     `
@@ -225,16 +295,38 @@ async function getReportAccess(reportTypeCode, role) {
       AND role_code = $2
     LIMIT 1
     `,
-    [reportTypeCode, normalizedRole]
+    [requestedCode, normalizedRole]
   );
 
-  return result.rowCount > 0
-    ? result.rows[0]
-    : {
-        can_view: false,
-        can_generate: false,
-        can_schedule: false,
-      };
+  if (result.rowCount > 0) {
+    return result.rows[0];
+  }
+
+  if (legacyFallbackCode && legacyFallbackCode !== requestedCode) {
+    const fallback = await pool.query(
+      `
+      SELECT
+        can_view,
+        can_generate,
+        can_schedule
+      FROM report_access_rules
+      WHERE report_type_code = $1
+        AND role_code = $2
+      LIMIT 1
+      `,
+      [legacyFallbackCode, normalizedRole]
+    );
+
+    if (fallback.rowCount > 0) {
+      return fallback.rows[0];
+    }
+  }
+
+  return {
+    can_view: false,
+    can_generate: false,
+    can_schedule: false,
+  };
 }
 
 async function dealerHasTenantAccess(userId, tenantId) {
@@ -271,25 +363,40 @@ async function getTenantById(tenantId) {
   return result.rowCount > 0 ? result.rows[0] : null;
 }
 
-function buildReportTitle(reportType, reportTypeCode, period, locale = 'es') {
+function buildReportTitle(reportType, reportTypeCode, period, locale = 'es', profileContext = null) {
   const fallbackTitlesEs = {
     executive_summary: 'Informe para Gerencia',
+    executive_iso_status: 'Informe Ejecutivo de Estado ISO',
     audit_report: 'Informe para Auditoría',
+    internal_audit_report: 'Informe de Auditoría Interna',
     control_status: 'Informe de Control de Estado',
+    control_health_report: 'Informe de Control Health',
+    maturity_gap_diagnostic: 'Diagnóstico de Madurez y Brechas',
+    iso_risk_report: 'Informe de Riesgos ISO',
+    action_plan_report: 'Informe de Plan de Acción',
     platform_client_monthly: 'Informe Mensual de Plataforma por Cliente',
   };
 
   const fallbackTitlesEn = {
     executive_summary: 'Management Report',
+    executive_iso_status: 'ISO Executive Status Report',
     audit_report: 'Audit Report',
+    internal_audit_report: 'Internal Audit Report',
     control_status: 'Control Status Report',
+    control_health_report: 'Control Health Report',
+    maturity_gap_diagnostic: 'Maturity and Gap Diagnostic',
+    iso_risk_report: 'ISO Risk Report',
+    action_plan_report: 'Action Plan Report',
     platform_client_monthly: 'Monthly Client Platform Report',
   };
 
   const fallbackTitles = isEnglishLocale(locale) ? fallbackTitlesEn : fallbackTitlesEs;
 
   const baseTitle =
-    reportType?.name || fallbackTitles[reportTypeCode] || (isEnglishLocale(locale) ? 'Executive Report' : 'Informe Ejecutivo');
+    profileContext?.report_title ||
+    reportType?.name ||
+    fallbackTitles[reportTypeCode] ||
+    (isEnglishLocale(locale) ? 'Executive Report' : 'Informe Ejecutivo');
 
   if (!period) return baseTitle;
 
@@ -2314,7 +2421,14 @@ router.post('/generate', auth, async (req, res) => {
     const userId = getUserId(req.user);
     const userTenantId = getUserTenantId(req.user);
 
-    const { report_type_code, tenant_id, period, metadata } = req.body || {};
+    const {
+      report_type_code,
+      tenant_id,
+      period,
+      metadata,
+      standard_code,
+      version_code,
+    } = req.body || {};
 
     if (!userId) {
       return res.status(401).json({
@@ -2330,7 +2444,9 @@ router.post('/generate', auth, async (req, res) => {
       });
     }
 
-    const reportType = await getReportType(report_type_code);
+    const resolvedReportTypeCode = resolveReportTypeCode(report_type_code);
+    const legacyReportTypeCode = getLegacyReportTypeCode(resolvedReportTypeCode);
+    const reportType = await getReportType(resolvedReportTypeCode);
 
     if (!reportType) {
       return res.status(404).json({
@@ -2339,7 +2455,7 @@ router.post('/generate', auth, async (req, res) => {
       });
     }
 
-    const access = await getReportAccess(report_type_code, role);
+    const access = await getReportAccess(resolvedReportTypeCode || report_type_code, role);
 
     if (!access.can_generate) {
       return res.status(403).json({
@@ -2366,6 +2482,48 @@ router.post('/generate', auth, async (req, res) => {
       userTenantId,
       targetTenantId,
     });
+
+    const requestedStandardCode = String(
+      standard_code || metadata?.standard_code || ''
+    ).trim();
+
+    const requestedVersionCode = String(
+      version_code || metadata?.version_code || ''
+    ).trim();
+
+    let reportCoverage = null;
+    let profileContext = null;
+
+    if (requestedStandardCode) {
+      reportCoverage = await getCoverageForTenantStandard({
+        tenantId: targetTenantId,
+        standardCode: requestedStandardCode,
+        versionCode: requestedVersionCode,
+        reportTypeCode: resolvedReportTypeCode || report_type_code,
+      });
+
+      assertCanGenerateReportByCoverage(
+        reportCoverage,
+        resolvedReportTypeCode || report_type_code
+      );
+
+      profileContext = reportCoverage.profile_context || null;
+    }
+
+    const enrichedReportMetadata = {
+      ...safeObject(metadata),
+      report_type_code,
+      resolved_report_type_code: resolvedReportTypeCode || report_type_code,
+      legacy_report_type_code: legacyReportTypeCode || null,
+      standard_code: reportCoverage?.standard_code || requestedStandardCode || null,
+      version_code: reportCoverage?.version_code || requestedVersionCode || null,
+      standard_label: reportCoverage?.display_name || metadata?.standard_label || null,
+      coverage_status: reportCoverage?.coverage_status || metadata?.coverage_status || null,
+      coverage_label: reportCoverage?.coverage_label || metadata?.coverage_label || null,
+      coverage_metrics: reportCoverage?.metrics || null,
+      coverage_warnings: reportCoverage?.warnings || [],
+      profile_context: profileContext || null,
+    };
 
     const tenant = await getTenantById(targetTenantId);
 
@@ -2414,9 +2572,16 @@ router.post('/generate', auth, async (req, res) => {
       };
     }
 
-    const html = renderExecutivePremiumTemplate(reportData, { locale });
+        reportData.standard_context = reportCoverage || null;
+    reportData.profile_context = profileContext || null;
+    reportData.metadata = {
+      ...(reportData.metadata || {}),
+      ...enrichedReportMetadata,
+    };
 
-    const reportTitle = buildReportTitle(reportType, report_type_code, period, locale);
+const html = renderExecutivePremiumTemplate(reportData, { locale });
+
+    const reportTitle = buildReportTitle(reportType, resolvedReportTypeCode || report_type_code, period, locale, profileContext);
     const tenantFolder = path.join(
       __dirname,
       '..',
