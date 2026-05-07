@@ -16,6 +16,8 @@ const {
 const { renderControlHealthPremiumTemplate } = require('../reports/templates/controlHealthPremium.template');
 const { renderMaturityGapDiagnosticPremiumTemplate } = require('../reports/templates/maturityGapDiagnosticPremium.template');
 const { renderIsoRiskPremiumTemplate } = require('../reports/templates/isoRiskPremium.template');
+const { renderInternalAuditPremiumTemplate } = require('../reports/templates/internalAuditPremium.template');
+const { renderActionPlanPremiumTemplate } = require('../reports/templates/actionPlanPremium.template');
 const {
   persistSeniorAuditorSuggestions,
   summarizeSeniorSuggestionSync,
@@ -385,6 +387,14 @@ function renderReportHtmlByType(reportData) {
   if (code === 'iso_risk_report') {
     return renderIsoRiskPremiumTemplate(reportData);
   }
+  if (code === 'action_plan_report') {
+    return renderActionPlanPremiumTemplate(reportData);
+  }
+
+  if (code === 'internal_audit_report' || code === 'audit_report') {
+    return renderInternalAuditPremiumTemplate(reportData);
+  }
+
 
   return renderExecutivePremiumTemplate(reportData);
 }
