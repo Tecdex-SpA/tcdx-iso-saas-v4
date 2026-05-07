@@ -1,4 +1,15 @@
 const { createReportTranslator, reportLocaleToIntl, normalizeReportLocale } = require('../i18n/reportLocale');
+const {
+  getReportChartStyles,
+  renderKpiCards,
+  renderProgressBars,
+  renderDonut,
+  renderStatusDistribution,
+  renderTopItems,
+  renderBadge,
+  renderEmptyState,
+} = require('../charts/reportCharts.helpers');
+
 
 let activeReportLocale = 'es';
 let activeReportTranslator = createReportTranslator(activeReportLocale);
@@ -189,8 +200,18 @@ function getTenantLogo(tenant) {
 
 function getReportConfig(reportTypeCode) {
   const code = reportTypeCode || 'executive_summary';
+
+  const aliases = {
+    executive_iso_status: 'executive_summary',
+    internal_audit_report: 'audit_report',
+    control_health_report: 'control_status',
+    maturity_gap_diagnostic: 'executive_summary',
+    iso_risk_report: 'executive_summary',
+    action_plan_report: 'control_status',
+  };
+
   const known = ['executive_summary', 'audit_report', 'control_status', 'platform_client_monthly'];
-  const safeCode = known.includes(code) ? code : 'executive_summary';
+  const safeCode = known.includes(code) ? code : aliases[code] || 'executive_summary';
 
   return {
     title: tr(`reports.config.${safeCode}.title`),
@@ -434,6 +455,313 @@ function statusBadge(value) {
   return `<span class="${cls}">${escapeHtml(value || '-')}</span>`;
 }
 
+
+function getStandardContext(data) {
+  const metadata = data?.metadata || {};
+  const standardContext = data?.standard_context || null;
+  const profileContext = data?.profile_context || metadata.profile_context || standardContext?.profile_context || null;
+  const metrics = standardContext?.metrics || metadata.coverage_metrics || {};
+
+  const standardCode =
+    standardContext?.standard_code ||
+    metadata.standard_code ||
+    data?.standard_code ||
+    '';
+
+  const versionCode =
+    standardContext?.version_code ||
+    metadata.version_code ||
+    data?.version_code ||
+    '';
+
+  const displayName =
+    standardContext?.display_name ||
+    metadata.standard_label ||
+    profileContext?.display_name ||
+    (standardCode && versionCode ? `${standardCode}:${versionCode}` : '');
+
+  const coverageStatus =
+    standardContext?.coverage_status ||
+    metadata.coverage_status ||
+    '';
+
+  const coverageLabel =
+    standardContext?.coverage_label ||
+    metadata.coverage_label ||
+    '';
+
+  const warnings =
+    asArray(standardContext?.warnings).length > 0
+      ? asArray(standardContext.warnings)
+      : asArray(metadata.coverage_warnings);
+
+  return {
+    hasStandard: !!standardCode,
+    standardCode,
+    versionCode,
+    displayName,
+    coverageStatus,
+    coverageLabel,
+    coverageSeverity: standardContext?.coverage_severity || '',
+    profileContext,
+    metrics,
+    warnings,
+  };
+}
+
+function getProfileText(data, key, fallback = '') {
+  const standard = getStandardContext(data);
+  return standard.profileContext?.[key] || fallback;
+}
+
+function getSelectedStandardPill(data) {
+  const standard = getStandardContext(data);
+
+  if (!standard.hasStandard) {
+    return '';
+  }
+
+  return `<span class="pill pillStrong">${escapeHtml(standard.displayName)}</span>`;
+}
+
+function buildIsoKpiCards(data) {
+  const standard = getStandardContext(data);
+  const metrics = standard.metrics || {};
+  const { controls, evidences, findings, risks, actions } = getStats(data);
+  const score = clampPercent(controls.average_score || controls.score || data.score || metrics.avg_health_score || 0);
+
+  if (!standard.hasStandard) {
+    return [];
+  }
+
+  return [
+    {
+      label: 'Score de salud',
+      value: score,
+      unit: '%',
+      status: score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger',
+      helper: standard.displayName,
+    },
+    {
+      label: 'Cobertura catálogo',
+      value: metrics.catalog_coverage_pct || 0,
+      unit: '%',
+      status: (metrics.catalog_coverage_pct || 0) >= 80 ? 'success' : 'warning',
+      helper: 'Mapeo ISO / catálogo',
+    },
+    {
+      label: 'Cobertura operacional',
+      value: metrics.operational_coverage_pct || 0,
+      unit: '%',
+      status: (metrics.operational_coverage_pct || 0) >= 70 ? 'success' : 'warning',
+      helper: 'Controles, salud y evidencias',
+    },
+    {
+      label: 'Cobertura evidencias',
+      value: metrics.evidence_coverage_pct || 0,
+      unit: '%',
+      status: (metrics.evidence_coverage_pct || 0) >= 70 ? 'success' : 'danger-soft',
+      helper: `${metrics.evidence_count || evidences.total_evidences || 0}/${metrics.expected_evidence_count || 0} esperadas`,
+    },
+    {
+      label: 'Controles tenant',
+      value: metrics.tenant_controls_count || controls.total_controls || 0,
+      status: 'neutral',
+      helper: `${metrics.health_records_count || 0} con salud calculada`,
+    },
+    {
+      label: 'Riesgos / matrices',
+      value: metrics.risk_runs_count || risks.total_risks || 0,
+      status: (metrics.risk_runs_count || 0) > 0 ? 'success' : 'warning',
+      helper: 'Ejecuciones de matriz ISO',
+    },
+    {
+      label: 'Hallazgos abiertos',
+      value: findings.open_findings || 0,
+      status: (findings.open_findings || 0) > 0 ? 'warning' : 'success',
+      helper: 'Requieren seguimiento',
+    },
+    {
+      label: 'Acciones abiertas',
+      value: actions.open_actions || actions.open_action_plans || 0,
+      status: (actions.overdue_actions || 0) > 0 ? 'danger' : 'neutral',
+      helper: `${actions.overdue_actions || 0} vencidas`,
+    },
+  ];
+}
+
+function buildControlHealthDistribution(data) {
+  const standard = getStandardContext(data);
+  const metrics = standard.metrics || {};
+  const { controls } = getStats(data);
+
+  const healthy = Number(metrics.healthy_controls_count ?? controls.healthy_controls ?? 0);
+  const attention = Number(metrics.attention_controls_count ?? controls.warning_controls ?? 0);
+  const deteriorated = Number(metrics.deteriorated_controls_count ?? controls.critical_controls ?? 0);
+
+  return [
+    { label: 'Saludables', value: healthy, status: 'success' },
+    { label: 'En atención', value: attention, status: 'warning' },
+    { label: 'Deteriorados', value: deteriorated, status: 'danger' },
+  ].filter((item) => item.value > 0);
+}
+
+function buildEvidenceDistribution(data) {
+  const standard = getStandardContext(data);
+  const metrics = standard.metrics || {};
+  const { evidences } = getStats(data);
+
+  return [
+    {
+      label: 'Aprobadas',
+      value: Number(metrics.approved_evidence_count ?? evidences.approved_evidences ?? 0),
+      status: 'success',
+    },
+    {
+      label: 'Pendientes',
+      value: Number(metrics.pending_evidence_count ?? evidences.pending_evidences ?? 0),
+      status: 'warning',
+    },
+    {
+      label: 'Vencidas',
+      value: Number(metrics.expired_evidence_count ?? evidences.expired_evidences ?? 0),
+      status: 'danger',
+    },
+  ].filter((item) => item.value > 0);
+}
+
+function buildCoverageBars(data) {
+  const standard = getStandardContext(data);
+  const metrics = standard.metrics || {};
+
+  if (!standard.hasStandard) {
+    return [];
+  }
+
+  return [
+    {
+      label: 'Catálogo técnico',
+      value: metrics.catalog_coverage_pct || 0,
+      status: (metrics.catalog_coverage_pct || 0) >= 80 ? 'success' : 'warning',
+    },
+    {
+      label: 'Controles tenant',
+      value: metrics.tenant_control_coverage_pct || 0,
+      status: (metrics.tenant_control_coverage_pct || 0) >= 80 ? 'success' : 'warning',
+    },
+    {
+      label: 'Salud controles',
+      value: metrics.health_coverage_pct || 0,
+      status: (metrics.health_coverage_pct || 0) >= 70 ? 'success' : 'warning',
+    },
+    {
+      label: 'Evidencias',
+      value: metrics.evidence_coverage_pct || 0,
+      status: (metrics.evidence_coverage_pct || 0) >= 70 ? 'success' : 'danger-soft',
+    },
+    {
+      label: 'Operacional',
+      value: metrics.operational_coverage_pct || 0,
+      status: (metrics.operational_coverage_pct || 0) >= 70 ? 'success' : 'warning',
+    },
+  ];
+}
+
+function renderIsoExecutiveBlock(data) {
+  const standard = getStandardContext(data);
+
+  if (!standard.hasStandard) {
+    return '';
+  }
+
+  const profile = standard.profileContext || {};
+  const metrics = standard.metrics || {};
+  const focus = profile.executive_focus || 'cumplimiento, controles, evidencias, riesgos y mejora continua';
+  const managementSystem = profile.management_system || 'Sistema de Gestión';
+  const mainQuestion = profile.main_question || '¿Cuál es el estado del sistema de gestión evaluado?';
+  const decision = profile.management_decision || 'Priorizar acciones, responsables y fechas de cierre.';
+  const warnings = asArray(standard.warnings).slice(0, 4);
+
+  const badges = [
+    renderBadge(standard.coverageLabel || 'Cobertura evaluada', standard.coverageStatus || 'neutral'),
+    profile.is_default_profile ? renderBadge('Perfil genérico', 'neutral') : renderBadge(profile.profile_key || profile.requested_key || 'Perfil ISO', 'success'),
+  ].join('');
+
+  const warningItems = warnings.length
+    ? warnings.map((warning) => `<li>${escapeHtml(cleanText(warning, 180))}</li>`).join('')
+    : `<li>${escapeHtml('La norma tiene cobertura suficiente para informes premium.')}</li>`;
+
+  return `
+    <section class="isoExecutiveBlock">
+      <div class="isoBlockHeader">
+        <div>
+          <div class="isoKicker">Contexto normativo seleccionado</div>
+          <h2>${escapeHtml(standard.displayName)}</h2>
+          <p>${escapeHtml(managementSystem)}</p>
+        </div>
+        <div class="isoBadgeWrap">${badges}</div>
+      </div>
+
+      <div class="isoGrid">
+        <div class="isoTextCard">
+          <h3>Foco ejecutivo</h3>
+          <p>${escapeHtml(focus)}</p>
+        </div>
+
+        <div class="isoTextCard">
+          <h3>Pregunta gerencial</h3>
+          <p>${escapeHtml(mainQuestion)}</p>
+        </div>
+
+        <div class="isoTextCard">
+          <h3>Decisión sugerida</h3>
+          <p>${escapeHtml(decision)}</p>
+        </div>
+      </div>
+
+      ${renderKpiCards(buildIsoKpiCards(data), { columns: 4 })}
+
+      <div class="twoCol isoChartsGrid">
+        ${renderProgressBars(buildCoverageBars(data), { title: 'Cobertura para generación de informes' })}
+        ${renderDonut(buildControlHealthDistribution(data), {
+          title: 'Distribución de salud de controles',
+          centerLabel: 'Controles',
+        })}
+      </div>
+
+      <div class="twoCol isoChartsGrid">
+        ${renderStatusDistribution(buildEvidenceDistribution(data), { title: 'Estado de evidencias' })}
+        ${renderTopItems([
+          {
+            title: 'Controles sin responsable asignado',
+            description: 'Debe completarse la gobernanza operativa del sistema de gestión.',
+            value: metrics.tenant_controls_count ? (metrics.tenant_controls_count - (metrics.controls_with_responsible_count || 0)) : 0,
+            status: metrics.controls_with_responsible_count > 0 ? 'warning' : 'danger-soft',
+          },
+          {
+            title: 'Evidencias vencidas',
+            description: 'Elementos documentales que requieren renovación o reemplazo.',
+            value: metrics.expired_evidence_count || 0,
+            status: (metrics.expired_evidence_count || 0) > 0 ? 'danger' : 'success',
+          },
+          {
+            title: 'Último diagnóstico',
+            description: metrics.last_assessment_at ? formatDateTimeEs(metrics.last_assessment_at) : 'Sin diagnóstico reciente',
+            value: metrics.assessments_count || 0,
+            status: (metrics.assessments_count || 0) > 0 ? 'success' : 'warning',
+          },
+        ], { title: 'Puntos de atención para gerencia', valueLabel: 'Total' })}
+      </div>
+
+      <div class="isoWarnings">
+        <strong>Lectura ejecutiva:</strong>
+        <ul>${warningItems}</ul>
+      </div>
+    </section>
+  `;
+}
+
+
 function renderPage1(data) {
   const config = getReportConfig(data.report_type_code);
   const { controls, evidences, findings, risks, actions } = getStats(data);
@@ -476,7 +804,7 @@ function renderPage1(data) {
       ${card(tr('page1.reportIdentification'), `
         <div class="infoLine"><span>${escapeHtml(tr('page1.company'))}</span><strong>${escapeHtml(data.tenant?.name || 'Cliente')}</strong></div>
         <div class="infoLine"><span>${escapeHtml(tr('page1.reportType'))}</span><strong>${escapeHtml(config.badge)}</strong></div>
-        <div class="infoLine"><span>${escapeHtml(tr('page1.activeStandards'))}</span><div class="pillWrap">${standardsHtml}</div></div>
+        <div class="infoLine"><span>${escapeHtml(tr('page1.activeStandards'))}</span><div class="pillWrap">${standardsHtml}${getSelectedStandardPill(data)}</div></div>
       `)}
 
       ${card(tr('page1.executivePriority'), `
@@ -495,6 +823,8 @@ function renderPage1(data) {
       ${miniMetric(tr('page1.openFindings'), fmtNumber(findings.open_findings), tr('page1.followUp'))}
       ${miniMetric(tr('page1.criticalRisks'), fmtNumber(risks.critical_risks || risks.high_risks || 0), tr('page1.exposure'))}
     </div>
+
+    ${renderIsoExecutiveBlock(data)}
   `;
 }
 
@@ -961,6 +1291,7 @@ function renderLifecyclePages(data) {
 
 function renderStyles() {
   return `
+    ${getReportChartStyles()}
     <style>
       @page {
         size: Letter;
@@ -1464,7 +1795,126 @@ function renderStyles() {
         font-size: 8px;
         margin: 1px 0;
       }
-    </style>
+    
+      .isoExecutiveBlock {
+        margin-top: 7mm;
+        padding: 5mm;
+        border: 1px solid #DCE7F3;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #F8FAFC 0%, #FFFFFF 58%, #F0F9FF 100%);
+        break-inside: avoid;
+      }
+
+      .isoBlockHeader {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8mm;
+        margin-bottom: 4mm;
+      }
+
+      .isoKicker {
+        color: #2563EB;
+        font-size: 9px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-bottom: 1.5mm;
+      }
+
+      .isoBlockHeader h2 {
+        margin: 0;
+        color: #0B2F4F;
+        font-size: 18px;
+        font-weight: 900;
+      }
+
+      .isoBlockHeader p {
+        margin: 1mm 0 0;
+        color: #64748B;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .isoBadgeWrap {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 1.5mm;
+        max-width: 72mm;
+      }
+
+      .isoGrid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 3mm;
+        margin: 4mm 0;
+      }
+
+      .isoTextCard {
+        border: 1px solid #E2E8F0;
+        background: #FFFFFF;
+        border-radius: 14px;
+        padding: 3.5mm;
+      }
+
+      .isoTextCard h3 {
+        margin: 0 0 1.5mm;
+        color: #0F172A;
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .isoTextCard p {
+        margin: 0;
+        color: #475569;
+        font-size: 10px;
+        line-height: 1.45;
+      }
+
+      .isoChartsGrid {
+        margin-top: 3mm;
+      }
+
+      .isoChartsGrid .tcdx-chart-block {
+        margin: 0;
+        min-height: 62mm;
+      }
+
+      .isoWarnings {
+        margin-top: 4mm;
+        border: 1px solid #FDE68A;
+        background: #FFFBEB;
+        color: #92400E;
+        border-radius: 14px;
+        padding: 3.5mm;
+        font-size: 10.5px;
+        line-height: 1.45;
+      }
+
+      .isoWarnings strong {
+        display: block;
+        margin-bottom: 1.5mm;
+        font-weight: 900;
+      }
+
+      .isoWarnings ul {
+        margin: 0;
+        padding-left: 4mm;
+      }
+
+      .isoWarnings li {
+        margin-bottom: 1mm;
+      }
+
+      .pillStrong {
+        background: #EFF6FF;
+        border-color: #BFDBFE;
+        color: #1D4ED8;
+        font-weight: 900;
+      }
+
+</style>
   `;
 }
 
