@@ -456,12 +456,89 @@ function statusBadge(value) {
 }
 
 
-function getStandardContext(data) { return getScopedStandardContext(data); }
+function getStandardContext(data) {
+  const metadata = data?.metadata || {};
+  const standardContext = data?.standard_context || null;
+  const profileContext =
+    data?.profile_context ||
+    metadata.profile_context ||
+    standardContext?.profile_context ||
+    null;
 
-function getProfileText(data, key, fallback = '') {
-  const standard = getStandardContext(data);
-  return standard.profileContext?.[key] || fallback;
+  const metrics =
+    standardContext?.metrics ||
+    metadata.coverage_metrics ||
+    {};
+
+  const standardCodeRaw =
+    standardContext?.standard_code ||
+    metadata.standard_code ||
+    data?.standard_code ||
+    profileContext?.standard_code ||
+    '';
+
+  const normalizedCode = String(standardCodeRaw || '')
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/ISO\/IEC/g, 'ISO')
+    .replace(/ISO-/g, 'ISO')
+    .replace(/:/g, '');
+
+  const standardCode = normalizedCode.includes('27001')
+    ? 'ISO27001'
+    : normalizedCode.includes('9001')
+      ? 'ISO9001'
+      : normalizedCode;
+
+  const versionCode =
+    standardContext?.version_code ||
+    metadata.version_code ||
+    data?.version_code ||
+    profileContext?.version_code ||
+    '';
+
+  const displayName =
+    standardContext?.display_name ||
+    metadata.standard_label ||
+    profileContext?.display_name ||
+    (standardCode && versionCode ? `${standardCode}:${versionCode}` : '');
+
+  const coverageStatus =
+    standardContext?.coverage_status ||
+    metadata.coverage_status ||
+    '';
+
+  const coverageLabel =
+    standardContext?.coverage_label ||
+    metadata.coverage_label ||
+    '';
+
+  const warnings =
+    asArray(standardContext?.warnings).length > 0
+      ? asArray(standardContext.warnings)
+      : asArray(metadata.coverage_warnings);
+
+  return {
+    hasStandard: !!standardCode,
+    standardCode,
+    standard_code: standardCode,
+    versionCode,
+    version_code: versionCode,
+    displayName,
+    display_name: displayName,
+    coverageStatus,
+    coverage_status: coverageStatus,
+    coverageLabel,
+    coverage_label: coverageLabel,
+    coverageSeverity: standardContext?.coverage_severity || metadata.coverage_severity || '',
+    coverage_severity: standardContext?.coverage_severity || metadata.coverage_severity || '',
+    profileContext,
+    profile_context: profileContext,
+    metrics,
+    warnings,
+  };
 }
+
 
 function getSelectedStandardPill(data) {
   const standard = getStandardContext(data);
