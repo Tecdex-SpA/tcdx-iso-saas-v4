@@ -18,6 +18,10 @@ const {
   summarizeSeniorSuggestionSync,
 } = require('../services/seniorAuditorSuggestions.service');
 
+const {
+  listCoverageForTenant,
+} = require('../reports/services/reportCoverage.service');
+
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
 
@@ -604,6 +608,117 @@ router.get('/clients', auth, async (req, res) => {
     });
   }
 });
+
+
+// =====================================================
+// GET /api/reports/standards
+// Devuelve normas activas del tenant con cobertura para informes.
+// Usado por Exportes para selector ISO/version y badges de cobertura.
+// =====================================================
+router.get('/standards', auth, async (req, res) => {
+  try {
+    const locale = resolveLocale(req);
+    const originalRole =
+      req.user?.role || req.user?.user_role || req.user?.userRole;
+
+    const role = normalizeRole(originalRole);
+    const userId = getUserId(req.user);
+    const userTenantId = getUserTenantId(req.user);
+
+    const {
+      tenant_id,
+      report_type_code,
+    } = req.query || {};
+
+    if (!userId) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Usuario no identificado en token',
+      });
+    }
+
+    const targetTenantId = await resolveTargetTenantId({
+      role,
+      userId,
+      userTenantId,
+      requestedTenantId: tenant_id || null,
+    });
+
+    await ensureTargetTenantAccess({
+      role,
+      userId,
+      userTenantId,
+      targetTenantId,
+    });
+
+    const tenant = await getTenantById(targetTenantId);
+
+    if (!tenant) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Cliente no encontrado',
+      });
+    }
+
+    const coverage = await listCoverageForTenant({
+      tenantId: targetTenantId,
+      reportTypeCode: report_type_code || 'executive_iso_status',
+    });
+
+    const data = coverage.map((item) => ({
+      tenant_id: item.tenant_id,
+      standard_code: item.standard_code,
+      version_code: item.version_code,
+      label: item.display_name || `${item.standard_code}:${item.version_code}`,
+      display_name: item.display_name || `${item.standard_code}:${item.version_code}`,
+
+      coverage_status: item.coverage_status,
+      coverage_label: item.coverage_label,
+      coverage_severity: item.coverage_severity,
+
+      can_generate_executive: item.can_generate_executive,
+      can_generate_operational: item.can_generate_operational,
+      can_generate_audit: item.can_generate_audit,
+
+      profile_key: item.profile_context?.profile_key || null,
+      is_default_profile: item.profile_context?.is_default_profile === true,
+      management_system: item.profile_context?.management_system || null,
+      executive_focus: item.profile_context?.executive_focus || null,
+      risk_language: item.profile_context?.risk_language || null,
+      evidence_focus: item.profile_context?.evidence_focus || null,
+      report_title: item.profile_context?.report_title || null,
+      chart_priority: item.profile_context?.chart_priority || [],
+
+      metrics: item.metrics,
+      warnings: item.warnings || [],
+    }));
+
+    return res.json({
+      ok: true,
+      scope: {
+        original_role: originalRole || null,
+        role,
+        locale,
+        tenant_id: userTenantId || null,
+        target_tenant_id: targetTenantId,
+        is_platform: isPlatformRole(role),
+        is_dealer: isDealerRole(role),
+      },
+      tenant,
+      data,
+    });
+  } catch (error) {
+    console.error('ERROR GET REPORT STANDARDS:', error);
+
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || 'Error obteniendo normas disponibles para reportes',
+      code: error.code || 'REPORT_STANDARDS_ERROR',
+      ...errorDetail(error),
+    });
+  }
+});
+
 
 // =====================================================
 // GET /api/reports/exports
