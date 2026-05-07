@@ -37,6 +37,112 @@ export type DashboardV2Priority = {
   route?: string | null;
 };
 
+export type DashboardV2ActionItem = {
+  id: string;
+  standard_code?: string | null;
+  source_module?: string | null;
+  suggestion_type?: string | null;
+  target_record_type?: string | null;
+  title: string;
+  description?: string | null;
+  rationale?: string | null;
+  priority?: string | null;
+  status?: string | null;
+  suggested_owner?: string | null;
+  suggested_due_date?: string | null;
+  created_record_type?: string | null;
+  created_record_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type DashboardV2ActionsPanel = {
+  summary: {
+    total: number;
+    pending: number;
+    converted: number;
+    overdue: number;
+    pending_approval: number;
+    critical: number;
+    open_action_plans: number;
+    open_findings: number;
+    open_nonconformities: number;
+  };
+  by_standard: Array<Record<string, number | string | null>>;
+  recent: DashboardV2ActionItem[];
+  work_pending: Array<Record<string, number | string | null>>;
+  data_quality?: string;
+};
+
+export type DashboardV2RiskItem = {
+  id: string;
+  standard_code?: string | null;
+  version_code?: string | null;
+  risk_code?: string | null;
+  risk_title: string;
+  risk_description?: string | null;
+  risk_category?: string | null;
+  asset_name?: string | null;
+  asset_type?: string | null;
+  asset_criticality?: string | null;
+  inherent_risk_score?: number | string | null;
+  inherent_risk_level?: string | null;
+  residual_risk_score?: number | string | null;
+  residual_risk_level?: string | null;
+  treatment_strategy?: string | null;
+  status?: string | null;
+  confidence?: number | string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type DashboardV2RisksPanel = {
+  summary: {
+    total: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    without_owner: number;
+    without_treatment: number;
+    upcoming_due: number;
+  };
+  by_standard: Array<Record<string, number | string | null>>;
+  priority_risks: DashboardV2RiskItem[];
+  all_risks: DashboardV2RiskItem[];
+  data_quality?: string;
+};
+
+export type DashboardV2KpiItem = {
+  id?: string;
+  kpi_id?: string;
+  code?: string;
+  name?: string;
+  category?: string | null;
+  unit?: string | null;
+  standard_code?: string | null;
+  value?: number | string | null;
+  numerator_value?: number | string | null;
+  denominator_value?: number | string | null;
+  status_color?: string | null;
+  calculated_at?: string | null;
+};
+
+export type DashboardV2KpisPanel = {
+  summary: {
+    measured_kpis: number;
+    green: number;
+    yellow: number;
+    red: number;
+    gray: number;
+    executive_score: number;
+    last_calculated_at?: string | null;
+  };
+  by_standard: Array<Record<string, number | string | null>>;
+  items: DashboardV2KpiItem[];
+  data_quality?: string;
+};
+
 export type DashboardV2Tab = {
   key: string;
   title: string;
@@ -103,6 +209,12 @@ export type DashboardV2Response = {
       last_calculated_at?: string | null;
       data_quality?: string;
     };
+  };
+  operational_panels?: {
+    actions?: DashboardV2ActionsPanel;
+    risks?: DashboardV2RisksPanel;
+    kpis?: DashboardV2KpisPanel;
+    alerts?: DashboardV2Alert[];
   };
   alerts: DashboardV2Alert[];
   priorities: DashboardV2Priority[];

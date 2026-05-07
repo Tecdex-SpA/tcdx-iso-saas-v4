@@ -31,4 +31,56 @@ router.get('/summary', async (req, res) => {
   }
 });
 
+router.get('/actions', async (req, res) => {
+  try {
+    const data = await dashboardV2.getActions(req.user);
+    return res.json({
+      ok: true,
+      ...data,
+      data,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.get('/risks', async (req, res) => {
+  try {
+    const data = await dashboardV2.getRisks(req.user);
+    return res.json({
+      ok: true,
+      ...data,
+      data,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.get('/kpis', async (req, res) => {
+  try {
+    const data = await dashboardV2.getKpis(req.user);
+    return res.json({
+      ok: true,
+      ...data,
+      data,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.get('/alerts', async (req, res) => {
+  try {
+    const data = await dashboardV2.getAlerts(req.user);
+    return res.json({
+      ok: true,
+      ...data,
+      data,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
 module.exports = router;
