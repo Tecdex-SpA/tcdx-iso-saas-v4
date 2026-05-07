@@ -2,12 +2,31 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getStoredValidToken, getTenantIdFromToken } from '@/utils/auth';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { chipClass, formatDateTime, formatNumber, formatPercent, priorityClass, scoreClass, statusLabel } from './utils';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   'http://192.168.100.120:3000';
+
+const HEALTH_COLORS: Record<string, string> = {
+  saludable: '#059669',
+  atencion: '#d97706',
+  deteriorado: '#f97316',
+  critico: '#e11d48',
+};
 
 type HealthSummary = {
   tenant_id: string;
@@ -247,6 +266,24 @@ export default function DashboardV2HealthSection() {
     () => data.standards.map((standard) => standard.standard_code).filter(Boolean).sort(),
     [data.standards]
   );
+  const healthDistribution = useMemo(() => {
+    if (!data.summary) return [];
+    return [
+      { name: 'Saludables', key: 'saludable', value: Number(data.summary.healthy_controls || 0) },
+      { name: 'Atencion', key: 'atencion', value: Number(data.summary.attention_controls || 0) },
+      { name: 'Deteriorados', key: 'deteriorado', value: Number(data.summary.deteriorated_controls || 0) },
+      { name: 'Criticos', key: 'critico', value: Number(data.summary.critical_controls || 0) },
+    ].filter((item) => item.value > 0);
+  }, [data.summary]);
+  const healthByStandard = useMemo(() => {
+    return data.standards.map((standard) => ({
+      standard_code: standard.standard_code,
+      saludable: Number(standard.healthy_controls || 0),
+      atencion: Number(standard.attention_controls || 0),
+      deteriorado: Number(standard.deteriorated_controls || 0),
+      critico: Number(standard.critical_controls || 0),
+    }));
+  }, [data.standards]);
 
   async function refreshHealth() {
     if (!token) return;
@@ -376,6 +413,57 @@ export default function DashboardV2HealthSection() {
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
             <div className="space-y-6">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-base font-semibold text-slate-950">Distribucion de salud</h3>
+                  <div className="mt-4 h-64">
+                    {healthDistribution.length === 0 ? (
+                      <Empty text="Sin distribucion de salud calculada." />
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={healthDistribution}
+                            dataKey="value"
+                            innerRadius={56}
+                            outerRadius={92}
+                            paddingAngle={3}
+                            label={({ name, value }) => `${name}: ${value}`}
+                          >
+                            {healthDistribution.map((entry) => (
+                              <Cell key={entry.key} fill={HEALTH_COLORS[entry.key]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-base font-semibold text-slate-950">Estado por norma</h3>
+                  <div className="mt-4 h-64">
+                    {healthByStandard.length === 0 ? (
+                      <Empty text="Sin salud por norma calculada." />
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={healthByStandard}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="standard_code" tick={{ fontSize: 11 }} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                          <Tooltip />
+                          <Bar dataKey="saludable" stackId="a" fill={HEALTH_COLORS.saludable} />
+                          <Bar dataKey="atencion" stackId="a" fill={HEALTH_COLORS.atencion} />
+                          <Bar dataKey="deteriorado" stackId="a" fill={HEALTH_COLORS.deteriorado} />
+                          <Bar dataKey="critico" stackId="a" fill={HEALTH_COLORS.critico} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="text-base font-semibold text-slate-950">Salud por norma contratada</h3>
                 <div className="mt-4 grid gap-3 lg:grid-cols-2">

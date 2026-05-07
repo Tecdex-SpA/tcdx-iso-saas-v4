@@ -1,6 +1,20 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import type {
   DashboardV2ActionItem,
   DashboardV2Alert,
@@ -18,6 +32,13 @@ import {
   priorityClass,
   statusLabel,
 } from './utils';
+
+const KPI_COLORS: Record<string, string> = {
+  green: '#059669',
+  yellow: '#d97706',
+  red: '#e11d48',
+  gray: '#94a3b8',
+};
 
 type Props = {
   activeTab: string;
@@ -225,6 +246,25 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
   const panel = data.operational_panels?.kpis;
   const summary = panel?.summary;
   const items = panel?.items || [];
+  const kpiDistribution = [
+    { name: 'Verdes', key: 'green', value: Number(summary?.green || 0) },
+    { name: 'Amarillos', key: 'yellow', value: Number(summary?.yellow || 0) },
+    { name: 'Rojos', key: 'red', value: Number(summary?.red || 0) },
+    { name: 'Grises', key: 'gray', value: Number(summary?.gray || 0) },
+  ].filter((item) => item.value > 0);
+  const kpiByStandard = (panel?.by_standard || []).map((row) => ({
+    standard_code: String(row.standard_code || 'Global'),
+    green: Number(row.green || 0),
+    yellow: Number(row.yellow || 0),
+    red: Number(row.red || 0),
+  }));
+  const trendItems = items
+    .filter((item) => Number.isFinite(Number(item.value)))
+    .slice(0, 8)
+    .map((item, index) => ({
+      name: item.code || `KPI ${index + 1}`,
+      value: Number(item.value || 0),
+    }));
 
   return (
     <Panel title="KPIs ejecutivos" actionHref="/dashboard-kpi">
@@ -238,8 +278,52 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-semibold text-slate-950">Distribucion visual KPI</h3>
+          <div className="mt-4 h-64">
+            {kpiDistribution.length === 0 ? (
+              <Empty text="Sin distribucion KPI calculada." />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={kpiDistribution}
+                    dataKey="value"
+                    innerRadius={58}
+                    outerRadius={92}
+                    paddingAngle={3}
+                    label={({ name, value }) => `${name}: ${value}`}
+                  >
+                    {kpiDistribution.map((entry) => (
+                      <Cell key={entry.key} fill={KPI_COLORS[entry.key]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <h3 className="text-sm font-semibold text-slate-950">KPIs por norma contratada</h3>
+          <div className="mt-4 h-64">
+            {kpiByStandard.length === 0 ? (
+              <Empty text="Sin KPIs por norma con datos suficientes." />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={kpiByStandard}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="standard_code" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="green" name="Verdes" stackId="a" fill={KPI_COLORS.green} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="yellow" name="Amarillos" stackId="a" fill={KPI_COLORS.yellow} />
+                  <Bar dataKey="red" name="Rojos" stackId="a" fill={KPI_COLORS.red} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
           <div className="mt-3 space-y-2">
             {(panel?.by_standard || []).length === 0 && <Empty text="Sin KPIs por norma con datos suficientes." />}
             {(panel?.by_standard || []).map((row, index) => (
@@ -255,6 +339,26 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
+          <h3 className="text-sm font-semibold text-slate-950">Microtendencia KPI</h3>
+          <p className="mt-1 text-xs text-slate-500">Serie compacta con los ultimos valores calculados disponibles.</p>
+          <div className="mt-4 h-56">
+            {trendItems.length === 0 ? (
+              <Empty text="Sin valores numericos suficientes para graficar tendencia." />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendItems}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-12} textAnchor="end" height={46} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
