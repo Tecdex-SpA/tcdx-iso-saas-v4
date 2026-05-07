@@ -4,10 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getStoredValidToken } from '@/utils/auth';
 import DashboardV2Header from './DashboardV2Header';
 import DashboardV2Panel from './DashboardV2Panel';
-import DashboardV2StandardCard from './DashboardV2StandardCard';
+import DashboardV2PersonalizedLayout, {
+  DEFAULT_DASHBOARD_V2_LAYOUT,
+  normalizeDashboardV2Layout,
+} from './DashboardV2PersonalizedLayout';
 import DashboardV2Tabs from './DashboardV2Tabs';
-import type { DashboardV2Response } from './types';
-import { chipClass, statusLabel } from './utils';
+import type { DashboardV2BlockKey, DashboardV2Layout, DashboardV2Response } from './types';
+import { statusLabel } from './utils';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -17,6 +20,16 @@ const API_BASE_URL =
 type ApiEnvelope = Partial<DashboardV2Response> & {
   ok?: boolean;
   data?: DashboardV2Response;
+  error?: string;
+};
+
+type PreferencesEnvelope = {
+  ok?: boolean;
+  data?: {
+    layout_json?: Partial<DashboardV2Layout>;
+    is_default?: boolean;
+  };
+  layout_json?: Partial<DashboardV2Layout>;
   error?: string;
 };
 
@@ -125,8 +138,13 @@ export default function DashboardV2() {
   const [token, setToken] = useState<string | null>(null);
   const [data, setData] = useState<DashboardV2Response>(emptyData());
   const [activeTab, setActiveTab] = useState('resumen');
+  const [layout, setLayout] = useState<DashboardV2Layout>(DEFAULT_DASHBOARD_V2_LAYOUT);
+  const [savedLayout, setSavedLayout] = useState<DashboardV2Layout>(DEFAULT_DASHBOARD_V2_LAYOUT);
+  const [editMode, setEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [savingLayout, setSavingLayout] = useState(false);
   const [error, setError] = useState('');
+  const [layoutMessage, setLayoutMessage] = useState('');
 
   const loadSummary = useCallback(async (activeToken: string) => {
     const response = await fetch(`${API_BASE_URL}/api/dashboard-v2/summary`, {
@@ -152,13 +170,41 @@ export default function DashboardV2() {
     return (json.data || json) as DashboardV2Response;
   }, []);
 
+  const loadPreferences = useCallback(async (activeToken: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/dashboard-v2/preferences`, {
+      headers: { Authorization: `Bearer ${activeToken}` },
+    });
+
+    const text = await response.text();
+    let json: PreferencesEnvelope | null = null;
+
+    try {
+      json = text ? JSON.parse(text) as PreferencesEnvelope : null;
+    } catch {
+      return DEFAULT_DASHBOARD_V2_LAYOUT;
+    }
+
+    if (!response.ok || json?.ok === false || !json) {
+      setLayoutMessage(json?.error || 'No fue posible cargar preferencias; se usara el diseno predeterminado.');
+      return DEFAULT_DASHBOARD_V2_LAYOUT;
+    }
+
+    return normalizeDashboardV2Layout(json.data?.layout_json || json.layout_json || DEFAULT_DASHBOARD_V2_LAYOUT);
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!token) return;
 
     try {
       setLoading(true);
       setError('');
-      const next = await loadSummary(token);
+      setLayoutMessage('');
+      const [next, nextLayout] = await Promise.all([
+        loadSummary(token),
+        loadPreferences(token),
+      ]);
+      setLayout(nextLayout);
+      setSavedLayout(nextLayout);
       setData({
         ...emptyData(),
         ...next,
@@ -232,7 +278,7 @@ export default function DashboardV2() {
     } finally {
       setLoading(false);
     }
-  }, [loadSummary, token]);
+  }, [loadPreferences, loadSummary, token]);
 
   useEffect(() => {
     const validToken = getStoredValidToken();
@@ -252,6 +298,93 @@ export default function DashboardV2() {
     () => [...data.active_standards].sort((a, b) => Number(a.readiness_score || 0) - Number(b.readiness_score || 0)),
     [data.active_standards]
   );
+
+  const layoutDirty = useMemo(
+    () => JSON.stringify(layout) !== JSON.stringify(savedLayout),
+    [layout, savedLayout]
+  );
+
+  const moveBlock = (from: DashboardV2BlockKey, to: DashboardV2BlockKey) => {
+    setLayout((current) => {
+      const order = [...current.order];
+      const fromIndex = order.indexOf(from);
+      const toIndex = order.indexOf(to);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      order.splice(fromIndex, 1);
+      order.splice(toIndex, 0, from);
+      return { ...current, order };
+    });
+  };
+
+  const toggleCollapse = (block: DashboardV2BlockKey) => {
+    setLayout((current) => ({
+      ...current,
+      collapsed: {
+        ...current.collapsed,
+        [block]: current.collapsed[block] !== true,
+      },
+    }));
+  };
+
+  const saveLayout = async () => {
+    if (!token) return;
+    try {
+      setSavingLayout(true);
+      setLayoutMessage('');
+      const response = await fetch(`${API_BASE_URL}/api/dashboard-v2/preferences`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dashboard_key: 'dashboard_v2',
+          layout_json: layout,
+        }),
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok || json?.ok === false) {
+        throw new Error(json?.error || 'No fue posible guardar el diseno.');
+      }
+      const nextLayout = normalizeDashboardV2Layout(json?.data?.layout_json || json?.layout_json || layout);
+      setLayout(nextLayout);
+      setSavedLayout(nextLayout);
+      setLayoutMessage('Diseno guardado para tu usuario.');
+      setEditMode(false);
+    } catch (err) {
+      setLayoutMessage(err instanceof Error ? err.message : 'No fue posible guardar el diseno.');
+    } finally {
+      setSavingLayout(false);
+    }
+  };
+
+  const resetLayout = async () => {
+    if (!token) return;
+    const confirmed = window.confirm('Restaurar el diseno predeterminado de Dashboard v2 para tu usuario?');
+    if (!confirmed) return;
+
+    try {
+      setSavingLayout(true);
+      setLayoutMessage('');
+      const response = await fetch(`${API_BASE_URL}/api/dashboard-v2/preferences`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok || json?.ok === false) {
+        throw new Error(json?.error || 'No fue posible restaurar el diseno.');
+      }
+      const nextLayout = normalizeDashboardV2Layout(json?.data?.layout_json || json?.layout_json || DEFAULT_DASHBOARD_V2_LAYOUT);
+      setLayout(nextLayout);
+      setSavedLayout(nextLayout);
+      setLayoutMessage('Diseno predeterminado restaurado.');
+      setEditMode(false);
+    } catch (err) {
+      setLayoutMessage(err instanceof Error ? err.message : 'No fue posible restaurar el diseno.');
+    } finally {
+      setSavingLayout(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#f6f8fb] px-4 py-6 text-slate-950 lg:px-8">
@@ -296,38 +429,70 @@ export default function DashboardV2() {
 
         {!loading && !error && standards.length > 0 && (
           <>
-            <section>
-              <div className="mb-3 flex items-center justify-between">
+            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-950">Normas contratadas</h2>
-                  <p className="mt-1 text-xs text-slate-500">Solo tarjetas activas del tenant actual.</p>
+                  <h2 className="text-base font-semibold text-slate-950">Personalizacion visual</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Orden y bloques colapsados se guardan por usuario, tenant y Dashboard v2.
+                  </p>
                 </div>
-                <span className={`rounded border px-2 py-1 text-xs font-semibold ${chipClass(data.general_health.status)}`}>
-                  {statusLabel(data.general_health.status)}
-                </span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditMode((value) => !value)}
+                    className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold hover:bg-slate-50"
+                  >
+                    {editMode ? 'Salir de edicion' : 'Personalizar dashboard'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveLayout}
+                    disabled={!layoutDirty || savingLayout}
+                    className="rounded bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+                  >
+                    {savingLayout ? 'Guardando...' : 'Guardar cambios'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetLayout}
+                    disabled={savingLayout}
+                    className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold hover:bg-slate-50 disabled:opacity-45"
+                  >
+                    Restaurar predeterminado
+                  </button>
+                </div>
               </div>
-              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                {standards.map((standard) => (
-                  <DashboardV2StandardCard
-                    key={`${standard.standard_code}-${standard.version_code}`}
-                    standard={standard}
-                  />
-                ))}
-              </div>
+              {(layoutDirty || layoutMessage) && (
+                <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  {layoutMessage || 'Hay cambios sin guardar en tu diseno.'}
+                </div>
+              )}
             </section>
 
-            <DashboardV2Panel activeTab={activeTab} data={data} />
+            {activeTab === 'resumen' ? (
+              <DashboardV2PersonalizedLayout
+                data={data}
+                standards={standards}
+                layout={layout}
+                editMode={editMode}
+                onMove={moveBlock}
+                onToggleCollapse={toggleCollapse}
+              />
+            ) : (
+              <DashboardV2Panel activeTab={activeTab} data={data} />
+            )}
 
             <section className="rounded-lg border border-dashed border-slate-300 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 className="text-base font-semibold text-slate-950">Base para personalizacion futura</h2>
+                  <h2 className="text-base font-semibold text-slate-950">Layout por usuario activo</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Los bloques ya quedan declarados para ordenamiento, layout por usuario y tarjetas movibles en fases siguientes.
+                    Tu orden visual no modifica el Dashboard v2 de otros usuarios del mismo tenant.
                   </p>
                 </div>
                 <span className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-                  {data.customization?.layout_version || 'dashboard_v2_base'}
+                  {layout.updated_at ? `Guardado ${new Date(layout.updated_at).toLocaleDateString('es-CL')}` : 'Predeterminado'}
                 </span>
               </div>
             </section>

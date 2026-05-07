@@ -32,12 +32,24 @@ function getUserTenantId(user) {
   );
 }
 
+function getUserId(user) {
+  return user?.user_id || user?.userId || user?.id || user?.sub || null;
+}
+
 function resolveTenantId(user) {
   const tenantId = getUserTenantId(user);
   if (!tenantId && PLATFORM_ROLES.has(normalizeRole(user?.role || user?.user_role || user?.userRole))) {
     throw publicError(400, 'TENANT_CONTEXT_REQUIRED', 'Dashboard v2 requiere contexto de tenant');
   }
   return tenantId;
+}
+
+function resolveUserId(user) {
+  const userId = getUserId(user);
+  if (!userId) {
+    throw publicError(400, 'USER_CONTEXT_REQUIRED', 'Dashboard v2 requiere contexto de usuario');
+  }
+  return userId;
 }
 
 function toNumber(value, fallback = 0) {
@@ -72,6 +84,60 @@ async function tableExists(tableName) {
   );
 
   return result.rowCount > 0;
+}
+
+const DASHBOARD_V2_KEY = 'dashboard_v2';
+const DEFAULT_LAYOUT = {
+  version: 1,
+  order: ['standards', 'salud_iso', 'ciclo_vida', 'acciones', 'riesgos', 'kpis', 'alertas'],
+  collapsed: {},
+};
+const ALLOWED_LAYOUT_BLOCKS = new Set(DEFAULT_LAYOUT.order);
+
+function normalizeDashboardKey(value = DASHBOARD_V2_KEY) {
+  const key = String(value || DASHBOARD_V2_KEY).trim();
+  if (key !== DASHBOARD_V2_KEY) {
+    throw publicError(400, 'INVALID_DASHBOARD_KEY', 'dashboard_key invalido');
+  }
+  return key;
+}
+
+function normalizeLayout(layout) {
+  if (!layout || typeof layout !== 'object' || Array.isArray(layout)) {
+    throw publicError(400, 'INVALID_LAYOUT', 'layout_json debe ser un objeto');
+  }
+
+  const serialized = JSON.stringify(layout);
+  if (serialized.length > 20000) {
+    throw publicError(413, 'LAYOUT_TOO_LARGE', 'layout_json excede el tamano permitido');
+  }
+
+  const rawOrder = Array.isArray(layout.order) ? layout.order : DEFAULT_LAYOUT.order;
+  const order = [];
+  rawOrder.forEach((block) => {
+    const key = String(block || '').trim();
+    if (ALLOWED_LAYOUT_BLOCKS.has(key) && !order.includes(key)) {
+      order.push(key);
+    }
+  });
+  DEFAULT_LAYOUT.order.forEach((block) => {
+    if (!order.includes(block)) order.push(block);
+  });
+
+  const rawCollapsed = layout.collapsed && typeof layout.collapsed === 'object' && !Array.isArray(layout.collapsed)
+    ? layout.collapsed
+    : {};
+  const collapsed = {};
+  DEFAULT_LAYOUT.order.forEach((block) => {
+    collapsed[block] = rawCollapsed[block] === true;
+  });
+
+  return {
+    version: 1,
+    order,
+    collapsed,
+    updated_at: new Date().toISOString(),
+  };
 }
 
 async function getTenant(tenantId, notes) {
@@ -1126,10 +1192,145 @@ async function getAlerts(user) {
   };
 }
 
+async function getPreferences(user, query = {}) {
+  const tenantId = resolveTenantId(user);
+  const userId = resolveUserId(user);
+  const dashboardKey = normalizeDashboardKey(query.dashboard_key);
+
+  const exists = await tableExists('user_dashboard_preferences');
+  if (!exists) {
+    return {
+      tenant_id: tenantId,
+      user_id: userId,
+      dashboard_key: dashboardKey,
+      layout_json: DEFAULT_LAYOUT,
+      is_default: true,
+      data_quality: {
+        level: 'limited',
+        notes: ['Tabla user_dashboard_preferences aun no existe. Aplicar migracion 20260507_dashboard_v2_user_preferences.sql.'],
+      },
+    };
+  }
+
+  const result = await pool.query(
+    `
+    SELECT id, tenant_id, user_id, dashboard_key, layout_json, created_at, updated_at
+    FROM user_dashboard_preferences
+    WHERE tenant_id = $1::uuid
+      AND user_id = $2::uuid
+      AND dashboard_key = $3
+    LIMIT 1
+    `,
+    [tenantId, userId, dashboardKey]
+  );
+
+  if (!result.rowCount) {
+    return {
+      tenant_id: tenantId,
+      user_id: userId,
+      dashboard_key: dashboardKey,
+      layout_json: DEFAULT_LAYOUT,
+      is_default: true,
+      data_quality: {
+        level: 'complete',
+        notes: [],
+      },
+    };
+  }
+
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    tenant_id: tenantId,
+    user_id: userId,
+    dashboard_key: dashboardKey,
+    layout_json: normalizeLayout(row.layout_json || DEFAULT_LAYOUT),
+    is_default: false,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    data_quality: {
+      level: 'complete',
+      notes: [],
+    },
+  };
+}
+
+async function savePreferences(user, payload = {}) {
+  const tenantId = resolveTenantId(user);
+  const userId = resolveUserId(user);
+  const dashboardKey = normalizeDashboardKey(payload.dashboard_key);
+  const layout = normalizeLayout(payload.layout_json || payload.layout || {});
+
+  const exists = await tableExists('user_dashboard_preferences');
+  if (!exists) {
+    throw publicError(500, 'PREFERENCES_TABLE_MISSING', 'Tabla user_dashboard_preferences no existe; aplicar migracion');
+  }
+
+  const result = await pool.query(
+    `
+    INSERT INTO user_dashboard_preferences (
+      tenant_id,
+      user_id,
+      dashboard_key,
+      layout_json
+    )
+    VALUES ($1::uuid, $2::uuid, $3, $4::jsonb)
+    ON CONFLICT (tenant_id, user_id, dashboard_key)
+    DO UPDATE SET
+      layout_json = EXCLUDED.layout_json,
+      updated_at = now()
+    RETURNING id, tenant_id, user_id, dashboard_key, layout_json, created_at, updated_at
+    `,
+    [tenantId, userId, dashboardKey, JSON.stringify(layout)]
+  );
+
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    tenant_id: tenantId,
+    user_id: userId,
+    dashboard_key: dashboardKey,
+    layout_json: row.layout_json,
+    is_default: false,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+async function resetPreferences(user, query = {}) {
+  const tenantId = resolveTenantId(user);
+  const userId = resolveUserId(user);
+  const dashboardKey = normalizeDashboardKey(query.dashboard_key);
+
+  const exists = await tableExists('user_dashboard_preferences');
+  if (exists) {
+    await pool.query(
+      `
+      DELETE FROM user_dashboard_preferences
+      WHERE tenant_id = $1::uuid
+        AND user_id = $2::uuid
+        AND dashboard_key = $3
+      `,
+      [tenantId, userId, dashboardKey]
+    );
+  }
+
+  return {
+    tenant_id: tenantId,
+    user_id: userId,
+    dashboard_key: dashboardKey,
+    layout_json: DEFAULT_LAYOUT,
+    is_default: true,
+  };
+}
+
 module.exports = {
   getSummary,
   getActions,
   getRisks,
   getKpis,
   getAlerts,
+  getPreferences,
+  savePreferences,
+  resetPreferences,
 };

@@ -150,6 +150,22 @@ export type DashboardV2Tab = {
   metric?: number | string | null;
 };
 
+export type DashboardV2BlockKey =
+  | 'standards'
+  | 'salud_iso'
+  | 'ciclo_vida'
+  | 'acciones'
+  | 'riesgos'
+  | 'kpis'
+  | 'alertas';
+
+export type DashboardV2Layout = {
+  version: number;
+  order: DashboardV2BlockKey[];
+  collapsed: Partial<Record<DashboardV2BlockKey, boolean>>;
+  updated_at?: string;
+};
+
 export type DashboardV2Response = {
   tenant?: {
     id?: string | null;

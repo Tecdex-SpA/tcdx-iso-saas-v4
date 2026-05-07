@@ -31,6 +31,65 @@ router.get('/summary', async (req, res) => {
   }
 });
 
+router.get('/preferences', async (req, res) => {
+  try {
+    const data = await dashboardV2.getPreferences(req.user, {
+      dashboard_key: req.query.dashboard_key,
+    });
+    return res.json({
+      ok: true,
+      ...data,
+      data,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.put('/preferences', async (req, res) => {
+  try {
+    const data = await dashboardV2.savePreferences(req.user, req.body || {});
+    return res.json({
+      ok: true,
+      ...data,
+      data,
+      success: true,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.delete('/preferences', async (req, res) => {
+  try {
+    const data = await dashboardV2.resetPreferences(req.user, {
+      dashboard_key: req.query.dashboard_key,
+    });
+    return res.json({
+      ok: true,
+      ...data,
+      data,
+      success: true,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.post('/preferences/reset', async (req, res) => {
+  try {
+    const data = await dashboardV2.resetPreferences(req.user, req.body || {});
+    return res.json({
+      ok: true,
+      ...data,
+      data,
+      success: true,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
 router.get('/actions', async (req, res) => {
   try {
     const data = await dashboardV2.getActions(req.user);
