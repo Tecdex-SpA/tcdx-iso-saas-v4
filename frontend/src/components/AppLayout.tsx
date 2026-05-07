@@ -234,10 +234,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         const viewerAllowedRoutes = [
           '/dashboard',
           '/command-center-iso',
+          '/centro-control-iso',
           '/ciclo-vida',
           '/health',
           '/exportes',
           '/auditorias',
+          '/auditor-iso',
           '/acciones-recomendadas',
           '/perfil',
         ];

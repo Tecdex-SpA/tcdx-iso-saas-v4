@@ -27,6 +27,21 @@ const ACTION_PLAN_FALLBACK_TARGETS = new Set([
   'control_review',
 ]);
 
+const WORKFLOW_STATUSES = new Set([
+  'suggested',
+  'approved',
+  'converted',
+  'in_progress',
+  'blocked',
+  'done',
+  'rejected',
+  'needs_review',
+  'pending',
+  'applied',
+  'archived',
+  'error',
+]);
+
 function publicError(status, code, message) {
   const error = new Error(message);
   error.status = status;
@@ -202,6 +217,36 @@ async function tenantStandardActive(tenantId, standardCode) {
   );
 
   return result.rowCount > 0;
+}
+
+async function workflowTableExists() {
+  const result = await pool.query(
+    `
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'iso_recommended_action_workflow_events'
+    LIMIT 1
+    `
+  );
+
+  return result.rowCount > 0;
+}
+
+function normalizeWorkflowStatus(value) {
+  const status = String(value || '').trim().toLowerCase();
+  if (!WORKFLOW_STATUSES.has(status)) {
+    throw publicError(400, 'INVALID_WORKFLOW_STATUS', 'Estado de workflow invalido');
+  }
+  return status;
+}
+
+function getCurrentWorkflowStatus(suggestion, events = []) {
+  const latest = events[0]?.new_status;
+  if (latest) return latest;
+  if (suggestion.status === 'applied') return 'converted';
+  if (suggestion.status === 'pending') return 'suggested';
+  return suggestion.status || 'suggested';
 }
 
 function conversionWarnings(targetType) {
@@ -419,8 +464,209 @@ async function convertRecommendation(user, recommendationId, payload = {}) {
   };
 }
 
+async function getWorkflow(user, recommendationId, query = {}) {
+  const tenantId = resolveTenantId(user, query.tenant_id);
+  if (!tenantId) throw publicError(400, 'TENANT_REQUIRED', 'No se pudo resolver tenant_id');
+  assertTenantAccess(user, tenantId);
+
+  const suggestion = await isoOperationalExecution.getSuggestion(user, recommendationId, tenantId);
+  if (!(await workflowTableExists())) {
+    return {
+      suggestion_id: recommendationId,
+      tenant_id: tenantId,
+      current_status: getCurrentWorkflowStatus(suggestion),
+      events: [],
+      warning: 'Tabla de workflow no aplicada; ejecutar migracion 20260507_iso_recommended_action_workflow.sql.',
+    };
+  }
+
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      suggestion_id,
+      previous_status,
+      new_status,
+      event_type,
+      comment,
+      user_id,
+      metadata,
+      created_at
+    FROM iso_recommended_action_workflow_events
+    WHERE tenant_id = $1::uuid
+      AND suggestion_id = $2::uuid
+    ORDER BY created_at DESC
+    `,
+    [tenantId, recommendationId]
+  );
+
+  return {
+    suggestion_id: recommendationId,
+    tenant_id: tenantId,
+    current_status: getCurrentWorkflowStatus(suggestion, result.rows),
+    stored_status: suggestion.status,
+    events: result.rows,
+  };
+}
+
+async function transitionWorkflow(user, recommendationId, payload = {}) {
+  const tenantId = resolveTenantId(user, payload.tenant_id);
+  if (!tenantId) throw publicError(400, 'TENANT_REQUIRED', 'No se pudo resolver tenant_id');
+  assertTenantAccess(user, tenantId);
+
+  if (!(await workflowTableExists())) {
+    throw publicError(503, 'WORKFLOW_TABLE_MISSING', 'Tabla de workflow no disponible; aplicar migracion primero');
+  }
+
+  const suggestion = await isoOperationalExecution.getSuggestion(user, recommendationId, tenantId);
+  const current = await getWorkflow(user, recommendationId, { tenant_id: tenantId });
+  const newStatus = normalizeWorkflowStatus(payload.new_status || payload.status);
+  const userId = getUserId(user);
+
+  const result = await pool.query(
+    `
+    INSERT INTO iso_recommended_action_workflow_events (
+      suggestion_id,
+      tenant_id,
+      previous_status,
+      new_status,
+      event_type,
+      comment,
+      user_id,
+      metadata
+    )
+    VALUES ($1::uuid, $2::uuid, $3, $4, 'transition', $5, $6::uuid, $7::jsonb)
+    RETURNING *
+    `,
+    [
+      recommendationId,
+      tenantId,
+      current.current_status || suggestion.status || null,
+      newStatus,
+      payload.comment || null,
+      userId,
+      JSON.stringify({
+        source: 'iso_recommended_action_workflow',
+        stored_status: suggestion.status,
+        requested_status: payload.new_status || payload.status,
+      }),
+    ]
+  );
+
+  return {
+    suggestion_id: recommendationId,
+    tenant_id: tenantId,
+    current_status: newStatus,
+    event: result.rows[0],
+  };
+}
+
+async function commentWorkflow(user, recommendationId, payload = {}) {
+  const tenantId = resolveTenantId(user, payload.tenant_id);
+  if (!tenantId) throw publicError(400, 'TENANT_REQUIRED', 'No se pudo resolver tenant_id');
+  assertTenantAccess(user, tenantId);
+
+  if (!(await workflowTableExists())) {
+    throw publicError(503, 'WORKFLOW_TABLE_MISSING', 'Tabla de workflow no disponible; aplicar migracion primero');
+  }
+
+  if (!String(payload.comment || '').trim()) {
+    throw publicError(400, 'COMMENT_REQUIRED', 'El comentario es requerido');
+  }
+
+  const suggestion = await isoOperationalExecution.getSuggestion(user, recommendationId, tenantId);
+  const current = await getWorkflow(user, recommendationId, { tenant_id: tenantId });
+
+  const result = await pool.query(
+    `
+    INSERT INTO iso_recommended_action_workflow_events (
+      suggestion_id,
+      tenant_id,
+      previous_status,
+      new_status,
+      event_type,
+      comment,
+      user_id,
+      metadata
+    )
+    VALUES ($1::uuid, $2::uuid, $3, $3, 'comment', $4, $5::uuid, $6::jsonb)
+    RETURNING *
+    `,
+    [
+      recommendationId,
+      tenantId,
+      current.current_status || suggestion.status || 'suggested',
+      payload.comment,
+      getUserId(user),
+      JSON.stringify({ source: 'iso_recommended_action_workflow_comment' }),
+    ]
+  );
+
+  return {
+    suggestion_id: recommendationId,
+    tenant_id: tenantId,
+    current_status: current.current_status || suggestion.status || 'suggested',
+    event: result.rows[0],
+  };
+}
+
+async function getWorkflowSummary(user, query = {}) {
+  const tenantId = resolveTenantId(user, query.tenant_id);
+  if (!tenantId) throw publicError(400, 'TENANT_REQUIRED', 'No se pudo resolver tenant_id');
+  assertTenantAccess(user, tenantId);
+
+  const standardFilter = query.standard_code ? String(query.standard_code).trim().toUpperCase() : null;
+
+  const suggestions = await pool.query(
+    `
+    SELECT
+      standard_code,
+      status,
+      COUNT(*)::integer AS total
+    FROM iso_operational_suggestions
+    WHERE tenant_id = $1::uuid
+      AND ($2::text IS NULL OR standard_code = $2)
+      AND status IS DISTINCT FROM 'archived'
+    GROUP BY standard_code, status
+    ORDER BY standard_code, status
+    `,
+    [tenantId, standardFilter]
+  );
+
+  let events = [];
+  if (await workflowTableExists()) {
+    const result = await pool.query(
+      `
+      SELECT
+        e.new_status,
+        COUNT(*)::integer AS total
+      FROM iso_recommended_action_workflow_events e
+      JOIN iso_operational_suggestions s
+        ON s.id = e.suggestion_id
+       AND s.tenant_id = e.tenant_id
+      WHERE e.tenant_id = $1::uuid
+        AND ($2::text IS NULL OR s.standard_code = $2)
+      GROUP BY e.new_status
+      ORDER BY e.new_status
+      `,
+      [tenantId, standardFilter]
+    );
+    events = result.rows;
+  }
+
+  return {
+    tenant_id: tenantId,
+    suggestions_by_status: suggestions.rows,
+    workflow_events_by_status: events,
+  };
+}
+
 module.exports = {
   getConversionOptions,
   dryRunConvertRecommendation,
   convertRecommendation,
+  getWorkflow,
+  transitionWorkflow,
+  commentWorkflow,
+  getWorkflowSummary,
 };

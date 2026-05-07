@@ -27,6 +27,52 @@ function handleError(res, error) {
   });
 }
 
+router.get('/workflow-summary', async (req, res) => {
+  try {
+    const data = await isoRecommendedActions.getWorkflowSummary(req.user, req.query || {});
+    return sendData(res, data);
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.get('/:id/workflow', async (req, res) => {
+  try {
+    const data = await isoRecommendedActions.getWorkflow(req.user, req.params.id, {
+      tenant_id: req.query.tenant_id,
+    });
+    return sendData(res, data);
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.post('/:id/workflow/transition', async (req, res) => {
+  try {
+    const data = await isoRecommendedActions.transitionWorkflow(
+      req.user,
+      req.params.id,
+      req.body || {}
+    );
+    return sendData(res, data, { success: true });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.post('/:id/workflow/comment', async (req, res) => {
+  try {
+    const data = await isoRecommendedActions.commentWorkflow(
+      req.user,
+      req.params.id,
+      req.body || {}
+    );
+    return sendData(res, data, { success: true });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
 router.get('/:id/conversion-options', async (req, res) => {
   try {
     const data = await isoRecommendedActions.getConversionOptions(req.user, req.params.id, {

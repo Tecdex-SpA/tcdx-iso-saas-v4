@@ -105,6 +105,11 @@ const API_RULES = [
     read: TENANT_READ_ROLES,
     write: [],
   },
+  {
+    prefix: '/api/iso-auditor',
+    read: TENANT_READ_ROLES,
+    write: [],
+  },
 
   // Dashboard y lectura ejecutiva
   {

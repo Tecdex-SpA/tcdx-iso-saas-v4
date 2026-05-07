@@ -805,6 +805,142 @@ async function buildCommandCenter(user, filters = {}) {
   };
 }
 
+function isTransitionStandard(standard) {
+  return standard?.publication_status === 'transition_prep' || standard?.certifiable === false;
+}
+
+function uniqueStandardCount(standards) {
+  return new Set(standards.map((standard) => standard.standard_code).filter(Boolean)).size;
+}
+
+function buildUnifiedAlerts({ transitionStandards, standards, dataQualityResult }) {
+  const alerts = [];
+
+  transitionStandards.forEach((standard) => {
+    alerts.push({
+      level: 'info',
+      type: 'transition',
+      standard_code: standard.standard_code,
+      version_code: standard.version_code,
+      title: `${standard.standard_code} ${standard.version_code} es solo transicion`,
+      message: 'Se muestra como preparacion no certificable y no como norma operativa final.',
+      route: '/diagnostico',
+    });
+  });
+
+  standards
+    .filter((standard) => standard.semaphore === 'critico' || standard.readiness_score < 50)
+    .slice(0, 5)
+    .forEach((standard) => {
+      alerts.push({
+        level: 'warning',
+        type: 'readiness',
+        standard_code: standard.standard_code,
+        version_code: standard.version_code,
+        title: `${standard.standard_code} requiere atencion`,
+        message: `Readiness actual ${standard.readiness_score}%. Priorizar brechas, riesgos y acciones abiertas.`,
+        route: '/acciones-recomendadas',
+      });
+    });
+
+  if (dataQualityResult?.level !== 'complete') {
+    alerts.push({
+      level: 'warning',
+      type: 'data_quality',
+      title: 'Datos parciales',
+      message: 'Algunas fuentes opcionales no estan disponibles o no tienen datos suficientes.',
+      route: null,
+    });
+  }
+
+  return alerts;
+}
+
+function buildQuickLinks() {
+  return [
+    { label: 'Diagnostico ISO', route: '/diagnostico', kind: 'diagnostic' },
+    { label: 'Matriz de riesgos', route: '/matriz-riesgo', kind: 'risks' },
+    { label: 'Acciones recomendadas', route: '/acciones-recomendadas', kind: 'actions' },
+    { label: 'Documentos ISO', route: '/documentos', kind: 'documents' },
+    { label: 'Auditor ISO', route: '/auditor-iso', kind: 'auditor' },
+    { label: 'Evidencias', route: '/evidencias', kind: 'evidence' },
+    { label: 'Controles', route: '/controles', kind: 'controls' },
+  ];
+}
+
+async function getUnified(user, filters = {}) {
+  const data = await buildCommandCenter(user, filters);
+  const transitionStandards = data.standards.filter(isTransitionStandard);
+  const operationalStandards = data.standards.filter((standard) => !isTransitionStandard(standard));
+  const operationalSummary = buildGlobalSummary(operationalStandards);
+  const quality = dataQuality(data.data_quality?.notes || [], operationalStandards);
+
+  return {
+    tenant_id: data.tenant_id,
+    tenant: {
+      id: data.tenant_id,
+    },
+    summary: {
+      ...operationalSummary,
+      contracted_standards: uniqueStandardCount(operationalStandards),
+      transition_standards: transitionStandards.length,
+      total_versions_evaluated: operationalStandards.length,
+    },
+    standard_cards: operationalStandards,
+    standards: operationalStandards,
+    transition_items: transitionStandards.map((standard) => ({
+      standard_code: standard.standard_code,
+      version_code: standard.version_code,
+      display_name: standard.display_name,
+      certifiable: false,
+      publication_status: standard.publication_status,
+      readiness_score: standard.readiness_score,
+      warning: 'Version de preparacion/transicion no certificable.',
+      route: '/diagnostico',
+    })),
+    health: {
+      readiness_score: operationalSummary.readiness_score,
+      readiness_label: operationalSummary.readiness_label,
+      coverage_pct: operationalSummary.coverage_pct,
+      data_quality: quality.level,
+    },
+    workflow: {
+      suggested: operationalSummary.recommended_actions_open,
+      converted: operationalSummary.recommended_actions_converted,
+      open_action_plans: operationalSummary.open_action_plans,
+      open_findings: operationalSummary.open_findings,
+      open_nonconformities: operationalSummary.open_nonconformities,
+    },
+    risks: {
+      high_or_critical: operationalSummary.high_risks,
+      standards_with_risk: operationalStandards.filter((standard) => standard.high_risks + standard.critical_risks > 0).length,
+    },
+    priorities: data.priorities
+      .filter((priority) => operationalStandards.some(
+        (standard) =>
+          standard.standard_code === priority.standard_code &&
+          standard.version_code === priority.version_code
+      ))
+      .slice(0, 10),
+    transition_priorities: data.priorities
+      .filter((priority) => transitionStandards.some(
+        (standard) =>
+          standard.standard_code === priority.standard_code &&
+          standard.version_code === priority.version_code
+      )),
+    activity: data.activity.filter((event) => operationalStandards.some(
+      (standard) => standard.standard_code === event.standard_code || !event.standard_code
+    )),
+    alerts: buildUnifiedAlerts({
+      transitionStandards,
+      standards: operationalStandards,
+      dataQualityResult: quality,
+    }),
+    quick_links: buildQuickLinks(),
+    data_quality: quality,
+  };
+}
+
 async function getSummary(user, filters = {}) {
   return buildCommandCenter(user, filters);
 }
@@ -872,4 +1008,5 @@ module.exports = {
   getStandardDetail,
   getReadiness,
   getActivity: getActivityOnly,
+  getUnified,
 };

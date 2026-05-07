@@ -44,6 +44,15 @@ router.get('/summary', async (req, res) => {
   }
 });
 
+router.get('/unified', async (req, res) => {
+  try {
+    const data = await isoCommandCenter.getUnified(req.user, filters(req));
+    return sendData(res, data);
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
 router.get('/standards', async (req, res) => {
   try {
     const data = await isoCommandCenter.getStandards(req.user, filters(req));

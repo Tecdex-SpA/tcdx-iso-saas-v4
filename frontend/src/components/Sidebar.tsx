@@ -280,6 +280,20 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         ),
       },
       {
+        href: '/centro-control-iso',
+        label: 'Centro Control ISO',
+        show: !isDealer,
+        icon: (
+          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M4 5h16v14H4z" />
+            <path d="M8 9h3" />
+            <path d="M8 13h8" />
+            <path d="M15 9h1" />
+            <path d="M18 9h1" />
+          </svg>
+        ),
+      },
+      {
         href: '/ciclo-vida',
         label: t('sidebar.lifecycle'),
         show: true,
@@ -452,6 +466,19 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             <path d="M12 3l7 4v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V7l7-4z" />
             <path d="M9 12l2 2 4-5" />
             <path d="M8 18h8" />
+          </svg>
+        ),
+      },
+      {
+        href: '/auditor-iso',
+        label: 'Auditor ISO',
+        show: !isDealer,
+        icon: (
+          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M9 11l2 2 4-5" />
+            <path d="M6 3h9l3 3v15H6z" />
+            <path d="M15 3v4h4" />
+            <path d="M8 17h8" />
           </svg>
         ),
       },
