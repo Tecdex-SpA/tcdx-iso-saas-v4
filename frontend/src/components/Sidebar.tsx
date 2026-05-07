@@ -266,6 +266,20 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         ),
       },
       {
+        href: '/command-center-iso',
+        label: 'Command Center ISO',
+        show: !isDealer,
+        icon: (
+          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M4 5h16" />
+            <path d="M4 19h16" />
+            <rect x="5" y="8" width="4" height="7" rx="1" />
+            <rect x="10" y="8" width="4" height="7" rx="1" />
+            <rect x="15" y="8" width="4" height="7" rx="1" />
+          </svg>
+        ),
+      },
+      {
         href: '/ciclo-vida',
         label: t('sidebar.lifecycle'),
         show: true,

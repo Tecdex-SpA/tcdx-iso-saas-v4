@@ -100,6 +100,11 @@ const API_RULES = [
     read: TENANT_READ_ROLES,
     write: TENANT_OPERATE_ROLES,
   },
+  {
+    prefix: '/api/iso-command-center',
+    read: TENANT_READ_ROLES,
+    write: [],
+  },
 
   // Dashboard y lectura ejecutiva
   {
