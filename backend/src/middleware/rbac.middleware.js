@@ -118,6 +118,11 @@ const API_RULES = [
     write: TENANT_ADMIN_ROLES,
   },
   {
+    prefix: '/api/dashboard-v2',
+    read: TENANT_READ_ROLES,
+    write: [],
+  },
+  {
     prefix: '/api/dashboard-controls',
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,
