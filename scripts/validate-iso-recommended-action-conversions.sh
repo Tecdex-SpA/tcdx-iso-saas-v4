@@ -16,7 +16,7 @@ if command -v jq >/dev/null 2>&1; then
 fi
 
 login_if_needed() {
-  if [[ -n "${TOKEN}" ]]; then
+  if [[ -n "${TOKEN}" && ( -z "${TEST_EMAIL}" || -z "${TEST_PASSWORD}" ) ]]; then
     return
   fi
 
