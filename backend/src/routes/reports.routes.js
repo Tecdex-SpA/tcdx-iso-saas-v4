@@ -15,6 +15,7 @@ const {
 } = require('../reports/templates/executivePremium.template');
 const { renderControlHealthPremiumTemplate } = require('../reports/templates/controlHealthPremium.template');
 const { renderMaturityGapDiagnosticPremiumTemplate } = require('../reports/templates/maturityGapDiagnosticPremium.template');
+const { renderIsoRiskPremiumTemplate } = require('../reports/templates/isoRiskPremium.template');
 const {
   persistSeniorAuditorSuggestions,
   summarizeSeniorSuggestionSync,
@@ -379,6 +380,10 @@ function renderReportHtmlByType(reportData) {
 
   if (code === 'maturity_gap_diagnostic') {
     return renderMaturityGapDiagnosticPremiumTemplate(reportData);
+  }
+
+  if (code === 'iso_risk_report') {
+    return renderIsoRiskPremiumTemplate(reportData);
   }
 
   return renderExecutivePremiumTemplate(reportData);
