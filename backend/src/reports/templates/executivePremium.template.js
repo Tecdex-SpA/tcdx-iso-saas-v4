@@ -822,11 +822,35 @@ function renderPage1(data) {
       ${miniMetric(tr('page1.pendingEvidence'), fmtNumber(evidences.pending_evidences), tr('page1.managementRequired'), 'warning')}
       ${miniMetric(tr('page1.openFindings'), fmtNumber(findings.open_findings), tr('page1.followUp'))}
       ${miniMetric(tr('page1.criticalRisks'), fmtNumber(risks.critical_risks || risks.high_risks || 0), tr('page1.exposure'))}
+    </div>  `;
+}
+
+
+function renderIsoContextPage(data) {
+  const standard = getStandardContext(data);
+
+  if (!standard.hasStandard) {
+    return '';
+  }
+
+  const profile = standard.profileContext || {};
+
+  return `
+    <div class="pageTitleBlock isoPageTitle">
+      <span>Contexto normativo</span>
+      <h2>${escapeHtml(standard.displayName || 'Norma ISO')}</h2>
+      <p>
+        ${escapeHtml(
+          profile.management_system ||
+          'Sistema de gestión evaluado'
+        )}
+      </p>
     </div>
 
     ${renderIsoExecutiveBlock(data)}
   `;
 }
+
 
 function renderAiPage(data) {
   const ai = data.ai_report_addendum || {};
@@ -1569,7 +1593,7 @@ function renderStyles() {
       }
 
       .card {
-        padding: 5mm;
+        padding: 4mm;
         min-height: 42mm;
       }
 
@@ -1848,14 +1872,14 @@ function renderStyles() {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 3mm;
-        margin: 4mm 0;
+        margin: 3mm 0;
       }
 
       .isoTextCard {
         border: 1px solid #E2E8F0;
         background: #FFFFFF;
         border-radius: 14px;
-        padding: 3.5mm;
+        padding: 3mm;
       }
 
       .isoTextCard h3 {
@@ -1878,7 +1902,7 @@ function renderStyles() {
 
       .isoChartsGrid .tcdx-chart-block {
         margin: 0;
-        min-height: 62mm;
+        min-height: auto;
       }
 
       .isoWarnings {
@@ -1914,6 +1938,35 @@ function renderStyles() {
         font-weight: 900;
       }
 
+
+      .isoPageTitle {
+        margin-bottom: 4mm;
+      }
+
+      .isoExecutiveBlock,
+      .tcdx-chart-block,
+      .tcdx-table-block,
+      .tcdx-kpi-card,
+      .card,
+      .metricCard {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .pdfContent {
+        overflow: visible;
+      }
+
+      .pdfPage {
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .pdfPage:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+
 </style>
   `;
 }
@@ -1929,6 +1982,7 @@ function renderExecutivePremiumTemplate(data = {}, options = {}) {
 
   const pageContents = [
     renderPage1(data),
+    ...(getStandardContext(data).hasStandard ? [renderIsoContextPage(data)] : []),
     renderAiPage(data),
     renderAuditSummaryPage(data),
     renderHealthPage(data),
