@@ -28,6 +28,44 @@ type Client = {
   logo_url?: string | null;
 };
 
+type StandardOption = {
+  tenant_id: string;
+  standard_code: string;
+  version_code: string;
+  label: string;
+  display_name: string;
+  coverage_status: 'complete' | 'partial' | 'insufficient' | 'not_active' | 'unknown' | string;
+  coverage_label: string;
+  coverage_severity: 'green' | 'yellow' | 'red' | 'gray' | string;
+  can_generate_executive: boolean;
+  can_generate_operational: boolean;
+  can_generate_audit: boolean;
+  profile_key?: string | null;
+  is_default_profile?: boolean;
+  management_system?: string | null;
+  executive_focus?: string | null;
+  risk_language?: string | null;
+  evidence_focus?: string | null;
+  report_title?: string | null;
+  chart_priority?: string[];
+  metrics?: {
+    catalog_coverage_pct?: number;
+    tenant_control_coverage_pct?: number;
+    operational_coverage_pct?: number;
+    evidence_coverage_pct?: number;
+    health_coverage_pct?: number;
+    tenant_controls_count?: number;
+    evidence_count?: number;
+    expected_evidence_count?: number;
+    health_records_count?: number;
+    avg_health_score?: number;
+    assessments_count?: number;
+    risk_runs_count?: number;
+    [key: string]: any;
+  };
+  warnings?: string[];
+};
+
 type ReportExport = {
   id: string;
   tenant_id: string;
@@ -115,10 +153,13 @@ function getReportTypeDescription(report: ReportType, t: (key: string) => string
 }
 
 function getReportIcon(code: string): TcdxIconName {
-  if (code === 'executive_summary') return 'kpi';
-  if (code === 'audit_report') return 'audit';
-  if (code === 'control_status') return 'check';
+  if (code === 'executive_summary' || code === 'executive_iso_status') return 'kpi';
+  if (code === 'audit_report' || code === 'internal_audit_report') return 'audit';
+  if (code === 'control_status' || code === 'control_health_report') return 'check';
   if (code === 'platform_client_monthly') return 'building';
+  if (code === 'maturity_gap_diagnostic') return 'document';
+  if (code === 'iso_risk_report') return 'document';
+  if (code === 'action_plan_report') return 'document';
 
   return 'document';
 }
@@ -205,6 +246,60 @@ function getStatusClass(status?: string) {
   return 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
+function getCoverageBadgeClass(severity?: string) {
+  const raw = String(severity || '').toLowerCase();
+
+  if (raw === 'green' || raw === 'complete') {
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  }
+
+  if (raw === 'yellow' || raw === 'partial') {
+    return 'bg-amber-50 text-amber-700 border-amber-200';
+  }
+
+  if (raw === 'red' || raw === 'insufficient') {
+    return 'bg-red-50 text-red-700 border-red-200';
+  }
+
+  return 'bg-slate-100 text-slate-600 border-slate-200';
+}
+
+function formatCoveragePct(value?: number) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return '0%';
+  return `${Math.round(n * 10) / 10}%`;
+}
+
+function getStandardFullLabel(standard?: StandardOption | null) {
+  if (!standard) return 'Norma no seleccionada';
+
+  return (
+    standard.display_name ||
+    standard.label ||
+    `${standard.standard_code || 'ISO'}:${standard.version_code || ''}`
+  );
+}
+
+function canGenerateSelectedReportForStandard(
+  reportCode: string,
+  standard?: StandardOption | null
+) {
+  if (!standard) return false;
+
+  if (reportCode === 'executive_summary' || reportCode === 'executive_iso_status') {
+    return standard.can_generate_executive === true;
+  }
+
+  if (
+    reportCode === 'audit_report' ||
+    reportCode === 'internal_audit_report'
+  ) {
+    return standard.can_generate_audit === true;
+  }
+
+  return standard.can_generate_operational === true;
+}
+
 function isToday(dateStr?: string) {
   if (!dateStr) return false;
 
@@ -239,8 +334,14 @@ function EmptyLogo() {
 const CATEGORY_ORDER = ['executive', 'operational', 'audit', 'platform'];
 
 const REPORT_ORDER = [
+  'executive_iso_status',
   'executive_summary',
+  'maturity_gap_diagnostic',
+  'control_health_report',
   'control_status',
+  'iso_risk_report',
+  'action_plan_report',
+  'internal_audit_report',
   'audit_report',
   'platform_client_monthly',
 ];
@@ -256,9 +357,12 @@ export default function ExportesPage() {
 
   const [reportTypes, setReportTypes] = useState<ReportType[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [standards, setStandards] = useState<StandardOption[]>([]);
+  const [standardsLoading, setStandardsLoading] = useState(false);
 
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [selectedReportCode, setSelectedReportCode] = useState('');
+  const [selectedStandardKey, setSelectedStandardKey] = useState('');
   const [period, setPeriod] = useState(() => getDefaultPeriod(locale));
   const [activeTab, setActiveTab] = useState<'generate' | 'history'>('generate');
 
@@ -285,6 +389,15 @@ export default function ExportesPage() {
   const selectedClient = useMemo(() => {
     return clients.find((client) => client.id === selectedTenantId) || null;
   }, [clients, selectedTenantId]);
+
+  const selectedStandard = useMemo(() => {
+    return (
+      standards.find(
+        (standard) =>
+          `${standard.standard_code}:${standard.version_code}` === selectedStandardKey
+      ) || null
+    );
+  }, [standards, selectedStandardKey]);
 
   const historyStats = useMemo(() => {
     const total = exportsHistory.length;
@@ -361,6 +474,81 @@ export default function ExportesPage() {
   const latestExports = useMemo(() => {
     return exportsHistory.slice(0, 5);
   }, [exportsHistory]);
+
+  const loadStandards = async (tenantId: string, reportCode?: string) => {
+    if (!tenantId) {
+      setStandards([]);
+      setSelectedStandardKey('');
+      return;
+    }
+
+    try {
+      setStandardsLoading(true);
+
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const params = appendLocaleParam(new URLSearchParams(), locale);
+      params.set('tenant_id', tenantId);
+
+      if (reportCode) {
+        params.set('report_type_code', reportCode);
+      }
+
+      const res = await fetch(`${API_URL}/api/reports/standards?${params.toString()}`, {
+        headers: buildLocaleHeaders(token, locale),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || 'Error obteniendo normas ISO disponibles');
+      }
+
+      const loadedStandards: StandardOption[] = json?.data || [];
+
+      setStandards(loadedStandards);
+
+      if (loadedStandards.length > 0) {
+        setSelectedStandardKey((current) => {
+          const stillExists = loadedStandards.some(
+            (standard) =>
+              `${standard.standard_code}:${standard.version_code}` === current
+          );
+
+          if (stillExists) return current;
+
+          const preferred =
+            loadedStandards.find(
+              (standard) =>
+                standard.standard_code === 'ISO27001' &&
+                standard.version_code === '2022'
+            ) ||
+            loadedStandards.find(
+              (standard) =>
+                standard.standard_code === 'ISO9001' &&
+                standard.version_code === '2015'
+            ) ||
+            loadedStandards[0];
+
+          return `${preferred.standard_code}:${preferred.version_code}`;
+        });
+      } else {
+        setSelectedStandardKey('');
+      }
+    } catch (err: any) {
+      console.error('ERROR LOAD REPORT STANDARDS:', err);
+      setStandards([]);
+      setSelectedStandardKey('');
+      setError(err.message || 'Error obteniendo normas ISO disponibles');
+    } finally {
+      setStandardsLoading(false);
+    }
+  };
 
   const loadHistory = async () => {
     try {
@@ -479,6 +667,13 @@ export default function ExportesPage() {
   }, [loading]);
 
   useEffect(() => {
+    if (!loading && selectedTenantId) {
+      loadStandards(selectedTenantId, selectedReportCode || undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, selectedTenantId, selectedReportCode, locale]);
+
+  useEffect(() => {
     if (!selectedReportCode && orderedReportTypes.length > 0) {
       setSelectedReportCode(orderedReportTypes[0].code);
     }
@@ -516,6 +711,19 @@ export default function ExportesPage() {
 
       if (selectedTenantId) {
         payload.tenant_id = selectedTenantId;
+      }
+
+      if (selectedStandard) {
+        payload.standard_code = selectedStandard.standard_code;
+        payload.version_code = selectedStandard.version_code;
+        payload.metadata = {
+          ...payload.metadata,
+          standard_code: selectedStandard.standard_code,
+          version_code: selectedStandard.version_code,
+          standard_label: getStandardFullLabel(selectedStandard),
+          coverage_status: selectedStandard.coverage_status,
+          coverage_label: selectedStandard.coverage_label,
+        };
       }
 
       const res = await fetch(`${API_URL}/api/reports/generate`, {
@@ -621,7 +829,7 @@ export default function ExportesPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.1fr_1fr_0.95fr]">
+        <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr_1.1fr_0.95fr]">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <label className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
               {t('exports.periodLabel')}
@@ -661,6 +869,66 @@ export default function ExportesPage() {
             </p>
           </div>
 
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <label className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+              Norma ISO
+            </label>
+
+            <select
+              value={selectedStandardKey}
+              onChange={(event) => setSelectedStandardKey(event.target.value)}
+              disabled={standardsLoading || standards.length === 0}
+              className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-[#0B2F4F] focus:ring-2 focus:ring-[#0B2F4F]/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+            >
+              {standards.length === 0 ? (
+                <option value="">
+                  {standardsLoading ? 'Cargando normas...' : 'Sin normas disponibles'}
+                </option>
+              ) : (
+                standards.map((standard) => (
+                  <option
+                    key={`${standard.standard_code}:${standard.version_code}`}
+                    value={`${standard.standard_code}:${standard.version_code}`}
+                  >
+                    {getStandardFullLabel(standard)}
+                  </option>
+                ))
+              )}
+            </select>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {selectedStandard ? (
+                <>
+                  <span className={`rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${getCoverageBadgeClass(selectedStandard.coverage_severity)}`}>
+                    {selectedStandard.coverage_label}
+                  </span>
+
+                  {selectedStandard.is_default_profile && (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                      Perfil genérico
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Norma no seleccionada
+                </span>
+              )}
+            </div>
+
+            {selectedStandard?.metrics && (
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                Catálogo {formatCoveragePct(selectedStandard.metrics.catalog_coverage_pct)} · Operacional {formatCoveragePct(selectedStandard.metrics.operational_coverage_pct)} · Evidencias {formatCoveragePct(selectedStandard.metrics.evidence_coverage_pct)}
+              </p>
+            )}
+
+            {selectedStandard?.warnings && selectedStandard.warnings.length > 0 && (
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400">
+                {selectedStandard.warnings[0]}
+              </p>
+            )}
+          </div>
+
           <div className="rounded-3xl border border-slate-200 bg-[#0B2F4F] p-5 text-white shadow-sm">
             <div className="flex items-start gap-4">
               {selectedClient?.logo_url ? (
@@ -686,8 +954,20 @@ export default function ExportesPage() {
                   {t('exports.premiumDocument')}
                 </div>
 
-                <div className="mt-3 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/75">
-                  {t('common.period')}: <span className="font-semibold text-white">{period}</span>
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/75">
+                    {t('common.period')}: <span className="font-semibold text-white">{period}</span>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/75">
+                    Norma: <span className="font-semibold text-white">{getStandardFullLabel(selectedStandard)}</span>
+                  </div>
+
+                  {selectedStandard && (
+                    <div className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/75">
+                      Cobertura: <span className="font-semibold text-white">{selectedStandard.coverage_label}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
