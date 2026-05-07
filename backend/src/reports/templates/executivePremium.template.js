@@ -456,58 +456,7 @@ function statusBadge(value) {
 }
 
 
-function getStandardContext(data) {
-  const metadata = data?.metadata || {};
-  const standardContext = data?.standard_context || null;
-  const profileContext = data?.profile_context || metadata.profile_context || standardContext?.profile_context || null;
-  const metrics = standardContext?.metrics || metadata.coverage_metrics || {};
-
-  const standardCode =
-    standardContext?.standard_code ||
-    metadata.standard_code ||
-    data?.standard_code ||
-    '';
-
-  const versionCode =
-    standardContext?.version_code ||
-    metadata.version_code ||
-    data?.version_code ||
-    '';
-
-  const displayName =
-    standardContext?.display_name ||
-    metadata.standard_label ||
-    profileContext?.display_name ||
-    (standardCode && versionCode ? `${standardCode}:${versionCode}` : '');
-
-  const coverageStatus =
-    standardContext?.coverage_status ||
-    metadata.coverage_status ||
-    '';
-
-  const coverageLabel =
-    standardContext?.coverage_label ||
-    metadata.coverage_label ||
-    '';
-
-  const warnings =
-    asArray(standardContext?.warnings).length > 0
-      ? asArray(standardContext.warnings)
-      : asArray(metadata.coverage_warnings);
-
-  return {
-    hasStandard: !!standardCode,
-    standardCode,
-    versionCode,
-    displayName,
-    coverageStatus,
-    coverageLabel,
-    coverageSeverity: standardContext?.coverage_severity || '',
-    profileContext,
-    metrics,
-    warnings,
-  };
-}
+function getStandardContext(data) { return getScopedStandardContext(data); }
 
 function getProfileText(data, key, fallback = '') {
   const standard = getStandardContext(data);

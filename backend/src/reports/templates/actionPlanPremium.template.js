@@ -1,6 +1,33 @@
 'use strict';
 
 const {
+  escapeHtml,
+  sanitizePdfText,
+  sanitizeId,
+  cleanFilename,
+} = require('../helpers/reportTextSanitizer.helpers');
+
+const {
+  resolveTcdxLogoUrl,
+  resolveTenantLogoUrl,
+  renderLogoOrFallback,
+} = require('../helpers/reportBranding.helpers');
+
+const {
+  getStandardContext: getScopedStandardContext,
+  buildScopedStats,
+  getIsoNormativeProfile,
+  getScopedEvidences,
+  getScopedFindings,
+  getScopedActions,
+  getScopedAudits,
+  getScopedLifecycle,
+  filterBySelectedStandard,
+  toNumber: scopedToNumber,
+} = require('../helpers/reportDataScope.helpers');
+
+
+const {
   getReportChartStyles,
   renderKpiCards,
   renderStatusDistribution,
@@ -10,14 +37,7 @@ const {
   renderBadge,
 } = require('../charts/reportCharts.helpers');
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
+function localEscapeHtml(value) { return escapeHtml(value); }
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -55,68 +75,17 @@ function formatDate(date) {
   }
 }
 
-function getBaseUrl() {
-  return (
-    process.env.REPORT_PUBLIC_BASE_URL ||
-    process.env.PUBLIC_BASE_URL ||
-    process.env.API_PUBLIC_URL ||
-    'http://192.168.100.120:3000'
-  ).replace(/\/+$/, '');
-}
+function getBaseUrl() { return ''; }
 
-function getTcdxLogo() {
-  return (
-    process.env.REPORT_TCDX_LOGO_URL ||
-    process.env.TCDX_LOGO_URL ||
-    `${getBaseUrl()}/uploads/logos/tcdx-logo.png`
-  );
-}
+function getTcdxLogo() { return resolveTcdxLogoUrl(); }
 
-function getTenantLogo(tenant) {
-  return tenant?.report_logo_url || tenant?.logo_url || tenant?.brand_logo_url || tenant?.logo || '';
-}
+function getTenantLogo(tenant) { return resolveTenantLogoUrl(tenant); }
 
-function renderLogo(src, fallback) {
-  const safeSrc = String(src || '').trim();
-  if (!safeSrc) return `<div class="logoFallback">${escapeHtml(fallback || 'Logo')}</div>`;
-  return `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(fallback || 'Logo')}" />`;
-}
+function renderLogo(src, fallback) { return renderLogoOrFallback(src, fallback); }
 
-function getStandardContext(data) {
-  const metadata = asObject(data?.metadata);
-  const standardContext = data?.standard_context || null;
-  const profileContext = data?.profile_context || metadata.profile_context || standardContext?.profile_context || null;
-  const metrics = standardContext?.metrics || metadata.coverage_metrics || {};
+function getStandardContext(data) { return getScopedStandardContext(data); }
 
-  const standardCode = standardContext?.standard_code || metadata.standard_code || data?.standard_code || '';
-  const versionCode = standardContext?.version_code || metadata.version_code || data?.version_code || '';
-  const displayName =
-    standardContext?.display_name ||
-    metadata.standard_label ||
-    profileContext?.display_name ||
-    (standardCode && versionCode ? `${standardCode}:${versionCode}` : 'Norma ISO');
-
-  return {
-    standardCode,
-    versionCode,
-    displayName,
-    coverageStatus: standardContext?.coverage_status || metadata.coverage_status || '',
-    coverageLabel: standardContext?.coverage_label || metadata.coverage_label || '',
-    profileContext,
-    metrics,
-  };
-}
-
-function getStats(data) {
-  const stats = data?.stats || {};
-  return {
-    controls: stats.controls || {},
-    evidences: stats.evidences || {},
-    findings: stats.findings || {},
-    risks: stats.risks || {},
-    actions: stats.action_plans || stats.actions || {},
-  };
-}
+function getStats(data) { return buildScopedStats(data); }
 
 function getActionRows(data) {
   const direct = [
@@ -125,9 +94,11 @@ function getActionRows(data) {
     ...asArray(data?.recommended_actions),
   ];
 
-  if (direct.length) {
-    return direct.slice(0, 18).map((item, index) => ({
-      id: item.id || item.code || `A-${String(index + 1).padStart(2, '0')}`,
+  const scopedDirect = filterBySelectedStandard(direct, data);
+
+  if (scopedDirect.length) {
+    return scopedDirect.slice(0, 18).map((item, index) => ({
+      id: sanitizeId(item.id || item.code || `A-${String(index + 1).padStart(2, '0')}`),
       action: item.title || item.name || item.action || item.description || `Acción ${index + 1}`,
       origin: item.origin || item.source || item.source_type || item.related_type || 'Sistema ISO',
       priority: item.priority || item.severity || item.impact || 'media',
@@ -139,18 +110,17 @@ function getActionRows(data) {
   }
 
   const standard = getStandardContext(data);
+  const normative = getIsoNormativeProfile(data);
   const metrics = standard.metrics || {};
   const stats = getStats(data);
 
-  const openActions = toNumber(stats.actions.open_actions || stats.actions.open_action_plans, 0);
-  const overdueActions = toNumber(stats.actions.overdue_actions, 0);
   const expiredEvidence = toNumber(metrics.expired_evidence_count || stats.evidences.expired_evidences, 0);
   const pendingEvidence = toNumber(metrics.pending_evidence_count || stats.evidences.pending_evidences, 0);
   const noResponsible = metrics.tenant_controls_count
     ? Math.max(toNumber(metrics.tenant_controls_count, 0) - toNumber(metrics.controls_with_responsible_count, 0), 0)
     : 0;
 
-  return [
+  const base = [
     {
       id: 'A-01',
       action: 'Regularizar evidencias vencidas o pendientes',
@@ -159,7 +129,7 @@ function getActionRows(data) {
       status: expiredEvidence > 0 || pendingEvidence > 0 ? 'abierta' : 'monitoreo',
       owner: 'Responsable documental',
       due_date: null,
-      recommendation: `Actualizar ${expiredEvidence + pendingEvidence} evidencias con fecha, responsable, periodo cubierto y control asociado.`,
+      recommendation: `Actualizar ${expiredEvidence + pendingEvidence} evidencias de ${standard.displayName} con fecha, responsable, periodo cubierto y control asociado.`,
     },
     {
       id: 'A-02',
@@ -169,29 +139,22 @@ function getActionRows(data) {
       status: noResponsible > 0 ? 'abierta' : 'monitoreo',
       owner: 'Responsable ISO / Gerencia',
       due_date: null,
-      recommendation: `Asignar responsable operativo a ${noResponsible} controles para asegurar seguimiento y trazabilidad.`,
-    },
-    {
-      id: 'A-03',
-      action: 'Cerrar acciones vencidas',
-      origin: 'Planes de acción',
-      priority: overdueActions > 0 ? 'alta' : 'media',
-      status: overdueActions > 0 ? 'vencida' : 'monitoreo',
-      owner: 'Jefaturas de proceso',
-      due_date: null,
-      recommendation: `Revisar ${overdueActions} acciones vencidas, actualizar compromiso y adjuntar evidencia de avance o cierre.`,
-    },
-    {
-      id: 'A-04',
-      action: 'Convertir controles en atención en plan trimestral',
-      origin: 'Controles',
-      priority: 'media',
-      status: openActions > 0 ? 'en progreso' : 'abierta',
-      owner: 'Responsable ISO',
-      due_date: null,
-      recommendation: 'Agrupar controles en atención por prioridad, responsable y dependencia de evidencia.',
+      recommendation: `Asignar responsable operativo a ${noResponsible} controles de ${standard.displayName}.`,
     },
   ];
+
+  const normActions = normative.actionFallbacks.map((text, index) => ({
+    id: `A-${String(index + 3).padStart(2, '0')}`,
+    action: text,
+    origin: normative.label,
+    priority: index < 2 ? 'alta' : 'media',
+    status: 'abierta',
+    owner: standard.standardCode === 'ISO27001' ? 'Responsable SGSI' : standard.standardCode === 'ISO9001' ? 'Responsable SGC' : 'Responsable ISO',
+    due_date: null,
+    recommendation: `Ejecutar acción específica para ${normative.managementSystem}, adjuntando evidencia objetiva y trazable.`,
+  }));
+
+  return [...base, ...normActions].slice(0, 8);
 }
 
 function classifyPriority(priority) {
@@ -375,7 +338,7 @@ function renderRoadmapPage(data) {
 
 function renderActionTablePage(data) {
   const rows = getActionRows(data).slice(0, 12).map((row) => ({
-    id: row.id,
+    id: sanitizeId(row.id),
     accion: row.action,
     origen: row.origin,
     prioridad: row.priority,

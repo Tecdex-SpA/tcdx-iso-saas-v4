@@ -1,6 +1,33 @@
 'use strict';
 
 const {
+  escapeHtml,
+  sanitizePdfText,
+  sanitizeId,
+  cleanFilename,
+} = require('../helpers/reportTextSanitizer.helpers');
+
+const {
+  resolveTcdxLogoUrl,
+  resolveTenantLogoUrl,
+  renderLogoOrFallback,
+} = require('../helpers/reportBranding.helpers');
+
+const {
+  getStandardContext: getScopedStandardContext,
+  buildScopedStats,
+  getIsoNormativeProfile,
+  getScopedEvidences,
+  getScopedFindings,
+  getScopedActions,
+  getScopedAudits,
+  getScopedLifecycle,
+  filterBySelectedStandard,
+  toNumber: scopedToNumber,
+} = require('../helpers/reportDataScope.helpers');
+
+
+const {
   getReportChartStyles,
   renderKpiCards,
   renderProgressBars,
@@ -11,14 +38,7 @@ const {
   renderBadge,
 } = require('../charts/reportCharts.helpers');
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
+function localEscapeHtml(value) { return escapeHtml(value); }
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -50,32 +70,13 @@ function pct(value) {
   return `${Math.round(n * 10) / 10}%`;
 }
 
-function getBaseUrl() {
-  return (
-    process.env.REPORT_PUBLIC_BASE_URL ||
-    process.env.PUBLIC_BASE_URL ||
-    process.env.API_PUBLIC_URL ||
-    'http://192.168.100.120:3000'
-  ).replace(/\/+$/, '');
-}
+function getBaseUrl() { return ''; }
 
-function getTcdxLogo() {
-  return (
-    process.env.REPORT_TCDX_LOGO_URL ||
-    process.env.TCDX_LOGO_URL ||
-    `${getBaseUrl()}/uploads/logos/tcdx-logo.png`
-  );
-}
+function getTcdxLogo() { return resolveTcdxLogoUrl(); }
 
-function getTenantLogo(tenant) {
-  return tenant?.report_logo_url || tenant?.logo_url || tenant?.brand_logo_url || tenant?.logo || '';
-}
+function getTenantLogo(tenant) { return resolveTenantLogoUrl(tenant); }
 
-function renderLogo(src, fallback) {
-  const safeSrc = String(src || '').trim();
-  if (!safeSrc) return `<div class="logoFallback">${escapeHtml(fallback || 'Logo')}</div>`;
-  return `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(fallback || 'Logo')}" />`;
-}
+function renderLogo(src, fallback) { return renderLogoOrFallback(src, fallback); }
 
 function formatDate(date = new Date()) {
   try {
@@ -89,41 +90,7 @@ function formatDate(date = new Date()) {
   }
 }
 
-function getStandardContext(data) {
-  const metadata = asObject(data?.metadata);
-  const standardContext = data?.standard_context || null;
-  const profileContext = data?.profile_context || metadata.profile_context || standardContext?.profile_context || null;
-  const metrics = standardContext?.metrics || metadata.coverage_metrics || {};
-
-  const standardCode =
-    standardContext?.standard_code ||
-    metadata.standard_code ||
-    data?.standard_code ||
-    '';
-
-  const versionCode =
-    standardContext?.version_code ||
-    metadata.version_code ||
-    data?.version_code ||
-    '';
-
-  const displayName =
-    standardContext?.display_name ||
-    metadata.standard_label ||
-    profileContext?.display_name ||
-    (standardCode && versionCode ? `${standardCode}:${versionCode}` : 'Norma ISO');
-
-  return {
-    standardCode,
-    versionCode,
-    displayName,
-    coverageStatus: standardContext?.coverage_status || metadata.coverage_status || '',
-    coverageLabel: standardContext?.coverage_label || metadata.coverage_label || '',
-    profileContext,
-    metrics,
-    warnings: asArray(standardContext?.warnings).length ? asArray(standardContext.warnings) : asArray(metadata.coverage_warnings),
-  };
-}
+function getStandardContext(data) { return getScopedStandardContext(data); }
 
 function getDiagnosticData(data) {
   const metadata = asObject(data?.metadata);
@@ -380,6 +347,44 @@ function renderGapsPage(data) {
   `;
 }
 
+
+function renderNormativeReadingPage(data) {
+  const standard = getStandardContext(data);
+  const normative = getIsoNormativeProfile(data);
+
+  const rows = normative.auditCriteria.slice(0, 8).map((criterion, index) => ({
+    area: criterion,
+    lectura: index < 3
+      ? 'Requiere validación prioritaria de evidencia, responsable y trazabilidad.'
+      : 'Debe mantenerse bajo seguimiento como parte de la mejora continua.',
+    foco: normative.managementSystem,
+  }));
+
+  return `
+    <div class="pageTitleBlock">
+      <span>LECTURA NORMATIVA</span>
+      <h2>Interpretación ISO de brechas</h2>
+      <p>${escapeHtml(normative.maturityFocus)}</p>
+    </div>
+
+    ${renderPremiumTable(
+      [
+        { key: 'area', label: 'Área normativa' },
+        { key: 'lectura', label: 'Lectura consultiva' },
+        { key: 'foco', label: 'Sistema' },
+      ],
+      rows,
+      { title: `Criterios relevantes para ${standard.displayName}` }
+    )}
+
+    <section class="noteBox">
+      <strong>Uso recomendado:</strong>
+      <p>Usar esta lectura para transformar brechas técnicas en acciones de implementación, auditoría interna y revisión por la dirección.</p>
+    </section>
+  `;
+}
+
+
 function renderRoadmapPage(data) {
   const diagnostic = getDiagnosticData(data);
   const missingEvidence = Math.max(diagnostic.expected_evidence - diagnostic.controls_with_evidence, 0);
@@ -443,6 +448,7 @@ function renderMaturityGapDiagnosticPremiumTemplate(data = {}) {
   const pages = [
     renderCoverPage(data),
     renderGapsPage(data),
+    renderNormativeReadingPage(data),
     renderRoadmapPage(data),
   ];
 

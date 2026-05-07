@@ -1,6 +1,33 @@
 'use strict';
 
 const {
+  escapeHtml,
+  sanitizePdfText,
+  sanitizeId,
+  cleanFilename,
+} = require('../helpers/reportTextSanitizer.helpers');
+
+const {
+  resolveTcdxLogoUrl,
+  resolveTenantLogoUrl,
+  renderLogoOrFallback,
+} = require('../helpers/reportBranding.helpers');
+
+const {
+  getStandardContext: getScopedStandardContext,
+  buildScopedStats,
+  getIsoNormativeProfile,
+  getScopedEvidences,
+  getScopedFindings,
+  getScopedActions,
+  getScopedAudits,
+  getScopedLifecycle,
+  filterBySelectedStandard,
+  toNumber: scopedToNumber,
+} = require('../helpers/reportDataScope.helpers');
+
+
+const {
   getReportChartStyles,
   renderKpiCards,
   renderStatusDistribution,
@@ -10,14 +37,7 @@ const {
   renderBadge,
 } = require('../charts/reportCharts.helpers');
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
+function localEscapeHtml(value) { return escapeHtml(value); }
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -55,68 +75,17 @@ function formatDate(date) {
   }
 }
 
-function getBaseUrl() {
-  return (
-    process.env.REPORT_PUBLIC_BASE_URL ||
-    process.env.PUBLIC_BASE_URL ||
-    process.env.API_PUBLIC_URL ||
-    'http://192.168.100.120:3000'
-  ).replace(/\/+$/, '');
-}
+function getBaseUrl() { return ''; }
 
-function getTcdxLogo() {
-  return (
-    process.env.REPORT_TCDX_LOGO_URL ||
-    process.env.TCDX_LOGO_URL ||
-    `${getBaseUrl()}/uploads/logos/tcdx-logo.png`
-  );
-}
+function getTcdxLogo() { return resolveTcdxLogoUrl(); }
 
-function getTenantLogo(tenant) {
-  return tenant?.report_logo_url || tenant?.logo_url || tenant?.brand_logo_url || tenant?.logo || '';
-}
+function getTenantLogo(tenant) { return resolveTenantLogoUrl(tenant); }
 
-function renderLogo(src, fallback) {
-  const safeSrc = String(src || '').trim();
-  if (!safeSrc) return `<div class="logoFallback">${escapeHtml(fallback || 'Logo')}</div>`;
-  return `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(fallback || 'Logo')}" />`;
-}
+function renderLogo(src, fallback) { return renderLogoOrFallback(src, fallback); }
 
-function getStandardContext(data) {
-  const metadata = asObject(data?.metadata);
-  const standardContext = data?.standard_context || null;
-  const profileContext = data?.profile_context || metadata.profile_context || standardContext?.profile_context || null;
-  const metrics = standardContext?.metrics || metadata.coverage_metrics || {};
+function getStandardContext(data) { return getScopedStandardContext(data); }
 
-  const standardCode = standardContext?.standard_code || metadata.standard_code || data?.standard_code || '';
-  const versionCode = standardContext?.version_code || metadata.version_code || data?.version_code || '';
-  const displayName =
-    standardContext?.display_name ||
-    metadata.standard_label ||
-    profileContext?.display_name ||
-    (standardCode && versionCode ? `${standardCode}:${versionCode}` : 'Norma ISO');
-
-  return {
-    standardCode,
-    versionCode,
-    displayName,
-    coverageStatus: standardContext?.coverage_status || metadata.coverage_status || '',
-    coverageLabel: standardContext?.coverage_label || metadata.coverage_label || '',
-    profileContext,
-    metrics,
-  };
-}
-
-function getStats(data) {
-  const stats = data?.stats || {};
-  return {
-    controls: stats.controls || {},
-    evidences: stats.evidences || {},
-    findings: stats.findings || {},
-    risks: stats.risks || {},
-    actions: stats.action_plans || stats.actions || {},
-  };
-}
+function getStats(data) { return buildScopedStats(data); }
 
 function getActionRows(data) {
   const direct = [
@@ -127,7 +96,7 @@ function getActionRows(data) {
 
   if (direct.length) {
     return direct.slice(0, 18).map((item, index) => ({
-      id: item.id || item.code || `A-${String(index + 1).padStart(2, '0')}`,
+      id: sanitizeId(item.id || item.code) || `A-${String(index + 1).padStart(2, '0')}`,
       action: item.title || item.name || item.action || item.description || `Acción ${index + 1}`,
       origin: item.origin || item.source || item.source_type || item.related_type || 'Sistema ISO',
       priority: item.priority || item.severity || item.impact || 'media',
@@ -309,6 +278,50 @@ function pageShell({ tenant, title, generatedAt, pageNumber, totalPages, content
   `;
 }
 
+
+function buildAuditKpis(data) {
+  const standard = getStandardContext(data);
+  const normative = getIsoNormativeProfile(data);
+  const metrics = standard.metrics || {};
+  const stats = getStats(data);
+
+  const auditedControls = metrics.health_records_count || stats.controls.evaluated_controls || 0;
+  const evidencesReviewed = metrics.evidence_count || stats.evidences.total_evidences || 0;
+  const findings = stats.findings.open_findings || 0;
+  const pendingEvidence = metrics.pending_evidence_count || stats.evidences.pending_evidences || 0;
+  const expiredEvidence = metrics.expired_evidence_count || stats.evidences.expired_evidences || 0;
+  const score = metrics.avg_health_score || stats.controls.average_score || 0;
+
+  return [
+    { label: normative.auditKpis[0] || 'Controles auditados', value: auditedControls, status: 'neutral', helper: standard.displayName },
+    { label: normative.auditKpis[1] || 'Evidencias revisadas', value: evidencesReviewed, status: evidencesReviewed > 0 ? 'success' : 'warning', helper: 'Evidencia objetiva' },
+    { label: 'Hallazgos abiertos', value: findings, status: findings > 0 ? 'warning' : 'success', helper: 'Requieren cierre' },
+    { label: 'Evidencias pendientes', value: pendingEvidence, status: pendingEvidence > 0 ? 'warning' : 'success', helper: 'Limitación auditora' },
+    { label: 'Evidencias vencidas', value: expiredEvidence, status: expiredEvidence > 0 ? 'danger-soft' : 'success', helper: 'Vigencia documental' },
+    { label: 'NC mayores', value: 0, status: 'success', helper: 'No registradas automáticamente' },
+    { label: 'NC menores', value: findings, status: findings > 0 ? 'warning' : 'success', helper: 'Estimación por hallazgos' },
+    { label: 'Score auditado', value: Math.round(score * 10) / 10, unit: '%', status: score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger-soft', helper: 'Base interna' },
+  ];
+}
+
+function renderAuditScopeBox(data) {
+  const standard = getStandardContext(data);
+  const normative = getIsoNormativeProfile(data);
+
+  return `
+    <section class="noteBox">
+      <strong>Alcance y criterio de auditoría:</strong>
+      <ul>
+        <li><strong>Norma:</strong> ${escapeHtml(standard.displayName)}</li>
+        <li><strong>Sistema:</strong> ${escapeHtml(normative.managementSystem)}</li>
+        <li><strong>Criterios:</strong> ${escapeHtml(normative.auditCriteria.slice(0, 6).join(', '))}</li>
+        <li><strong>Metodología:</strong> revisión documental, lectura de controles, evidencias, hallazgos y estado de acciones.</li>
+      </ul>
+    </section>
+  `;
+}
+
+
 function renderCoverPage(data) {
   const standard = getStandardContext(data);
   const rows = getActionRows(data);
@@ -338,7 +351,7 @@ function renderCoverPage(data) {
       </div>
     </section>
 
-    ${renderKpiCards(buildActionKpis(data), { columns: 4 })}
+    ${renderKpiCards(buildAuditKpis(data), { columns: 4 })}
 
     <div class="twoCol">
       ${renderStatusDistribution(buildStatusDistribution(data), { title: 'Distribución por estado' })}
@@ -375,7 +388,7 @@ function renderAuditFindingsPage(data) {
 
 function renderAuditConclusionPage(data) {
   const rows = getActionRows(data).slice(0, 12).map((row) => ({
-    id: row.id,
+    id: sanitizeId(row.id),
     accion: row.action,
     origen: row.origin,
     prioridad: row.priority,

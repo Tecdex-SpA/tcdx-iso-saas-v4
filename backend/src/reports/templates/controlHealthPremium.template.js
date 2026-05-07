@@ -1,6 +1,33 @@
 'use strict';
 
 const {
+  escapeHtml,
+  sanitizePdfText,
+  sanitizeId,
+  cleanFilename,
+} = require('../helpers/reportTextSanitizer.helpers');
+
+const {
+  resolveTcdxLogoUrl,
+  resolveTenantLogoUrl,
+  renderLogoOrFallback,
+} = require('../helpers/reportBranding.helpers');
+
+const {
+  getStandardContext: getScopedStandardContext,
+  buildScopedStats,
+  getIsoNormativeProfile,
+  getScopedEvidences,
+  getScopedFindings,
+  getScopedActions,
+  getScopedAudits,
+  getScopedLifecycle,
+  filterBySelectedStandard,
+  toNumber: scopedToNumber,
+} = require('../helpers/reportDataScope.helpers');
+
+
+const {
   getReportChartStyles,
   renderKpiCards,
   renderProgressBars,
@@ -11,14 +38,7 @@ const {
   renderPremiumTable,
 } = require('../charts/reportCharts.helpers');
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
+function localEscapeHtml(value) { return escapeHtml(value); }
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -50,42 +70,13 @@ function pct(value) {
   return `${Math.round(n * 10) / 10}%`;
 }
 
-function getBaseUrl() {
-  return (
-    process.env.REPORT_PUBLIC_BASE_URL ||
-    process.env.PUBLIC_BASE_URL ||
-    process.env.API_PUBLIC_URL ||
-    'http://192.168.100.120:3000'
-  ).replace(/\/+$/, '');
-}
+function getBaseUrl() { return ''; }
 
-function getTcdxLogo() {
-  return (
-    process.env.REPORT_TCDX_LOGO_URL ||
-    process.env.TCDX_LOGO_URL ||
-    `${getBaseUrl()}/uploads/logos/tcdx-logo.png`
-  );
-}
+function getTcdxLogo() { return resolveTcdxLogoUrl(); }
 
-function getTenantLogo(tenant) {
-  return (
-    tenant?.report_logo_url ||
-    tenant?.logo_url ||
-    tenant?.brand_logo_url ||
-    tenant?.logo ||
-    ''
-  );
-}
+function getTenantLogo(tenant) { return resolveTenantLogoUrl(tenant); }
 
-function renderLogo(src, fallback) {
-  const safeSrc = String(src || '').trim();
-
-  if (!safeSrc) {
-    return `<div class="logoFallback">${escapeHtml(fallback || 'Logo')}</div>`;
-  }
-
-  return `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(fallback || 'Logo')}" />`;
-}
+function renderLogo(src, fallback) { return renderLogoOrFallback(src, fallback); }
 
 function formatDate(date = new Date()) {
   try {
@@ -99,53 +90,9 @@ function formatDate(date = new Date()) {
   }
 }
 
-function getStandardContext(data) {
-  const metadata = asObject(data?.metadata);
-  const standardContext = data?.standard_context || null;
-  const profileContext = data?.profile_context || metadata.profile_context || standardContext?.profile_context || null;
-  const metrics = standardContext?.metrics || metadata.coverage_metrics || {};
+function getStandardContext(data) { return getScopedStandardContext(data); }
 
-  const standardCode =
-    standardContext?.standard_code ||
-    metadata.standard_code ||
-    data?.standard_code ||
-    '';
-
-  const versionCode =
-    standardContext?.version_code ||
-    metadata.version_code ||
-    data?.version_code ||
-    '';
-
-  const displayName =
-    standardContext?.display_name ||
-    metadata.standard_label ||
-    profileContext?.display_name ||
-    (standardCode && versionCode ? `${standardCode}:${versionCode}` : 'Norma ISO');
-
-  return {
-    standardCode,
-    versionCode,
-    displayName,
-    coverageStatus: standardContext?.coverage_status || metadata.coverage_status || '',
-    coverageLabel: standardContext?.coverage_label || metadata.coverage_label || '',
-    profileContext,
-    metrics,
-    warnings: asArray(standardContext?.warnings).length ? asArray(standardContext.warnings) : asArray(metadata.coverage_warnings),
-  };
-}
-
-function getStats(data) {
-  const stats = data?.stats || {};
-
-  return {
-    controls: stats.controls || {},
-    evidences: stats.evidences || {},
-    findings: stats.findings || {},
-    risks: stats.risks || {},
-    actions: stats.action_plans || stats.actions || {},
-  };
-}
+function getStats(data) { return buildScopedStats(data); }
 
 function pageShell({ tenant, title, generatedAt, pageNumber, totalPages, content }) {
   const tenantName = tenant?.name || 'Cliente';
@@ -378,44 +325,73 @@ function renderEvidenceAndIssuesPage(data) {
 }
 
 function renderOperationalDetailPage(data) {
-  const { controls, evidences, findings, actions } = getStats(data);
+  const standard = getStandardContext(data);
+  const metrics = standard.metrics || {};
+  const stats = getStats(data);
+
+  const controls = stats.controls || {};
+  const evidences = stats.evidences || {};
+  const findings = stats.findings || {};
+  const actions = stats.actions || stats.action_plans || {};
+
+  const tenantControls = metrics.tenant_controls_count || controls.total_controls || 0;
+  const healthRecords = metrics.health_records_count || controls.evaluated_controls || 0;
+  const attentionControls = metrics.attention_controls_count || controls.warning_controls || 0;
+  const deterioratedControls = metrics.deteriorated_controls_count || controls.critical_controls || 0;
+  const pendingEvidences = metrics.pending_evidence_count || evidences.pending_evidences || 0;
+  const expiredEvidences = metrics.expired_evidence_count || evidences.expired_evidences || 0;
+  const openFindings = findings.open_findings || 0;
+  const openActions = actions.open_actions || actions.open_action_plans || 0;
+  const overdueActions = actions.overdue_actions || 0;
 
   const rows = [
     {
       area: 'Controles',
-      indicador: 'Total controles evaluados',
-      valor: controls.total_controls || getStandardContext(data).metrics?.tenant_controls_count || 0,
-      lectura: 'Base operativa de análisis del periodo.',
+      indicador: 'Total controles de la norma',
+      valor: tenantControls,
+      lectura: `Base operativa específica para ${standard.displayName}.`,
+    },
+    {
+      area: 'Controles',
+      indicador: 'Controles con salud calculada',
+      valor: healthRecords,
+      lectura: 'Controles con medición reciente de salud.',
     },
     {
       area: 'Controles',
       indicador: 'Controles en atención',
-      valor: controls.warning_controls || getStandardContext(data).metrics?.attention_controls_count || 0,
+      valor: attentionControls,
       lectura: 'Requieren revisión, evidencia o remediación.',
+    },
+    {
+      area: 'Controles',
+      indicador: 'Controles deteriorados',
+      valor: deterioratedControls,
+      lectura: 'Requieren remediación prioritaria.',
     },
     {
       area: 'Evidencias',
       indicador: 'Evidencias pendientes',
-      valor: evidences.pending_evidences || getStandardContext(data).metrics?.pending_evidence_count || 0,
-      lectura: 'Limitan trazabilidad auditable.',
+      valor: pendingEvidences,
+      lectura: 'Limitan trazabilidad auditable de la norma seleccionada.',
     },
     {
       area: 'Evidencias',
       indicador: 'Evidencias vencidas',
-      valor: evidences.expired_evidences || getStandardContext(data).metrics?.expired_evidence_count || 0,
+      valor: expiredEvidences,
       lectura: 'Deben reemplazarse por evidencia vigente.',
     },
     {
       area: 'Hallazgos',
       indicador: 'Hallazgos abiertos',
-      valor: findings.open_findings || 0,
+      valor: openFindings,
       lectura: 'Pueden derivar en no conformidades o acciones correctivas.',
     },
     {
       area: 'Acciones',
-      indicador: 'Acciones vencidas',
-      valor: actions.overdue_actions || 0,
-      lectura: 'Requieren escalamiento operativo.',
+      indicador: 'Acciones abiertas / vencidas',
+      valor: `${openActions} / ${overdueActions}`,
+      lectura: 'Requieren seguimiento operativo y evidencia de cierre.',
     },
   ];
 
@@ -434,7 +410,7 @@ function renderOperationalDetailPage(data) {
         { key: 'lectura', label: 'Lectura operativa' },
       ],
       rows,
-      { title: 'Resumen operativo accionable' }
+      { title: `Resumen operativo accionable · ${standard.displayName}` }
     )}
 
     <section class="noteBox">

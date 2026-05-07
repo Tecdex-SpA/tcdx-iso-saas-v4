@@ -1,6 +1,33 @@
 'use strict';
 
 const {
+  escapeHtml,
+  sanitizePdfText,
+  sanitizeId,
+  cleanFilename,
+} = require('../helpers/reportTextSanitizer.helpers');
+
+const {
+  resolveTcdxLogoUrl,
+  resolveTenantLogoUrl,
+  renderLogoOrFallback,
+} = require('../helpers/reportBranding.helpers');
+
+const {
+  getStandardContext: getScopedStandardContext,
+  buildScopedStats,
+  getIsoNormativeProfile,
+  getScopedEvidences,
+  getScopedFindings,
+  getScopedActions,
+  getScopedAudits,
+  getScopedLifecycle,
+  filterBySelectedStandard,
+  toNumber: scopedToNumber,
+} = require('../helpers/reportDataScope.helpers');
+
+
+const {
   getReportChartStyles,
   renderKpiCards,
   renderProgressBars,
@@ -12,14 +39,7 @@ const {
   renderBadge,
 } = require('../charts/reportCharts.helpers');
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
+function localEscapeHtml(value) { return escapeHtml(value); }
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -51,42 +71,13 @@ function pct(value) {
   return `${Math.round(n * 10) / 10}%`;
 }
 
-function getBaseUrl() {
-  return (
-    process.env.REPORT_PUBLIC_BASE_URL ||
-    process.env.PUBLIC_BASE_URL ||
-    process.env.API_PUBLIC_URL ||
-    'http://192.168.100.120:3000'
-  ).replace(/\/+$/, '');
-}
+function getBaseUrl() { return ''; }
 
-function getTcdxLogo() {
-  return (
-    process.env.REPORT_TCDX_LOGO_URL ||
-    process.env.TCDX_LOGO_URL ||
-    `${getBaseUrl()}/uploads/logos/tcdx-logo.png`
-  );
-}
+function getTcdxLogo() { return resolveTcdxLogoUrl(); }
 
-function getTenantLogo(tenant) {
-  return (
-    tenant?.report_logo_url ||
-    tenant?.logo_url ||
-    tenant?.brand_logo_url ||
-    tenant?.logo ||
-    ''
-  );
-}
+function getTenantLogo(tenant) { return resolveTenantLogoUrl(tenant); }
 
-function renderLogo(src, fallback) {
-  const safeSrc = String(src || '').trim();
-
-  if (!safeSrc) {
-    return `<div class="logoFallback">${escapeHtml(fallback || 'Logo')}</div>`;
-  }
-
-  return `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(fallback || 'Logo')}" />`;
-}
+function renderLogo(src, fallback) { return renderLogoOrFallback(src, fallback); }
 
 function formatDate(date = new Date()) {
   try {
@@ -116,60 +107,9 @@ function formatDateTime(date) {
   }
 }
 
-function getStandardContext(data) {
-  const metadata = asObject(data?.metadata);
-  const standardContext = data?.standard_context || null;
-  const profileContext =
-    data?.profile_context ||
-    metadata.profile_context ||
-    standardContext?.profile_context ||
-    null;
+function getStandardContext(data) { return getScopedStandardContext(data); }
 
-  const metrics = standardContext?.metrics || metadata.coverage_metrics || {};
-
-  const standardCode =
-    standardContext?.standard_code ||
-    metadata.standard_code ||
-    data?.standard_code ||
-    '';
-
-  const versionCode =
-    standardContext?.version_code ||
-    metadata.version_code ||
-    data?.version_code ||
-    '';
-
-  const displayName =
-    standardContext?.display_name ||
-    metadata.standard_label ||
-    profileContext?.display_name ||
-    (standardCode && versionCode ? `${standardCode}:${versionCode}` : 'Norma ISO');
-
-  return {
-    standardCode,
-    versionCode,
-    displayName,
-    coverageStatus: standardContext?.coverage_status || metadata.coverage_status || '',
-    coverageLabel: standardContext?.coverage_label || metadata.coverage_label || '',
-    profileContext,
-    metrics,
-    warnings: asArray(standardContext?.warnings).length
-      ? asArray(standardContext.warnings)
-      : asArray(metadata.coverage_warnings),
-  };
-}
-
-function getStats(data) {
-  const stats = data?.stats || {};
-
-  return {
-    controls: stats.controls || {},
-    evidences: stats.evidences || {},
-    findings: stats.findings || {},
-    risks: stats.risks || {},
-    actions: stats.action_plans || stats.actions || {},
-  };
-}
+function getStats(data) { return buildScopedStats(data); }
 
 function getRiskItems(data) {
   return (
@@ -222,7 +162,7 @@ function getRiskRowsFromData(data) {
       );
 
       return {
-        id: item.id || item.code || `R-${String(index + 1).padStart(2, '0')}`,
+        id: sanitizeId(item.id || item.code) || `R-${String(index + 1).padStart(2, '0')}`,
         title:
           item.title ||
           item.name ||
@@ -265,50 +205,20 @@ function getRiskRowsFromData(data) {
     });
   }
 
-  const highRisks = toNumber(stats.risks.high_risks || stats.risks.critical_risks, 0);
-  const totalRisks = toNumber(stats.risks.total_risks || metrics.risk_runs_count || 0, 0);
+  const normative = getIsoNormativeProfile(data);
+  const m = standard.metrics || {};
+  const generated = normative.riskFallbacks.map((item, index) => ({
+    ...item,
+    id: item.id || `R-${String(index + 1).padStart(2, '0')}`,
+    description:
+      item.description ||
+      `Riesgo sugerido para ${normative.label}, derivado de brechas de control, evidencia y cobertura operacional.`,
+    residual:
+      item.residual ||
+      ((m.evidence_coverage_pct || 0) < 70 ? 12 : 8),
+  }));
 
-  return [
-    {
-      id: 'R-01',
-      title: 'Riesgos altos o críticos detectados',
-      description: 'Riesgos con exposición relevante que requieren tratamiento y seguimiento.',
-      asset: 'Sistema de gestión',
-      probability: highRisks > 0 ? 4 : 3,
-      impact: highRisks > 0 ? 4 : 3,
-      inherent: highRisks > 0 ? 16 : 9,
-      residual: highRisks > 0 ? 12 : 6,
-      level: highRisks > 0 ? 'Alto' : 'Medio',
-      treatment: highRisks > 0 ? 'Mitigar' : 'Monitorear',
-      owner: 'Responsable ISO',
-    },
-    {
-      id: 'R-02',
-      title: 'Evidencias insuficientes para sustentar controles',
-      description: 'La falta de evidencia reduce la capacidad de demostrar control efectivo.',
-      asset: 'Controles ISO',
-      probability: (metrics.evidence_coverage_pct || 0) < 70 ? 4 : 2,
-      impact: 4,
-      inherent: 16,
-      residual: (metrics.evidence_coverage_pct || 0) < 70 ? 12 : 6,
-      level: (metrics.evidence_coverage_pct || 0) < 70 ? 'Alto' : 'Medio',
-      treatment: 'Mitigar',
-      owner: 'Responsable documental',
-    },
-    {
-      id: 'R-03',
-      title: 'Controles sin responsable operativo',
-      description: 'La ausencia de propietario dificulta ejecución, revisión y mejora continua.',
-      asset: 'Gobierno de controles',
-      probability: metrics.controls_with_responsible_count > 0 ? 2 : 4,
-      impact: 3,
-      inherent: 12,
-      residual: metrics.controls_with_responsible_count > 0 ? 6 : 12,
-      level: metrics.controls_with_responsible_count > 0 ? 'Medio' : 'Alto',
-      treatment: 'Mitigar',
-      owner: 'Gerencia / Responsable ISO',
-    },
-  ].slice(0, Math.max(totalRisks, 1));
+  return generated;
 }
 
 function classifyRiskLevel(score) {
@@ -607,7 +517,7 @@ function renderTreatmentPage(data) {
 
 function renderRiskDetailPage(data) {
   const rows = getRiskRowsFromData(data).slice(0, 10).map((item) => ({
-    id: item.id,
+    id: sanitizeId(item.id),
     riesgo: item.title,
     activo: item.asset,
     prob: item.probability,

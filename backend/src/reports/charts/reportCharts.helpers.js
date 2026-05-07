@@ -1,5 +1,7 @@
 'use strict';
 
+const { sanitizePdfText } = require('../helpers/reportTextSanitizer.helpers');
+
 /**
  * Helpers visuales HTML/CSS para informes PDF TCDX.
  *
@@ -11,7 +13,7 @@
  */
 
 function asString(value) {
-  return String(value ?? '').trim();
+  return sanitizePdfText(value);
 }
 
 function toNumber(value, fallback = 0) {
