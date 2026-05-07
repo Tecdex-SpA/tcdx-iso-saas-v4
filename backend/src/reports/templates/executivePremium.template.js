@@ -834,20 +834,124 @@ function renderIsoContextPage(data) {
   }
 
   const profile = standard.profileContext || {};
+  const metrics = standard.metrics || {};
+  const focus = profile.executive_focus || 'cumplimiento, controles, evidencias, riesgos y mejora continua';
+  const managementSystem = profile.management_system || 'Sistema de gestión evaluado';
+  const mainQuestion = profile.main_question || '¿Cuál es el estado del sistema de gestión evaluado?';
+  const decision = profile.management_decision || 'Priorizar acciones, responsables y fechas de cierre.';
+
+  const badges = [
+    renderBadge(standard.coverageLabel || 'Cobertura evaluada', standard.coverageStatus || 'neutral'),
+    profile.is_default_profile ? renderBadge('Perfil genérico', 'neutral') : renderBadge(profile.profile_key || profile.requested_key || 'Perfil ISO', 'success'),
+  ].join('');
 
   return `
     <div class="pageTitleBlock isoPageTitle">
       <span>Contexto normativo</span>
       <h2>${escapeHtml(standard.displayName || 'Norma ISO')}</h2>
-      <p>
-        ${escapeHtml(
-          profile.management_system ||
-          'Sistema de gestión evaluado'
-        )}
-      </p>
+      <p>${escapeHtml(managementSystem)}</p>
     </div>
 
-    ${renderIsoExecutiveBlock(data)}
+    <section class="isoExecutiveBlock isoExecutiveBlockCompact">
+      <div class="isoBlockHeader">
+        <div>
+          <div class="isoKicker">Contexto normativo seleccionado</div>
+          <h2>${escapeHtml(standard.displayName)}</h2>
+          <p>${escapeHtml(managementSystem)}</p>
+        </div>
+        <div class="isoBadgeWrap">${badges}</div>
+      </div>
+
+      <div class="isoGrid">
+        <div class="isoTextCard">
+          <h3>Foco ejecutivo</h3>
+          <p>${escapeHtml(focus)}</p>
+        </div>
+
+        <div class="isoTextCard">
+          <h3>Pregunta gerencial</h3>
+          <p>${escapeHtml(mainQuestion)}</p>
+        </div>
+
+        <div class="isoTextCard">
+          <h3>Decisión sugerida</h3>
+          <p>${escapeHtml(decision)}</p>
+        </div>
+      </div>
+
+      ${renderKpiCards(buildIsoKpiCards(data), { columns: 4 })}
+
+      ${renderProgressBars(buildCoverageBars(data), { title: 'Cobertura para generación de informes' })}
+
+      <div class="isoWarnings isoWarningsCompact">
+        <strong>Lectura ejecutiva:</strong>
+        <ul>
+          <li>${escapeHtml(`La norma cuenta con cobertura técnica de catálogo de ${fmtPercent(metrics.catalog_coverage_pct || 0)} y cobertura operacional de ${fmtPercent(metrics.operational_coverage_pct || 0)}.`)}</li>
+          <li>${escapeHtml('Los puntos críticos deben transformarse en acciones con responsable, fecha objetivo y evidencia trazable.')}</li>
+        </ul>
+      </div>
+    </section>
+  `;
+}
+
+function renderIsoChartsPage(data) {
+  const standard = getStandardContext(data);
+
+  if (!standard.hasStandard) {
+    return '';
+  }
+
+  const metrics = standard.metrics || {};
+  const warnings = asArray(standard.warnings).slice(0, 4);
+  const warningItems = warnings.length
+    ? warnings.map((warning) => `<li>${escapeHtml(cleanText(warning, 160))}</li>`).join('')
+    : `<li>${escapeHtml('La norma tiene cobertura suficiente para informes premium.')}</li>`;
+
+  return `
+    <div class="pageTitleBlock isoPageTitle">
+      <span>Análisis visual</span>
+      <h2>${escapeHtml(standard.displayName || 'Norma ISO')}</h2>
+      <p>Distribución de controles, evidencias y puntos de atención para gerencia.</p>
+    </div>
+
+    <section class="isoExecutiveBlock isoExecutiveBlockCompact">
+      <div class="twoCol isoChartsGrid">
+        ${renderDonut(buildControlHealthDistribution(data), {
+          title: 'Distribución de salud de controles',
+          centerLabel: 'Controles',
+        })}
+
+        ${renderStatusDistribution(buildEvidenceDistribution(data), { title: 'Estado de evidencias' })}
+      </div>
+
+      <div class="twoCol isoChartsGrid">
+        ${renderTopItems([
+          {
+            title: 'Controles sin responsable asignado',
+            description: 'Debe completarse la gobernanza operativa del sistema de gestión.',
+            value: metrics.tenant_controls_count ? (metrics.tenant_controls_count - (metrics.controls_with_responsible_count || 0)) : 0,
+            status: metrics.controls_with_responsible_count > 0 ? 'warning' : 'danger-soft',
+          },
+          {
+            title: 'Evidencias vencidas',
+            description: 'Elementos documentales que requieren renovación o reemplazo.',
+            value: metrics.expired_evidence_count || 0,
+            status: (metrics.expired_evidence_count || 0) > 0 ? 'danger' : 'success',
+          },
+          {
+            title: 'Último diagnóstico',
+            description: metrics.last_assessment_at ? formatDateTimeEs(metrics.last_assessment_at) : 'Sin diagnóstico reciente',
+            value: metrics.assessments_count || 0,
+            status: (metrics.assessments_count || 0) > 0 ? 'success' : 'warning',
+          },
+        ], { title: 'Puntos de atención para gerencia', valueLabel: 'Total' })}
+
+        <div class="isoWarnings isoWarningsStandalone">
+          <strong>Lectura ejecutiva:</strong>
+          <ul>${warningItems}</ul>
+        </div>
+      </div>
+    </section>
   `;
 }
 
@@ -890,7 +994,7 @@ function renderAuditSummaryPage(data) {
   const auditData = data.audit_summary || {};
   const summary = auditData.summary || {};
   const next = auditData.next_audit || null;
-  const recent = asArray(auditData.recent_audits).slice(0, 8);
+  const recent = asArray(auditData.recent_audits).slice(0, 6);
   const execution = data.audit_execution_summary || {};
   const reviews = execution.reviews || {};
   const latestAiRun = execution.latest_ai_auditor_run || null;
@@ -1967,6 +2071,157 @@ function renderStyles() {
         break-after: auto;
       }
 
+
+      /* =====================================================
+         Ajuste de encuadre PDF - Paso 11A
+         Reduce header/footer, aumenta área útil y evita pisar pie.
+      ===================================================== */
+
+      .pdfHeader {
+        min-height: 24mm !important;
+        height: 24mm !important;
+        padding: 4.5mm 11mm !important;
+      }
+
+      .pdfHeader .headerTitle h1,
+      .headerTitle h1 {
+        font-size: 17px !important;
+        line-height: 1.05 !important;
+        margin: 0 !important;
+      }
+
+      .pdfHeader .headerTitle p,
+      .headerTitle p {
+        font-size: 8.5px !important;
+        margin-top: 1.5mm !important;
+      }
+
+      .logoBox {
+        max-height: 18mm !important;
+        min-height: 14mm !important;
+      }
+
+      .logoBox img {
+        max-height: 18mm !important;
+        object-fit: contain !important;
+      }
+
+      .pdfFooter {
+        min-height: 10mm !important;
+        height: 10mm !important;
+        padding: 0 10mm !important;
+        font-size: 7.4px !important;
+        line-height: 1.15 !important;
+        z-index: 20 !important;
+      }
+
+      .footerCenter {
+        font-size: 7.2px !important;
+      }
+
+      .footerRight {
+        font-size: 7.4px !important;
+        white-space: nowrap !important;
+      }
+
+      .pdfContent {
+        padding: 7mm 11mm 14mm !important;
+        overflow: hidden !important;
+        transform: scale(0.965);
+        transform-origin: top center;
+        width: 103.6%;
+        margin-left: -1.8%;
+      }
+
+      .pdfPage {
+        overflow: hidden !important;
+      }
+
+      .pageTitleBlock {
+        margin-bottom: 4mm !important;
+      }
+
+      .pageTitleBlock h2 {
+        font-size: 19px !important;
+        line-height: 1.12 !important;
+        margin: 1.5mm 0 0 !important;
+      }
+
+      .pageTitleBlock p {
+        font-size: 10px !important;
+        line-height: 1.35 !important;
+        margin-top: 1mm !important;
+      }
+
+      .card,
+      .tcdx-chart-block,
+      .tcdx-table-block,
+      .metricCard,
+      .tcdx-kpi-card,
+      .tableBox {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+
+      .tableBox {
+        overflow: hidden !important;
+      }
+
+      table {
+        table-layout: fixed !important;
+        width: 100% !important;
+      }
+
+      th,
+      td {
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+        hyphens: auto !important;
+      }
+
+      .wideCard {
+        margin-bottom: 3mm !important;
+      }
+
+      .isoExecutiveBlockCompact {
+        padding: 3.5mm !important;
+      }
+
+      .isoExecutiveBlockCompact .tcdx-kpi-card {
+        min-height: 78px !important;
+        padding: 10px !important;
+      }
+
+      .isoExecutiveBlockCompact .tcdx-kpi-value {
+        font-size: 21px !important;
+      }
+
+      .isoExecutiveBlockCompact .tcdx-kpi-label {
+        font-size: 8.8px !important;
+      }
+
+      .isoExecutiveBlockCompact .tcdx-chart-block {
+        padding: 12px !important;
+        margin: 0 !important;
+      }
+
+      .isoWarningsStandalone {
+        height: auto !important;
+        min-height: 42mm;
+      }
+
+      .isoWarningsCompact {
+        margin-top: 3mm !important;
+      }
+
+      .twoCol {
+        gap: 4mm !important;
+      }
+
+      .metricGrid {
+        gap: 3mm !important;
+      }
+
 </style>
   `;
 }
@@ -1982,7 +2237,7 @@ function renderExecutivePremiumTemplate(data = {}, options = {}) {
 
   const pageContents = [
     renderPage1(data),
-    ...(getStandardContext(data).hasStandard ? [renderIsoContextPage(data)] : []),
+    ...(getStandardContext(data).hasStandard ? [renderIsoContextPage(data), renderIsoChartsPage(data)] : []),
     renderAiPage(data),
     renderAuditSummaryPage(data),
     renderHealthPage(data),
