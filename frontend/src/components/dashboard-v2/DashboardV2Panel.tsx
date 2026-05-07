@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import type { DashboardV2Response } from './types';
+import DashboardV2HealthSection from './DashboardV2HealthSection';
+import DashboardV2LifecycleSection from './DashboardV2LifecycleSection';
 import { chipClass, formatNumber, priorityClass, statusLabel } from './utils';
 
 type Props = {
@@ -65,16 +67,12 @@ export default function DashboardV2Panel({ activeTab, data }: Props) {
     );
   }
 
-  if (activeTab === 'salud_iso' || activeTab === 'ciclo_vida') {
-    return (
-      <Panel title={activeTab === 'salud_iso' ? 'Salud ISO' : 'Ciclo de vida operativo'} actionHref={activeTab === 'salud_iso' ? '/health' : '/ciclo-vida'}>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Metric label="Cobertura" value={`${Number(data.summary.coverage_pct || 0).toFixed(1)}%`} />
-          <Metric label="Hallazgos" value={data.summary.open_findings} />
-          <Metric label="No conformidades" value={data.summary.open_nonconformities} />
-        </div>
-      </Panel>
-    );
+  if (activeTab === 'salud_iso') {
+    return <DashboardV2HealthSection />;
+  }
+
+  if (activeTab === 'ciclo_vida') {
+    return <DashboardV2LifecycleSection />;
   }
 
   return (
