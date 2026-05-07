@@ -1316,6 +1316,44 @@ async function approveSuggestion(user, id, payload = {}) {
       ]
     );
 
+    if (payload.conversion_context && payload.dry_run !== true) {
+      await client.query(
+        `
+        INSERT INTO iso_recommended_action_conversions (
+          tenant_id,
+          recommendation_id,
+          target_type,
+          target_table,
+          target_id,
+          conversion_status,
+          source_payload,
+          result_payload,
+          converted_by
+        )
+        VALUES ($1::uuid,$2::uuid,$3,$4,$5::uuid,'converted',$6::jsonb,$7::jsonb,$8::uuid)
+        ON CONFLICT DO NOTHING
+        `,
+        [
+          tenantId,
+          id,
+          payload.conversion_context.target_type || targetRecordType,
+          payload.conversion_context.target_table || null,
+          createdRecordId,
+          JSON.stringify({
+            suggestion_id: id,
+            target_record_type: targetRecordType,
+            conversion_context: payload.conversion_context,
+          }),
+          JSON.stringify({
+            status: 'applied',
+            created_record_type: targetRecordType,
+            created_record_id: createdRecordId,
+          }),
+          getUserId(user),
+        ]
+      );
+    }
+
     await client.query('COMMIT');
 
     return updated.rows[0];

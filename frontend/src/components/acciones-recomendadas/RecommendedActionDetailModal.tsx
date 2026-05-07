@@ -11,6 +11,7 @@ import {
 
 type Props = {
   action: RecommendedAction | null;
+  conversionPreview?: JsonObject | null;
   readonly?: boolean;
   busy?: boolean;
   onClose: () => void;
@@ -40,6 +41,7 @@ function textValue(value: unknown, fallback: string) {
 
 export default function RecommendedActionDetailModal({
   action,
+  conversionPreview = null,
   readonly = false,
   busy = false,
   onClose,
@@ -53,6 +55,15 @@ export default function RecommendedActionDetailModal({
   const links = relatedLinks(action);
   const payload = action.payload_json || {};
   const trace = action.source_trace_json || {};
+  const preview = conversionPreview && typeof conversionPreview.preview === 'object'
+    ? conversionPreview.preview as JsonObject
+    : null;
+  const warnings = Array.isArray(conversionPreview?.warnings)
+    ? conversionPreview.warnings.map(String)
+    : [];
+  const blockedReasons = Array.isArray(conversionPreview?.blocked_reasons)
+    ? conversionPreview.blocked_reasons.map(String)
+    : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6">
@@ -158,6 +169,29 @@ export default function RecommendedActionDetailModal({
                   </a>
                 ))}
               </div>
+            </section>
+          )}
+
+          {conversionPreview && (
+            <section className="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <h3 className="text-sm font-semibold text-blue-950">Preview de conversion</h3>
+              <div className="mt-3 grid gap-2 text-sm text-blue-900 md:grid-cols-2">
+                <div><span className="font-semibold">Destino:</span> {textValue(conversionPreview.target_type, action.target_record_type)}</div>
+                <div><span className="font-semibold">Tabla:</span> {textValue(preview?.table, 'Sin tabla')}</div>
+                <div className="md:col-span-2"><span className="font-semibold">Titulo:</span> {textValue(preview?.title, action.title)}</div>
+                <div><span className="font-semibold">Prioridad:</span> {textValue(preview?.priority, action.priority)}</div>
+                <div><span className="font-semibold">Fecha:</span> {textValue(preview?.due_date, 'Sin fecha')}</div>
+              </div>
+              {warnings.length > 0 && (
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-blue-900">
+                  {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                </ul>
+              )}
+              {blockedReasons.length > 0 && (
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-red-800">
+                  {blockedReasons.map((reason) => <li key={reason}>{reason}</li>)}
+                </ul>
+              )}
             </section>
           )}
 

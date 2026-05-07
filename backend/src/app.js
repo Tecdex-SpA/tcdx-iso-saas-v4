@@ -43,6 +43,7 @@ const isoExpressDiagnosticRoutes = require('./routes/iso-express-diagnostic.rout
 const isoDocumentGeneratorRoutes = require('./routes/iso-document-generator.routes');
 const isoRiskMatrixRoutes = require('./routes/iso-risk-matrix.routes');
 const isoOperationalExecutionRoutes = require('./routes/iso-operational-execution.routes');
+const isoRecommendedActionsRoutes = require('./routes/iso-recommended-actions.routes');
 const aiTenantSearchRoutes = require('./routes/ai-tenant-search.routes');
 const lifecycleRoutes = require('./routes/lifecycle.routes');
 const aiFeedbackRoutes = require('./routes/ai-feedback.routes');
@@ -240,6 +241,7 @@ app.use('/api/iso-express-diagnostic', isoExpressDiagnosticRoutes);
 app.use('/api/iso-document-generator', isoDocumentGeneratorRoutes);
 app.use('/api/iso-risk-matrix', isoRiskMatrixRoutes);
 app.use('/api/iso-operational-execution', isoOperationalExecutionRoutes);
+app.use('/api/iso-recommended-actions', isoRecommendedActionsRoutes);
 app.use('/api/ai-compliance/tenant-search', aiTenantSearchRoutes);
 app.use('/api/lifecycle', lifecycleRoutes);
 

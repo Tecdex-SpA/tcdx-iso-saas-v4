@@ -72,6 +72,7 @@ export default function RecommendedActionsDashboard() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<ActionFeedback>(null);
   const [error, setError] = useState<string>('');
+  const [conversionPreview, setConversionPreview] = useState<JsonObject | null>(null);
 
   const readonly = !canMutate(role);
 
@@ -281,18 +282,25 @@ export default function RecommendedActionsDashboard() {
   const handleDryRun = async (action: RecommendedAction) => {
     try {
       setBusyId(action.id);
-      const result = await requestJson(`/api/iso-operational-execution/${action.id}/approve`, {
+      const result = await requestJson(`/api/iso-recommended-actions/${action.id}/dry-run-convert`, {
         method: 'POST',
         body: JSON.stringify({
           tenant_id: tenantId,
-          target_record_type: action.target_record_type,
-          dry_run: true,
+          target_type: action.target_record_type,
+          options: {},
         }),
       });
       const resultData = asJsonObject(result.data);
+      setSelected(action);
+      setConversionPreview(resultData);
+      const blocked = Array.isArray(resultData.blocked_reasons)
+        ? resultData.blocked_reasons.filter(Boolean).join(' | ')
+        : '';
       setFeedback({
-        kind: 'info',
-        message: `Dry-run OK: se podria crear ${targetLabel(String(resultData.would_create || action.target_record_type))}.`,
+        kind: resultData.can_convert === false ? 'warning' : 'info',
+        message: resultData.can_convert === false
+          ? `Conversion bloqueada: ${blocked || 'requiere revision manual.'}`
+          : `Dry-run OK: se podria crear ${targetLabel(String(resultData.target_type || action.target_record_type))}.`,
         data: result.data,
       });
     } catch (err: unknown) {
@@ -305,18 +313,32 @@ export default function RecommendedActionsDashboard() {
   const handleConvert = async (action: RecommendedAction) => {
     try {
       setBusyId(action.id);
-      const dryRun = await requestJson(`/api/iso-operational-execution/${action.id}/approve`, {
+      const dryRun = await requestJson(`/api/iso-recommended-actions/${action.id}/dry-run-convert`, {
         method: 'POST',
         body: JSON.stringify({
           tenant_id: tenantId,
-          target_record_type: action.target_record_type,
-          dry_run: true,
+          target_type: action.target_record_type,
+          options: {},
         }),
       });
 
       const dryRunData = asJsonObject(dryRun.data);
+      setSelected(action);
+      setConversionPreview(dryRunData);
+      if (dryRunData.can_convert === false) {
+        const blocked = Array.isArray(dryRunData.blocked_reasons)
+          ? dryRunData.blocked_reasons.filter(Boolean).join(' | ')
+          : '';
+        setFeedback({
+          kind: 'warning',
+          message: `Conversion bloqueada: ${blocked || 'requiere revision manual.'}`,
+          data: dryRun.data,
+        });
+        return;
+      }
+
       const confirmed = window.confirm(
-        `El backend puede crear ${targetLabel(String(dryRunData.would_create || action.target_record_type))} desde esta sugerencia. Confirmas la conversion real?`
+        `El backend puede crear ${targetLabel(String(dryRunData.target_type || action.target_record_type))} desde esta sugerencia. Confirmas la conversion real?`
       );
       if (!confirmed) {
         setFeedback({
@@ -327,12 +349,13 @@ export default function RecommendedActionsDashboard() {
         return;
       }
 
-      const result = await requestJson(`/api/iso-operational-execution/${action.id}/approve`, {
+      const result = await requestJson(`/api/iso-recommended-actions/${action.id}/convert`, {
         method: 'POST',
         body: JSON.stringify({
           tenant_id: tenantId,
-          target_record_type: action.target_record_type,
-          dry_run: false,
+          target_type: action.target_record_type,
+          confirmed: true,
+          options: {},
         }),
       });
 
@@ -342,6 +365,7 @@ export default function RecommendedActionsDashboard() {
         data: result.data,
       });
       setSelected(null);
+      setConversionPreview(null);
       await loadData(filters);
     } catch (err: unknown) {
       setFeedback({ kind: 'error', message: errorMessage(err, 'No fue posible convertir la sugerencia.') });
@@ -371,6 +395,7 @@ export default function RecommendedActionsDashboard() {
         data: result.data,
       });
       setSelected(null);
+      setConversionPreview(null);
       await loadData(filters);
     } catch (err: unknown) {
       setFeedback({ kind: 'error', message: errorMessage(err, 'No fue posible descartar la sugerencia.') });
@@ -559,9 +584,13 @@ export default function RecommendedActionsDashboard() {
 
       <RecommendedActionDetailModal
         action={selected}
+        conversionPreview={conversionPreview}
         readonly={readonly}
         busy={Boolean(selected && busyId === selected.id)}
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null);
+          setConversionPreview(null);
+        }}
         onAccept={handleDryRun}
         onConvert={handleConvert}
         onDismiss={handleDismiss}
