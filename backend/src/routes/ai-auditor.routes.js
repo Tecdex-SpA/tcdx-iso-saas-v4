@@ -5,6 +5,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
 const { resolveLocale } = require('../utils/locale');
+const { renderAiAuditorPremiumPdf } = require('../reports/helpers/aiAuditorPdfKitPremium.helpers');
 
 function normalizeRole(user) {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
@@ -1916,12 +1917,6 @@ function addAiAuditorGovernancePdfSection(doc, locale, analysis, review) {
 
 
 function streamAiAuditorPdfReport({ res, locale, tenant, analysis, fileName }) {
-  const summary = getAiAuditorPdfSummary(analysis);
-  const coverage = getAiAuditorPdfCoverage(analysis);
-  const trace = getAiAuditorPdfTrace(analysis);
-  const suggestions = getAiAuditorPdfSuggestions(analysis);
-  const scope = analysis?.scope || {};
-  const review = getAiAuditorPdfReview(analysis, null, analysis?.__pdf_review);
   const doc = new PDFDocument({
     size: 'LETTER',
     margins: { top: 50, bottom: 54, left: 50, right: 50 },
@@ -1931,81 +1926,7 @@ function streamAiAuditorPdfReport({ res, locale, tenant, analysis, fileName }) {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${sanitizeAiAuditorPdfFileName(fileName)}.pdf"`);
   doc.pipe(res);
-
-  doc.roundedRect(36, 30, doc.page.width - 72, 92, 18).fillAndStroke('#0B1120', '#0B1120');
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#93C5FD').text('TCDX by Tecdex', 58, 48);
-  doc.fontSize(21).font('Helvetica-Bold').fillColor('#FFFFFF').text(aiAuditorPdfText(locale, 'title'), 58, 66, { width: doc.page.width - 116 });
-  doc.fontSize(9).font('Helvetica').fillColor('#CBD5E1').text(aiAuditorPdfText(locale, 'subtitle'), 58, 94);
-  doc.y = 145;
-
-  const metaY = doc.y;
-  const cardW = (doc.page.width - 120) / 2;
-  doc.roundedRect(50, metaY, cardW, 72, 12).fillAndStroke('#EFF6FF', '#BFDBFE');
-  doc.roundedRect(70 + cardW, metaY, cardW, 72, 12).fillAndStroke('#F8FAFC', '#E2E8F0');
-  doc.fontSize(8).font('Helvetica-Bold').fillColor('#1D4ED8').text(aiAuditorPdfText(locale, 'tenant'), 66, metaY + 14);
-  doc.fontSize(13).font('Helvetica-Bold').fillColor('#0F172A').text(safePdfValue(tenant?.name, 'Tenant'), 66, metaY + 31, { width: cardW - 32 });
-  doc.fontSize(8).font('Helvetica-Bold').fillColor('#64748B').text(aiAuditorPdfText(locale, 'emittedAt'), 86 + cardW, metaY + 14);
-  doc.fontSize(11).font('Helvetica-Bold').fillColor('#0F172A').text(new Date().toLocaleString(), 86 + cardW, metaY + 31, { width: cardW - 32 });
-  doc.y = metaY + 95;
-
-  const kpiY = doc.y;
-  const gap = 10;
-  const kpiW = (doc.page.width - 100 - (gap * 3)) / 4;
-  addAiAuditorPdfKpi(doc, aiAuditorPdfText(locale, 'score'), `${safePdfValue(summary.score, 0)}%`, 50, kpiY, kpiW);
-  addAiAuditorPdfKpi(doc, aiAuditorPdfText(locale, 'readiness'), safePdfValue(summary.readiness_level), 50 + kpiW + gap, kpiY, kpiW);
-  addAiAuditorPdfKpi(doc, aiAuditorPdfText(locale, 'controls'), safePdfValue(coverage.controls_reviewed, 0), 50 + ((kpiW + gap) * 2), kpiY, kpiW);
-  addAiAuditorPdfKpi(doc, 'AI Engine', trace.ai_engine_used === true ? 'true' : 'false', 50 + ((kpiW + gap) * 3), kpiY, kpiW);
-  doc.y = kpiY + 78;
-
-  doc.roundedRect(50, doc.y, doc.page.width - 100, 58, 12).fillAndStroke('#FEFCE8', '#FDE68A');
-  doc.fontSize(9).font('Helvetica-Bold').fillColor('#854D0E').text(`${aiAuditorPdfText(locale, 'humanReview')} · ${aiAuditorPdfText(locale, 'noAutoCreate')} · ${aiAuditorPdfText(locale, 'noApproval')}`, 66, doc.y + 17, { width: doc.page.width - 132, lineGap: 3 });
-  doc.y += 82;
-
-  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'executiveSummary'));
-  doc.fontSize(10).font('Helvetica').fillColor('#334155').text(safePdfValue(summary.executive_summary, aiAuditorPdfText(locale, 'empty')), { width: doc.page.width - 100, lineGap: 4 });
-
-  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'auditorOpinion'));
-  doc.fontSize(10).font('Helvetica').fillColor('#334155').text(safePdfValue(summary.auditor_opinion, aiAuditorPdfText(locale, 'empty')), { width: doc.page.width - 100, lineGap: 4 });
-
-  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'scope'));
-  addAiAuditorPdfBullets(doc, locale, [
-    `${aiAuditorPdfText(locale, 'standard')}: ${safePdfValue(analysis?.standard_code || scope?.standard_code || (Array.isArray(scope?.standards) ? scope.standards.join(', ') : ''))}`,
-    `${aiAuditorPdfText(locale, 'focus')}: ${safePdfValue(trace.audit_focus || analysis?.audit_focus)}`,
-    `${aiAuditorPdfText(locale, 'depth')}: ${safePdfValue(trace.depth || analysis?.depth)}`,
-    `${aiAuditorPdfText(locale, 'evidences')}: ${safePdfValue(coverage.evidences_reviewed, 0)}`,
-    `${aiAuditorPdfText(locale, 'findings')}: ${safePdfValue(coverage.findings_reviewed, 0)}`,
-    `${aiAuditorPdfText(locale, 'actions')}: ${safePdfValue(coverage.actions_reviewed, 0)}`,
-  ]);
-
-  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'mainGaps'));
-  addAiAuditorPdfBullets(doc, locale, summary.main_gaps, (item) => `${safePdfValue(item.title || item.type)} — ${safePdfValue(item.detail || item.severity || '')}`);
-
-  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'evidenceRequests'));
-  addAiAuditorPdfBullets(doc, locale, suggestions.evidence_requests, (item) => `${safePdfValue(item.title || item.standard_code)} — ${safePdfValue(item.reason || item.priority || '')}`);
-
-  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'findingsSuggestions'));
-  addAiAuditorPdfBullets(doc, locale, suggestions.findings_suggestions, (item) => `${safePdfValue(item.title)} — ${safePdfValue(item.recommended_action || item.severity || '')}`);
-
-  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'actionSuggestions'));
-  addAiAuditorPdfBullets(doc, locale, suggestions.action_plan_suggestions, (item) => `${safePdfValue(item.title)} — ${safePdfValue(item.recommended_action || item.priority || '')}`);
-
-  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'nextSteps'));
-  addAiAuditorPdfBullets(doc, locale, suggestions.next_steps);
-
-  addAiAuditorHumanReviewPdfSection(doc, locale, review);
-  addAiAuditorGovernancePdfSection(doc, locale, analysis, review);
-
-  addAiAuditorPdfSectionTitle(doc, locale, aiAuditorPdfText(locale, 'traceability'));
-  addAiAuditorPdfBullets(doc, locale, [
-    `ai_engine_used: ${safePdfValue(trace.ai_engine_used, false)}`,
-    `source: ${safePdfValue(trace.source)}`,
-    `endpoint: ${safePdfValue(trace.endpoint)}`,
-    `history_run_id: ${safePdfValue(trace.history_run_id)}`,
-    `generated_at: ${safePdfValue(trace.generated_at)}`,
-    `db_write: ${safePdfValue(trace.db_write, false)}`,
-  ]);
-
-  addAiAuditorPdfFooter(doc, locale);
+  renderAiAuditorPremiumPdf(doc, { locale, tenant, analysis });
   doc.end();
 }
 
