@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import type { SupportedLocale } from '@/i18n/locales';
 
@@ -11,6 +12,15 @@ export default function LanguageSelector({ variant = 'compact' }: LanguageSelect
   const { locale, setLocale, availableLocales, t } = useTranslation();
 
   const isLogin = variant === 'login';
+  const visibleLocales = isLogin
+    ? availableLocales.filter((item) => item.code === 'es')
+    : availableLocales;
+
+  useEffect(() => {
+    if (isLogin && locale !== 'es') {
+      setLocale('es' as SupportedLocale);
+    }
+  }, [isLogin, locale, setLocale]);
 
   return (
     <div
@@ -26,8 +36,14 @@ export default function LanguageSelector({ variant = 'compact' }: LanguageSelect
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-1">
-        {availableLocales.map((item) => {
+      <div className={isLogin ? 'grid grid-cols-1 gap-1' : 'grid grid-cols-2 gap-1'}>
+        {/*
+          Login temporalmente solo en espanol.
+          Para reactivar ingles en login, volver a usar:
+          availableLocales.map(...)
+          y restaurar grid-cols-2 arriba.
+        */}
+        {visibleLocales.map((item) => {
           const selected = locale === item.code;
 
           return (
