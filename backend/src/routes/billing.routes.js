@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
+const { renderAiAuditorPremiumTemplate } = require('../reports/templates/aiAuditorPremium.template');
 
 function normalizeRole(user) {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();

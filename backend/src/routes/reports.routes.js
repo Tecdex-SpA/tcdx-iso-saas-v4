@@ -18,6 +18,7 @@ const { renderMaturityGapDiagnosticPremiumTemplate } = require('../reports/templ
 const { renderIsoRiskPremiumTemplate } = require('../reports/templates/isoRiskPremium.template');
 const { renderInternalAuditPremiumTemplate } = require('../reports/templates/internalAuditPremium.template');
 const { renderActionPlanPremiumTemplate } = require('../reports/templates/actionPlanPremium.template');
+const { renderAiAuditorPremiumTemplate } = require('../reports/templates/aiAuditorPremium.template');
 const {
   persistSeniorAuditorSuggestions,
   summarizeSeniorSuggestionSync,

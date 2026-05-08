@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const isoCommandCenter = require('./isoCommandCenter.service');
+const { renderAiAuditorPremiumTemplate } = require('../../reports/templates/aiAuditorPremium.template');
 
 const PLATFORM_ROLES = new Set([
   'superadmin',

@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { renderAiAuditorPremiumTemplate } = require('../../reports/templates/aiAuditorPremium.template');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';

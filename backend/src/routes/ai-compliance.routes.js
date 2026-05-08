@@ -192,6 +192,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
 const { resolveLocale } = require('../utils/locale');
+const { renderAiAuditorPremiumTemplate } = require('../reports/templates/aiAuditorPremium.template');
 const {
   persistSeniorAuditorSuggestions,
   summarizeSeniorSuggestionSync,

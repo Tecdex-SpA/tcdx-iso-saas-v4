@@ -1,4 +1,5 @@
 const { createReportTranslator, reportLocaleToIntl, normalizeReportLocale } = require('../i18n/reportLocale');
+const { renderAiAuditorPremiumTemplate } = require('../../reports/templates/aiAuditorPremium.template');
 const {
   getReportChartStyles,
   renderKpiCards,
