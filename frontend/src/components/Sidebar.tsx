@@ -705,12 +705,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         />
       </div>
 
-      {!collapsed && (
-        <div className="mb-4 rounded-lg border border-white/10 bg-white/7 px-3 py-3 text-xs leading-5 text-white/66 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-          {t('sidebar.description')}
-        </div>
-      )}
-
       <nav className="tcdx-scrollbar flex-1 overflow-y-auto pr-1 text-sm">
         {isPlatformAdmin && (
           <>
