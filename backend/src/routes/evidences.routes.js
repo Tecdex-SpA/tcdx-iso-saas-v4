@@ -81,35 +81,6 @@ const canProcessAiJobs = (req) => {
 const evidenceUploadDir = path.join(__dirname, '..', '..', 'uploads', 'evidences')
 fs.mkdirSync(evidenceUploadDir, { recursive: true })
 
-const allowedEvidenceExtensions = new Set([
-  '.pdf',
-  '.doc',
-  '.docx',
-  '.xls',
-  '.xlsx',
-  '.csv',
-  '.txt',
-  '.json',
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.webp'
-])
-
-const allowedEvidenceMimes = new Set([
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'text/csv',
-  'text/plain',
-  'application/json',
-  'image/png',
-  'image/jpeg',
-  'image/webp'
-])
-
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, evidenceUploadDir),
   filename: (_req, file, cb) => {
@@ -122,16 +93,6 @@ const upload = multer({
   storage,
   limits: {
     fileSize: Number(process.env.EVIDENCE_UPLOAD_MAX_BYTES || 25 * 1024 * 1024)
-  },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(String(file.originalname || '')).toLowerCase()
-    const mime = String(file.mimetype || '').toLowerCase()
-
-    if (allowedEvidenceExtensions.has(ext) && allowedEvidenceMimes.has(mime)) {
-      return cb(null, true)
-    }
-
-    return cb(new Error('Tipo de archivo no permitido para evidencia'))
   }
 })
 
@@ -143,7 +104,7 @@ function evidenceUpload(req, res, next) {
     return res.status(400).json({
       error: isSizeError
         ? 'La evidencia excede el tamaño máximo permitido'
-        : 'Tipo de archivo no permitido para evidencia'
+        : err.message || 'No fue posible procesar el archivo de evidencia'
     })
   })
 }
