@@ -212,6 +212,11 @@ function RiskMatrixPageContent() {
 
   const [focusedControlId, setFocusedControlId] = useState('');
   const [focusMessage, setFocusMessage] = useState('');
+  const [applyingAiControlId, setApplyingAiControlId] = useState('');
+  const [aiActionFeedback, setAiActionFeedback] = useState<{
+    kind: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
 
   const focusAppliedRef = useRef(false);
 
@@ -658,18 +663,61 @@ function RiskMatrixPageContent() {
   const applyAI = async (tenant_control_id: string) => {
     const token = localStorage.getItem('token');
 
+    if (!token) {
+      setAiActionFeedback({
+        kind: 'error',
+        message: 'No hay sesion activa. Ingresa nuevamente antes de aplicar una accion IA.',
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Esta accion aplicara la correccion IA del control seleccionado y refrescara la matriz. ¿Deseas continuar?'
+    );
+
+    if (!confirmed) return;
+
     try {
-      await fetch(`${API_URL}/api/ai/apply/${tenant_control_id}`, {
+      setApplyingAiControlId(tenant_control_id);
+      setAiActionFeedback({
+        kind: 'info',
+        message: 'Aplicando accion IA sobre el control seleccionado...',
+      });
+
+      const response = await fetch(`${API_URL}/api/ai/apply/${tenant_control_id}`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      const text = await response.text();
+      let json: any = null;
+
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!response.ok || json?.success === false || json?.ok === false) {
+        throw new Error(json?.error || `No fue posible aplicar la accion IA (HTTP ${response.status}).`);
+      }
+
       if (iso) {
         await load(iso);
       }
+
+      setAiActionFeedback({
+        kind: 'success',
+        message: 'Accion IA aplicada correctamente. La matriz y los controles fueron actualizados.',
+      });
     } catch (err) {
       console.error('ERROR APPLY AI:', err);
-      alert(t('riskMatrix.applyAiError'));
+      setAiActionFeedback({
+        kind: 'error',
+        message: err instanceof Error ? err.message : t('riskMatrix.applyAiError'),
+      });
+    } finally {
+      setApplyingAiControlId('');
     }
   };
 
@@ -1291,6 +1339,21 @@ function RiskMatrixPageContent() {
               {t('riskMatrix.controlsWithRisk')} {riskLevelLabel(selectedLevel)}
             </h3>
 
+            {aiActionFeedback && (
+              <div
+                className={[
+                  'rounded-2xl border px-4 py-3 text-sm',
+                  aiActionFeedback.kind === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : aiActionFeedback.kind === 'error'
+                      ? 'border-red-200 bg-red-50 text-red-800'
+                      : 'border-blue-200 bg-blue-50 text-blue-800',
+                ].join(' ')}
+              >
+                {aiActionFeedback.message}
+              </div>
+            )}
+
             {filtered.length === 0 ? (
               <div className="text-gray-500">
                 {t('riskMatrix.noControlsForLevel')}
@@ -1326,10 +1389,12 @@ function RiskMatrixPageContent() {
 
                   {c.nivel !== 'BAJO' && (
                     <button
+                      type="button"
                       onClick={() => applyAI(c.id)}
-                      className="bg-blue-600 text-white px-3 py-1 rounded"
+                      disabled={applyingAiControlId === c.id}
+                      className="inline-flex items-center gap-2 rounded bg-blue-600 px-3 py-1 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {t('riskMatrix.applyAiAction')}
+                      {applyingAiControlId === c.id ? 'Aplicando...' : t('riskMatrix.applyAiAction')}
                     </button>
                   )}
                 </div>
