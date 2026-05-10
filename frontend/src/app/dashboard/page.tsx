@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
+import DashboardV2 from '@/components/dashboard-v2/DashboardV2';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
@@ -495,7 +496,7 @@ export default function DashboardPage() {
   }
 
   const { locale, t } = useTranslation();
-  const [activeView, setActiveView] = useState<'executive' | 'kpi'>('executive');
+  const [activeView, setActiveView] = useState<'executive' | 'kpi' | 'iso'>('executive');
 
   const currentRole = getUserRoleFromToken();
 
@@ -1052,6 +1053,19 @@ export default function DashboardPage() {
                   ].join(' ')}
                 >
                   {t('dashboard.kpiView')}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveView('iso')}
+                  className={[
+                    'rounded-md px-4 py-2 text-sm font-semibold transition',
+                    activeView === 'iso'
+                      ? 'bg-[#2563eb] text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100',
+                  ].join(' ')}
+                >
+                  Operacion ISO
                 </button>
               </div>
 
@@ -1803,6 +1817,12 @@ export default function DashboardPage() {
                 </>
               )}
             </>
+          )}
+
+          {activeView === 'iso' && (
+            <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+              <DashboardV2 />
+            </section>
           )}
         </div>
       </div>

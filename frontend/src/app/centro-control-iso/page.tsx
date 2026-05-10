@@ -1,10 +1,10 @@
 import AppLayout from '@/components/AppLayout';
-import UnifiedIsoCommandCenter from '@/components/centro-control-iso/UnifiedIsoCommandCenter';
+import CombinedIsoCommandCenter from '@/components/centro-control-iso/CombinedIsoCommandCenter';
 
 export default function CentroControlIsoPage() {
   return (
     <AppLayout>
-      <UnifiedIsoCommandCenter />
+      <CombinedIsoCommandCenter />
     </AppLayout>
   );
 }
