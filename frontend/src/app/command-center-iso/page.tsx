@@ -1,10 +1,5 @@
-import AppLayout from '@/components/AppLayout';
-import IsoCommandCenterDashboard from '@/components/command-center-iso/IsoCommandCenterDashboard';
+import { redirect } from 'next/navigation';
 
 export default function CommandCenterIsoPage() {
-  return (
-    <AppLayout>
-      <IsoCommandCenterDashboard />
-    </AppLayout>
-  );
+  redirect('/centro-control-iso');
 }

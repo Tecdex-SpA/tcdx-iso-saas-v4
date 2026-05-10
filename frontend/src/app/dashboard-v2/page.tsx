@@ -1,10 +1,5 @@
-import AppLayout from '@/components/AppLayout';
-import DashboardV2 from '@/components/dashboard-v2/DashboardV2';
+import { redirect } from 'next/navigation';
 
 export default function DashboardV2Page() {
-  return (
-    <AppLayout>
-      <DashboardV2 />
-    </AppLayout>
-  );
+  redirect('/dashboard');
 }

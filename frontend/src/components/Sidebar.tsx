@@ -266,34 +266,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         ),
       },
       {
-        href: '/dashboard-v2',
-        label: 'Nuevo Dashboard',
-        show: !isDealer,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M7 8h4" />
-            <path d="M7 12h10" />
-            <path d="M7 16h6" />
-            <path d="M15 8h2" />
-          </svg>
-        ),
-      },
-      {
-        href: '/command-center-iso',
-        label: 'Command Center ISO',
-        show: !isDealer,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M4 5h16" />
-            <path d="M4 19h16" />
-            <rect x="5" y="8" width="4" height="7" rx="1" />
-            <rect x="10" y="8" width="4" height="7" rx="1" />
-            <rect x="15" y="8" width="4" height="7" rx="1" />
-          </svg>
-        ),
-      },
-      {
         href: '/centro-control-iso',
         label: 'Centro Control ISO',
         show: !isDealer,
