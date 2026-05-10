@@ -447,6 +447,11 @@ function EvidenciasPageContent() {
     file: null as File | null,
   });
 
+  const uploadAccept =
+    uploadForm.evidence_type === 'foto' || uploadForm.evidence_type === 'captura'
+      ? 'image/*'
+      : undefined;
+
   const focusAppliedRef = useRef(false);
 
   const role = String(user?.role || '').toLowerCase().trim();
@@ -674,19 +679,7 @@ function EvidenciasPageContent() {
     }
 
     if (!uploadForm.file) {
-      alert('Debes seleccionar un archivo PDF o imagen.');
-      return;
-    }
-
-    const allowedTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-    ];
-
-    if (!allowedTypes.includes(uploadForm.file.type)) {
-      alert('Solo se permiten archivos PDF, JPG, PNG o WEBP.');
+      alert('Debes seleccionar un archivo.');
       return;
     }
 
@@ -1171,7 +1164,7 @@ function EvidenciasPageContent() {
               <input
                 id="evidence-file-input"
                 type="file"
-                accept=".pdf,image/jpeg,image/png,image/webp"
+                accept={uploadAccept}
                 onChange={(e) =>
                   setUploadForm((prev) => ({
                     ...prev,
