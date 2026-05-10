@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { getStoredValidToken, getTenantIdFromToken } from '@/utils/auth';
 import type { JsonObject, RecommendedAction } from './types';
 import {
   formatDate,
@@ -8,6 +12,11 @@ import {
   statusClass,
   targetLabel,
 } from './utils';
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  'http://192.168.100.120:3000';
 
 type Props = {
   action: RecommendedAction | null;
@@ -20,18 +29,13 @@ type Props = {
   onDismiss: (action: RecommendedAction) => void;
 };
 
-function TraceBlock({ title, data }: { title: string; data?: JsonObject | null }) {
-  if (!data || Object.keys(data).length === 0) return null;
-
-  return (
-    <details className="rounded border border-gray-200 bg-gray-50 p-3">
-      <summary className="cursor-pointer text-sm font-semibold text-gray-800">{title}</summary>
-      <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs text-gray-600">
-        {JSON.stringify(data, null, 2)}
-      </pre>
-    </details>
-  );
-}
+type AiInsightState = {
+  loading: boolean;
+  error: string;
+  summary: string;
+  recommendation: string;
+  source: string;
+};
 
 function textValue(value: unknown, fallback: string) {
   if (typeof value === 'string' && value.trim()) return value;
@@ -39,7 +43,142 @@ function textValue(value: unknown, fallback: string) {
   return fallback;
 }
 
-export default function RecommendedActionDetailModal({
+function numberValue(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function humanList(items: Array<string | null | undefined>) {
+  const clean = items.map((item) => String(item || '').trim()).filter(Boolean);
+  if (clean.length === 0) return '';
+  if (clean.length === 1) return clean[0];
+  return `${clean.slice(0, -1).join(', ')} y ${clean[clean.length - 1]}`;
+}
+
+function buildOperationalInsight(action: RecommendedAction, payload: JsonObject, trace: JsonObject) {
+  const clause = textValue(payload.clause || trace.clause || action.control_clause, '');
+  const category = textValue(payload.category || trace.category || action.control_category, '');
+  const standard = textValue(trace.standard_code || payload.standard_code || action.standard_code, 'la norma seleccionada');
+  const evidenceCount = numberValue(payload.evidence_count ?? trace.evidence_count);
+  const approvedEvidenceCount = numberValue(payload.approved_evidence_count ?? trace.approved_evidence_count);
+  const controlDescription = textValue(trace.control_description || action.control_description, '');
+  const contextParts = [standard, clause ? `clausula ${clause}` : '', category || controlDescription].filter(Boolean);
+
+  const evidenceSentence = evidenceCount !== null || approvedEvidenceCount !== null
+    ? `El analisis detecta ${evidenceCount ?? 0} evidencia(s) registradas y ${approvedEvidenceCount ?? 0} evidencia(s) aprobadas para sostener este punto.`
+    : 'La recomendacion requiere revisar si existe evidencia suficiente, vigente y aprobada antes de convertirla en trabajo operativo.';
+
+  const focus = humanList(contextParts);
+
+  return {
+    title: 'Lectura operativa',
+    body: focus
+      ? `Esta recomendacion se origina en ${focus}. ${evidenceSentence}`
+      : `Esta recomendacion se origina en ${sourceLabel(action.source_module)}. ${evidenceSentence}`,
+  };
+}
+
+function buildTraceInsight(action: RecommendedAction, payload: JsonObject, trace: JsonObject) {
+  const sourceEntity = humanList([
+    action.source_entity_type || '',
+    action.source_entity_id || '',
+  ]);
+  const tenantControl = textValue(action.tenant_control_id || trace.tenant_control_id, '');
+  const operationId = textValue(action.operation_id || trace.operation_id, '');
+  const expected = textValue(
+    payload.expected_result || payload.impact,
+    'La accion busca cerrar la brecha, reducir riesgo y dejar seguimiento auditable.'
+  );
+  const traceParts = [
+    sourceEntity ? `fuente ${sourceEntity}` : '',
+    tenantControl ? `control tenant ${tenantControl}` : '',
+    operationId ? `operacion ${operationId}` : '',
+  ].filter(Boolean);
+
+  return {
+    title: 'Trazabilidad explicada',
+    body: traceParts.length > 0
+      ? `La trazabilidad conecta esta sugerencia con ${humanList(traceParts)}. ${expected}`
+      : `La trazabilidad disponible confirma el origen funcional de la sugerencia. ${expected}`,
+  };
+}
+
+function buildAiQuestion(action: RecommendedAction, payload: JsonObject, trace: JsonObject) {
+  const context = {
+    norma: action.standard_code || trace.standard_code || payload.standard_code || 'ISO',
+    titulo: action.title,
+    descripcion: action.description || '',
+    justificacion: action.rationale || action.source_reason || '',
+    prioridad: action.priority,
+    estado: action.status,
+    origen: sourceLabel(action.source_module),
+    destino: targetLabel(action.target_record_type),
+    control: action.control_description || trace.control_description || payload.control_description || '',
+    clausula: action.control_clause || trace.clause || payload.clause || '',
+    categoria: action.control_category || trace.category || payload.category || '',
+    evidencias_registradas: payload.evidence_count ?? trace.evidence_count ?? null,
+    evidencias_aprobadas: payload.approved_evidence_count ?? trace.approved_evidence_count ?? null,
+    resultado_esperado: payload.expected_result || payload.impact || '',
+    riesgo_si_no_se_ejecuta: payload.risk_if_ignored || payload.risk_hint || '',
+  };
+
+  return [
+    'Actua como auditor ISO senior y product manager SaaS B2B.',
+    'Transforma esta accion recomendada ISO en una explicacion util para usuario final.',
+    'No muestres JSON, IDs tecnicos ni nombres de campos.',
+    'Entrega dos parrafos breves: primero lectura operativa, segundo recomendacion concreta y proximo paso.',
+    `Contexto: ${JSON.stringify(context)}`,
+  ].join(' ');
+}
+
+function extractAiInsight(json: any): Pick<AiInsightState, 'summary' | 'recommendation' | 'source'> {
+  const answer = json?.answer || json?.data?.answer || json?.ai || json?.data?.ai || json?.data || json;
+  const directText = typeof answer === 'string' ? answer : '';
+  const candidates = [
+    answer?.executive_summary,
+    answer?.summary,
+    answer?.answer,
+    answer?.text,
+    answer?.content,
+    answer?.response,
+    json?.answer_text,
+  ].filter((value) => typeof value === 'string' && value.trim());
+  const text = directText || String(candidates[0] || '').trim();
+  const paragraphs = text
+    .split(/\n{2,}|\r?\n-/)
+    .map((part) => part.replace(/^[-*\s]+/, '').trim())
+    .filter(Boolean);
+
+  return {
+    summary: paragraphs[0] || text || '',
+    recommendation: paragraphs.slice(1).join(' ') || String(answer?.recommendation || answer?.next_step || '').trim(),
+    source: String(answer?.source || json?.source || json?.search_trace?.source || 'ai-engine'),
+  };
+}
+
+function InsightBlock({ title, body, tone = 'slate' }: { title: string; body: string; tone?: 'slate' | 'blue' }) {
+  const toneClass = tone === 'blue'
+    ? 'border-blue-200 bg-blue-50 text-blue-950'
+    : 'border-gray-200 bg-gray-50 text-gray-900';
+
+  return (
+    <section className={`rounded-lg border p-4 ${toneClass}`}>
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <p className="mt-2 text-sm leading-6 opacity-85">{body}</p>
+    </section>
+  );
+}
+
+type ContentProps = Omit<Props, 'action'> & {
+  action: RecommendedAction;
+};
+
+export default function RecommendedActionDetailModal(props: Props) {
+  if (!props.action) return null;
+  return <RecommendedActionDetailModalContent {...props} action={props.action} />;
+}
+
+function RecommendedActionDetailModalContent({
   action,
   conversionPreview = null,
   readonly = false,
@@ -48,13 +187,20 @@ export default function RecommendedActionDetailModal({
   onAccept,
   onConvert,
   onDismiss,
-}: Props) {
-  if (!action) return null;
-
+}: ContentProps) {
   const canAct = !readonly && action.status === 'pending';
   const links = relatedLinks(action);
   const payload = action.payload_json || {};
   const trace = action.source_trace_json || {};
+  const operationalInsight = useMemo(() => buildOperationalInsight(action, payload, trace), [action, payload, trace]);
+  const traceInsight = useMemo(() => buildTraceInsight(action, payload, trace), [action, payload, trace]);
+  const [aiInsight, setAiInsight] = useState<AiInsightState>({
+    loading: false,
+    error: '',
+    summary: '',
+    recommendation: '',
+    source: '',
+  });
   const preview = conversionPreview && typeof conversionPreview.preview === 'object'
     ? conversionPreview.preview as JsonObject
     : null;
@@ -64,6 +210,77 @@ export default function RecommendedActionDetailModal({
   const blockedReasons = Array.isArray(conversionPreview?.blocked_reasons)
     ? conversionPreview.blocked_reasons.map(String)
     : [];
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAiInsight = async () => {
+      const token = getStoredValidToken();
+      const tenantId = action.tenant_id || getTenantIdFromToken();
+
+      if (!token || !tenantId) {
+        setAiInsight({
+          loading: false,
+          error: 'No hay sesion activa para generar lectura IA.',
+          summary: '',
+          recommendation: '',
+          source: '',
+        });
+        return;
+      }
+
+      try {
+        setAiInsight({ loading: true, error: '', summary: '', recommendation: '', source: '' });
+        const response = await fetch(`${API_BASE_URL}/api/ai-compliance/answer`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            tenant_id: tenantId,
+            question: buildAiQuestion(action, payload, trace),
+            limit: 6,
+            knowledge_limit: 6,
+            benchmark_limit: 0,
+            force_external_lookup: false,
+          }),
+        });
+        const json = await response.json().catch(() => null);
+
+        if (!response.ok || json?.ok === false) {
+          throw new Error(json?.error || `ai-engine no disponible (HTTP ${response.status}).`);
+        }
+
+        const next = extractAiInsight(json);
+        if (!cancelled) {
+          setAiInsight({
+            loading: false,
+            error: '',
+            summary: next.summary,
+            recommendation: next.recommendation,
+            source: next.source,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAiInsight({
+            loading: false,
+            error: error instanceof Error ? error.message : 'No fue posible generar lectura IA.',
+            summary: '',
+            recommendation: '',
+            source: '',
+          });
+        }
+      }
+    };
+
+    void loadAiInsight();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [action, payload, trace]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6">
@@ -196,9 +413,36 @@ export default function RecommendedActionDetailModal({
           )}
 
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <TraceBlock title="Payload operativo" data={payload} />
-            <TraceBlock title="Trazabilidad de origen" data={trace} />
+            <InsightBlock
+              title={aiInsight.summary ? 'Lectura generada por IA' : operationalInsight.title}
+              body={
+                aiInsight.loading
+                  ? 'Generando lectura operativa con ai-engine...'
+                  : aiInsight.summary || operationalInsight.body
+              }
+              tone="blue"
+            />
+            <InsightBlock
+              title={aiInsight.recommendation ? 'Recomendacion operativa IA' : traceInsight.title}
+              body={
+                aiInsight.loading
+                  ? 'Preparando recomendacion concreta y proximo paso para esta accion.'
+                  : aiInsight.recommendation || traceInsight.body
+              }
+            />
           </div>
+
+          {aiInsight.error && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+              No fue posible completar la lectura con ai-engine. Se muestra una interpretacion operativa segura basada en la trazabilidad existente.
+            </div>
+          )}
+
+          {aiInsight.source && !aiInsight.error && (
+            <div className="mt-3 text-xs text-gray-500">
+              Fuente de lectura: {aiInsight.source}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap justify-end gap-2 border-t border-gray-200 px-6 py-4">
