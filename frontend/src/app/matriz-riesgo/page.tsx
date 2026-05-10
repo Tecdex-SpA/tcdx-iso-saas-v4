@@ -34,8 +34,10 @@ type RiskControlRow = {
   iso?: string;
   iso_code?: string;
   standard_code?: string;
+  likelihood?: number;
+  impact?: number;
   score?: number;
-  nivel?: 'BAJO' | 'MEDIO' | 'ALTO';
+  nivel?: 'BAJO' | 'MEDIO' | 'ALTO' | 'CRITICO';
 };
 
 type IsoRiskMatrixOption = {
@@ -109,6 +111,24 @@ type IsoRiskMatrixAction = {
   due_days?: number;
 };
 
+type HeatmapEntry = {
+  id: string;
+  title: string;
+  description?: string | null;
+  source: 'iso_matrix' | 'control';
+  likelihood: number;
+  impact: number;
+  score: number;
+  level: 'BAJO' | 'MEDIO' | 'ALTO' | 'CRITICO';
+  asset?: string | null;
+  standard?: string | null;
+};
+
+type HeatmapCell = {
+  likelihood: number;
+  impact: number;
+};
+
 function resolveTenantId(user: any): string {
   return (
     user?.tenant_id ||
@@ -127,6 +147,27 @@ function isOperationalStandard(s: ScopeStandard) {
     Array.isArray(s?.active_operation_ids) &&
     s.active_operation_ids.length > 0
   );
+}
+
+function clampRiskAxis(value: any) {
+  const n = Math.round(Number(value || 0));
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.min(5, n));
+}
+
+function riskLevelFromScore(score: number): HeatmapEntry['level'] {
+  if (score >= 16) return 'CRITICO';
+  if (score >= 10) return 'ALTO';
+  if (score >= 5) return 'MEDIO';
+  return 'BAJO';
+}
+
+function axisLabel(value: number) {
+  if (value >= 5) return 'Muy alta';
+  if (value === 4) return 'Alta';
+  if (value === 3) return 'Media';
+  if (value === 2) return 'Baja';
+  return 'Muy baja';
 }
 
 export default function RiskMatrixPage() {
@@ -154,6 +195,7 @@ function RiskMatrixPageContent() {
   const [controls, setControls] = useState<RiskControlRow[]>([]);
   const [iso, setIso] = useState('');
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+  const [selectedHeatmapCell, setSelectedHeatmapCell] = useState<HeatmapCell | null>(null);
   const [matrixOptions, setMatrixOptions] = useState<IsoRiskMatrixOption[]>([]);
   const [selectedMatrixKey, setSelectedMatrixKey] = useState('');
   const [matrixRun, setMatrixRun] = useState<IsoRiskMatrixRun | null>(null);
@@ -194,6 +236,58 @@ function RiskMatrixPageContent() {
       .sort((a, b) => Number(b.residual_risk_score || 0) - Number(a.residual_risk_score || 0))
       .slice(0, 12);
   }, [matrixItems]);
+
+  const heatmapEntries = useMemo<HeatmapEntry[]>(() => {
+    if (matrixItems.length > 0) {
+      return matrixItems.map((item, index) => {
+        const likelihood = clampRiskAxis(item.likelihood || Math.ceil(Math.sqrt(Number(item.inherent_risk_score || item.residual_risk_score || 1))));
+        const impact = clampRiskAxis(item.impact || Math.ceil(Number(item.inherent_risk_score || item.residual_risk_score || 1) / likelihood));
+        const score = likelihood * impact;
+        const rawLevel = String(item.residual_risk_level || item.inherent_risk_level || '').toUpperCase();
+        const level = rawLevel === 'CRITICO' || rawLevel === 'ALTO' || rawLevel === 'MEDIO' || rawLevel === 'BAJO'
+          ? rawLevel as HeatmapEntry['level']
+          : riskLevelFromScore(score);
+
+        return {
+          id: item.id || `matrix-${index}`,
+          title: item.risk_title || 'Riesgo ISO sugerido',
+          description: item.risk_description,
+          source: 'iso_matrix',
+          likelihood,
+          impact,
+          score,
+          level,
+          asset: item.asset_name,
+          standard: `${selectedMatrixOption?.standard_code || ''} ${selectedMatrixOption?.version_code || ''}`.trim(),
+        };
+      });
+    }
+
+    return controls.map((control) => {
+      const likelihood = clampRiskAxis(control.likelihood || 1);
+      const impact = clampRiskAxis(control.impact || 1);
+      const score = likelihood * impact;
+      return {
+        id: control.id,
+        title: control.category || control.clause || 'Control operativo',
+        description: control.description,
+        source: 'control',
+        likelihood,
+        impact,
+        score,
+        level: control.nivel || riskLevelFromScore(score),
+        asset: control.clause ? `Clausula ${control.clause}` : null,
+        standard: control.iso,
+      };
+    });
+  }, [controls, matrixItems, selectedMatrixOption]);
+
+  const selectedHeatmapEntries = useMemo(() => {
+    if (!selectedHeatmapCell) return [];
+    return heatmapEntries
+      .filter((entry) => entry.likelihood === selectedHeatmapCell.likelihood && entry.impact === selectedHeatmapCell.impact)
+      .sort((a, b) => b.score - a.score);
+  }, [heatmapEntries, selectedHeatmapCell]);
 
   const riskLevelClass = (level?: string | null) => {
     const value = String(level || '').toLowerCase();
@@ -471,22 +565,19 @@ function RiskMatrixPageContent() {
           let i = 1;
 
           if (c.status === 'parcial') {
-            p = 2;
-            i = 2;
-          }
-
-          if (c.status === 'no cumple') {
             p = 3;
             i = 3;
           }
 
+          if (c.status === 'no cumple') {
+            p = 4;
+            i = 4;
+          }
+
           const score = p * i;
+          const nivel = riskLevelFromScore(score);
 
-          let nivel: 'BAJO' | 'MEDIO' | 'ALTO' = 'BAJO';
-          if (score >= 6) nivel = 'ALTO';
-          else if (score >= 3) nivel = 'MEDIO';
-
-          return { ...c, score, nivel };
+          return { ...c, likelihood: p, impact: i, score, nivel };
         })
         .sort((a: any, b: any) => Number(b.score || 0) - Number(a.score || 0));
 
@@ -515,6 +606,7 @@ function RiskMatrixPageContent() {
     setFocusedControlId('');
     setFocusMessage('');
     setSelectedLevel(null);
+    setSelectedHeatmapCell(null);
   }, [focusId, focusISO]);
 
   useEffect(() => {
@@ -559,10 +651,19 @@ function RiskMatrixPageContent() {
     return t('riskMatrix.explanations.low');
   };
 
-  const getColor = (value: number) => {
-    if (value <= 2) return 'bg-green-500';
-    if (value <= 4) return 'bg-yellow-400';
-    return 'bg-red-500';
+  const getHeatmapColor = (value: number) => {
+    if (value >= 20) return 'bg-gradient-to-br from-rose-700 to-red-600 text-white border-red-500 shadow-red-900/20';
+    if (value >= 16) return 'bg-gradient-to-br from-red-600 to-orange-600 text-white border-red-400 shadow-red-900/20';
+    if (value >= 10) return 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-orange-300 shadow-orange-900/10';
+    if (value >= 5) return 'bg-gradient-to-br from-yellow-300 to-amber-300 text-slate-950 border-amber-200 shadow-amber-900/10';
+    return 'bg-gradient-to-br from-emerald-100 to-teal-100 text-emerald-950 border-emerald-200 shadow-emerald-900/10';
+  };
+
+  const getHeatmapLevelClass = (level: string) => {
+    if (level === 'CRITICO') return 'bg-red-950/20 text-white';
+    if (level === 'ALTO') return 'bg-orange-950/15 text-white';
+    if (level === 'MEDIO') return 'bg-amber-950/10 text-amber-950';
+    return 'bg-emerald-950/10 text-emerald-950';
   };
 
   const filtered = useMemo(() => {
@@ -573,6 +674,7 @@ function RiskMatrixPageContent() {
 
   const riskLevelLabel = (value?: string | null) => {
     const raw = String(value || '').toUpperCase();
+    if (raw === 'CRITICO') return t('statuses.findings.critico') || 'Critico';
     if (raw === 'ALTO') return t('statuses.findings.alto');
     if (raw === 'MEDIO') return t('statuses.findings.medio');
     return t('statuses.findings.bajo');
@@ -976,56 +1078,167 @@ function RiskMatrixPageContent() {
         )}
 
         {iso && !loadingControls && (
-          <div className="bg-white p-6 rounded shadow">
-            <h2 className="font-semibold mb-4">{t('riskMatrix.heatmap')} — {iso}</h2>
-
-            {controls.length === 0 ? (
-              <div className="text-gray-500">
-                {t('riskMatrix.noControls')}
+          <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+            <div className="flex flex-col gap-5 border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#eef4ff_0%,#ffffff_38%,#f8fafc_100%)] p-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex gap-4">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-indigo-100 bg-white text-indigo-700 shadow-sm">
+                  <TcdxIcon name="risk" className="h-7 w-7" />
+                </span>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-700">Matriz multinorma</p>
+                  <h2 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">
+                    Matriz de riesgo — {iso}
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-sm text-slate-600">
+                    Heatmap moderno por probabilidad e impacto. El numero grande muestra riesgos en el cuadrante; el valor inferior muestra la criticidad asignada.
+                  </p>
+                </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-4 gap-2 text-center">
-                <div></div>
-                <div>{t('riskMatrix.grid.likelihoodLow')}</div>
-                <div>{t('riskMatrix.grid.likelihoodMedium')}</div>
-                <div>{t('riskMatrix.grid.likelihoodHigh')}</div>
 
-                {[3, 2, 1].map((impact) => (
-                  <div key={`row-${impact}`} className="contents">
-                    <div className="font-semibold">
-                      {impact === 3 ? t('riskMatrix.grid.impactHigh') : impact === 2 ? t('riskMatrix.grid.impactMedium') : t('riskMatrix.grid.impactLow')}
+              <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm sm:grid-cols-4">
+                {[
+                  ['Bajo', '1 - 4', 'bg-emerald-500'],
+                  ['Moderado', '5 - 9', 'bg-yellow-400'],
+                  ['Alto', '10 - 16', 'bg-orange-500'],
+                  ['Extremo', '17 - 25', 'bg-red-500'],
+                ].map(([label, range, dot]) => (
+                  <div key={label} className="flex items-center gap-3">
+                    <span className={`h-4 w-4 rounded-full shadow-sm ${dot}`} />
+                    <div>
+                      <div className="text-sm font-bold text-slate-950">{label}</div>
+                      <div className="text-xs font-semibold text-slate-500">{range}</div>
                     </div>
-
-                    {[1, 2, 3].map((prob) => {
-                      const value = prob * impact;
-
-                      let nivel = 'BAJO';
-                      if (value >= 6) nivel = 'ALTO';
-                      else if (value >= 3) nivel = 'MEDIO';
-
-                      const totalEnNivel = controls.filter(
-                        (c) => c.nivel === nivel
-                      ).length;
-
-                      return (
-                        <div
-                          key={`${prob}-${impact}`}
-                          onClick={() => setSelectedLevel(nivel)}
-                          className={`h-20 flex flex-col items-center justify-center text-white font-bold cursor-pointer hover:scale-105 transition ${getColor(
-                            value
-                          )}`}
-                        >
-                          <div>{value}</div>
-                          <div className="text-xs">{riskLevelLabel(nivel)}</div>
-                          <div className="text-[10px] opacity-90">{t('riskMatrix.controlsCount', { count: totalEnNivel })}</div>
-                        </div>
-                      );
-                    })}
                   </div>
                 ))}
               </div>
+            </div>
+
+            {heatmapEntries.length === 0 ? (
+              <div className="p-8 text-sm text-slate-500">
+                {t('riskMatrix.noControls')}
+              </div>
+            ) : (
+              <div className="p-5 lg:p-6">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[1060px]">
+                    <div className="grid grid-cols-[220px_repeat(5,minmax(138px,1fr))] gap-1.5">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-bold uppercase tracking-wide text-indigo-700">
+                        Probabilidad
+                      </div>
+                      {[1, 2, 3, 4, 5].map((impact) => (
+                        <div key={`impact-head-${impact}`} className="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
+                          <div className="text-2xl font-black text-indigo-700">{impact}</div>
+                          <div className="text-sm font-bold text-slate-950">{axisLabel(impact)}</div>
+                          <div className="text-xs text-slate-500">Impacto</div>
+                        </div>
+                      ))}
+
+                      {[5, 4, 3, 2, 1].map((likelihood) => (
+                        <div key={`risk-row-${likelihood}`} className="contents">
+                          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="text-3xl font-black text-indigo-700">{likelihood}</div>
+                            <div className="mt-1 text-base font-bold text-slate-950">{axisLabel(likelihood)}</div>
+                            <div className="text-xs text-slate-500">Probabilidad</div>
+                          </div>
+
+                          {[1, 2, 3, 4, 5].map((impact) => {
+                            const score = likelihood * impact;
+                            const level = riskLevelFromScore(score);
+                            const count = heatmapEntries.filter(
+                              (entry) => entry.likelihood === likelihood && entry.impact === impact
+                            ).length;
+                            const isActive = selectedHeatmapCell?.likelihood === likelihood && selectedHeatmapCell?.impact === impact;
+
+                            return (
+                              <button
+                                key={`${likelihood}-${impact}`}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedHeatmapCell({ likelihood, impact });
+                                  setSelectedLevel(level);
+                                }}
+                                className={[
+                                  'min-h-[132px] rounded-2xl border p-4 text-center shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-indigo-200',
+                                  getHeatmapColor(score),
+                                  isActive ? 'ring-4 ring-indigo-300' : '',
+                                ].join(' ')}
+                              >
+                                <div className="text-5xl font-black leading-none tracking-tight">{count}</div>
+                                <div className="mt-2 text-xs font-bold uppercase tracking-[0.16em] opacity-75">
+                                  riesgos
+                                </div>
+                                <div className={`mx-auto mt-3 inline-flex rounded-xl px-3 py-1 text-xs font-black uppercase shadow-sm backdrop-blur ${getHeatmapLevelClass(level)}`}>
+                                  {riskLevelLabel(level)}
+                                </div>
+                                <div className="mt-2 text-xs font-semibold opacity-80">
+                                  Valor {score}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
+
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-bold uppercase tracking-wide text-indigo-700">
+                        Impacto
+                      </div>
+                      {[1, 2, 3, 4, 5].map((impact) => (
+                        <div key={`impact-foot-${impact}`} className="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
+                          <div className="text-2xl font-black text-indigo-700">{impact}</div>
+                          <div className="text-sm font-bold text-slate-950">{axisLabel(impact)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedHeatmapCell && (
+                  <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-950">
+                          Riesgos en cuadrante P{selectedHeatmapCell.likelihood} / I{selectedHeatmapCell.impact}
+                        </h3>
+                        <p className="text-sm text-slate-500">
+                          Valor {selectedHeatmapCell.likelihood * selectedHeatmapCell.impact} · {riskLevelLabel(riskLevelFromScore(selectedHeatmapCell.likelihood * selectedHeatmapCell.impact))}
+                        </p>
+                      </div>
+                      <span className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm">
+                        {selectedHeatmapEntries.length} elemento(s)
+                      </span>
+                    </div>
+
+                    {selectedHeatmapEntries.length === 0 ? (
+                      <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
+                        No hay riesgos registrados en esta celda.
+                      </div>
+                    ) : (
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                        {selectedHeatmapEntries.slice(0, 8).map((entry) => (
+                          <div key={entry.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-bold text-slate-950">{entry.title}</div>
+                                <div className="mt-1 text-xs text-slate-500 line-clamp-2">{entry.description}</div>
+                              </div>
+                              <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+                                {entry.source === 'iso_matrix' ? 'ISO' : 'Control'}
+                              </span>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                              {entry.standard && <span>{entry.standard}</span>}
+                              {entry.asset && <span>{entry.asset}</span>}
+                              <span>Valor {entry.score}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
-          </div>
+          </section>
         )}
 
         {selectedLevel && controls.length > 0 && (
