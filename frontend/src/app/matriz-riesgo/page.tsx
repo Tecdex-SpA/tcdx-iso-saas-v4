@@ -223,9 +223,13 @@ function RiskMatrixPageContent() {
     return new Set(operationalStandards.map((s) => s.code).filter(Boolean));
   }, [operationalStandards]);
 
+  const matrixOptionsForSelectedIso = useMemo(() => {
+    return matrixOptions.filter((option) => !iso || option.standard_code === iso);
+  }, [iso, matrixOptions]);
+
   const selectedMatrixOption = useMemo(() => {
-    return matrixOptions.find((option) => `${option.standard_code}:${option.version_code}` === selectedMatrixKey) || null;
-  }, [matrixOptions, selectedMatrixKey]);
+    return matrixOptionsForSelectedIso.find((option) => `${option.standard_code}:${option.version_code}` === selectedMatrixKey) || null;
+  }, [matrixOptionsForSelectedIso, selectedMatrixKey]);
 
   const matrixSummary = useMemo(() => {
     return matrixRun?.summary_json || matrixRun || {};
@@ -429,6 +433,11 @@ function RiskMatrixPageContent() {
         setMatrixItems(Array.isArray(json.data.items) ? json.data.items : []);
         setMatrixActions(Array.isArray(json.data.actions) ? json.data.actions : []);
         setMatrixDryRun(false);
+      } else {
+        setMatrixRun(null);
+        setMatrixItems([]);
+        setMatrixActions([]);
+        setMatrixDryRun(true);
       }
     } catch (err) {
       console.error('ERROR LOAD LATEST ISO RISK MATRIX:', err);
@@ -598,8 +607,33 @@ function RiskMatrixPageContent() {
   useEffect(() => {
     if (selectedMatrixOption) {
       void loadLatestMatrix(selectedMatrixOption);
+    } else {
+      setMatrixRun(null);
+      setMatrixItems([]);
+      setMatrixActions([]);
+      setMatrixDryRun(true);
     }
-  }, [selectedMatrixKey]);
+  }, [selectedMatrixOption?.standard_code, selectedMatrixOption?.version_code]);
+
+  useEffect(() => {
+    if (!iso) return;
+
+    const hasSelectedOption = matrixOptionsForSelectedIso.some(
+      (option) => `${option.standard_code}:${option.version_code}` === selectedMatrixKey
+    );
+
+    if (hasSelectedOption) return;
+
+    const recommended = matrixOptionsForSelectedIso.find((option) => option.recommended);
+    const next = recommended || matrixOptionsForSelectedIso[0];
+
+    setSelectedMatrixKey(next ? `${next.standard_code}:${next.version_code}` : '');
+    setMatrixRun(null);
+    setMatrixItems([]);
+    setMatrixActions([]);
+    setMatrixDryRun(true);
+    setSelectedHeatmapCell(null);
+  }, [iso, matrixOptionsForSelectedIso, selectedMatrixKey]);
 
   useEffect(() => {
     focusAppliedRef.current = false;
@@ -769,6 +803,7 @@ function RiskMatrixPageContent() {
           onChange={(e) => {
             setIso(e.target.value);
             setSelectedLevel(null);
+            setSelectedHeatmapCell(null);
             setFocusedControlId('');
             if (!focusId) {
               setFocusMessage('');
@@ -812,8 +847,10 @@ function RiskMatrixPageContent() {
                 className="border border-gray-300 px-3 py-2 rounded text-sm min-w-[260px]"
                 disabled={loadingMatrix}
               >
-                <option value="">Seleccionar norma/version</option>
-                {matrixOptions.map((option) => (
+                <option value="">
+                  {iso ? `Seleccionar version de ${iso}` : 'Seleccionar norma/version'}
+                </option>
+                {matrixOptionsForSelectedIso.map((option) => (
                   <option
                     key={`${option.standard_code}:${option.version_code}`}
                     value={`${option.standard_code}:${option.version_code}`}
