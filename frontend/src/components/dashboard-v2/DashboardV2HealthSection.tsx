@@ -484,7 +484,7 @@ export default function DashboardV2HealthSection() {
                           style={{ width: `${Math.max(4, Math.min(100, Number(standard.avg_health_score || 0)))}%` }}
                         />
                       </div>
-                      <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                      <div className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
                         <Mini label="Saludables" value={formatNumber(standard.healthy_controls)} />
                         <Mini label="Atencion" value={formatNumber(standard.attention_controls)} />
                         <Mini label="Criticos" value={formatNumber(Number(standard.critical_controls || 0) + Number(standard.deteriorated_controls || 0))} />

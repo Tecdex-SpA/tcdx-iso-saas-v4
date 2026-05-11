@@ -641,7 +641,7 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
                   <span className="text-sm font-semibold text-slate-900">{row.standard_code || 'Global'}</span>
                   <span className="text-xs text-slate-500">{formatNumber(row.measured_kpis as number)} medidos</span>
                 </div>
-                <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
                   <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-800">Verdes {formatNumber(row.green as number)}</span>
                   <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">Amarillos {formatNumber(row.yellow as number)}</span>
                   <span className="rounded bg-rose-50 px-2 py-1 text-rose-800">Rojos {formatNumber(row.red as number)}</span>

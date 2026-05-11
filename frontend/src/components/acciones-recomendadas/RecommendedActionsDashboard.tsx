@@ -478,7 +478,7 @@ export default function RecommendedActionsDashboard() {
                     {Number(row.pending_count || 0)} pendientes
                   </span>
                 </div>
-                <div className="mt-4 grid grid-cols-4 gap-2 text-center text-xs">
+                <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
                   <div className="rounded bg-red-50 p-2 text-red-700">
                     <div className="font-bold">{Number(row.critical_count || 0)}</div>
                     Crit.

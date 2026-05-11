@@ -21,12 +21,12 @@ export default function IACompliancePage() {
   }, []);
 
   if (!data) {
-    return <AppLayout><div className="p-6">Cargando IA...</div></AppLayout>;
+    return <AppLayout><div className="px-3 py-4 sm:p-6">Cargando IA...</div></AppLayout>;
   }
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-6 px-3 py-4 sm:p-6">
 
         <h1 className="text-2xl font-bold">IA Compliance</h1>
 
@@ -37,7 +37,7 @@ export default function IACompliancePage() {
         </div>
 
         {/* SEMÁFORO + SCORE */}
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
 
           <div className="bg-white p-6 rounded-xl shadow text-center">
             <h2 className="mb-2 font-semibold">Nivel de Riesgo</h2>

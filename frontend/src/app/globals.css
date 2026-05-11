@@ -33,8 +33,14 @@ body {
     linear-gradient(180deg, #f8fbff 0%, #f3f7fc 42%, #eef3f8 100%);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  min-height: 100dvh;
+  overflow-x: hidden;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+}
+
+html {
+  overflow-x: hidden;
 }
 
 * {
@@ -118,9 +124,19 @@ textarea {
 
 .tcdx-premium-view {
   min-height: 100%;
+  width: 100%;
+  max-width: 100%;
   color: var(--tcdx-ink);
   overflow-x: hidden;
   overflow-wrap: anywhere;
+}
+
+.tcdx-premium-view > * {
+  max-width: 100%;
+}
+
+.tcdx-premium-view :is(div, section, article, form, nav, ul, ol, li) {
+  min-width: 0;
 }
 
 .tcdx-premium-view > div[class*="min-h-screen"] {
@@ -208,6 +224,19 @@ textarea {
 }
 
 @media (max-width: 767px) {
+  .tcdx-premium-main {
+    background:
+      linear-gradient(180deg, #f8fbff 0%, #f4f7fb 52%, #eef3f8 100%);
+  }
+
+  .tcdx-premium-view :is(input, select, textarea, button) {
+    max-width: 100%;
+  }
+
+  .tcdx-premium-view :is(.overflow-x-auto, [class*="overflow-x-auto"]) {
+    -webkit-overflow-scrolling: touch;
+  }
+
   .tcdx-premium-view table {
     display: block;
     overflow-x: auto;

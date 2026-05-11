@@ -998,7 +998,7 @@ function ActivosPageContent() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <MetricTiny title={t('assets.levels.highPlural')} value={selectedAssetRisks.alto} tone="red" />
                     <MetricTiny title={t('assets.levels.mediumPlural')} value={selectedAssetRisks.medio} tone="amber" />
                     <MetricTiny title={t('assets.levels.lowPlural')} value={selectedAssetRisks.bajo} tone="green" />

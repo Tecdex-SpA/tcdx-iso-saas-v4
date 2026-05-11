@@ -381,7 +381,7 @@ export default function SoAPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-6 px-3 py-4 sm:p-6">
 
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <h1 className="text-2xl font-bold">Statement of Applicability (SoA)</h1>
@@ -408,7 +408,7 @@ export default function SoAPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <MetricCard title="Total" value={metrics.total} />
           <MetricCard title={translateDisplayText("Aplican", locale, "generic")} value={metrics.applicable} />
           <MetricCard title={translateDisplayText("No aplican", locale, "generic")} value={metrics.notApplicable} />
