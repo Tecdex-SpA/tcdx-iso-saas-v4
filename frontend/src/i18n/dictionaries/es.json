@@ -239,14 +239,7 @@
   },
   "exports": {
     "title": "Exportes ejecutivos premium",
-    "subtitle": "Genere informes PDF de nivel ejecutivo para gerencia, auditoría, control de estado y seguimiento de plataforma por cliente, con trazabilidad histórica y una presentación alineada al estándar visual premium del sistema.",
     "brand": "TCDX by Tecdex",
-    "badges": {
-      "branding": "Branding premium",
-      "history": "Historial persistente",
-      "pdf": "PDFs descargables",
-      "commercial": "Salida ejecutiva comercial"
-    },
     "reportTypes": {
       "executive_summary": {
         "name": "Informe para Gerencia",

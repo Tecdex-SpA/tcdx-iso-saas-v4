@@ -239,14 +239,7 @@
   },
   "exports": {
     "title": "Premium Executive Reports",
-    "subtitle": "Generate executive-grade PDF reports for leadership, audit readiness, control status, and client-level platform follow-up, with historical traceability and a premium TCDX visual standard.",
     "brand": "TCDX by Tecdex",
-    "badges": {
-      "branding": "Premium branding",
-      "history": "Persistent history",
-      "pdf": "Downloadable PDFs",
-      "commercial": "Executive business output"
-    },
     "reportTypes": {
       "executive_summary": {
         "name": "Executive Report",

@@ -784,24 +784,6 @@ export default function ExportesPage() {
                 {t('exports.title')}
               </h1>
 
-              <p className="mt-3 text-sm leading-7 text-white/75 md:text-base">
-                {t('exports.subtitle')}
-              </p>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-                  {t('exports.badges.branding')}
-                </span>
-                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-                  {t('exports.badges.history')}
-                </span>
-                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-                  {t('exports.badges.pdf')}
-                </span>
-                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-                  {t('exports.badges.commercial')}
-                </span>
-              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[440px] xl:max-w-[480px]">

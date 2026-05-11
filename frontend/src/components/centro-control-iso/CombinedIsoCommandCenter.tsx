@@ -33,7 +33,7 @@ export default function CombinedIsoCommandCenter() {
                 Vista combinada de gestion y command center
               </h1>
               <p className="mt-1 text-sm text-slate-600">
-                Unifica la vista operativa y la ejecutiva sin perder informacion ni romper rutas existentes.
+                Consolidación de brechas, riesgos, documentos, acciones y documentos operativos
               </p>
             </div>
 

@@ -135,7 +135,7 @@ export default function UnifiedIsoCommandCenter() {
                 Operacion diaria de cumplimiento, riesgos y acciones ISO
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-600">
-                Vista unificada por normas contratadas del tenant. Consolida readiness, brechas, riesgos, documentos, acciones y seguimiento operativo sin crear datos al cargar.
+                Consolidación de brechas, riesgos, documentos, acciones y documentos operativos
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 <a href="/acciones-recomendadas" className="rounded bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800">
