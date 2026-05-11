@@ -13,11 +13,11 @@ const API_URL =
 const IA_COMPLIANCE_COPY = {
   es: {
     title: 'IA Compliance',
-    subtitle: '{copy.subtitle}',
-    refresh: '{copy.refresh}',
-    executiveBrief: '{copy.managementSummary}',
+    subtitle: 'Centro inteligente para cumplimiento, remediación y seguimiento ejecutivo.',
+    refresh: 'Actualizar',
+    executiveBrief: 'Resumen ejecutivo IA',
     generating: 'Generando...',
-    loading: '{copy.loading}',
+    loading: 'Cargando IA Compliance...',
     sessionError: 'No se pudo obtener la sesión del usuario.',
     genericError: 'No fue posible cargar IA Compliance.',
     engineWarning: 'No fue posible conectar con AI Engine. Se muestran datos internos disponibles.',
@@ -27,18 +27,18 @@ const IA_COMPLIANCE_COPY = {
     activeControls: 'Controles activos',
     attentionControls: 'Controles en atención',
     pendingEvidence: 'Evidencias pendientes',
-    healthTitle: '{copy.healthTitle}',
-    healthSubtitle: '{copy.healthSubtitle}',
+    healthTitle: 'Resumen de salud IA',
+    healthSubtitle: 'Lectura ejecutiva del estado actual del tenant.',
     company: 'Empresa',
-    activeStandards: '{copy.activeStandards}',
+    activeStandards: 'Normas activas',
     noStandards: 'Sin normas activas',
     noSummary: 'Sin resumen IA disponible.',
     deterioratedControls: 'Controles deteriorados',
     criticalFindings: 'Hallazgos críticos',
-    recommendations: '{copy.recommendations}',
-    noRecommendations: '{copy.noRecommendations}',
+    recommendations: 'Recomendaciones IA',
+    noRecommendations: 'No hay recomendaciones disponibles.',
     quickAccess: 'Accesos rápidos',
-    quickAccessSubtitle: '{copy.quickAccessSubtitle}',
+    quickAccessSubtitle: 'Atajos a módulos donde la IA ya está integrada.',
     findings: 'Hallazgos',
     findingsDesc: 'Analizar y aplicar IA sobre hallazgos.',
     nonconformities: 'No conformidades',
@@ -47,17 +47,17 @@ const IA_COMPLIANCE_COPY = {
     actionPlanDesc: 'Aplicar planes sugeridos IA al plan real.',
     savedSuggestions: 'Sugerencias IA guardadas',
     savedSuggestionsDesc: 'Revisar borradores, trazabilidad y aplicar.',
-    recentSuggestions: '{copy.recentSuggestions}',
+    recentSuggestions: 'Sugerencias recientes',
     pending: 'Pendientes',
     applied: 'Aplicadas',
     confidence: 'Confianza',
-    managementSummary: '{copy.managementSummary}',
-    priorities: '{copy.priorities}',
-    managementActions: '{copy.managementActions}',
-    latestSuggestions: '{copy.latestSuggestions}',
-    latestSuggestionsSubtitle: '{copy.latestSuggestionsSubtitle}',
-    viewAll: '{copy.viewAll}',
-    noSavedSuggestions: '{copy.noSavedSuggestions}',
+    managementSummary: 'Resumen ejecutivo IA',
+    priorities: 'Prioridades',
+    managementActions: 'Acciones gerenciales',
+    latestSuggestions: 'Últimas sugerencias guardadas',
+    latestSuggestionsSubtitle: 'Vista rápida de actividad reciente de módulos IA.',
+    viewAll: 'Ver todas',
+    noSavedSuggestions: 'Aún no hay sugerencias guardadas.',
     ok: 'OK',
     error: 'Error',
     draft: 'draft',
@@ -463,11 +463,11 @@ export default function IaCompliancePage() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-nowrap gap-2 overflow-x-auto">
             <button
               type="button"
               onClick={loadAll}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 whitespace-nowrap shadow-sm hover:bg-slate-50"
             >
               {copy.refresh}
             </button>
@@ -475,7 +475,7 @@ export default function IaCompliancePage() {
             <button
               type="button"
               onClick={loadExecutiveBrief}
-              className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+              className="inline-flex items-center justify-center rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white whitespace-nowrap shadow-sm hover:bg-violet-700"
             >
               {briefLoading ? copy.generating : copy.executiveBrief}
             </button>

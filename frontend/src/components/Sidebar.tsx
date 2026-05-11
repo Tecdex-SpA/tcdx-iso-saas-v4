@@ -60,8 +60,8 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
       href={href}
       title={label}
       className={[
-        'group flex items-center rounded-lg text-sm font-medium transition-all duration-200',
-        collapsed ? 'justify-center px-2 py-3' : 'gap-3 px-3 py-2.5',
+        'group flex w-full items-center rounded-lg text-sm font-medium transition-all duration-200',
+        collapsed ? 'justify-center px-2 py-3' : 'justify-start gap-3 px-3 py-2.5 text-left',
         active
           ? 'bg-[#2563eb] text-white shadow-[0_12px_26px_rgba(37,99,235,0.34)]'
           : 'text-white/76 hover:bg-white/9 hover:text-white',
@@ -75,7 +75,7 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
       >
         {icon}
       </span>
-      {!collapsed && <span className="truncate">{label}</span>}
+      {!collapsed && <span className="block min-w-0 flex-1 truncate text-left">{label}</span>}
     </a>
   );
 }
