@@ -420,11 +420,11 @@ export default function RecommendedActionsDashboard() {
                 Convierte diagnosticos, riesgos, documentos y controles ISO en trabajo operativo gestionable, con revision humana antes de crear registros.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-nowrap gap-2 overflow-x-auto lg:justify-end">
               <button
                 type="button"
                 onClick={() => loadData(filters)}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+                className="inline-flex items-center justify-center rounded border border-gray-300 px-4 py-2 text-sm font-medium whitespace-nowrap hover:bg-gray-50"
               >
                 Actualizar
               </button>
@@ -432,7 +432,7 @@ export default function RecommendedActionsDashboard() {
                 type="button"
                 onClick={handleGenerate}
                 disabled={readonly || generating || !token}
-                className="rounded bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-45"
+                className="inline-flex items-center justify-center rounded bg-blue-700 px-4 py-2 text-sm font-semibold text-white whitespace-nowrap hover:bg-blue-800 disabled:opacity-45"
               >
                 {generating ? 'Generando...' : 'Generar recomendaciones'}
               </button>

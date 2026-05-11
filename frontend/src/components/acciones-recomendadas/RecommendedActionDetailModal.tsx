@@ -445,12 +445,12 @@ function RecommendedActionDetailModalContent({
           )}
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2 border-t border-gray-200 px-6 py-4">
+        <div className="flex flex-nowrap justify-end gap-2 overflow-x-auto border-t border-gray-200 px-6 py-4">
           <button
             type="button"
             onClick={() => onDismiss(action)}
             disabled={!canAct || busy}
-            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-45"
+            className="inline-flex items-center justify-center rounded border border-gray-300 px-4 py-2 text-sm font-medium whitespace-nowrap hover:bg-gray-50 disabled:opacity-45"
           >
             Descartar
           </button>
@@ -458,7 +458,7 @@ function RecommendedActionDetailModalContent({
             type="button"
             onClick={() => onAccept(action)}
             disabled={!canAct || busy}
-            className="rounded border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-45"
+            className="inline-flex items-center justify-center rounded border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 whitespace-nowrap hover:bg-emerald-100 disabled:opacity-45"
           >
             Validar dry-run
           </button>
@@ -466,7 +466,7 @@ function RecommendedActionDetailModalContent({
             type="button"
             onClick={() => onConvert(action)}
             disabled={!canAct || busy}
-            className="rounded bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+            className="inline-flex items-center justify-center rounded bg-slate-950 px-4 py-2 text-sm font-semibold text-white whitespace-nowrap hover:bg-slate-800 disabled:opacity-45"
           >
             Crear tarea / plan
           </button>

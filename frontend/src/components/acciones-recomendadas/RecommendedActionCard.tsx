@@ -79,11 +79,11 @@ export default function RecommendedActionCard({
           </div>
         </button>
 
-        <div className="flex shrink-0 flex-wrap gap-2 lg:max-w-[250px] lg:justify-end">
+        <div className="flex shrink-0 flex-nowrap gap-2 overflow-x-auto lg:max-w-[250px] lg:justify-end">
           <button
             type="button"
             onClick={() => onSelect(action)}
-            className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
+            className="inline-flex items-center justify-center rounded border border-gray-300 px-3 py-1.5 text-xs font-medium whitespace-nowrap hover:bg-gray-50"
           >
             Ver detalle
           </button>
@@ -91,7 +91,7 @@ export default function RecommendedActionCard({
             type="button"
             onClick={() => onAccept(action)}
             disabled={!canAct || busy}
-            className="rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-45"
+            className="inline-flex items-center justify-center rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 whitespace-nowrap hover:bg-emerald-100 disabled:opacity-45"
           >
             Aceptar
           </button>
@@ -99,7 +99,7 @@ export default function RecommendedActionCard({
             type="button"
             onClick={() => onConvert(action)}
             disabled={!canAct || busy}
-            className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-45"
+            className="inline-flex items-center justify-center rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white whitespace-nowrap hover:bg-slate-800 disabled:opacity-45"
           >
             Crear tarea
           </button>
@@ -107,7 +107,7 @@ export default function RecommendedActionCard({
             type="button"
             onClick={() => onDismiss(action)}
             disabled={!canAct || busy}
-            className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 disabled:opacity-45"
+            className="inline-flex items-center justify-center rounded border border-gray-300 px-3 py-1.5 text-xs font-medium whitespace-nowrap hover:bg-gray-50 disabled:opacity-45"
           >
             Descartar
           </button>

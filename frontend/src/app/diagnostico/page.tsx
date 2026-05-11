@@ -1099,22 +1099,29 @@ export default function DiagnosticoPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="p-6">{copy.loadingDiagnostic}</div>
+        <div className="px-3 py-4 sm:p-6">{copy.loadingDiagnostic}</div>
       </AppLayout>
     );
   }
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-6">
-        <div className="flex flex-wrap justify-between items-center gap-3">
-          <h1 className="text-2xl font-bold">{copy.title}</h1>
+      <div className="space-y-6 px-3 py-4 sm:p-6">
+        <section className="rounded-lg border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+          <div className="flex flex-wrap justify-between items-center gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Diagnóstico ISO</p>
+              <h1 className="mt-2 text-3xl font-bold text-slate-950">{copy.title}</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                Evaluación rápida de controles, brechas y preparación operativa por norma contratada.
+              </p>
+            </div>
 
-          <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
             <select
               value={selectedISO}
               onChange={(e) => setSelectedISO(e.target.value)}
-              className="border p-2 rounded"
+              className="rounded-lg border border-slate-200 bg-white p-2 text-sm shadow-sm"
             >
               {operationalStandards.map((s) => (
                 <option key={s.code} value={s.code}>
@@ -1126,7 +1133,7 @@ export default function DiagnosticoPage() {
             <select
               value={selectedOperationId}
               onChange={(e) => setSelectedOperationId(e.target.value)}
-              className="border p-2 rounded"
+              className="rounded-lg border border-slate-200 bg-white p-2 text-sm shadow-sm"
             >
               {availableOperations.map((op) => (
                 <option key={op.id} value={op.id}>
@@ -1134,8 +1141,9 @@ export default function DiagnosticoPage() {
                 </option>
               ))}
             </select>
+            </div>
           </div>
-        </div>
+        </section>
 
         {errorMessage && (
           <div className="bg-red-50 border border-red-200 p-4 rounded text-red-700">
@@ -1146,27 +1154,27 @@ export default function DiagnosticoPage() {
         {renderExpressPanel()}
 
         <div className="grid md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded shadow">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
             <div className="text-sm text-gray-500">{copy.compliance}</div>
             <div className="text-2xl font-bold text-blue-600">
               {cumplimiento}%
             </div>
           </div>
 
-          <div className="bg-green-100 p-4 rounded text-green-700">
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4 font-semibold text-green-700">
             {copy.compliant}: {cumple}
           </div>
 
-          <div className="bg-yellow-100 p-4 rounded text-yellow-700">
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 font-semibold text-yellow-700">
             {copy.partial}: {parcial}
           </div>
 
-          <div className="bg-red-100 p-4 rounded text-red-700">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 font-semibold text-red-700">
             {copy.nonCompliant}: {noCumple}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           {data.length === 0 ? (
             <div className="p-6 text-gray-500">
               {copy.noControls}

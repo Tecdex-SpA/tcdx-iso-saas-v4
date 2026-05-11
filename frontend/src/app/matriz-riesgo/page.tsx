@@ -912,7 +912,7 @@ function RiskMatrixPageContent() {
                 type="button"
                 onClick={() => generateMatrix(true)}
                 disabled={!selectedMatrixOption || generatingMatrix}
-                className="px-4 py-2 rounded border border-gray-300 text-gray-800 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                className="inline-flex items-center justify-center rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-800 whitespace-nowrap hover:bg-gray-50 disabled:opacity-50"
               >
                 Simular
               </button>
@@ -921,7 +921,7 @@ function RiskMatrixPageContent() {
                 type="button"
                 onClick={() => generateMatrix(false)}
                 disabled={!selectedMatrixOption || generatingMatrix}
-                className="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
+                className="inline-flex items-center justify-center rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white whitespace-nowrap hover:bg-slate-800 disabled:opacity-50"
               >
                 Generar matriz
               </button>

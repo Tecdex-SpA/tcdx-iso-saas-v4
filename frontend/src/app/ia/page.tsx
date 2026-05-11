@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import TcdxIcon from '@/components/icons/TcdxIcon';
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
 export default function IACompliancePage() {
   const [data, setData] = useState<any>(null);
@@ -12,7 +16,7 @@ export default function IACompliancePage() {
     const token = localStorage.getItem('token');
 
     if (user?.tenant_id) {
-      fetch(`http://192.168.100.120:3000/api/ai/recommendations/${user.tenant_id}`, {
+      fetch(`${API_URL}/api/ai/recommendations/${user.tenant_id}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -28,18 +32,34 @@ export default function IACompliancePage() {
     <AppLayout>
       <div className="space-y-6 px-3 py-4 sm:p-6">
 
-        <h1 className="text-2xl font-bold">IA Compliance</h1>
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-[linear-gradient(135deg,#06173a_0%,#082452_58%,#0f172a_100%)] p-6 text-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-white/65">
+                <TcdxIcon name="ai" className="h-4 w-4" />
+                Inteligencia operacional
+              </div>
+              <h1 className="mt-3 text-3xl font-bold">IA Compliance</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
+                Priorización asistida para controles, riesgos y acciones con foco en operación auditora.
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/12 bg-white/8 px-4 py-3 text-sm text-white/72">
+              Revisión no destructiva · Requiere validación humana
+            </div>
+          </div>
+        </section>
 
         {/* RESUMEN */}
-        <div className="bg-white p-6 rounded-xl shadow">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           <h2 className="font-semibold mb-2">Resumen Ejecutivo</h2>
-          <p>{data.summary}</p>
+          <p className="leading-7 text-slate-600">{data.summary}</p>
         </div>
 
         {/* SEMÁFORO + SCORE */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
 
-          <div className="bg-white p-6 rounded-xl shadow text-center">
+          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
             <h2 className="mb-2 font-semibold">Nivel de Riesgo</h2>
 
             <div className={`text-3xl font-bold ${
@@ -53,7 +73,7 @@ export default function IACompliancePage() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow text-center">
+          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
             <h2 className="mb-2 font-semibold">Score de Riesgo</h2>
             <div className="text-4xl font-bold text-blue-600">
               {data.riskScore}%
@@ -63,12 +83,12 @@ export default function IACompliancePage() {
         </div>
 
         {/* TOP RIESGOS */}
-        <div className="bg-white p-6 rounded-xl shadow">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           <h2 className="mb-4 font-semibold">Controles Críticos / Pendientes</h2>
 
           <div className="space-y-2">
             {data.topRisks.map((r: any, i: number) => (
-              <div key={i} className="border p-3 rounded">
+              <div key={i} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 {r.clause} - {r.status}
               </div>
             ))}
@@ -76,12 +96,12 @@ export default function IACompliancePage() {
         </div>
 
         {/* RECOMENDACIONES */}
-        <div className="bg-white p-6 rounded-xl shadow">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           <h2 className="mb-4 font-semibold">Recomendaciones</h2>
 
           <div className="space-y-3">
             {data.recommendations.map((r: any, i: number) => (
-              <div key={i} className="border p-4 rounded-lg">
+              <div key={i} className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
 
                 <div className="font-semibold">{r.clause}</div>
 

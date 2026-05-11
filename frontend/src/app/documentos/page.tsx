@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import TcdxIcon from '@/components/icons/TcdxIcon';
 import { getStoredValidToken, getTenantIdFromToken } from '@/utils/auth';
 
 const API_URL =
@@ -310,22 +311,31 @@ export default function DocumentosPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando generador documental...</div>
+        <div className="px-3 py-4 sm:p-6">Cargando generador documental...</div>
       </AppLayout>
     );
   }
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-6">
-        <div className="flex flex-wrap justify-between gap-3 items-start">
-          <div>
-            <h1 className="text-2xl font-bold">Generador documental ISO</h1>
-            <p className="text-sm text-gray-500">
-              Politicas y procedimientos desde iso_*, diagnostico express y mapeos gobernados.
-            </p>
+      <div className="space-y-6 px-3 py-4 sm:p-6">
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_52%,#edf4ff_100%)] p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+          <div className="flex flex-wrap justify-between gap-5 items-start">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-blue-700">
+                <TcdxIcon name="document" className="h-4 w-4" />
+                Generador ISO
+              </div>
+              <h1 className="mt-3 text-3xl font-bold text-slate-950">Generador documental ISO</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                Políticas y procedimientos desde conocimiento ISO, diagnóstico express y mapeos gobernados.
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm">
+              Base comercial lista para revisión y ajuste humano.
+            </div>
           </div>
-        </div>
+        </section>
 
         {error && (
           <div className="bg-red-50 border border-red-200 p-4 rounded text-sm text-red-700">
@@ -333,7 +343,7 @@ export default function DocumentosPage() {
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow p-5 space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] space-y-4">
           <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-gray-500">Norma/version</label>
@@ -417,7 +427,7 @@ export default function DocumentosPage() {
             <button
               onClick={generateDocument}
               disabled={generating || !selectedOption || !templateCode}
-              className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white whitespace-nowrap shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
             >
               {generating ? 'Generando...' : 'Generar documento'}
             </button>
@@ -431,7 +441,7 @@ export default function DocumentosPage() {
         </div>
 
         {(result?.markdown_preview || detail?.markdown_preview) && (
-          <div className="bg-white rounded-xl shadow p-5 space-y-3">
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] space-y-3">
             <div className="flex justify-between gap-3">
               <h2 className="text-lg font-semibold">Preview</h2>
               {(result?.document || detail?.document) && (
@@ -451,7 +461,7 @@ export default function DocumentosPage() {
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           <div className="p-5 border-b">
             <h2 className="text-lg font-semibold">Historial de documentos</h2>
           </div>
@@ -471,17 +481,17 @@ export default function DocumentosPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-nowrap gap-2">
                   <button
                     onClick={() => openDocument(document.id)}
-                    className="px-3 py-1 rounded bg-slate-100 text-sm"
+                    className="inline-flex items-center justify-center rounded bg-slate-100 px-3 py-1 text-sm whitespace-nowrap"
                   >
                     Ver
                   </button>
                   {document.document_status !== 'archived' && (
                     <button
                       onClick={() => archiveDocument(document.id)}
-                      className="px-3 py-1 rounded bg-red-50 text-red-700 text-sm"
+                      className="inline-flex items-center justify-center rounded bg-red-50 px-3 py-1 text-sm text-red-700 whitespace-nowrap"
                     >
                       Archivar
                     </button>
