@@ -776,14 +776,18 @@ export default function ExportesPage() {
         <section className="overflow-hidden rounded-[34px] border border-slate-200 bg-[linear-gradient(135deg,#0B2F4F_0%,#103a61_48%,#0b2740_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/50">
+              <div className="inline-flex items-center gap-3 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white/65">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white">
+                  <TcdxIcon name="export" className="h-4 w-4" />
+                </span>
                 {t('exports.brand')}
-              </p>
+              </div>
 
               <h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">
                 {t('exports.title')}
               </h1>
 
+              <div className="mt-6 h-px w-28 bg-gradient-to-r from-white/45 to-transparent" />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[440px] xl:max-w-[480px]">
@@ -1523,7 +1527,7 @@ function HeroMiniStat({
   helper: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-4">
+    <div className="rounded-2xl border border-white/12 bg-white/10 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur">
       <div className="text-xs font-bold uppercase tracking-[0.14em] text-white/50">
         {label}
       </div>

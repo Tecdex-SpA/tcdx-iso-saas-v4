@@ -8,6 +8,7 @@ import {
   isTokenExpired,
 } from '@/utils/auth';
 import LanguageSelector from '@/components/language/LanguageSelector';
+import TcdxIcon from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
@@ -104,10 +105,16 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f4f7fb_48%,#eef3f8_100%)]">
-      <div className="hidden w-[46%] flex-col justify-between bg-[linear-gradient(180deg,#06173a_0%,#061f49_52%,#041126_100%)] p-10 text-white shadow-[18px_0_42px_rgba(8,25,58,0.2)] md:flex">
+      <div className="relative hidden w-[46%] overflow-hidden bg-[linear-gradient(180deg,#06173a_0%,#061f49_52%,#041126_100%)] text-white shadow-[18px_0_42px_rgba(8,25,58,0.2)] md:flex">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-[linear-gradient(180deg,transparent_0%,rgba(16,185,129,0.08)_100%)]" />
+        <div className="relative z-10 flex min-h-screen w-full flex-col justify-between p-10">
         <div>
           <img src="/logo.png" className="mb-10 w-56" alt="TCDX Compliance" />
-          <div className="h-1 w-16 rounded bg-emerald-300" />
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-100/80">
+            <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.8)]" />
+            Plataforma SaaS B2B ISO
+          </div>
         </div>
 
         <div>
@@ -123,24 +130,48 @@ export default function LoginPage() {
             {t('login.heroSubtitle')}
           </p>
 
-          <div className="mt-9 grid max-w-xl grid-cols-2 gap-3 text-sm text-white/82">
+          <div className="mt-9 grid max-w-xl grid-cols-1 gap-3 text-sm text-white/82 xl:grid-cols-2">
             <div className="rounded-lg border border-white/12 bg-white/8 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              {t('login.heroCardAudits')}
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-emerald-100">
+                <TcdxIcon name="audit" className="h-5 w-5" />
+              </div>
+              <div className="font-semibold text-white">{t('login.heroCardAudits')}</div>
+              <div className="mt-2 text-xs leading-5 text-white/58">
+                Preparación auditora, hallazgos, evidencia y trazabilidad por rol.
+              </div>
             </div>
 
             <div className="rounded-lg border border-white/12 bg-white/8 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              {t('login.heroCardEvidence')}
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-blue-100">
+                <TcdxIcon name="evidence" className="h-5 w-5" />
+              </div>
+              <div className="font-semibold text-white">{t('login.heroCardEvidence')}</div>
+              <div className="mt-2 text-xs leading-5 text-white/58">
+                Operación diaria conectada con KPIs, riesgos y acciones.
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="text-xs text-white/55">
-          {t('login.heroFooter')}
+        <div className="grid grid-cols-3 gap-3 text-xs text-white/60">
+          <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3">
+            <div className="text-lg font-bold text-white">ISO</div>
+            <div className="mt-1">Multinorma</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3">
+            <div className="text-lg font-bold text-white">JWT</div>
+            <div className="mt-1">Multiempresa</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3">
+            <div className="text-lg font-bold text-white">IA</div>
+            <div className="mt-1">Auditora</div>
+          </div>
+        </div>
         </div>
       </div>
 
-      <div className="flex w-full items-center justify-center p-6 md:w-[54%]">
-        <div className="tcdx-card w-full max-w-md rounded-lg p-8">
+      <div className="flex w-full items-center justify-center px-4 py-6 sm:p-6 md:w-[54%]">
+        <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white/95 p-6 shadow-[0_24px_70px_rgba(8,25,58,0.12)] backdrop-blur sm:p-8">
           <div className="mb-6">
             <LanguageSelector variant="login" />
           </div>
@@ -176,6 +207,7 @@ export default function LoginPage() {
               </label>
 
               <input
+                type="email"
                 className="tcdx-focus-ring w-full rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-slate-900 placeholder:text-slate-400"
                 placeholder={t('login.emailPlaceholder')}
                 value={email}
@@ -202,10 +234,14 @@ export default function LoginPage() {
             </div>
 
             <button
+              type="button"
               onClick={handleLogin}
               disabled={loading}
-              className="w-full rounded-lg bg-[#1f6feb] p-3 font-semibold text-white shadow-[0_14px_28px_rgba(31,111,235,0.24)] transition hover:bg-[#195fc9] disabled:cursor-not-allowed disabled:opacity-60"
+              className="group flex w-full items-center justify-center gap-2 rounded-lg bg-[#1f6feb] p-3 font-semibold text-white shadow-[0_14px_28px_rgba(31,111,235,0.24)] transition hover:-translate-y-0.5 hover:bg-[#195fc9] hover:shadow-[0_18px_34px_rgba(31,111,235,0.28)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
             >
+              {loading && (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              )}
               {loading ? t('login.submitting') : t('login.submit')}
             </button>
           </div>
