@@ -82,7 +82,7 @@ function localText(locale: string) {
     focusEvidence: en ? 'Evidence' : 'Evidencias',
     focusRisks: en ? 'Risks' : 'Riesgos',
     focusActions: en ? 'Actions' : 'Acciones',
-    focusCertification: en ? 'Certification readiness' : 'Preparación certificación',
+    focusCertification: en ? 'Certification-audit readiness' : 'Preparación para auditoría certificadora',
     depthExecutive: en ? 'Executive' : 'Ejecutiva',
     depthStandard: en ? 'Standard' : 'Estándar',
     depthDeep: en ? 'Deep' : 'Profunda',
