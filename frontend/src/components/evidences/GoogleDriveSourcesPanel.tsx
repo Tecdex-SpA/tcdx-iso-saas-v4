@@ -104,22 +104,29 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
     [integrations]
   );
 
-  const authHeaders = () => {
-    const token = getToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
   const fetchJson = async (url: string, options: RequestInit = {}) => {
+    const token = getToken();
+    const headers = new Headers(options.headers);
+
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    if (options.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
     const res = await fetch(url, {
       ...options,
-      headers: {
-        ...authHeaders(),
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.headers || {}),
-      },
+      headers,
     });
+
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || 'Error en la operación');
+
+    if (!res.ok) {
+      throw new Error(json?.error || 'Error en la operación');
+    }
+
     return json;
   };
 
