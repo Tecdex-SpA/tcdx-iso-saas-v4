@@ -192,8 +192,8 @@ async function createPendingControlSuggestions({ tenantId, documentId, analysisI
           AND document_id = $2
           AND target_type = 'control'
           AND status = 'pending'
-          AND COALESCE(suggested_standard_code, '') = COALESCE($4, '')
-          AND COALESCE(suggested_control_ref, '') = COALESCE($5, '')
+          AND COALESCE(suggested_standard_code, '') = COALESCE($4::varchar, '')
+          AND COALESCE(suggested_control_ref, '') = COALESCE($5::varchar, '')
       )
       RETURNING *
       `,
