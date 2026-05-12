@@ -422,25 +422,26 @@ async function getAvailableControls(tenantId, standards) {
     const result = await pool.query(
       `
       SELECT DISTINCT
-        COALESCE(ccs.standard_code, cc.standard_code) AS standard_code,
+        COALESCE(ccs.standard_code, cc.iso) AS standard_code,
         COALESCE(ccs.clause, cc.clause) AS clause,
-        COALESCE(cc.control_code, cc.code, cc.control_ref, COALESCE(ccs.clause, cc.clause)) AS control_code,
-        COALESCE(cc.title, cc.name, cc.control_name, '') AS title,
-        COALESCE(cc.description, cc.control_description, '') AS description
+        COALESCE(ccs.clause, cc.clause) AS control_code,
+        COALESCE(cc.description, cc.category, COALESCE(ccs.clause, cc.clause), '') AS title,
+        COALESCE(cc.description, '') AS description,
+        cc.category AS category
       FROM controls_catalog cc
       LEFT JOIN controls_catalog_standards ccs
         ON ccs.control_id = cc.id
       WHERE
-        COALESCE(ccs.standard_code, cc.standard_code) = ANY($1::text[])
-        OR REPLACE(REPLACE(REPLACE(UPPER(COALESCE(ccs.standard_code, cc.standard_code, '')), ':', ''), '-', ''), ' ', '')
+        COALESCE(ccs.standard_code, cc.iso) = ANY($1::text[])
+        OR REPLACE(REPLACE(REPLACE(UPPER(COALESCE(ccs.standard_code, cc.iso, '')), ':', ''), '-', ''), ' ', '')
            = ANY(
              SELECT REPLACE(REPLACE(REPLACE(UPPER(x), ':', ''), '-', ''), ' ', '')
              FROM unnest($1::text[]) AS x
            )
       ORDER BY
-        COALESCE(ccs.standard_code, cc.standard_code),
+        COALESCE(ccs.standard_code, cc.iso),
         COALESCE(ccs.clause, cc.clause),
-        COALESCE(cc.control_code, cc.code, cc.control_ref, COALESCE(ccs.clause, cc.clause))
+        COALESCE(cc.description, cc.category, COALESCE(ccs.clause, cc.clause), '')
       LIMIT 300
       `,
       [expandedStandards]
@@ -449,7 +450,9 @@ async function getAvailableControls(tenantId, standards) {
     return result.rows.map((row) => ({
       ...row,
       standard_code: normalizeStandardCode(row.standard_code) || row.standard_code,
-      control_ref: normalizeControlRef(row.control_code || row.clause)
+      control_ref: normalizeControlRef(row.control_code || row.clause),
+      title: row.title || row.description || row.clause,
+      description: row.description || row.title || ''
     }))
   } catch (err) {
     console.error('ERROR LOAD AVAILABLE CONTROLS FOR DOCUMENT AI:', err.message)
