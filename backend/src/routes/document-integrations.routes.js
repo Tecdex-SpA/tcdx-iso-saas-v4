@@ -409,6 +409,42 @@ router.get('/suggestions', auth, async (req, res) => {
   }
 })
 
+
+router.post('/suggestions/:suggestionId/approve', auth, async (req, res) => {
+  const tenantId = assertTenant(req, res)
+  if (!tenantId) return
+
+  if (!canManageDocumentIntegrations(req.user)) {
+    return res.status(403).json({ error: 'No autorizado para revisar sugerencias documentales' })
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE document_association_suggestions
+      SET
+        status = 'approved',
+        reviewed_by_user_id = $3,
+        reviewed_at = NOW()
+      WHERE id = $1
+        AND tenant_id = $2
+        AND status = 'pending'
+      RETURNING *
+      `,
+      [req.params.suggestionId, tenantId, getUserId(req.user)]
+    )
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Sugerencia pendiente no encontrada' })
+    }
+
+    return res.json({ suggestion: result.rows[0] })
+  } catch (err) {
+    console.error('ERROR APPROVE DOCUMENT SUGGESTION:', err)
+    return res.status(500).json({ error: 'Error aprobando sugerencia documental' })
+  }
+})
+
 router.post('/suggestions/:suggestionId/reject', auth, async (req, res) => {
   const tenantId = assertTenant(req, res)
   if (!tenantId) return

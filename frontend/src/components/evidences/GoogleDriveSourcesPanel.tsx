@@ -59,6 +59,26 @@ type DocumentAnalysis = {
   created_at?: string | null;
 };
 
+type DocumentSuggestion = {
+  id: string;
+  tenant_id: string;
+  document_id: string;
+  target_type: string;
+  target_id?: string | null;
+  suggested_standard_code?: string | null;
+  suggested_control_ref?: string | null;
+  suggested_reason?: string | null;
+  confidence_score?: number | string | null;
+  status: string;
+  reviewed_by_user_id?: string | null;
+  reviewed_at?: string | null;
+  created_at?: string | null;
+  file_name?: string | null;
+  provider?: string | null;
+  web_view_url?: string | null;
+  mime_type?: string | null;
+};
+
 type SyncLog = {
   id: string;
   source_name?: string | null;
@@ -133,10 +153,46 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
   const [breadcrumb, setBreadcrumb] = useState<Breadcrumb[]>([{ id: 'root', name: 'Mi unidad' }]);
   const [selectedAnalysisDocument, setSelectedAnalysisDocument] = useState<DocumentRow | null>(null);
   const [documentAnalyses, setDocumentAnalyses] = useState<DocumentAnalysis[]>([]);
+  const [suggestions, setSuggestions] = useState<DocumentSuggestion[]>([]);
+  const [documentSearch, setDocumentSearch] = useState('');
+  const [documentSourceFilter, setDocumentSourceFilter] = useState('');
 
   const googleIntegration = useMemo(
     () => integrations.find((item) => item.provider === 'google_drive' && item.status === 'connected') || null,
     [integrations]
+  );
+
+  const documentSourceOptions = useMemo(() => {
+    return Array.from(
+      new Set(documents.map((doc) => doc.source_name).filter(Boolean).map((item) => String(item)))
+    ).sort((a, b) => a.localeCompare(b));
+  }, [documents]);
+
+  const filteredDocuments = useMemo(() => {
+    const q = documentSearch.trim().toLowerCase();
+
+    return documents.filter((doc) => {
+      const matchesSource = !documentSourceFilter || doc.source_name === documentSourceFilter;
+      const haystack = [
+        doc.file_name,
+        doc.mime_type,
+        doc.file_extension,
+        doc.source_name,
+        doc.status,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      const matchesSearch = !q || haystack.includes(q);
+
+      return matchesSource && matchesSearch;
+    });
+  }, [documents, documentSearch, documentSourceFilter]);
+
+  const pendingSuggestions = useMemo(
+    () => suggestions.filter((item) => item.status === 'pending'),
+    [suggestions]
   );
 
   const fetchJson = async (url: string, options: RequestInit = {}) => {
@@ -167,18 +223,29 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
 
   const refresh = async () => {
     if (!tenantId) return;
+
     try {
       setLoading(true);
-      const [integrationsJson, sourcesJson, documentsJson, logsJson] = await Promise.all([
+
+      const [
+        integrationsJson,
+        sourcesJson,
+        documentsJson,
+        logsJson,
+        suggestionsJson,
+      ] = await Promise.all([
         fetchJson(`${API_URL}/api/document-integrations/integrations?tenant_id=${tenantId}`),
         fetchJson(`${API_URL}/api/document-integrations/sources?tenant_id=${tenantId}`),
-        fetchJson(`${API_URL}/api/document-integrations/documents?tenant_id=${tenantId}&limit=50`),
+        fetchJson(`${API_URL}/api/document-integrations/documents?tenant_id=${tenantId}&limit=200`),
         fetchJson(`${API_URL}/api/document-integrations/sync-logs?tenant_id=${tenantId}`),
+        fetchJson(`${API_URL}/api/document-integrations/suggestions?tenant_id=${tenantId}&status=pending&limit=200`),
       ]);
+
       setIntegrations(integrationsJson.integrations || []);
       setSources(sourcesJson.sources || []);
       setDocuments(documentsJson.documents || []);
       setLogs(logsJson.logs || []);
+      setSuggestions(suggestionsJson.suggestions || []);
     } catch (err: any) {
       setMessage(err.message || 'No fue posible cargar fuentes documentales.');
     } finally {
@@ -304,9 +371,38 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       });
       setSelectedAnalysisDocument(doc);
       setDocumentAnalyses(json.analysis ? [json.analysis] : []);
-      setMessage(`Análisis metadata-only generado para: ${doc.file_name}`);
+      const created = Number(json.suggestions_created || 0);
+      setMessage(
+        created > 0
+          ? `Análisis generado para: ${doc.file_name}. Sugerencias nuevas: ${created}.`
+          : `Análisis generado para: ${doc.file_name}. No se crearon sugerencias nuevas.`
+      );
+      await refresh();
     } catch (err: any) {
       setMessage(err.message || 'No fue posible analizar el documento.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const reviewSuggestion = async (suggestion: DocumentSuggestion, action: 'approve' | 'reject') => {
+    try {
+      setWorking(`${action}-suggestion-${suggestion.id}`);
+
+      await fetchJson(`${API_URL}/api/document-integrations/suggestions/${suggestion.id}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({ tenant_id: tenantId }),
+      });
+
+      setMessage(
+        action === 'approve'
+          ? 'Sugerencia aprobada. No se creó evidencia formal automáticamente.'
+          : 'Sugerencia rechazada.'
+      );
+
+      await refresh();
+    } catch (err: any) {
+      setMessage(err.message || 'No fue posible revisar la sugerencia.');
     } finally {
       setWorking('');
     }
@@ -470,29 +566,174 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
         </div>
       </div>
 
+      <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Revisión humana requerida</p>
+            <h3 className="mt-2 text-lg font-black text-amber-950">Sugerencias de asociación documental</h3>
+            <p className="mt-1 text-sm text-amber-800">
+              Estas sugerencias vienen del análisis IA. Aprobar o rechazar aquí solo registra la revisión; no crea evidencias formales ni cambia cumplimiento.
+            </p>
+          </div>
+          <div className="rounded-2xl bg-white px-4 py-3 text-center ring-1 ring-amber-200">
+            <div className="text-2xl font-black text-amber-900">{pendingSuggestions.length}</div>
+            <div className="text-xs font-bold uppercase tracking-wide text-amber-700">Pendientes</div>
+          </div>
+        </div>
+
+        <div className="mt-4 max-h-[360px] overflow-y-auto pr-1">
+          <div className="space-y-3">
+            {pendingSuggestions.map((suggestion) => (
+              <div key={suggestion.id} className="rounded-2xl border border-amber-100 bg-white p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-black text-slate-950">
+                      {suggestion.file_name || 'Documento indexado'}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+                      <span className="rounded-full bg-slate-50 px-3 py-1 text-slate-700 ring-1 ring-slate-200">
+                        Target: {suggestion.target_type}
+                      </span>
+                      <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700 ring-1 ring-blue-200">
+                        Norma: {suggestion.suggested_standard_code || '—'}
+                      </span>
+                      <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700 ring-1 ring-indigo-200">
+                        Control: {suggestion.suggested_control_ref || '—'}
+                      </span>
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 ring-1 ring-emerald-200">
+                        Confianza: {pct(suggestion.confidence_score)}
+                      </span>
+                    </div>
+
+                    {suggestion.suggested_reason && (
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {suggestion.suggested_reason}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {suggestion.web_view_url && (
+                      <a
+                        href={suggestion.web_view_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100"
+                      >
+                        Abrir doc
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => reviewSuggestion(suggestion, 'approve')}
+                      disabled={working === `approve-suggestion-${suggestion.id}`}
+                      className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      Aprobar
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => reviewSuggestion(suggestion, 'reject')}
+                      disabled={working === `reject-suggestion-${suggestion.id}`}
+                      className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-700 disabled:opacity-60"
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {pendingSuggestions.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-amber-200 bg-white p-5 text-sm text-amber-800">
+                No hay sugerencias pendientes. Ejecuta análisis documental sobre archivos indexados para generarlas.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="mt-6 rounded-3xl border border-slate-200 p-4">
-        <h3 className="text-lg font-black text-slate-900">Documentos indexados</h3>
-        <p className="mt-1 text-sm text-slate-500">El análisis disponible en esta etapa usa metadata y nombre de archivo. No descarga ni lee contenido real todavía.</p>
-        <div className="mt-4 overflow-x-auto">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-900">Documentos indexados</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Listado con scroll interno. No agranda la página aunque existan muchos documentos.
+            </p>
+          </div>
+
+          <div className="grid w-full grid-cols-1 gap-2 md:grid-cols-2 xl:w-[520px]">
+            <input
+              value={documentSearch}
+              onChange={(event) => setDocumentSearch(event.target.value)}
+              placeholder="Buscar por archivo, tipo, fuente o estado"
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none ring-blue-100 focus:ring-2"
+            />
+
+            <select
+              value={documentSourceFilter}
+              onChange={(event) => setDocumentSourceFilter(event.target.value)}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none ring-blue-100 focus:ring-2"
+            >
+              <option value="">Todas las fuentes</option>
+              {documentSourceOptions.map((sourceName) => (
+                <option key={sourceName} value={sourceName}>
+                  {sourceName}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
+          <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">
+            Mostrando {filteredDocuments.length} de {documents.length}
+          </span>
+          {documentSearch && (
+            <button
+              type="button"
+              onClick={() => setDocumentSearch('')}
+              className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+            >
+              Limpiar búsqueda
+            </button>
+          )}
+        </div>
+
+        <div className="mt-4 max-h-[460px] overflow-y-auto overflow-x-auto rounded-2xl border border-slate-100">
           <table className="min-w-full text-left text-sm">
-            <thead className="text-xs uppercase tracking-wide text-slate-400">
+            <thead className="sticky top-0 z-10 bg-white text-xs uppercase tracking-wide text-slate-400 shadow-sm">
               <tr>
-                <th className="px-3 py-2">Archivo</th>
-                <th className="px-3 py-2">Tipo</th>
-                <th className="px-3 py-2">Fuente</th>
-                <th className="px-3 py-2">Modificado</th>
-                <th className="px-3 py-2">Estado</th>
-                <th className="px-3 py-2">Acciones</th>
+                <th className="px-3 py-3">Archivo</th>
+                <th className="px-3 py-3">Tipo</th>
+                <th className="px-3 py-3">Fuente</th>
+                <th className="px-3 py-3">Modificado</th>
+                <th className="px-3 py-3">Estado</th>
+                <th className="px-3 py-3">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {documents.slice(0, 20).map((doc) => (
-                <tr key={doc.id}>
-                  <td className="px-3 py-3 font-semibold text-slate-800">{doc.file_name}</td>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {filteredDocuments.map((doc) => (
+                <tr key={doc.id} className="hover:bg-slate-50">
+                  <td className="max-w-[360px] px-3 py-3">
+                    <div className="truncate font-semibold text-slate-800" title={doc.file_name}>
+                      {doc.file_name}
+                    </div>
+                    <div className="mt-1 truncate text-xs text-slate-400">
+                      {doc.id}
+                    </div>
+                  </td>
                   <td className="px-3 py-3 text-slate-500">{doc.file_extension || doc.mime_type || '—'}</td>
                   <td className="px-3 py-3 text-slate-500">{doc.source_name || '—'}</td>
                   <td className="px-3 py-3 text-slate-500">{fmtDate(doc.modified_at)}</td>
-                  <td className="px-3 py-3"><span className={`rounded-full px-2 py-1 text-xs font-bold ring-1 ${badgeClass(doc.status)}`}>{doc.status || '—'}</span></td>
+                  <td className="px-3 py-3">
+                    <span className={`rounded-full px-2 py-1 text-xs font-bold ring-1 ${badgeClass(doc.status)}`}>
+                      {doc.status || '—'}
+                    </span>
+                  </td>
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap gap-2">
                       {doc.web_view_url && (
@@ -501,7 +742,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
                         </a>
                       )}
                       <button onClick={() => analyzeDocument(doc)} disabled={working === `analyze-${doc.id}`} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60">
-                        {working === `analyze-${doc.id}` ? 'Analizando...' : 'Analizar metadata'}
+                        {working === `analyze-${doc.id}` ? 'Analizando...' : 'Analizar'}
                       </button>
                       <button onClick={() => viewAnalysis(doc)} disabled={working === `analysis-${doc.id}`} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60">
                         Ver análisis
@@ -512,7 +753,12 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
               ))}
             </tbody>
           </table>
-          {documents.length === 0 && <p className="p-4 text-sm text-slate-500">Aún no hay documentos indexados.</p>}
+
+          {filteredDocuments.length === 0 && (
+            <p className="bg-white p-4 text-sm text-slate-500">
+              No hay documentos que coincidan con los filtros.
+            </p>
+          )}
         </div>
       </div>
 
