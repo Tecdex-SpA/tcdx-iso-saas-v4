@@ -72,6 +72,69 @@ function deriveWorkbenchHealthScore(row) {
   return existing
 }
 
+
+function getWorkbenchDerivedHealth(row) {
+  const healthScore = Number(row.health_score || 0)
+  const existingHealth = String(
+    row.derived_health_status ||
+    row.tenant_health_status ||
+    row.health_status ||
+    ''
+  ).toLowerCase().trim()
+
+  const status = String(
+    row.declared_status ||
+    row.status ||
+    ''
+  ).toLowerCase().trim()
+
+  const score = Number(row.declared_score || row.score || 0)
+  const evidenceCount = Number(row.evidence_count || 0)
+  const pendingEvidenceCount = Number(row.pending_evidence_count || 0)
+  const openFindings = Number(row.open_findings_count || 0)
+  const openNonconformities = Number(row.open_nonconformities_count || 0)
+
+  if (
+    healthScore > 0 &&
+    ['saludable', 'atencion', 'deteriorado', 'critico'].includes(existingHealth)
+  ) {
+    return {
+      derived_health_status: existingHealth,
+      health_score: healthScore,
+    }
+  }
+
+  if (
+    status === 'cumple' &&
+    score >= 80 &&
+    evidenceCount > 0 &&
+    pendingEvidenceCount === 0 &&
+    openFindings === 0 &&
+    openNonconformities === 0
+  ) {
+    return {
+      derived_health_status: 'saludable',
+      health_score: Math.max(0, Math.min(100, score)),
+    }
+  }
+
+  if (
+    ['cumple', 'parcial'].includes(status) &&
+    score >= 50 &&
+    evidenceCount > 0
+  ) {
+    return {
+      derived_health_status: 'atencion',
+      health_score: Math.max(0, Math.min(100, score)),
+    }
+  }
+
+  return {
+    derived_health_status: existingHealth || 'deteriorado',
+    health_score: healthScore,
+  }
+}
+
 function normalizeRole(role) {
   return String(role || '').toLowerCase().trim();
 }
@@ -904,14 +967,9 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
     );
 
     const items = result.rows.map((row) => {
-      const healthScore = Number(row.health_score || 0);
-
-      let derivedStatus = row.derived_health_status || null;
-      if (!derivedStatus) {
-        if (healthScore < 50) derivedStatus = 'deteriorado';
-        else if (healthScore < 80) derivedStatus = 'atencion';
-        else derivedStatus = 'saludable';
-      }
+      const workbenchHealth = getWorkbenchDerivedHealth(row);
+      const healthScore = Number(workbenchHealth.health_score || 0);
+      const derivedStatus = workbenchHealth.derived_health_status;
 
       let complianceBucket = 'cumple';
       if (healthScore < 50) complianceBucket = 'no cumple';
