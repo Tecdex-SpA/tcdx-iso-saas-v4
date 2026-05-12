@@ -412,3 +412,17 @@ El flujo documental queda separado en tres etapas:
    - Recién en esta etapa puede impactar cumplimiento.
 
 La vista `/evidencias` incluye el panel **Evidencias integradas pendientes de aprobación**, con scroll interno, búsqueda y acciones humanas de aprobar/rechazar.
+
+## Resolución operacional de evidencias documentales integradas
+
+Al crear evidencia formal desde una sugerencia documental aprobada, el backend debe resolver el `tenant_control_id` usando la operación donde la norma está activa en `tenant_standard_operations`.
+
+Reglas vigentes:
+
+- No se debe usar `Toda la empresa / GENERAL` si la norma está inactiva en esa operación.
+- Si la norma está activa en una sola operación, la evidencia se asocia automáticamente al control de esa operación.
+- Si la norma está activa en más de una operación, el backend debe exigir `operation_id` para evitar asociaciones ambiguas.
+- La evidencia creada mantiene estado `pendiente` inicialmente y requiere aprobación humana.
+- La aprobación humana de evidencia es la que puede impactar salud, KPIs y cumplimiento después del refresh correspondiente.
+- No se crean evidencias automáticamente al analizar documentos.
+- No se aprueban evidencias automáticamente desde IA.

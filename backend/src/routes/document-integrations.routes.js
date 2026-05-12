@@ -119,12 +119,63 @@ function normalizeSuggestionStatus(value) {
 async function resolveTenantControlForDocumentSuggestion(client, {
   tenantId,
   suggestedStandardCode,
-  suggestedControlRef
+  suggestedControlRef,
+  preferredOperationId = null
 }) {
   const baseStandard = baseStandardCodeFromSuggestion(suggestedStandardCode)
   const controlRef = String(suggestedControlRef || '').trim()
 
   if (!baseStandard || !controlRef) return null
+
+  const activeOperations = await client.query(
+    `
+    SELECT
+      tso.operation_id,
+      op.name AS operation_name,
+      op.code AS operation_code,
+      op.operation_type,
+      COALESCE(op.is_default, false) AS is_default,
+      COALESCE(op.sort_order, 9999) AS sort_order
+    FROM tenant_standard_operations tso
+    JOIN tenant_operations op
+      ON op.id = tso.operation_id
+     AND op.tenant_id = tso.tenant_id
+     AND op.is_active = TRUE
+    WHERE tso.tenant_id = $1::uuid
+      AND tso.is_active = TRUE
+      AND UPPER(REPLACE(REPLACE(COALESCE(tso.standard_code, ''), '/', ''), ' ', '')) = $2
+      AND (
+        $3::uuid IS NULL
+        OR tso.operation_id = $3::uuid
+      )
+    ORDER BY
+      COALESCE(op.is_default, false) DESC,
+      COALESCE(op.sort_order, 9999) ASC,
+      op.name ASC
+    `,
+    [tenantId, baseStandard, preferredOperationId || null]
+  )
+
+  if (activeOperations.rowCount === 0) {
+    const err = new Error(
+      `No existe operación activa para la norma ${baseStandard} en este tenant`
+    )
+    err.statusCode = 422
+    throw err
+  }
+
+  if (!preferredOperationId && activeOperations.rowCount > 1) {
+    const err = new Error(
+      `La norma ${baseStandard} está activa en más de una operación. Debe seleccionarse operation_id antes de crear evidencia formal.`
+    )
+    err.statusCode = 409
+    err.details = {
+      active_operations: activeOperations.rows
+    }
+    throw err
+  }
+
+  const operationId = activeOperations.rows[0].operation_id
 
   const result = await client.query(
     `
@@ -146,10 +197,17 @@ async function resolveTenantControlForDocumentSuggestion(client, {
      AND cc.is_active = TRUE
     LEFT JOIN controls_catalog_standards ccs
       ON ccs.control_id = cc.id
-    LEFT JOIN tenant_operations op
+    JOIN tenant_operations op
       ON op.id = tc.operation_id
      AND op.tenant_id = tc.tenant_id
+     AND op.is_active = TRUE
+    JOIN tenant_standard_operations tso
+      ON tso.tenant_id = tc.tenant_id
+     AND tso.operation_id = tc.operation_id
+     AND tso.is_active = TRUE
+     AND UPPER(REPLACE(REPLACE(COALESCE(tso.standard_code, ''), '/', ''), ' ', '')) = $2
     WHERE tc.tenant_id = $1::uuid
+      AND tc.operation_id = $4::uuid
       AND (
         UPPER(REPLACE(REPLACE(COALESCE(ccs.standard_code, cc.iso, ''), '/', ''), ' ', '')) = $2
         OR UPPER(REPLACE(REPLACE(COALESCE(cc.iso, ''), '/', ''), ' ', '')) = $2
@@ -161,13 +219,25 @@ async function resolveTenantControlForDocumentSuggestion(client, {
       )
     ORDER BY
       CASE WHEN COALESCE(ccs.clause, cc.clause, '') = $3 THEN 0 ELSE 1 END,
-      COALESCE(op.is_default, false) DESC,
-      COALESCE(op.sort_order, 9999) ASC,
+      CASE WHEN cc.clause = $3 THEN 0 ELSE 1 END,
       tc.created_at ASC
     LIMIT 1
     `,
-    [tenantId, baseStandard, controlRef]
+    [tenantId, baseStandard, controlRef, operationId]
   )
+
+  if (result.rowCount === 0) {
+    const err = new Error(
+      `No fue posible resolver un control activo para ${baseStandard} / ${controlRef} en la operación activa`
+    )
+    err.statusCode = 422
+    err.details = {
+      operation_id: operationId,
+      standard_code: baseStandard,
+      control_ref: controlRef
+    }
+    throw err
+  }
 
   return result.rows[0] || null
 }
@@ -175,7 +245,8 @@ async function resolveTenantControlForDocumentSuggestion(client, {
 async function createEvidenceFromApprovedDocumentSuggestion(client, {
   tenantId,
   suggestionId,
-  userId
+  userId,
+  preferredOperationId = null
 }) {
   const current = await client.query(
     `
@@ -229,7 +300,8 @@ async function createEvidenceFromApprovedDocumentSuggestion(client, {
   const resolvedControl = await resolveTenantControlForDocumentSuggestion(client, {
     tenantId,
     suggestedStandardCode: suggestion.suggested_standard_code,
-    suggestedControlRef: suggestion.suggested_control_ref
+    suggestedControlRef: suggestion.suggested_control_ref,
+    preferredOperationId: preferredOperationId || null
   })
 
   if (!resolvedControl) {
@@ -756,7 +828,8 @@ router.post('/suggestions/:suggestionId/create-evidence', auth, async (req, res)
     const result = await createEvidenceFromApprovedDocumentSuggestion(client, {
       tenantId,
       suggestionId: req.params.suggestionId,
-      userId: getUserId(req.user)
+      userId: getUserId(req.user),
+      preferredOperationId: req.body?.operation_id || null
     })
 
     await client.query('COMMIT')
