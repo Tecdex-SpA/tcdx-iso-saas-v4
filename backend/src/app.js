@@ -21,6 +21,7 @@ const documentIntegrationsRoutes = require('./routes/document-integrations.route
 const documentIntegrationsGoogleRoutes = require('./routes/document-integrations-google.routes');
 const documentIntegrationsSyncRoutes = require('./routes/document-integrations-sync.routes');
 const documentIntegrationsFoldersRoutes = require('./routes/document-integrations-folders.routes');
+const documentIntegrationsAnalysisRoutes = require('./routes/document-integrations-analysis.routes');
 const policyRoutes = require('./routes/policy.routes');
 const auditsRoutes = require('./routes/audits.routes');
 const auditExecutionRoutes = require('./routes/audit-execution.routes');
@@ -226,6 +227,7 @@ app.use('/api/diagnostic', diagnosticRoutes);
 app.use('/api/nonconformities', ncRoutes);
 app.use('/api/dashboard-controls', dashboardControls);
 app.use('/api/evidences', evidencesRoutes);
+app.use('/api/document-integrations', documentIntegrationsAnalysisRoutes);
 app.use('/api/document-integrations', documentIntegrationsFoldersRoutes);
 app.use('/api/document-integrations', documentIntegrationsSyncRoutes);
 app.use('/api/document-integrations', documentIntegrationsRoutes);
