@@ -1192,6 +1192,51 @@ router.get('/:tenant_id', auth, async (req, res) => {
   try {
     const { tenant_id } = req.params
     const { iso, status, tenant_control_id, action_plan_id } = req.query
+    // Bypass seguro para vista Controles:
+    // cuando se solicita por tenant_control_id, devolver evidencias asociadas directamente
+    // sin depender de joins legacy por control_id.
+    if (tenant_control_id) {
+      if (!ensureTenantAccess(req, tenant_id)) {
+        return res.status(403).json({ error: 'No autorizado para este tenant' })
+      }
+
+      const directParams = [tenant_id, tenant_control_id]
+      let directWhere = `
+        WHERE e.tenant_id = $1
+          AND e.tenant_control_id = $2
+      `
+
+      if (status) {
+        directParams.push(status)
+        directWhere += ` AND LOWER(COALESCE(e.status, 'pendiente')) = LOWER($${directParams.length})`
+      }
+
+      const directResult = await pool.query(
+        `
+        SELECT
+          e.*,
+          e.metadata->>'web_view_url' AS web_view_url,
+          e.metadata->>'source_document_id' AS source_document_id,
+          e.metadata->>'source_suggestion_id' AS source_suggestion_id,
+          e.metadata->>'suggested_standard_code' AS suggested_standard_code,
+          e.metadata->>'suggested_control_ref' AS suggested_control_ref,
+          e.metadata->>'control_description' AS metadata_control_description,
+          e.metadata->>'source_name' AS source_name,
+          e.metadata->>'folder_path' AS folder_path,
+          u.name AS reviewed_by_label,
+          ap.title AS action_plan_title
+        FROM evidences e
+        LEFT JOIN users u ON u.id = e.reviewed_by
+        LEFT JOIN action_plans ap ON ap.id = e.action_plan_id
+        ${directWhere}
+        ORDER BY e.created_at DESC
+        `,
+        directParams
+      )
+
+      return res.json(directResult.rows)
+    }
+
 
     if (!ensureTenantAccess(req, tenant_id)) {
       return res.status(403).json({ error: 'No autorizado para este tenant' })
