@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import GoogleDriveSourcesPanel from '@/components/evidences/GoogleDriveSourcesPanel';
 import { clearAiAuditorDraft, formatAiAuditorDraftEvidenceDescription, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
@@ -1048,6 +1049,10 @@ function EvidenciasPageContent() {
           <MetricCard title={t('evidence.linkedToPlan')} value={metrics.vinculadasPlan} />
           <MetricCard title={t('evidence.aiRecommended')} value={metrics.recomendadasIa} />
         </div>
+
+        {tenantId && (
+          <GoogleDriveSourcesPanel tenantId={tenantId} />
+        )}
 
         {isRemediationMode && (
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
