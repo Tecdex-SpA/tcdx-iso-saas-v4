@@ -95,6 +95,284 @@ const providerCards = [
   }
 ]
 
+
+
+function baseStandardCodeFromSuggestion(value) {
+  const raw = String(value || '').toUpperCase().trim()
+
+  if (!raw) return ''
+
+  if (raw.includes('9001')) return 'ISO9001'
+  if (raw.includes('27001')) return 'ISO27001'
+  if (raw.includes('42001')) return 'ISO42001'
+
+  return raw
+    .replace(/:20\d{2}/g, '')
+    .replace(/\s+/g, '')
+    .replace(/\//g, '')
+}
+
+function normalizeSuggestionStatus(value) {
+  return String(value || '').toLowerCase().trim()
+}
+
+async function resolveTenantControlForDocumentSuggestion(client, {
+  tenantId,
+  suggestedStandardCode,
+  suggestedControlRef
+}) {
+  const baseStandard = baseStandardCodeFromSuggestion(suggestedStandardCode)
+  const controlRef = String(suggestedControlRef || '').trim()
+
+  if (!baseStandard || !controlRef) return null
+
+  const result = await client.query(
+    `
+    SELECT
+      tc.id AS tenant_control_id,
+      tc.control_id AS catalog_control_id,
+      tc.operation_id,
+      cc.iso,
+      COALESCE(ccs.standard_code, cc.iso) AS standard_code,
+      COALESCE(ccs.clause, cc.clause) AS clause,
+      cc.description AS control_description,
+      cc.category,
+      op.name AS operation_name,
+      op.code AS operation_code,
+      op.operation_type
+    FROM tenant_controls tc
+    JOIN controls_catalog cc
+      ON cc.id = tc.control_id
+     AND cc.is_active = TRUE
+    LEFT JOIN controls_catalog_standards ccs
+      ON ccs.control_id = cc.id
+    LEFT JOIN tenant_operations op
+      ON op.id = tc.operation_id
+     AND op.tenant_id = tc.tenant_id
+    WHERE tc.tenant_id = $1::uuid
+      AND (
+        UPPER(REPLACE(REPLACE(COALESCE(ccs.standard_code, cc.iso, ''), '/', ''), ' ', '')) = $2
+        OR UPPER(REPLACE(REPLACE(COALESCE(cc.iso, ''), '/', ''), ' ', '')) = $2
+      )
+      AND (
+        COALESCE(ccs.clause, cc.clause, '') = $3
+        OR cc.clause = $3
+        OR cc.description ILIKE '%' || $3 || '%'
+      )
+    ORDER BY
+      CASE WHEN COALESCE(ccs.clause, cc.clause, '') = $3 THEN 0 ELSE 1 END,
+      COALESCE(op.is_default, false) DESC,
+      COALESCE(op.sort_order, 9999) ASC,
+      tc.created_at ASC
+    LIMIT 1
+    `,
+    [tenantId, baseStandard, controlRef]
+  )
+
+  return result.rows[0] || null
+}
+
+async function createEvidenceFromApprovedDocumentSuggestion(client, {
+  tenantId,
+  suggestionId,
+  userId
+}) {
+  const current = await client.query(
+    `
+    SELECT
+      s.*,
+      d.file_name,
+      d.file_url,
+      d.web_view_url,
+      d.mime_type,
+      d.file_extension,
+      d.size_bytes,
+      d.provider,
+      d.source_id,
+      d.integration_id,
+      d.provider_file_id,
+      d.provider_version_id,
+      d.modified_at,
+      d.metadata_json AS document_metadata_json,
+      src.source_name,
+      src.folder_path
+    FROM document_association_suggestions s
+    JOIN document_index d
+      ON d.id = s.document_id
+     AND d.tenant_id = s.tenant_id
+    LEFT JOIN tenant_document_sources src
+      ON src.id = d.source_id
+     AND src.tenant_id = d.tenant_id
+    WHERE s.id = $1::uuid
+      AND s.tenant_id = $2::uuid
+      AND s.target_type = 'control'
+    LIMIT 1
+    `,
+    [suggestionId, tenantId]
+  )
+
+  if (current.rowCount === 0) {
+    const err = new Error('Sugerencia documental no encontrada')
+    err.statusCode = 404
+    throw err
+  }
+
+  const suggestion = current.rows[0]
+  const status = normalizeSuggestionStatus(suggestion.status)
+
+  if (status !== 'approved') {
+    const err = new Error('La sugerencia debe estar aprobada antes de crear evidencia formal')
+    err.statusCode = 409
+    throw err
+  }
+
+  const resolvedControl = await resolveTenantControlForDocumentSuggestion(client, {
+    tenantId,
+    suggestedStandardCode: suggestion.suggested_standard_code,
+    suggestedControlRef: suggestion.suggested_control_ref
+  })
+
+  if (!resolvedControl) {
+    const err = new Error('No fue posible resolver un control activo del tenant para esta sugerencia')
+    err.statusCode = 422
+    throw err
+  }
+
+  const existing = await client.query(
+    `
+    SELECT id
+    FROM evidences
+    WHERE tenant_id = $1::uuid
+      AND metadata->>'source_document_id' = $2
+      AND metadata->>'source_suggestion_id' = $3
+    LIMIT 1
+    `,
+    [tenantId, suggestion.document_id, suggestion.id]
+  )
+
+  if (existing.rowCount > 0) {
+    const evidence = await client.query(
+      `SELECT * FROM evidences WHERE id = $1::uuid LIMIT 1`,
+      [existing.rows[0].id]
+    )
+
+    return {
+      evidence: evidence.rows[0],
+      created: false,
+      already_exists: true,
+      resolved_control: resolvedControl
+    }
+  }
+
+  const metadata = {
+    source: 'document_integration',
+    source_document_id: suggestion.document_id,
+    source_suggestion_id: suggestion.id,
+    source_provider: suggestion.provider || null,
+    source_id: suggestion.source_id || null,
+    source_name: suggestion.source_name || null,
+    folder_path: suggestion.folder_path || null,
+    provider_file_id: suggestion.provider_file_id || null,
+    provider_version_id: suggestion.provider_version_id || null,
+    web_view_url: suggestion.web_view_url || suggestion.file_url || null,
+    document_modified_at: suggestion.modified_at || null,
+    suggested_standard_code: suggestion.suggested_standard_code || null,
+    suggested_control_ref: suggestion.suggested_control_ref || null,
+    suggested_reason: suggestion.suggested_reason || null,
+    suggestion_confidence_score: suggestion.confidence_score || null,
+    promoted_by_user_id: userId || null,
+    promoted_at: new Date().toISOString(),
+    iso: resolvedControl.standard_code || resolvedControl.iso || null,
+    clause: resolvedControl.clause || suggestion.suggested_control_ref || null,
+    control_description: resolvedControl.control_description || null,
+    operation_id: resolvedControl.operation_id || null,
+    operation_name: resolvedControl.operation_name || null,
+    operation_code: resolvedControl.operation_code || null,
+    operation_type: resolvedControl.operation_type || null,
+    human_review_required: true,
+    no_auto_approval: true
+  }
+
+  const description = [
+    `Evidencia documental integrada desde Google Drive: ${suggestion.file_name || 'documento sin nombre'}.`,
+    suggestion.suggested_reason ? `Motivo IA: ${suggestion.suggested_reason}` : null,
+    'Creada desde sugerencia aprobada; requiere aprobación humana antes de impactar cumplimiento.'
+  ].filter(Boolean).join('\n')
+
+  const inserted = await client.query(
+    `
+    INSERT INTO evidences (
+      tenant_id,
+      control_id,
+      tenant_control_id,
+      description,
+      file_name,
+      file_path,
+      file_mime_type,
+      file_size_bytes,
+      status,
+      validated,
+      expires_at,
+      evidence_type,
+      metadata,
+      content_fingerprint,
+      document_extraction_status,
+      ai_analysis_status
+    )
+    VALUES (
+      $1::uuid,
+      $2::uuid,
+      $3::uuid,
+      $4,
+      $5,
+      NULL,
+      $6,
+      $7,
+      'pendiente',
+      false,
+      NULL,
+      'documento_integrado',
+      $8::jsonb,
+      md5(COALESCE($1::text,'') || '|' || COALESCE($5,'') || '|' || COALESCE($9::text,'')),
+      'external_reference',
+      'pending'
+    )
+    RETURNING *
+    `,
+    [
+      tenantId,
+      resolvedControl.catalog_control_id,
+      resolvedControl.tenant_control_id,
+      description,
+      suggestion.file_name || null,
+      suggestion.mime_type || null,
+      suggestion.size_bytes || null,
+      JSON.stringify(metadata),
+      suggestion.document_id
+    ]
+  )
+
+  await client.query(
+    `
+    UPDATE document_association_suggestions
+    SET
+      status = 'superseded',
+      reviewed_at = COALESCE(reviewed_at, NOW()),
+      reviewed_by_user_id = COALESCE(reviewed_by_user_id, $3::uuid)
+    WHERE id = $1::uuid
+      AND tenant_id = $2::uuid
+    `,
+    [suggestionId, tenantId, userId || null]
+  )
+
+  return {
+    evidence: inserted.rows[0],
+    created: true,
+    already_exists: false,
+    resolved_control: resolvedControl
+  }
+}
+
 router.get('/providers', auth, async (_req, res) => {
   return res.json({ providers: providerCards })
 })
@@ -458,6 +736,50 @@ router.post('/suggestions/:suggestionId/approve', auth, async (req, res) => {
   } catch (err) {
     console.error('ERROR APPROVE DOCUMENT SUGGESTION:', err)
     return res.status(500).json({ error: 'Error aprobando sugerencia documental' })
+  }
+})
+
+
+router.post('/suggestions/:suggestionId/create-evidence', auth, async (req, res) => {
+  const tenantId = assertTenant(req, res)
+  if (!tenantId) return
+
+  if (!canManageDocumentIntegrations(req.user)) {
+    return res.status(403).json({ error: 'No autorizado para crear evidencia desde sugerencias documentales' })
+  }
+
+  const client = await pool.connect()
+
+  try {
+    await client.query('BEGIN')
+
+    const result = await createEvidenceFromApprovedDocumentSuggestion(client, {
+      tenantId,
+      suggestionId: req.params.suggestionId,
+      userId: getUserId(req.user)
+    })
+
+    await client.query('COMMIT')
+
+    return res.status(result.created ? 201 : 200).json({
+      ok: true,
+      created: result.created,
+      already_exists: result.already_exists,
+      evidence: result.evidence,
+      resolved_control: result.resolved_control,
+      message: result.created
+        ? 'Evidencia formal creada en estado pendiente. Requiere aprobación humana para impactar cumplimiento.'
+        : 'La evidencia ya existía para esta sugerencia.'
+    })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error('ERROR CREATE EVIDENCE FROM DOCUMENT SUGGESTION:', err)
+
+    return res.status(err.statusCode || 500).json({
+      error: err.message || 'Error creando evidencia desde sugerencia documental'
+    })
+  } finally {
+    client.release()
   }
 })
 
