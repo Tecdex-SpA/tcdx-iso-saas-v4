@@ -1130,3 +1130,359 @@ def process_evidence(
 
 
 app.include_router(ai_router)
+
+
+# =========================================================
+# Document AI Analysis Endpoint - TCDX Evidence Center
+# =========================================================
+
+class DocumentAnalysisRequest(BaseModel):
+    tenant_id: str
+    document_id: str
+    file_name: Optional[str] = None
+    mime_type: Optional[str] = None
+    text: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    active_standards: List[str] = Field(default_factory=list)
+    available_controls: List[Dict[str, Any]] = Field(default_factory=list)
+    instructions: Dict[str, Any] = Field(default_factory=dict)
+
+
+def _doc_norm(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _doc_lower(value: Any) -> str:
+    return _doc_norm(value).lower()
+
+
+def _doc_contains_any(text: str, terms: List[str]) -> bool:
+    lowered = _doc_lower(text)
+    return any(term in lowered for term in terms)
+
+
+def _normalize_standard_code(value: Any) -> Optional[str]:
+    raw = _doc_norm(value)
+    compact = raw.upper().replace(" ", "").replace("_", "").replace("-", "")
+
+    if "27001" in compact:
+        return "ISO27001:2022"
+    if "9001" in compact:
+        return "ISO9001:2015"
+    if "42001" in compact:
+        return "ISO42001:2023"
+    if "22301" in compact:
+        return "ISO22301:2019"
+    if "14001" in compact:
+        return "ISO14001:2015"
+    if "37001" in compact:
+        return "ISO37001:2016"
+    if "50001" in compact:
+        return "ISO50001:2018"
+
+    return raw or None
+
+
+def _infer_document_type(file_name: str, mime_type: str, text: str) -> str:
+    haystack = f"{file_name} {mime_type} {text}".lower()
+
+    if _doc_contains_any(haystack, ["política", "politica", "policy", "lineamientos", "directriz"]):
+        return "policy"
+    if _doc_contains_any(haystack, ["procedimiento", "procedure", "instrucción", "instructivo", "flujo", "paso a paso"]):
+        return "procedure"
+    if _doc_contains_any(haystack, ["registro", "record", "listado", "matriz", "planilla", "acta", "formulario"]):
+        return "record"
+    if _doc_contains_any(haystack, ["auditoría", "auditoria", "audit", "hallazgo", "no conformidad", "observación"]):
+        return "audit_report"
+    if _doc_contains_any(haystack, ["riesgo", "risk", "amenaza", "vulnerabilidad", "impacto", "probabilidad"]):
+        return "risk_document"
+    if _doc_contains_any(haystack, ["evidencia", "evidence", "respaldo", "certificado", "comprobante"]):
+        return "evidence"
+
+    return "unknown"
+
+
+def _infer_standards(file_name: str, text: str, active_standards: List[str]) -> List[str]:
+    haystack = f"{file_name} {text}".lower()
+    detected: List[str] = []
+
+    for candidate in active_standards or []:
+        normalized = _normalize_standard_code(candidate)
+        if normalized and normalized not in detected:
+            raw = _doc_lower(candidate)
+            compact_raw = raw.replace(":", "").replace("-", "").replace(" ", "")
+            compact_haystack = haystack.replace(":", "").replace("-", "").replace(" ", "")
+            if raw and (raw in haystack or compact_raw in compact_haystack):
+                detected.append(normalized)
+
+    explicit_map = [
+        ("ISO9001:2015", ["iso9001", "iso 9001", "sistema de gestión de calidad", "gestion de calidad", "sgc", "calidad"]),
+        ("ISO27001:2022", ["iso27001", "iso 27001", "seguridad de la información", "seguridad de la informacion", "ciberseguridad"]),
+        ("ISO42001:2023", ["iso42001", "iso 42001", "inteligencia artificial", "sistema de gestión de ia", "sistema de gestion de ia"]),
+        ("ISO22301:2019", ["iso22301", "iso 22301", "continuidad", "bcp", "drp", "recuperación ante desastres"]),
+        ("ISO14001:2015", ["iso14001", "iso 14001", "ambiental", "medio ambiente"]),
+    ]
+
+    for standard, terms in explicit_map:
+        if _doc_contains_any(haystack, terms) and standard not in detected:
+            detected.append(standard)
+
+    if not detected and active_standards:
+        normalized = _normalize_standard_code(active_standards[0])
+        if normalized:
+            detected.append(normalized)
+
+    return detected[:3]
+
+
+def _find_probable_controls(text: str, standards: List[str], available_controls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not available_controls:
+        return []
+
+    lowered = _doc_lower(text)
+    scored = []
+
+    for control in available_controls:
+        standard = _normalize_standard_code(control.get("standard_code"))
+        if standards and standard not in standards:
+            continue
+
+        clause = _doc_norm(control.get("clause"))
+        control_code = _doc_norm(control.get("control_code"))
+        title = _doc_norm(control.get("title"))
+        description = _doc_norm(control.get("description"))
+
+        score = 0
+        reasons = []
+
+        for field_name, field_value, weight in [
+            ("clause", clause, 18),
+            ("control_code", control_code, 15),
+            ("title", title, 24),
+            ("description", description, 14),
+        ]:
+            value = _doc_lower(field_value)
+            if value and value in lowered:
+                score += weight
+                reasons.append(f"Coincidencia directa con {field_name}.")
+
+        title_terms = [
+            term for term in _doc_lower(title).replace("/", " ").replace("-", " ").split()
+            if len(term) >= 5
+        ]
+        matching_terms = [term for term in title_terms if term in lowered]
+
+        if matching_terms:
+            score += min(35, len(matching_terms) * 8)
+            reasons.append(f"Términos relevantes detectados: {', '.join(matching_terms[:5])}.")
+
+        if score >= 18:
+            scored.append({
+                "control_ref": control_code or clause or None,
+                "standard_code": standard,
+                "clause": clause or None,
+                "title": title or None,
+                "reason": " ".join(reasons) or "Coincidencia semántica preliminar con el contenido.",
+                "confidence": round(min(0.94, 0.45 + score / 100), 2),
+            })
+
+    scored.sort(key=lambda item: item.get("confidence", 0), reverse=True)
+    return scored[:8]
+
+
+def _assess_missing_elements(document_type: str, text: str, metadata: Dict[str, Any]) -> List[str]:
+    lowered = _doc_lower(text)
+    missing = []
+
+    if len(lowered) < 500:
+        missing.append("El texto extraído es limitado; la revisión debe considerarse preliminar.")
+
+    if not _doc_contains_any(lowered, ["versión", "version", "v.", "rev.", "revisión", "revision"]):
+        missing.append("No se detecta versión o revisión documental explícita.")
+
+    if not _doc_contains_any(lowered, ["aprobado", "aprobación", "aprobacion", "autoriza", "firma", "revisado por"]):
+        missing.append("No se detecta aprobación formal o evidencia de revisión.")
+
+    if not _doc_contains_any(lowered, ["responsable", "owner", "propietario", "encargado"]):
+        missing.append("No se detecta responsable documental o dueño del proceso.")
+
+    if not _doc_contains_any(lowered, ["fecha", "vigencia", "actualización", "actualizacion", "emisión", "emision"]):
+        missing.append("No se detecta fecha de emisión, vigencia o actualización dentro del contenido.")
+
+    if document_type in ["policy", "procedure"] and not _doc_contains_any(lowered, ["objetivo", "alcance", "scope"]):
+        missing.append("No se detecta objetivo y/o alcance formal del documento.")
+
+    if metadata.get("extraction", {}).get("truncated"):
+        missing.append("El texto fue truncado por límite de análisis; revisar documento completo antes de aprobar.")
+
+    return missing[:10]
+
+
+def _detect_probable_errors(file_name: str, text: str, metadata: Dict[str, Any], standards: List[str]) -> List[str]:
+    lowered = _doc_lower(text)
+    errors = []
+
+    modified_at = _doc_norm(metadata.get("modified_at"))
+    if modified_at and modified_at[:4].isdigit():
+        try:
+            year = int(modified_at[:4])
+            if year < 2023:
+                errors.append("La fecha de modificación es antigua; validar si el documento sigue vigente.")
+        except Exception:
+            pass
+
+    if "iso9001" in _doc_lower(file_name) and "ISO9001:2015" not in standards:
+        errors.append("El nombre del archivo sugiere ISO9001, pero el análisis no logró confirmar esa norma con claridad.")
+
+    if _doc_contains_any(lowered, ["borrador", "draft", "pendiente de aprobación", "pendiente de aprobacion"]):
+        errors.append("El contenido sugiere estado borrador o pendiente de aprobación.")
+
+    if _doc_contains_any(lowered, ["obsoleto", "no vigente", "reemplazado"]):
+        errors.append("El contenido podría indicar documento obsoleto o reemplazado.")
+
+    if _doc_contains_any(lowered, ["copia no controlada", "uncontrolled copy"]):
+        errors.append("El contenido indica copia no controlada; no debe usarse como evidencia principal sin validación.")
+
+    return errors[:10]
+
+
+def _evidence_quality(text: str, document_type: str, missing_elements: List[str], probable_errors: List[str]) -> str:
+    length = len(_doc_norm(text))
+
+    if document_type == "unknown" or length < 300:
+        return "insufficient"
+    if probable_errors:
+        return "medium"
+    if len(missing_elements) >= 4:
+        return "low"
+    if len(missing_elements) >= 2:
+        return "medium"
+    if length >= 2500:
+        return "high"
+
+    return "medium"
+
+
+def _confidence_score(
+    text: str,
+    standards: List[str],
+    document_type: str,
+    controls: List[Dict[str, Any]],
+    missing_elements: List[str],
+) -> float:
+    score = 0.35
+
+    if len(_doc_norm(text)) > 500:
+        score += 0.14
+    if len(_doc_norm(text)) > 2000:
+        score += 0.10
+    if standards:
+        score += 0.14
+    if document_type != "unknown":
+        score += 0.12
+    if controls:
+        score += 0.08
+    if len(missing_elements) <= 2:
+        score += 0.07
+
+    return round(max(0.1, min(0.95, score)), 2)
+
+
+@app.post("/api/ai-compliance/analyze-document")
+def analyze_document_for_compliance(
+    payload: DocumentAnalysisRequest,
+    x_ai_token: Optional[str] = Header(default=None),
+    x_internal_token: Optional[str] = Header(default=None),
+):
+    """
+    Analiza contenido documental extraído desde el Centro Inteligente de Evidencias.
+
+    Reglas:
+    - No aprueba cumplimiento.
+    - No crea evidencia.
+    - No modifica controles.
+    - Devuelve recomendaciones revisables por humano.
+    """
+    configured = get_configured_ai_token()
+    if configured:
+        require_ai_token(
+            x_ai_token=x_ai_token,
+            x_internal_token=x_internal_token,
+        )
+
+    text = _doc_norm(payload.text)
+    file_name = _doc_norm(payload.file_name)
+    mime_type = _doc_norm(payload.mime_type)
+    metadata = payload.metadata or {}
+
+    standards = _infer_standards(file_name, text, payload.active_standards or [])
+    document_type = _infer_document_type(file_name, mime_type, text)
+    suggested_controls = _find_probable_controls(text, standards, payload.available_controls or [])
+    missing_elements = _assess_missing_elements(document_type, text, metadata)
+    probable_errors = _detect_probable_errors(file_name, text, metadata, standards)
+
+    evidence_quality = _evidence_quality(text, document_type, missing_elements, probable_errors)
+    confidence = _confidence_score(text, standards, document_type, suggested_controls, missing_elements)
+
+    suggested_targets = [
+        {
+            "target_type": "control",
+            "target_id": None,
+            "standard_code": item.get("standard_code"),
+            "control_ref": item.get("control_ref") or item.get("clause"),
+            "reason": item.get("reason"),
+            "confidence": item.get("confidence"),
+        }
+        for item in suggested_controls
+    ]
+
+    summary_parts = [
+        f"Documento analizado como {document_type}.",
+        f"Normas probables: {', '.join(standards) if standards else 'no determinada'}.",
+        f"Calidad preliminar de evidencia: {evidence_quality}.",
+    ]
+
+    if probable_errors:
+        summary_parts.append(f"Se detectaron {len(probable_errors)} advertencias que requieren revisión.")
+
+    if suggested_controls:
+        summary_parts.append(f"Se sugieren {len(suggested_controls)} posibles asociaciones a controles para revisión humana.")
+
+    recommended_actions = [
+        "Revisar el análisis antes de asociar el documento a controles o evidencias formales.",
+        "Confirmar vigencia, responsable, versión y aprobación documental.",
+        "Validar que el documento corresponda al alcance del tenant y a la norma activa aplicable.",
+        "No considerar este resultado como aprobación de cumplimiento ni certificación.",
+    ]
+
+    if probable_errors:
+        recommended_actions.append("Resolver advertencias detectadas antes de usar el documento como evidencia principal.")
+
+    if suggested_controls:
+        recommended_actions.append("Evaluar las asociaciones sugeridas y aprobar/rechazar manualmente cada una.")
+
+    return {
+        "document_type": document_type,
+        "standards": standards,
+        "suggested_controls": suggested_controls,
+        "suggested_targets": suggested_targets,
+        "summary": " ".join(summary_parts),
+        "evidence_quality": evidence_quality,
+        "missing_elements": missing_elements + probable_errors,
+        "recommended_actions": recommended_actions,
+        "confidence_score": confidence,
+        "requires_review": True,
+        "analysis_source": "ai_engine_document_auditor",
+        "audit_findings": {
+            "probable_errors": probable_errors,
+            "missing_elements": missing_elements,
+            "content_length": len(text),
+            "metadata_reviewed": {
+                "provider": metadata.get("provider"),
+                "source_name": metadata.get("source_name"),
+                "modified_at": metadata.get("modified_at"),
+                "extraction_stage": metadata.get("extraction_stage"),
+            },
+        },
+    }
+
