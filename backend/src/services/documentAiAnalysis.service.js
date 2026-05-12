@@ -25,6 +25,202 @@ function sanitizeDocumentForResponse(document) {
   return clone
 }
 
+
+function normalizeStandardCode(value) {
+  const raw = toText(value)
+  const compact = raw.toUpperCase().replace(/[\s_:-]/g, '')
+
+  if (compact.includes('27001')) return 'ISO27001:2022'
+  if (compact.includes('9001')) return 'ISO9001:2015'
+  if (compact.includes('42001')) return 'ISO42001:2023'
+  if (compact.includes('22301')) return 'ISO22301:2019'
+  if (compact.includes('14001')) return 'ISO14001:2015'
+  if (compact.includes('37001')) return 'ISO37001:2016'
+  if (compact.includes('50001')) return 'ISO50001:2018'
+
+  return raw || null
+}
+
+function expandStandardCodes(standards = []) {
+  const expanded = new Set()
+
+  for (const item of standards || []) {
+    const raw = toText(item)
+    const normalized = normalizeStandardCode(raw)
+
+    if (raw) expanded.add(raw)
+    if (normalized) expanded.add(normalized)
+
+    if (normalized === 'ISO9001:2015') {
+      expanded.add('ISO9001')
+      expanded.add('ISO 9001')
+      expanded.add('9001')
+    }
+
+    if (normalized === 'ISO27001:2022') {
+      expanded.add('ISO27001')
+      expanded.add('ISO 27001')
+      expanded.add('27001')
+    }
+
+    if (normalized === 'ISO42001:2023') {
+      expanded.add('ISO42001')
+      expanded.add('ISO 42001')
+      expanded.add('42001')
+    }
+  }
+
+  return Array.from(expanded).filter(Boolean)
+}
+
+function normalizeControlRef(value) {
+  return toText(value)
+    .replace(/^control\s+/i, '')
+    .replace(/^cl[aá]usula\s+/i, '')
+    .trim()
+}
+
+function normalizeConfidence(value, fallback = 0.5) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return fallback
+  if (n > 1) return Math.max(0, Math.min(1, n / 100))
+  return Math.max(0, Math.min(1, n))
+}
+
+function buildControlSuggestionCandidates(normalized) {
+  const candidates = []
+  const seen = new Set()
+
+  const pushCandidate = (item = {}, source = 'unknown') => {
+    const targetType = toText(item.target_type || 'control') || 'control'
+    if (targetType !== 'control') return
+
+    const standardCode = normalizeStandardCode(
+      item.standard_code ||
+      item.suggested_standard_code ||
+      item.iso ||
+      item.standard ||
+      (Array.isArray(normalized?.standards) ? normalized.standards[0] : null)
+    )
+
+    const controlRef = normalizeControlRef(
+      item.control_ref ||
+      item.suggested_control_ref ||
+      item.control_id ||
+      item.ref ||
+      item.clause ||
+      item.control_code
+    )
+
+    if (!standardCode || !controlRef) return
+
+    const key = `${standardCode}::${controlRef}`
+    if (seen.has(key)) return
+    seen.add(key)
+
+    candidates.push({
+      target_type: 'control',
+      target_id: item.target_id || null,
+      suggested_standard_code: standardCode,
+      suggested_control_ref: controlRef,
+      suggested_reason:
+        toText(item.reason || item.suggested_reason || item.title || item.description) ||
+        'Sugerencia generada por análisis documental IA.',
+      confidence_score: normalizeConfidence(item.confidence ?? item.confidence_score, normalized?.confidence_score || 0.5),
+      source
+    })
+  }
+
+  if (Array.isArray(normalized?.suggested_controls)) {
+    for (const item of normalized.suggested_controls) {
+      pushCandidate(item, 'suggested_controls')
+    }
+  }
+
+  if (Array.isArray(normalized?.suggested_targets)) {
+    for (const item of normalized.suggested_targets) {
+      pushCandidate(item, 'suggested_targets')
+    }
+  }
+
+  return candidates
+}
+
+async function createPendingControlSuggestions({ tenantId, documentId, analysisId, normalized, userId = null }) {
+  const candidates = buildControlSuggestionCandidates(normalized)
+
+  if (candidates.length === 0) {
+    return []
+  }
+
+  const created = []
+
+  for (const candidate of candidates) {
+    const result = await pool.query(
+      `
+      INSERT INTO document_association_suggestions (
+        tenant_id,
+        document_id,
+        target_type,
+        target_id,
+        suggested_standard_code,
+        suggested_control_ref,
+        suggested_reason,
+        confidence_score,
+        status,
+        reviewed_by_user_id,
+        reviewed_at,
+        created_at
+      )
+      SELECT
+        $1,
+        $2,
+        'control',
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        'pending',
+        NULL,
+        NULL,
+        NOW()
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM document_association_suggestions
+        WHERE tenant_id = $1
+          AND document_id = $2
+          AND target_type = 'control'
+          AND status = 'pending'
+          AND COALESCE(suggested_standard_code, '') = COALESCE($4, '')
+          AND COALESCE(suggested_control_ref, '') = COALESCE($5, '')
+      )
+      RETURNING *
+      `,
+      [
+        tenantId,
+        documentId,
+        candidate.target_id,
+        candidate.suggested_standard_code,
+        candidate.suggested_control_ref,
+        candidate.suggested_reason,
+        candidate.confidence_score
+      ]
+    )
+
+    if (result.rows[0]) {
+      created.push({
+        ...result.rows[0],
+        analysis_id: analysisId,
+        source: candidate.source,
+        created_by_user_id: userId
+      })
+    }
+  }
+
+  return created
+}
+
 function inferDocumentType({ fileName, mimeType, text = '' }) {
   const haystack = `${fileName || ''} ${mimeType || ''} ${text || ''}`.toLowerCase()
 
@@ -209,33 +405,54 @@ async function getActiveStandards(tenantId) {
       `,
       [tenantId]
     )
-    return result.rows.map((row) => row.standard_code).filter(Boolean)
+
+    const rawStandards = result.rows.map((row) => row.standard_code).filter(Boolean)
+    return expandStandardCodes(rawStandards)
   } catch (_err) {
     return []
   }
 }
 
 async function getAvailableControls(tenantId, standards) {
+  const expandedStandards = expandStandardCodes(
+    standards && standards.length ? standards : ['ISO9001:2015', 'ISO27001:2022', 'ISO42001:2023']
+  )
+
   try {
     const result = await pool.query(
       `
-      SELECT
+      SELECT DISTINCT
         COALESCE(ccs.standard_code, cc.standard_code) AS standard_code,
         COALESCE(ccs.clause, cc.clause) AS clause,
-        cc.control_code,
-        cc.title,
-        cc.description
+        COALESCE(cc.control_code, cc.code, cc.control_ref, COALESCE(ccs.clause, cc.clause)) AS control_code,
+        COALESCE(cc.title, cc.name, cc.control_name, '') AS title,
+        COALESCE(cc.description, cc.control_description, '') AS description
       FROM controls_catalog cc
       LEFT JOIN controls_catalog_standards ccs
         ON ccs.control_id = cc.id
-      WHERE COALESCE(ccs.standard_code, cc.standard_code) = ANY($1::text[])
-      ORDER BY COALESCE(ccs.standard_code, cc.standard_code), COALESCE(ccs.clause, cc.clause), cc.control_code
-      LIMIT 200
+      WHERE
+        COALESCE(ccs.standard_code, cc.standard_code) = ANY($1::text[])
+        OR REPLACE(REPLACE(REPLACE(UPPER(COALESCE(ccs.standard_code, cc.standard_code, '')), ':', ''), '-', ''), ' ', '')
+           = ANY(
+             SELECT REPLACE(REPLACE(REPLACE(UPPER(x), ':', ''), '-', ''), ' ', '')
+             FROM unnest($1::text[]) AS x
+           )
+      ORDER BY
+        COALESCE(ccs.standard_code, cc.standard_code),
+        COALESCE(ccs.clause, cc.clause),
+        COALESCE(cc.control_code, cc.code, cc.control_ref, COALESCE(ccs.clause, cc.clause))
+      LIMIT 300
       `,
-      [standards && standards.length ? standards : ['ISO9001:2015', 'ISO27001:2022', 'ISO42001:2023']]
+      [expandedStandards]
     )
-    return result.rows
-  } catch (_err) {
+
+    return result.rows.map((row) => ({
+      ...row,
+      standard_code: normalizeStandardCode(row.standard_code) || row.standard_code,
+      control_ref: normalizeControlRef(row.control_code || row.clause)
+    }))
+  } catch (err) {
+    console.error('ERROR LOAD AVAILABLE CONTROLS FOR DOCUMENT AI:', err.message)
     return []
   }
 }
@@ -375,11 +592,24 @@ async function analyzeDocument({ tenantId, documentId, userId = null }) {
     ]
   )
 
+  const controlSuggestions = await createPendingControlSuggestions({
+    tenantId,
+    documentId: document.id,
+    analysisId: insert.rows[0].id,
+    normalized,
+    userId
+  }).catch((err) => {
+    console.error('ERROR CREATE DOCUMENT CONTROL SUGGESTIONS:', err.message)
+    return []
+  })
+
   return {
     ok: true,
     document: safeDocument,
     extraction: extractionResult.extraction || {},
-    analysis: insert.rows[0]
+    analysis: insert.rows[0],
+    suggestions_created: controlSuggestions.length,
+    suggestions: controlSuggestions
   }
 }
 
