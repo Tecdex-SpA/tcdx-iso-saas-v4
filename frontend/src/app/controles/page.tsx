@@ -613,6 +613,23 @@ function ControlesPageContent() {
     }
   };
 
+
+  const refreshTenantHealth = async () => {
+    if (!token || !tenantId) return;
+
+    try {
+      await fetch(`${API_URL}/health/refresh?tenant_id=${encodeURIComponent(tenantId)}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (err) {
+      console.warn('WARN REFRESH TENANT HEALTH:', err);
+    }
+  };
+
   const loadEvidencesForControl = async (tenantControlId: string) => {
     if (!token || !tenantId) return;
 
@@ -1010,8 +1027,9 @@ function ControlesPageContent() {
         throw new Error(json?.error || json?.detail || 'No fue posible establecer la evidencia como oficial')
       }
 
-      await loadWorkbench(tenantId, token || '', selectedISO, selectedOperationId)
-      await loadEvidencesForControl(item.tenant_control_id)
+      await refreshTenantHealth();
+      await loadWorkbench(tenantId, token || '', selectedISO, selectedOperationId);
+      await loadEvidencesForControl(item.tenant_control_id);
 
     } catch (err: any) {
       console.error('ERROR MARK INTEGRATED EVIDENCE OFFICIAL:', err)
