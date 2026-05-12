@@ -45,6 +45,20 @@ type DocumentRow = {
   web_view_url?: string | null;
 };
 
+type DocumentAnalysis = {
+  id: string;
+  document_id: string;
+  detected_document_type?: string | null;
+  detected_standard_code?: string | null;
+  summary?: string | null;
+  confidence_score?: number | string | null;
+  evidence_quality?: string | null;
+  missing_elements?: any;
+  recommended_actions?: any;
+  analysis_json?: any;
+  created_at?: string | null;
+};
+
 type SyncLog = {
   id: string;
   source_name?: string | null;
@@ -76,12 +90,31 @@ function fmtDate(value?: string | null) {
   return d.toLocaleString('es-CL');
 }
 
+function pct(value?: number | string | null) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return `${Math.round(n * 100)}%`;
+}
+
+function asArray(value: any): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item));
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [value];
+    } catch {
+      return [value];
+    }
+  }
+  return [];
+}
+
 function badgeClass(status?: string | null) {
   const value = String(status || '').toLowerCase();
-  if (['connected', 'completed', 'indexed', 'updated'].includes(value)) {
+  if (['connected', 'completed', 'indexed', 'updated', 'medium', 'high'].includes(value)) {
     return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
   }
-  if (['failed', 'error', 'disconnected'].includes(value)) {
+  if (['failed', 'error', 'disconnected', 'low', 'insufficient'].includes(value)) {
     return 'bg-red-50 text-red-700 ring-red-200';
   }
   return 'bg-slate-50 text-slate-700 ring-slate-200';
@@ -98,6 +131,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const [folderOpen, setFolderOpen] = useState(false);
   const [breadcrumb, setBreadcrumb] = useState<Breadcrumb[]>([{ id: 'root', name: 'Mi unidad' }]);
+  const [selectedAnalysisDocument, setSelectedAnalysisDocument] = useState<DocumentRow | null>(null);
+  const [documentAnalyses, setDocumentAnalyses] = useState<DocumentAnalysis[]>([]);
 
   const googleIntegration = useMemo(
     () => integrations.find((item) => item.provider === 'google_drive' && item.status === 'connected') || null,
@@ -247,6 +282,36 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
     }
   };
 
+  const viewAnalysis = async (doc: DocumentRow) => {
+    try {
+      setWorking(`analysis-${doc.id}`);
+      setSelectedAnalysisDocument(doc);
+      const json = await fetchJson(`${API_URL}/api/document-integrations/documents/${doc.id}/analysis?tenant_id=${tenantId}`);
+      setDocumentAnalyses(json.analyses || []);
+    } catch (err: any) {
+      setMessage(err.message || 'No fue posible cargar análisis del documento.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const analyzeDocument = async (doc: DocumentRow) => {
+    try {
+      setWorking(`analyze-${doc.id}`);
+      const json = await fetchJson(`${API_URL}/api/document-integrations/documents/${doc.id}/analyze`, {
+        method: 'POST',
+        body: JSON.stringify({ tenant_id: tenantId }),
+      });
+      setSelectedAnalysisDocument(doc);
+      setDocumentAnalyses(json.analysis ? [json.analysis] : []);
+      setMessage(`Análisis metadata-only generado para: ${doc.file_name}`);
+    } catch (err: any) {
+      setMessage(err.message || 'No fue posible analizar el documento.');
+    } finally {
+      setWorking('');
+    }
+  };
+
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -254,7 +319,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Fuentes documentales</p>
           <h2 className="mt-2 text-2xl font-black text-slate-950">Google Drive conectado a evidencias</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Conecta una cuenta Google Drive, selecciona una carpeta específica de evidencias ISO y sincroniza solo metadata documental. No se descargan archivos ni se ejecuta análisis IA en esta etapa.
+            Conecta una cuenta Google Drive, selecciona una carpeta específica de evidencias ISO y sincroniza solo metadata documental. En esta fase el análisis IA es preliminar, no aprueba ni crea evidencias automáticamente.
           </p>
         </div>
         <button
@@ -407,6 +472,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
 
       <div className="mt-6 rounded-3xl border border-slate-200 p-4">
         <h3 className="text-lg font-black text-slate-900">Documentos indexados</h3>
+        <p className="mt-1 text-sm text-slate-500">El análisis disponible en esta etapa usa metadata y nombre de archivo. No descarga ni lee contenido real todavía.</p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-400">
@@ -416,7 +482,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
                 <th className="px-3 py-2">Fuente</th>
                 <th className="px-3 py-2">Modificado</th>
                 <th className="px-3 py-2">Estado</th>
-                <th className="px-3 py-2">Acción</th>
+                <th className="px-3 py-2">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -428,11 +494,19 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
                   <td className="px-3 py-3 text-slate-500">{fmtDate(doc.modified_at)}</td>
                   <td className="px-3 py-3"><span className={`rounded-full px-2 py-1 text-xs font-bold ring-1 ${badgeClass(doc.status)}`}>{doc.status || '—'}</span></td>
                   <td className="px-3 py-3">
-                    {doc.web_view_url ? (
-                      <a href={doc.web_view_url} target="_blank" rel="noreferrer" className="text-xs font-black text-blue-600 hover:text-blue-800">
-                        Abrir en Drive
-                      </a>
-                    ) : '—'}
+                    <div className="flex flex-wrap gap-2">
+                      {doc.web_view_url && (
+                        <a href={doc.web_view_url} target="_blank" rel="noreferrer" className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100">
+                          Abrir
+                        </a>
+                      )}
+                      <button onClick={() => analyzeDocument(doc)} disabled={working === `analyze-${doc.id}`} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60">
+                        {working === `analyze-${doc.id}` ? 'Analizando...' : 'Analizar metadata'}
+                      </button>
+                      <button onClick={() => viewAnalysis(doc)} disabled={working === `analysis-${doc.id}`} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+                        Ver análisis
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -441,6 +515,65 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
           {documents.length === 0 && <p className="p-4 text-sm text-slate-500">Aún no hay documentos indexados.</p>}
         </div>
       </div>
+
+      {selectedAnalysisDocument && (
+        <div className="mt-6 rounded-3xl border border-indigo-200 bg-indigo-50 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-600">Análisis documental IA</p>
+              <h3 className="mt-2 text-lg font-black text-indigo-950">{selectedAnalysisDocument.file_name}</h3>
+              <p className="mt-1 text-sm text-indigo-800">Resultado preliminar. Requiere revisión humana y no modifica evidencias ni cumplimiento.</p>
+            </div>
+            <button onClick={() => { setSelectedAnalysisDocument(null); setDocumentAnalyses([]); }} className="rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100">
+              Cerrar
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {documentAnalyses.map((analysis) => {
+              const missing = asArray(analysis.missing_elements);
+              const actions = asArray(analysis.recommended_actions);
+              return (
+                <div key={analysis.id} className="rounded-2xl border border-indigo-100 bg-white p-4">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full bg-slate-50 px-3 py-1 font-bold text-slate-700 ring-1 ring-slate-200">Tipo: {analysis.detected_document_type || '—'}</span>
+                    <span className="rounded-full bg-slate-50 px-3 py-1 font-bold text-slate-700 ring-1 ring-slate-200">Norma: {analysis.detected_standard_code || 'Sin detectar'}</span>
+                    <span className={`rounded-full px-3 py-1 font-bold ring-1 ${badgeClass(analysis.evidence_quality)}`}>Calidad: {analysis.evidence_quality || '—'}</span>
+                    <span className="rounded-full bg-slate-50 px-3 py-1 font-bold text-slate-700 ring-1 ring-slate-200">Confianza: {pct(analysis.confidence_score)}</span>
+                    <span className="rounded-full bg-slate-50 px-3 py-1 font-bold text-slate-700 ring-1 ring-slate-200">Fecha: {fmtDate(analysis.created_at)}</span>
+                  </div>
+
+                  {analysis.summary && (
+                    <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                      {analysis.summary}
+                    </div>
+                  )}
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Elementos faltantes</div>
+                      {missing.length > 0 ? (
+                        <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                          {missing.slice(0, 6).map((item, idx) => <li key={`m-${idx}`} className="rounded-xl bg-slate-50 px-3 py-2">{item}</li>)}
+                        </ul>
+                      ) : <p className="mt-2 text-sm text-slate-500">Sin observaciones relevantes.</p>}
+                    </div>
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Acciones recomendadas</div>
+                      {actions.length > 0 ? (
+                        <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                          {actions.slice(0, 6).map((item, idx) => <li key={`a-${idx}`} className="rounded-xl bg-slate-50 px-3 py-2">{item}</li>)}
+                        </ul>
+                      ) : <p className="mt-2 text-sm text-slate-500">Sin acciones sugeridas.</p>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {documentAnalyses.length === 0 && <p className="rounded-2xl bg-white p-4 text-sm text-slate-500">Este documento aún no tiene análisis guardados.</p>}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
