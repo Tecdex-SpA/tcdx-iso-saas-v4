@@ -14,6 +14,17 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0))
 }
 
+function sanitizeDocumentForResponse(document) {
+  if (!document || typeof document !== 'object') return document
+
+  const clone = { ...document }
+  delete clone.encrypted_access_token
+  delete clone.encrypted_refresh_token
+  delete clone.token_expires_at
+
+  return clone
+}
+
 function inferDocumentType({ fileName, mimeType, text = '' }) {
   const haystack = `${fileName || ''} ${mimeType || ''} ${text || ''}`.toLowerCase()
 
@@ -255,6 +266,7 @@ async function analyzeDocument({ tenantId, documentId, userId = null }) {
   }
 
   const document = docResult.rows[0]
+  const safeDocument = sanitizeDocumentForResponse(document)
   const metadataText = buildMetadataText(document)
   const activeStandards = await getActiveStandards(tenantId)
   const availableControls = await getAvailableControls(tenantId, activeStandards)
@@ -365,7 +377,7 @@ async function analyzeDocument({ tenantId, documentId, userId = null }) {
 
   return {
     ok: true,
-    document,
+    document: safeDocument,
     extraction: extractionResult.extraction || {},
     analysis: insert.rows[0]
   }
