@@ -165,6 +165,8 @@ type EvidenceItem = {
   description?: string | null;
   file_name?: string | null;
   file_path?: string | null;
+  web_view_url?: string | null;
+  metadata?: Record<string, any> | null;
   status?: string | null;
   validated?: boolean;
   reviewed_at?: string | null;
@@ -1924,20 +1926,38 @@ function ControlesPageContent() {
                                             </div>
                                           )}
 
-                                          {evidence.file_path && (
-                                            <div>
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  openAuthorizedFile(
-                                                    `${API_URL}/api/evidences/file/${evidence.id}`,
-                                                    token
-                                                  )
-                                                }
-                                                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-                                              >
-                                                {t('controls.viewFile')}
-                                              </button>
+                                          {(evidence.file_path || evidence.web_view_url || evidence.metadata?.web_view_url) && (
+                                            <div className="flex flex-wrap gap-2">
+                                              {evidence.file_path && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    openAuthorizedFile(
+                                                      `${API_URL}/api/evidences/file/${evidence.id}`,
+                                                      token
+                                                    )
+                                                  }
+                                                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                                                >
+                                                  {t('controls.viewFile')}
+                                                </button>
+                                              )}
+
+                                              {(evidence.web_view_url || evidence.metadata?.web_view_url) && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    window.open(
+                                                      evidence.web_view_url || evidence.metadata?.web_view_url,
+                                                      '_blank',
+                                                      'noopener,noreferrer'
+                                                    )
+                                                  }
+                                                  className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                                                >
+                                                  Abrir en Drive
+                                                </button>
+                                              )}
                                             </div>
                                           )}
 
