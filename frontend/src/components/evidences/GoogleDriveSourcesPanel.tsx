@@ -211,6 +211,16 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
     [suggestions]
   );
 
+  const approvedSuggestions = useMemo(
+    () => suggestions.filter((item) => item.status === 'approved'),
+    [suggestions]
+  );
+
+  const supersededSuggestions = useMemo(
+    () => suggestions.filter((item) => item.status === 'superseded'),
+    [suggestions]
+  );
+
   const fetchJson = async (url: string, options: RequestInit = {}) => {
     const token = getToken();
     const headers = new Headers(options.headers);
@@ -248,20 +258,28 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
         sourcesJson,
         documentsJson,
         logsJson,
-        suggestionsJson,
+        pendingSuggestionsJson,
+        approvedSuggestionsJson,
+        supersededSuggestionsJson,
       ] = await Promise.all([
         fetchJson(`${API_URL}/api/document-integrations/integrations?tenant_id=${tenantId}`),
         fetchJson(`${API_URL}/api/document-integrations/sources?tenant_id=${tenantId}`),
         fetchJson(`${API_URL}/api/document-integrations/documents?tenant_id=${tenantId}&limit=500&include_folders=false`),
         fetchJson(`${API_URL}/api/document-integrations/sync-logs?tenant_id=${tenantId}`),
         fetchJson(`${API_URL}/api/document-integrations/suggestions?tenant_id=${tenantId}&status=pending&limit=200`),
+        fetchJson(`${API_URL}/api/document-integrations/suggestions?tenant_id=${tenantId}&status=approved&limit=200`),
+        fetchJson(`${API_URL}/api/document-integrations/suggestions?tenant_id=${tenantId}&status=superseded&limit=200`),
       ]);
 
       setIntegrations(integrationsJson.integrations || []);
       setSources(sourcesJson.sources || []);
       setDocuments(documentsJson.documents || []);
       setLogs(logsJson.logs || []);
-      setSuggestions(suggestionsJson.suggestions || []);
+      setSuggestions([
+        ...(pendingSuggestionsJson.suggestions || []),
+        ...(approvedSuggestionsJson.suggestions || []),
+        ...(supersededSuggestionsJson.suggestions || []),
+      ]);
     } catch (err: any) {
       setMessage(err.message || 'No fue posible cargar fuentes documentales.');
     } finally {
@@ -419,6 +437,29 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       await refresh();
     } catch (err: any) {
       setMessage(err.message || 'No fue posible revisar la sugerencia.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const createEvidenceFromSuggestion = async (suggestion: DocumentSuggestion) => {
+    try {
+      setWorking(`create-evidence-${suggestion.id}`);
+
+      const json = await fetchJson(`${API_URL}/api/document-integrations/suggestions/${suggestion.id}/create-evidence`, {
+        method: 'POST',
+        body: JSON.stringify({ tenant_id: tenantId }),
+      });
+
+      if (json?.already_exists) {
+        setMessage('La evidencia ya existía para esta sugerencia. No se duplicó.');
+      } else {
+        setMessage('Evidencia formal creada en estado pendiente. Requiere aprobación humana para impactar cumplimiento.');
+      }
+
+      await refresh();
+    } catch (err: any) {
+      setMessage(err.message || 'No fue posible crear evidencia desde la sugerencia.');
     } finally {
       setWorking('');
     }
@@ -588,12 +629,24 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
             <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Revisión humana requerida</p>
             <h3 className="mt-2 text-lg font-black text-amber-950">Sugerencias de asociación documental</h3>
             <p className="mt-1 text-sm text-amber-800">
-              Estas sugerencias vienen del análisis IA. Aprobar o rechazar aquí solo registra la revisión; no crea evidencias formales ni cambia cumplimiento.
+              Estas sugerencias vienen del análisis IA. Primero se revisan; luego puedes crear evidencia formal pendiente. Nada impacta cumplimiento hasta que la evidencia sea aprobada por un humano.
             </p>
           </div>
-          <div className="rounded-2xl bg-white px-4 py-3 text-center ring-1 ring-amber-200">
-            <div className="text-2xl font-black text-amber-900">{pendingSuggestions.length}</div>
-            <div className="text-xs font-bold uppercase tracking-wide text-amber-700">Pendientes</div>
+          <div className="flex flex-wrap gap-2">
+            <div className="rounded-2xl bg-white px-4 py-3 text-center ring-1 ring-amber-200">
+              <div className="text-2xl font-black text-amber-900">{pendingSuggestions.length}</div>
+              <div className="text-xs font-bold uppercase tracking-wide text-amber-700">Pendientes</div>
+            </div>
+
+            <div className="rounded-2xl bg-white px-4 py-3 text-center ring-1 ring-emerald-200">
+              <div className="text-2xl font-black text-emerald-900">{approvedSuggestions.length}</div>
+              <div className="text-xs font-bold uppercase tracking-wide text-emerald-700">Aprobadas</div>
+            </div>
+
+            <div className="rounded-2xl bg-white px-4 py-3 text-center ring-1 ring-slate-200">
+              <div className="text-2xl font-black text-slate-900">{supersededSuggestions.length}</div>
+              <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Con evidencia</div>
+            </div>
           </div>
         </div>
 
@@ -666,6 +719,143 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
             {pendingSuggestions.length === 0 && (
               <div className="rounded-2xl border border-dashed border-amber-200 bg-white p-5 text-sm text-amber-800">
                 No hay sugerencias pendientes. Ejecuta análisis documental sobre archivos indexados para generarlas.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-3xl border border-emerald-200 bg-emerald-50 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Paso siguiente</p>
+            <h3 className="mt-2 text-lg font-black text-emerald-950">Sugerencias aprobadas listas para crear evidencia</h3>
+            <p className="mt-1 text-sm text-emerald-800">
+              Al crear evidencia, quedará en estado pendiente. No mejora salud ni cumplimiento hasta aprobación humana.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 max-h-[300px] overflow-y-auto pr-1">
+          <div className="space-y-3">
+            {approvedSuggestions.map((suggestion) => (
+              <div key={suggestion.id} className="rounded-2xl border border-emerald-100 bg-white p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-black text-slate-950">
+                      {suggestion.file_name || 'Documento indexado'}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+                      <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700 ring-1 ring-blue-200">
+                        Norma: {suggestion.suggested_standard_code || '—'}
+                      </span>
+                      <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700 ring-1 ring-indigo-200">
+                        Control: {suggestion.suggested_control_ref || '—'}
+                      </span>
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 ring-1 ring-emerald-200">
+                        Confianza: {pct(suggestion.confidence_score)}
+                      </span>
+                    </div>
+
+                    {suggestion.suggested_reason && (
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {suggestion.suggested_reason}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {suggestion.web_view_url && (
+                      <a
+                        href={suggestion.web_view_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100"
+                      >
+                        Abrir doc
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => createEvidenceFromSuggestion(suggestion)}
+                      disabled={working === `create-evidence-${suggestion.id}`}
+                      className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {working === `create-evidence-${suggestion.id}` ? 'Creando...' : 'Crear evidencia'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {approvedSuggestions.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-emerald-200 bg-white p-5 text-sm text-emerald-800">
+                No hay sugerencias aprobadas pendientes de convertir en evidencia.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Historial</p>
+            <h3 className="mt-2 text-lg font-black text-slate-900">Sugerencias ya convertidas en evidencia</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Estas sugerencias quedaron cerradas porque ya generaron una evidencia formal.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 max-h-[220px] overflow-y-auto pr-1">
+          <div className="space-y-3">
+            {supersededSuggestions.map((suggestion) => (
+              <div key={suggestion.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-black text-slate-950">
+                      {suggestion.file_name || 'Documento indexado'}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+                      <span className="rounded-full bg-slate-50 px-3 py-1 text-slate-700 ring-1 ring-slate-200">
+                        Evidencia creada
+                      </span>
+                      <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700 ring-1 ring-blue-200">
+                        Norma: {suggestion.suggested_standard_code || '—'}
+                      </span>
+                      <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700 ring-1 ring-indigo-200">
+                        Control: {suggestion.suggested_control_ref || '—'}
+                      </span>
+                    </div>
+
+                    {suggestion.suggested_reason && (
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {suggestion.suggested_reason}
+                      </p>
+                    )}
+                  </div>
+
+                  {suggestion.web_view_url && (
+                    <a
+                      href={suggestion.web_view_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100"
+                    >
+                      Abrir doc
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {supersededSuggestions.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-500">
+                Aún no hay sugerencias convertidas en evidencia.
               </div>
             )}
           </div>
