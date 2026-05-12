@@ -53,10 +53,14 @@ function buildOAuthClientFromTokens(tokens) {
   return oauthClient
 }
 
+function escapeDriveQueryValue(value) {
+  return String(value || '').replace(/'/g, "\\'")
+}
+
 async function listDriveFiles({ oauthClient, folderId, pageToken = null }) {
   const drive = google.drive({ version: 'v3', auth: oauthClient })
   const q = folderId
-    ? `'${String(folderId).replace(/'/g, "\\'")}' in parents and trashed = false`
+    ? `'${escapeDriveQueryValue(folderId)}' in parents and trashed = false`
     : 'trashed = false'
 
   const result = await drive.files.list({
@@ -75,6 +79,32 @@ async function listDriveFiles({ oauthClient, folderId, pageToken = null }) {
   }
 }
 
+async function listDriveFolders({ oauthClient, parentId = 'root', pageToken = null }) {
+  const drive = google.drive({ version: 'v3', auth: oauthClient })
+  const q = [
+    "mimeType = 'application/vnd.google-apps.folder'",
+    'trashed = false',
+    parentId ? `'${escapeDriveQueryValue(parentId)}' in parents` : null
+  ]
+    .filter(Boolean)
+    .join(' and ')
+
+  const result = await drive.files.list({
+    q,
+    pageToken: pageToken || undefined,
+    pageSize: 100,
+    orderBy: 'name',
+    fields: 'nextPageToken, files(id, name, mimeType, webViewLink, modifiedTime, parents, iconLink, owners(emailAddress,displayName))',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  })
+
+  return {
+    folders: result?.data?.files || [],
+    nextPageToken: result?.data?.nextPageToken || null
+  }
+}
+
 module.exports = {
   getScopes,
   getGoogleOAuthClient,
@@ -82,5 +112,6 @@ module.exports = {
   exchangeCodeForTokens,
   getAccountEmail,
   buildOAuthClientFromTokens,
-  listDriveFiles
+  listDriveFiles,
+  listDriveFolders
 }
