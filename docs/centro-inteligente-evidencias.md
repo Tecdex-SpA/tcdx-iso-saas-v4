@@ -345,3 +345,41 @@ Etapa 2:
 
 No avanzar a Etapa 2 sin validar Etapa 1.
 \n\n## Etapa 3.5 — Sugerencias IA revisables desde análisis documental\n\nAl ejecutar `POST /api/document-integrations/documents/:documentId/analyze`, el backend guarda el análisis en `document_ai_analysis` y, si el `ai-engine` devuelve `suggested_controls` o `suggested_targets` de tipo `control`, crea sugerencias pendientes en `document_association_suggestions`.\n\n### Reglas de seguridad\n\n- No se crean evidencias formales automáticamente.\n- No se aprueba cumplimiento automáticamente.\n- No se modifican controles, riesgos, hallazgos, no conformidades, auditorías ni planes de acción.\n- Toda sugerencia queda con `status = 'pending'`.\n- La revisión humana sigue siendo obligatoria.\n- Se evita duplicar sugerencias pendientes por `tenant_id`, `document_id`, `target_type`, `suggested_standard_code` y `suggested_control_ref`.\n\n### Alcance actual\n\nLa primera implementación crea únicamente sugerencias `target_type = 'control'`. Las asociaciones a riesgos, hallazgos, no conformidades, auditorías, activos y planes de acción quedan preparadas para fases posteriores.\n\n### Validación SQL\n\n```sql\nSELECT\n  id,\n  tenant_id,\n  document_id,\n  target_type,\n  suggested_standard_code,\n  suggested_control_ref,\n  confidence_score,\n  status,\n  created_at\nFROM document_association_suggestions\nWHERE document_id = 'DOCUMENT_ID'\nORDER BY created_at DESC;\n```\n
+
+
+## Sincronización recursiva Google Drive
+
+La fuente documental Google Drive se sincroniza desde una carpeta específica seleccionada por el usuario. No se sincroniza `root` por defecto.
+
+### Reglas de seguridad
+
+- La fuente debe pertenecer al tenant autenticado.
+- La integración debe pertenecer al mismo tenant.
+- No se exponen access tokens ni refresh tokens.
+- No se crean evidencias automáticamente.
+- No se aprueba cumplimiento automáticamente.
+- No se modifican controles, riesgos, hallazgos, no conformidades, auditorías ni planes de acción.
+
+### Recorrido de carpetas
+
+El backend recorre subcarpetas de forma controlada:
+
+- `max_depth` por defecto: 5.
+- `max_files` por defecto: 1000.
+- Uso de `visitedFolderIds` para evitar loops.
+- Paginación hasta `nextPageToken = null`.
+- Si una carpeta o archivo falla, se registra warning y continúa el proceso.
+
+### Metadata documental
+
+Cada archivo indexado conserva su ruta lógica en:
+
+- `metadata_json.google.folder_path`
+- `metadata_json.folder_path`
+- `metadata_json.google.parent_folder_id`
+
+Las carpetas se usan para recorrido, pero no se muestran como documentos analizables por defecto.
+
+### Frontend /evidencias
+
+La tabla de documentos indexados usa scroll interno, búsqueda y filtros, evitando que la página completa crezca indefinidamente.

@@ -38,7 +38,10 @@ router.post('/sources/:sourceId/sync-google', auth, async (req, res) => {
   try {
     const result = await syncGoogleDriveSource({
       tenantId,
-      sourceId: req.params.sourceId
+      sourceId: req.params.sourceId,
+      maxDepth: req.body?.max_depth,
+      maxFiles: req.body?.max_files,
+      allowRoot: req.body?.allow_root === true
     })
 
     return res.json(result)

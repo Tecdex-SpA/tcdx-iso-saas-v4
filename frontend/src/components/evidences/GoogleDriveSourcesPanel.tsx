@@ -39,6 +39,7 @@ type DocumentRow = {
   file_extension?: string | null;
   provider: string;
   source_name?: string | null;
+  folder_path?: string | null;
   modified_at?: string | null;
   indexed_at?: string | null;
   status?: string | null;
@@ -156,11 +157,23 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
   const [suggestions, setSuggestions] = useState<DocumentSuggestion[]>([]);
   const [documentSearch, setDocumentSearch] = useState('');
   const [documentSourceFilter, setDocumentSourceFilter] = useState('');
+  const [documentTypeFilter, setDocumentTypeFilter] = useState('');
 
   const googleIntegration = useMemo(
     () => integrations.find((item) => item.provider === 'google_drive' && item.status === 'connected') || null,
     [integrations]
   );
+
+  const documentTypeOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        documents
+          .map((doc) => doc.file_extension || doc.mime_type || 'sin_tipo')
+          .filter(Boolean)
+          .map((item) => String(item))
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [documents]);
 
   const documentSourceOptions = useMemo(() => {
     return Array.from(
@@ -173,11 +186,14 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
 
     return documents.filter((doc) => {
       const matchesSource = !documentSourceFilter || doc.source_name === documentSourceFilter;
+      const docType = String(doc.file_extension || doc.mime_type || 'sin_tipo');
+      const matchesType = !documentTypeFilter || docType === documentTypeFilter;
       const haystack = [
         doc.file_name,
         doc.mime_type,
         doc.file_extension,
         doc.source_name,
+        doc.folder_path,
         doc.status,
       ]
         .filter(Boolean)
@@ -186,9 +202,9 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
 
       const matchesSearch = !q || haystack.includes(q);
 
-      return matchesSource && matchesSearch;
+      return matchesSource && matchesType && matchesSearch;
     });
-  }, [documents, documentSearch, documentSourceFilter]);
+  }, [documents, documentSearch, documentSourceFilter, documentTypeFilter]);
 
   const pendingSuggestions = useMemo(
     () => suggestions.filter((item) => item.status === 'pending'),
@@ -236,7 +252,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       ] = await Promise.all([
         fetchJson(`${API_URL}/api/document-integrations/integrations?tenant_id=${tenantId}`),
         fetchJson(`${API_URL}/api/document-integrations/sources?tenant_id=${tenantId}`),
-        fetchJson(`${API_URL}/api/document-integrations/documents?tenant_id=${tenantId}&limit=200`),
+        fetchJson(`${API_URL}/api/document-integrations/documents?tenant_id=${tenantId}&limit=500&include_folders=false`),
         fetchJson(`${API_URL}/api/document-integrations/sync-logs?tenant_id=${tenantId}`),
         fetchJson(`${API_URL}/api/document-integrations/suggestions?tenant_id=${tenantId}&status=pending&limit=200`),
       ]);
@@ -665,7 +681,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
             </p>
           </div>
 
-          <div className="grid w-full grid-cols-1 gap-2 md:grid-cols-2 xl:w-[520px]">
+          <div className="grid w-full grid-cols-1 gap-2 md:grid-cols-3 xl:w-[760px]">
             <input
               value={documentSearch}
               onChange={(event) => setDocumentSearch(event.target.value)}
@@ -682,6 +698,19 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
               {documentSourceOptions.map((sourceName) => (
                 <option key={sourceName} value={sourceName}>
                   {sourceName}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={documentTypeFilter}
+              onChange={(event) => setDocumentTypeFilter(event.target.value)}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none ring-blue-100 focus:ring-2"
+            >
+              <option value="">Todos los tipos</option>
+              {documentTypeOptions.map((typeName) => (
+                <option key={typeName} value={typeName}>
+                  {typeName}
                 </option>
               ))}
             </select>

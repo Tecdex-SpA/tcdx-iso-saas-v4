@@ -320,7 +320,9 @@ router.get('/documents', auth, async (req, res) => {
   const provider = req.query.provider || null
   const sourceId = req.query.source_id || null
   const status = req.query.status || null
-  const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)))
+  const q = String(req.query.q || '').trim()
+  const includeFolders = String(req.query.include_folders || 'false').toLowerCase() === 'true'
+  const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)))
 
   try {
     const params = [tenantId]
@@ -345,6 +347,19 @@ router.get('/documents', auth, async (req, res) => {
       idx += 1
     }
 
+    if (q) {
+      where += ` AND (d.file_name ILIKE $${idx} OR d.mime_type ILIKE $${idx} OR d.file_extension ILIKE $${idx})`
+      params.push(`%${q}%`)
+      idx += 1
+    }
+
+    if (!includeFolders) {
+      where += `
+        AND COALESCE(d.mime_type, '') <> 'application/vnd.google-apps.folder'
+        AND COALESCE(d.metadata_json->'google'->>'is_folder', 'false') <> 'true'
+      `
+    }
+
     params.push(limit)
 
     const result = await pool.query(
@@ -352,7 +367,8 @@ router.get('/documents', auth, async (req, res) => {
       SELECT
         d.*,
         s.source_name,
-        i.display_name AS integration_display_name
+        i.display_name AS integration_display_name,
+        d.metadata_json->'google'->>'folder_path' AS folder_path
       FROM document_index d
       LEFT JOIN tenant_document_sources s
         ON s.id = d.source_id
@@ -361,7 +377,7 @@ router.get('/documents', auth, async (req, res) => {
         ON i.id = d.integration_id
        AND i.tenant_id = d.tenant_id
       ${where}
-      ORDER BY d.indexed_at DESC
+      ORDER BY d.indexed_at DESC NULLS LAST, d.modified_at DESC NULLS LAST
       LIMIT $${idx}
       `,
       params
