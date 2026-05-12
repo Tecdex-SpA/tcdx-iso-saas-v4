@@ -987,9 +987,7 @@ function ControlesPageContent() {
       setErrorMessage('')
 
       const res = await fetch(
-        `${API_URL}/api/controls/workbench/${tenantId}/${encodeURIComponent(
-          selectedISO
-        )}/${item.tenant_control_id}`,
+        `${API_URL}/api/controls/workbench/${item.tenant_control_id}`,
         {
           method: 'PUT',
           headers: {
