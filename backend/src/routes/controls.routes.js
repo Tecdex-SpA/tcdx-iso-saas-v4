@@ -3,6 +3,75 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 
+
+function deriveWorkbenchHealthStatus(row) {
+  const explicitHealth = String(
+    row.derived_health_status ||
+    row.health_status ||
+    row.tenant_health_status ||
+    ''
+  ).toLowerCase().trim()
+
+  const declaredStatus = String(
+    row.declared_status ||
+    row.status ||
+    ''
+  ).toLowerCase().trim()
+
+  const score = Number(
+    row.declared_score ??
+    row.score ??
+    row.health_score ??
+    0
+  )
+
+  const evidenceCount = Number(row.evidence_count || 0)
+  const pendingEvidenceCount = Number(row.pending_evidence_count || 0)
+  const openFindings = Number(row.open_findings_count || 0)
+  const openNonconformities = Number(row.open_nonconformities_count || 0)
+
+  if (
+    ['saludable', 'atencion', 'deteriorado', 'critico'].includes(explicitHealth) &&
+    Number(row.health_score || 0) > 0
+  ) {
+    return explicitHealth
+  }
+
+  if (
+    ['cumple', 'aprobada', 'aprobado'].includes(declaredStatus) &&
+    score >= 80 &&
+    evidenceCount > 0 &&
+    pendingEvidenceCount === 0 &&
+    openFindings === 0 &&
+    openNonconformities === 0
+  ) {
+    return 'saludable'
+  }
+
+  if (
+    ['cumple', 'parcial'].includes(declaredStatus) &&
+    score >= 50 &&
+    evidenceCount > 0
+  ) {
+    return 'atencion'
+  }
+
+  if (explicitHealth) return explicitHealth
+
+  return 'deteriorado'
+}
+
+function deriveWorkbenchHealthScore(row) {
+  const existing = Number(row.health_score || 0)
+  const declaredScore = Number(row.declared_score ?? row.score ?? 0)
+  const evidenceCount = Number(row.evidence_count || 0)
+
+  if (existing > 0) return existing
+  if (declaredScore > 0 && evidenceCount > 0) return Math.max(0, Math.min(100, declaredScore))
+
+  return existing
+}
+
 function normalizeRole(role) {
   return String(role || '').toLowerCase().trim();
 }
