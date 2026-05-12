@@ -1223,11 +1223,9 @@ router.get('/:tenant_id', auth, async (req, res) => {
           e.metadata->>'control_description' AS metadata_control_description,
           e.metadata->>'source_name' AS source_name,
           e.metadata->>'folder_path' AS folder_path,
-          u.name AS reviewed_by_label,
-          ap.title AS action_plan_title
+          NULL AS reviewed_by_label,
+          NULL AS action_plan_title
         FROM evidences e
-        LEFT JOIN users u ON u.id = e.reviewed_by
-        LEFT JOIN action_plans ap ON ap.id = e.action_plan_id
         ${directWhere}
         ORDER BY e.created_at DESC
         `,
