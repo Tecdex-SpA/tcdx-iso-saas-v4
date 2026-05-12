@@ -911,4 +911,134 @@ router.get('/sync-logs', auth, async (req, res) => {
   }
 })
 
+
+
+// =========================================================
+// Evidencias integradas creadas desde sugerencias documentales
+// =========================================================
+function tcdxIntegratedGetUserTenantId(user) {
+  return (
+    user?.tenant_id ||
+    user?.tenantId ||
+    user?.tenant ||
+    user?.company_id ||
+    user?.companyId ||
+    null
+  )
+}
+
+function tcdxIntegratedNormalizeRole(user) {
+  return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase().trim()
+}
+
+function tcdxIntegratedIsSuperAdmin(user) {
+  return [
+    'superadmin',
+    'super_admin',
+    'admin_global',
+    'global_admin',
+    'platform_admin',
+    'owner'
+  ].includes(tcdxIntegratedNormalizeRole(user))
+}
+
+function tcdxIntegratedHasTenantAccess(req, tenantId) {
+  if (tcdxIntegratedIsSuperAdmin(req.user)) return true
+  return String(tcdxIntegratedGetUserTenantId(req.user)) === String(tenantId)
+}
+
+router.get('/integrated-evidences', auth, async (req, res) => {
+  try {
+    const tenantId = req.query.tenant_id
+    const status = String(req.query.status || '').trim().toLowerCase()
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)))
+
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenant_id es obligatorio' })
+    }
+
+    if (!tcdxIntegratedHasTenantAccess(req, tenantId)) {
+      return res.status(403).json({ error: 'No autorizado para este tenant' })
+    }
+
+    const params = [tenantId]
+    let idx = 2
+
+    let where = `
+      e.tenant_id = $1::uuid
+      AND e.evidence_type = 'documento_integrado'
+    `
+
+    if (status) {
+      where += ` AND LOWER(COALESCE(e.status, '')) = $${idx}::text`
+      params.push(status)
+      idx += 1
+    }
+
+    params.push(limit)
+
+    const result = await pool.query(
+      `
+      SELECT
+        e.id,
+        e.tenant_id,
+        e.control_id,
+        e.tenant_control_id,
+        e.description,
+        e.file_name,
+        e.file_path,
+        e.file_mime_type,
+        e.file_size_bytes,
+        e.status,
+        e.validated,
+        e.evidence_type,
+        e.created_at,
+        e.reviewed_by,
+        e.reviewed_at,
+        e.rejection_reason,
+        e.metadata,
+        e.metadata->>'source_document_id' AS source_document_id,
+        e.metadata->>'source_suggestion_id' AS source_suggestion_id,
+        e.metadata->>'suggested_standard_code' AS suggested_standard_code,
+        e.metadata->>'suggested_control_ref' AS suggested_control_ref,
+        e.metadata->>'suggested_reason' AS suggested_reason,
+        e.metadata->>'suggestion_confidence_score' AS suggestion_confidence_score,
+        e.metadata->>'web_view_url' AS web_view_url,
+        e.metadata->>'source_provider' AS source_provider,
+        e.metadata->>'source_name' AS source_name,
+        e.metadata->>'folder_path' AS folder_path,
+        e.metadata->>'iso' AS iso,
+        e.metadata->>'clause' AS clause,
+        e.metadata->>'control_description' AS control_description,
+        e.metadata->>'operation_name' AS operation_name,
+        e.metadata->>'operation_code' AS operation_code,
+        e.metadata->>'operation_type' AS operation_type,
+        cc.description AS catalog_control_description,
+        cc.category AS catalog_category,
+        tc.status AS tenant_control_status
+      FROM evidences e
+      LEFT JOIN controls_catalog cc
+        ON cc.id = e.control_id
+      LEFT JOIN tenant_controls tc
+        ON tc.id = e.tenant_control_id
+       AND tc.tenant_id = e.tenant_id
+      WHERE ${where}
+      ORDER BY e.created_at DESC
+      LIMIT $${idx}::int
+      `,
+      params
+    )
+
+    return res.json({
+      evidences: result.rows
+    })
+  } catch (err) {
+    console.error('ERROR LIST INTEGRATED EVIDENCES:', err)
+    return res.status(500).json({
+      error: 'Error listando evidencias integradas'
+    })
+  }
+})
+
+
 module.exports = router

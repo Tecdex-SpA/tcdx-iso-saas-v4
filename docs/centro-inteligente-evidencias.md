@@ -383,3 +383,32 @@ Las carpetas se usan para recorrido, pero no se muestran como documentos analiza
 ### Frontend /evidencias
 
 La tabla de documentos indexados usa scroll interno, búsqueda y filtros, evitando que la página completa crezca indefinidamente.
+
+
+## Evidencias integradas pendientes de aprobación
+
+El flujo documental queda separado en tres etapas:
+
+1. **Sugerencia IA**
+   - Se crea en `document_association_suggestions`.
+   - No modifica cumplimiento.
+   - No crea evidencia formal por sí sola.
+
+2. **Promoción a evidencia formal**
+   - Se crea una fila en `evidences`.
+   - `evidence_type = 'documento_integrado'`.
+   - `status = 'pendiente'`.
+   - `validated = false`.
+   - No impacta salud, KPI ni cumplimiento todavía.
+
+3. **Aprobación humana**
+   - Un usuario autorizado aprueba mediante `PUT /api/evidences/approve/:id`.
+   - Roles esperados: `superadmin`, `tenant_admin`, `admin` o `auditor`.
+   - Al aprobar:
+     - `status = 'aprobada'`.
+     - `validated = true`.
+     - Se registra `reviewed_by` y `reviewed_at`.
+     - Se refresca salud de controles y snapshots KPI.
+   - Recién en esta etapa puede impactar cumplimiento.
+
+La vista `/evidencias` incluye el panel **Evidencias integradas pendientes de aprobación**, con scroll interno, búsqueda y acciones humanas de aprobar/rechazar.
