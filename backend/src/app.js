@@ -203,6 +203,13 @@ app.use('/uploads/reports', express.static(path.join(__dirname, '..', 'uploads',
 app.use('/uploads/tenants', express.static(path.join(__dirname, '..', 'uploads', 'tenants')));
 app.use('/uploads/tenant-logos', express.static(path.join(__dirname, '..', 'uploads', 'tenant-logos')));
 app.use('/api/auth', express.json({ limit: jsonBodyLimit }), authRoutes);
+
+// OAuth Google necesita exponer callback público.
+
+// El endpoint /oauth/start mantiene auth propio dentro de la ruta.
+
+app.use('/api/document-integrations/google', express.json({ limit: jsonBodyLimit }), documentIntegrationsGoogleRoutes);
+
 app.use('/api', auth, enforceApiAccess);
 app.use(express.json({ limit: jsonBodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: jsonBodyLimit }));
@@ -218,7 +225,6 @@ app.use('/api/diagnostic', diagnosticRoutes);
 app.use('/api/nonconformities', ncRoutes);
 app.use('/api/dashboard-controls', dashboardControls);
 app.use('/api/evidences', evidencesRoutes);
-app.use('/api/document-integrations/google', documentIntegrationsGoogleRoutes);
 app.use('/api/document-integrations', documentIntegrationsSyncRoutes);
 app.use('/api/document-integrations', documentIntegrationsRoutes);
 app.use('/api/policy', policyRoutes);
