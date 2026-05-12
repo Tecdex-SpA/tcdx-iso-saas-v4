@@ -315,6 +315,24 @@ function healthCardClass(status?: string | null) {
   return 'border-red-200 bg-red-50/40';
 }
 
+
+function getIntegratedEvidenceCompliancePct(evidence: any): number | null {
+  const direct = Number(evidence?.ai_acceptance_pct)
+  if (Number.isFinite(direct) && direct > 0) return Math.round(direct)
+
+  const confidence = Number(
+    evidence?.suggestion_confidence_score ||
+    evidence?.metadata?.suggestion_confidence_score ||
+    evidence?.metadata?.confidence_score
+  )
+
+  if (Number.isFinite(confidence) && confidence > 0) {
+    return Math.round(confidence <= 1 ? confidence * 100 : confidence)
+  }
+
+  return null
+}
+
 export default function ControlesPage() {
   return (
     <Suspense
@@ -943,6 +961,65 @@ function ControlesPageContent() {
       alert('Error subiendo evidencia');
     } finally {
       setActionLoading('');
+    }
+  };
+
+
+  const markIntegratedEvidenceAsOfficial = async (
+    item: WorkbenchItem,
+    evidence: any
+  ) => {
+    const pct = getIntegratedEvidenceCompliancePct(evidence) || 100
+
+    const officialDraft = {
+      ...(drafts[item.tenant_control_id] || emptyDraft(item)),
+      status: 'cumple',
+      score: String(Math.min(100, Math.max(0, pct))),
+    }
+
+    setDrafts((prev) => ({
+      ...prev,
+      [item.tenant_control_id]: officialDraft,
+    }))
+
+    try {
+      setActionLoading(`official-${evidence.id}`)
+      setErrorMessage('')
+
+      const res = await fetch(
+        `${API_URL}/api/controls/workbench/${tenantId}/${encodeURIComponent(
+          selectedISO
+        )}/${item.tenant_control_id}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...officialDraft,
+            status: 'cumple',
+            score: Math.min(100, Math.max(0, pct)),
+            official_evidence_id: evidence.id,
+            official_evidence_source: 'documento_integrado',
+          }),
+        }
+      )
+
+      const json = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(json?.error || json?.detail || 'No fue posible establecer la evidencia como oficial')
+      }
+
+      await loadWorkbench(tenantId, token || '', selectedISO, selectedOperationId)
+      await loadEvidencesForControl(item.tenant_control_id)
+
+    } catch (err: any) {
+      console.error('ERROR MARK INTEGRATED EVIDENCE OFFICIAL:', err)
+      setErrorMessage(err?.message || 'Error estableciendo evidencia oficial')
+    } finally {
+      setActionLoading('')
     }
   };
 
@@ -1856,12 +1933,11 @@ function ControlesPageContent() {
                                                 {translateStatusLabel(evidence.status || 'pendiente', locale)}
                                               </span>
 
-                                              {evidence.ai_acceptance_pct !== undefined &&
-                                                evidence.ai_acceptance_pct !== null && (
-                                                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
-                                                    IA {toNumber(evidence.ai_acceptance_pct)}%
-                                                  </span>
-                                                )}
+                                              {getIntegratedEvidenceCompliancePct(evidence) !== null && (
+                                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                                                  Cumplimiento evidencia {getIntegratedEvidenceCompliancePct(evidence)}%
+                                                </span>
+                                              )}
                                             </div>
                                           </div>
 
@@ -1974,10 +2050,28 @@ function ControlesPageContent() {
                                                 }
                                                 className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
                                               >
-                                                Abrir documento en Drive
+                                                Abrir en Drive
                                               </button>
                                             </div>
                                           )}
+
+                                          {isIntegratedEvidence(evidence) &&
+                                            String(evidence.status || '').toLowerCase() === 'aprobada' && (
+                                              <div className="flex flex-wrap gap-2">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    void markIntegratedEvidenceAsOfficial(item, evidence)
+                                                  }
+                                                  disabled={actionLoading === `official-${evidence.id}`}
+                                                  className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                                                >
+                                                  {actionLoading === `official-${evidence.id}`
+                                                    ? 'Aplicando...'
+                                                    : 'Establecer como evidencia oficial'}
+                                                </button>
+                                              </div>
+                                            )}
 
                                           {canReviewEvidence &&
                                             String(evidence.status || '').toLowerCase() !==
