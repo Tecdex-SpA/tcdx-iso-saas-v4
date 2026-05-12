@@ -209,6 +209,50 @@ function emptyDraft(item: WorkbenchItem): DraftItem {
   };
 }
 
+
+function getEvidenceMetadataForDisplay(evidence: any): Record<string, any> {
+  const metadata = evidence?.metadata;
+
+  if (!metadata) return {};
+
+  if (typeof metadata === 'object' && !Array.isArray(metadata)) {
+    return metadata;
+  }
+
+  if (typeof metadata === 'string') {
+    try {
+      const parsed = JSON.parse(metadata);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+function getIntegratedEvidenceUrl(evidence: any): string {
+  const metadata = getEvidenceMetadataForDisplay(evidence);
+
+  return String(
+    metadata.web_view_url ||
+      evidence?.web_view_url ||
+      evidence?.file_url ||
+      ''
+  ).trim();
+}
+
+function isIntegratedEvidence(evidence: any): boolean {
+  const metadata = getEvidenceMetadataForDisplay(evidence);
+
+  return (
+    String(evidence?.evidence_type || '').toLowerCase() === 'documento_integrado' ||
+    String(metadata.source || '').toLowerCase() === 'document_integration' ||
+    Boolean(metadata.source_document_id) ||
+    Boolean(metadata.source_suggestion_id)
+  );
+}
+
 function formatDate(value?: string | null) {
   if (!value) return '—';
   const d = new Date(value);
@@ -1848,6 +1892,38 @@ function ControlesPageContent() {
                                             </div>
                                           )}
 
+                                          {isIntegratedEvidence(evidence) && (
+                                            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="font-semibold">
+                                                  Evidencia integrada desde fuente documental
+                                                </div>
+                                                <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-xs font-bold text-blue-700">
+                                                  Google Drive
+                                                </span>
+                                              </div>
+
+                                              <div className="mt-2 grid gap-2 text-xs text-blue-800 md:grid-cols-2 xl:grid-cols-4">
+                                                <span>
+                                                  Norma: <b>{getEvidenceMetadataForDisplay(evidence).suggested_standard_code || '—'}</b>
+                                                </span>
+                                                <span>
+                                                  Control: <b>{getEvidenceMetadataForDisplay(evidence).suggested_control_ref || '—'}</b>
+                                                </span>
+                                                <span>
+                                                  Fuente: <b>{getEvidenceMetadataForDisplay(evidence).source_name || '—'}</b>
+                                                </span>
+                                                <span>
+                                                  Carpeta: <b>{getEvidenceMetadataForDisplay(evidence).folder_path || '—'}</b>
+                                                </span>
+                                              </div>
+
+                                              <div className="mt-2 text-xs text-blue-700">
+                                                Esta evidencia ya fue promovida desde una sugerencia documental y queda visible en el control asociado. Solo impacta salud/cumplimiento si está aprobada y validada.
+                                              </div>
+                                            </div>
+                                          )}
+
                                           {evidence.file_path && (
                                             <div>
                                               <button
@@ -1861,6 +1937,24 @@ function ControlesPageContent() {
                                                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                                               >
                                                 {t('controls.viewFile')}
+                                              </button>
+                                            </div>
+                                          )}
+
+                                          {!evidence.file_path && getIntegratedEvidenceUrl(evidence) && (
+                                            <div>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  window.open(
+                                                    getIntegratedEvidenceUrl(evidence),
+                                                    '_blank',
+                                                    'noopener,noreferrer'
+                                                  )
+                                                }
+                                                className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                                              >
+                                                Abrir documento en Drive
                                               </button>
                                             </div>
                                           )}
