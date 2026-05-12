@@ -242,6 +242,11 @@ const API_RULES = [
     write: ['admin', 'tenant_admin', 'operativo'],
   },
   {
+    prefix: '/api/document-integrations',
+    read: TENANT_OPERATE_ROLES,
+    write: ['admin', 'tenant_admin', 'operativo'],
+  },
+  {
     prefix: '/api/findings',
     read: TENANT_READ_ROLES,
     write: TENANT_OPERATE_ROLES,
