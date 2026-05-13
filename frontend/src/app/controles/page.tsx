@@ -116,6 +116,15 @@ type WorkbenchItem = {
   responsible_user_name?: string | null;
   health_score?: number;
   derived_health_status?: string | null;
+  effective_health_score?: number | string | null;
+  effective_health_status?: string | null;
+  evidence_quality_status?: string | null;
+  approved_evidence_count?: number | string | null;
+  official_evidence_count?: number | string | null;
+  open_action_plans_count?: number | string | null;
+  overdue_action_plans_count?: number | string | null;
+  is_in_active_operational_scope?: boolean | null;
+  health_trace_json?: Record<string, unknown> | null;
   evidence_count?: number;
   pending_evidence_count?: number;
   open_findings_count?: number;
@@ -345,6 +354,55 @@ function getIntegratedEvidenceCompliancePct(evidence: any): number | null {
 
   return null
 }
+
+
+function getEffectiveHealthStatus(item: WorkbenchItem): string | null {
+  return item.effective_health_status || item.derived_health_status || null;
+}
+
+function getEffectiveHealthScore(item: WorkbenchItem): number {
+  const raw = item.effective_health_score ?? item.health_score ?? 0;
+  return toNumber(raw);
+}
+
+function mapEvidenceQualityLabel(value?: string | null): string {
+  const normalized = String(value || '').toLowerCase();
+
+  if (normalized === 'oficial') return 'Evidencia oficial';
+  if (normalized === 'aprobada_no_oficial') return 'Aprobada no oficial';
+  if (normalized === 'pendiente_revision') return 'Pendiente de revisión';
+  if (normalized === 'rechazada') return 'Evidencia rechazada';
+  if (normalized === 'sin_evidencia') return 'Sin evidencia';
+
+  return 'Sin evidencia';
+}
+
+function getEvidenceQualityClass(value?: string | null): string {
+  const normalized = String(value || '').toLowerCase();
+
+  if (normalized === 'oficial') {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  }
+
+  if (normalized === 'aprobada_no_oficial') {
+    return 'border-blue-200 bg-blue-50 text-blue-700';
+  }
+
+  if (normalized === 'pendiente_revision') {
+    return 'border-amber-200 bg-amber-50 text-amber-700';
+  }
+
+  if (normalized === 'rechazada') {
+    return 'border-red-200 bg-red-50 text-red-700';
+  }
+
+  return 'border-slate-200 bg-slate-50 text-slate-600';
+}
+
+function getEffectiveComplianceBucket(item: WorkbenchItem): string {
+  return String(item.compliance_bucket || '').toLowerCase();
+}
+
 
 export default function ControlesPage() {
   return (
@@ -771,7 +829,7 @@ function ControlesPageContent() {
 
     if (healthFilter !== 'todos') {
       base = base.filter(
-        (item) => normalizeHealthStatus(item.derived_health_status) === healthFilter
+        (item) => normalizeHealthStatus(getEffectiveHealthStatus(item)) === healthFilter
       );
     }
 
@@ -1604,7 +1662,7 @@ function ControlesPageContent() {
                             const evidenceItems =
                               evidencesByControl[item.tenant_control_id] || [];
                             const needsEvidenceAttention =
-                              normalizeHealthStatus(item.derived_health_status) !==
+                              normalizeHealthStatus(getEffectiveHealthStatus(item)) !==
                               'saludable';
 
                             return (
@@ -1612,7 +1670,7 @@ function ControlesPageContent() {
                                 key={item.tenant_control_id}
                                 id={`control-${item.tenant_control_id}`}
                                 className={`rounded-[24px] border p-4 shadow-sm ${healthCardClass(
-                                  item.derived_health_status
+                                  getEffectiveHealthStatus(item)
                                 )} ${
                                   focusedControlId === item.tenant_control_id
                                     ? 'ring-2 ring-indigo-200'
@@ -1624,13 +1682,23 @@ function ControlesPageContent() {
                                     <div className="flex flex-wrap gap-2">
                                       <span
                                         className={`rounded-full px-3 py-1 text-xs font-semibold ${healthBadgeClass(
-                                          item.derived_health_status
+                                          getEffectiveHealthStatus(item)
                                         )}`}
                                       >
-                                        {mapHealthLabel(item.derived_health_status)}
+                                        {mapHealthLabel(getEffectiveHealthStatus(item))}
                                       </span>
                                       <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                                        Health {toNumber(item.health_score)}
+                                        Health {getEffectiveHealthScore(item)}
+                                      </span>
+                                      <span
+                                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getEvidenceQualityClass(
+                                          item.evidence_quality_status
+                                        )}`}
+                                      >
+                                        {mapEvidenceQualityLabel(item.evidence_quality_status)}
+                                      </span>
+                                      <span className="text-xs text-slate-500">
+                                        Oficial {toNumber(item.official_evidence_count)} · Aprobada {toNumber(item.approved_evidence_count)}
                                       </span>
                                       <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
                                         Evidencias {toNumber(item.evidence_count)}
