@@ -561,6 +561,14 @@ export default function DashboardPage() {
   const { locale, t } = useTranslation();
   const [activeView, setActiveView] = useState<'executive' | 'kpi' | 'iso'>('executive');
 
+  useEffect(() => {
+    const view = new URLSearchParams(window.location.search).get('view');
+
+    if (view === 'executive' || view === 'kpi' || view === 'iso') {
+      setActiveView(view);
+    }
+  }, []);
+
   const currentRole = getUserRoleFromToken();
 
   const canManageKpis = [
@@ -584,6 +592,7 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [loadingKpis, setLoadingKpis] = useState(false);
+  const [effectiveHealthLoading, setEffectiveHealthLoading] = useState(false);
   const [recalculatingKpis, setRecalculatingKpis] = useState(false);
   const [refreshingExecutive, setRefreshingExecutive] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -599,18 +608,27 @@ export default function DashboardPage() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/api/kpi/effective-health-summary/${user.tenant_id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      setEffectiveHealthLoading(true);
 
-      const json = await res.json();
+      const endpoints = [
+        `${API_URL}/api/kpi/effective-health-summary/${user.tenant_id}`,
+        `${API_URL}/api/kpis/effective-health-summary/${user.tenant_id}`,
+      ];
 
-      if (!res.ok) {
-        console.error('ERROR EFFECTIVE ISO HEALTH SUMMARY:', json);
-        setEffectiveHealthRows([]);
-        return;
+      let json: any = null;
+      let lastError: unknown = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          json = await fetchJson(endpoint, token);
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+
+      if (!json) {
+        throw lastError || new Error('No fue posible cargar salud ISO efectiva.');
       }
 
       const rows = Array.isArray(json?.active_summary)
@@ -623,6 +641,8 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('ERROR EFFECTIVE ISO HEALTH SUMMARY:', err);
       setEffectiveHealthRows([]);
+    } finally {
+      setEffectiveHealthLoading(false);
     }
   }, []);
 
@@ -728,7 +748,10 @@ export default function DashboardPage() {
   const handleRefreshDashboard = async () => {
     try {
       setRefreshingExecutive(true);
-      await loadExecutiveDashboard();
+      await Promise.all([
+        loadEffectiveHealthSummary(),
+        loadExecutiveDashboard(),
+      ]);
 
       if (activeView === 'kpi') {
         await loadKpiDashboard();
@@ -1059,33 +1082,55 @@ export default function DashboardPage() {
   }, [isoCards]);
 
 
-  const effectiveActiveRows = effectiveHealthRows.filter(
-    (row) => toSafeNumber(row.active_scope_controls) > 0
-  );
+  const effectiveActiveRows = useMemo(() => {
+    return effectiveHealthRows.filter(
+      (row) => toSafeNumber(row.active_scope_controls) > 0
+    );
+  }, [effectiveHealthRows]);
 
-  const effectiveTotalActiveControls = effectiveActiveRows.reduce(
-    (acc, row) => acc + toSafeNumber(row.active_scope_controls),
-    0
-  );
+  const effectiveTotalActiveControls = useMemo(() => {
+    return effectiveActiveRows.reduce(
+      (acc, row) => acc + toSafeNumber(row.active_scope_controls),
+      0
+    );
+  }, [effectiveActiveRows]);
 
-  const effectiveCompliesControls = effectiveActiveRows.reduce(
-    (acc, row) => acc + toSafeNumber(row.complies_controls),
-    0
-  );
+  const effectiveCompliesControls = useMemo(() => {
+    return effectiveActiveRows.reduce(
+      (acc, row) => acc + toSafeNumber(row.complies_controls),
+      0
+    );
+  }, [effectiveActiveRows]);
 
-  const effectiveControlsWithoutEvidence = effectiveActiveRows.reduce(
-    (acc, row) => acc + toSafeNumber(row.controls_without_evidence),
-    0
-  );
+  const effectiveControlsWithoutEvidence = useMemo(() => {
+    return effectiveActiveRows.reduce(
+      (acc, row) => acc + toSafeNumber(row.controls_without_evidence),
+      0
+    );
+  }, [effectiveActiveRows]);
 
-  const effectiveOverduePlans = effectiveActiveRows.reduce(
-    (acc, row) => acc + toSafeNumber(row.overdue_action_plans_count),
-    0
-  );
+  const effectiveOverduePlans = useMemo(() => {
+    return effectiveActiveRows.reduce(
+      (acc, row) => acc + toSafeNumber(row.overdue_action_plans_count),
+      0
+    );
+  }, [effectiveActiveRows]);
+
+  const effectiveOfficialEvidenceControls = useMemo(() => {
+    return effectiveActiveRows.reduce(
+      (acc, row) => acc + toSafeNumber(row.controls_with_official_evidence),
+      0
+    );
+  }, [effectiveActiveRows]);
 
   const effectiveCompliancePercent =
     effectiveTotalActiveControls > 0
       ? Math.round((effectiveCompliesControls / effectiveTotalActiveControls) * 100)
+      : 0;
+
+  const effectiveOfficialEvidencePercent =
+    effectiveTotalActiveControls > 0
+      ? Math.round((effectiveOfficialEvidenceControls / effectiveTotalActiveControls) * 100)
       : 0;
 
   const auditTimelineItems = useMemo(() => {
@@ -1238,7 +1283,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {!loading && controls.length === 0 && !dashboardHasSummaryData && (
+              {!loading && controls.length === 0 && !dashboardHasSummaryData && effectiveActiveRows.length === 0 && !effectiveHealthLoading && (
                 <div className="rounded-[30px] border border-amber-200 bg-[linear-gradient(135deg,#fffdf5_0%,#fdf8e8_100%)] p-8 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                   <h2 className="mb-3 text-3xl font-bold text-slate-900">
                     {t('dashboard.initialControlsTitle')}
@@ -1254,7 +1299,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {!loading && (controls.length > 0 || dashboardHasSummaryData) && (
+              {!loading && (controls.length > 0 || dashboardHasSummaryData || effectiveHealthLoading || effectiveActiveRows.length > 0) && (
                 <>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
                     <TopCard
@@ -1300,6 +1345,17 @@ export default function DashboardPage() {
 
                   </div>
 
+                  <EffectiveIsoHealthSection
+                    rows={effectiveActiveRows}
+                    loading={effectiveHealthLoading}
+                    totalActiveControls={effectiveTotalActiveControls}
+                    compliesControls={effectiveCompliesControls}
+                    controlsWithoutEvidence={effectiveControlsWithoutEvidence}
+                    overduePlans={effectiveOverduePlans}
+                    compliancePercent={effectiveCompliancePercent}
+                    officialEvidencePercent={effectiveOfficialEvidencePercent}
+                  />
+
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.05fr_1fr_1.22fr]">
                     <StandardHealthPanel rows={standardHealthRows} />
                     <AuditTimelinePanel items={auditTimelineItems} />
@@ -1324,101 +1380,6 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-1 gap-4">
                       <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
               
-        {effectiveActiveRows.length > 0 && (
-          <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-                  Salud ISO efectiva
-                </p>
-                <h2 className="text-xl font-semibold text-slate-900">
-                  Cumplimiento calculado por norma y operación activa
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Usa la vista efectiva de salud ISO, excluye datos fuera de alcance y prioriza evidencia oficial.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-right">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-xs text-slate-500">Cumplimiento efectivo</p>
-                  <p className="text-2xl font-bold text-slate-900">{effectiveCompliancePercent}%</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-xs text-slate-500">Planes vencidos</p>
-                  <p className="text-2xl font-bold text-red-600">{effectiveOverduePlans}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Controles activos</p>
-                <p className="mt-1 text-xl font-bold text-slate-900">{effectiveTotalActiveControls}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Cumplen</p>
-                <p className="mt-1 text-xl font-bold text-emerald-700">{effectiveCompliesControls}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Sin evidencia</p>
-                <p className="mt-1 text-xl font-bold text-amber-700">{effectiveControlsWithoutEvidence}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Normas/operaciones activas</p>
-                <p className="mt-1 text-xl font-bold text-slate-900">{effectiveActiveRows.length}</p>
-              </div>
-            </div>
-
-            <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-              <div className="grid grid-cols-12 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <div className="col-span-3">Norma / operación</div>
-                <div className="col-span-2 text-right">Cumplimiento</div>
-                <div className="col-span-2 text-right">Evidencia oficial</div>
-                <div className="col-span-2 text-right">Sin evidencia</div>
-                <div className="col-span-2 text-right">Promedio salud</div>
-                <div className="col-span-1 text-right">Estado</div>
-              </div>
-
-              {effectiveActiveRows.map((row) => (
-                <div
-                  key={`${row.iso}-${row.operation_id}`}
-                  className="grid grid-cols-12 items-center border-t border-slate-100 px-4 py-3 text-sm"
-                >
-                  <div className="col-span-3">
-                    <p className="font-semibold text-slate-900">{row.iso}</p>
-                    <p className="text-xs text-slate-500">
-                      {row.operation_name || 'Operación'} · {row.operation_code || 'N/A'}
-                    </p>
-                  </div>
-
-                  <div className="col-span-2 text-right font-semibold text-slate-900">
-                    {toSafeNumber(row.compliance_percentage)}%
-                  </div>
-
-                  <div className="col-span-2 text-right text-slate-700">
-                    {toSafeNumber(row.official_evidence_percentage)}%
-                  </div>
-
-                  <div className="col-span-2 text-right text-slate-700">
-                    {toSafeNumber(row.controls_without_evidence)}
-                  </div>
-
-                  <div className="col-span-2 text-right text-slate-700">
-                    {toSafeNumber(row.avg_effective_health_score)}
-                  </div>
-
-                  <div className="col-span-1 flex justify-end">
-                    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getEffectiveHealthTone(row.kpi_health_status)}`}>
-                      {mapEffectiveHealthLabel(row.kpi_health_status)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
           <div className="mb-5 flex items-center justify-between">
                           <div>
                             <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">
@@ -2061,6 +2022,132 @@ export default function DashboardPage() {
         </div>
       </div>
     </AppLayout>
+  );
+}
+
+function EffectiveIsoHealthSection({
+  rows,
+  loading,
+  totalActiveControls,
+  compliesControls,
+  controlsWithoutEvidence,
+  overduePlans,
+  compliancePercent,
+  officialEvidencePercent,
+}: {
+  rows: EffectiveIsoHealthRow[];
+  loading: boolean;
+  totalActiveControls: number;
+  compliesControls: number;
+  controlsWithoutEvidence: number;
+  overduePlans: number;
+  compliancePercent: number;
+  officialEvidencePercent: number;
+}) {
+  return (
+    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+            Salud ISO efectiva
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+            Cumplimiento por norma y operación activa
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-slate-500">
+            Fuente: public.v_iso_effective_kpi_summary. Excluye controles fuera de alcance y prioriza evidencia oficial.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-right">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs text-slate-500">Cumplimiento efectivo</p>
+            <p className="text-2xl font-bold text-slate-900">{compliancePercent}%</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs text-slate-500">Evidencia oficial</p>
+            <p className="text-2xl font-bold text-slate-900">{officialEvidencePercent}%</p>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+          Cargando salud ISO efectiva...
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+          No hay datos de salud ISO efectiva disponibles para el alcance activo.
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">Controles activos</p>
+              <p className="mt-1 text-xl font-bold text-slate-900">{totalActiveControls}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">Cumplen</p>
+              <p className="mt-1 text-xl font-bold text-emerald-700">{compliesControls}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">Sin evidencia</p>
+              <p className="mt-1 text-xl font-bold text-amber-700">{controlsWithoutEvidence}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">Planes vencidos</p>
+              <p className="mt-1 text-xl font-bold text-red-600">{overduePlans}</p>
+            </div>
+          </div>
+
+          <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="min-w-[920px] w-full divide-y divide-slate-200 text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 text-left">Norma / operación</th>
+                  <th className="px-4 py-3 text-right">Cumplimiento</th>
+                  <th className="px-4 py-3 text-right">Evidencia oficial</th>
+                  <th className="px-4 py-3 text-right">Sin evidencia</th>
+                  <th className="px-4 py-3 text-right">Promedio salud</th>
+                  <th className="px-4 py-3 text-right">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {rows.map((row) => (
+                  <tr key={`${row.iso}-${row.operation_id || row.operation_code || row.operation_name}`}>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-slate-900">{row.iso}</p>
+                      <p className="text-xs text-slate-500">
+                        {row.operation_name || 'Operación'} · {row.operation_code || 'N/A'}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      {toSafeNumber(row.compliance_percentage)}%
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-700">
+                      {toSafeNumber(row.official_evidence_percentage)}%
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-700">
+                      {toSafeNumber(row.controls_without_evidence)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-700">
+                      {toSafeNumber(row.avg_effective_health_score)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end">
+                        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getEffectiveHealthTone(row.kpi_health_status)}`}>
+                          {mapEffectiveHealthLabel(row.kpi_health_status)}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

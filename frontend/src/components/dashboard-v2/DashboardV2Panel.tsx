@@ -576,7 +576,7 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
     }));
 
   return (
-    <Panel title="KPIs ejecutivos" actionHref="/dashboard-kpi">
+    <Panel title="KPIs ejecutivos" actionHref="/dashboard?view=kpi">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <Metric label="Score KPI" value={formatPercent(summary?.executive_score || 0)} tone="success" />
         <Metric label="Medidos" value={summary?.measured_kpis || 0} />
