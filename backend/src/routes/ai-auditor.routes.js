@@ -6,6 +6,8 @@ const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
 const { resolveLocale } = require('../utils/locale');
 const { renderAiAuditorPremiumPdf } = require('../reports/helpers/aiAuditorPdfKitPremium.helpers');
+const aiContextBuilder = require('../services/aiContextBuilder.service');
+const aiEngineClient = require('../services/aiEngineClient.service');
 
 function normalizeRole(user) {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
@@ -1425,6 +1427,162 @@ function markAiAuditorFallback(fallback, error) {
   };
 }
 
+function normalizeSeniorAuditorTask(body = {}) {
+  if (body.tenant_control_id) return 'control_analysis';
+  if (body.evidence_id) return 'evidence_review';
+  if (body.action_plan_id) return 'action_plan_review';
+  if (body.question) return 'free_question';
+  return 'audit_analysis';
+}
+
+async function buildSeniorAuditorContext({ tenantId, body }) {
+  const standardCode = body?.standard_code ? String(body.standard_code) : null;
+  const operationId = body?.operation_id ? String(body.operation_id) : null;
+
+  if (body?.tenant_control_id) {
+    return aiContextBuilder.buildAiControlContext({
+      tenantId,
+      tenantControlId: String(body.tenant_control_id),
+      standardCode,
+      operationId,
+    });
+  }
+
+  if (body?.evidence_id) {
+    return aiContextBuilder.buildAiEvidenceContext({
+      tenantId,
+      evidenceId: String(body.evidence_id),
+    });
+  }
+
+  if (body?.audit_id) {
+    return aiContextBuilder.buildAiAuditContext({
+      tenantId,
+      auditId: String(body.audit_id),
+    });
+  }
+
+  if (standardCode || operationId) {
+    return aiContextBuilder.buildAiStandardContext({
+      tenantId,
+      standardCode,
+      operationId,
+    });
+  }
+
+  return aiContextBuilder.buildAiTenantContext({ tenantId });
+}
+
+function buildSeniorAuditorPayload({ tenantId, locale, context, body }) {
+  return {
+    task_type: normalizeSeniorAuditorTask(body),
+    tenant_id: tenantId,
+    module_origin: 'ia-auditor',
+    question: safeText(body?.question || body?.prompt || ''),
+    locale: 'es',
+    context,
+    options: {
+      use_rag: body?.use_rag !== false,
+      use_drive: body?.use_drive !== false,
+      use_web: body?.use_web !== false,
+      depth: ['executive', 'standard', 'deep'].includes(body?.depth) ? body.depth : 'standard',
+      return_structured_result: true,
+    },
+    request_metadata: {
+      requested_locale: locale || 'es',
+      audit_focus: body?.audit_focus || 'general',
+    },
+  };
+}
+
+function readinessToLegacyLevel(status) {
+  const value = String(status || '').toLowerCase();
+  if (value === 'listo') return 'high';
+  if (value === 'parcial') return 'medium';
+  if (value === 'no_listo') return 'critical';
+  return 'low';
+}
+
+function adaptSeniorAuditorV2Response(engineJson, fallback, locale, scope, context) {
+  const structured = engineJson?.structured_result && typeof engineJson.structured_result === 'object'
+    ? engineJson.structured_result
+    : {};
+  const confidence = Number(engineJson?.confidence ?? structured?.confidence ?? 0);
+  const score = clampAiAuditorScore(confidence * 100, fallback?.summary?.score || 0);
+  const readinessStatus = structured?.audit_readiness?.status || 'sin_datos';
+  const recommendedActions = safeAiAuditorArray(structured?.recommended_actions);
+
+  return {
+    ...fallback,
+    ok: engineJson?.ok !== false,
+    locale,
+    tenant_id: fallback?.tenant_id || scope?.tenant_id,
+    answer: engineJson?.answer || structured?.diagnosis || fallback?.summary?.auditor_opinion || '',
+    structured_result: structured,
+    source_trace: safeAiAuditorArray(engineJson?.source_trace, safeAiAuditorArray(structured?.source_trace)),
+    confidence,
+    limitations: safeAiAuditorArray(engineJson?.limitations, safeAiAuditorArray(structured?.limitations)),
+    engine: engineJson?.engine || {},
+    summary: {
+      ...(fallback?.summary || {}),
+      score,
+      readiness_level: readinessToLegacyLevel(readinessStatus),
+      executive_summary: structured?.executive_summary || fallback?.summary?.executive_summary,
+      auditor_opinion: structured?.diagnosis || engineJson?.answer || fallback?.summary?.auditor_opinion,
+      main_risks: safeAiAuditorArray(structured?.gaps, fallback?.summary?.main_risks),
+      main_gaps: safeAiAuditorArray(structured?.gaps, fallback?.summary?.main_gaps),
+      recommended_focus: recommendedActions.map((item) => item.title || item.description).filter(Boolean),
+    },
+    coverage: {
+      ...(fallback?.coverage || {}),
+      controls_reviewed: Array.isArray(context?.priority_controls)
+        ? context.priority_controls.length
+        : fallback?.coverage?.controls_reviewed,
+      evidences_reviewed: Array.isArray(context?.recent_evidences)
+        ? context.recent_evidences.length
+        : fallback?.coverage?.evidences_reviewed,
+      findings_reviewed: Array.isArray(context?.recent_findings)
+        ? context.recent_findings.length
+        : fallback?.coverage?.findings_reviewed,
+      actions_reviewed: Array.isArray(context?.recent_action_plans)
+        ? context.recent_action_plans.length
+        : fallback?.coverage?.actions_reviewed,
+    },
+    evidence_requests: safeAiAuditorArray(structured?.documents_to_request).map((item) => ({
+      title: item,
+      reason: 'Solicitud generada desde structured_result del Auditor ISO Senior.',
+      priority: 'high',
+    })),
+    action_plan_suggestions: recommendedActions.map((item) => ({
+      ...item,
+      title: item.title,
+      priority: item.priority,
+      recommended_action: item.description,
+      deep_link: item.target_module === 'evidencias' ? '/evidencias' : '/plan-accion',
+    })),
+    findings_suggestions: safeAiAuditorArray(structured?.gaps).map((item) => ({
+      title: item.title,
+      severity: item.severity,
+      recommended_action: item.description,
+      source_clause: item.clause,
+    })),
+    next_steps: recommendedActions.map((item) => item.description).filter(Boolean),
+    human_review_required: true,
+    can_create_records: false,
+    scope: fallback?.scope || scope,
+    context_v2: context,
+    trace: {
+      ...(fallback?.trace || {}),
+      source: 'ai_engine_senior_auditor_v2',
+      endpoint: '/api/ai/senior-auditor/analyze',
+      ai_engine_used: engineJson?.ok !== false,
+      db_write: false,
+      generated_at: new Date().toISOString(),
+      engine: engineJson?.engine || {},
+    },
+  };
+}
+
 
 
 // =========================================================
@@ -2258,17 +2416,16 @@ router.post('/analyze', auth, async (req, res) => {
     });
 
     try {
-      const enginePayload = buildAiAuditorEnginePayload({
+      const context = await buildSeniorAuditorContext({ tenantId, body: req.body || {} });
+      const enginePayload = buildSeniorAuditorPayload({
         tenantId,
-        standardCode,
         locale,
-        scope,
-        fallback,
-        body: req.body,
+        context,
+        body: req.body || {},
       });
 
-      const engineJson = await callAiAuditorEngine(enginePayload, locale);
-      const analysis = sanitizeAiAuditorEngineResponse(engineJson, fallback, locale, scope);
+      const engineJson = await aiEngineClient.analyzeWithSeniorAuditor(enginePayload);
+      const analysis = adaptSeniorAuditorV2Response(engineJson, fallback, locale, scope, context);
 
       return res.json(analysis);
     } catch (engineError) {
