@@ -1043,9 +1043,17 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
     });
   } catch (err) {
     console.error('ERROR GET CONTROLS WORKBENCH:', err);
-    return res.status(500).json({
-      error: 'Error obteniendo workbench de controles',
-      detail: err.message,
+
+    const message = err?.message || 'Error obteniendo workbench de controles';
+    const isInactiveOperationError = message.includes(
+      'La operación seleccionada no está activa para esa norma en esta empresa'
+    );
+
+    return res.status(isInactiveOperationError ? 400 : 500).json({
+      error: isInactiveOperationError
+        ? message
+        : 'Error obteniendo workbench de controles',
+      ...(isInactiveOperationError ? {} : { detail: message }),
     });
   } finally {
     client.release();
