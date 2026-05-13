@@ -11,6 +11,8 @@ const {
   cancelActiveJobsForEvidence,
   processEvidenceAiJobs
 } = require('../services/evidence-ai.service')
+const aiContextBuilder = require('../services/aiContextBuilder.service')
+const { runOperationalAiReview } = require('../services/aiOperationalReview.service')
 
 const AI_RECOMMENDATION_THRESHOLD = Number(
   process.env.EVIDENCE_AI_RECOMMENDATION_THRESHOLD ||
@@ -1323,6 +1325,71 @@ router.post('/:id/mark-official', auth, async (req, res) => {
     client.release();
   }
 });
+
+
+router.post('/:id/ai-review', auth, async (req, res) => {
+  try {
+    const evidenceId = req.params.id
+    const requestedTenantId = req.body?.tenant_id || req.query?.tenant_id || getUserTenantId(req.user)
+
+    if (!requestedTenantId) {
+      return res.status(400).json({ ok: false, error: 'tenant_id requerido' })
+    }
+
+    if (!ensureTenantAccess(req, requestedTenantId)) {
+      return res.status(403).json({ ok: false, error: 'Sin acceso al tenant indicado' })
+    }
+
+    const evidenceResult = await pool.query(
+      `
+      SELECT *
+      FROM evidences
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+      `,
+      [evidenceId, requestedTenantId]
+    )
+
+    if (evidenceResult.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'Evidencia no encontrada' })
+    }
+
+    const evidence = evidenceResult.rows[0]
+    const tenantId = requestedTenantId
+
+    const context = evidence.tenant_control_id
+      ? await aiContextBuilder.buildAiControlContext({
+          tenantId,
+          tenantControlId: evidence.tenant_control_id,
+          standardCode: req.body?.standard_code || null,
+          operationId: req.body?.operation_id || null
+        })
+      : await aiContextBuilder.buildAiEvidenceContext({ tenantId, evidenceId })
+
+    context.scope.evidence_id = evidenceId
+    context.recent_evidences = [evidence, ...(context.recent_evidences || [])].slice(0, 10)
+
+    const aiResult = await runOperationalAiReview({
+      tenantId,
+      moduleOrigin: 'evidencias',
+      taskType: 'evidence_review',
+      context,
+      body: req.body || {},
+      entityLabel: `evidencia ${evidence.file_name || evidence.title || evidenceId}`,
+      defaultQuestion: 'Evalúa si esta evidencia sustenta cumplimiento, si puede oficializarse y qué le falta para auditoría.'
+    })
+
+    return res.json({
+      ...aiResult,
+      tenant_id: tenantId,
+      evidence_id: evidenceId
+    })
+  } catch (err) {
+    console.error('ERROR EVIDENCE AI REVIEW:', err)
+    return res.status(500).json({ ok: false, error: 'Error ejecutando revisión IA de evidencia' })
+  }
+})
 
 
 router.get('/:tenant_id', auth, async (req, res) => {

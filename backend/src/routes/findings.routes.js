@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const aiContextBuilder = require('../services/aiContextBuilder.service');
+const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
 
 function getUserTenantId(user) {
   return (
@@ -550,6 +552,70 @@ router.get('/controls/:tenant_id', auth, async (req, res) => {
       error: 'Error obteniendo controles para hallazgos',
       detail: err.message
     });
+  }
+});
+
+router.post('/:id/ai-review', auth, async (req, res) => {
+  try {
+    const findingId = req.params.id;
+    const requestedTenantId = req.body?.tenant_id || req.query?.tenant_id || getUserTenantId(req.user);
+
+    if (!requestedTenantId) {
+      return res.status(400).json({ ok: false, error: 'tenant_id requerido' });
+    }
+
+    if (!ensureTenantAccess(req, requestedTenantId)) {
+      return res.status(403).json({ ok: false, error: 'No autorizado para este tenant' });
+    }
+
+    const findingResult = await pool.query(
+      `
+      SELECT *
+      FROM findings
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+      `,
+      [findingId, requestedTenantId]
+    );
+
+    if (findingResult.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'Hallazgo no encontrado' });
+    }
+
+    const finding = findingResult.rows[0];
+    const tenantId = requestedTenantId;
+
+    const context = finding.tenant_control_id
+      ? await aiContextBuilder.buildAiControlContext({
+          tenantId,
+          tenantControlId: finding.tenant_control_id,
+          standardCode: req.body?.standard_code || finding.iso_code || finding.iso || null,
+          operationId: req.body?.operation_id || finding.operation_id || null,
+        })
+      : await aiContextBuilder.buildAiFindingContext({ tenantId, findingId });
+
+    context.scope.finding_id = findingId;
+    context.recent_findings = [finding, ...(context.recent_findings || [])].slice(0, 10);
+
+    const aiResult = await runOperationalAiReview({
+      tenantId,
+      moduleOrigin: 'hallazgos',
+      taskType: 'standard_gap_analysis',
+      context,
+      body: req.body || {},
+      entityLabel: `hallazgo ${finding.title || findingId}`,
+      defaultQuestion: 'Evalúa el hallazgo, su impacto en auditoría, evidencia requerida y acciones correctivas recomendadas.',
+    });
+
+    return res.json({
+      ...aiResult,
+      tenant_id: tenantId,
+      finding_id: findingId,
+    });
+  } catch (err) {
+    console.error('ERROR FINDING AI REVIEW:', err);
+    return res.status(500).json({ ok: false, error: 'Error ejecutando revisión IA del hallazgo' });
   }
 });
 

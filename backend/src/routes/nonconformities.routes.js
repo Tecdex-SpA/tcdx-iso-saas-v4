@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const aiContextBuilder = require('../services/aiContextBuilder.service');
+const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
 
 function getUserTenantId(user) {
   return (
@@ -74,7 +76,7 @@ async function ensureOperationalTenantStandard(client, tenantId, isoCode) {
   return result.rowCount > 0;
 }
 
-async function getNcWithStandard(client, id) {
+async function getNcWithStandard(client, id, tenantId = null) {
   return client.query(
     `
     SELECT
@@ -118,9 +120,10 @@ async function getNcWithStandard(client, id) {
       LIMIT 1
     ) active_scope ON TRUE
     WHERE tnc.id = $1
+      AND ($2::uuid IS NULL OR tnc.tenant_id = $2::uuid)
     LIMIT 1
     `,
-    [id]
+    [id, tenantId]
   );
 }
 
@@ -250,6 +253,64 @@ async function createResolutionEvidenceIfMissing(client, ncRow, currentNc, revie
 // GET NC
 // Solo normas operativas reales
 // =============================
+router.post('/:id/ai-review', auth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const nonconformityId = req.params.id;
+    const requestedTenantId = req.body?.tenant_id || req.query?.tenant_id || getUserTenantId(req.user);
+
+    if (!requestedTenantId) {
+      return res.status(400).json({ ok: false, error: 'tenant_id requerido' });
+    }
+
+    if (!ensureTenantAccess(req, requestedTenantId)) {
+      return res.status(403).json({ ok: false, error: 'No autorizado para este tenant' });
+    }
+
+    const ncResult = await getNcWithStandard(client, nonconformityId, requestedTenantId);
+
+    if (ncResult.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'No conformidad no encontrada' });
+    }
+
+    const nc = ncResult.rows[0];
+    const tenantId = requestedTenantId;
+
+    const context = nc.tenant_control_id
+      ? await aiContextBuilder.buildAiControlContext({
+          tenantId,
+          tenantControlId: nc.tenant_control_id,
+          standardCode: req.body?.standard_code || nc.iso || null,
+          operationId: req.body?.operation_id || nc.operation_id || null,
+        })
+      : await aiContextBuilder.buildAiTenantContext({ tenantId });
+
+    context.scope.nonconformity_id = nonconformityId;
+    context.recent_nonconformities = [nc, ...(context.recent_nonconformities || [])].slice(0, 10);
+
+    const aiResult = await runOperationalAiReview({
+      tenantId,
+      moduleOrigin: 'no-conformidades',
+      taskType: 'standard_gap_analysis',
+      context,
+      body: req.body || {},
+      entityLabel: `no conformidad ${nc.title || nonconformityId}`,
+      defaultQuestion: 'Evalúa esta no conformidad, causa probable, riesgo auditor, evidencia requerida y plan de cierre recomendado.',
+    });
+
+    return res.json({
+      ...aiResult,
+      tenant_id: tenantId,
+      nonconformity_id: nonconformityId,
+    });
+  } catch (err) {
+    console.error('ERROR NONCONFORMITY AI REVIEW:', err);
+    return res.status(500).json({ ok: false, error: 'Error ejecutando revisión IA de no conformidad' });
+  } finally {
+    client.release();
+  }
+});
+
 router.get('/:tenant_id', auth, async (req, res) => {
   try {
     const { tenant_id } = req.params;

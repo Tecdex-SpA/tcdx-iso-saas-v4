@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const aiContextBuilder = require('../services/aiContextBuilder.service');
+const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
 
 
 function deriveWorkbenchHealthStatus(row) {
@@ -697,6 +699,56 @@ async function getTenantControlDependencies(client, tenantId, tenantControlId) {
 // =====================================
 // WORKBENCH OPERATIVO
 // =====================================
+router.post('/:tenant_control_id/ai-analyze', auth, async (req, res) => {
+  try {
+    const { tenant_control_id } = req.params;
+    const tenantId = req.body?.tenant_id || req.query?.tenant_id || getUserTenantId(req.user);
+
+    if (!tenantId || !isUUID(tenantId) || !isUUID(tenant_control_id)) {
+      return res.status(400).json({ ok: false, error: 'tenant_id y tenant_control_id válidos son requeridos' });
+    }
+
+    if (!canAccessTenant(req, tenantId)) {
+      return res.status(403).json({ ok: false, error: 'No autorizado para este tenant' });
+    }
+
+    const control = await resolveControlRefs(pool, tenantId, tenant_control_id);
+    if (!control) {
+      return res.status(404).json({ ok: false, error: 'Control no encontrado para el tenant indicado' });
+    }
+
+    const standardCode = req.body?.standard_code || control.primary_standard_code || null;
+    const operationId = req.body?.operation_id || control.operation_id || null;
+    const context = await aiContextBuilder.buildAiControlContext({
+      tenantId,
+      tenantControlId: tenant_control_id,
+      standardCode,
+      operationId,
+    });
+    context.scope.control_description = control.description || '';
+    context.scope.clause = control.clause || '';
+
+    const aiResult = await runOperationalAiReview({
+      tenantId,
+      moduleOrigin: 'controles',
+      taskType: 'control_analysis',
+      context,
+      body: req.body || {},
+      entityLabel: `control ${standardCode || ''} ${control.clause || ''}`.trim(),
+      defaultQuestion: `Analiza el control ${standardCode || ''} ${control.clause || ''}, explica brechas, evidencia faltante y acciones de cierre.`,
+    });
+
+    return res.json({
+      ...aiResult,
+      tenant_id: tenantId,
+      tenant_control_id,
+    });
+  } catch (error) {
+    console.error('ERROR CONTROL AI ANALYZE:', error);
+    return res.status(500).json({ ok: false, error: 'Error ejecutando análisis IA del control' });
+  }
+});
+
 router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
   const client = await pool.connect();
 

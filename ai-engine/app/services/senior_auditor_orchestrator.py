@@ -370,10 +370,12 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             llm_used = True
             engine_model = f"{llm_metadata.get('provider')}/{llm_metadata.get('model')}"
         except Exception as exc:
+            provider = llm_metadata.get("provider") or "desconocido"
+            model = llm_metadata.get("model") or "sin_modelo"
             structured["limitations"].append(
-                f"Proveedor LLM falló — análisis generado por fallback determinístico ({str(exc)[:120]})"
+                f"Proveedor LLM falló — análisis generado por fallback determinístico. Proveedor: {provider}, modelo: {model}. Detalle: {str(exc)[:160]}"
             )
-            limitations.append("Proveedor LLM falló — análisis generado por fallback determinístico")
+            limitations.append(f"Proveedor LLM falló — análisis generado por fallback determinístico. Modelo intentado: {model}")
             engine_model = "deterministic_senior_auditor_v2"
     else:
         structured["limitations"].append(

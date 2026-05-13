@@ -383,13 +383,15 @@ Proveedores soportados:
 Variables:
 
 ```env
-LLM_PROVIDER=openai
+LLM_PROVIDER=ollama
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
+AI_ENGINE_LLM_TIMEOUT_MS=90000
+
+# opcional si se habilita proveedor externo
 OPENAI_API_KEY=
 OPENAI_MODEL=
 OPENAI_BASE_URL=
-OLLAMA_HOST=
-OLLAMA_MODEL=
-AI_ENGINE_LLM_TIMEOUT_MS=60000
 ```
 
 Si el LLM falla, el orquestador agrega:
@@ -404,13 +406,54 @@ Si no hay LLM:
 Proveedor LLM no configurado — análisis generado por motor determinístico basado en contexto interno
 ```
 
-## 24. Validation commands
+## 24. Final AI value layer
+
+La capa final mantiene `ai-engine` como cerebro del sistema. Backend solo valida JWT/RBAC/tenant, arma contexto y llama al contrato v2.
+
+Cambios finales:
+
+- Ollama queda como proveedor local recomendado: `LLM_PROVIDER=ollama`, `OLLAMA_HOST=http://localhost:11434`, `OLLAMA_MODEL=qwen2.5:7b`.
+- `llm_client.py` usa `/api/generate` con `stream=false`, salida JSON y fallback seguro.
+- Si Ollama no responde o falta el modelo, el orquestador conserva análisis determinístico y agrega limitación con proveedor/modelo intentado.
+- RAG incluye baseline local en `ai-engine/knowledge/iso_baseline_knowledge.json` para ISO9001, ISO27001 e ISO42001, sin copiar texto normativo propietario.
+- Documentos/Drive se consumen desde `document_index` cuando backend lo agrega al contexto; ai-engine no reconstruye OAuth.
+
+## 25. Operational AI endpoints
+
+Endpoints backend añadidos:
+
+```txt
+POST /api/controls/:tenant_control_id/ai-analyze
+POST /api/evidences/:evidence_id/ai-review
+POST /api/action-plans/:action_plan_id/ai-review
+POST /api/findings/:finding_id/ai-review
+POST /api/nonconformities/:nonconformity_id/ai-review
+```
+
+Todos retornan el contrato canónico:
+
+- `answer`
+- `structured_result`
+- `source_trace`
+- `confidence`
+- `limitations`
+- `engine`
+
+La UI operativa queda pendiente para una pasada de bajo riesgo visual. Ver `docs/ai-operational-endpoints.md`.
+
+## 26. Validation commands
 
 ```bash
 node -c backend/src/services/aiContextBuilder.service.js
 node -c backend/src/services/aiEngineClient.service.js
+node -c backend/src/services/aiOperationalReview.service.js
 node -c backend/src/routes/ai-auditor.routes.js
 node -c backend/src/routes/ai-compliance.routes.js
+node -c backend/src/routes/controls.routes.js
+node -c backend/src/routes/evidences.routes.js
+node -c backend/src/routes/action-plans.routes.js
+node -c backend/src/routes/findings.routes.js
+node -c backend/src/routes/nonconformities.routes.js
 
 PYTHONPYCACHEPREFIX=/private/tmp/tcdx-pycache python3 -m py_compile \
   ai-engine/app/services/senior_auditor_orchestrator.py \
@@ -427,7 +470,13 @@ git diff --check
 git status --short
 ```
 
-## 25. Post-deploy tests
+## 27. Post-deploy tests
+
+Ollama:
+
+```bash
+curl -s http://localhost:11434/api/tags | python3 -m json.tool
+```
 
 IA Compliance:
 
@@ -455,3 +504,17 @@ Campos esperados:
 - `engine.used_rag`
 - `engine.used_drive`
 - `engine.used_web`
+
+Control AI:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -X POST http://localhost:3000/api/controls/TENANT_CONTROL_ID/ai-analyze \
+  -d '{
+    "tenant_id":"TENANT_ID",
+    "standard_code":"ISO27001",
+    "operation_id":"OPERATION_ID",
+    "depth":"deep"
+  }' | python3 -m json.tool
+```

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const aiContextBuilder = require('../services/aiContextBuilder.service');
+const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
 
 function getUserTenantId(user) {
   return (
@@ -976,6 +978,70 @@ router.post('/:id/review-approval', auth, async (req, res) => {
     });
   } finally {
     client.release();
+  }
+});
+
+router.post('/:id/ai-review', auth, async (req, res) => {
+  try {
+    const actionPlanId = req.params.id;
+    const requestedTenantId = req.body?.tenant_id || req.query?.tenant_id || getUserTenantId(req.user);
+
+    if (!requestedTenantId) {
+      return res.status(400).json({ ok: false, error: 'tenant_id requerido' });
+    }
+
+    if (!ensureTenantAccess(req, requestedTenantId)) {
+      return res.status(403).json({ ok: false, error: 'No autorizado para este tenant' });
+    }
+
+    const planResult = await pool.query(
+      `
+      SELECT *
+      FROM action_plans
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+      `,
+      [actionPlanId, requestedTenantId]
+    );
+
+    if (planResult.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'Plan de acción no encontrado' });
+    }
+
+    const plan = planResult.rows[0];
+    const tenantId = requestedTenantId;
+
+    const context = plan.tenant_control_id
+      ? await aiContextBuilder.buildAiControlContext({
+          tenantId,
+          tenantControlId: plan.tenant_control_id,
+          standardCode: req.body?.standard_code || plan.standard_code || null,
+          operationId: req.body?.operation_id || plan.operation_id || null,
+        })
+      : await aiContextBuilder.buildAiActionPlanContext({ tenantId, actionPlanId });
+
+    context.scope.action_plan_id = actionPlanId;
+    context.recent_action_plans = [plan, ...(context.recent_action_plans || [])].slice(0, 10);
+
+    const aiResult = await runOperationalAiReview({
+      tenantId,
+      moduleOrigin: 'plan-accion',
+      taskType: 'action_plan_review',
+      context,
+      body: req.body || {},
+      entityLabel: `plan de acción ${plan.title || actionPlanId}`,
+      defaultQuestion: 'Evalúa si este plan de acción es suficiente, qué evidencia requiere y qué criterios de cierre debe cumplir.',
+    });
+
+    return res.json({
+      ...aiResult,
+      tenant_id: tenantId,
+      action_plan_id: actionPlanId,
+    });
+  } catch (err) {
+    console.error('ERROR ACTION PLAN AI REVIEW:', err);
+    return res.status(500).json({ ok: false, error: 'Error ejecutando revisión IA de plan de acción' });
   }
 });
 
