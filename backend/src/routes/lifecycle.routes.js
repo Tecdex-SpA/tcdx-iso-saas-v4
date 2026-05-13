@@ -595,13 +595,14 @@ async function getMetricsForPair(client, tenantId, standardCode, operationId) {
       GROUP BY ec.tenant_control_id
     ),
     latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id)
-        chs.tenant_control_id,
-        COALESCE(chs.health_score, 0) AS health_score
-      FROM control_health_scores chs
-      WHERE chs.tenant_id = $1
-        AND chs.standard_code = $2
-      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+      SELECT
+        veh.tenant_control_id,
+        COALESCE(veh.effective_health_score, 0) AS health_score
+      FROM public.v_iso_control_effective_health veh
+      WHERE veh.tenant_id = $1
+        AND veh.iso = $2
+        AND veh.operation_id = $3
+        AND COALESCE(veh.is_in_active_operational_scope, false) = true
     ),
     nc_std AS (
       SELECT COUNT(*)::int AS open_nonconformities_count,

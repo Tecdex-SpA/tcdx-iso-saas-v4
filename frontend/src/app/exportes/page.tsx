@@ -787,6 +787,19 @@ export default function ExportesPage() {
                 {t('exports.title')}
               </h1>
 
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
+                Los reportes ejecutivos se basan en salud ISO efectiva: controles activos en alcance,
+                evidencia oficial, hallazgos, no conformidades y planes vencidos.
+              </p>
+
+              <a
+                href="/dashboard?view=iso"
+                className="mt-4 inline-flex w-fit items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+              >
+                Ver Centro Control ISO
+                <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
+              </a>
+
               <div className="mt-6 h-px w-28 bg-gradient-to-r from-white/45 to-transparent" />
             </div>
 

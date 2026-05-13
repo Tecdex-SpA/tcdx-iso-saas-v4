@@ -69,3 +69,40 @@ No se reescribieron prompts ni flujos completos de IA Auditor en esta pasada.
 - Auditar modulos historicos de ciclo de vida que aun muestran `health_status`/`avg_health_score` propios del flujo de lifecycle.
 - Evaluar si `/centro-control-iso` debe eliminarse fisicamente cuando no existan enlaces externos activos.
 - Revisar reportes avanzados pagina por pagina si se decide redisenar exportes premium completos.
+
+## Pasada liviana Exportes + Ciclo de Vida
+
+Alcance limitado por disponibilidad de Codex en el tramo actual. Se revisaron solo:
+
+- `frontend/src/app/exportes/page.tsx`
+- `frontend/src/app/ciclo-vida/page.tsx`
+- `backend/src/reports/services/reportData.service.js`
+- `backend/src/reports/services/reportCoverage.service.js`
+- `backend/src/routes/lifecycle.routes.js`
+
+Correcciones aplicadas:
+
+- `/exportes` ahora comunica que los reportes ejecutivos usan salud ISO efectiva, controles activos en alcance, evidencia oficial, hallazgos, no conformidades y planes vencidos.
+- `/exportes` agrega acceso directo a `/dashboard?view=iso`.
+- Ciclo de vida reemplaza el promedio de health desde `control_health_scores` por `public.v_iso_control_effective_health`, filtrando por tenant, norma, operacion y alcance operacional activo.
+
+Observaciones de auditoria rapida:
+
+- `reportData.service.js` ya usa `public.v_iso_control_effective_health` y `public.v_iso_effective_kpi_summary` para los agregados principales de reportes.
+- `reportCoverage.service.js` ya usa `public.v_iso_control_effective_health` para health de cobertura, pero mantiene `tenant_controls.status` para cobertura de implementacion. Eso no se cambio porque mide avance/cobertura operativa, no salud efectiva.
+- `frontend/src/app/ciclo-vida/page.tsx` sigue mostrando `health_status` y `avg_health_score` como parte del tablero lifecycle; el backend ahora alimenta el promedio con salud efectiva, pero el microcopy visual completo queda pendiente.
+
+No se toco por limite de Codex:
+
+- Templates PDF premium y paginacion.
+- Redisenos de `/exportes` o `/ciclo-vida`.
+- Reglas PDCA, aprobacion automatica o transiciones de ciclo.
+- IA Auditor.
+
+Plan exacto para la proxima pasada:
+
+1. Validar en runtime `/ciclo-vida` para confirmar que los scores coinciden con Centro Control ISO por tenant/norma/operacion.
+2. Ajustar microcopy de tarjetas lifecycle para distinguir "avance de ciclo de vida" de "salud ISO efectiva".
+3. Revisar templates `executivePremium`, `controlHealthPremium` e `internalAuditPremium` solo en las secciones que imprimen health/cumplimiento.
+4. Agregar una nota visible en los PDFs indicando exclusion de controles fuera de alcance y preferencia por evidencia oficial.
+5. Revisar si `reportCoverage.service.js` debe exponer dos metricas separadas: cobertura de implementacion y salud efectiva.
