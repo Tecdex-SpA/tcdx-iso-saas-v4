@@ -776,10 +776,6 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
           ON tnc.tenant_id = tc.tenant_id
          AND (
               tnc.control_id = tc.control_id
-              AND (
-                tnc.metadata->>'operation_id' IS NULL
-                OR tnc.metadata->>'operation_id' = tc.operation_id::text
-              )
          )
         WHERE tc.tenant_id = $1
           AND tc.operation_id = $2
@@ -811,12 +807,7 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
               f.tenant_control_id = tc.id
               OR (
                 lc.controls_id_legacy IS NOT NULL
-                AND f.tenant_control_id = lc.controls_id_legacy
-                AND (
-                  f.metadata->>'operation_id' IS NULL
-                  OR f.metadata->>'operation_id' = tc.operation_id::text
-                )
-              )
+                AND f.tenant_control_id = lc.controls_id_legacy              )
          )
         WHERE tc.tenant_id = $1
           AND tc.operation_id = $2
@@ -856,6 +847,16 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
           tc.status AS declared_status,
           tc.score AS declared_score,
           tc.health_status AS tenant_health_status,
+        veh.effective_health_score AS effective_health_score,
+        veh.effective_health_status AS effective_health_status,
+        veh.compliance_bucket AS effective_compliance_bucket,
+        veh.evidence_quality_status AS effective_evidence_quality_status,
+        veh.approved_evidence_count AS effective_approved_evidence_count,
+        veh.official_evidence_count AS effective_official_evidence_count,
+        veh.open_action_plans_count AS effective_open_action_plans_count,
+        veh.overdue_action_plans_count AS effective_overdue_action_plans_count,
+        veh.is_in_active_operational_scope AS effective_is_in_active_operational_scope,
+        veh.health_trace_json AS effective_health_trace_json,
           tc.last_reviewed_at,
           tc.due_date,
           tc.priority,
@@ -917,6 +918,9 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
           FROM controls_catalog_standards ccs
           WHERE ccs.control_id = cc.id
         ) rel ON TRUE
+        LEFT JOIN public.v_iso_control_effective_health veh
+          ON veh.tenant_control_id = tc.id
+         AND veh.tenant_id = tc.tenant_id
         LEFT JOIN users u
           ON u.id = tc.responsible_user_id
         LEFT JOIN latest_health lh
@@ -984,19 +988,51 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
     );
 
     const items = result.rows.map((row) => {
-      const workbenchHealth = getWorkbenchDerivedHealth(row);
-      const healthScore = Number(workbenchHealth.health_score || 0);
-      const derivedStatus = workbenchHealth.derived_health_status;
+      const fallbackHealth = getWorkbenchDerivedHealth(row);
 
-      let complianceBucket = 'cumple';
-      if (healthScore < 50) complianceBucket = 'no cumple';
-      else if (healthScore < 80) complianceBucket = 'parcial';
+      const effectiveHealthScore =
+        row.effective_health_score !== null && row.effective_health_score !== undefined
+          ? Number(row.effective_health_score || 0)
+          : Number(fallbackHealth.health_score || 0);
+
+      const effectiveHealthStatus =
+        row.effective_health_status ||
+        fallbackHealth.derived_health_status ||
+        'sin_datos';
+
+      let complianceBucket =
+        row.effective_compliance_bucket ||
+        row.compliance_bucket ||
+        null;
+
+      if (!complianceBucket) {
+        if (effectiveHealthScore >= 80) complianceBucket = 'cumple';
+        else if (effectiveHealthScore >= 50) complianceBucket = 'parcial';
+        else if (effectiveHealthScore > 0) complianceBucket = 'no_cumple';
+        else complianceBucket = 'sin_datos';
+      }
 
       return {
         ...row,
-        health_score: healthScore,
-        derived_health_status: derivedStatus,
+
+        // Compatibilidad con frontend actual.
+        health_score: effectiveHealthScore,
+        derived_health_status: effectiveHealthStatus,
         compliance_bucket: complianceBucket,
+
+        // Campos nuevos para salud efectiva / auditoría / KPI.
+        effective_health_score: effectiveHealthScore,
+        effective_health_status: effectiveHealthStatus,
+        evidence_quality_status: row.effective_evidence_quality_status || row.evidence_quality_status || 'sin_evidencia',
+        approved_evidence_count: Number(row.effective_approved_evidence_count ?? row.approved_evidence_count ?? 0),
+        official_evidence_count: Number(row.effective_official_evidence_count ?? row.official_evidence_count ?? 0),
+        open_action_plans_count: Number(row.effective_open_action_plans_count ?? row.open_action_plans_count ?? 0),
+        overdue_action_plans_count: Number(row.effective_overdue_action_plans_count ?? row.overdue_action_plans_count ?? 0),
+        is_in_active_operational_scope:
+          row.effective_is_in_active_operational_scope ??
+          row.is_in_active_operational_scope ??
+          true,
+        health_trace_json: row.effective_health_trace_json || row.health_trace_json || null,
       };
     });
 
