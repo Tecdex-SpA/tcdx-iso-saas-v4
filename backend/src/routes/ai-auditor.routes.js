@@ -686,28 +686,77 @@ async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
     'health_by_standard',
     `
     SELECT
-      standard_code,
-      COUNT(*)::int AS controls,
-      ROUND(AVG(COALESCE(health_score, 0))::numeric, 2)::float AS avg_health_score,
-      SUM(CASE WHEN COALESCE(health_score, 0) < 50 THEN 1 ELSE 0 END)::int AS deteriorated,
-      SUM(CASE WHEN COALESCE(health_score, 0) >= 50 AND COALESCE(health_score, 0) < 80 THEN 1 ELSE 0 END)::int AS attention,
-      SUM(CASE WHEN COALESCE(health_score, 0) >= 80 THEN 1 ELSE 0 END)::int AS healthy
-    FROM control_health_scores
+      iso AS standard_code,
+      SUM(COALESCE(active_scope_controls, 0))::int AS controls,
+      ROUND(
+        (
+          SUM(COALESCE(avg_effective_health_score, 0) * GREATEST(COALESCE(active_scope_controls, 0), 1)) /
+          NULLIF(SUM(GREATEST(COALESCE(active_scope_controls, 0), 1)), 0)
+        )::numeric,
+        2
+      )::float AS avg_health_score,
+      SUM(COALESCE(deteriorated_controls, 0))::int AS deteriorated,
+      SUM(COALESCE(attention_controls, 0))::int AS attention,
+      SUM(COALESCE(healthy_controls, 0))::int AS healthy,
+      SUM(COALESCE(controls_without_evidence, 0))::int AS controls_without_evidence,
+      SUM(COALESCE(overdue_action_plans_count, 0))::int AS overdue_action_plans_count,
+      AVG(COALESCE(compliance_percentage, 0))::float AS compliance_percentage,
+      AVG(COALESCE(official_evidence_percentage, 0))::float AS official_evidence_percentage
+    FROM public.v_iso_effective_kpi_summary
     WHERE tenant_id = $1::uuid
-      AND ($2::text IS NULL OR standard_code = $2::text)
-    GROUP BY standard_code
-    ORDER BY standard_code
+      AND COALESCE(active_scope_controls, 0) > 0
+      AND ($2::text IS NULL OR iso = $2::text)
+    GROUP BY iso
+    ORDER BY iso
     `,
     [tenantId, standardCode]
   );
 
-  let controlsSource = 'control_health_scores';
+  const effectiveControlContext = await safeRows(
+    'effective_control_context',
+    `
+    SELECT
+      tenant_control_id,
+      iso,
+      clause,
+      operation_name,
+      control_description,
+      effective_health_score,
+      effective_health_status,
+      compliance_bucket,
+      evidence_quality_status,
+      official_evidence_count,
+      open_findings_count,
+      open_nonconformities_count,
+      open_action_plans_count,
+      overdue_action_plans_count
+    FROM public.v_iso_control_effective_health
+    WHERE tenant_id = $1::uuid
+      AND COALESCE(is_in_active_operational_scope, false) = true
+      AND ($2::text IS NULL OR iso = $2::text)
+    ORDER BY
+      CASE
+        WHEN effective_health_status = 'critico' THEN 1
+        WHEN effective_health_status = 'deteriorado' THEN 2
+        WHEN effective_health_status = 'atencion' THEN 3
+        WHEN effective_health_status = 'saludable' THEN 4
+        ELSE 5
+      END ASC,
+      COALESCE(overdue_action_plans_count, 0) DESC,
+      COALESCE(official_evidence_count, 0) ASC,
+      COALESCE(effective_health_score, 0) ASC
+    LIMIT 40
+    `,
+    [tenantId, standardCode]
+  );
+
+  let controlsSource = 'public.v_iso_effective_kpi_summary';
   let controlsByStandard = (healthByStandard || [])
     .filter((row) => row?.standard_code)
     .map((row) => ({
       standard_code: row.standard_code,
       controls: Number(row.controls || 0),
-      source: 'control_health_scores',
+      source: 'public.v_iso_effective_kpi_summary',
     }))
     .filter((row) => row.controls > 0);
 
@@ -763,7 +812,7 @@ async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
   }
 
   if (controlsTotal <= 0) {
-    warnings.push('controls_total could not be resolved from control_health_scores or tenant_controls');
+    warnings.push('controls_total could not be resolved from public.v_iso_effective_kpi_summary or tenant_controls');
     controlsSource = 'unresolved';
   }
 
@@ -890,6 +939,7 @@ async function buildGlobalAiAuditorScope(tenantId, standardCode = null) {
       warnings,
     },
     health_by_standard: healthByStandard,
+    effective_control_context: effectiveControlContext,
     findings_open: findingsOpen,
     action_plans_open: actionPlansOpen,
     action_plans_overdue: overdueActions,
@@ -1116,6 +1166,9 @@ function compactAiAuditorScope(scope) {
     sources: safe.sources || {},
     health_by_standard: Array.isArray(safe.health_by_standard)
       ? safe.health_by_standard.slice(0, 20)
+      : [],
+    effective_control_context: Array.isArray(safe.effective_control_context)
+      ? safe.effective_control_context.slice(0, 20)
       : [],
     findings_open: Array.isArray(safe.findings_open)
       ? safe.findings_open.slice(0, 20)

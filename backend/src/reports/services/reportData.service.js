@@ -983,45 +983,16 @@ async function getActiveStandards(tenantId) {
 async function getControlStats(tenantId) {
   const rows = await safeQuery(
     `
-    WITH active_standards AS (
-      SELECT standard_code
-      FROM tenant_standards
-      WHERE tenant_id = $1::uuid
-        AND is_active = TRUE
-    ),
-    latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id)
-        chs.tenant_control_id,
-        chs.tenant_id,
-        chs.standard_code,
-        COALESCE(chs.health_score, 0) AS health_score,
-        CASE
-          WHEN COALESCE(chs.health_score, 0) < 50 THEN 'deteriorado'
-          WHEN COALESCE(chs.health_score, 0) < 80 THEN 'atencion'
-          ELSE 'saludable'
-        END AS derived_health_status,
-        chs.calculated_at
-      FROM control_health_scores chs
-      INNER JOIN active_standards ast
-        ON ast.standard_code = chs.standard_code
-      WHERE chs.tenant_id = $1::uuid
-      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
-    )
     SELECT
       COUNT(*)::int AS total_controls,
-      SUM(CASE WHEN derived_health_status = 'saludable' THEN 1 ELSE 0 END)::int AS healthy_controls,
-      SUM(CASE WHEN derived_health_status = 'atencion' THEN 1 ELSE 0 END)::int AS warning_controls,
-      SUM(CASE WHEN derived_health_status = 'deteriorado' THEN 1 ELSE 0 END)::int AS critical_controls,
-      SUM(
-        CASE
-          WHEN tc.due_date IS NOT NULL AND tc.due_date < CURRENT_DATE
-          THEN 1 ELSE 0
-        END
-      )::int AS overdue_controls,
-      ROUND(AVG(COALESCE(lh.health_score, 0))::numeric, 1) AS average_score
-    FROM latest_health lh
-    LEFT JOIN tenant_controls tc
-      ON tc.id = lh.tenant_control_id
+      SUM(CASE WHEN effective_health_status = 'saludable' THEN 1 ELSE 0 END)::int AS healthy_controls,
+      SUM(CASE WHEN effective_health_status = 'atencion' THEN 1 ELSE 0 END)::int AS warning_controls,
+      SUM(CASE WHEN effective_health_status IN ('deteriorado', 'critico') THEN 1 ELSE 0 END)::int AS critical_controls,
+      SUM(COALESCE(overdue_action_plans_count, 0))::int AS overdue_controls,
+      ROUND(AVG(COALESCE(effective_health_score, 0))::numeric, 1) AS average_score
+    FROM public.v_iso_control_effective_health
+    WHERE tenant_id = $1::uuid
+      AND COALESCE(is_in_active_operational_scope, false) = true
     `,
     [tenantId],
     []
@@ -1054,56 +1025,26 @@ async function getControlStats(tenantId) {
 async function getControlHealthStats(tenantId) {
   const rows = await safeQuery(
     `
-    WITH active_standards AS (
-      SELECT standard_code
-      FROM tenant_standards
-      WHERE tenant_id = $1::uuid
-        AND is_active = TRUE
-    ),
-    latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id)
-        chs.tenant_control_id,
-        chs.standard_code,
-        COALESCE(chs.health_score, 0) AS health_score,
-        COALESCE(chs.evidence_score, 0) AS evidence_score,
-        COALESCE(chs.compliance_score, 0) AS compliance_score,
-        COALESCE(chs.findings_score, 0) AS findings_score,
-        COALESCE(chs.risk_score, 0) AS risk_score,
-        COALESCE(chs.action_score, 0) AS action_score,
-        COALESCE(chs.review_score, 0) AS review_score,
-        COALESCE(chs.evidence_count, 0) AS evidence_count,
-        COALESCE(chs.approved_evidence_count, 0) AS approved_evidence_count,
-        COALESCE(chs.pending_evidence_count, 0) AS pending_evidence_count,
-        COALESCE(chs.rejected_evidence_count, 0) AS rejected_evidence_count,
-        COALESCE(chs.open_findings_count, 0) AS open_findings_count,
-        COALESCE(chs.open_actions_count, 0) AS open_actions_count,
-        COALESCE(chs.overdue_actions_count, 0) AS overdue_actions_count,
-        COALESCE(chs.high_risks_count, 0) AS high_risks_count,
-        chs.calculated_at
-      FROM control_health_scores chs
-      INNER JOIN active_standards ast
-        ON ast.standard_code = chs.standard_code
-      WHERE chs.tenant_id = $1::uuid
-      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
-    )
     SELECT
       COUNT(*)::int AS total_health_rows,
-      ROUND(AVG(health_score)::numeric, 1) AS avg_health_score,
-      ROUND(AVG(evidence_score)::numeric, 1) AS avg_evidence_score,
-      ROUND(AVG(compliance_score)::numeric, 1) AS avg_compliance_score,
-      ROUND(AVG(findings_score)::numeric, 1) AS avg_findings_score,
-      ROUND(AVG(risk_score)::numeric, 1) AS avg_risk_score,
-      ROUND(AVG(action_score)::numeric, 1) AS avg_action_score,
-      ROUND(AVG(review_score)::numeric, 1) AS avg_review_score,
+      ROUND(AVG(COALESCE(effective_health_score, 0))::numeric, 1) AS avg_health_score,
+      ROUND((COUNT(*) FILTER (WHERE COALESCE(official_evidence_count, 0) > 0)::numeric / NULLIF(COUNT(*), 0)) * 100, 1) AS avg_evidence_score,
+      ROUND((COUNT(*) FILTER (WHERE compliance_bucket = 'cumple')::numeric / NULLIF(COUNT(*), 0)) * 100, 1) AS avg_compliance_score,
+      ROUND((COUNT(*) FILTER (WHERE COALESCE(open_findings_count, 0) = 0)::numeric / NULLIF(COUNT(*), 0)) * 100, 1) AS avg_findings_score,
+      ROUND(AVG(COALESCE(effective_health_score, 0))::numeric, 1) AS avg_risk_score,
+      ROUND((COUNT(*) FILTER (WHERE COALESCE(overdue_action_plans_count, 0) = 0)::numeric / NULLIF(COUNT(*), 0)) * 100, 1) AS avg_action_score,
+      ROUND(AVG(COALESCE(effective_health_score, 0))::numeric, 1) AS avg_review_score,
       SUM(evidence_count)::int AS evidence_count,
       SUM(approved_evidence_count)::int AS approved_evidence_count,
       SUM(pending_evidence_count)::int AS pending_evidence_count,
       SUM(rejected_evidence_count)::int AS rejected_evidence_count,
       SUM(open_findings_count)::int AS open_findings_count,
-      SUM(open_actions_count)::int AS open_actions_count,
-      SUM(overdue_actions_count)::int AS overdue_actions_count,
-      SUM(high_risks_count)::int AS high_risks_count
-    FROM latest_health
+      SUM(open_action_plans_count)::int AS open_actions_count,
+      SUM(overdue_action_plans_count)::int AS overdue_actions_count,
+      SUM(CASE WHEN effective_health_status IN ('deteriorado', 'critico') THEN 1 ELSE 0 END)::int AS high_risks_count
+    FROM public.v_iso_control_effective_health
+    WHERE tenant_id = $1::uuid
+      AND COALESCE(is_in_active_operational_scope, false) = true
     `,
     [tenantId],
     []
@@ -1503,64 +1444,38 @@ async function getNonconformityStats(tenantId) {
 async function getComplianceByStandard(tenantId) {
   const rows = await safeQuery(
     `
-    WITH active_standards AS (
-      SELECT standard_code
-      FROM tenant_standards
-      WHERE tenant_id = $1::uuid
-        AND is_active = TRUE
-    ),
-    latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id, chs.standard_code)
-        chs.tenant_control_id,
-        chs.standard_code,
-        COALESCE(chs.health_score, 0) AS health_score,
-        COALESCE(chs.evidence_score, 0) AS evidence_score,
-        COALESCE(chs.compliance_score, 0) AS compliance_score,
-        COALESCE(chs.findings_score, 0) AS findings_score,
-        COALESCE(chs.risk_score, 0) AS risk_score,
-        COALESCE(chs.action_score, 0) AS action_score,
-        COALESCE(chs.review_score, 0) AS review_score,
-        COALESCE(chs.pending_evidence_count, 0) AS pending_evidence_count,
-        COALESCE(chs.open_findings_count, 0) AS open_findings_count,
-        COALESCE(chs.open_actions_count, 0) AS open_actions_count,
-        COALESCE(chs.overdue_actions_count, 0) AS overdue_actions_count,
-        COALESCE(chs.high_risks_count, 0) AS high_risks_count,
-        CASE
-          WHEN COALESCE(chs.health_score, 0) < 50 THEN 'deteriorado'
-          WHEN COALESCE(chs.health_score, 0) < 80 THEN 'atencion'
-          ELSE 'saludable'
-        END AS derived_health_status,
-        chs.calculated_at
-      FROM control_health_scores chs
-      INNER JOIN active_standards ast
-        ON ast.standard_code = chs.standard_code
-      WHERE chs.tenant_id = $1::uuid
-      ORDER BY chs.tenant_control_id, chs.standard_code, chs.calculated_at DESC NULLS LAST
-    )
     SELECT
-      lh.standard_code,
-      COALESCE(s.name, lh.standard_code) AS standard_name,
-      ROUND(AVG(lh.health_score)::numeric, 1) AS score,
-      COUNT(*)::int AS controls_count,
-      SUM(CASE WHEN lh.derived_health_status = 'saludable' THEN 1 ELSE 0 END)::int AS healthy_controls,
-      SUM(CASE WHEN lh.derived_health_status = 'atencion' THEN 1 ELSE 0 END)::int AS warning_controls,
-      SUM(CASE WHEN lh.derived_health_status = 'deteriorado' THEN 1 ELSE 0 END)::int AS critical_controls,
-      ROUND(AVG(lh.evidence_score)::numeric, 1) AS evidence_score,
-      ROUND(AVG(lh.compliance_score)::numeric, 1) AS compliance_score,
-      ROUND(AVG(lh.findings_score)::numeric, 1) AS findings_score,
-      ROUND(AVG(lh.risk_score)::numeric, 1) AS risk_score,
-      ROUND(AVG(lh.action_score)::numeric, 1) AS action_score,
-      ROUND(AVG(lh.review_score)::numeric, 1) AS review_score,
-      SUM(lh.pending_evidence_count)::int AS pending_evidence_count,
-      SUM(lh.open_findings_count)::int AS open_findings_count,
-      SUM(lh.open_actions_count)::int AS open_actions_count,
-      SUM(lh.overdue_actions_count)::int AS overdue_actions_count,
-      SUM(lh.high_risks_count)::int AS high_risks_count
-    FROM latest_health lh
+      v.iso AS standard_code,
+      COALESCE(s.name, v.iso) AS standard_name,
+      ROUND(
+        (
+          SUM(COALESCE(v.avg_effective_health_score, 0) * GREATEST(COALESCE(v.active_scope_controls, 0), 1)) /
+          NULLIF(SUM(GREATEST(COALESCE(v.active_scope_controls, 0), 1)), 0)
+        )::numeric,
+        1
+      ) AS score,
+      SUM(COALESCE(v.active_scope_controls, 0))::int AS controls_count,
+      SUM(COALESCE(v.healthy_controls, 0))::int AS healthy_controls,
+      SUM(COALESCE(v.attention_controls, 0))::int AS warning_controls,
+      SUM(COALESCE(v.deteriorated_controls, 0))::int AS critical_controls,
+      ROUND(AVG(COALESCE(v.official_evidence_percentage, 0))::numeric, 1) AS evidence_score,
+      ROUND(AVG(COALESCE(v.compliance_percentage, 0))::numeric, 1) AS compliance_score,
+      SUM(COALESCE(v.open_findings_count, 0))::int AS open_findings_count_raw,
+      100 AS risk_score,
+      ROUND((COUNT(*) FILTER (WHERE COALESCE(v.overdue_action_plans_count, 0) = 0)::numeric / NULLIF(COUNT(*), 0)) * 100, 1) AS action_score,
+      ROUND(AVG(COALESCE(v.avg_effective_health_score, 0))::numeric, 1) AS review_score,
+      0::int AS pending_evidence_count,
+      SUM(COALESCE(v.open_findings_count, 0))::int AS open_findings_count,
+      SUM(COALESCE(v.open_action_plans_count, 0))::int AS open_actions_count,
+      SUM(COALESCE(v.overdue_action_plans_count, 0))::int AS overdue_actions_count,
+      SUM(CASE WHEN v.kpi_health_status IN ('deteriorado', 'critico') THEN COALESCE(v.active_scope_controls, 0) ELSE 0 END)::int AS high_risks_count
+    FROM public.v_iso_effective_kpi_summary v
     LEFT JOIN standards s
-      ON s.code = lh.standard_code
-    GROUP BY lh.standard_code, s.name
-    ORDER BY lh.standard_code ASC
+      ON s.code = v.iso
+    WHERE v.tenant_id = $1::uuid
+      AND COALESCE(v.active_scope_controls, 0) > 0
+    GROUP BY v.iso, s.name
+    ORDER BY v.iso ASC
     `,
     [tenantId],
     []
@@ -1576,7 +1491,7 @@ async function getComplianceByStandard(tenantId) {
     critical_controls: toNumber(row.critical_controls, 0),
     evidence_score: toNumber(row.evidence_score, 0),
     compliance_score: toNumber(row.compliance_score, 0),
-    findings_score: toNumber(row.findings_score, 0),
+    findings_score: toNumber(row.open_findings_count_raw, 0) > 0 ? 0 : 100,
     risk_score: toNumber(row.risk_score, 0),
     action_score: toNumber(row.action_score, 0),
     review_score: toNumber(row.review_score, 0),
@@ -1591,42 +1506,30 @@ async function getComplianceByStandard(tenantId) {
 async function getAuditFocusControls(tenantId) {
   const rows = await safeQuery(
     `
-    WITH active_standards AS (
-      SELECT standard_code
-      FROM tenant_standards
+    WITH latest_health AS (
+      SELECT
+        tenant_control_id,
+        iso AS standard_code,
+        COALESCE(effective_health_score, 0) AS health_score,
+        CASE WHEN COALESCE(official_evidence_count, 0) > 0 THEN 100 ELSE 0 END AS evidence_score,
+        CASE WHEN compliance_bucket = 'cumple' THEN 100 WHEN compliance_bucket = 'parcial' THEN 60 ELSE 0 END AS compliance_score,
+        CASE WHEN COALESCE(open_findings_count, 0) = 0 THEN 100 ELSE 0 END AS findings_score,
+        COALESCE(effective_health_score, 0) AS risk_score,
+        CASE WHEN COALESCE(overdue_action_plans_count, 0) = 0 THEN 100 ELSE 0 END AS action_score,
+        COALESCE(effective_health_score, 0) AS review_score,
+        COALESCE(evidence_count, 0) AS evidence_count,
+        COALESCE(approved_evidence_count, 0) AS approved_evidence_count,
+        COALESCE(pending_evidence_count, 0) AS pending_evidence_count,
+        COALESCE(rejected_evidence_count, 0) AS rejected_evidence_count,
+        COALESCE(open_findings_count, 0) AS open_findings_count,
+        COALESCE(open_action_plans_count, 0) AS open_actions_count,
+        COALESCE(overdue_action_plans_count, 0) AS overdue_actions_count,
+        CASE WHEN effective_health_status IN ('deteriorado', 'critico') THEN 1 ELSE 0 END AS high_risks_count,
+        COALESCE(effective_health_status, 'sin_datos') AS derived_health_status,
+        NULL::timestamp AS calculated_at
+      FROM public.v_iso_control_effective_health
       WHERE tenant_id = $1::uuid
-        AND is_active = TRUE
-    ),
-    latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id)
-        chs.tenant_control_id,
-        chs.standard_code,
-        COALESCE(chs.health_score, 0) AS health_score,
-        COALESCE(chs.evidence_score, 0) AS evidence_score,
-        COALESCE(chs.compliance_score, 0) AS compliance_score,
-        COALESCE(chs.findings_score, 0) AS findings_score,
-        COALESCE(chs.risk_score, 0) AS risk_score,
-        COALESCE(chs.action_score, 0) AS action_score,
-        COALESCE(chs.review_score, 0) AS review_score,
-        COALESCE(chs.evidence_count, 0) AS evidence_count,
-        COALESCE(chs.approved_evidence_count, 0) AS approved_evidence_count,
-        COALESCE(chs.pending_evidence_count, 0) AS pending_evidence_count,
-        COALESCE(chs.rejected_evidence_count, 0) AS rejected_evidence_count,
-        COALESCE(chs.open_findings_count, 0) AS open_findings_count,
-        COALESCE(chs.open_actions_count, 0) AS open_actions_count,
-        COALESCE(chs.overdue_actions_count, 0) AS overdue_actions_count,
-        COALESCE(chs.high_risks_count, 0) AS high_risks_count,
-        CASE
-          WHEN COALESCE(chs.health_score, 0) < 50 THEN 'deteriorado'
-          WHEN COALESCE(chs.health_score, 0) < 80 THEN 'atencion'
-          ELSE 'saludable'
-        END AS derived_health_status,
-        chs.calculated_at
-      FROM control_health_scores chs
-      INNER JOIN active_standards ast
-        ON ast.standard_code = chs.standard_code
-      WHERE chs.tenant_id = $1::uuid
-      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+        AND COALESCE(is_in_active_operational_scope, false) = true
     ),
     ranked AS (
       SELECT
@@ -1746,50 +1649,24 @@ async function getAuditFocusControls(tenantId) {
 async function getControlStatusRows(tenantId) {
   const rows = await safeQuery(
     `
-    WITH active_standards AS (
-      SELECT standard_code
-      FROM tenant_standards
-      WHERE tenant_id = $1::uuid
-        AND is_active = TRUE
-    ),
-    latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id)
-        chs.tenant_control_id,
-        chs.standard_code,
-        COALESCE(chs.health_score, 0) AS health_score,
-        CASE
-          WHEN COALESCE(chs.health_score, 0) < 50 THEN 'deteriorado'
-          WHEN COALESCE(chs.health_score, 0) < 80 THEN 'atencion'
-          ELSE 'saludable'
-        END AS derived_health_status,
-        COALESCE(chs.pending_evidence_count, 0) AS pending_evidence_count,
-        COALESCE(chs.open_findings_count, 0) AS open_findings_count,
-        COALESCE(chs.open_actions_count, 0) AS open_actions_count,
-        COALESCE(chs.overdue_actions_count, 0) AS overdue_actions_count,
-        COALESCE(chs.high_risks_count, 0) AS high_risks_count,
-        chs.calculated_at
-      FROM control_health_scores chs
-      INNER JOIN active_standards ast
-        ON ast.standard_code = chs.standard_code
-      WHERE chs.tenant_id = $1::uuid
-      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
-    )
     SELECT
-      derived_health_status AS health_status,
+      COALESCE(effective_health_status, 'sin_datos') AS health_status,
       COUNT(*)::int AS total,
-      ROUND(AVG(COALESCE(health_score, 0))::numeric, 1) AS average_score,
+      ROUND(AVG(COALESCE(effective_health_score, 0))::numeric, 1) AS average_score,
       SUM(pending_evidence_count)::int AS pending_evidence_count,
       SUM(open_findings_count)::int AS open_findings_count,
-      SUM(open_actions_count)::int AS open_actions_count,
-      SUM(overdue_actions_count)::int AS overdue_actions_count,
-      SUM(high_risks_count)::int AS high_risks_count
-    FROM latest_health
-    GROUP BY derived_health_status
+      SUM(open_action_plans_count)::int AS open_actions_count,
+      SUM(overdue_action_plans_count)::int AS overdue_actions_count,
+      SUM(CASE WHEN effective_health_status IN ('deteriorado', 'critico') THEN 1 ELSE 0 END)::int AS high_risks_count
+    FROM public.v_iso_control_effective_health
+    WHERE tenant_id = $1::uuid
+      AND COALESCE(is_in_active_operational_scope, false) = true
+    GROUP BY COALESCE(effective_health_status, 'sin_datos')
     ORDER BY
       CASE
-        WHEN derived_health_status = 'deteriorado' THEN 1
-        WHEN derived_health_status = 'atencion' THEN 2
-        WHEN derived_health_status = 'saludable' THEN 3
+        WHEN COALESCE(effective_health_status, 'sin_datos') IN ('critico', 'deteriorado') THEN 1
+        WHEN COALESCE(effective_health_status, 'sin_datos') = 'atencion' THEN 2
+        WHEN COALESCE(effective_health_status, 'sin_datos') = 'saludable' THEN 3
         ELSE 4
       END ASC
     `,

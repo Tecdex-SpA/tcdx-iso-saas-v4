@@ -340,15 +340,15 @@ async function getCoverageForTenantStandard({
         )
     ),
     latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id)
-        chs.tenant_control_id,
-        chs.health_status,
-        chs.health_score,
-        chs.calculated_at
-      FROM control_health_scores chs
-      WHERE chs.tenant_id = $1::uuid
-        AND chs.standard_code = $2
-      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+      SELECT
+        veh.tenant_control_id,
+        veh.effective_health_status AS health_status,
+        veh.effective_health_score AS health_score,
+        NULL::timestamp AS calculated_at
+      FROM public.v_iso_control_effective_health veh
+      WHERE veh.tenant_id = $1::uuid
+        AND veh.iso = $2
+        AND COALESCE(veh.is_in_active_operational_scope, false) = true
     ),
     health_stats AS (
       SELECT

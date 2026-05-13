@@ -967,7 +967,7 @@ function buildOperationalAlerts({ standards, actionsPanel, risksPanel, kpisPanel
       type: 'kpi',
       title: 'KPIs en rojo',
       message: `${kpisPanel.summary.red} KPI(s) requieren revision ejecutiva.`,
-      route: '/dashboard-kpi',
+      route: '/dashboard?view=kpi',
     });
   }
 

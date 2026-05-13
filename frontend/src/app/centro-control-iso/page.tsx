@@ -1,10 +1,5 @@
-import AppLayout from '@/components/AppLayout';
-import CombinedIsoCommandCenter from '@/components/centro-control-iso/CombinedIsoCommandCenter';
+import { redirect } from 'next/navigation';
 
-export default function CentroControlIsoPage() {
-  return (
-    <AppLayout>
-      <CombinedIsoCommandCenter />
-    </AppLayout>
-  );
+export default function CentroControlIsoLegacyPage() {
+  redirect('/dashboard?view=iso');
 }
