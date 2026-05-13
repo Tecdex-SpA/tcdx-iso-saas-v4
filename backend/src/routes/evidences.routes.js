@@ -1216,15 +1216,11 @@ router.post('/:id/mark-official', auth, async (req, res) => {
     const evidenceResult = await client.query(
       `
       SELECT
-        e.*,
-        tc.id AS resolved_tenant_control_id,
-        tc.tenant_id AS control_tenant_id
+        e.*
       FROM evidences e
-      LEFT JOIN tenant_controls tc
-        ON tc.id = e.tenant_control_id
       WHERE e.id = $1
         AND e.tenant_id = $2
-      FOR UPDATE
+      FOR UPDATE OF e
       `,
       [evidenceId, tenantId]
     );
@@ -1247,6 +1243,24 @@ router.post('/:id/mark-official', auth, async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'La evidencia no tiene tenant_control_id asociado'
+      });
+    }
+
+    const controlResult = await client.query(
+      `
+      SELECT id
+      FROM tenant_controls
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+      `,
+      [evidence.tenant_control_id, tenantId]
+    );
+
+    if (controlResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'El control asociado no pertenece al tenant indicado'
       });
     }
 
