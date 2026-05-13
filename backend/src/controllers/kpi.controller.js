@@ -1326,6 +1326,141 @@ async function getDashboardByTenant(req, res) {
   }
 }
 
+
+async function getEffectiveHealthSummaryByTenant(req, res) {
+  try {
+    const tenantId = req.params.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenantId es requerido' });
+    }
+
+    if (!canAccessTenant(req, tenantId)) {
+      return denyTenantAccess(res);
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT
+        tenant_id,
+        iso,
+        operation_id,
+        operation_name,
+        operation_code,
+        operation_type,
+        total_controls,
+        active_scope_controls,
+        out_of_scope_controls,
+        complies_controls,
+        partial_controls,
+        non_compliant_or_no_data_controls,
+        healthy_controls,
+        attention_controls,
+        deteriorated_controls,
+        controls_with_official_evidence,
+        controls_with_approved_non_official_evidence,
+        controls_without_evidence,
+        approved_evidence_count,
+        official_evidence_count,
+        open_findings_count,
+        open_nonconformities_count,
+        open_action_plans_count,
+        overdue_action_plans_count,
+        avg_effective_health_score,
+        compliance_percentage,
+        official_evidence_percentage,
+        kpi_health_status,
+        kpi_trace_json
+      FROM public.v_iso_effective_kpi_summary
+      WHERE tenant_id = $1
+      ORDER BY
+        CASE WHEN active_scope_controls > 0 THEN 0 ELSE 1 END,
+        iso,
+        operation_name
+      `,
+      [tenantId]
+    );
+
+    const summary = rows.map((row) => ({
+      tenant_id: row.tenant_id,
+      iso: row.iso,
+      operation_id: row.operation_id,
+      operation_name: row.operation_name,
+      operation_code: row.operation_code,
+      operation_type: row.operation_type,
+
+      total_controls: Number(row.total_controls || 0),
+      active_scope_controls: Number(row.active_scope_controls || 0),
+      out_of_scope_controls: Number(row.out_of_scope_controls || 0),
+
+      complies_controls: Number(row.complies_controls || 0),
+      partial_controls: Number(row.partial_controls || 0),
+      non_compliant_or_no_data_controls: Number(row.non_compliant_or_no_data_controls || 0),
+
+      healthy_controls: Number(row.healthy_controls || 0),
+      attention_controls: Number(row.attention_controls || 0),
+      deteriorated_controls: Number(row.deteriorated_controls || 0),
+
+      controls_with_official_evidence: Number(row.controls_with_official_evidence || 0),
+      controls_with_approved_non_official_evidence: Number(row.controls_with_approved_non_official_evidence || 0),
+      controls_without_evidence: Number(row.controls_without_evidence || 0),
+
+      approved_evidence_count: Number(row.approved_evidence_count || 0),
+      official_evidence_count: Number(row.official_evidence_count || 0),
+
+      open_findings_count: Number(row.open_findings_count || 0),
+      open_nonconformities_count: Number(row.open_nonconformities_count || 0),
+      open_action_plans_count: Number(row.open_action_plans_count || 0),
+      overdue_action_plans_count: Number(row.overdue_action_plans_count || 0),
+
+      avg_effective_health_score:
+        row.avg_effective_health_score === null || row.avg_effective_health_score === undefined
+          ? null
+          : Number(row.avg_effective_health_score),
+
+      compliance_percentage:
+        row.compliance_percentage === null || row.compliance_percentage === undefined
+          ? null
+          : Number(row.compliance_percentage),
+
+      official_evidence_percentage:
+        row.official_evidence_percentage === null || row.official_evidence_percentage === undefined
+          ? null
+          : Number(row.official_evidence_percentage),
+
+      kpi_health_status: row.kpi_health_status || 'sin_datos',
+      kpi_trace_json: row.kpi_trace_json || null
+    }));
+
+    const activeSummary = summary.filter((row) => row.active_scope_controls > 0);
+
+    return res.json({
+      ok: true,
+      tenant_id: tenantId,
+      source: 'public.v_iso_effective_kpi_summary',
+      total_rows: summary.length,
+      active_rows: activeSummary.length,
+      summary,
+      active_summary: activeSummary
+    });
+  } catch (err) {
+    console.error('GET KPI EFFECTIVE HEALTH SUMMARY ERROR:', err);
+
+    if (err && err.code === '42P01') {
+      return res.status(503).json({
+        error: 'Vista de salud efectiva ISO no disponible',
+        detail: 'Falta public.v_iso_effective_kpi_summary en la base de datos.'
+      });
+    }
+
+    return res.status(500).json({
+      error: 'Error obteniendo resumen efectivo de salud ISO',
+      detail: err.message
+    });
+  }
+}
+
+
 async function getAdminListByTenant(req, res) {
   try {
     const tenantId = req.params.tenantId;
@@ -2076,6 +2211,7 @@ async function deleteCustomKpi(req, res) {
 module.exports = {
   getCatalogByTenant,
   getDashboardByTenant,
+  getEffectiveHealthSummaryByTenant,
   getAdminListByTenant,
   createCustomKpi,
   deleteCustomKpi,

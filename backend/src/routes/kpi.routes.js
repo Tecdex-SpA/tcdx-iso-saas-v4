@@ -6,6 +6,7 @@ const { calculateAllKPIs } = require('../services/kpi.engine');
 const {
   getCatalogByTenant,
   getDashboardByTenant,
+  getEffectiveHealthSummaryByTenant,
   getAdminListByTenant,
   createCustomKpi,
   updateCustomKpi,
@@ -21,6 +22,7 @@ const {
 
 router.post('/recalculate/:tenantId', auth, recalculateTenantKpis);
 router.get('/dashboard/:tenantId', auth, getDashboardByTenant);
+router.get('/effective-health-summary/:tenantId', auth, getEffectiveHealthSummaryByTenant);
 
 /* =========================
    ADMINISTRACIÓN KPI
