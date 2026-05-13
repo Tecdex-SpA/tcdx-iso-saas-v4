@@ -266,7 +266,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         ),
       },
       {
-        href: '/centro-control-iso',
+        href: '/dashboard?view=iso',
         label: 'Centro Control ISO',
         show: !isDealer,
         icon: (

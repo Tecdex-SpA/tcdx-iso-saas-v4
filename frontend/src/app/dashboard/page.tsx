@@ -1,15 +1,16 @@
 'use client';
 
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
-import DashboardV2 from '@/components/dashboard-v2/DashboardV2';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
@@ -31,6 +32,16 @@ import {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
+type DashboardView = 'executive' | 'kpi' | 'iso';
+
+type IsoSuggestedAction = {
+  title: string;
+  description: string;
+  severity: 'critico' | 'alto' | 'medio';
+  source: string;
+  href: string;
+  cta: string;
+};
 
 type EffectiveIsoHealthRow = {
   tenant_id?: string;
@@ -63,6 +74,12 @@ type EffectiveIsoHealthRow = {
   kpi_health_status?: string | null;
 };
 
+function normalizeDashboardView(value?: string | null): DashboardView {
+  return value === 'kpi' || value === 'iso' || value === 'executive'
+    ? value
+    : 'executive';
+}
+
 function toSafeNumber(value: unknown): number {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
@@ -87,9 +104,147 @@ function getEffectiveHealthTone(value?: string | null): string {
   if (normalized === 'atencion') return 'border-amber-200 bg-amber-50 text-amber-700';
   if (normalized === 'critico') return 'border-red-200 bg-red-50 text-red-700';
   if (normalized === 'deteriorado') return 'border-rose-200 bg-rose-50 text-rose-700';
-  if (normalized === 'sin_alcance') return 'border-slate-200 bg-slate-50 text-slate-500';
+  if (normalized === 'sin_alcance' || normalized === 'fuera_alcance' || normalized === 'no_aplicable') {
+    return 'border-slate-200 bg-slate-50 text-slate-500';
+  }
 
   return 'border-slate-200 bg-slate-50 text-slate-600';
+}
+
+function getEffectiveStatusRank(value?: string | null): number {
+  const normalized = String(value || '').toLowerCase();
+
+  if (normalized === 'critico') return 5;
+  if (normalized === 'deteriorado') return 4;
+  if (normalized === 'atencion') return 3;
+  if (normalized === 'saludable') return 1;
+  return 0;
+}
+
+function resolveGlobalEffectiveStatus(rows: EffectiveIsoHealthRow[]): string {
+  if (rows.length === 0) return 'sin_datos';
+
+  return rows.reduce((status, row) => {
+    return getEffectiveStatusRank(row.kpi_health_status) > getEffectiveStatusRank(status)
+      ? row.kpi_health_status || status
+      : status;
+  }, rows[0]?.kpi_health_status || 'sin_datos');
+}
+
+function getEffectiveCompliancePercent(row: EffectiveIsoHealthRow): number | null {
+  if (row.compliance_percentage !== null && row.compliance_percentage !== undefined) {
+    return toSafeNumber(row.compliance_percentage);
+  }
+
+  const activeControls = toSafeNumber(row.active_scope_controls);
+  if (activeControls <= 0) return null;
+
+  return Math.round((toSafeNumber(row.complies_controls) / activeControls) * 10000) / 100;
+}
+
+function getEffectiveOfficialEvidencePercent(row: EffectiveIsoHealthRow): number | null {
+  if (row.official_evidence_percentage !== null && row.official_evidence_percentage !== undefined) {
+    return toSafeNumber(row.official_evidence_percentage);
+  }
+
+  const activeControls = toSafeNumber(row.active_scope_controls);
+  if (activeControls <= 0) return null;
+
+  return Math.round((toSafeNumber(row.controls_with_official_evidence) / activeControls) * 10000) / 100;
+}
+
+function formatIsoPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'Sin alcance';
+  }
+
+  return `${Number(value).toFixed(Number(value) % 1 === 0 ? 0 : 2)}%`;
+}
+
+function formatIsoScore(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'Sin dato';
+  }
+
+  return Number(value).toFixed(Number(value) % 1 === 0 ? 0 : 2);
+}
+
+function buildIsoSuggestedActions(rows: EffectiveIsoHealthRow[]): IsoSuggestedAction[] {
+  const actions: IsoSuggestedAction[] = [];
+
+  rows.forEach((row) => {
+    const iso = row.iso || 'ISO';
+    const operation = row.operation_name || row.operation_code || 'Operación activa';
+    const isoParam = encodeURIComponent(iso);
+    const withoutEvidence = toSafeNumber(row.controls_without_evidence);
+    const overduePlans = toSafeNumber(row.overdue_action_plans_count);
+    const compliance = getEffectiveCompliancePercent(row);
+    const officialEvidence = getEffectiveOfficialEvidencePercent(row);
+    const status = String(row.kpi_health_status || '').toLowerCase();
+    const source = 'public.v_iso_effective_kpi_summary';
+
+    if (withoutEvidence > 0) {
+      actions.push({
+        title: `Regularizar evidencia oficial en ${iso} / ${operation}`,
+        description: `${withoutEvidence} controles activos no tienen evidencia asociada en el alcance operativo.`,
+        severity: withoutEvidence >= 20 || status === 'critico' ? 'critico' : 'alto',
+        source,
+        href: `/evidencias?iso=${isoParam}`,
+        cta: 'Revisar evidencias',
+      });
+    }
+
+    if (overduePlans > 0) {
+      actions.push({
+        title: `Resolver planes vencidos en ${iso}`,
+        description: `${overduePlans} plan(es) vencido(s) afectan la lectura efectiva de salud.`,
+        severity: 'critico',
+        source,
+        href: `/plan-accion?iso=${isoParam}`,
+        cta: 'Abrir planes',
+      });
+    }
+
+    if (compliance !== null && compliance < 60) {
+      actions.push({
+        title: `Priorizar cierre de brechas en ${iso} / ${operation}`,
+        description: `Cumplimiento efectivo actual: ${formatIsoPercent(compliance)} sobre controles activos en alcance.`,
+        severity: compliance < 25 ? 'critico' : 'alto',
+        source,
+        href: `/controles?iso=${isoParam}`,
+        cta: 'Ver controles',
+      });
+    }
+
+    if (officialEvidence !== null && officialEvidence < 50) {
+      actions.push({
+        title: `Elevar evidencia oficial en ${iso}`,
+        description: `Evidencia oficial efectiva: ${formatIsoPercent(officialEvidence)}. Prioriza respaldos aprobados y trazables.`,
+        severity: officialEvidence < 20 ? 'alto' : 'medio',
+        source,
+        href: `/evidencias?iso=${isoParam}`,
+        cta: 'Completar evidencia',
+      });
+    }
+  });
+
+  if (rows.some((row) => String(row.kpi_health_status || '').toLowerCase() === 'critico')) {
+    actions.push({
+      title: 'Ejecutar revisión IA Auditor sobre normas críticas',
+      description: 'Usa el estado efectivo para enfocar la revisión automática en las operaciones con mayor deterioro.',
+      severity: 'alto',
+      source: 'public.v_iso_effective_kpi_summary',
+      href: '/ia-auditor',
+      cta: 'Abrir IA Auditor',
+    });
+  }
+
+  return actions
+    .sort((a, b) => {
+      const rank = { critico: 3, alto: 2, medio: 1 };
+      return rank[b.severity] - rank[a.severity];
+    })
+    .slice(0, 6);
 }
 
 type AuditItem = {
@@ -544,6 +699,26 @@ function formatKpiValue(value: number | string | null | undefined, unit?: string
 }
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardPageFallback />}>
+      <DashboardPageContent />
+    </Suspense>
+  );
+}
+
+function DashboardPageFallback() {
+  return (
+    <AppLayout>
+      <div className="min-h-screen bg-[#f5f7fb] p-6">
+        <div className="mx-auto max-w-[1720px] rounded-lg border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
+          Cargando dashboard...
+        </div>
+      </div>
+    </AppLayout>
+  );
+}
+
+function DashboardPageContent() {
   function getKpiCategoryLabel(category?: string | null) {
     const normalized = String(category || 'otros').toLowerCase();
     const key = `dashboardKpi.categories.${normalized}`;
@@ -559,15 +734,29 @@ export default function DashboardPage() {
   }
 
   const { locale, t } = useTranslation();
-  const [activeView, setActiveView] = useState<'executive' | 'kpi' | 'iso'>('executive');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedView = normalizeDashboardView(searchParams.get('view'));
+  const [activeView, setActiveView] = useState<DashboardView>(requestedView);
 
   useEffect(() => {
-    const view = new URLSearchParams(window.location.search).get('view');
+    setActiveView(requestedView);
+  }, [requestedView]);
 
-    if (view === 'executive' || view === 'kpi' || view === 'iso') {
-      setActiveView(view);
+  const handleViewChange = useCallback((view: DashboardView) => {
+    setActiveView(view);
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (view === 'executive') {
+      nextParams.delete('view');
+    } else {
+      nextParams.set('view', view);
     }
-  }, []);
+
+    const query = nextParams.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   const currentRole = getUserRoleFromToken();
 
@@ -738,12 +927,8 @@ export default function DashboardPage() {
   useEffect(() => {
     loadEffectiveHealthSummary();
     loadExecutiveDashboard();
-  }, [loadEffectiveHealthSummary, loadExecutiveDashboard]);
-
-  useEffect(() => {
-    if (activeView !== 'kpi') return;
     loadKpiDashboard();
-  }, [activeView, loadKpiDashboard]);
+  }, [loadEffectiveHealthSummary, loadExecutiveDashboard, loadKpiDashboard]);
 
   const handleRefreshDashboard = async () => {
     try {
@@ -751,11 +936,8 @@ export default function DashboardPage() {
       await Promise.all([
         loadEffectiveHealthSummary(),
         loadExecutiveDashboard(),
+        loadKpiDashboard(),
       ]);
-
-      if (activeView === 'kpi') {
-        await loadKpiDashboard();
-      }
     } finally {
       setRefreshingExecutive(false);
     }
@@ -1133,6 +1315,62 @@ export default function DashboardPage() {
       ? Math.round((effectiveOfficialEvidenceControls / effectiveTotalActiveControls) * 100)
       : 0;
 
+  const effectiveAverageHealthScore = useMemo(() => {
+    const rowsWithScore = effectiveActiveRows.filter(
+      (row) => row.avg_effective_health_score !== null && row.avg_effective_health_score !== undefined
+    );
+
+    const totalWeight = rowsWithScore.reduce(
+      (acc, row) => acc + Math.max(1, toSafeNumber(row.active_scope_controls)),
+      0
+    );
+
+    if (totalWeight <= 0) return null;
+
+    const weighted = rowsWithScore.reduce((acc, row) => {
+      return acc + toSafeNumber(row.avg_effective_health_score) * Math.max(1, toSafeNumber(row.active_scope_controls));
+    }, 0);
+
+    return Math.round((weighted / totalWeight) * 100) / 100;
+  }, [effectiveActiveRows]);
+
+  const effectiveGlobalStatus = useMemo(
+    () => resolveGlobalEffectiveStatus(effectiveActiveRows),
+    [effectiveActiveRows]
+  );
+
+  const effectivePriorityRows = useMemo(() => {
+    return [...effectiveActiveRows].sort((a, b) => {
+      const statusDiff = getEffectiveStatusRank(b.kpi_health_status) - getEffectiveStatusRank(a.kpi_health_status);
+      if (statusDiff !== 0) return statusDiff;
+
+      const overdueDiff = toSafeNumber(b.overdue_action_plans_count) - toSafeNumber(a.overdue_action_plans_count);
+      if (overdueDiff !== 0) return overdueDiff;
+
+      const complianceDiff =
+        toSafeNumber(getEffectiveCompliancePercent(a)) - toSafeNumber(getEffectiveCompliancePercent(b));
+      if (complianceDiff !== 0) return complianceDiff;
+
+      const evidenceDiff =
+        toSafeNumber(getEffectiveOfficialEvidencePercent(a)) - toSafeNumber(getEffectiveOfficialEvidencePercent(b));
+      if (evidenceDiff !== 0) return evidenceDiff;
+
+      return toSafeNumber(b.controls_without_evidence) - toSafeNumber(a.controls_without_evidence);
+    });
+  }, [effectiveActiveRows]);
+
+  const isoSuggestedActions = useMemo(
+    () => buildIsoSuggestedActions(effectivePriorityRows),
+    [effectivePriorityRows]
+  );
+
+  const executiveComplianceValue =
+    effectiveTotalActiveControls > 0 ? effectiveCompliancePercent : complianceValue;
+  const executiveHealthyControls =
+    effectiveTotalActiveControls > 0 ? effectiveCompliesControls : cumple;
+  const executiveTotalControls =
+    effectiveTotalActiveControls > 0 ? effectiveTotalActiveControls : totalControls;
+
   const auditTimelineItems = useMemo(() => {
     const recent = Array.isArray(auditSummary?.recent_audits)
       ? auditSummary.recent_audits
@@ -1214,7 +1452,7 @@ export default function DashboardPage() {
               <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
                 <button
                   type="button"
-                  onClick={() => setActiveView('executive')}
+                  onClick={() => handleViewChange('executive')}
                   className={[
                     'rounded-md px-4 py-2 text-sm font-semibold transition',
                     activeView === 'executive'
@@ -1227,7 +1465,7 @@ export default function DashboardPage() {
 
                 <button
                   type="button"
-                  onClick={() => setActiveView('kpi')}
+                  onClick={() => handleViewChange('kpi')}
                   className={[
                     'rounded-md px-4 py-2 text-sm font-semibold transition',
                     activeView === 'kpi'
@@ -1240,7 +1478,7 @@ export default function DashboardPage() {
 
                 <button
                   type="button"
-                  onClick={() => setActiveView('iso')}
+                  onClick={() => handleViewChange('iso')}
                   className={[
                     'rounded-md px-4 py-2 text-sm font-semibold transition',
                     activeView === 'iso'
@@ -1248,7 +1486,7 @@ export default function DashboardPage() {
                       : 'text-slate-600 hover:bg-slate-100',
                   ].join(' ')}
                 >
-                  Operacion ISO
+                  Centro Control ISO
                 </button>
               </div>
 
@@ -1304,22 +1542,22 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
                     <TopCard
                       title={t('dashboard.globalCompliance')}
-                      value={`${complianceValue}%`}
+                      value={`${executiveComplianceValue}%`}
                       subtitle={t('dashboard.globalComplianceSubtitle')}
                       accent="indigo"
-                      change={`↑ ${Math.max(1, Math.round(complianceValue * 0.03))}%`}
-                      changeHint={t('dashboard.previousMeasurement')}
+                      change={`ISO ${mapEffectiveHealthLabel(effectiveGlobalStatus)}`}
+                      changeHint="Lectura efectiva en alcance"
                       icon={<TcdxIcon name="shield" className="h-6 w-6" />}
-                      ringValue={complianceValue}
+                      ringValue={executiveComplianceValue}
                     />
 
                     <TopCard
                       title={t('dashboard.healthyControls')}
-                      value={`${cumple} / ${totalControls || 0}`}
+                      value={`${executiveHealthyControls} / ${executiveTotalControls || 0}`}
                       subtitle={t('dashboard.healthyControlsSubtitle')}
                       accent="indigo"
-                      change={t('dashboard.ofTotal', { value: completionPct })}
-                      changeHint={t('dashboard.currentAssessment')}
+                      change={t('dashboard.ofTotal', { value: executiveComplianceValue })}
+                      changeHint="Controles activos en alcance"
                       icon={<TcdxIcon name="activity" className="h-6 w-6" />}
                     />
 
@@ -1356,6 +1594,16 @@ export default function DashboardPage() {
                     officialEvidencePercent={effectiveOfficialEvidencePercent}
                   />
 
+                  {totalKpis > 0 && (
+                    <ExecutiveKpiPulse
+                      score={scoreKpiGlobal}
+                      coverage={kpiCoveragePct}
+                      red={kpiSummary?.red || 0}
+                      gray={kpiSummary?.gray || 0}
+                      health={kpiSummary?.health_kpis || healthKpiItems.length}
+                    />
+                  )}
+
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.05fr_1fr_1.22fr]">
                     <StandardHealthPanel rows={standardHealthRows} />
                     <AuditTimelinePanel items={auditTimelineItems} />
@@ -1371,308 +1619,8 @@ export default function DashboardPage() {
                     />
                     <ExecutiveReportPanel
                       period={latestSyncText}
-                      complianceValue={complianceValue}
+                      complianceValue={executiveComplianceValue}
                     />
-                  </div>
-
-                  <div className="hidden">
-                  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,1fr)]">
-                    <div className="grid grid-cols-1 gap-4">
-                      <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-              
-          <div className="mb-5 flex items-center justify-between">
-                          <div>
-                            <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">
-                              Estado de Cumplimiento
-                            </h2>
-                            <p className="mt-1 text-sm text-slate-500">
-                              Fuente principal: controles inicializados y evaluaciones del tenant.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)_250px] xl:items-center">
-                          <div className="relative mx-auto h-[260px] w-full max-w-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <PieChart>
-                                <Pie
-                                  data={donutData}
-                                  dataKey="value"
-                                  nameKey="name"
-                                  innerRadius={62}
-                                  outerRadius={95}
-                                  paddingAngle={3}
-                                  stroke="#ffffff"
-                                  strokeWidth={4}
-                                >
-                                  {donutData.map((_, index) => (
-                                    <Cell key={index} fill={donutColors[index]} />
-                                  ))}
-                                </Pie>
-                                <Tooltip formatter={(value: any, name: any) => [value, name]} />
-                              </PieChart>
-                            </ResponsiveContainer>
-
-                            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                              <div className="text-5xl font-bold tracking-tight text-slate-900">
-                                {complianceValue}%
-                              </div>
-                              <div className="mt-1 text-base font-medium text-slate-500">
-                                Cumplimiento
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-5">
-                            <LegendRow
-                              label="Cumplido"
-                              value={`${completionPct}%`}
-                              color="bg-green-600"
-                              extra={`${cumple} controles`}
-                            />
-                            <LegendRow
-                              label="En Proceso"
-                              value={`${progressPct}%`}
-                              color="bg-amber-400"
-                              extra={`${parcial} controles`}
-                            />
-                            <LegendRow
-                              label="No Cumplido"
-                              value={`${failPct}%`}
-                              color="bg-red-500"
-                              extra={`${noCumple} controles`}
-                            />
-                          </div>
-
-                          <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] p-4">
-                            <div className="mb-3 text-sm font-semibold text-slate-500">
-                              Tendencia estimada
-                            </div>
-                            <div className="h-[170px]">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={complianceTrend}>
-                                  <CartesianGrid vertical={false} stroke="#eef2f7" />
-                                  <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} hide />
-                                  <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
-                                  <Tooltip />
-                                  <Line
-                                    type="monotone"
-                                    dataKey="value"
-                                    stroke="#22c55e"
-                                    strokeWidth={3}
-                                    dot={{ r: 4, fill: '#16a34a' }}
-                                    activeDot={{ r: 6 }}
-                                  />
-                                </LineChart>
-                              </ResponsiveContainer>
-                            </div>
-
-                            <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-medium text-slate-600">
-                              Riesgo global:{' '}
-                              <span className={riesgoColor(globalRiskLabel)}>
-                                {globalRiskLabel}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </section>
-
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-                        <MiniCard
-                          title="Hallazgos"
-                          mainValue={openFindingsCount}
-                          mainLabel="Abiertos"
-                          sideValue={noCumple}
-                          sideLabel="Críticos"
-                          tone="violet"
-                          footer={`Fuente visible: ${noCumple} controles no conformes`}
-                          href="/hallazgos"
-                        />
-
-                        <MiniCard
-                          title="Planes"
-                          mainValue={activeActionPlans}
-                          mainLabel="Activos"
-                          sideValue={overdueActionPlans}
-                          sideLabel="Atrasados"
-                          tone="amber"
-                          footer={`Total: ${actionPlans.length} planes`}
-                          href="/plan-accion"
-                        />
-
-                        <MiniCard
-                          title="Riesgos"
-                          mainValue={highRisks}
-                          mainLabel="Altos"
-                          sideValue={highRisks + mediumRisks + lowRisks}
-                          sideLabel="Totales"
-                          tone="red"
-                          footer="Evaluación consolidada"
-                          href="/matriz-riesgo"
-                        />
-
-                        <MiniCard
-                          title="Auditorías"
-                          mainValue={nextAudits.length}
-                          mainLabel="Próximas"
-                          sideValue={upcomingAuditBars[0]?.value || 0}
-                          sideLabel="En 7 días"
-                          tone="indigo"
-                          footer="Agenda del período"
-                          href="/auditorias"
-                        />
-
-                        <MiniCard
-                          title="NC"
-                          mainValue={openNcCount}
-                          mainLabel="Abiertas"
-                          sideValue={closedNcCount}
-                          sideLabel="Resueltas"
-                          tone="rose"
-                          footer="Seguimiento de no conformidades"
-                          href="/no-conformidades"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4">
-                      <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                        <div className="mb-4 flex items-center justify-between">
-                          <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">
-                            Vencimientos Próximos
-                          </h2>
-
-                          <a
-                            href="/auditorias"
-                            className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
-                          >
-                            <span>Ver calendario</span>
-                            <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
-                          </a>
-                        </div>
-
-                        <div className="h-[260px]">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={upcomingAuditBars}>
-                              <CartesianGrid vertical={false} stroke="#e5e7eb" />
-                              <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} tickLine={false} axisLine={false} />
-                              <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                              <Tooltip content={<UpcomingAuditsTooltip />} />
-                              <Bar dataKey="value" radius={[10, 10, 0, 0]}>
-                                {upcomingAuditBars.map((entry, index) => (
-                                  <Cell key={index} fill={entry.fill} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </section>
-
-                      <section className="rounded-[30px] border border-slate-200 bg-[linear-gradient(135deg,#0b1b46_0%,#0b1636_55%,#081226_100%)] p-6 text-white shadow-[0_16px_40px_rgba(2,8,23,0.22)]">
-                        <h2 className="mb-5 text-2xl font-semibold">Acciones rápidas</h2>
-
-                        <div className="space-y-3">
-                          <QuickActionButton href="/plan-accion" label="Nuevo Plan de Acción" />
-                          <QuickActionButton href="/evidencias" label="Registrar Evidencia" />
-                          <QuickActionButton href="/no-conformidades" label="Crear No Conformidad" />
-                          <QuickActionButton href="/auditorias" label="Gestionar Auditoría" />
-                        </div>
-                      </section>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
-                    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                      <div className="mb-4 flex items-center justify-between">
-                        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                          Resumen por Norma
-                        </h2>
-
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                          {isoCards.length} norma(s)
-                        </span>
-                      </div>
-
-                      {isoCards.length === 0 ? (
-                        <div className="text-slate-500">No hay normas con datos aún.</div>
-                      ) : (
-                        <div className="space-y-4">
-                          {isoCards.map((item) => (
-                            <div
-                              key={item.iso}
-                              className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-4 transition hover:shadow-sm"
-                            >
-                              <div className="mb-3 flex items-center justify-between gap-4">
-                                <div className="font-semibold text-slate-900">{item.iso}</div>
-                                <div className="text-sm font-semibold text-indigo-600">
-                                  {item.percent}% cumplimiento
-                                </div>
-                              </div>
-
-                              <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-blue-500"
-                                  style={{ width: `${item.percent}%` }}
-                                />
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                                <StatChip label="Total" value={item.total} color="text-slate-900" />
-                                <StatChip label="OK" value={item.ok} color="text-emerald-600" />
-                                <StatChip label="Parcial" value={item.partial} color="text-amber-600" />
-                                <StatChip label="Crítico" value={item.critical} color="text-rose-600" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-
-                    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                      <div className="mb-4 flex items-center justify-between">
-                        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                          Planes de Acción Activos
-                        </h2>
-
-                        <a
-                          href="/plan-accion"
-                          className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
-                        >
-                          <span>Ver todos</span>
-                          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
-                        </a>
-                      </div>
-
-                      {actionPlans.length === 0 ? (
-                        <div className="text-slate-500">No hay planes registrados.</div>
-                      ) : (
-                        <div className="space-y-3">
-                          {actionPlans
-                            .filter((item) => {
-                              const normalized = normalizeActionStatus(item.status);
-                              return normalized !== 'completado' && normalized !== 'cancelado';
-                            })
-                            .slice(0, 6)
-                            .map((item) => (
-                              <ActionPlanRowCard key={item.id} item={item} />
-                            ))}
-                        </div>
-                      )}
-                    </section>
-                  </div>
-
-                  <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <BottomMetric label="Controles contratados" value={contractedControls} />
-                      <BottomMetric label="Normas activas" value={activeNorms} />
-                      <BottomMetric
-                        label="Riesgo global"
-                        value={globalRiskLabel}
-                        className={riesgoColor(globalRiskLabel)}
-                      />
-                      <BottomMetric label="% Riesgo" value={`${globalRiskValue}%`} />
-                    </div>
-                  </section>
                   </div>
                 </>
               )}
@@ -1698,19 +1646,23 @@ export default function DashboardPage() {
                       className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
                     >{t('dashboardKpi.viewHealth')}</a>
 
-                    <a
-                      href="/administrar-kpis"
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                    >{t('dashboardKpi.administerKpis')}</a>
+                    {canManageKpis && (
+                      <>
+                        <a
+                          href="/administrar-kpis"
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                        >{t('dashboardKpi.administerKpis')}</a>
 
-                    <button
-                      type="button"
-                      onClick={handleRecalculateKpis}
-                      disabled={recalculatingKpis || !canManageKpis}
-                      className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
-                    >
-                      {recalculatingKpis ? 'Recalculando...' : 'Recalcular KPIs'}
-                    </button>
+                        <button
+                          type="button"
+                          onClick={handleRecalculateKpis}
+                          disabled={recalculatingKpis}
+                          className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                        >
+                          {recalculatingKpis ? 'Recalculando...' : 'Recalcular KPIs'}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1907,13 +1859,15 @@ export default function DashboardPage() {
                           {t('dashboardKpi.categoryDistribution')}
                         </h2>
 
-                        <a
-                          href="/administrar-kpis"
-                          className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
-                        >
-                          <span>{t('dashboardKpi.manage')}</span>
-                          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
-                        </a>
+                        {canManageKpis && (
+                          <a
+                            href="/administrar-kpis"
+                            className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                          >
+                            <span>{t('dashboardKpi.manage')}</span>
+                            <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
+                          </a>
+                        )}
                       </div>
 
                       <div className="h-[300px]">
@@ -1988,13 +1942,15 @@ export default function DashboardPage() {
                         {t('dashboardKpi.allKpis')}
                       </h2>
 
-                      <a
-                        href="/administrar-kpis"
-                        className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
-                      >
-                        <span>Abrir administración</span>
-                        <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
-                      </a>
+                      {canManageKpis && (
+                        <a
+                          href="/administrar-kpis"
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                        >
+                          <span>Abrir administración</span>
+                          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
+                        </a>
+                      )}
                     </div>
 
                     {kpiItems.length === 0 ? (
@@ -2015,9 +1971,20 @@ export default function DashboardPage() {
           )}
 
           {activeView === 'iso' && (
-            <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-              <DashboardV2 />
-            </section>
+            <IsoControlCenterView
+              rows={effectiveActiveRows}
+              priorityRows={effectivePriorityRows}
+              suggestedActions={isoSuggestedActions}
+              loading={effectiveHealthLoading}
+              totalActiveControls={effectiveTotalActiveControls}
+              compliesControls={effectiveCompliesControls}
+              controlsWithoutEvidence={effectiveControlsWithoutEvidence}
+              overduePlans={effectiveOverduePlans}
+              compliancePercent={effectiveCompliancePercent}
+              officialEvidencePercent={effectiveOfficialEvidencePercent}
+              averageHealthScore={effectiveAverageHealthScore}
+              globalStatus={effectiveGlobalStatus}
+            />
           )}
         </div>
       </div>
@@ -2148,6 +2115,372 @@ function EffectiveIsoHealthSection({
         </>
       )}
     </section>
+  );
+}
+
+function ExecutiveKpiPulse({
+  score,
+  coverage,
+  red,
+  gray,
+  health,
+}: {
+  score: number;
+  coverage: number;
+  red: number;
+  gray: number;
+  health: number;
+}) {
+  return (
+    <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Pulso KPI</p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-950">Señales ejecutivas de desempeño</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Snapshot resumido de KPIs calculados, cobertura de medición y KPIs Health.
+          </p>
+        </div>
+        <a
+          href="/dashboard?view=kpi"
+          className="inline-flex w-fit rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+        >
+          Abrir Vista KPI
+        </a>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <PriorityMiniMetric label="Score KPI" value={`${score}%`} />
+        <PriorityMiniMetric label="Cobertura" value={`${coverage}%`} />
+        <PriorityMiniMetric label="Críticos" value={String(red)} />
+        <PriorityMiniMetric label="Sin datos" value={String(gray)} />
+        <PriorityMiniMetric label="Health" value={String(health)} />
+      </div>
+    </section>
+  );
+}
+
+function IsoControlCenterView({
+  rows,
+  priorityRows,
+  suggestedActions,
+  loading,
+  totalActiveControls,
+  compliesControls,
+  controlsWithoutEvidence,
+  overduePlans,
+  compliancePercent,
+  officialEvidencePercent,
+  averageHealthScore,
+  globalStatus,
+}: {
+  rows: EffectiveIsoHealthRow[];
+  priorityRows: EffectiveIsoHealthRow[];
+  suggestedActions: IsoSuggestedAction[];
+  loading: boolean;
+  totalActiveControls: number;
+  compliesControls: number;
+  controlsWithoutEvidence: number;
+  overduePlans: number;
+  compliancePercent: number;
+  officialEvidencePercent: number;
+  averageHealthScore: number | null;
+  globalStatus: string;
+}) {
+  const nonCompliantOrNoData = rows.reduce(
+    (acc, row) => acc + toSafeNumber(row.non_compliant_or_no_data_controls),
+    0
+  );
+
+  return (
+    <div className="space-y-5">
+      <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+        <div className="grid gap-0 xl:grid-cols-[minmax(0,1.4fr)_390px]">
+          <div className="p-6 lg:p-7">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+              Centro Control ISO
+            </p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+              Priorización táctica basada en salud ISO efectiva
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              Consolida controles activos en alcance operacional, evidencia oficial, hallazgos,
+              no conformidades y planes vencidos. Los datos fuera de alcance no deterioran los KPIs activos.
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <a href="/controles" className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                Ir a controles
+              </a>
+              <a href="/evidencias" className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
+                Revisar evidencias
+              </a>
+              <a href="/plan-accion" className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
+                Planes de acción
+              </a>
+              <a href="/ia-auditor" className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100">
+                IA Auditor
+              </a>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 bg-slate-950 p-6 text-white xl:border-l xl:border-t-0">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Estado global efectivo</div>
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <span className="text-5xl font-bold tracking-tight">{formatIsoScore(averageHealthScore)}</span>
+              <span className={`mb-1 rounded-full border px-3 py-1 text-xs font-semibold ${getEffectiveHealthTone(globalStatus)}`}>
+                {mapEffectiveHealthLabel(globalStatus)}
+              </span>
+            </div>
+            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/12">
+              <div
+                className="h-full rounded-full bg-blue-400"
+                style={{ width: `${Math.max(4, Math.min(100, Number(averageHealthScore || 0)))}%` }}
+              />
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3 text-xs">
+              <DarkIsoMetric label="Operaciones evaluadas" value={rows.length} />
+              <DarkIsoMetric label="Controles activos" value={totalActiveControls} />
+              <DarkIsoMetric label="Cumplimiento" value={`${compliancePercent}%`} />
+              <DarkIsoMetric label="Evidencia oficial" value={`${officialEvidencePercent}%`} />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {loading ? (
+        <section className="rounded-[30px] border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+          Cargando Centro Control ISO...
+        </section>
+      ) : rows.length === 0 ? (
+        <section className="rounded-[30px] border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+          No hay normas u operaciones activas con salud ISO efectiva para priorizar.
+        </section>
+      ) : (
+        <>
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-6">
+            <IsoMetricCard label="Normas/operaciones activas" value={rows.length} helper="active_summary" tone="indigo" />
+            <IsoMetricCard label="Controles en alcance" value={totalActiveControls} helper="No incluye fuera de alcance" tone="indigo" />
+            <IsoMetricCard label="Cumplimiento efectivo" value={`${compliancePercent}%`} helper={`${compliesControls} cumplen`} tone="green" />
+            <IsoMetricCard label="Evidencia oficial" value={`${officialEvidencePercent}%`} helper="Respaldos oficiales" tone="green" />
+            <IsoMetricCard label="Sin evidencia" value={controlsWithoutEvidence} helper="Acción documental" tone="amber" />
+            <IsoMetricCard label="Planes vencidos" value={overduePlans} helper="Impacto operativo" tone="red" />
+          </section>
+
+          <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-2xl font-semibold tracking-tight text-slate-950">Matriz efectiva por norma y operación</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Lectura operacional desde public.v_iso_effective_kpi_summary.
+                </p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                {nonCompliantOrNoData} no cumplen o sin datos
+              </span>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="min-w-[1120px] w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left">ISO / operación</th>
+                    <th className="px-4 py-3 text-right">Activos</th>
+                    <th className="px-4 py-3 text-right">Cumple</th>
+                    <th className="px-4 py-3 text-right">Parcial</th>
+                    <th className="px-4 py-3 text-right">Sin datos / no cumple</th>
+                    <th className="px-4 py-3 text-right">Evidencia oficial</th>
+                    <th className="px-4 py-3 text-right">Sin evidencia</th>
+                    <th className="px-4 py-3 text-right">Planes vencidos</th>
+                    <th className="px-4 py-3 text-right">Salud</th>
+                    <th className="px-4 py-3 text-right">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {rows.map((row) => (
+                    <IsoControlRow key={`${row.iso}-${row.operation_id || row.operation_code || row.operation_name}`} row={row} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+            <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+              <div className="mb-5">
+                <h3 className="text-2xl font-semibold tracking-tight text-slate-950">Ranking de prioridades</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Ordenado por criticidad, planes vencidos, cumplimiento, evidencia oficial y controles sin evidencia.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {priorityRows.slice(0, 5).map((row, index) => (
+                  <div key={`${row.iso}-${row.operation_id || index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-950">
+                          {index + 1}. {row.iso} / {row.operation_name || row.operation_code || 'Operación'}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {toSafeNumber(row.controls_without_evidence)} sin evidencia · {toSafeNumber(row.overdue_action_plans_count)} planes vencidos
+                        </div>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getEffectiveHealthTone(row.kpi_health_status)}`}>
+                        {mapEffectiveHealthLabel(row.kpi_health_status)}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                      <PriorityMiniMetric label="Cumplimiento" value={formatIsoPercent(getEffectiveCompliancePercent(row))} />
+                      <PriorityMiniMetric label="Evidencia oficial" value={formatIsoPercent(getEffectiveOfficialEvidencePercent(row))} />
+                      <PriorityMiniMetric label="Salud" value={formatIsoScore(row.avg_effective_health_score)} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+              <div className="mb-5">
+                <h3 className="text-2xl font-semibold tracking-tight text-slate-950">Acciones sugeridas</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Reglas tácticas generadas en frontend desde los KPIs efectivos, sin IA.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {suggestedActions.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                    Sin acciones sugeridas críticas para el alcance activo.
+                  </div>
+                ) : (
+                  suggestedActions.map((action) => (
+                    <IsoSuggestedActionCard key={`${action.title}-${action.href}`} action={action} />
+                  ))
+                )}
+              </div>
+            </section>
+          </div>
+
+          <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-950">Explicabilidad del cálculo</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Esta vista usa controles activos en alcance operacional, evidencia oficial y aprobada,
+                  hallazgos abiertos, no conformidades abiertas, planes abiertos y planes vencidos. Las normas
+                  u operaciones sin alcance activo no se mezclan con el cumplimiento operativo.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <a href="/auditorias" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-700 hover:bg-white">Auditorías</a>
+                <a href="/exportes" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-700 hover:bg-white">Exportes</a>
+                <a href="/hallazgos" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-700 hover:bg-white">Hallazgos</a>
+                <a href="/no-conformidades" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-700 hover:bg-white">No conformidades</a>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function IsoControlRow({ row }: { row: EffectiveIsoHealthRow }) {
+  return (
+    <tr>
+      <td className="px-4 py-3">
+        <p className="font-semibold text-slate-900">{row.iso}</p>
+        <p className="text-xs text-slate-500">{row.operation_name || 'Operación'} · {row.operation_code || 'N/A'}</p>
+      </td>
+      <td className="px-4 py-3 text-right text-slate-700">{toSafeNumber(row.active_scope_controls)}</td>
+      <td className="px-4 py-3 text-right font-semibold text-emerald-700">{toSafeNumber(row.complies_controls)}</td>
+      <td className="px-4 py-3 text-right text-amber-700">{toSafeNumber(row.partial_controls)}</td>
+      <td className="px-4 py-3 text-right text-slate-700">{toSafeNumber(row.non_compliant_or_no_data_controls)}</td>
+      <td className="px-4 py-3 text-right text-slate-700">{formatIsoPercent(getEffectiveOfficialEvidencePercent(row))}</td>
+      <td className="px-4 py-3 text-right text-slate-700">{toSafeNumber(row.controls_without_evidence)}</td>
+      <td className="px-4 py-3 text-right text-red-600">{toSafeNumber(row.overdue_action_plans_count)}</td>
+      <td className="px-4 py-3 text-right text-slate-700">{formatIsoScore(row.avg_effective_health_score)}</td>
+      <td className="px-4 py-3">
+        <div className="flex justify-end">
+          <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getEffectiveHealthTone(row.kpi_health_status)}`}>
+            {mapEffectiveHealthLabel(row.kpi_health_status)}
+          </span>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function IsoMetricCard({
+  label,
+  value,
+  helper,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  helper: string;
+  tone: 'green' | 'amber' | 'red' | 'indigo';
+}) {
+  const toneMap = {
+    green: 'text-emerald-700 bg-emerald-50 border-emerald-100',
+    amber: 'text-amber-700 bg-amber-50 border-amber-100',
+    red: 'text-red-700 bg-red-50 border-red-100',
+    indigo: 'text-blue-700 bg-blue-50 border-blue-100',
+  };
+
+  return (
+    <div className={`rounded-2xl border p-4 shadow-sm ${toneMap[tone]}`}>
+      <div className="text-xs font-semibold uppercase tracking-wide opacity-70">{label}</div>
+      <div className="mt-2 text-3xl font-bold tracking-tight">{value}</div>
+      <div className="mt-1 text-xs font-medium opacity-75">{helper}</div>
+    </div>
+  );
+}
+
+function DarkIsoMetric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
+      <div className="text-white/55">{label}</div>
+      <div className="mt-1 text-lg font-bold text-white">{value}</div>
+    </div>
+  );
+}
+
+function PriorityMiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+      <div className="text-[11px] text-slate-500">{label}</div>
+      <div className="mt-1 font-semibold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function IsoSuggestedActionCard({ action }: { action: IsoSuggestedAction }) {
+  const severityClass =
+    action.severity === 'critico'
+      ? 'border-red-200 bg-red-50 text-red-700'
+      : action.severity === 'alto'
+      ? 'border-amber-200 bg-amber-50 text-amber-700'
+      : 'border-blue-200 bg-blue-50 text-blue-700';
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold text-slate-950">{action.title}</div>
+          <p className="mt-1 text-sm leading-5 text-slate-600">{action.description}</p>
+          <p className="mt-2 text-xs text-slate-500">Fuente: {action.source}</p>
+        </div>
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${severityClass}`}>
+          {action.severity}
+        </span>
+      </div>
+      <a href={action.href} className="mt-4 inline-flex rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800">
+        {action.cta}
+      </a>
+    </div>
   );
 }
 

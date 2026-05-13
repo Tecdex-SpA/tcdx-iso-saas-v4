@@ -32,7 +32,7 @@ export default function DashboardV2Header({ data, loading, onRefresh }: Props) {
             <a href="/acciones-recomendadas" className="rounded border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50">
               Acciones recomendadas
             </a>
-            <a href="/centro-control-iso" className="rounded border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50">
+            <a href="/dashboard?view=iso" className="rounded border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50">
               Centro ISO
             </a>
           </div>
