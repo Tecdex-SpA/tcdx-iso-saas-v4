@@ -333,9 +333,29 @@ const enrichedActionPlansSelect = `
       COUNT(e.id)::int AS evidence_count,
 
       COUNT(e.id) FILTER (
-        WHERE LOWER(COALESCE(e.status, '')) IN ('aprobada', 'aprobado', 'approved')
-           OR e.validated = true
+        WHERE e.metadata->>'action_plan_id' = ap.id::text
+      )::int AS direct_plan_evidence_count,
+
+      COUNT(e.id) FILTER (
+        WHERE ap.tenant_control_id IS NOT NULL
+          AND e.tenant_control_id = ap.tenant_control_id
+          AND COALESCE(e.metadata->>'action_plan_id', '') <> ap.id::text
+      )::int AS control_context_evidence_count,
+
+      COUNT(e.id) FILTER (
+        WHERE (
+          LOWER(COALESCE(e.status, '')) IN ('aprobada', 'aprobado', 'approved')
+          OR e.validated = true
+        )
       )::int AS approved_evidence_count,
+
+      COUNT(e.id) FILTER (
+        WHERE e.metadata->>'action_plan_id' = ap.id::text
+          AND (
+            LOWER(COALESCE(e.status, '')) IN ('aprobada', 'aprobado', 'approved')
+            OR e.validated = true
+          )
+      )::int AS approved_direct_plan_evidence_count,
 
       COUNT(e.id) FILTER (
         WHERE LOWER(COALESCE(e.status, '')) IN ('pendiente', 'pending', 'en revision', 'en revisión')
@@ -729,10 +749,10 @@ router.post('/:id/request-approval', auth, async (req, res) => {
       });
     }
 
-    if (Number(row.approved_evidence_count || 0) <= 0) {
+    if (Number(row.approved_direct_plan_evidence_count || 0) <= 0) {
       return res.status(400).json({
         error:
-          'Debes contar con al menos una evidencia aprobada para solicitar aprobación',
+          'Debes contar con al menos una evidencia directa del plan aprobada para solicitar aprobación',
       });
     }
 

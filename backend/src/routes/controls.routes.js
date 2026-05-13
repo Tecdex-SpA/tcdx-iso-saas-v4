@@ -743,11 +743,18 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
         FROM tenant_controls tc
         LEFT JOIN evidences e
           ON e.tenant_id = tc.tenant_id
+         AND COALESCE(e.status, '') <> 'deleted'
          AND (
               e.tenant_control_id = tc.id
-              OR e.control_id = tc.control_id
+              OR (
+                e.tenant_control_id IS NULL
+                AND e.control_id = tc.control_id
+                AND (
+                  e.metadata->>'operation_id' IS NULL
+                  OR e.metadata->>'operation_id' = tc.operation_id::text
+                )
+              )
          )
-         AND COALESCE(e.status, '') <> 'deleted'
         WHERE tc.tenant_id = $1
           AND tc.operation_id = $2
         GROUP BY tc.id
@@ -767,7 +774,13 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
         FROM tenant_controls tc
         LEFT JOIN tenant_nonconformities tnc
           ON tnc.tenant_id = tc.tenant_id
-         AND tnc.control_id = tc.control_id
+         AND (
+              tnc.control_id = tc.control_id
+              AND (
+                tnc.metadata->>'operation_id' IS NULL
+                OR tnc.metadata->>'operation_id' = tc.operation_id::text
+              )
+         )
         WHERE tc.tenant_id = $1
           AND tc.operation_id = $2
         GROUP BY tc.id
@@ -799,6 +812,10 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
               OR (
                 lc.controls_id_legacy IS NOT NULL
                 AND f.tenant_control_id = lc.controls_id_legacy
+                AND (
+                  f.metadata->>'operation_id' IS NULL
+                  OR f.metadata->>'operation_id' = tc.operation_id::text
+                )
               )
          )
         WHERE tc.tenant_id = $1
