@@ -197,6 +197,8 @@ const {
   persistSeniorAuditorSuggestions,
   summarizeSeniorSuggestionSync,
 } = require('../services/seniorAuditorSuggestions.service');
+const aiContextBuilder = require('../services/aiContextBuilder.service');
+const aiEngineClient = require('../services/aiEngineClient.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8000';
@@ -1032,6 +1034,131 @@ function buildSeniorAuditorPayload({
   };
 }
 
+async function buildAiComplianceV2Context({ tenantId, body = {}, standardCode = null, operationId = null }) {
+  if (body.tenant_control_id) {
+    return aiContextBuilder.buildAiControlContext({
+      tenantId,
+      tenantControlId: String(body.tenant_control_id),
+      standardCode,
+      operationId,
+    });
+  }
+
+  if (body.evidence_id) {
+    return aiContextBuilder.buildAiEvidenceContext({
+      tenantId,
+      evidenceId: String(body.evidence_id),
+    });
+  }
+
+  if (standardCode || operationId) {
+    return aiContextBuilder.buildAiStandardContext({
+      tenantId,
+      standardCode,
+      operationId,
+    });
+  }
+
+  return aiContextBuilder.buildAiTenantContext({ tenantId });
+}
+
+function buildAiComplianceV2Payload({ tenantId, context, body = {}, question = '', taskType = null }) {
+  const requestedDepth = String(body.depth || body.analysis_depth || 'standard');
+  const depth = ['executive', 'standard', 'deep'].includes(requestedDepth)
+    ? requestedDepth
+    : 'standard';
+
+  const resolvedTaskType =
+    taskType ||
+    (body.tenant_control_id
+      ? 'control_analysis'
+      : body.evidence_id
+        ? 'evidence_review'
+        : question
+          ? 'free_question'
+          : 'standard_gap_analysis');
+
+  return {
+    task_type: resolvedTaskType,
+    tenant_id: tenantId,
+    module_origin: 'ia-compliance',
+    question: safeText(question || body.question || body.prompt || ''),
+    locale: 'es',
+    context,
+    options: {
+      use_rag: body.use_rag !== false,
+      use_drive: body.use_drive !== false,
+      use_web: body.use_web !== false,
+      depth,
+      return_structured_result: true,
+    },
+  };
+}
+
+function mapStructuredActionsToSuggestions(structuredResult) {
+  const actions = Array.isArray(structuredResult?.recommended_actions)
+    ? structuredResult.recommended_actions
+    : [];
+
+  return actions.map((item) => ({
+    title: item.title || 'Acción recomendada',
+    summary: item.description || '',
+    recommended_action: item.description || '',
+    priority: item.priority || 'media',
+    target_module: item.target_module || 'plan-accion',
+    due_days: item.due_days || 30,
+    acceptance_criteria: Array.isArray(item.acceptance_criteria)
+      ? item.acceptance_criteria
+      : [],
+    related_iso: item.related_iso || '',
+    related_clause: item.related_clause || '',
+  }));
+}
+
+function buildLegacyAiComplianceView(aiResult) {
+  const structured = aiResult?.structured_result || {};
+  const suggestions = mapStructuredActionsToSuggestions(structured);
+
+  return {
+    ok: aiResult?.ok !== false,
+    type: 'senior_iso_compliance_v2',
+    summary: structured.executive_summary || aiResult?.answer || '',
+    suggestions: suggestions.map((item) => item.title || item.recommended_action).filter(Boolean),
+    recommendations: suggestions,
+    confidence: aiResult?.confidence ?? structured.confidence ?? 0,
+    source: 'ai-engine-v2',
+    structured_result: structured,
+    source_trace: aiResult?.source_trace || structured.source_trace || [],
+    limitations: aiResult?.limitations || structured.limitations || [],
+    engine: aiResult?.engine || {},
+  };
+}
+
+async function runAiComplianceV2Analysis({ tenantId, body = {}, question = '', taskType = null }) {
+  const standardCode = body.standard_code || body.iso_code || body.iso || null;
+  const operationId = body.operation_id || null;
+  const context = await buildAiComplianceV2Context({
+    tenantId,
+    body,
+    standardCode,
+    operationId,
+  });
+  const payload = buildAiComplianceV2Payload({
+    tenantId,
+    context,
+    body,
+    question,
+    taskType,
+  });
+  const aiResult = await aiEngineClient.analyzeWithSeniorAuditor(payload);
+  return {
+    payload,
+    context,
+    aiResult,
+    legacy: buildLegacyAiComplianceView(aiResult),
+  };
+}
+
 async function getTenantName(tenantId) {
   const result = await pool.query(
     `
@@ -1743,10 +1870,25 @@ router.get('/health-summary', auth, async (req, res) => {
       allowWebContext: getAuditorWebContextFlag(req),
     });
 
-    const [aiResponse, seniorAuditor] = await Promise.all([
+    const [aiResponse, seniorAuditorLegacy, complianceV2] = await Promise.all([
       callAiEngine('/api/ai/suggest/health-summary', aiPayload),
       callAiEngineOptional('/api/ai/auditor/analyze', seniorAuditorPayload),
+      runAiComplianceV2Analysis({
+        tenantId,
+        body: {
+          depth: 'standard',
+          use_web: true,
+          use_drive: true,
+          use_rag: true,
+        },
+        question: 'Analiza el estado de cumplimiento, brechas críticas y acciones prioritarias del tenant.',
+        taskType: 'standard_gap_analysis',
+      }),
     ]);
+
+    const seniorAuditor = complianceV2.aiResult?.ok === false
+      ? seniorAuditorLegacy
+      : complianceV2.aiResult;
 
     const seniorAuditorSuggestions = await syncSeniorAuditorSuggestionsSafe({
       tenantId,
@@ -1767,10 +1909,12 @@ router.get('/health-summary', auth, async (req, res) => {
       requestPayload: {
         health_summary: aiPayload,
         senior_auditor: seniorAuditorPayload,
+        ai_v2: complianceV2.payload,
       },
       responsePayload: {
         health_summary: aiResponse,
         senior_auditor: seniorAuditor,
+        ai_v2: complianceV2.aiResult,
         senior_auditor_suggestions: seniorAuditorSuggestions,
       },
       status: 'ok',
@@ -1781,7 +1925,20 @@ router.get('/health-summary', auth, async (req, res) => {
       ok: true,
       locale,
       context: aiPayload,
-      ai: aiResponse,
+      ai: {
+        ...(aiResponse || {}),
+        structured_result: complianceV2.aiResult?.structured_result || null,
+        source_trace: complianceV2.aiResult?.source_trace || [],
+        limitations: complianceV2.aiResult?.limitations || [],
+        engine: complianceV2.aiResult?.engine || {},
+      },
+      answer: complianceV2.aiResult?.answer || aiResponse?.summary || '',
+      structured_result: complianceV2.aiResult?.structured_result || null,
+      source_trace: complianceV2.aiResult?.source_trace || [],
+      confidence: complianceV2.aiResult?.confidence ?? null,
+      limitations: complianceV2.aiResult?.limitations || [],
+      engine: complianceV2.aiResult?.engine || {},
+      suggestions: complianceV2.legacy.suggestions || [],
       senior_auditor: seniorAuditor,
       senior_auditor_suggestions: seniorAuditorSuggestions,
     });
@@ -1791,6 +1948,61 @@ router.get('/health-summary', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error generando resumen IA de cumplimiento',
+      ...errorDetail(error),
+    });
+  }
+});
+
+router.post('/analyze', auth, async (req, res) => {
+  try {
+    const locale = resolveLocale(req);
+    res.set('x-tcdx-locale', locale);
+    const tenantId = resolveTenantId(req);
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se pudo determinar tenant_id para IA Compliance',
+      });
+    }
+
+    const question =
+      req.body?.question ||
+      'Analiza brechas críticas de cumplimiento, evidencia faltante y acciones prioritarias para auditoría.';
+
+    const complianceV2 = await runAiComplianceV2Analysis({
+      tenantId,
+      body: req.body || {},
+      question,
+      taskType: req.body?.tenant_control_id
+        ? 'control_analysis'
+        : req.body?.evidence_id
+          ? 'evidence_review'
+          : req.body?.task_type || 'standard_gap_analysis',
+    });
+
+    return res.json({
+      ok: complianceV2.aiResult?.ok !== false,
+      locale,
+      tenant_id: tenantId,
+      answer: complianceV2.aiResult?.answer || '',
+      structured_result: complianceV2.aiResult?.structured_result || null,
+      source_trace: complianceV2.aiResult?.source_trace || [],
+      confidence: complianceV2.aiResult?.confidence ?? null,
+      limitations: complianceV2.aiResult?.limitations || [],
+      engine: complianceV2.aiResult?.engine || {},
+      suggestions: complianceV2.legacy.suggestions || [],
+      recommendations: complianceV2.legacy.recommendations || [],
+      analysis: complianceV2.legacy.summary || '',
+      summary: complianceV2.aiResult?.structured_result?.executive_summary || '',
+      context: complianceV2.context,
+    });
+  } catch (error) {
+    console.error('ERROR AI COMPLIANCE V2 ANALYZE:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error ejecutando análisis IA Compliance v2',
       ...errorDetail(error),
     });
   }
@@ -2143,10 +2355,25 @@ router.get('/executive-brief', auth, async (req, res) => {
       allowWebContext: getAuditorWebContextFlag(req),
     });
 
-    const [aiResponse, seniorAuditor] = await Promise.all([
+    const [aiResponse, seniorAuditorLegacy, complianceV2] = await Promise.all([
       callAiEngine('/api/ai/suggest/executive-brief', aiPayload),
       callAiEngineOptional('/api/ai/auditor/analyze', seniorAuditorPayload),
+      runAiComplianceV2Analysis({
+        tenantId,
+        body: {
+          depth: 'executive',
+          use_web: true,
+          use_drive: true,
+          use_rag: true,
+        },
+        question: `Genera un resumen ejecutivo de cumplimiento para ${aiPayload.period}, priorizando brechas y acciones gerenciales.`,
+        taskType: 'standard_gap_analysis',
+      }),
     ]);
+
+    const seniorAuditor = complianceV2.aiResult?.ok === false
+      ? seniorAuditorLegacy
+      : complianceV2.aiResult;
 
     const seniorAuditorSuggestions = await syncSeniorAuditorSuggestionsSafe({
       tenantId,
@@ -2167,10 +2394,12 @@ router.get('/executive-brief', auth, async (req, res) => {
       requestPayload: {
         executive_brief: aiPayload,
         senior_auditor: seniorAuditorPayload,
+        ai_v2: complianceV2.payload,
       },
       responsePayload: {
         executive_brief: aiResponse,
         senior_auditor: seniorAuditor,
+        ai_v2: complianceV2.aiResult,
         senior_auditor_suggestions: seniorAuditorSuggestions,
       },
       status: 'ok',
@@ -2181,7 +2410,20 @@ router.get('/executive-brief', auth, async (req, res) => {
       ok: true,
       locale,
       context: aiPayload,
-      ai: aiResponse,
+      ai: {
+        ...(aiResponse || {}),
+        structured_result: complianceV2.aiResult?.structured_result || null,
+        source_trace: complianceV2.aiResult?.source_trace || [],
+        limitations: complianceV2.aiResult?.limitations || [],
+        engine: complianceV2.aiResult?.engine || {},
+      },
+      answer: complianceV2.aiResult?.answer || aiResponse?.executive_summary || '',
+      structured_result: complianceV2.aiResult?.structured_result || null,
+      source_trace: complianceV2.aiResult?.source_trace || [],
+      confidence: complianceV2.aiResult?.confidence ?? null,
+      limitations: complianceV2.aiResult?.limitations || [],
+      engine: complianceV2.aiResult?.engine || {},
+      suggestions: complianceV2.legacy.suggestions || [],
       senior_auditor: seniorAuditor,
       senior_auditor_suggestions: seniorAuditorSuggestions,
     });

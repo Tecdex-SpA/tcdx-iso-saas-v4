@@ -73,6 +73,62 @@ async function tableExists(tableName) {
   return result.rowCount > 0;
 }
 
+async function columnExists(tableName, columnName) {
+  const result = await pool.query(
+    `
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = $1
+      AND column_name = $2
+    LIMIT 1
+    `,
+    [tableName, columnName]
+  );
+  return result.rowCount > 0;
+}
+
+function normalizeSearchToken(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9.áéíóúñü\s-]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildDocumentSearchTerms({ standardCode = null, operationId = null, controls = [], summaries = [] }) {
+  const terms = new Set();
+  const add = (value) => {
+    const normalized = normalizeSearchToken(value);
+    if (normalized && normalized.length >= 3) terms.add(normalized.slice(0, 80));
+  };
+
+  add(standardCode);
+  add(operationId);
+
+  for (const summary of compactRows(summaries, 5)) {
+    add(summary.iso);
+    add(summary.operation_name);
+    add(summary.operation_code);
+  }
+
+  for (const control of compactRows(controls, 8)) {
+    add(control.iso);
+    add(control.clause);
+    add(control.category);
+    const words = normalizeSearchToken(control.control_description)
+      .split(' ')
+      .filter((word) => word.length >= 5)
+      .slice(0, 8);
+    words.forEach(add);
+  }
+
+  ['politica', 'política', 'procedimiento', 'informe', 'registro', 'evidencia', 'plan', 'matriz'].forEach(add);
+  return Array.from(terms).slice(0, 24);
+}
+
 async function loadTenantProfile(context, tenantId) {
   const tenants = await safeQuery(
     context,
@@ -307,7 +363,34 @@ async function loadRecentEntities(context, { tenantId, standardCode = null }) {
   );
 }
 
-async function loadOptionalEntities(context, { tenantId }) {
+function documentRelation(row, terms = []) {
+  const haystack = normalizeSearchToken(
+    [
+      row.file_name,
+      row.mime_type,
+      row.file_extension,
+      JSON.stringify(row.metadata_json || {}),
+    ].join(' ')
+  );
+  const matched = terms.filter((term) => haystack.includes(normalizeSearchToken(term))).slice(0, 8);
+
+  return {
+    ...row,
+    document_id: row.id,
+    title: row.file_name || row.title || 'Documento Google Drive',
+    type: row.file_extension || row.mime_type || 'documento',
+    source: row.provider || 'google_drive',
+    date: row.modified_at || row.indexed_at || row.created_at || null,
+    relation: matched.length
+      ? `Coincide con ${matched.join(', ')}`
+      : 'Documento indexado reciente del tenant para contraste documental',
+    matched_by: matched,
+    summary: row.metadata_json?.summary || row.metadata_json?.description || '',
+    link: row.web_view_url || row.file_url || '',
+  };
+}
+
+async function loadOptionalEntities(context, { tenantId, standardCode = null, operationId = null }) {
   const optionalSources = [
     { table: 'risks', target: 'risks', usedFor: 'riesgos del tenant' },
     { table: 'assets', target: 'assets', usedFor: 'activos del tenant' },
@@ -339,6 +422,21 @@ async function loadOptionalEntities(context, { tenantId }) {
   }
 
   if (await tableExists('document_index')) {
+    const hasMetadata = await columnExists('document_index', 'metadata_json');
+    const hasWebView = await columnExists('document_index', 'web_view_url');
+    const hasFileUrl = await columnExists('document_index', 'file_url');
+    const hasModifiedAt = await columnExists('document_index', 'modified_at');
+    const searchTerms = buildDocumentSearchTerms({
+      standardCode,
+      operationId,
+      controls: context.priority_controls,
+      summaries: context.effective_health_summary,
+    });
+    const metadataExpression = hasMetadata ? 'metadata_json' : `'{}'::jsonb`;
+    const webViewExpression = hasWebView ? 'web_view_url' : `NULL::text`;
+    const fileUrlExpression = hasFileUrl ? 'file_url' : `NULL::text`;
+    const modifiedExpression = hasModifiedAt ? 'modified_at' : `NULL::timestamp`;
+
     context.documents = await safeQuery(
       context,
       'document_index.google_drive',
@@ -349,21 +447,34 @@ async function loadOptionalEntities(context, { tenantId }) {
         file_name,
         mime_type,
         file_extension,
-        web_view_url,
-        modified_at,
+        ${webViewExpression} AS web_view_url,
+        ${fileUrlExpression} AS file_url,
+        ${modifiedExpression} AS modified_at,
         indexed_at,
         status,
-        metadata_json
+        ${metadataExpression} AS metadata_json
       FROM document_index
       WHERE tenant_id = $1::uuid
         AND provider = 'google_drive'
         AND COALESCE(status, '') NOT IN ('deleted','error')
+        AND (
+          cardinality($2::text[]) = 0
+          OR EXISTS (
+            SELECT 1
+            FROM unnest($2::text[]) AS term
+            WHERE LOWER(COALESCE(file_name, '')) LIKE '%' || LOWER(term) || '%'
+              OR LOWER(COALESCE(mime_type, '')) LIKE '%' || LOWER(term) || '%'
+              OR LOWER(COALESCE(file_extension, '')) LIKE '%' || LOWER(term) || '%'
+              OR LOWER(COALESCE(${metadataExpression}::text, '')) LIKE '%' || LOWER(term) || '%'
+          )
+        )
       ORDER BY modified_at DESC NULLS LAST, indexed_at DESC NULLS LAST
       LIMIT 10
       `,
-      [tenantId],
+      [tenantId, searchTerms],
       'documentos Google Drive indexados para contraste documental'
     );
+    context.documents = context.documents.map((row) => documentRelation(row, searchTerms));
   } else {
     context.limitations.push('document_index: índice documental no disponible para Google Drive');
   }
@@ -383,7 +494,7 @@ async function buildAiStandardContext({ tenantId, standardCode, operationId = nu
   await loadTenantProfile(context, tenantId);
   await loadEffectiveHealth(context, { tenantId, standardCode, operationId });
   await loadRecentEntities(context, { tenantId, standardCode });
-  await loadOptionalEntities(context, { tenantId });
+  await loadOptionalEntities(context, { tenantId, standardCode, operationId });
   return context;
 }
 
@@ -393,7 +504,7 @@ async function buildAiControlContext({ tenantId, tenantControlId, standardCode =
   await loadTenantProfile(context, tenantId);
   await loadEffectiveHealth(context, { tenantId, standardCode, operationId, tenantControlId });
   await loadRecentEntities(context, { tenantId, standardCode });
-  await loadOptionalEntities(context, { tenantId });
+  await loadOptionalEntities(context, { tenantId, standardCode, operationId });
   return context;
 }
 

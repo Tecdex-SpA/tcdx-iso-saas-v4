@@ -296,14 +296,162 @@ curl -X POST "http://localhost:8001/api/ai/senior-auditor/analyze" \
 
 1. Migrar `POST /api/ai-auditor/analyze/:audit_id` al flujo v2 completo.
 2. Enriquecer `buildAiEvidenceContext`, `buildAiFindingContext`, `buildAiActionPlanContext` y `buildAiAuditContext`.
-3. Pasar documentos Google Drive indexados desde backend al contexto canónico.
-4. Evaluar proveedor LLM real dentro de ai-engine si se requiere razonamiento generativo más rico.
-5. Migrar IA Compliance a `aiEngineClient.analyzeWithSeniorAuditor`.
-6. Persistir trazas IA v2 en tabla dedicada si se requiere auditoría de prompts/respuestas.
+3. Migrar endpoints de aplicación directa IA Compliance (`finding-analysis`, `action-plan-suggestion`, `nonconformity-draft`) a v2 sin afectar escrituras.
+4. Persistir trazas IA v2 en tabla dedicada si se requiere auditoría de prompts/respuestas.
 
 ## 20. Known limitations
 
 - RAG actual es knowledge wrapper local, no vector store semántico completo.
-- Google Drive no se consulta directamente desde ai-engine para evitar duplicar OAuth; se espera contexto documental desde backend.
+- Google Drive no se autentica directamente desde ai-engine para evitar duplicar OAuth. Backend consulta `document_index` por tenant/norma/cláusula/keywords y ai-engine razona sobre esos documentos.
 - Brave depende de `.env` y de acceso de red del runtime de ai-engine.
-- El motor v2 es determinístico si no existe proveedor LLM configurado.
+- El motor v2 usa LLM si existe configuración compatible; si no, usa fallback determinístico.
+
+## 21. IA Compliance v2 integration
+
+IA Compliance ahora tiene un consumidor directo del contrato v2:
+
+```txt
+POST /api/ai-compliance/analyze
+```
+
+También se enriquecieron:
+
+- `GET /api/ai-compliance/health-summary`
+- `GET /api/ai-compliance/executive-brief`
+
+Campos devueltos:
+
+- `answer`
+- `structured_result`
+- `source_trace`
+- `confidence`
+- `limitations`
+- `engine`
+- `suggestions`
+- `recommendations`
+
+Los campos legacy `ai`, `context`, `senior_auditor` y sugerencias existentes se conservan.
+
+## 22. Drive/document_index deep search
+
+Backend agrega documentos desde `document_index` con filtro estricto:
+
+```sql
+WHERE tenant_id = $1::uuid
+  AND provider = 'google_drive'
+```
+
+La búsqueda usa:
+
+- `standard_code` / `iso`
+- `clause`
+- `operation_name`
+- `control_description`
+- nombres de evidencias
+- tipos documentales: política, procedimiento, informe, registro, evidencia, plan, matriz
+
+Cada documento incluye:
+
+- `document_id`
+- `title`
+- `type`
+- `source`
+- `date`
+- `relation`
+- `matched_by`
+- `summary`
+- `link`
+
+ai-engine convierte esos documentos en `drive_context_used` y agrega `source_trace` con fuente `drive`.
+
+## 23. LLM provider evaluation
+
+Se agregó `ai-engine/app/services/llm_client.py`.
+
+Funciones:
+
+- `is_llm_available()`
+- `get_llm_metadata()`
+- `call_llm_json(...)`
+
+Proveedores soportados:
+
+1. OpenAI/OpenAI-compatible API
+2. Ollama/local
+3. Fallback determinístico
+
+Variables:
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=
+OPENAI_MODEL=
+OPENAI_BASE_URL=
+OLLAMA_HOST=
+OLLAMA_MODEL=
+AI_ENGINE_LLM_TIMEOUT_MS=60000
+```
+
+Si el LLM falla, el orquestador agrega:
+
+```txt
+Proveedor LLM falló — análisis generado por fallback determinístico
+```
+
+Si no hay LLM:
+
+```txt
+Proveedor LLM no configurado — análisis generado por motor determinístico basado en contexto interno
+```
+
+## 24. Validation commands
+
+```bash
+node -c backend/src/services/aiContextBuilder.service.js
+node -c backend/src/services/aiEngineClient.service.js
+node -c backend/src/routes/ai-auditor.routes.js
+node -c backend/src/routes/ai-compliance.routes.js
+
+PYTHONPYCACHEPREFIX=/private/tmp/tcdx-pycache python3 -m py_compile \
+  ai-engine/app/services/senior_auditor_orchestrator.py \
+  ai-engine/app/services/structured_result_service.py \
+  ai-engine/app/services/guardrails_service.py \
+  ai-engine/app/services/source_trace_service.py \
+  ai-engine/app/services/rag_context_service.py \
+  ai-engine/app/services/drive_context_service.py \
+  ai-engine/app/services/llm_client.py \
+  ai-engine/app/routes/senior_auditor_v2.py
+
+cd frontend && npm run build
+git diff --check
+git status --short
+```
+
+## 25. Post-deploy tests
+
+IA Compliance:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -X POST http://localhost:3000/api/ai-compliance/analyze \
+  -d '{
+    "standard_code":"ISO27001",
+    "operation_id":"OPERATION_ID",
+    "question":"Analiza brechas críticas y acciones para auditoría",
+    "depth":"deep"
+  }' | python3 -m json.tool
+```
+
+Campos esperados:
+
+- `answer`
+- `structured_result`
+- `structured_result.gaps`
+- `structured_result.recommended_actions`
+- `source_trace`
+- `confidence`
+- `limitations`
+- `engine.used_rag`
+- `engine.used_drive`
+- `engine.used_web`

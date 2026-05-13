@@ -73,6 +73,14 @@ const IA_COMPLIANCE_COPY = {
     aiSuggestedPlan: 'Plan sugerido IA',
     seniorAuditorSuggestion: 'Sugerencia auditor senior',
     aiDraft: 'Borrador IA',
+    structuredResult: 'Resultado estructurado AI v2',
+    diagnosis: 'Diagnóstico',
+    gaps: 'Brechas',
+    missingEvidence: 'Evidencia faltante',
+    recommendedActions: 'Acciones recomendadas',
+    auditorQuestions: 'Preguntas de auditor',
+    sourcesUsed: 'Fuentes usadas',
+    limitations: 'Limitaciones',
   },
   en: {
     title: 'AI Compliance',
@@ -136,6 +144,14 @@ const IA_COMPLIANCE_COPY = {
     aiSuggestedPlan: 'AI suggested plan',
     seniorAuditorSuggestion: 'Senior auditor suggestion',
     aiDraft: 'AI draft',
+    structuredResult: 'AI v2 structured result',
+    diagnosis: 'Diagnosis',
+    gaps: 'Gaps',
+    missingEvidence: 'Missing evidence',
+    recommendedActions: 'Recommended actions',
+    auditorQuestions: 'Auditor questions',
+    sourcesUsed: 'Sources used',
+    limitations: 'Limitations',
   },
 };
 
@@ -171,7 +187,17 @@ type HealthSummaryResponse = {
     suggestions?: string[];
     confidence?: string;
     source?: string;
+    structured_result?: any;
+    source_trace?: any[];
+    limitations?: string[];
+    engine?: any;
   };
+  answer?: string;
+  structured_result?: any;
+  source_trace?: any[];
+  confidence?: number;
+  limitations?: string[];
+  engine?: any;
 };
 
 type ExecutiveBriefResponse = {
@@ -183,8 +209,152 @@ type ExecutiveBriefResponse = {
     top_priorities: string[];
     management_actions: string[];
     confidence?: string;
+    structured_result?: any;
+    source_trace?: any[];
+    limitations?: string[];
+    engine?: any;
   };
+  answer?: string;
+  structured_result?: any;
+  source_trace?: any[];
+  confidence?: number;
+  limitations?: string[];
+  engine?: any;
 };
+
+function severityTone(value: any) {
+  const normalized = String(value || '').toLowerCase();
+  if (['alta', 'high', 'critical', 'critica', 'crítica'].includes(normalized)) return 'border-red-200 bg-red-50 text-red-700';
+  if (['media', 'medium'].includes(normalized)) return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+}
+
+function confidenceTone(value: any) {
+  const numeric = Number(value || 0);
+  if (numeric >= 0.7) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (numeric >= 0.4) return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-red-200 bg-red-50 text-red-700';
+}
+
+function sourceTone(value: any) {
+  const normalized = String(value || '').toLowerCase();
+  if (normalized === 'internal_db') return 'border-indigo-200 bg-indigo-50 text-indigo-700';
+  if (normalized === 'rag') return 'border-violet-200 bg-violet-50 text-violet-700';
+  if (normalized === 'drive') return 'border-sky-200 bg-sky-50 text-sky-700';
+  if (normalized === 'web') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  return 'border-slate-200 bg-slate-50 text-slate-700';
+}
+
+function StructuredCompliancePanel({
+  result,
+  copy,
+}: {
+  result: any;
+  copy: IaComplianceCopy;
+}) {
+  if (!result || typeof result !== 'object') return null;
+
+  const gaps = Array.isArray(result.gaps) ? result.gaps : [];
+  const actions = Array.isArray(result.recommended_actions) ? result.recommended_actions : [];
+  const questions = Array.isArray(result.auditor_questions) ? result.auditor_questions : [];
+  const sources = Array.isArray(result.source_trace) ? result.source_trace : [];
+  const limitations = Array.isArray(result.limitations) ? result.limitations : [];
+  const missingEvidence = Array.isArray(result.evidence_assessment?.missing_evidence)
+    ? result.evidence_assessment.missing_evidence
+    : [];
+
+  return (
+    <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-[0.16em] text-indigo-500">
+            {copy.structuredResult}
+          </div>
+          <p className="mt-2 max-w-5xl text-sm leading-7 text-slate-700">
+            {result.executive_summary || result.diagnosis || copy.noSummary}
+          </p>
+        </div>
+        <span className={`rounded-full border px-3 py-1 text-xs font-bold ${confidenceTone(result.confidence)}`}>
+          {copy.confidence}: {Math.round(Number(result.confidence || 0) * 100)}%
+        </span>
+      </div>
+
+      {result.diagnosis && (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-sm font-bold text-slate-900">{copy.diagnosis}</div>
+          <p className="mt-2 text-sm leading-7 text-slate-700">{result.diagnosis}</p>
+        </div>
+      )}
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        {gaps.length > 0 && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-bold text-slate-900">{copy.gaps}</div>
+            <div className="mt-3 space-y-3">
+              {gaps.slice(0, 4).map((gap: any, index: number) => (
+                <div key={index} className="rounded-xl bg-white p-3 ring-1 ring-slate-100">
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`rounded-full border px-2 py-1 text-[11px] font-bold ${severityTone(gap.severity)}`}>{gap.severity || '-'}</span>
+                    <span className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-bold text-slate-700">{gap.iso || '-'} {gap.clause || ''}</span>
+                  </div>
+                  <div className="mt-2 text-sm font-bold text-slate-900">{gap.title}</div>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">{gap.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {actions.length > 0 && (
+          <div className="rounded-xl border border-violet-100 bg-violet-50 p-4">
+            <div className="text-sm font-bold text-violet-950">{copy.recommendedActions}</div>
+            <div className="mt-3 space-y-3">
+              {actions.slice(0, 4).map((action: any, index: number) => (
+                <div key={index} className="rounded-xl bg-white p-3 ring-1 ring-violet-100">
+                  <div className="text-sm font-bold text-slate-900">{action.title}</div>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">{action.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        {missingEvidence.length > 0 && (
+          <SmallList title={copy.missingEvidence} items={missingEvidence.slice(0, 5)} />
+        )}
+        {questions.length > 0 && (
+          <SmallList title={copy.auditorQuestions} items={questions.slice(0, 5)} />
+        )}
+        {limitations.length > 0 && (
+          <SmallList title={copy.limitations} items={limitations.slice(0, 5)} />
+        )}
+      </div>
+
+      {sources.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {sources.slice(0, 8).map((source: any, index: number) => (
+            <span key={index} className={`rounded-full border px-3 py-1 text-xs font-bold ${sourceTone(source.source)}`}>
+              {source.source}: {source.reference}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SmallList({ title, items }: { title: string; items: any[] }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="text-sm font-bold text-slate-900">{title}</div>
+      <ul className="mt-2 space-y-2 text-sm text-slate-600">
+        {items.map((item, index) => <li key={index}>{String(item)}</li>)}
+      </ul>
+    </div>
+  );
+}
 
 type SuggestionRow = {
   id: string;
@@ -335,6 +505,8 @@ export default function IaCompliancePage() {
   const healthContext = healthSummary?.context || null;
   const healthAi = healthSummary?.ai || null;
   const executiveData = executiveBrief?.ai || null;
+  const healthStructured = healthSummary?.structured_result || healthAi?.structured_result || null;
+  const executiveStructured = executiveBrief?.structured_result || executiveData?.structured_result || null;
 
   const suggestionMetrics = useMemo(() => {
     return {
@@ -680,6 +852,8 @@ export default function IaCompliancePage() {
                 </div>
               </div>
             )}
+
+            <StructuredCompliancePanel result={executiveStructured || healthStructured} copy={copy} />
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-4">

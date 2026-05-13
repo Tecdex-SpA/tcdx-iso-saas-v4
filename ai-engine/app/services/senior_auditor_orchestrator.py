@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 from app.services.drive_context_service import build_drive_context
 from app.services.guardrails_service import apply_post_analysis_guardrails, apply_pre_analysis_guardrails
+from app.services.llm_client import call_llm_json, get_llm_metadata, is_llm_available
 from app.services.rag_context_service import build_rag_context
 from app.services.source_trace_service import make_source_trace_item, normalize_source_trace
 from app.services.structured_result_service import (
@@ -172,6 +173,34 @@ def _web_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _build_llm_user_prompt(payload: Dict[str, Any], context: Dict[str, Any], deterministic_result: Dict[str, Any]) -> str:
+    compact = {
+        "task_type": payload.get("task_type"),
+        "tenant_id": payload.get("tenant_id"),
+        "module_origin": payload.get("module_origin"),
+        "question": payload.get("question"),
+        "context": {
+            "tenant": context.get("tenant"),
+            "scope": context.get("scope"),
+            "effective_health_summary": (context.get("effective_health_summary") or [])[:10],
+            "priority_controls": (context.get("priority_controls") or [])[:20],
+            "recent_evidences": (context.get("recent_evidences") or [])[:10],
+            "recent_findings": (context.get("recent_findings") or [])[:10],
+            "recent_nonconformities": (context.get("recent_nonconformities") or [])[:10],
+            "recent_action_plans": (context.get("recent_action_plans") or [])[:10],
+            "documents": (context.get("documents") or [])[:10],
+            "source_trace": context.get("source_trace") or [],
+            "limitations": context.get("limitations") or [],
+        },
+        "deterministic_baseline": {
+            "answer": deterministic_result.get("answer"),
+            "structured_result": deterministic_result.get("structured_result"),
+        },
+        "required_output": "Devuelve JSON válido con answer y structured_result completo. Todo en español.",
+    }
+    return json.dumps(compact, ensure_ascii=False, default=str)
+
+
 def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         payload = {}
@@ -313,6 +342,45 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not structured["diagnosis"]:
         structured = build_fallback_structured_result(answer, context, limitations)
 
+    engine_model = "deterministic_senior_auditor_v2"
+    llm_metadata = get_llm_metadata()
+    llm_used = False
+    if is_llm_available():
+        try:
+            llm_raw = call_llm_json(
+                prompt=_build_llm_user_prompt(
+                    payload,
+                    context,
+                    {"answer": answer, "structured_result": structured},
+                ),
+                system_prompt=_load_master_prompt(),
+                temperature=0.2,
+                timeout=60,
+            )
+            llm_structured = normalize_ai_structured_result(llm_raw, defaults=structured)
+            llm_structured["confidence"] = structured["confidence"]
+            llm_structured["source_trace"] = normalize_source_trace(
+                (llm_structured.get("source_trace") or []) + structured.get("source_trace", [])
+            )
+            llm_structured["limitations"] = list(dict.fromkeys(
+                (llm_structured.get("limitations") or []) + structured.get("limitations", [])
+            ))
+            answer = str(llm_raw.get("answer") or answer) if isinstance(llm_raw, dict) else answer
+            structured = llm_structured
+            llm_used = True
+            engine_model = f"{llm_metadata.get('provider')}/{llm_metadata.get('model')}"
+        except Exception as exc:
+            structured["limitations"].append(
+                f"Proveedor LLM falló — análisis generado por fallback determinístico ({str(exc)[:120]})"
+            )
+            limitations.append("Proveedor LLM falló — análisis generado por fallback determinístico")
+            engine_model = "deterministic_senior_auditor_v2"
+    else:
+        structured["limitations"].append(
+            "Proveedor LLM no configurado — análisis generado por motor determinístico basado en contexto interno"
+        )
+        limitations.append("Proveedor LLM no configurado — análisis generado por motor determinístico basado en contexto interno")
+
     result = {
         "ok": True,
         "answer": answer,
@@ -323,7 +391,10 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
         "engine": {
             "prompt_version": PROMPT_VERSION,
             "context_version": context.get("scope", {}).get("context_version") or CONTEXT_VERSION,
-            "model": "deterministic_senior_auditor_v2",
+            "model": engine_model,
+            "llm_provider": llm_metadata.get("provider"),
+            "llm_available": llm_metadata.get("available") is True,
+            "used_llm": llm_used,
             "used_internal_context": True,
             "used_rag": bool(rag.get("used")),
             "used_drive": bool(drive.get("used")),

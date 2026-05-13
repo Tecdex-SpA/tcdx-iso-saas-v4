@@ -95,6 +95,7 @@ function buildOriginSummary(row: SuggestionRow) {
 
 function getSuggestionAiTrace(row: SuggestionRow) {
   const output = row.output_payload || {};
+  const structuredResult = output.structured_result || output.enhanced_answer?.structured_result || {};
   const enhanced = output.enhanced_orchestration || output.enhanced || {};
   const enhancedAnswer = output.enhanced_answer || enhanced.answer || {};
   const structured = output.structured_guided || {};
@@ -130,6 +131,7 @@ function getSuggestionAiTrace(row: SuggestionRow) {
       knowledgeSources.confidence ||
       structured.confidence ||
       row.confidence ||
+      structuredResult.confidence ||
       ''
   );
 
@@ -180,6 +182,59 @@ function getSuggestionAiTrace(row: SuggestionRow) {
     benchmarkHits,
     externalHits,
   };
+}
+
+function StructuredSuggestionResult({ row }: { row: SuggestionRow }) {
+  const output = row.output_payload || {};
+  const structured = output.structured_result || output.enhanced_answer?.structured_result || null;
+  if (!structured || typeof structured !== 'object') return null;
+
+  const gaps = Array.isArray(structured.gaps) ? structured.gaps : [];
+  const actions = Array.isArray(structured.recommended_actions) ? structured.recommended_actions : [];
+  const limitations = Array.isArray(structured.limitations) ? structured.limitations : [];
+
+  return (
+    <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.14em] text-indigo-600">
+            Resultado estructurado AI v2
+          </div>
+          <p className="mt-2 text-sm leading-6 text-indigo-950">
+            {structured.executive_summary || structured.diagnosis || 'Sin resumen estructurado.'}
+          </p>
+        </div>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-indigo-700 ring-1 ring-indigo-100">
+          Confianza: {Math.round(Number(structured.confidence || 0) * 100)}%
+        </span>
+      </div>
+
+      {(gaps.length > 0 || actions.length > 0 || limitations.length > 0) && (
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          {gaps.length > 0 && (
+            <MiniStructuredList title="Brechas" items={gaps.slice(0, 3).map((item: any) => item.title || item.description)} />
+          )}
+          {actions.length > 0 && (
+            <MiniStructuredList title="Acciones" items={actions.slice(0, 3).map((item: any) => item.title || item.description)} />
+          )}
+          {limitations.length > 0 && (
+            <MiniStructuredList title="Limitaciones" items={limitations.slice(0, 3)} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MiniStructuredList({ title, items }: { title: string; items: any[] }) {
+  return (
+    <div className="rounded-xl bg-white p-3 ring-1 ring-indigo-100">
+      <div className="text-sm font-bold text-slate-900">{title}</div>
+      <ul className="mt-2 space-y-1 text-sm text-slate-600">
+        {items.map((item, index) => <li key={index}>{String(item)}</li>)}
+      </ul>
+    </div>
+  );
 }
 
 function SuggestionAiTraceCard({ row }: { row: SuggestionRow }) {
@@ -832,6 +887,7 @@ export default function AiSuggestionsPage() {
                   </div>
 
                   <SuggestionAiTraceCard row={row} />
+                  <StructuredSuggestionResult row={row} />
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
