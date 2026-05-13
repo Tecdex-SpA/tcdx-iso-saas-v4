@@ -122,6 +122,49 @@ type LatestSnapshot = {
   breakdown_json?: any;
 };
 
+
+type EffectiveHealthSummaryItem = {
+  tenant_id: string;
+  iso: string;
+  operation_id: string;
+  operation_name?: string | null;
+  operation_code?: string | null;
+  operation_type?: string | null;
+  total_controls?: number | string | null;
+  active_scope_controls?: number | string | null;
+  out_of_scope_controls?: number | string | null;
+  complies_controls?: number | string | null;
+  partial_controls?: number | string | null;
+  non_compliant_or_no_data_controls?: number | string | null;
+  healthy_controls?: number | string | null;
+  attention_controls?: number | string | null;
+  deteriorated_controls?: number | string | null;
+  controls_with_official_evidence?: number | string | null;
+  controls_with_approved_non_official_evidence?: number | string | null;
+  controls_without_evidence?: number | string | null;
+  approved_evidence_count?: number | string | null;
+  official_evidence_count?: number | string | null;
+  open_findings_count?: number | string | null;
+  open_nonconformities_count?: number | string | null;
+  open_action_plans_count?: number | string | null;
+  overdue_action_plans_count?: number | string | null;
+  avg_effective_health_score?: number | string | null;
+  compliance_percentage?: number | string | null;
+  official_evidence_percentage?: number | string | null;
+  kpi_health_status?: string | null;
+  kpi_trace_json?: Record<string, unknown> | null;
+};
+
+type EffectiveHealthSummaryResponse = {
+  ok: boolean;
+  tenant_id: string;
+  source?: string;
+  total_rows?: number;
+  active_rows?: number;
+  summary?: EffectiveHealthSummaryItem[];
+  active_summary?: EffectiveHealthSummaryItem[];
+};
+
 type KpiDashboardItem = {
   id: string;
   code: string;
@@ -198,6 +241,48 @@ function normalizeLatestSnapshot(snapshot: any): LatestSnapshot | null {
     calculated_at: snapshot.calculated_at ?? null,
     breakdown_json: snapshot.breakdown_json ?? null,
   };
+}
+
+
+function toSafeNumber(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function mapEffectiveHealthLabel(value?: string | null): string {
+  const normalized = String(value || '').toLowerCase();
+
+  if (normalized === 'saludable') return 'Saludable';
+  if (normalized === 'atencion') return 'Atención';
+  if (normalized === 'deteriorado') return 'Deteriorado';
+  if (normalized === 'critico') return 'Crítico';
+  if (normalized === 'sin_alcance') return 'Sin alcance';
+  if (normalized === 'fuera_alcance') return 'Fuera de alcance';
+  if (normalized === 'sin_datos') return 'Sin datos';
+
+  return value || 'Sin datos';
+}
+
+function getEffectiveHealthTone(value?: string | null): string {
+  const normalized = String(value || '').toLowerCase();
+
+  if (normalized === 'saludable') {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  }
+
+  if (normalized === 'atencion') {
+    return 'border-amber-200 bg-amber-50 text-amber-700';
+  }
+
+  if (normalized === 'critico' || normalized === 'deteriorado') {
+    return 'border-red-200 bg-red-50 text-red-700';
+  }
+
+  if (normalized === 'sin_alcance' || normalized === 'fuera_alcance') {
+    return 'border-slate-200 bg-slate-50 text-slate-500';
+  }
+
+  return 'border-slate-200 bg-slate-50 text-slate-600';
 }
 
 function normalizeKpiDashboardItem(item: any): KpiDashboardItem {
@@ -377,6 +462,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const [kpiData, setKpiData] = useState<KpiDashboardResponse | null>(null);
+  const [effectiveHealthData, setEffectiveHealthData] = useState<EffectiveHealthSummaryResponse | null>(null);
   const [loadingKpis, setLoadingKpis] = useState(false);
   const [recalculatingKpis, setRecalculatingKpis] = useState(false);
 
@@ -423,14 +509,16 @@ export default function DashboardPage() {
     try {
       setLoadingKpis(true);
 
-      const json = await fetchJson(
-        `${API_URL}/api/kpis/dashboard/${user.tenant_id}`,
-        token
-      );
+      const [json, effectiveJson] = await Promise.all([
+        fetchJson(`${API_URL}/api/kpis/dashboard/${user.tenant_id}`, token),
+        fetchJson(`${API_URL}/api/kpi/effective-health-summary/${user.tenant_id}`, token),
+      ]);
 
       setKpiData(
         normalizeKpiDashboardResponse(json || { summary: undefined, items: [] })
       );
+
+      setEffectiveHealthData(effectiveJson || null);
     } catch (err) {
       console.error('ERROR KPI DASHBOARD:', err);
       setKpiData({
@@ -696,6 +784,34 @@ export default function DashboardPage() {
 
   const kpiItems = kpiData?.items || [];
   const kpiSummary = kpiData?.summary;
+  const effectiveHealthRows = effectiveHealthData?.active_summary || [];
+  const effectiveHealthTotals = effectiveHealthRows.reduce(
+    (acc, row) => {
+      acc.activeControls += toSafeNumber(row.active_scope_controls);
+      acc.compliesControls += toSafeNumber(row.complies_controls);
+      acc.withoutEvidence += toSafeNumber(row.controls_without_evidence);
+      acc.officialEvidenceControls += toSafeNumber(row.controls_with_official_evidence);
+      acc.overdueActionPlans += toSafeNumber(row.overdue_action_plans_count);
+      acc.openNonconformities += toSafeNumber(row.open_nonconformities_count);
+      return acc;
+    },
+    {
+      activeControls: 0,
+      compliesControls: 0,
+      withoutEvidence: 0,
+      officialEvidenceControls: 0,
+      overdueActionPlans: 0,
+      openNonconformities: 0,
+    }
+  );
+  const effectiveCompliancePercent =
+    effectiveHealthTotals.activeControls > 0
+      ? Math.round((effectiveHealthTotals.compliesControls / effectiveHealthTotals.activeControls) * 100)
+      : 0;
+  const effectiveOfficialEvidencePercent =
+    effectiveHealthTotals.activeControls > 0
+      ? Math.round((effectiveHealthTotals.officialEvidenceControls / effectiveHealthTotals.activeControls) * 100)
+      : 0;
   const healthKpiCount = kpiItems.filter(
     (item) => item.is_health_kpi || item.code.startsWith('KPI-HLT-')
   ).length;
@@ -1317,6 +1433,111 @@ export default function DashboardPage() {
                   </button>
                 </div>
               </div>
+
+              
+              {effectiveHealthRows.length > 0 && (
+                <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                        Salud ISO efectiva
+                      </p>
+                      <h2 className="mt-1 text-xl font-semibold text-slate-900">
+                        Cumplimiento calculado por norma y operación activa
+                      </h2>
+                      <p className="mt-1 max-w-3xl text-sm text-slate-500">
+                        Este resumen usa la vista efectiva de cumplimiento. Excluye datos fuera de alcance operacional y prioriza evidencia oficial, hallazgos, no conformidades y planes vencidos.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+                      <p className="text-xs text-slate-500">Cumplimiento efectivo</p>
+                      <p className="text-2xl font-bold text-slate-900">{effectiveCompliancePercent}%</p>
+                      <p className="text-xs text-slate-500">
+                        Evidencia oficial: {effectiveOfficialEvidencePercent}%
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">Controles activos</p>
+                      <p className="mt-1 text-2xl font-semibold text-slate-900">
+                        {effectiveHealthTotals.activeControls}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">Cumplen</p>
+                      <p className="mt-1 text-2xl font-semibold text-emerald-700">
+                        {effectiveHealthTotals.compliesControls}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">Sin evidencia</p>
+                      <p className="mt-1 text-2xl font-semibold text-amber-700">
+                        {effectiveHealthTotals.withoutEvidence}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">Planes vencidos</p>
+                      <p className="mt-1 text-2xl font-semibold text-red-700">
+                        {effectiveHealthTotals.overdueActionPlans}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+                    <div className="grid grid-cols-12 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <div className="col-span-3">Norma / operación</div>
+                      <div className="col-span-2 text-right">Cumplimiento</div>
+                      <div className="col-span-2 text-right">Evidencia oficial</div>
+                      <div className="col-span-2 text-right">Sin evidencia</div>
+                      <div className="col-span-2 text-right">Promedio salud</div>
+                      <div className="col-span-1 text-right">Estado</div>
+                    </div>
+
+                    {effectiveHealthRows.map((row) => (
+                      <div
+                        key={`${row.iso}-${row.operation_id}`}
+                        className="grid grid-cols-12 items-center border-t border-slate-100 px-4 py-3 text-sm"
+                      >
+                        <div className="col-span-3">
+                          <p className="font-semibold text-slate-900">{row.iso}</p>
+                          <p className="text-xs text-slate-500">
+                            {row.operation_name || 'Operación'} · {row.operation_code || 'N/A'}
+                          </p>
+                        </div>
+
+                        <div className="col-span-2 text-right font-semibold text-slate-900">
+                          {toSafeNumber(row.compliance_percentage)}%
+                        </div>
+
+                        <div className="col-span-2 text-right text-slate-700">
+                          {toSafeNumber(row.official_evidence_percentage)}%
+                        </div>
+
+                        <div className="col-span-2 text-right text-slate-700">
+                          {toSafeNumber(row.controls_without_evidence)}
+                        </div>
+
+                        <div className="col-span-2 text-right text-slate-700">
+                          {toSafeNumber(row.avg_effective_health_score)}
+                        </div>
+
+                        <div className="col-span-1 flex justify-end">
+                          <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getEffectiveHealthTone(row.kpi_health_status)}`}>
+                            {mapEffectiveHealthLabel(row.kpi_health_status)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
 
               {loadingKpis && (
                 <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
