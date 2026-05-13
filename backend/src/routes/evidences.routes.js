@@ -1186,6 +1186,131 @@ router.get('/file/:id', auth, async (req, res) => {
 // - tenant_control_id
 // - action_plan_id
 // =============================
+
+
+// =====================================================
+// Marcar evidencia integrada como evidencia oficial
+// =====================================================
+router.post('/:id/mark-official', auth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const evidenceId = req.params.id;
+    const tenantId = req.body?.tenant_id || req.query?.tenant_id || getUserTenantId(req.user);
+    const userId = getUserId(req.user);
+
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenant_id requerido' });
+    }
+
+    if (!ensureTenantAccess(req, tenantId)) {
+      return res.status(403).json({ error: 'Sin acceso al tenant indicado' });
+    }
+
+    if (!canReviewEvidence(req, tenantId)) {
+      return res.status(403).json({ error: 'Usuario no autorizado para oficializar evidencias' });
+    }
+
+    await client.query('BEGIN');
+
+    const evidenceResult = await client.query(
+      `
+      SELECT
+        e.*,
+        tc.id AS resolved_tenant_control_id,
+        tc.tenant_id AS control_tenant_id
+      FROM evidences e
+      LEFT JOIN tenant_controls tc
+        ON tc.id = e.tenant_control_id
+      WHERE e.id = $1
+        AND e.tenant_id = $2
+      FOR UPDATE
+      `,
+      [evidenceId, tenantId]
+    );
+
+    if (evidenceResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Evidencia no encontrada' });
+    }
+
+    const evidence = evidenceResult.rows[0];
+
+    if (String(evidence.evidence_type || '').toLowerCase() !== 'documento_integrado') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Solo las evidencias integradas pueden marcarse como oficiales por este flujo'
+      });
+    }
+
+    if (!evidence.tenant_control_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'La evidencia no tiene tenant_control_id asociado'
+      });
+    }
+
+    if (String(evidence.status || '').toLowerCase() !== 'aprobada' || evidence.validated !== true) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'La evidencia debe estar aprobada y validada antes de oficializarse'
+      });
+    }
+
+    const metadata = safeObject(evidence.metadata);
+    const now = new Date().toISOString();
+
+    const updatedMetadata = deepMerge(metadata, {
+      official_evidence: true,
+      officialized_at: now,
+      officialized_by_user_id: userId,
+      official_source: 'control_workbench',
+      official_scope: {
+        tenant_control_id: evidence.tenant_control_id,
+        control_id: evidence.control_id || null,
+        source_document_id: metadata.source_document_id || null,
+        source_suggestion_id: metadata.source_suggestion_id || null,
+        suggested_standard_code: metadata.suggested_standard_code || null,
+        suggested_control_ref: metadata.suggested_control_ref || null
+      }
+    });
+
+    const updatedEvidenceResult = await client.query(
+      `
+      UPDATE evidences
+      SET
+        metadata = $1::jsonb,
+        reviewed_by = COALESCE(reviewed_by, $2),
+        reviewed_at = COALESCE(reviewed_at, NOW()),
+        status = 'aprobada',
+        validated = true
+      WHERE id = $3
+        AND tenant_id = $4
+      RETURNING *
+      `,
+      [JSON.stringify(updatedMetadata), userId, evidenceId, tenantId]
+    );
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      evidence: updatedEvidenceResult.rows[0],
+      message: 'Evidencia marcada como oficial del control'
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('ERROR MARK EVIDENCE OFFICIAL:', err);
+    return res.status(500).json({
+      error: 'No fue posible marcar la evidencia como oficial',
+      detail: err.message
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
 router.get('/:tenant_id', auth, async (req, res) => {
   const client = await pool.connect()
 

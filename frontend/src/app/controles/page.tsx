@@ -316,6 +316,19 @@ function healthCardClass(status?: string | null) {
 }
 
 
+
+function isOfficialIntegratedEvidence(evidence: any): boolean {
+  const metadata = evidence?.metadata || {};
+  return (
+    isIntegratedEvidence(evidence) &&
+    (
+      metadata.official_evidence === true ||
+      metadata.official_evidence === 'true' ||
+      Boolean(metadata.officialized_at)
+    )
+  );
+}
+
 function getIntegratedEvidenceCompliancePct(evidence: any): number | null {
   const direct = Number(evidence?.ai_acceptance_pct)
   if (Number.isFinite(direct) && direct > 0) return Math.round(direct)
@@ -2059,7 +2072,12 @@ function ControlesPageContent() {
                                           {isIntegratedEvidence(evidence) &&
                                             String(evidence.status || '').toLowerCase() === 'aprobada' && (
                                               <div className="flex flex-wrap gap-2">
-                                                <button
+                                                {isOfficialIntegratedEvidence(evidence) ? (
+                                                  <span className="inline-flex rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                                                    Evidencia oficial del control
+                                                  </span>
+                                                ) : (
+                                                  <button
                                                   type="button"
                                                   onClick={() =>
                                                     void markIntegratedEvidenceAsOfficial(item, evidence)
@@ -2071,6 +2089,7 @@ function ControlesPageContent() {
                                                     ? 'Aplicando...'
                                                     : 'Establecer como evidencia oficial'}
                                                 </button>
+                                                )}
                                               </div>
                                             )}
 
