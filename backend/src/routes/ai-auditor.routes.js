@@ -1482,9 +1482,11 @@ function buildSeniorAuditorPayload({ tenantId, locale, context, body }) {
     locale: 'es',
     context,
     options: {
+      local_compact: body?.local_compact !== false,
       use_rag: body?.use_rag !== false,
-      use_drive: body?.use_drive !== false,
-      use_web: body?.use_web !== false,
+      use_drive: body?.use_drive === undefined ? 'auto' : body.use_drive !== false,
+      use_web: body?.force_web === true || body?.use_web === true,
+      force_web: body?.force_web === true,
       depth: ['executive', 'standard', 'deep'].includes(body?.depth) ? body.depth : 'standard',
       return_structured_result: true,
     },

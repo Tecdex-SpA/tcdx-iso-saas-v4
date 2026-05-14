@@ -9,6 +9,11 @@ LLM_PROVIDER=ollama
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:7b
 AI_ENGINE_LLM_TIMEOUT_MS=90000
+AI_ENGINE_LOCAL_COMPACT=true
+AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_EXECUTIVE=220
+AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_STANDARD=420
+AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_DEEP=700
+AI_ENGINE_LOCAL_COMPACT_NUM_CTX=2048
 ```
 
 Modelos sugeridos:
@@ -51,6 +56,7 @@ curl -s http://localhost:11434/api/generate \
 - No configurar `OLLAMA_HOST=0.0.0.0` salvo que exista control de red explícito.
 - No enviar secretos, tokens ni credenciales al prompt.
 - Si Ollama está caído o el modelo no existe, `ai-engine` debe responder con fallback determinístico y limitación explícita.
+- Para modelos pequeños como `qwen2.5:1.5b` o `qwen2.5:3b`, mantener `local_compact` activo para reducir contexto y limitar generación.
 
 ## Prueba desde ai-engine después del deploy
 
@@ -64,4 +70,6 @@ Luego probar IA Auditor o IA Compliance desde backend y verificar:
 - `engine.llm_provider = "ollama"`
 - `engine.used_llm = true` cuando Ollama responde.
 - `engine.model = "ollama/qwen2.5:7b"` o el modelo configurado.
+- `engine.local_compact = true` cuando el proveedor sea Ollama o se fuerce por request.
+- `engine.ollama_options.num_predict` debe reflejar la profundidad solicitada.
 - Si falla, `limitations` debe indicar fallback determinístico y modelo intentado.

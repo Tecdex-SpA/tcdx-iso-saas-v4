@@ -418,6 +418,86 @@ Cambios finales:
 - RAG incluye baseline local en `ai-engine/knowledge/iso_baseline_knowledge.json` para ISO9001, ISO27001 e ISO42001, sin copiar texto normativo propietario.
 - Documentos/Drive se consumen desde `document_index` cuando backend lo agrega al contexto; ai-engine no reconstruye OAuth.
 
+## 24.1 Simple RAG baseline
+
+Archivo canónico:
+
+```txt
+ai-engine/app/knowledge/iso_baseline_knowledge.json
+```
+
+El RAG simple no usa vector DB, embeddings ni dependencias nuevas. `rag_context_service.py` busca de forma determinística por:
+
+- `standard_code`
+- cláusula/dominio
+- tópico
+- keywords de descripción/control/pregunta
+- `module_origin`
+
+Scoring:
+
+- `+5` match exacto de norma
+- `+4` dominio/cláusula
+- `+3` tópico
+- `+2` keyword
+- `+1` módulo
+
+El orquestador agrega los resultados bajo:
+
+```txt
+CONOCIMIENTO NORMATIVO INTERNO DISPONIBLE
+```
+
+y los usa en fallback determinístico para evidencia esperada, preguntas auditoras, documentos a solicitar, acciones y criterios de cierre.
+
+## 24.2 local_compact para Ollama
+
+`local_compact` se activa cuando:
+
+- `LLM_PROVIDER=ollama`
+- `AI_ENGINE_LOCAL_COMPACT=true`
+- `payload.options.local_compact=true`
+
+En modo compacto:
+
+- usa `ai-engine/prompts/iso_senior_auditor_compact.md`;
+- limita controles/evidencias/hallazgos/planes;
+- trunca strings largos;
+- envía RAG compacto en vez de grandes arrays;
+- deshabilita Brave por defecto en executive/standard;
+- usa Drive solo si hay documentos relevantes;
+- limita Ollama con `num_predict` por profundidad.
+
+Variables:
+
+```env
+AI_ENGINE_LOCAL_COMPACT_MAX_CONTROLS=8
+AI_ENGINE_LOCAL_COMPACT_MAX_EVIDENCES=5
+AI_ENGINE_LOCAL_COMPACT_MAX_FINDINGS=5
+AI_ENGINE_LOCAL_COMPACT_MAX_ACTIONS=5
+AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_EXECUTIVE=220
+AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_STANDARD=420
+AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_DEEP=700
+AI_ENGINE_LOCAL_COMPACT_NUM_CTX=2048
+```
+
+Metadata esperada:
+
+```json
+{
+  "engine": {
+    "local_compact": true,
+    "used_rag": true,
+    "used_web": false,
+    "ollama_options": {
+      "num_predict": 220,
+      "temperature": 0.2,
+      "num_ctx": 2048
+    }
+  }
+}
+```
+
 ## 25. Operational AI endpoints
 
 Endpoints backend añadidos:

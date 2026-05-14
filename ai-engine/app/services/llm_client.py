@@ -55,6 +55,31 @@ def get_llm_metadata() -> dict:
     }
 
 
+def _int_env(name: str, fallback: int) -> int:
+    try:
+        return int(os.getenv(name, str(fallback)) or fallback)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def get_ollama_generation_options(depth: str = "standard", local_compact: bool = False, temperature: float = 0.2) -> Dict[str, Any]:
+    depth = depth if depth in {"executive", "standard", "deep"} else "standard"
+    defaults = {
+        "executive": _int_env("AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_EXECUTIVE", 220),
+        "standard": _int_env("AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_STANDARD", 420),
+        "deep": _int_env("AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_DEEP", 700),
+    }
+    options: Dict[str, Any] = {
+        "temperature": temperature,
+        "top_p": 0.9,
+        "repeat_penalty": 1.05,
+    }
+    if local_compact:
+        options["num_predict"] = defaults[depth]
+        options["num_ctx"] = _int_env("AI_ENGINE_LOCAL_COMPACT_NUM_CTX", 2048)
+    return options
+
+
 def _request_json(url: str, headers: Dict[str, str], payload: Dict[str, Any], timeout: int) -> Dict[str, Any]:
     data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(url, data=data, headers=headers, method="POST")
@@ -85,7 +110,14 @@ def _parse_json_text(value: Any) -> Dict[str, Any]:
         return {"answer": text}
 
 
-def call_llm_json(prompt: str, system_prompt: str = "", temperature: float = 0.2, timeout: int = 60) -> dict:
+def call_llm_json(
+    prompt: str,
+    system_prompt: str = "",
+    temperature: float = 0.2,
+    timeout: int = 60,
+    depth: str = "standard",
+    local_compact: bool = False,
+) -> dict:
     metadata = get_llm_metadata()
     if not metadata["available"]:
         raise RuntimeError("LLM provider not configured")
@@ -126,7 +158,7 @@ def call_llm_json(prompt: str, system_prompt: str = "", temperature: float = 0.2
             "prompt": combined_prompt,
             "stream": False,
             "format": "json",
-            "options": {"temperature": temperature},
+            "options": get_ollama_generation_options(depth, local_compact, temperature),
         }
         data = _request_json(url, {"Content-Type": "application/json"}, payload, int(timeout))
         content = data.get("response") or (data.get("message") or {}).get("content") or ""

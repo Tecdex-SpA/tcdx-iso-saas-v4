@@ -1,7 +1,7 @@
 const aiEngineClient = require('./aiEngineClient.service');
 
 function normalizeDepth(value) {
-  return ['executive', 'standard', 'deep'].includes(value) ? value : 'standard';
+  return ['executive', 'standard', 'deep'].includes(value) ? value : 'executive';
 }
 
 function buildQuestion({ defaultQuestion, body = {}, entityLabel = '' }) {
@@ -27,9 +27,11 @@ async function runOperationalAiReview({
     locale: 'es',
     context,
     options: {
+      local_compact: body.local_compact !== false,
       use_rag: body.use_rag !== false,
-      use_drive: body.use_drive !== false,
-      use_web: body.use_web !== false,
+      use_drive: body.use_drive === undefined ? 'auto' : body.use_drive !== false,
+      use_web: body.force_web === true || body.use_web === true,
+      force_web: body.force_web === true,
       depth: normalizeDepth(body.depth),
       return_structured_result: true,
     },

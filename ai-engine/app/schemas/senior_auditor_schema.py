@@ -5,8 +5,11 @@ from pydantic import BaseModel, Field
 
 class SeniorAuditorOptions(BaseModel):
     use_rag: bool = True
-    use_drive: bool = True
+    use_drive: Any = True
     use_web: bool = True
+    force_web: bool = False
+    local_compact: bool = False
+    rag_limit: int = 5
     depth: Literal["executive", "standard", "deep"] = "standard"
     return_structured_result: bool = True
 

@@ -5,7 +5,7 @@ class AiEngineClient {
         process.env.AI_ENGINE_BASE_URL ||
         'http://localhost:8001'
     ).replace(/\/+$/, '');
-    this.timeout = Number.parseInt(process.env.AI_ENGINE_TIMEOUT_MS || '30000', 10) || 30000;
+    this.timeout = Number.parseInt(process.env.AI_ENGINE_TIMEOUT_MS || '120000', 10) || 120000;
     this.token = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
   }
 

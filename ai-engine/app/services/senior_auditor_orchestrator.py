@@ -1,11 +1,12 @@
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
 from app.services.drive_context_service import build_drive_context
 from app.services.guardrails_service import apply_post_analysis_guardrails, apply_pre_analysis_guardrails
-from app.services.llm_client import call_llm_json, get_llm_metadata, is_llm_available
+from app.services.llm_client import call_llm_json, get_llm_metadata, get_ollama_generation_options, is_llm_available
 from app.services.rag_context_service import build_rag_context
 from app.services.source_trace_service import make_source_trace_item, normalize_source_trace
 from app.services.structured_result_service import (
@@ -18,6 +19,7 @@ PROMPT_VERSION = "1.0.0"
 CONTEXT_VERSION = "ai_context_v2.0.0"
 BASE_DIR = Path(__file__).resolve().parents[2]
 PROMPT_PATH = BASE_DIR / "prompts" / "iso_senior_auditor.md"
+COMPACT_PROMPT_PATH = BASE_DIR / "prompts" / "iso_senior_auditor_compact.md"
 
 
 def _number(value: Any) -> float:
@@ -36,6 +38,79 @@ def _load_master_prompt() -> str:
         return PROMPT_PATH.read_text(encoding="utf-8")
     except OSError:
         return "Prompt Maestro — Auditor ISO Senior no disponible en disco."
+
+
+def _load_prompt(local_compact: bool) -> str:
+    if local_compact:
+        try:
+            return COMPACT_PROMPT_PATH.read_text(encoding="utf-8")
+        except OSError:
+            return _load_master_prompt()
+    return _load_master_prompt()
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = str(os.getenv(name, str(default))).lower().strip()
+    return value in {"1", "true", "yes", "on", "si", "sí"}
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)) or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def is_local_compact_mode(payload: dict, settings: dict = None) -> bool:
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    if options.get("local_compact") is True:
+        return True
+    if options.get("local_compact") is False:
+        return False
+    provider = str((settings or {}).get("provider") or os.getenv("LLM_PROVIDER") or os.getenv("MODEL_PROVIDER") or "").lower()
+    return provider == "ollama" or _env_bool("AI_ENGINE_LOCAL_COMPACT", False)
+
+
+def _compact_limits() -> Dict[str, int]:
+    return {
+        "max_controls": _env_int("AI_ENGINE_LOCAL_COMPACT_MAX_CONTROLS", 8),
+        "max_evidences": _env_int("AI_ENGINE_LOCAL_COMPACT_MAX_EVIDENCES", 5),
+        "max_findings": _env_int("AI_ENGINE_LOCAL_COMPACT_MAX_FINDINGS", 5),
+        "max_actions": _env_int("AI_ENGINE_LOCAL_COMPACT_MAX_ACTIONS", 5),
+    }
+
+
+def resolve_source_policy(payload: dict, local_compact: bool, depth: str) -> dict:
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    if not local_compact:
+        return {
+            "use_rag": options.get("use_rag") is not False,
+            "use_drive": options.get("use_drive") is not False,
+            "use_web": options.get("use_web") is not False,
+            "rag_limit": int(options.get("rag_limit") or 5),
+            "limitations": [],
+        }
+
+    force_web = options.get("force_web") is True
+    drive_option = options.get("use_drive", "auto")
+    context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+    scope = context.get("scope") if isinstance(context.get("scope"), dict) else {}
+    has_direct_entity = bool(scope.get("tenant_control_id") or scope.get("evidence_id") or scope.get("action_plan_id"))
+    has_documents = bool(context.get("documents"))
+    use_drive = drive_option is True or (drive_option != False and has_documents and (has_direct_entity or depth in {"standard", "deep"}))
+    use_web = bool(force_web or (depth == "deep" and options.get("use_web") is not False))
+    limitations = []
+    if not use_web:
+        limitations.append("Brave/internet omitido por modo local_compact para reducir latencia.")
+    if not use_drive and options.get("use_drive") is not False:
+        limitations.append("Google Drive/documentos omitidos por modo local_compact salvo coincidencia directa relevante.")
+    return {
+        "use_rag": options.get("use_rag") is not False,
+        "use_drive": use_drive,
+        "use_web": use_web,
+        "rag_limit": {"executive": 2, "standard": 3, "deep": 5}.get(depth, 3),
+        "limitations": limitations,
+    }
 
 
 def _readiness(summary_rows: List[Dict[str, Any]], controls: List[Dict[str, Any]]) -> Dict[str, str]:
@@ -76,6 +151,142 @@ def _severity(control: Dict[str, Any]) -> str:
     if score < 70:
         return "media"
     return "baja"
+
+
+def _truncate_value(value: Any, max_len: int = 500) -> Any:
+    if isinstance(value, str):
+        return value if len(value) <= max_len else value[:max_len].rstrip() + "..."
+    if isinstance(value, dict):
+        return {key: _truncate_value(item, max_len) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_truncate_value(item, max_len) for item in value]
+    return value
+
+
+def _sort_controls_worst_first(controls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return sorted(
+        [item for item in controls if isinstance(item, dict)],
+        key=lambda row: (
+            _number(row.get("effective_health_score")),
+            -_int(row.get("overdue_action_plans_count")),
+            -_int(row.get("open_nonconformities_count")),
+            -_int(row.get("open_findings_count")),
+        ),
+    )
+
+
+def build_compact_ai_context(context: dict, depth: str = "executive", limits: dict = None) -> dict:
+    """
+    Takes full backend context and returns compact context for local LLM.
+    Must preserve enough data to produce useful answer.
+    Must not mutate original context.
+    """
+    limits = limits or _compact_limits()
+    full_controls = context.get("priority_controls") if isinstance(context.get("priority_controls"), list) else []
+    full_evidences = context.get("recent_evidences") if isinstance(context.get("recent_evidences"), list) else []
+    full_findings = context.get("recent_findings") if isinstance(context.get("recent_findings"), list) else []
+    full_nc = context.get("recent_nonconformities") if isinstance(context.get("recent_nonconformities"), list) else []
+    full_actions = context.get("recent_action_plans") if isinstance(context.get("recent_action_plans"), list) else []
+    controls = _sort_controls_worst_first(full_controls)[: limits["max_controls"]]
+
+    def slim_control(row: Dict[str, Any]) -> Dict[str, Any]:
+        return _truncate_value({
+            "tenant_control_id": row.get("tenant_control_id"),
+            "standard_code": row.get("standard_code") or row.get("iso"),
+            "iso": row.get("iso"),
+            "clause": row.get("clause"),
+            "description": row.get("control_description") or row.get("description"),
+            "control_description": row.get("control_description") or row.get("description"),
+            "effective_health_score": row.get("effective_health_score"),
+            "effective_health_status": row.get("effective_health_status"),
+            "compliance_bucket": row.get("compliance_bucket"),
+            "evidence_quality_status": row.get("evidence_quality_status"),
+            "official_evidence_count": row.get("official_evidence_count"),
+            "approved_evidence_count": row.get("approved_evidence_count"),
+            "open_findings_count": row.get("open_findings_count"),
+            "open_nonconformities_count": row.get("open_nonconformities_count"),
+            "open_action_plans_count": row.get("open_action_plans_count"),
+            "overdue_action_plans_count": row.get("overdue_action_plans_count"),
+            "is_in_active_operational_scope": row.get("is_in_active_operational_scope"),
+        })
+
+    def slim_entity(row: Dict[str, Any]) -> Dict[str, Any]:
+        return _truncate_value({
+            "id": row.get("id"),
+            "title": row.get("title") or row.get("name") or row.get("file_name"),
+            "name": row.get("name") or row.get("file_name") or row.get("title"),
+            "status": row.get("status") or row.get("approval_status"),
+            "evidence_type": row.get("evidence_type") or row.get("type"),
+            "severity": row.get("severity"),
+            "priority": row.get("priority"),
+            "due_date": row.get("due_date"),
+            "created_at": row.get("created_at"),
+            "tenant_control_id": row.get("tenant_control_id"),
+            "iso": row.get("iso") or row.get("iso_code") or row.get("standard_code"),
+            "clause": row.get("clause"),
+        })
+
+    summaries = []
+    for row in context.get("effective_health_summary") or []:
+        if not isinstance(row, dict) or _int(row.get("active_scope_controls")) <= 0:
+            continue
+        summaries.append(_truncate_value({
+            "iso": row.get("iso"),
+            "operation_id": row.get("operation_id"),
+            "operation_name": row.get("operation_name"),
+            "active_scope_controls": row.get("active_scope_controls"),
+            "complies_controls": row.get("complies_controls"),
+            "controls_without_evidence": row.get("controls_without_evidence"),
+            "controls_with_official_evidence": row.get("controls_with_official_evidence"),
+            "open_nonconformities_count": row.get("open_nonconformities_count"),
+            "overdue_action_plans_count": row.get("overdue_action_plans_count"),
+            "avg_effective_health_score": row.get("avg_effective_health_score"),
+            "compliance_percentage": row.get("compliance_percentage"),
+            "official_evidence_percentage": row.get("official_evidence_percentage"),
+            "kpi_health_status": row.get("kpi_health_status"),
+        }))
+
+    open_findings = [item for item in full_findings if str(item.get("status") or "").lower() not in {"cerrado", "closed", "resuelto", "resolved"}]
+    open_nc = [item for item in full_nc if str(item.get("status") or "").lower() not in {"cerrada", "cerrado", "closed", "resuelta", "resolved"}]
+    open_actions = [item for item in full_actions if str(item.get("status") or "").lower() not in {"cerrado", "closed", "completado", "cancelado"}]
+    compact = {
+        "tenant": _truncate_value(context.get("tenant") if isinstance(context.get("tenant"), dict) else {}),
+        "scope": _truncate_value(context.get("scope") if isinstance(context.get("scope"), dict) else {}),
+        "effective_health_summary": summaries[:10],
+        "priority_controls": [slim_control(item) for item in controls],
+        "recent_evidences": [slim_entity(item) for item in full_evidences[: limits["max_evidences"]]],
+        "recent_findings": [slim_entity(item) for item in open_findings[: limits["max_findings"]]],
+        "recent_nonconformities": [slim_entity(item) for item in open_nc[: limits["max_findings"]]],
+        "recent_action_plans": [slim_entity(item) for item in open_actions[: limits["max_actions"]]],
+        "kpis": _truncate_value((context.get("kpis") or [])[:5]),
+        "documents": [
+            _truncate_value({
+                "document_id": item.get("document_id") or item.get("id"),
+                "title": item.get("title") or item.get("name") or item.get("file_name"),
+                "type": item.get("type") or item.get("file_extension") or item.get("mime_type"),
+                "date": item.get("date") or item.get("modified_at") or item.get("created_at"),
+                "relation": item.get("relation"),
+                "matched_by": item.get("matched_by"),
+                "summary": item.get("summary"),
+            })
+            for item in (context.get("documents") or [])[:5]
+            if isinstance(item, dict)
+        ],
+        "source_trace": context.get("source_trace") or [],
+        "limitations": context.get("limitations") or [],
+        "compact_context_summary": {
+            "enabled": True,
+            "controls_included": len(controls),
+            "controls_omitted": max(0, len(full_controls) - len(controls)),
+            "evidences_included": min(len(full_evidences), limits["max_evidences"]),
+            "evidences_omitted": max(0, len(full_evidences) - limits["max_evidences"]),
+            "findings_included": min(len(open_findings), limits["max_findings"]),
+            "action_plans_included": min(len(open_actions), limits["max_actions"]),
+            "large_text_truncated": True,
+            "depth": depth,
+        },
+    }
+    return compact
 
 
 def _build_gaps(controls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -128,6 +339,88 @@ def _build_actions(gaps: List[Dict[str, Any]], controls: List[Dict[str, Any]]) -
     return actions
 
 
+def _rag_results(rag: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [item for item in (rag.get("results") or []) if isinstance(item, dict)]
+
+
+def _flatten_rag_values(rag_results: List[Dict[str, Any]], key: str, limit: int = 8) -> List[str]:
+    values: List[str] = []
+    for item in rag_results:
+        for value in item.get(key) or []:
+            text = str(value or "").strip()
+            if text and text not in values:
+                values.append(text)
+            if len(values) >= limit:
+                return values
+    return values
+
+
+def build_deterministic_preanalysis(context: dict, rag_results: list = None) -> dict:
+    rag_results = [item for item in (rag_results or []) if isinstance(item, dict)]
+    summaries = context.get("effective_health_summary") if isinstance(context.get("effective_health_summary"), list) else []
+    controls = _sort_controls_worst_first(context.get("priority_controls") or [])
+    readiness = _readiness(summaries, controls)
+    active = sum(_int(row.get("active_scope_controls")) for row in summaries)
+    complies = sum(_int(row.get("complies_controls")) for row in summaries)
+    without = sum(_int(row.get("controls_without_evidence")) for row in summaries)
+    official = sum(_int(row.get("controls_with_official_evidence")) for row in summaries)
+    overdue = sum(_int(row.get("overdue_action_plans_count")) for row in summaries)
+    open_nc = sum(_int(row.get("open_nonconformities_count")) for row in summaries)
+    compliance = round((complies / active * 100), 2) if active else 0
+    official_pct = round((official / active * 100), 2) if active else 0
+    gaps = _build_gaps(controls)
+    actions = _build_actions(gaps, controls)
+    expected_evidence = _flatten_rag_values(rag_results, "expected_evidence", 10)
+    common_gaps = _flatten_rag_values(rag_results, "common_gaps", 8)
+    audit_questions = _flatten_rag_values(rag_results, "audit_questions", 8)
+    documents_to_request = _flatten_rag_values(rag_results, "documents_to_request", 8)
+    recommended_from_rag = _flatten_rag_values(rag_results, "recommended_actions", 8)
+    closure_criteria = _flatten_rag_values(rag_results, "closure_criteria", 8)
+
+    missing_evidence = [
+        f"{item} — requerido como sustento operativo según conocimiento normativo interno"
+        for item in expected_evidence[:6]
+    ]
+    for action, rag_action in zip(actions, recommended_from_rag):
+        action["description"] = f"{action['description']} Acción RAG sugerida: {rag_action}."
+        action["acceptance_criteria"] = list(dict.fromkeys(action.get("acceptance_criteria", []) + closure_criteria[:3]))
+
+    if recommended_from_rag and len(actions) < 5:
+        for rag_action in recommended_from_rag[: 5 - len(actions)]:
+            actions.append({
+                "title": rag_action,
+                "description": f"Ejecutar acción recomendada por conocimiento normativo interno: {rag_action}.",
+                "priority": "media",
+                "target_module": "evidencias",
+                "suggested_owner_role": "Responsable del proceso y auditor interno ISO",
+                "due_days": 30,
+                "acceptance_criteria": closure_criteria[:4] or ["Evidencia verificable cargada", "Responsable asignado", "Cierre revisado por auditor interno"],
+                "related_control_id": "",
+                "related_iso": str((rag_results[0] or {}).get("standard_code") or ""),
+                "related_clause": str((rag_results[0] or {}).get("clause_or_domain") or ""),
+            })
+
+    return {
+        "readiness": readiness,
+        "active": active,
+        "complies": complies,
+        "without": without,
+        "official": official,
+        "overdue": overdue,
+        "open_nc": open_nc,
+        "compliance": compliance,
+        "official_pct": official_pct,
+        "gaps": gaps,
+        "actions": actions,
+        "missing_evidence": missing_evidence,
+        "common_gaps": common_gaps,
+        "audit_questions": audit_questions,
+        "documents_to_request": documents_to_request,
+        "closure_criteria": closure_criteria,
+        "confidence_seed": 0.15 if rag_results else 0.0,
+    }
+
+
 def _calculate_confidence(context: Dict[str, Any], used_rag: bool, used_drive: bool, used_web: bool) -> float:
     summaries = context.get("effective_health_summary") if isinstance(context.get("effective_health_summary"), list) else []
     controls = context.get("priority_controls") if isinstance(context.get("priority_controls"), list) else []
@@ -173,12 +466,21 @@ def _web_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _build_llm_user_prompt(payload: Dict[str, Any], context: Dict[str, Any], deterministic_result: Dict[str, Any]) -> str:
+def _build_llm_user_prompt(
+    payload: Dict[str, Any],
+    context: Dict[str, Any],
+    deterministic_result: Dict[str, Any],
+    rag: Dict[str, Any] = None,
+    local_compact: bool = False,
+) -> str:
+    rag_context = "\n".join(rag.get("rag_context_used") or []) if isinstance(rag, dict) else ""
     compact = {
         "task_type": payload.get("task_type"),
         "tenant_id": payload.get("tenant_id"),
         "module_origin": payload.get("module_origin"),
         "question": payload.get("question"),
+        "local_compact": local_compact,
+        "CONOCIMIENTO NORMATIVO INTERNO DISPONIBLE": rag_context,
         "context": {
             "tenant": context.get("tenant"),
             "scope": context.get("scope"),
@@ -195,8 +497,9 @@ def _build_llm_user_prompt(payload: Dict[str, Any], context: Dict[str, Any], det
         "deterministic_baseline": {
             "answer": deterministic_result.get("answer"),
             "structured_result": deterministic_result.get("structured_result"),
+            "preanalysis": deterministic_result.get("preanalysis"),
         },
-        "required_output": "Devuelve JSON válido con answer y structured_result completo. Todo en español.",
+        "required_output": "Devuelve JSON válido con answer y structured_result completo. Todo en español. Usa CONOCIMIENTO NORMATIVO INTERNO DISPONIBLE como guía compacta, no inventes evidencia.",
     }
     return json.dumps(compact, ensure_ascii=False, default=str)
 
@@ -208,25 +511,43 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not tenant_id:
         raise ValueError("tenant_id requerido")
     payload["locale"] = "es"
-    context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+    original_context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    depth = str(options.get("depth") or "standard")
+    if depth not in {"executive", "standard", "deep"}:
+        depth = "standard"
+    llm_metadata = get_llm_metadata()
+    local_compact = is_local_compact_mode(payload, llm_metadata)
+    limits = _compact_limits()
+    context = build_compact_ai_context(original_context, depth, limits) if local_compact else original_context
+    payload_for_sources = {**payload, "context": context, "options": dict(options)}
+    source_policy = resolve_source_policy(payload_for_sources, local_compact, depth)
+    payload_for_sources["options"].update({
+        "use_rag": source_policy["use_rag"],
+        "use_drive": source_policy["use_drive"],
+        "use_web": source_policy["use_web"],
+        "rag_limit": source_policy["rag_limit"],
+    })
     summaries = context.get("effective_health_summary") if isinstance(context.get("effective_health_summary"), list) else []
     controls = context.get("priority_controls") if isinstance(context.get("priority_controls"), list) else []
-    limitations = list(context.get("limitations") or [])
+    limitations = list(context.get("limitations") or []) + source_policy.get("limitations", [])
+    if local_compact and not COMPACT_PROMPT_PATH.exists():
+        limitations.append("Prompt compacto no disponible; se usó prompt maestro completo como fallback.")
     source_trace = normalize_source_trace(context.get("source_trace") or [])
     pre = apply_pre_analysis_guardrails(payload)
     limitations.extend(pre.get("limitations") or [])
     source_trace.extend(pre.get("source_trace") or [])
 
-    _load_master_prompt()
-
     rag = drive = web = {"used": False, "limitations": []}
     for name, fn, args in [
-        ("rag", build_rag_context, (payload,)),
-        ("drive", build_drive_context, (payload,)),
-        ("web", build_external_context, (_web_payload(payload),)),
+        ("rag", build_rag_context, (payload_for_sources,)),
+        ("drive", build_drive_context, (payload_for_sources,)),
+        ("web", build_external_context, (_web_payload(payload_for_sources),)),
     ]:
         try:
-            if name == "web" and (payload.get("options") or {}).get("use_web") is False:
+            if name == "drive" and not source_policy["use_drive"]:
+                continue
+            if name == "web" and not source_policy["use_web"]:
                 continue
             result = fn(*args)
             if name == "rag":
@@ -249,17 +570,18 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     elif web.get("reason"):
         limitations.append(str(web.get("reason")))
 
-    readiness = _readiness(summaries, controls)
-    active = sum(_int(row.get("active_scope_controls")) for row in summaries)
-    complies = sum(_int(row.get("complies_controls")) for row in summaries)
-    without = sum(_int(row.get("controls_without_evidence")) for row in summaries)
-    official = sum(_int(row.get("controls_with_official_evidence")) for row in summaries)
-    overdue = sum(_int(row.get("overdue_action_plans_count")) for row in summaries)
-    open_nc = sum(_int(row.get("open_nonconformities_count")) for row in summaries)
-    compliance = round((complies / active * 100), 2) if active else 0
-    official_pct = round((official / active * 100), 2) if active else 0
-    gaps = _build_gaps(controls)
-    actions = _build_actions(gaps, controls)
+    preanalysis = build_deterministic_preanalysis(context, _rag_results(rag))
+    readiness = preanalysis["readiness"]
+    active = preanalysis["active"]
+    complies = preanalysis["complies"]
+    without = preanalysis["without"]
+    official = preanalysis["official"]
+    overdue = preanalysis["overdue"]
+    open_nc = preanalysis["open_nc"]
+    compliance = preanalysis["compliance"]
+    official_pct = preanalysis["official_pct"]
+    gaps = preanalysis["gaps"]
+    actions = preanalysis["actions"]
 
     facts = [
         f"Según datos internos: {active} controles activos en alcance evaluados por public.v_iso_effective_kpi_summary.",
@@ -293,7 +615,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
         "Limitación del análisis: Google Drive, RAG o Brave pueden aportar contraste y mejores prácticas, pero no sustituyen la evidencia interna ni permiten declarar certificación."
     )
 
-    confidence = _calculate_confidence(context, bool(rag.get("used")), bool(drive.get("used")), bool(web.get("used")))
+    confidence = min(1.0, _calculate_confidence(context, bool(rag.get("used")), bool(drive.get("used")), bool(web.get("used"))) + preanalysis.get("confidence_seed", 0))
     structured = normalize_ai_structured_result({
         "executive_summary": f"Preparación {readiness['status']}: {active} controles activos, {compliance}% cumplimiento efectivo, {official_pct}% evidencia oficial, {without} controles sin evidencia.",
         "diagnosis": diagnosis,
@@ -303,8 +625,8 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
         "evidence_assessment": {
             "available_evidence": [f"{_int(control.get('evidence_count'))} evidencias en {control.get('iso')} {control.get('clause')}" for control in controls[:6] if _int(control.get("evidence_count")) > 0],
             "official_evidence": [f"{_int(control.get('official_evidence_count'))} oficiales en {control.get('iso')} {control.get('clause')}" for control in controls[:6] if _int(control.get("official_evidence_count")) > 0],
-            "weak_evidence": [gap["title"] for gap in gaps if gap["evidence_status"] == "evidencia_debil"],
-            "missing_evidence": [gap["title"] for gap in gaps if gap["evidence_status"] == "sin_evidencia"],
+            "weak_evidence": [gap["title"] for gap in gaps if gap["evidence_status"] == "evidencia_debil"] + preanalysis["common_gaps"][:3],
+            "missing_evidence": [gap["title"] for gap in gaps if gap["evidence_status"] == "sin_evidencia"] + preanalysis["missing_evidence"][:6],
         },
         "risk_impact": "Riesgo de hallazgos mayores si controles críticos carecen de evidencia oficial, planes vigentes y cierre de no conformidades.",
         "audit_readiness": {
@@ -314,7 +636,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "¿Qué evidencia oficial sustenta los controles críticos?",
                 "¿Por qué existen planes vencidos y quién aprobó la extensión?",
                 "¿Las no conformidades abiertas tienen causa raíz y tratamiento verificable?",
-            ],
+            ] + preanalysis["common_gaps"][:3],
         },
         "recommended_actions": actions,
         "auditor_questions": [
@@ -322,12 +644,12 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "¿Qué controles críticos siguen sin evidencia en alcance activo?",
             "¿Quién es responsable del cierre de planes vencidos?",
             "¿Cómo se verifica la eficacia de las acciones correctivas?",
-        ],
+        ] + preanalysis["audit_questions"][:6],
         "documents_to_request": [
             "Política o procedimiento vigente aplicable al control crítico",
             "Registro operacional reciente que demuestre ejecución del control",
             "Evidencia de revisión/aprobación por responsable formal",
-        ],
+        ] + preanalysis["documents_to_request"][:6],
         "web_context_used": [
             f"Como referencia externa: {item.get('url')} — {item.get('summary')}"
             for item in (web.get("sources") or [])[:5]
@@ -343,7 +665,6 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
         structured = build_fallback_structured_result(answer, context, limitations)
 
     engine_model = "deterministic_senior_auditor_v2"
-    llm_metadata = get_llm_metadata()
     llm_used = False
     if is_llm_available():
         try:
@@ -351,11 +672,15 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
                 prompt=_build_llm_user_prompt(
                     payload,
                     context,
-                    {"answer": answer, "structured_result": structured},
+                    {"answer": answer, "structured_result": structured, "preanalysis": preanalysis},
+                    rag,
+                    local_compact,
                 ),
-                system_prompt=_load_master_prompt(),
+                system_prompt=_load_prompt(local_compact),
                 temperature=0.2,
                 timeout=60,
+                depth=depth,
+                local_compact=local_compact,
             )
             llm_structured = normalize_ai_structured_result(llm_raw, defaults=structured)
             llm_structured["confidence"] = structured["confidence"]
@@ -401,6 +726,11 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "used_rag": bool(rag.get("used")),
             "used_drive": bool(drive.get("used")),
             "used_web": bool(web.get("used")),
+            "local_compact": local_compact,
+            "compact_reason": "ollama_provider" if local_compact and llm_metadata.get("provider") == "ollama" else ("request_or_env" if local_compact else ""),
+            "context_limits": limits if local_compact else {},
+            "compact_context_summary": context.get("compact_context_summary") or {},
+            "ollama_options": get_ollama_generation_options(depth, local_compact, 0.2) if llm_metadata.get("provider") == "ollama" else {},
             "generated_at": datetime.now(timezone.utc).isoformat(),
         },
     }
