@@ -3,6 +3,10 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 const pool = require('../config/db');
 const { errorDetail } = require('../utils/errorResponse');
+const {
+  getJwtSecret,
+  getJwtVerifyOptions,
+} = require('../config/security');
 
 // =====================================================
 // Middleware local de autenticación para rutas Health
@@ -20,20 +24,16 @@ function authenticateHealth(req, res, next) {
 
     const token = authHeader.replace('Bearer ', '').trim();
 
-    const secret =
-      process.env.JWT_SECRET ||
-      process.env.JWT_SECRET_KEY ||
-      process.env.SECRET_KEY ||
-      process.env.TOKEN_SECRET;
+    const secret = getJwtSecret();
 
     if (!secret) {
       return res.status(500).json({
         ok: false,
-        error: 'JWT_SECRET no configurado en backend',
+        error: 'Servicio de autenticación no disponible',
       });
     }
 
-    const decoded = jwt.verify(token, secret);
+    const decoded = jwt.verify(token, secret, getJwtVerifyOptions());
     req.user = decoded;
 
     next();
@@ -1498,7 +1498,6 @@ router.post('/refresh', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error recalculando salud de controles',
-      detail: err.message,
     });
   } finally {
     client.release();

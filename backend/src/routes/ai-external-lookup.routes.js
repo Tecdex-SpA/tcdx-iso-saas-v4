@@ -2,6 +2,10 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const http = require('http');
 const { errorDetail } = require('../utils/errorResponse');
+const {
+  getJwtSecret,
+  getJwtVerifyOptions,
+} = require('../config/security');
 
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
@@ -21,20 +25,16 @@ function authenticateExternalLookup(req, res, next) {
 
     const token = authHeader.replace('Bearer ', '').trim();
 
-    const secret =
-      process.env.JWT_SECRET ||
-      process.env.JWT_SECRET_KEY ||
-      process.env.SECRET_KEY ||
-      process.env.TOKEN_SECRET;
+    const secret = getJwtSecret();
 
     if (!secret) {
       return res.status(500).json({
         ok: false,
-        error: 'JWT_SECRET no configurado en backend',
+        error: 'Servicio de autenticación no disponible',
       });
     }
 
-    req.user = jwt.verify(token, secret);
+    req.user = jwt.verify(token, secret, getJwtVerifyOptions());
     next();
   } catch (error) {
     console.error('Error autenticando búsqueda externa IA:', error.message);

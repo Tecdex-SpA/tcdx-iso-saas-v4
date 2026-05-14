@@ -8,6 +8,19 @@ import { getUserFromToken } from '@/utils/auth';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
 
+const passwordPolicyMessage =
+  'Mínimo 8 caracteres, con mayúsculas, minúsculas, números y símbolos.';
+
+function isStrongPassword(password: string) {
+  return (
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
+}
+
 type TenantItem = {
   id: string;
   name: string;
@@ -47,6 +60,7 @@ const ui = {
     name: 'Nombre',
     email: 'Email',
     password: 'Password',
+    passwordPolicy: passwordPolicyMessage,
     role: 'Rol',
     users: 'Usuarios',
     total: 'Total',
@@ -96,6 +110,7 @@ const ui = {
     name: 'Name',
     email: 'Email',
     password: 'Password',
+    passwordPolicy: passwordPolicyMessage,
     role: 'Role',
     users: 'Users',
     total: 'Total',
@@ -338,6 +353,11 @@ export default function UsuariosPage() {
       return;
     }
 
+    if (!isStrongPassword(form.password)) {
+      alert(copy.passwordPolicy);
+      return;
+    }
+
     if (!isSuperAdmin && ['superadmin', 'dealer'].includes(form.role)) {
       alert(copy.cannotCreateRole);
       return;
@@ -381,6 +401,11 @@ export default function UsuariosPage() {
 
     if (!isSuperAdmin && ['superadmin', 'dealer'].includes(row.role)) {
       alert(copy.cannotAssignRole);
+      return;
+    }
+
+    if (row.newPassword && !isStrongPassword(row.newPassword)) {
+      alert(copy.passwordPolicy);
       return;
     }
 
@@ -526,6 +551,7 @@ export default function UsuariosPage() {
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             className="border p-2 rounded w-full"
           />
+          <p className="text-xs text-slate-500">{copy.passwordPolicy}</p>
 
           <select
             value={form.role}
@@ -643,6 +669,7 @@ export default function UsuariosPage() {
                       }
                       className="border p-2 rounded w-full"
                     />
+                    <p className="mt-1 text-xs text-slate-500">{copy.passwordPolicy}</p>
                   </div>
                 </div>
 

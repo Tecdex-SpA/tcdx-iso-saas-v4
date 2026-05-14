@@ -1,6 +1,14 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const {
+  getJwtSecret,
+  getJwtSignOptions,
+} = require('../config/security');
+const {
+  validatePasswordStrength,
+  getPasswordPolicyMessage,
+} = require('../utils/passwordPolicy');
 
 // =============================
 // 📝 REGISTRO
@@ -15,6 +23,12 @@ const register = async (email, password, tenant_id = null, role = 'user') => {
 
     if (exists.rowCount > 0) {
       throw new Error('Usuario ya existe');
+    }
+
+    if (!validatePasswordStrength(password).valid) {
+      const err = new Error(getPasswordPolicyMessage());
+      err.code = 'PASSWORD_POLICY_FAILED';
+      throw err;
     }
 
     // 🔐 hash password
@@ -64,14 +78,22 @@ const login = async (email, password) => {
     // =============================
     // 🔥 JWT CON ROLE
     // =============================
+    const secret = getJwtSecret();
+
+    if (!secret) {
+      const err = new Error('Servicio de autenticación no disponible');
+      err.code = 'JWT_SECRET_MISSING';
+      throw err;
+    }
+
     const token = jwt.sign(
       {
         user_id: user.id,
         tenant_id: user.tenant_id,
         role: user.role || 'user'
       },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      secret,
+      getJwtSignOptions()
     );
 
     return token;

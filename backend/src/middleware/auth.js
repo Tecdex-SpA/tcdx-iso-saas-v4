@@ -1,5 +1,9 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
+const {
+  getJwtSecret,
+  getJwtVerifyOptions,
+} = require('../config/security');
 
 function getBearerToken(req) {
   const header =
@@ -147,21 +151,18 @@ module.exports = async function auth(req, res, next) {
       });
     }
 
-    const secret =
-      process.env.JWT_SECRET ||
-      process.env.JWT_SECRET_KEY ||
-      process.env.SECRET_KEY;
+    const secret = getJwtSecret();
 
     if (!secret) {
       console.error('AUTH ERROR: JWT secret no configurado');
 
       return res.status(500).json({
-        error: 'JWT secret no configurado',
+        error: 'Servicio de autenticación no disponible',
         code: 'JWT_SECRET_MISSING',
       });
     }
 
-    const decoded = jwt.verify(token, secret);
+    const decoded = jwt.verify(token, secret, getJwtVerifyOptions());
 
     req.token = token;
     req.user = decoded;

@@ -212,6 +212,40 @@ function firstExistingPath(paths) {
   return null;
 }
 
+function getReportDownloadUrl(exportId) {
+  return `/api/reports/download/${encodeURIComponent(String(exportId))}`;
+}
+
+function resolveReportFilePath(tenantId, fileUrl) {
+  const raw = String(fileUrl || '');
+  const fileName = path.basename(raw);
+
+  if (!tenantId || !fileName || fileName !== path.basename(fileName)) {
+    return null;
+  }
+
+  return path.join(
+    __dirname,
+    '..',
+    '..',
+    'uploads',
+    'reports',
+    String(tenantId),
+    fileName
+  );
+}
+
+function canAccessReportExport({ role, userId, userTenantId, row }) {
+  if (!row) return false;
+  if (isPlatformRole(role)) return true;
+
+  if (isDealerRole(role)) {
+    return row.dealer_can_access === true;
+  }
+
+  return String(row.tenant_id) === String(userTenantId) || String(row.requested_by) === String(userId);
+}
+
 async function getReportType(reportTypeCode) {
   const requestedCode = String(reportTypeCode || '').trim();
   const legacyFallbackCode = getLegacyReportTypeCode(requestedCode);
@@ -981,6 +1015,11 @@ router.get('/exports', auth, async (req, res) => {
     `;
 
     const result = await pool.query(sql, params);
+    const rows = result.rows.map((row) => ({
+      ...row,
+      legacy_file_url: row.file_url,
+      file_url: getReportDownloadUrl(row.id),
+    }));
 
     return res.json({
       ok: true,
@@ -992,7 +1031,7 @@ router.get('/exports', auth, async (req, res) => {
         is_platform: isPlatformRole(role),
         is_dealer: isDealerRole(role),
       },
-      data: result.rows,
+      data: rows,
     });
   } catch (error) {
     console.error('ERROR GET REPORT EXPORTS:', error);
@@ -1001,6 +1040,75 @@ router.get('/exports', auth, async (req, res) => {
       ok: false,
       error: 'Error obteniendo historial de informes',
       ...errorDetail(error),
+    });
+  }
+});
+
+
+// =====================================================
+// GET /api/reports/download/:id
+// Descarga autenticada de reportes generados.
+// =====================================================
+router.get('/download/:id', auth, async (req, res) => {
+  try {
+    const exportId = String(req.params.id || '').trim();
+    const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
+    const userId = getUserId(req.user);
+    const userTenantId = getUserTenantId(req.user);
+
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(exportId)) {
+      return res.status(400).json({ ok: false, error: 'Reporte no especificado' });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        re.id,
+        re.tenant_id,
+        re.requested_by,
+        re.report_title,
+        re.report_format,
+        re.file_url,
+        EXISTS (
+          SELECT 1
+          FROM dealer_tenant_access dta
+          WHERE dta.tenant_id = re.tenant_id
+            AND dta.dealer_user_id = $2::uuid
+            AND dta.is_active = TRUE
+        ) AS dealer_can_access
+      FROM report_exports re
+      WHERE re.id = $1::uuid
+      LIMIT 1
+      `,
+      [exportId, userId]
+    );
+
+    const row = result.rows[0];
+
+    if (!row || !canAccessReportExport({ role, userId, userTenantId, row })) {
+      return res.status(404).json({ ok: false, error: 'Reporte no disponible' });
+    }
+
+    const filePath = resolveReportFilePath(row.tenant_id, row.file_url);
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ ok: false, error: 'Archivo de reporte no disponible' });
+    }
+
+    const downloadName = path.basename(filePath);
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    res.setHeader('Content-Type', row.report_format === 'pdf' ? 'application/pdf' : 'application/octet-stream');
+    return res.sendFile(filePath);
+  } catch (error) {
+    console.error('ERROR DOWNLOAD REPORT:', {
+      request_id: req.requestId || null,
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error descargando reporte',
+      request_id: req.requestId || null,
     });
   }
 });
@@ -2587,7 +2695,7 @@ const html = renderReportHtmlByType(reportData);
 
     await generatePdfFromHtml(html, outputPath);
 
-    const fileUrl = `/uploads/reports/${targetTenantId}/${fileName}`;
+    const legacyFileUrl = `/uploads/reports/${targetTenantId}/${fileName}`;
 
     const exportMetadata = {
       ...safeObject(metadata),
@@ -2631,18 +2739,25 @@ const html = renderReportHtmlByType(reportData);
         report_type_code,
         reportTitle,
         reportType.default_format || 'pdf',
-        fileUrl,
+        legacyFileUrl,
         JSON.stringify(reportData),
         JSON.stringify(exportMetadata),
       ]
     );
 
+    const exportRow = exportResult.rows[0];
+    const downloadUrl = getReportDownloadUrl(exportRow.id);
+
     return res.status(201).json({
       ok: true,
       message: 'Informe generado correctamente',
       data: {
-        export: exportResult.rows[0],
-        file_url: fileUrl,
+        export: {
+          ...exportRow,
+          legacy_file_url: exportRow.file_url,
+          file_url: downloadUrl,
+        },
+        file_url: downloadUrl,
       },
     });
   } catch (error) {

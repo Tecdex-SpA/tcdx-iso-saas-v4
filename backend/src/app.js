@@ -201,7 +201,6 @@ app.use(cors({
 }));
 app.use('/uploads/logos', express.static(path.join(__dirname, '..', 'uploads', 'logos')));
 app.use('/uploads/profiles', express.static(path.join(__dirname, '..', 'uploads', 'profiles')));
-app.use('/uploads/reports', express.static(path.join(__dirname, '..', 'uploads', 'reports')));
 app.use('/uploads/tenants', express.static(path.join(__dirname, '..', 'uploads', 'tenants')));
 app.use('/uploads/tenant-logos', express.static(path.join(__dirname, '..', 'uploads', 'tenant-logos')));
 app.use('/api/auth', express.json({ limit: jsonBodyLimit }), authRoutes);

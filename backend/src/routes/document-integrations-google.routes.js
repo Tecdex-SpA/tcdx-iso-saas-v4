@@ -5,6 +5,9 @@ const auth = require('../middleware/auth')
 const crypto = require('crypto')
 const { encryptToken } = require('../utils/cryptoTokens')
 const {
+  getJwtSecret,
+} = require('../config/security')
+const {
   getScopes,
   buildGoogleOAuthUrl,
   exchangeCodeForTokens,
@@ -45,7 +48,7 @@ function getFrontendUrl() {
 }
 
 function getStateSecret() {
-  const secret = process.env.JWT_SECRET || process.env.SESSION_SECRET || process.env.TOKEN_ENCRYPTION_KEY
+  const secret = getJwtSecret() || process.env.SESSION_SECRET || process.env.TOKEN_ENCRYPTION_KEY
   if (!secret) throw new Error('No existe secreto para firmar state OAuth')
   return secret
 }

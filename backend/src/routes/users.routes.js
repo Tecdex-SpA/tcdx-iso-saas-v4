@@ -3,6 +3,19 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
+const {
+  validatePasswordStrength,
+  getPasswordPolicyMessage,
+} = require('../utils/passwordPolicy');
+
+function sendPasswordPolicyError(res) {
+  return res.status(400).json({
+    ok: false,
+    code: 'PASSWORD_POLICY_FAILED',
+    error: getPasswordPolicyMessage(),
+    message: getPasswordPolicyMessage(),
+  });
+}
 
 function getUserRole(req) {
   return String(
@@ -180,6 +193,10 @@ router.post('/', auth, async (req, res) => {
       return res.status(403).json({ error: 'No autorizado para crear usuarios en esta empresa' });
     }
 
+    if (!validatePasswordStrength(password).valid) {
+      return sendPasswordPolicyError(res);
+    }
+
     const allowedRoles = isSuperAdmin(req)
       ? allowedRolesForSuperAdmin
       : allowedRolesForAdmin;
@@ -279,6 +296,10 @@ router.put('/:id', auth, async (req, res) => {
 
     let hashedPassword = null;
     if (password && String(password).trim() !== '') {
+      if (!validatePasswordStrength(password).valid) {
+        return sendPasswordPolicyError(res);
+      }
+
       hashedPassword = await bcrypt.hash(password, 10);
     }
 

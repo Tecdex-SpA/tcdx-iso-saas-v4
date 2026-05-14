@@ -2,6 +2,10 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const pool = require('../config/db');
+const {
+  getJwtSecret,
+  getJwtSignOptions,
+} = require('../config/security');
 
 let jwt = null;
 try {
@@ -16,13 +20,6 @@ const INTERNAL_BACKEND_URL = String(
     process.env.BACKEND_URL ||
     'http://127.0.0.1:3000'
 ).replace(/\/+$/, '');
-
-const SERVICE_JWT_SECRET = String(
-  process.env.JWT_SECRET ||
-    process.env.AUTH_SECRET ||
-    process.env.TOKEN_SECRET ||
-    ''
-).trim();
 
 const EVIDENCE_AI_SERVICE_USER_ID = String(
   process.env.EVIDENCE_AI_SERVICE_USER_ID ||
@@ -697,9 +694,15 @@ function extractEvidenceAiTraceFromAssessmentData(data, context = {}) {
 
 
 function createEvidenceServiceJwt(tenantId) {
-  if (!jwt || !SERVICE_JWT_SECRET || !tenantId) return '';
+  const secret = getJwtSecret();
+  if (!jwt || !secret || !tenantId) return '';
 
   try {
+    const signOptions = {
+      ...getJwtSignOptions(),
+      expiresIn: process.env.EVIDENCE_AI_SERVICE_JWT_EXPIRES_IN || '15m',
+    };
+
     return jwt.sign(
       {
         id: EVIDENCE_AI_SERVICE_USER_ID,
@@ -711,8 +714,8 @@ function createEvidenceServiceJwt(tenantId) {
         email: 'evidence-ai-worker@internal.tcdx',
         full_name: 'Evidence AI Worker'
       },
-      SERVICE_JWT_SECRET,
-      { expiresIn: '15m' }
+      secret,
+      signOptions
     );
   } catch (err) {
     console.error('ERROR CREATE EVIDENCE SERVICE JWT:', err.message);

@@ -114,6 +114,26 @@ function getAbsoluteFileUrl(fileUrl: string) {
   return `${API_URL}${fileUrl}`;
 }
 
+function buildLocaleHeadersForReport(token: string) {
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
+async function openAuthenticatedReport(fileUrl: string, token: string) {
+  const res = await fetch(getAbsoluteFileUrl(fileUrl), {
+    headers: buildLocaleHeadersForReport(token),
+  });
+
+  if (!res.ok) {
+    throw new Error('No fue posible descargar el reporte.');
+  }
+
+  const blobUrl = URL.createObjectURL(await res.blob());
+  window.open(blobUrl, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 function formatDate(value?: string, locale = 'es') {
   if (!value) return '-';
 
@@ -748,7 +768,7 @@ export default function ExportesPage() {
       const fileUrl = json?.data?.file_url;
 
       if (fileUrl) {
-        window.open(getAbsoluteFileUrl(fileUrl), '_blank');
+        await openAuthenticatedReport(fileUrl, token);
       }
     } catch (err: any) {
       console.error('ERROR GENERATE REPORT:', err);
@@ -1507,14 +1527,19 @@ export default function ExportesPage() {
                           </td>
 
                           <td className="px-4 py-3 align-top">
-                            <a
-                              href={getAbsoluteFileUrl(report.file_url)}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const reportToken = localStorage.getItem('token');
+                                if (!reportToken) return;
+                                openAuthenticatedReport(report.file_url, reportToken).catch((err) => {
+                                  setError(err.message || t('exports.loadExportsError'));
+                                });
+                              }}
                               className="font-bold text-[#0B2F4F] hover:underline"
                             >
                               {t('exports.viewPdf')}
-                            </a>
+                            </button>
                           </td>
                         </tr>
                       ))}
