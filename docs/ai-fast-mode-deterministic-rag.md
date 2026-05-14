@@ -107,6 +107,8 @@ El análisis pesado queda para `POST /api/ai-compliance/analyze` o solicitudes e
 
 Desde el cierre de endpoints legacy, `GET /api/ai-compliance/health-summary` y `GET /api/ai-compliance/executive-brief` ya no llaman en paralelo a `/api/ai/suggest/health-summary` ni `/api/ai/suggest/executive-brief`. Construyen una vista legacy compatible desde la respuesta v2 fast y devuelven `metrics.duration_ms`.
 
+Reportes y exportes también consumen `reportAiEnrichment.service.js`, que usa el mismo patrón v2 fast. Esto evita que la generación de reportes dependa de suggest legacy o de Ollama por defecto.
+
 ## Pruebas post deploy
 
 ### Fast executive sin LLM

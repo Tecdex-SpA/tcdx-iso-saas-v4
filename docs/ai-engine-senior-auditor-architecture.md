@@ -632,3 +632,16 @@ El backend también endurece `aiContextBuilder.service.js` contra esquema variab
 Los endpoints visibles de IA Compliance (`/api/ai-compliance/health-summary` y `/api/ai-compliance/executive-brief`) usan el flujo v2 `fast_mode` y ya no ejecutan llamadas suggest legacy en paralelo. Esto evita trabajo duplicado y mantiene respuesta rápida.
 
 Para análisis generativo, usar `POST /api/ai-compliance/analyze` con `depth=standard|deep` y `fast_mode=false`.
+
+## 30. Report AI Enrichment
+
+Reportes y exportes usan `backend/src/services/reportAiEnrichment.service.js` para enriquecimiento IA v2 rápido. Esta capa:
+
+- construye contexto con `aiContextBuilder`;
+- llama `aiEngineClient.analyzeWithSeniorAuditor`;
+- usa `local_compact=true`;
+- usa `fast_mode=true` por defecto;
+- no espera Ollama por defecto;
+- preserva fallback seguro para que el reporte se genere aunque ai-engine falle.
+
+Los reportes ya no prefieren `/api/ai/suggest/health-summary` ni `/api/ai/suggest/executive-brief`. Los endpoints legacy permanecen disponibles por compatibilidad.

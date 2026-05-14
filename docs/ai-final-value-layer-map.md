@@ -34,3 +34,11 @@ Alcance: pasada final de valor IA sin deploy, enfocada en Ollama local, RAG úti
 | Legacy suggest health-summary | Cerrado para IA Compliance | `ai-engine/app/routes/ai.py`, `backend/src/routes/ai-compliance.routes.js` | Endpoint interno no exponía métricas y el frontend visible lo llamaba en paralelo | Métricas en ai-engine y vista backend v2 fast compatible | Sí | Reportes aún lo usan como fallback opcional | `py_compile ai.py`, `node -c ai-compliance.routes.js` |
 | Legacy suggest executive-brief | Cerrado para IA Compliance | `ai-engine/app/routes/ai.py`, `backend/src/routes/ai-compliance.routes.js` | Endpoint interno no exponía métricas y el frontend visible lo llamaba en paralelo | Métricas en ai-engine y vista backend v2 fast compatible | Sí | Reportes aún lo usan como fallback opcional | `py_compile ai.py`, `node -c ai-compliance.routes.js` |
 | Runtime metrics | Implementado | `backend/src/services/aiRuntimeMetrics.service.js`, `ai-engine/app/services/senior_auditor_orchestrator.py` | No había duración visible por modo | `duration_ms`, `mode`, `used_llm`, `used_rag`, `used_drive`, `used_web` | Sí | No hay persistencia histórica aún | `node -c`, `py_compile` |
+
+## Pasada 2026-05-14 — report AI fallback migration
+
+| area | current_status | file_or_table | value_gap | action_required | implemented | blocker | validation |
+|---|---|---|---|---|---|---|---|
+| Report AI enrichment | Migrado a v2 fast | `backend/src/services/reportAiEnrichment.service.js` | Reportes dependían de `/api/ai/suggest/health-summary` y `/api/ai/suggest/executive-brief` | Servicio backend v2 fast con contexto efectivo, RAG y métricas | Sí | Ninguno | `node -c reportAiEnrichment.service.js` |
+| Report data AI fallback | Migrado | `backend/src/reports/services/reportData.service.js` | `getAiEnhancements()` llamaba suggest legacy | Usa `buildReportAiEnrichment()` y conserva campos existentes | Sí | Finding-analysis legacy queda fuera de alcance | `node -c reportData.service.js` |
+| Report route addendum | Migrado | `backend/src/routes/reports.routes.js` | Addendum llamaba suggest executive-brief directo | Usa `buildReportAiEnrichment()` | Sí | Ninguno | `node -c reports.routes.js` |

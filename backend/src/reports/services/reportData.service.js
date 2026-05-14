@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { renderAiAuditorPremiumTemplate } = require('../../reports/templates/aiAuditorPremium.template');
+const { buildReportAiEnrichment } = require('../../services/reportAiEnrichment.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
@@ -869,6 +870,69 @@ function normalizeExecutiveBrief(raw, fallback = {}) {
     source: firstNonEmptyString(ai.source, 'ai-engine-knowledge'),
     knowledge_context: cleanDisplayText(firstNonEmptyString(ai.knowledge_context)),
     knowledge_sources: normalizeKnowledgeSources(ai.knowledge_sources),
+  };
+}
+
+function normalizeReportAiEnrichmentAsExecutiveBrief(enrichment, fallback = {}) {
+  const structured = enrichment?.structured_result || {};
+  const readiness = structured.audit_readiness || {};
+  const actions = asArray(enrichment?.recommended_actions || structured.recommended_actions);
+
+  return {
+    ok: enrichment?.ok !== false,
+    headline: 'Resumen ejecutivo IA',
+    summary: cleanDisplayText(firstNonEmptyString(
+      enrichment?.executive_summary,
+      structured.executive_summary,
+      enrichment?.answer,
+      fallback.summary
+    )),
+    priorities: filterInsights([
+      ...actions.map((item) => item.title || item.description),
+      ...(fallback.priorities || []),
+    ], 6),
+    risks: filterInsights([
+      structured.risk_impact,
+      ...(asArray(readiness.auditor_concerns)),
+      ...(fallback.risks || []),
+    ], 4),
+    decisions: filterInsights([
+      readiness.reason,
+      ...(fallback.decisions || []),
+    ], 4),
+    recommendations: filterInsights([
+      ...actions.map((item) => item.description || item.title),
+      ...(fallback.priorities || []),
+    ], 6),
+    confidence: normalizeConfidence(enrichment?.confidence),
+    source: 'ai-engine-v2-report-fast',
+    knowledge_context: '',
+    knowledge_sources: normalizeKnowledgeSources(enrichment?.source_trace || []),
+    metrics: enrichment?.metrics || {},
+  };
+}
+
+function normalizeReportAiEnrichmentAsHealthSummary(enrichment, fallback = {}) {
+  const structured = enrichment?.structured_result || {};
+  const actions = asArray(enrichment?.recommended_actions || structured.recommended_actions);
+
+  return {
+    ok: enrichment?.ok !== false,
+    summary: cleanDisplayText(firstNonEmptyString(
+      structured.diagnosis,
+      enrichment?.executive_summary,
+      enrichment?.answer,
+      fallback.summary
+    )),
+    suggestions: filterInsights([
+      ...actions.map((item) => item.title || item.description),
+      ...(fallback.suggestions || []),
+    ], 6),
+    confidence: normalizeConfidence(enrichment?.confidence),
+    source: 'ai-engine-v2-report-fast',
+    knowledge_context: '',
+    knowledge_sources: normalizeKnowledgeSources(enrichment?.source_trace || []),
+    metrics: enrichment?.metrics || {},
   };
 }
 
@@ -2097,9 +2161,18 @@ async function getAiEnhancements({
     latestKpis,
   });
 
-  const [executiveBriefRaw, healthSummaryRaw, seniorAuditorRaw] = await Promise.all([
-    safeAiCall('/api/ai/suggest/executive-brief', executiveBriefPayload, null),
-    safeAiCall('/api/ai/suggest/health-summary', healthSummaryPayload, null),
+  const primaryStandardCode = executiveBriefPayload.standards.length === 1
+    ? executiveBriefPayload.standards[0]
+    : null;
+
+  const [reportAiEnrichment, seniorAuditorRaw] = await Promise.all([
+    buildReportAiEnrichment({
+      tenantId,
+      standardCode: primaryStandardCode,
+      reportType: reportTypeCode || 'executive',
+      depth: 'executive',
+      includeDeepLlm: false,
+    }),
     safeAiCall('/api/ai/auditor/analyze', seniorAuditorPayload, null, 20000),
   ]);
 
@@ -2171,8 +2244,8 @@ async function getAiEnhancements({
     suggestions: executiveFallback.priorities,
   };
 
-  const executiveBrief = normalizeExecutiveBrief(executiveBriefRaw, executiveFallback);
-  const healthSummary = normalizeHealthSummary(healthSummaryRaw, healthFallback);
+  const executiveBrief = normalizeReportAiEnrichmentAsExecutiveBrief(reportAiEnrichment, executiveFallback);
+  const healthSummary = normalizeReportAiEnrichmentAsHealthSummary(reportAiEnrichment, healthFallback);
 
   if (!executiveBrief.summary) {
     executiveBrief.summary = executiveFallback.summary;
@@ -2237,6 +2310,11 @@ async function getAiEnhancements({
   return {
     executive_brief: executiveBrief,
     health_summary: healthSummary,
+    ai_enrichment: reportAiEnrichment,
+    ai_summary: reportAiEnrichment.executive_summary || executiveBrief.summary || '',
+    ai_recommended_actions: asArray(reportAiEnrichment.recommended_actions),
+    ai_limitations: asArray(reportAiEnrichment.limitations),
+    ai_metrics: reportAiEnrichment.metrics || {},
     senior_auditor: seniorAuditor,
     top_finding_analyses: topFindingAnalyses,
     knowledge_sources: mergeKnowledgeSources(

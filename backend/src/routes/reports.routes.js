@@ -10,6 +10,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 
 const { buildReportData } = require('../reports/services/reportData.service');
+const { buildReportAiEnrichment } = require('../services/reportAiEnrichment.service');
 const {
   renderExecutivePremiumTemplate,
 } = require('../reports/templates/executivePremium.template');
@@ -29,9 +30,6 @@ const {
   getCoverageForTenantStandard,
   assertCanGenerateReportByCoverage,
 } = require('../reports/services/reportCoverage.service');
-
-const AI_ENGINE_URL =
-  process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
 
 const REPORT_TYPE_ALIASES = {
   executive_summary: 'executive_iso_status',
@@ -70,16 +68,6 @@ const CHROME_CANDIDATES = [
   '/usr/bin/google-chrome',
   '/usr/bin/google-chrome-stable',
 ].filter(Boolean);
-
-function getAiInternalToken() {
-  const token = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
-
-  if (!token) {
-    throw new Error('AI_INTERNAL_TOKEN no configurado');
-  }
-
-  return token;
-}
 
 function normalizeRole(role) {
   const raw = String(role || '')
@@ -1806,77 +1794,37 @@ async function buildAiReportAddendum(reportData) {
   const fallback = buildFallbackAiReportAddendum(reportData);
 
   try {
-    const stats = reportData?.stats || {};
-    const controls = stats.controls || {};
-    const evidences = stats.evidences || {};
-    const findings = stats.findings || {};
     const standards = Array.isArray(reportData?.standards)
       ? reportData.standards.map((item) => item.code || item.standard_code || item).filter(Boolean)
       : [];
-
-    const complianceRows = Array.isArray(reportData?.compliance_by_standard)
-      ? reportData.compliance_by_standard
-      : Array.isArray(reportData?.complianceByStandard)
-      ? reportData.complianceByStandard
-      : [];
-
-    const weakestStandards = complianceRows
-      .slice()
-      .sort((a, b) => Number(a.score || 999) - Number(b.score || 999))
-      .slice(0, 3)
-      .map((row) => `${row.code || row.standard_code || 'ISO'} (${Number(row.score || 0).toFixed(1)}%)`);
-
-    const response = await fetch(`${AI_ENGINE_URL}/api/ai/suggest/executive-brief`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-ai-token': getAiInternalToken(),
-      },
-      body: JSON.stringify({
-        tenant_id: reportData?.tenant?.id || reportData?.tenant_id || '',
-        tenant_name: reportData?.tenant?.name || 'Cliente',
-        period: reportData?.period || 'Periodo actual',
-        standards,
-        controls_total: Number(controls.total_controls || 0),
-        controls_warning: Number(controls.warning_controls || 0),
-        controls_critical: Number(controls.critical_controls || 0),
-        evidences_pending: Number(evidences.pending_evidences || 0),
-        findings_critical: Number(findings.critical_findings || 0),
-        weakest_standards: weakestStandards,
-      }),
-      signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined,
+    const ai = await buildReportAiEnrichment({
+      tenantId: reportData?.tenant?.id || reportData?.tenant_id || '',
+      standardCode: standards.length === 1 ? standards[0] : null,
+      reportType: reportData?.report_type_code || reportData?.reportTypeCode || 'executive',
+      depth: 'executive',
+      includeDeepLlm: false,
     });
-
-    const json = await response.json();
-
-    if (!response.ok || json?.ok === false) {
-      throw new Error(json?.detail || json?.error || 'AI executive brief failed');
-    }
-
-    const ai = json.ai || json;
+    const structured = ai.structured_result || {};
+    const actions = Array.isArray(ai.recommended_actions) ? ai.recommended_actions : [];
 
     return mergeAiReportAddendumWithSenior({
-      source: 'own-ai-engine-140',
-      headline: String(ai.headline || ai.title || fallback.headline || '').trim(),
-      summary: String(ai.summary || ai.executive_summary || ai.brief || fallback.summary || '').trim(),
+      source: 'ai-engine-v2-report-fast',
+      headline: String(fallback.headline || 'Resumen ejecutivo IA').trim(),
+      summary: String(ai.executive_summary || structured.executive_summary || ai.answer || fallback.summary || '').trim(),
       priorities: normalizeReportList([
-        ...(ai.top_priorities || []),
-        ...(ai.priorities || []),
-        ...(ai.suggestions || []),
-        ...(ai.recommended_actions || []),
+        ...actions.map((item) => item.title || item.description),
         ...fallback.priorities,
       ], 6),
       risks: normalizeReportList([
-        ...(ai.key_risks || []),
-        ...(ai.risks || []),
+        structured.risk_impact,
+        ...((structured.audit_readiness || {}).auditor_concerns || []),
         ...fallback.risks,
       ], 4),
       decisions: normalizeReportList([
-        ...(ai.decisions || []),
-        ...(ai.management_implications || []),
-        ...(ai.business_impact || []),
+        (structured.audit_readiness || {}).reason,
         ...fallback.decisions,
       ], 4),
+      ai_metrics: ai.metrics || {},
     }, reportData);
   } catch (error) {
     console.error('REPORT AI ADDENDUM ERROR:', error.message);

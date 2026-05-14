@@ -215,3 +215,15 @@ Las respuestas IA relevantes exponen:
 - `metrics.used_web`
 
 Los endpoints internos legacy de ai-engine `/api/ai/suggest/health-summary` y `/api/ai/suggest/executive-brief` también devuelven `engine.used_llm=false` y `metrics.duration_ms`.
+
+## Reportes
+
+Los reportes usan `reportAiEnrichment.service.js` como camino preferente de IA. El modo por defecto es:
+
+- `local_compact=true`
+- `fast_mode=true`
+- `use_llm_in_fast_mode=false`
+- `used_llm=false`
+- `used_web=false`
+
+El objetivo es que la generación de reportes no espere a Ollama salvo una futura opción explícita de enriquecimiento profundo.
