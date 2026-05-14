@@ -234,7 +234,7 @@ function buildIsoSuggestedActions(rows: EffectiveIsoHealthRow[]): IsoSuggestedAc
       description: 'Usa el estado efectivo para enfocar la revisión automática en las operaciones con mayor deterioro.',
       severity: 'alto',
       source: 'public.v_iso_effective_kpi_summary',
-      href: '/ia-auditor',
+      href: '/auditorias?view=ia',
       cta: 'Abrir IA Auditor',
     });
   }
@@ -656,7 +656,7 @@ function AiAuditorDashboardCta({ t }: { t: (key: string) => string }) {
         </div>
 
         <a
-          href="/ia-auditor"
+          href="/auditorias?view=ia"
           className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 shadow-sm transition hover:bg-indigo-50"
         >
           {t('aiAuditor.runAnalysis')}
@@ -2218,7 +2218,7 @@ function IsoControlCenterView({
               <a href="/plan-accion" className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
                 Planes de acción
               </a>
-              <a href="/ia-auditor" className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100">
+              <a href="/auditorias?view=ia" className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100">
                 IA Auditor
               </a>
             </div>

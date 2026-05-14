@@ -1,8 +1,10 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import IsoAuditorPreview from '@/components/auditor-iso/IsoAuditorPreview';
+import IaAuditorPanel from '@/components/auditorias/IaAuditorPanel';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
@@ -178,14 +180,86 @@ export default function AuditoriasPage() {
         </AppLayout>
       }
     >
-      <AuditoriasPageContent />
+      <AuditoriasWorkspaceContent />
     </Suspense>
   );
 }
 
+const auditWorkspaceTabs = [
+  { value: 'programa', label: 'Programa de auditorías' },
+  { value: 'preauditoria', label: 'Preauditoría ISO' },
+  { value: 'ia', label: 'IA Auditor Senior' },
+];
+
+function AuditoriasWorkspaceContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawView = searchParams.get('view') || 'programa';
+  const activeView = auditWorkspaceTabs.some((tab) => tab.value === rawView)
+    ? rawView
+    : 'programa';
+
+  const setActiveView = (view: string) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (view === 'programa') {
+      nextParams.delete('view');
+    } else {
+      nextParams.set('view', view);
+    }
+
+    const query = nextParams.toString();
+    router.push(query ? `/auditorias?${query}` : '/auditorias');
+  };
+
+  return (
+    <AppLayout>
+      <div className="space-y-5">
+        <section className="mx-auto flex max-w-[1800px] flex-col gap-3 rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+          <div className="px-2">
+            <h1 className="text-xl font-black text-slate-950">Auditorías</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Programa, preauditoría e IA auditora en un solo espacio operativo.
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            {auditWorkspaceTabs.map((tab) => {
+              const active = activeView === tab.value;
+
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setActiveView(tab.value)}
+                  className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
+                    active
+                      ? 'bg-slate-950 text-white shadow-sm'
+                      : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-white'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {activeView === 'preauditoria' ? (
+          <IsoAuditorPreview />
+        ) : activeView === 'ia' ? (
+          <IaAuditorPanel />
+        ) : (
+          <AuditProgramPanel />
+        )}
+      </div>
+    </AppLayout>
+  );
+}
 
 function AiAuditorAuditCta({ t, iso }: { t: (key: string) => string; iso?: string }) {
-  const href = iso ? `/ia-auditor?standard_code=${encodeURIComponent(iso)}` : '/ia-auditor';
+  const href = iso
+    ? `/auditorias?view=ia&standard_code=${encodeURIComponent(iso)}`
+    : '/auditorias?view=ia';
 
   return (
     <section className="rounded-[28px] border border-indigo-100 bg-indigo-50 p-5 text-indigo-950 shadow-sm">
@@ -217,7 +291,7 @@ function AiAuditorAuditCta({ t, iso }: { t: (key: string) => string; iso?: strin
 }
 
 
-function AuditoriasPageContent() {
+function AuditProgramPanel() {
   const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
   const focusId = searchParams.get('id');
@@ -998,35 +1072,30 @@ function AuditoriasPageContent() {
 
   if (loadingStandards) {
     return (
-      <AppLayout>
-        <div className="p-6">{t('audits.loadingStandards')}</div>
-      </AppLayout>
+      <div className="mx-auto max-w-[1800px] p-6">{t('audits.loadingStandards')}</div>
     );
   }
 
   if (!loadingStandards && operationalStandards.length === 0) {
     return (
-      <AppLayout>
-        <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">{t('audits.title')}</h1>
+      <div className="mx-auto max-w-[1800px] space-y-4 p-6">
+        <h1 className="text-2xl font-bold">{t('audits.title')}</h1>
 
-          <div className="rounded-[28px] border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
-            <h2 className="mb-2 text-lg font-semibold">
-              {t('audits.noOperationalStandards')}
-            </h2>
+        <div className="rounded-[28px] border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
+          <h2 className="mb-2 text-lg font-semibold">
+            {t('audits.noOperationalStandards')}
+          </h2>
 
-            <p className="text-sm text-gray-700">
-              {t('audits.noOperationalStandardsHelp')}
-            </p>
-          </div>
+          <p className="text-sm text-gray-700">
+            {t('audits.noOperationalStandardsHelp')}
+          </p>
         </div>
-      </AppLayout>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="mx-auto max-w-[1800px] space-y-6">
+    <div className="mx-auto max-w-[1800px] space-y-6">
         <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">
@@ -1625,8 +1694,7 @@ function AuditoriasPageContent() {
             </section>
           </div>
         )}
-      </div>
-    </AppLayout>
+    </div>
   );
 }
 
