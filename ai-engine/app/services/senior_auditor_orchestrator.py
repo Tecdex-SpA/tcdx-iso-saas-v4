@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -623,6 +624,7 @@ def _build_llm_user_prompt(
 
 
 def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
+    started_at = time.perf_counter()
     if not isinstance(payload, dict):
         payload = {}
     tenant_id = str(payload.get("tenant_id") or "")
@@ -837,6 +839,8 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
         )
         limitations.append("Proveedor LLM no configurado — análisis generado por motor determinístico basado en contexto interno")
 
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    mode = "fast_mode" if fast_mode else ("llm" if llm_used else ("local_compact" if local_compact else "deterministic"))
     result = {
         "ok": True,
         "answer": answer,
@@ -863,6 +867,17 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "compact_context_summary": context.get("compact_context_summary") or {},
             "ollama_options": get_ollama_generation_options(depth, local_compact, 0.2) if llm_metadata.get("provider") == "ollama" else {},
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "duration_ms": duration_ms,
+        },
+        "metrics": {
+            "duration_ms": duration_ms,
+            "mode": mode,
+            "fast_mode": fast_mode,
+            "local_compact": local_compact,
+            "used_llm": llm_used,
+            "used_rag": bool(rag.get("used")),
+            "used_drive": bool(drive.get("used")),
+            "used_web": bool(web.get("used")),
         },
     }
     return apply_post_analysis_guardrails(result, context)

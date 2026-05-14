@@ -199,6 +199,7 @@ const {
 } = require('../services/seniorAuditorSuggestions.service');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
+const { createAiTimer, resolveAiMode } = require('../services/aiRuntimeMetrics.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://192.168.100.140:8000';
@@ -1138,6 +1139,36 @@ function buildLegacyAiComplianceView(aiResult) {
   };
 }
 
+function buildFastLegacyAiResponse({ type, summary, suggestions = [], confidence = 'media', source = 'internal_fast_summary', endpoint, metrics = null }) {
+  return {
+    ok: true,
+    type,
+    summary,
+    executive_summary: type === 'executive_brief' ? summary : undefined,
+    headline: type === 'executive_brief' ? 'Resumen ejecutivo IA' : undefined,
+    suggestions,
+    top_priorities: type === 'executive_brief' ? suggestions : undefined,
+    management_actions: type === 'executive_brief' ? suggestions : undefined,
+    confidence,
+    source,
+    engine: {
+      fast_mode: true,
+      used_llm: false,
+      local_compact: true,
+      used_rag: true,
+      used_drive: false,
+      used_web: false,
+      model: 'deterministic_backend_summary',
+    },
+    metrics: metrics || {
+      endpoint,
+      mode: 'fast_mode',
+      duration_ms: 0,
+    },
+    limitations: [],
+  };
+}
+
 async function runAiComplianceV2Analysis({ tenantId, body = {}, question = '', taskType = null }) {
   const standardCode = body.standard_code || body.iso_code || body.iso || null;
   const operationId = body.operation_id || null;
@@ -1837,6 +1868,13 @@ router.get('/engine-health', auth, async (_req, res) => {
 });
 
 router.get('/health-summary', auth, async (req, res) => {
+  const timer = createAiTimer({
+    endpoint: '/api/ai-compliance/health-summary',
+    mode: 'fast_mode',
+    tenantId: resolveTenantId(req),
+    operationId: req.query?.operation_id || null,
+    standardCode: req.query?.standard_code || req.query?.iso || null,
+  });
   try {
     const locale = resolveLocale(req);
     res.set('x-tcdx-locale', locale);
@@ -1874,9 +1912,7 @@ router.get('/health-summary', auth, async (req, res) => {
       allowWebContext: getAuditorWebContextFlag(req),
     });
 
-    const [aiResponse, complianceV2] = await Promise.all([
-      callAiEngine('/api/ai/suggest/health-summary', aiPayload),
-      runAiComplianceV2Analysis({
+    const complianceV2 = await runAiComplianceV2Analysis({
         tenantId,
         body: {
           depth: 'executive',
@@ -1889,10 +1925,28 @@ router.get('/health-summary', auth, async (req, res) => {
         },
         question: 'Analiza el estado de cumplimiento, brechas críticas y acciones prioritarias del tenant.',
         taskType: 'standard_gap_analysis',
-      }),
-    ]);
+      });
 
     const seniorAuditor = complianceV2.aiResult;
+    const metrics = timer.finish({
+      mode: resolveAiMode(complianceV2.payload?.options, complianceV2.aiResult?.engine || {}),
+      used_llm: complianceV2.aiResult?.engine?.used_llm === true,
+      fast_mode: complianceV2.aiResult?.engine?.fast_mode === true,
+      local_compact: complianceV2.aiResult?.engine?.local_compact === true,
+      used_rag: complianceV2.aiResult?.engine?.used_rag === true,
+      used_drive: complianceV2.aiResult?.engine?.used_drive === true,
+      used_web: complianceV2.aiResult?.engine?.used_web === true,
+    });
+    const aiResponse = buildFastLegacyAiResponse({
+      type: 'health_summary',
+      endpoint: '/api/ai-compliance/health-summary',
+      summary: complianceV2.aiResult?.structured_result?.executive_summary ||
+        `Resumen rápido: ${stats.controls_total} controles, ${stats.controls_warning} en atención, ${stats.controls_critical} críticos, ${stats.evidences_pending} evidencias pendientes y ${stats.findings_critical} hallazgos críticos.`,
+      suggestions: complianceV2.legacy.suggestions || [],
+      confidence: complianceV2.aiResult?.confidence ?? 'media',
+      source: 'ai-compliance-v2-fast',
+      metrics,
+    });
 
     const seniorAuditorSuggestions = await syncSeniorAuditorSuggestionsSafe({
       tenantId,
@@ -1920,6 +1974,7 @@ router.get('/health-summary', auth, async (req, res) => {
         senior_auditor: seniorAuditor,
         ai_v2: complianceV2.aiResult,
         senior_auditor_suggestions: seniorAuditorSuggestions,
+        metrics,
       },
       status: 'ok',
       createdBy: userId,
@@ -1935,6 +1990,7 @@ router.get('/health-summary', auth, async (req, res) => {
         source_trace: complianceV2.aiResult?.source_trace || [],
         limitations: complianceV2.aiResult?.limitations || [],
         engine: complianceV2.aiResult?.engine || {},
+        metrics,
       },
       answer: complianceV2.aiResult?.answer || aiResponse?.summary || '',
       structured_result: complianceV2.aiResult?.structured_result || null,
@@ -1942,6 +1998,7 @@ router.get('/health-summary', auth, async (req, res) => {
       confidence: complianceV2.aiResult?.confidence ?? null,
       limitations: complianceV2.aiResult?.limitations || [],
       engine: complianceV2.aiResult?.engine || {},
+      metrics,
       suggestions: complianceV2.legacy.suggestions || [],
       senior_auditor: seniorAuditor,
       senior_auditor_suggestions: seniorAuditorSuggestions,
@@ -1958,6 +2015,13 @@ router.get('/health-summary', auth, async (req, res) => {
 });
 
 router.post('/analyze', auth, async (req, res) => {
+  const timer = createAiTimer({
+    endpoint: '/api/ai-compliance/analyze',
+    mode: req.body?.fast_mode ? 'fast_mode' : 'local_compact',
+    tenantId: resolveTenantId(req),
+    operationId: req.body?.operation_id || null,
+    standardCode: req.body?.standard_code || req.body?.iso || null,
+  });
   try {
     const locale = resolveLocale(req);
     res.set('x-tcdx-locale', locale);
@@ -1984,6 +2048,15 @@ router.post('/analyze', auth, async (req, res) => {
           ? 'evidence_review'
           : req.body?.task_type || 'standard_gap_analysis',
     });
+    const metrics = timer.finish({
+      mode: resolveAiMode(complianceV2.payload?.options, complianceV2.aiResult?.engine || {}),
+      used_llm: complianceV2.aiResult?.engine?.used_llm === true,
+      fast_mode: complianceV2.aiResult?.engine?.fast_mode === true,
+      local_compact: complianceV2.aiResult?.engine?.local_compact === true,
+      used_rag: complianceV2.aiResult?.engine?.used_rag === true,
+      used_drive: complianceV2.aiResult?.engine?.used_drive === true,
+      used_web: complianceV2.aiResult?.engine?.used_web === true,
+    });
 
     return res.json({
       ok: complianceV2.aiResult?.ok !== false,
@@ -1995,6 +2068,7 @@ router.post('/analyze', auth, async (req, res) => {
       confidence: complianceV2.aiResult?.confidence ?? null,
       limitations: complianceV2.aiResult?.limitations || [],
       engine: complianceV2.aiResult?.engine || {},
+      metrics,
       suggestions: complianceV2.legacy.suggestions || [],
       recommendations: complianceV2.legacy.recommendations || [],
       analysis: complianceV2.legacy.summary || '',
@@ -2318,6 +2392,13 @@ router.post('/action-plan-suggestion', auth, async (req, res) => {
 });
 
 router.get('/executive-brief', auth, async (req, res) => {
+  const timer = createAiTimer({
+    endpoint: '/api/ai-compliance/executive-brief',
+    mode: 'fast_mode',
+    tenantId: resolveTenantId(req),
+    operationId: req.query?.operation_id || null,
+    standardCode: req.query?.standard_code || req.query?.iso || null,
+  });
   try {
     const locale = resolveLocale(req);
     res.set('x-tcdx-locale', locale);
@@ -2359,9 +2440,7 @@ router.get('/executive-brief', auth, async (req, res) => {
       allowWebContext: getAuditorWebContextFlag(req),
     });
 
-    const [aiResponse, complianceV2] = await Promise.all([
-      callAiEngine('/api/ai/suggest/executive-brief', aiPayload),
-      runAiComplianceV2Analysis({
+    const complianceV2 = await runAiComplianceV2Analysis({
         tenantId,
         body: {
           depth: 'executive',
@@ -2374,10 +2453,28 @@ router.get('/executive-brief', auth, async (req, res) => {
         },
         question: `Genera un resumen ejecutivo de cumplimiento para ${aiPayload.period}, priorizando brechas y acciones gerenciales.`,
         taskType: 'standard_gap_analysis',
-      }),
-    ]);
+      });
 
     const seniorAuditor = complianceV2.aiResult;
+    const metrics = timer.finish({
+      mode: resolveAiMode(complianceV2.payload?.options, complianceV2.aiResult?.engine || {}),
+      used_llm: complianceV2.aiResult?.engine?.used_llm === true,
+      fast_mode: complianceV2.aiResult?.engine?.fast_mode === true,
+      local_compact: complianceV2.aiResult?.engine?.local_compact === true,
+      used_rag: complianceV2.aiResult?.engine?.used_rag === true,
+      used_drive: complianceV2.aiResult?.engine?.used_drive === true,
+      used_web: complianceV2.aiResult?.engine?.used_web === true,
+    });
+    const aiResponse = buildFastLegacyAiResponse({
+      type: 'executive_brief',
+      endpoint: '/api/ai-compliance/executive-brief',
+      summary: complianceV2.aiResult?.structured_result?.executive_summary ||
+        `Resumen ejecutivo rápido para ${tenantName}: ${stats.controls_total} controles, ${stats.controls_warning} en atención, ${stats.controls_critical} críticos y ${stats.evidences_pending} evidencias pendientes.`,
+      suggestions: complianceV2.legacy.suggestions || [],
+      confidence: complianceV2.aiResult?.confidence ?? 'media',
+      source: 'ai-compliance-v2-fast',
+      metrics,
+    });
 
     const seniorAuditorSuggestions = await syncSeniorAuditorSuggestionsSafe({
       tenantId,
@@ -2405,6 +2502,7 @@ router.get('/executive-brief', auth, async (req, res) => {
         senior_auditor: seniorAuditor,
         ai_v2: complianceV2.aiResult,
         senior_auditor_suggestions: seniorAuditorSuggestions,
+        metrics,
       },
       status: 'ok',
       createdBy: userId,
@@ -2420,6 +2518,7 @@ router.get('/executive-brief', auth, async (req, res) => {
         source_trace: complianceV2.aiResult?.source_trace || [],
         limitations: complianceV2.aiResult?.limitations || [],
         engine: complianceV2.aiResult?.engine || {},
+        metrics,
       },
       answer: complianceV2.aiResult?.answer || aiResponse?.executive_summary || '',
       structured_result: complianceV2.aiResult?.structured_result || null,
@@ -2427,6 +2526,7 @@ router.get('/executive-brief', auth, async (req, res) => {
       confidence: complianceV2.aiResult?.confidence ?? null,
       limitations: complianceV2.aiResult?.limitations || [],
       engine: complianceV2.aiResult?.engine || {},
+      metrics,
       suggestions: complianceV2.legacy.suggestions || [],
       senior_auditor: seniorAuditor,
       senior_auditor_suggestions: seniorAuditorSuggestions,

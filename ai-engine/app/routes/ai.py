@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -119,6 +120,42 @@ def validate_internal_token(token: Optional[str]) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized AI internal token")
 
 
+def _with_runtime_metrics(result: Dict[str, Any], *, started_at: float, endpoint: str, mode: str = "deterministic") -> Dict[str, Any]:
+    if not isinstance(result, dict):
+        result = {"ok": True, "result": result}
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    engine = result.get("engine") if isinstance(result.get("engine"), dict) else {}
+    metrics = {
+        "duration_ms": duration_ms,
+        "endpoint": endpoint,
+        "mode": mode,
+        "fast_mode": engine.get("fast_mode", mode in {"fast_mode", "deterministic"}),
+        "local_compact": engine.get("local_compact", True),
+        "used_llm": engine.get("used_llm", False),
+        "used_rag": engine.get("used_rag", False),
+        "used_drive": engine.get("used_drive", False),
+        "used_web": engine.get("used_web", False),
+    }
+    return {
+        **result,
+        "engine": {
+            "fast_mode": metrics["fast_mode"],
+            "used_llm": metrics["used_llm"],
+            "local_compact": metrics["local_compact"],
+            "used_rag": metrics["used_rag"],
+            "used_drive": metrics["used_drive"],
+            "used_web": metrics["used_web"],
+            "model": engine.get("model") or "deterministic_legacy_guided",
+            **engine,
+            "duration_ms": duration_ms,
+        },
+        "metrics": {
+            **(result.get("metrics") if isinstance(result.get("metrics"), dict) else {}),
+            **metrics,
+        },
+    }
+
+
 @router.post("/suggest/health-summary")
 def suggest_health_summary(
     payload: HealthSummaryRequest,
@@ -126,11 +163,13 @@ def suggest_health_summary(
     x_tcdx_locale: Optional[str] = Header(default=None),
 ):
     validate_internal_token(x_ai_token)
+    started_at = time.perf_counter()
     try:
         payload_dict = _payload_to_dict(payload)
         locale = _request_locale(payload_dict, x_tcdx_locale)
         payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
-        return localize_ai_response(generate_health_summary(payload_dict), locale)
+        result = localize_ai_response(generate_health_summary(payload_dict), locale)
+        return _with_runtime_metrics(result, started_at=started_at, endpoint="/api/ai/suggest/health-summary")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"health-summary error: {e}")
 
@@ -200,11 +239,13 @@ def suggest_executive_brief(
     x_tcdx_locale: Optional[str] = Header(default=None),
 ):
     validate_internal_token(x_ai_token)
+    started_at = time.perf_counter()
     try:
         payload_dict = _payload_to_dict(payload)
         locale = _request_locale(payload_dict, x_tcdx_locale)
         payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
-        return localize_ai_response(generate_executive_brief(payload_dict), locale)
+        result = localize_ai_response(generate_executive_brief(payload_dict), locale)
+        return _with_runtime_metrics(result, started_at=started_at, endpoint="/api/ai/suggest/executive-brief")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"executive-brief error: {e}")
 

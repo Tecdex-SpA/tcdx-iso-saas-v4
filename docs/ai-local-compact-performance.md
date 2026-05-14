@@ -200,3 +200,18 @@ O bien:
 ```
 
 IA Compliance health/brief usa `fast_mode=true` y `use_llm_in_fast_mode=false`; el análisis generativo queda para acciones explícitas.
+
+## Métricas de Duración
+
+Las respuestas IA relevantes exponen:
+
+- `metrics.duration_ms`
+- `metrics.mode`
+- `metrics.fast_mode`
+- `metrics.local_compact`
+- `metrics.used_llm`
+- `metrics.used_rag`
+- `metrics.used_drive`
+- `metrics.used_web`
+
+Los endpoints internos legacy de ai-engine `/api/ai/suggest/health-summary` y `/api/ai/suggest/executive-brief` también devuelven `engine.used_llm=false` y `metrics.duration_ms`.

@@ -619,3 +619,16 @@ Campos esperados:
 Para forzar LLM en modo rápido, enviar `use_llm_in_fast_mode=true`. Para análisis estándar/profundo, usar `depth=standard|deep` y `fast_mode=false`.
 
 El backend también endurece `aiContextBuilder.service.js` contra esquema variable: antes de consultar tablas opcionales valida existencia de tabla/columnas mediante `information_schema`, no expone SQLSTATE al usuario y entrega limitaciones limpias en español.
+
+## 29. Legacy Suggest Endpoints y Métricas
+
+`/api/ai/suggest/health-summary` y `/api/ai/suggest/executive-brief` permanecen como endpoints internos legacy de ai-engine para compatibilidad. No llaman Ollama directamente; usan generación guiada determinística. Ahora devuelven:
+
+- `engine.used_llm=false`;
+- `engine.model=deterministic_legacy_guided`;
+- `metrics.duration_ms`;
+- `metrics.mode=deterministic`.
+
+Los endpoints visibles de IA Compliance (`/api/ai-compliance/health-summary` y `/api/ai-compliance/executive-brief`) usan el flujo v2 `fast_mode` y ya no ejecutan llamadas suggest legacy en paralelo. Esto evita trabajo duplicado y mantiene respuesta rápida.
+
+Para análisis generativo, usar `POST /api/ai-compliance/analyze` con `depth=standard|deep` y `fast_mode=false`.

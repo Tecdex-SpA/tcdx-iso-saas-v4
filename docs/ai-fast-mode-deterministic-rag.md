@@ -105,6 +105,8 @@ Los endpoints de resumen/brief de IA Compliance ahora llaman al flujo v2 con:
 
 El análisis pesado queda para `POST /api/ai-compliance/analyze` o solicitudes explícitas con `depth=standard|deep`.
 
+Desde el cierre de endpoints legacy, `GET /api/ai-compliance/health-summary` y `GET /api/ai-compliance/executive-brief` ya no llaman en paralelo a `/api/ai/suggest/health-summary` ni `/api/ai/suggest/executive-brief`. Construyen una vista legacy compatible desde la respuesta v2 fast y devuelven `metrics.duration_ms`.
+
 ## Pruebas post deploy
 
 ### Fast executive sin LLM
@@ -151,4 +153,3 @@ Esperado:
 - `engine.used_llm=true` si Ollama está disponible;
 - `engine.local_compact=true`;
 - `engine.used_web=false` salvo `force_web=true`.
-
