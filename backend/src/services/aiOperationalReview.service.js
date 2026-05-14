@@ -19,6 +19,8 @@ async function runOperationalAiReview({
   defaultQuestion = '',
   entityLabel = '',
 }) {
+  const depth = normalizeDepth(body.depth);
+  const fastMode = body.fast_mode === undefined ? depth === 'executive' : body.fast_mode === true;
   const payload = {
     task_type: taskType,
     tenant_id: tenantId,
@@ -32,7 +34,9 @@ async function runOperationalAiReview({
       use_drive: body.use_drive === undefined ? 'auto' : body.use_drive !== false,
       use_web: body.force_web === true || body.use_web === true,
       force_web: body.force_web === true,
-      depth: normalizeDepth(body.depth),
+      fast_mode: fastMode,
+      use_llm_in_fast_mode: body.use_llm_in_fast_mode === true,
+      depth,
       return_structured_result: true,
     },
   };

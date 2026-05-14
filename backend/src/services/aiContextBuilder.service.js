@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 
 const CONTEXT_VERSION = 'ai_context_v2.0.0';
+const schemaCache = new Map();
 
 function compactRows(rows, limit = 20) {
   return Array.isArray(rows) ? rows.slice(0, limit) : [];
@@ -50,16 +51,51 @@ async function safeQuery(context, label, sql, params, usedFor) {
     const result = await pool.query(sql, params);
     context.source_trace.push(sourceItem(label, usedFor));
     if (!result.rows.length) {
-      context.limitations.push(`${label}: sin registros disponibles para el tenant consultado`);
+      context.limitations.push(cleanLimitation(label, 'empty'));
     }
     return result.rows;
   } catch (error) {
-    context.limitations.push(`${label}: fuente no disponible o esquema distinto (${error.code || error.message})`);
+    console.warn('AI_CONTEXT_SOURCE_SKIPPED', {
+      label,
+      code: error?.code,
+      message: error?.message,
+    });
+    context.source_trace.push(sourceItem(label, 'consulta omitida: fuente no disponible'));
+    context.limitations.push(cleanLimitation(label, 'unavailable'));
     return [];
   }
 }
 
+function cleanLimitation(label, reason = 'unavailable') {
+  const names = {
+    findings: 'hallazgos',
+    tenant_nonconformities: 'no conformidades',
+    nonconformities: 'no conformidades',
+    evidences: 'evidencias',
+    action_plans: 'planes de acción',
+    audits: 'auditorías',
+    assets: 'activos',
+    risks: 'riesgos',
+    iso_risk_matrix_items: 'matriz de riesgos',
+    asset_risks: 'riesgos de activos',
+    kpis: 'KPIs',
+    kpi_snapshots: 'KPIs',
+    document_index: 'documentos indexados',
+    'document_index.google_drive': 'documentos Google Drive indexados',
+  };
+  const readable = names[label] || label;
+  if (reason === 'empty') {
+    return `No se encontraron ${readable} disponibles para este tenant.`;
+  }
+  if (reason === 'missing') {
+    return `La fuente de ${readable} aún no está habilitada en este entorno.`;
+  }
+  return `No se encontraron ${readable} disponibles para este tenant o la fuente aún no está habilitada.`;
+}
+
 async function tableExists(tableName) {
+  const cacheKey = `table:${tableName}`;
+  if (schemaCache.has(cacheKey)) return schemaCache.get(cacheKey);
   const result = await pool.query(
     `
     SELECT 1
@@ -70,22 +106,50 @@ async function tableExists(tableName) {
     `,
     [tableName]
   );
-  return result.rowCount > 0;
+  const exists = result.rowCount > 0;
+  schemaCache.set(cacheKey, exists);
+  return exists;
 }
 
 async function columnExists(tableName, columnName) {
+  const columns = await getExistingColumns(tableName);
+  return columns.has(columnName);
+}
+
+async function getExistingColumns(tableName) {
+  const cacheKey = `columns:${tableName}`;
+  if (schemaCache.has(cacheKey)) return schemaCache.get(cacheKey);
   const result = await pool.query(
     `
-    SELECT 1
+    SELECT column_name
     FROM information_schema.columns
     WHERE table_schema = 'public'
       AND table_name = $1
-      AND column_name = $2
-    LIMIT 1
     `,
-    [tableName, columnName]
+    [tableName]
   );
-  return result.rowCount > 0;
+  const columns = new Set(result.rows.map((row) => row.column_name));
+  schemaCache.set(cacheKey, columns);
+  return columns;
+}
+
+function hasRequiredTenantColumn(columns) {
+  return columns.has('tenant_id');
+}
+
+function statusOpenClause(alias, columns, closedValues, defaultStatus = '') {
+  if (!columns.has('status')) return '';
+  const prefix = alias ? `${alias}.` : '';
+  return `AND LOWER(COALESCE(${prefix}status, '${defaultStatus}')) NOT IN (${closedValues.map((item) => `'${item}'`).join(',')})`;
+}
+
+function orderByExisting(alias, columns, preferred, fallback = 'id') {
+  const prefix = alias ? `${alias}.` : '';
+  const parts = preferred
+    .filter((item) => columns.has(item.column))
+    .map((item) => `${prefix}${item.column} ${item.direction}`);
+  if (parts.length) return parts.join(', ');
+  return columns.has(fallback) ? `${prefix}${fallback}` : '1';
 }
 
 function normalizeSearchToken(value) {
@@ -278,89 +342,134 @@ async function loadEffectiveHealth(context, { tenantId, standardCode = null, ope
 }
 
 async function loadRecentEntities(context, { tenantId, standardCode = null }) {
-  context.recent_evidences = await safeQuery(
-    context,
-    'evidences',
-    `
-    SELECT *
-    FROM evidences
-    WHERE tenant_id = $1::uuid
-      AND COALESCE(status, '') <> 'deleted'
-    ORDER BY created_at DESC NULLS LAST
-    LIMIT 10
-    `,
-    [tenantId],
-    'evidencias recientes del tenant'
-  );
+  if (await tableExists('evidences')) {
+    const columns = await getExistingColumns('evidences');
+    if (hasRequiredTenantColumn(columns)) {
+      context.recent_evidences = await safeQuery(
+        context,
+        'evidences',
+        `
+        SELECT *
+        FROM evidences
+        WHERE tenant_id = $1::uuid
+          ${columns.has('status') ? "AND COALESCE(status, '') <> 'deleted'" : ''}
+        ORDER BY ${orderByExisting('', columns, [{ column: 'created_at', direction: 'DESC NULLS LAST' }, { column: 'uploaded_at', direction: 'DESC NULLS LAST' }])}
+        LIMIT 10
+        `,
+        [tenantId],
+        'evidencias recientes del tenant'
+      );
+    }
+  } else {
+    context.limitations.push(cleanLimitation('evidences', 'missing'));
+  }
 
-  context.recent_findings = await safeQuery(
-    context,
-    'findings',
-    `
-    SELECT *
-    FROM findings
-    WHERE tenant_id = $1::uuid
-      AND COALESCE(status, '') NOT IN ('cerrado','cerrada','closed','completado','completada','resolved')
-      AND ($2::text IS NULL OR COALESCE(iso_code, iso, '') = $2::text)
-    ORDER BY
-      CASE
-        WHEN severity IN ('critical','critica','crítica','alta','high') THEN 1
-        WHEN severity IN ('media','medium') THEN 2
-        ELSE 3
-      END,
-      created_at DESC NULLS LAST
-    LIMIT 10
-    `,
-    [tenantId, standardCode || null],
-    'hallazgos abiertos relevantes'
-  );
+  if (await tableExists('findings')) {
+    const columns = await getExistingColumns('findings');
+    if (hasRequiredTenantColumn(columns)) {
+      const standardClauses = [];
+      const params = [tenantId];
+      if (standardCode) {
+        const standardColumns = ['iso_code', 'iso', 'standard_code'].filter((column) => columns.has(column));
+        if (standardColumns.length) {
+          params.push(standardCode);
+          standardClauses.push(`AND (${standardColumns.map((column) => `${column} = $2::text`).join(' OR ')})`);
+        }
+      }
+      const severityOrder = columns.has('severity')
+        ? `CASE WHEN severity IN ('critical','critica','crítica','alta','high') THEN 1 WHEN severity IN ('media','medium') THEN 2 ELSE 3 END,`
+        : '';
+      context.recent_findings = await safeQuery(
+        context,
+        'findings',
+        `
+        SELECT *
+        FROM findings
+        WHERE tenant_id = $1::uuid
+          ${statusOpenClause('', columns, ['cerrado','cerrada','closed','completado','completada','resolved'])}
+          ${standardClauses.join('\n')}
+        ORDER BY
+          ${severityOrder}
+          ${orderByExisting('', columns, [{ column: 'created_at', direction: 'DESC NULLS LAST' }, { column: 'due_date', direction: 'ASC NULLS LAST' }])}
+        LIMIT 10
+        `,
+        params,
+        'hallazgos abiertos relevantes'
+      );
+    }
+  } else {
+    context.limitations.push(cleanLimitation('findings', 'missing'));
+  }
 
-  context.recent_nonconformities = await safeQuery(
-    context,
-    'tenant_nonconformities',
-    `
-    SELECT *
-    FROM tenant_nonconformities
-    WHERE tenant_id = $1::uuid
-      AND COALESCE(status, '') NOT IN ('cerrado','cerrada','closed','completado','completada','resolved')
-    ORDER BY created_at DESC NULLS LAST
-    LIMIT 10
-    `,
-    [tenantId],
-    'no conformidades abiertas'
-  );
+  if (await tableExists('tenant_nonconformities')) {
+    const columns = await getExistingColumns('tenant_nonconformities');
+    if (hasRequiredTenantColumn(columns)) {
+      context.recent_nonconformities = await safeQuery(
+        context,
+        'tenant_nonconformities',
+        `
+        SELECT *
+        FROM tenant_nonconformities
+        WHERE tenant_id = $1::uuid
+          ${statusOpenClause('', columns, ['cerrado','cerrada','closed','completado','completada','resolved','resuelta'])}
+        ORDER BY ${orderByExisting('', columns, [{ column: 'detected_at', direction: 'DESC NULLS LAST' }, { column: 'created_at', direction: 'DESC NULLS LAST' }])}
+        LIMIT 10
+        `,
+        [tenantId],
+        'no conformidades abiertas'
+      );
+    }
+  } else {
+    context.limitations.push(cleanLimitation('tenant_nonconformities', 'missing'));
+  }
 
-  context.recent_action_plans = await safeQuery(
-    context,
-    'action_plans',
-    `
-    SELECT *
-    FROM action_plans
-    WHERE tenant_id = $1::uuid
-      AND COALESCE(status, '') NOT IN ('cerrado','cerrada','closed','completado','completada','resolved')
-    ORDER BY
-      CASE WHEN due_date IS NOT NULL AND due_date < CURRENT_DATE THEN 0 ELSE 1 END,
-      due_date ASC NULLS LAST,
-      created_at DESC NULLS LAST
-    LIMIT 10
-    `,
-    [tenantId],
-    'planes de acción abiertos y vencidos'
-  );
+  if (await tableExists('action_plans')) {
+    const columns = await getExistingColumns('action_plans');
+    if (hasRequiredTenantColumn(columns)) {
+      const dueSort = columns.has('due_date')
+        ? 'CASE WHEN due_date IS NOT NULL AND due_date < CURRENT_DATE THEN 0 ELSE 1 END, due_date ASC NULLS LAST,'
+        : '';
+      context.recent_action_plans = await safeQuery(
+        context,
+        'action_plans',
+        `
+        SELECT *
+        FROM action_plans
+        WHERE tenant_id = $1::uuid
+          ${statusOpenClause('', columns, ['cerrado','cerrada','closed','completado','completada','resolved','cancelado'])}
+        ORDER BY
+          ${dueSort}
+          ${orderByExisting('', columns, [{ column: 'created_at', direction: 'DESC NULLS LAST' }])}
+        LIMIT 10
+        `,
+        [tenantId],
+        'planes de acción abiertos y vencidos'
+      );
+    }
+  } else {
+    context.limitations.push(cleanLimitation('action_plans', 'missing'));
+  }
 
-  context.audits = await safeQuery(
-    context,
-    'audits',
-    `
-    SELECT *
-    FROM audits
-    WHERE tenant_id = $1::uuid
-    ORDER BY created_at DESC NULLS LAST
-    LIMIT 3
-    `,
-    [tenantId],
-    'auditorías recientes'
-  );
+  if (await tableExists('audits')) {
+    const columns = await getExistingColumns('audits');
+    if (hasRequiredTenantColumn(columns)) {
+      context.audits = await safeQuery(
+        context,
+        'audits',
+        `
+        SELECT *
+        FROM audits
+        WHERE tenant_id = $1::uuid
+        ORDER BY ${orderByExisting('', columns, [{ column: 'created_at', direction: 'DESC NULLS LAST' }, { column: 'scheduled_date', direction: 'DESC NULLS LAST' }])}
+        LIMIT 3
+        `,
+        [tenantId],
+        'auditorías recientes'
+      );
+    }
+  } else {
+    context.limitations.push(cleanLimitation('audits', 'missing'));
+  }
 }
 
 function documentRelation(row, terms = []) {
@@ -391,80 +500,197 @@ function documentRelation(row, terms = []) {
 }
 
 async function loadOptionalEntities(context, { tenantId, standardCode = null, operationId = null }) {
-  const optionalSources = [
-    { table: 'risks', target: 'risks', usedFor: 'riesgos del tenant' },
-    { table: 'assets', target: 'assets', usedFor: 'activos del tenant' },
-    { table: 'kpis', target: 'kpis', usedFor: 'KPIs del tenant' },
-  ];
+  if (await tableExists('iso_risk_matrix_items')) {
+    const riskColumns = await getExistingColumns('iso_risk_matrix_items');
+    if (hasRequiredTenantColumn(riskColumns)) {
+      const params = [tenantId];
+      const standardClause = standardCode && riskColumns.has('standard_code')
+        ? (params.push(standardCode), 'AND standard_code = $2::text')
+        : '';
+      const riskOrder = orderByExisting('', riskColumns, [
+        { column: 'residual_risk_score', direction: 'DESC NULLS LAST' },
+        { column: 'inherent_risk_score', direction: 'DESC NULLS LAST' },
+        { column: 'updated_at', direction: 'DESC NULLS LAST' },
+        { column: 'created_at', direction: 'DESC NULLS LAST' },
+      ]);
 
-  for (const item of optionalSources) {
-    try {
-      if (!(await tableExists(item.table))) {
-        context.limitations.push(`${item.table}: tabla no disponible en este entorno`);
-        continue;
-      }
-
-      context[item.target] = await safeQuery(
+      context.risks = await safeQuery(
         context,
-        item.table,
+        'iso_risk_matrix_items',
         `
         SELECT *
-        FROM ${item.table}
+        FROM iso_risk_matrix_items
         WHERE tenant_id = $1::uuid
+          ${standardClause}
+        ORDER BY ${riskOrder}
+        LIMIT 10
+        `,
+        params,
+        'matriz de riesgos ISO del tenant'
+      );
+    }
+  } else if (await tableExists('asset_risks')) {
+    const assetRiskColumns = await getExistingColumns('asset_risks');
+    const assetColumns = await getExistingColumns('assets');
+    if (
+      (await tableExists('assets')) &&
+      assetRiskColumns.has('asset_id') &&
+      assetColumns.has('id') &&
+      hasRequiredTenantColumn(assetColumns)
+    ) {
+      const assetRiskOrder = orderByExisting('ar', assetRiskColumns, [
+        { column: 'level', direction: 'DESC NULLS LAST' },
+        { column: 'created_at', direction: 'DESC NULLS LAST' },
+      ]);
+      context.risks = await safeQuery(
+        context,
+        'asset_risks',
+        `
+        SELECT
+          ar.*,
+          a.name AS asset_name,
+          ${assetColumns.has('type') ? 'a.type' : 'NULL::text'} AS asset_type,
+          ${assetColumns.has('criticality') ? 'a.criticality' : 'NULL::text'} AS asset_criticality,
+          ${assetColumns.has('iso') ? 'a.iso' : 'NULL::text'} AS standard_code
+        FROM asset_risks ar
+        JOIN assets a ON a.id = ar.asset_id
+        WHERE a.tenant_id = $1::uuid
+        ORDER BY ${assetRiskOrder}
         LIMIT 10
         `,
         [tenantId],
-        item.usedFor
+        'riesgos asociados a activos del tenant'
       );
-    } catch (error) {
-      context.limitations.push(`${item.table}: no fue posible consultar (${error.code || error.message})`);
+    } else {
+      context.limitations.push(cleanLimitation('asset_risks', 'missing'));
     }
+  } else {
+    context.limitations.push(cleanLimitation('risks', 'missing'));
+  }
+
+  if (await tableExists('assets')) {
+    const assetColumns = await getExistingColumns('assets');
+    if (hasRequiredTenantColumn(assetColumns)) {
+      context.assets = await safeQuery(
+        context,
+        'assets',
+        `
+        SELECT *
+        FROM assets
+        WHERE tenant_id = $1::uuid
+        ORDER BY ${orderByExisting('', assetColumns, [{ column: 'created_at', direction: 'DESC NULLS LAST' }, { column: 'name', direction: 'ASC NULLS LAST' }])}
+        LIMIT 10
+        `,
+        [tenantId],
+        'activos del tenant'
+      );
+    }
+  } else {
+    context.limitations.push(cleanLimitation('assets', 'missing'));
+  }
+
+  if (await tableExists('kpi_snapshots')) {
+    const snapshotColumns = await getExistingColumns('kpi_snapshots');
+    const definitionColumns = await getExistingColumns('kpi_definitions');
+    if (
+      (await tableExists('kpi_definitions')) &&
+      hasRequiredTenantColumn(snapshotColumns) &&
+      snapshotColumns.has('kpi_id') &&
+      definitionColumns.has('id')
+    ) {
+      const standardSnapshotClause = standardCode && snapshotColumns.has('standard_code')
+        ? 'AND ks.standard_code = $2::text'
+        : '';
+      const params = standardSnapshotClause ? [tenantId, standardCode] : [tenantId];
+      context.kpis = await safeQuery(
+        context,
+        'kpi_snapshots',
+        `
+        WITH latest AS (
+          SELECT
+            ks.*,
+            ${definitionColumns.has('code') ? 'kd.code' : 'NULL::text'} AS kpi_code,
+            ${definitionColumns.has('name') ? 'kd.name' : 'NULL::text'} AS kpi_name,
+            ${definitionColumns.has('category') ? 'kd.category' : 'NULL::text'} AS kpi_category,
+            ROW_NUMBER() OVER (
+              PARTITION BY ks.kpi_id${snapshotColumns.has('standard_code') ? ", COALESCE(NULLIF(ks.standard_code, ''), 'GLOBAL')" : ''}
+              ORDER BY
+                ${snapshotColumns.has('calculated_at') ? 'ks.calculated_at DESC NULLS LAST,' : ''}
+                ${snapshotColumns.has('period_start') ? 'ks.period_start DESC NULLS LAST,' : ''}
+                ks.kpi_id
+            ) AS rn
+          FROM kpi_snapshots ks
+          JOIN kpi_definitions kd ON kd.id = ks.kpi_id
+          WHERE ks.tenant_id = $1::uuid
+            ${standardSnapshotClause}
+        )
+        SELECT *
+        FROM latest
+        WHERE rn = 1
+        LIMIT 10
+        `,
+        params,
+        'últimas mediciones KPI del tenant'
+      );
+    }
+  } else {
+    context.limitations.push(cleanLimitation('kpi_snapshots', 'missing'));
   }
 
   if (await tableExists('document_index')) {
-    const hasMetadata = await columnExists('document_index', 'metadata_json');
-    const hasWebView = await columnExists('document_index', 'web_view_url');
-    const hasFileUrl = await columnExists('document_index', 'file_url');
-    const hasModifiedAt = await columnExists('document_index', 'modified_at');
+    const documentColumns = await getExistingColumns('document_index');
+    if (!hasRequiredTenantColumn(documentColumns)) {
+      context.limitations.push(cleanLimitation('document_index', 'missing'));
+      return;
+    }
     const searchTerms = buildDocumentSearchTerms({
       standardCode,
       operationId,
       controls: context.priority_controls,
       summaries: context.effective_health_summary,
     });
-    const metadataExpression = hasMetadata ? 'metadata_json' : `'{}'::jsonb`;
-    const webViewExpression = hasWebView ? 'web_view_url' : `NULL::text`;
-    const fileUrlExpression = hasFileUrl ? 'file_url' : `NULL::text`;
-    const modifiedExpression = hasModifiedAt ? 'modified_at' : `NULL::timestamp`;
+    const metadataExpression = documentColumns.has('metadata_json') ? 'metadata_json' : `'{}'::jsonb`;
+    const providerExpression = documentColumns.has('provider') ? 'provider' : `'google_drive'::text`;
+    const fileNameExpression = documentColumns.has('file_name') ? 'file_name' : (documentColumns.has('title') ? 'title' : `'Documento indexado'::text`);
+    const idExpression = documentColumns.has('id') ? 'id' : `NULL::uuid`;
+    const mimeExpression = documentColumns.has('mime_type') ? 'mime_type' : `NULL::text`;
+    const extensionExpression = documentColumns.has('file_extension') ? 'file_extension' : `NULL::text`;
+    const webViewExpression = documentColumns.has('web_view_url') ? 'web_view_url' : `NULL::text`;
+    const fileUrlExpression = documentColumns.has('file_url') ? 'file_url' : `NULL::text`;
+    const modifiedExpression = documentColumns.has('modified_at') ? 'modified_at' : (documentColumns.has('updated_at') ? 'updated_at' : `NULL::timestamp`);
+    const indexedExpression = documentColumns.has('indexed_at') ? 'indexed_at' : (documentColumns.has('created_at') ? 'created_at' : `NULL::timestamp`);
+    const statusExpression = documentColumns.has('status') ? 'status' : `'active'::text`;
+    const providerClause = documentColumns.has('provider') ? "AND provider = 'google_drive'" : '';
+    const statusClause = documentColumns.has('status') ? "AND COALESCE(status, '') NOT IN ('deleted','error')" : '';
 
     context.documents = await safeQuery(
       context,
       'document_index.google_drive',
       `
       SELECT
-        id,
-        provider,
-        file_name,
-        mime_type,
-        file_extension,
+        ${idExpression} AS id,
+        ${providerExpression} AS provider,
+        ${fileNameExpression} AS file_name,
+        ${mimeExpression} AS mime_type,
+        ${extensionExpression} AS file_extension,
         ${webViewExpression} AS web_view_url,
         ${fileUrlExpression} AS file_url,
         ${modifiedExpression} AS modified_at,
-        indexed_at,
-        status,
+        ${indexedExpression} AS indexed_at,
+        ${statusExpression} AS status,
         ${metadataExpression} AS metadata_json
       FROM document_index
       WHERE tenant_id = $1::uuid
-        AND provider = 'google_drive'
-        AND COALESCE(status, '') NOT IN ('deleted','error')
+        ${providerClause}
+        ${statusClause}
         AND (
           cardinality($2::text[]) = 0
           OR EXISTS (
             SELECT 1
             FROM unnest($2::text[]) AS term
-            WHERE LOWER(COALESCE(file_name, '')) LIKE '%' || LOWER(term) || '%'
-              OR LOWER(COALESCE(mime_type, '')) LIKE '%' || LOWER(term) || '%'
-              OR LOWER(COALESCE(file_extension, '')) LIKE '%' || LOWER(term) || '%'
+            WHERE LOWER(COALESCE(${fileNameExpression}, '')) LIKE '%' || LOWER(term) || '%'
+              OR LOWER(COALESCE(${mimeExpression}, '')) LIKE '%' || LOWER(term) || '%'
+              OR LOWER(COALESCE(${extensionExpression}, '')) LIKE '%' || LOWER(term) || '%'
               OR LOWER(COALESCE(${metadataExpression}::text, '')) LIKE '%' || LOWER(term) || '%'
           )
         )
@@ -476,7 +702,7 @@ async function loadOptionalEntities(context, { tenantId, standardCode = null, op
     );
     context.documents = context.documents.map((row) => documentRelation(row, searchTerms));
   } else {
-    context.limitations.push('document_index: índice documental no disponible para Google Drive');
+    context.limitations.push(cleanLimitation('document_index', 'missing'));
   }
 }
 

@@ -1091,6 +1091,8 @@ function buildAiComplianceV2Payload({ tenantId, context, body = {}, question = '
       use_drive: body.use_drive === undefined ? 'auto' : body.use_drive !== false,
       use_web: body.force_web === true || body.use_web === true,
       force_web: body.force_web === true,
+      fast_mode: body.fast_mode === undefined ? depth === 'executive' : body.fast_mode === true,
+      use_llm_in_fast_mode: body.use_llm_in_fast_mode === true,
       depth,
       return_structured_result: true,
     },
@@ -1872,14 +1874,15 @@ router.get('/health-summary', auth, async (req, res) => {
       allowWebContext: getAuditorWebContextFlag(req),
     });
 
-    const [aiResponse, seniorAuditorLegacy, complianceV2] = await Promise.all([
+    const [aiResponse, complianceV2] = await Promise.all([
       callAiEngine('/api/ai/suggest/health-summary', aiPayload),
-      callAiEngineOptional('/api/ai/auditor/analyze', seniorAuditorPayload),
       runAiComplianceV2Analysis({
         tenantId,
         body: {
           depth: 'executive',
           local_compact: true,
+          fast_mode: true,
+          use_llm_in_fast_mode: false,
           use_web: false,
           use_drive: 'auto',
           use_rag: true,
@@ -1889,9 +1892,7 @@ router.get('/health-summary', auth, async (req, res) => {
       }),
     ]);
 
-    const seniorAuditor = complianceV2.aiResult?.ok === false
-      ? seniorAuditorLegacy
-      : complianceV2.aiResult;
+    const seniorAuditor = complianceV2.aiResult;
 
     const seniorAuditorSuggestions = await syncSeniorAuditorSuggestionsSafe({
       tenantId,
@@ -2358,14 +2359,15 @@ router.get('/executive-brief', auth, async (req, res) => {
       allowWebContext: getAuditorWebContextFlag(req),
     });
 
-    const [aiResponse, seniorAuditorLegacy, complianceV2] = await Promise.all([
+    const [aiResponse, complianceV2] = await Promise.all([
       callAiEngine('/api/ai/suggest/executive-brief', aiPayload),
-      callAiEngineOptional('/api/ai/auditor/analyze', seniorAuditorPayload),
       runAiComplianceV2Analysis({
         tenantId,
         body: {
           depth: 'executive',
           local_compact: true,
+          fast_mode: true,
+          use_llm_in_fast_mode: false,
           use_web: false,
           use_drive: 'auto',
           use_rag: true,
@@ -2375,9 +2377,7 @@ router.get('/executive-brief', auth, async (req, res) => {
       }),
     ]);
 
-    const seniorAuditor = complianceV2.aiResult?.ok === false
-      ? seniorAuditorLegacy
-      : complianceV2.aiResult;
+    const seniorAuditor = complianceV2.aiResult;
 
     const seniorAuditorSuggestions = await syncSeniorAuditorSuggestionsSafe({
       tenantId,

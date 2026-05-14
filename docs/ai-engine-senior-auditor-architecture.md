@@ -598,3 +598,24 @@ curl -s -H "Authorization: Bearer $TOKEN" \
     "depth":"deep"
   }' | python3 -m json.tool
 ```
+
+## 28. Fast Mode Determinístico
+
+Desde 2026-05-14 existe `fast_mode` para respuestas ejecutivas rápidas. Cuando `local_compact=true` y `depth=executive`, el ai-engine puede responder sin esperar a Ollama usando:
+
+- `public.v_iso_effective_kpi_summary`;
+- `public.v_iso_control_effective_health`;
+- RAG baseline ISO;
+- preanálisis determinístico.
+
+Campos esperados:
+
+- `engine.fast_mode=true`;
+- `engine.used_llm=false`;
+- `engine.llm_skipped_reason=fast_mode_deterministic_response`;
+- `structured_result` completo;
+- `source_trace` con datos internos y RAG si hubo match.
+
+Para forzar LLM en modo rápido, enviar `use_llm_in_fast_mode=true`. Para análisis estándar/profundo, usar `depth=standard|deep` y `fast_mode=false`.
+
+El backend también endurece `aiContextBuilder.service.js` contra esquema variable: antes de consultar tablas opcionales valida existencia de tabla/columnas mediante `information_schema`, no expone SQLSTATE al usuario y entrega limitaciones limpias en español.

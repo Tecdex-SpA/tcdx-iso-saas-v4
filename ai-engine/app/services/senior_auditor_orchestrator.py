@@ -289,9 +289,9 @@ def build_compact_ai_context(context: dict, depth: str = "executive", limits: di
     return compact
 
 
-def _build_gaps(controls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _build_gaps(controls: List[Dict[str, Any]], limit: int = 5) -> List[Dict[str, Any]]:
     gaps = []
-    for control in controls[:5]:
+    for control in controls[:limit]:
         iso = str(control.get("iso") or "")
         clause = str(control.get("clause") or "")
         title = f"{iso} {clause} con salud efectiva {control.get('effective_health_score', 0)}%"
@@ -315,9 +315,9 @@ def _build_gaps(controls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return gaps
 
 
-def _build_actions(gaps: List[Dict[str, Any]], controls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _build_actions(gaps: List[Dict[str, Any]], controls: List[Dict[str, Any]], limit: int = 5) -> List[Dict[str, Any]]:
     actions = []
-    for index, gap in enumerate(gaps):
+    for index, gap in enumerate(gaps[:limit]):
         control = controls[index] if index < len(controls) else {}
         actions.append({
             "title": f"Regularizar {gap['iso']} {gap['clause']}",
@@ -355,8 +355,33 @@ def _flatten_rag_values(rag_results: List[Dict[str, Any]], key: str, limit: int 
     return values
 
 
-def build_deterministic_preanalysis(context: dict, rag_results: list = None) -> dict:
+def _depth_limits(depth: str) -> Dict[str, int]:
+    return {
+        "executive": {"gaps": 3, "actions": 3, "questions": 5},
+        "standard": {"gaps": 5, "actions": 5, "questions": 8},
+        "deep": {"gaps": 8, "actions": 8, "questions": 12},
+    }.get(depth, {"gaps": 5, "actions": 5, "questions": 8})
+
+
+def is_fast_mode(payload: dict, local_compact: bool, depth: str) -> bool:
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    if options.get("fast_mode") is True:
+        return True
+    if options.get("fast_mode") is False:
+        return False
+    return _env_bool("AI_ENGINE_FAST_MODE", False) or (local_compact and depth == "executive")
+
+
+def _avg_effective_health(summaries: List[Dict[str, Any]]) -> float:
+    values = [_number(row.get("avg_effective_health_score")) for row in summaries if row.get("avg_effective_health_score") is not None]
+    if not values:
+        return 0.0
+    return round(sum(values) / len(values), 2)
+
+
+def build_deterministic_preanalysis(context: dict, rag_results: list = None, depth: str = "executive") -> dict:
     rag_results = [item for item in (rag_results or []) if isinstance(item, dict)]
+    limits = _depth_limits(depth)
     summaries = context.get("effective_health_summary") if isinstance(context.get("effective_health_summary"), list) else []
     controls = _sort_controls_worst_first(context.get("priority_controls") or [])
     readiness = _readiness(summaries, controls)
@@ -368,11 +393,12 @@ def build_deterministic_preanalysis(context: dict, rag_results: list = None) -> 
     open_nc = sum(_int(row.get("open_nonconformities_count")) for row in summaries)
     compliance = round((complies / active * 100), 2) if active else 0
     official_pct = round((official / active * 100), 2) if active else 0
-    gaps = _build_gaps(controls)
-    actions = _build_actions(gaps, controls)
+    avg_health = _avg_effective_health(summaries)
+    gaps = _build_gaps(controls, limits["gaps"])
+    actions = _build_actions(gaps, controls, limits["actions"])
     expected_evidence = _flatten_rag_values(rag_results, "expected_evidence", 10)
     common_gaps = _flatten_rag_values(rag_results, "common_gaps", 8)
-    audit_questions = _flatten_rag_values(rag_results, "audit_questions", 8)
+    audit_questions = _flatten_rag_values(rag_results, "audit_questions", limits["questions"])
     documents_to_request = _flatten_rag_values(rag_results, "documents_to_request", 8)
     recommended_from_rag = _flatten_rag_values(rag_results, "recommended_actions", 8)
     closure_criteria = _flatten_rag_values(rag_results, "closure_criteria", 8)
@@ -385,8 +411,8 @@ def build_deterministic_preanalysis(context: dict, rag_results: list = None) -> 
         action["description"] = f"{action['description']} Acción RAG sugerida: {rag_action}."
         action["acceptance_criteria"] = list(dict.fromkeys(action.get("acceptance_criteria", []) + closure_criteria[:3]))
 
-    if recommended_from_rag and len(actions) < 5:
-        for rag_action in recommended_from_rag[: 5 - len(actions)]:
+    if recommended_from_rag and len(actions) < limits["actions"]:
+        for rag_action in recommended_from_rag[: limits["actions"] - len(actions)]:
             actions.append({
                 "title": rag_action,
                 "description": f"Ejecutar acción recomendada por conocimiento normativo interno: {rag_action}.",
@@ -400,7 +426,95 @@ def build_deterministic_preanalysis(context: dict, rag_results: list = None) -> 
                 "related_clause": str((rag_results[0] or {}).get("clause_or_domain") or ""),
             })
 
-    return {
+    confirmed_facts = [
+        f"Según datos internos: {active} controles activos en alcance evaluados por public.v_iso_effective_kpi_summary.",
+        f"Según datos internos: cumplimiento efectivo {compliance}% y evidencia oficial {official_pct}%.",
+        f"Según datos internos: {without} controles sin evidencia, {overdue} planes vencidos y {open_nc} no conformidades abiertas.",
+    ]
+    if not active and not controls:
+        confirmed_facts = ["Según datos internos: no se recibieron controles activos suficientes para concluir cumplimiento."]
+
+    inferences = [
+        f"Inferencia razonada: la preparación de auditoría es {readiness['status']} porque {readiness['reason']}",
+    ]
+    if without > 0:
+        inferences.append("Inferencia razonada: los controles sin evidencia son candidatos prioritarios a observación auditora.")
+    if overdue > 0:
+        inferences.append("Inferencia razonada: los planes vencidos elevan el riesgo de no conformidad por falta de tratamiento oportuno.")
+
+    diagnosis = (
+        f"Según datos internos, el estado de preparación es {readiness['status']}. "
+        f"Hay {active} controles activos en alcance, {compliance}% de cumplimiento efectivo, "
+        f"{official_pct}% de evidencia oficial y salud promedio {avg_health}%. "
+        f"Se priorizan {len(gaps)} brechas y {len(actions)} acciones usando salud efectiva y conocimiento normativo interno."
+    )
+    executive_summary = (
+        f"Preparación {readiness['status']}: {active} controles activos, {compliance}% cumplimiento efectivo, "
+        f"{official_pct}% evidencia oficial, {without} controles sin evidencia, {overdue} planes vencidos."
+    )
+    source_trace = [
+        make_source_trace_item("internal_db", "public.v_iso_effective_kpi_summary", "cálculo determinístico de preparación de auditoría"),
+        make_source_trace_item("internal_db", "public.v_iso_control_effective_health", "priorización de controles críticos"),
+    ]
+    if rag_results:
+        source_trace.extend(
+            make_source_trace_item("rag", item.get("id") or item.get("topic") or "iso_baseline_knowledge", "evidencia esperada y preguntas auditoras")
+            for item in rag_results[: limits["gaps"]]
+        )
+
+    structured_result = {
+        "executive_summary": executive_summary,
+        "diagnosis": diagnosis,
+        "confirmed_facts": confirmed_facts,
+        "inferences": inferences,
+        "gaps": gaps,
+        "evidence_assessment": {
+            "available_evidence": [f"{_int(control.get('evidence_count'))} evidencias en {control.get('iso')} {control.get('clause')}" for control in controls[:6] if _int(control.get("evidence_count")) > 0],
+            "official_evidence": [f"{_int(control.get('official_evidence_count'))} oficiales en {control.get('iso')} {control.get('clause')}" for control in controls[:6] if _int(control.get("official_evidence_count")) > 0],
+            "weak_evidence": [gap["title"] for gap in gaps if gap["evidence_status"] == "evidencia_debil"] + common_gaps[:3],
+            "missing_evidence": [gap["title"] for gap in gaps if gap["evidence_status"] == "sin_evidencia"] + missing_evidence[:6],
+        },
+        "risk_impact": "Riesgo de hallazgos de auditoría si los controles críticos no tienen evidencia oficial, planes vigentes y cierre de brechas.",
+        "audit_readiness": {
+            "status": readiness["status"],
+            "reason": readiness["reason"],
+            "auditor_concerns": [
+                "¿Qué evidencia oficial sustenta los controles críticos?",
+                "¿Qué planes vencidos siguen afectando controles en alcance?",
+                "¿Qué no conformidades abiertas tienen causa raíz y tratamiento verificable?",
+            ] + common_gaps[:3],
+        },
+        "recommended_actions": actions,
+        "auditor_questions": audit_questions[: limits["questions"]] or [
+            "¿Cuál es el criterio formal para marcar una evidencia como oficial?",
+            "¿Qué controles críticos siguen sin evidencia en alcance activo?",
+            "¿Quién es responsable del cierre de planes vencidos?",
+        ][: limits["questions"]],
+        "documents_to_request": documents_to_request[: limits["questions"]] or [
+            "Política o procedimiento vigente aplicable al control crítico",
+            "Registro operacional reciente que demuestre ejecución del control",
+            "Evidencia de revisión/aprobación por responsable formal",
+        ][: limits["questions"]],
+        "web_context_used": [],
+        "drive_context_used": [],
+        "rag_context_used": [
+            f"Como referencia normativa interna: {item.get('standard_code')} / {item.get('topic')} — evidencia esperada y criterios de cierre usados en el análisis"
+            for item in rag_results[: limits["gaps"]]
+        ],
+        "source_trace": source_trace,
+        "confidence": min(1.0, 0.55 + (0.1 if active else 0) + (0.1 if rag_results else 0) - (0.1 if without and active and without / active > 0.5 else 0)),
+        "limitations": [] if active or controls else ["No hay evidencia suficiente para concluir cumplimiento. Se requieren datos internos antes de emitir diagnóstico."],
+    }
+
+    answer = (
+        f"{diagnosis}\n\n"
+        f"{' '.join(confirmed_facts)} "
+        "La recomendación operativa es cerrar primero las brechas con evidencia faltante, planes vencidos o no conformidades abiertas. "
+        "Como referencia normativa interna, las acciones incluyen evidencia esperada, preguntas auditoras y criterios de cierre verificables. "
+        "Este análisis es determinístico y puede entregarse sin esperar al modelo LLM; el LLM queda reservado para redacción ampliada o análisis profundo."
+    )
+
+    result = {
         "readiness": readiness,
         "active": active,
         "complies": complies,
@@ -410,6 +524,7 @@ def build_deterministic_preanalysis(context: dict, rag_results: list = None) -> 
         "open_nc": open_nc,
         "compliance": compliance,
         "official_pct": official_pct,
+        "avg_effective_health_score": avg_health,
         "gaps": gaps,
         "actions": actions,
         "missing_evidence": missing_evidence,
@@ -418,7 +533,10 @@ def build_deterministic_preanalysis(context: dict, rag_results: list = None) -> 
         "documents_to_request": documents_to_request,
         "closure_criteria": closure_criteria,
         "confidence_seed": 0.15 if rag_results else 0.0,
+        "answer": answer,
+        "structured_result": normalize_ai_structured_result(structured_result),
     }
+    return result
 
 
 def _calculate_confidence(context: Dict[str, Any], used_rag: bool, used_drive: bool, used_web: bool) -> float:
@@ -570,7 +688,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     elif web.get("reason"):
         limitations.append(str(web.get("reason")))
 
-    preanalysis = build_deterministic_preanalysis(context, _rag_results(rag))
+    preanalysis = build_deterministic_preanalysis(context, _rag_results(rag), depth)
     readiness = preanalysis["readiness"]
     active = preanalysis["active"]
     complies = preanalysis["complies"]
@@ -616,7 +734,9 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     confidence = min(1.0, _calculate_confidence(context, bool(rag.get("used")), bool(drive.get("used")), bool(web.get("used"))) + preanalysis.get("confidence_seed", 0))
+    deterministic_structured = preanalysis.get("structured_result") if isinstance(preanalysis.get("structured_result"), dict) else {}
     structured = normalize_ai_structured_result({
+        **deterministic_structured,
         "executive_summary": f"Preparación {readiness['status']}: {active} controles activos, {compliance}% cumplimiento efectivo, {official_pct}% evidencia oficial, {without} controles sin evidencia.",
         "diagnosis": diagnosis,
         "confirmed_facts": facts,
@@ -666,7 +786,16 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     engine_model = "deterministic_senior_auditor_v2"
     llm_used = False
-    if is_llm_available():
+    fast_mode = is_fast_mode(payload, local_compact, depth)
+    use_llm_in_fast_mode = options.get("use_llm_in_fast_mode") is True
+    llm_skipped_reason = ""
+    if fast_mode and not use_llm_in_fast_mode:
+        llm_skipped_reason = "fast_mode_deterministic_response"
+        structured["limitations"] = list(dict.fromkeys(
+            (structured.get("limitations") or []) +
+            ["Modo rápido ejecutivo: análisis generado con datos internos, salud efectiva y RAG sin esperar al LLM."]
+        ))
+    elif is_llm_available():
         try:
             llm_raw = call_llm_json(
                 prompt=_build_llm_user_prompt(
@@ -698,7 +827,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             provider = llm_metadata.get("provider") or "desconocido"
             model = llm_metadata.get("model") or "sin_modelo"
             structured["limitations"].append(
-                f"Proveedor LLM falló — análisis generado por fallback determinístico. Proveedor: {provider}, modelo: {model}. Detalle: {str(exc)[:160]}"
+                f"Proveedor LLM falló — análisis generado por fallback determinístico. Proveedor: {provider}, modelo: {model}."
             )
             limitations.append(f"Proveedor LLM falló — análisis generado por fallback determinístico. Modelo intentado: {model}")
             engine_model = "deterministic_senior_auditor_v2"
@@ -722,6 +851,8 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "llm_provider": llm_metadata.get("provider"),
             "llm_available": llm_metadata.get("available") is True,
             "used_llm": llm_used,
+            "fast_mode": fast_mode,
+            "llm_skipped_reason": llm_skipped_reason,
             "used_internal_context": True,
             "used_rag": bool(rag.get("used")),
             "used_drive": bool(drive.get("used")),

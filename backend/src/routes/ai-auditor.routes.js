@@ -1474,6 +1474,7 @@ async function buildSeniorAuditorContext({ tenantId, body }) {
 }
 
 function buildSeniorAuditorPayload({ tenantId, locale, context, body }) {
+  const depth = ['executive', 'standard', 'deep'].includes(body?.depth) ? body.depth : 'standard';
   return {
     task_type: normalizeSeniorAuditorTask(body),
     tenant_id: tenantId,
@@ -1487,7 +1488,9 @@ function buildSeniorAuditorPayload({ tenantId, locale, context, body }) {
       use_drive: body?.use_drive === undefined ? 'auto' : body.use_drive !== false,
       use_web: body?.force_web === true || body?.use_web === true,
       force_web: body?.force_web === true,
-      depth: ['executive', 'standard', 'deep'].includes(body?.depth) ? body.depth : 'standard',
+      fast_mode: body?.fast_mode === undefined ? false : body.fast_mode === true,
+      use_llm_in_fast_mode: body?.use_llm_in_fast_mode === true,
+      depth,
       return_structured_result: true,
     },
     request_metadata: {

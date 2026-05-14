@@ -167,8 +167,36 @@ time curl -s -H "Authorization: Bearer $TOKEN" \
 Respuesta esperada:
 
 - `engine.local_compact = true`
-- `engine.used_llm = true` si Ollama responde
+- `engine.fast_mode = true` para `depth=executive` salvo override
+- `engine.used_llm = false` en fast executive por defecto
 - `engine.used_rag = true`
 - `engine.used_web = false` salvo `force_web=true`
 - `structured_result` existe
 - `answer` existe
+
+## Fast Mode Determinístico
+
+La optimización principal ya no intenta que Ollama sea siempre rápido. En `local_compact + executive`, ai-engine devuelve una respuesta determinística basada en salud efectiva y RAG sin llamar al LLM. Esto evita esperas de 40+ segundos para análisis rápidos de control/estado.
+
+Para solicitar redacción con LLM:
+
+```json
+{
+  "depth": "standard",
+  "local_compact": true,
+  "fast_mode": false
+}
+```
+
+O bien:
+
+```json
+{
+  "depth": "executive",
+  "local_compact": true,
+  "fast_mode": true,
+  "use_llm_in_fast_mode": true
+}
+```
+
+IA Compliance health/brief usa `fast_mode=true` y `use_llm_in_fast_mode=false`; el análisis generativo queda para acciones explícitas.

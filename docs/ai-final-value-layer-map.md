@@ -18,3 +18,11 @@ Alcance: pasada final de valor IA sin deploy, enfocada en Ollama local, RAG úti
 | IA Auditor | Integrado en v2 | `backend/src/routes/ai-auditor.routes.js`, `frontend/src/app/ia-auditor` | Mantener estable | Sin cambios funcionales en esta pasada | Sí | Ninguno | `node -c ai-auditor.routes.js` |
 | IA Compliance | Integrado/documentado en v2 | `backend/src/routes/ai-compliance.routes.js`, `frontend/src/app/ia-compliance` | Mantener estable | Sin cambios funcionales en esta pasada | Sí | Ninguno | `node -c ai-compliance.routes.js` |
 | frontend rendering | IA Auditor/Compliance renderizan structured_result | `frontend/src/app/*` | Botones IA operativos por módulo aún no añadidos | Documentar rollout siguiente para evitar riesgo visual | Parcial | UI por módulo requiere diseño/QA dedicado | `npm run build` no requerido si no se toca frontend |
+
+## Pasada 2026-05-14 — hardening contexto + fast mode
+
+| area | current_status | file_or_table | value_gap | action_required | implemented | blocker | validation |
+|---|---|---|---|---|---|---|---|
+| Schema-safe AI context | Endurecido | `backend/src/services/aiContextBuilder.service.js` | Limitaciones podían mostrar códigos SQL como `42703` y asumir tablas/columnas opcionales | Validar tablas/columnas con `information_schema`, usar fuentes reales (`iso_risk_matrix_items`, `asset_risks`, `kpi_snapshots`) y mensajes limpios | Sí | Requiere datos reales para validar volumen | `node -c aiContextBuilder.service.js` |
+| Fast deterministic mode | Implementado | `ai-engine/app/services/senior_auditor_orchestrator.py` | Executive local_compact esperaba Ollama y podía tardar 40+ segundos | `fast_mode` devuelve structured_result con salud efectiva + RAG sin LLM | Sí | Profundidad estándar/deep sigue dependiendo de Ollama | `py_compile senior_auditor_orchestrator.py` |
+| IA Compliance health/brief | Ajustado | `backend/src/routes/ai-compliance.routes.js` | Refresh/brief podía activar análisis pesado legacy | Se usa v2 executive fast y se evita llamada legacy senior auditor en esos flujos | Sí | `callAiEngine('/api/ai/suggest/*')` legacy queda por revisar en otra pasada si genera LLM | `node -c ai-compliance.routes.js` |
