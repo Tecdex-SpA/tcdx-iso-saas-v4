@@ -454,17 +454,17 @@ async function generateEvidenceIndex({ packageId, user }) {
 
   const rows = [];
   for (const evidence of context.evidences || []) {
-    const name = evidence.title || evidence.name || evidence.file_url || `Evidencia ${evidence.id}`;
+    const name = evidence.title || evidence.name || evidence.file_name || evidence.file_url || evidence.file_path || evidence.description || `Evidencia ${evidence.id}`;
     rows.push({
       evidence_name: String(name || '').slice(0, 255),
       evidence_type: evidence.evidence_type || null,
       folder_path: '03_EVIDENCIAS_PARA_VALIDAR',
       source_module: 'evidences',
       source_id: evidence.id || null,
-      source_reference: evidence.file_url || evidence.description || null,
+      source_reference: evidence.file_url || evidence.file_path || evidence.description || null,
       status: 'requires_validation',
       notes: 'Evidencia encontrada en plataforma; requiere validación de aplicabilidad al paquete.',
-      file_url: evidence.file_url || null,
+      file_url: evidence.file_url || evidence.file_path || null,
     });
   }
 

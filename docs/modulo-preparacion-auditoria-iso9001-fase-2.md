@@ -146,6 +146,76 @@ Incluye 15 registros sobre estructura de carpeta, manual, política, objetivos, 
 - No se implementó export ZIP completo.
 - La generación documental en ai-engine es determinística y segura; LLM/Ollama puede incorporarse después sobre este contrato.
 
+## Corrección de compatibilidad con schema real
+
+### Error detectado
+
+Durante pruebas reales de `POST /api/audit-preparation/packages/:id/build-context`, backend devolvió error genérico y el log interno mostró:
+
+```txt
+column "updated_at" does not exist
+```
+
+El origen era una consulta central del context builder que asumía columnas fijas en tablas heredadas. En el schema real:
+
+- `tenants` no tiene `updated_at`;
+- `audits` no tiene `updated_at` y usa `iso` en vez de `standard_code`;
+- `evidences` no tiene `updated_at` ni `standard_code`;
+- `risks` no existe en este entorno.
+
+### Corrección aplicada
+
+- `auditPreparationContext.service.js` ahora usa introspección por tabla antes de seleccionar columnas.
+- Las fuentes opcionales se consultan con selección dinámica y solo usan columnas existentes.
+- `tenants` e `iso_standards` ya no usan columnas hardcodeadas no verificadas.
+- `evidences` se consulta por `tenant_id` y período cuando no hay filtro directo por norma, registrando gap `evidences_standard_filter_unavailable`.
+- `risks` ausente no falla el contexto; queda como `source_trace.available=false` con `reason=table_not_found`.
+- El controller ya no expone códigos PostgreSQL como `42703` al cliente en errores 500; el detalle técnico queda solo en logs.
+- El cliente backend de ai-engine usa el header correcto `x-ai-token`.
+
+### Header correcto ai-engine
+
+Backend debe llamar ai-engine con:
+
+```txt
+x-ai-token: $AI_INTERNAL_TOKEN
+```
+
+Variables esperadas:
+
+```bash
+AI_INTERNAL_TOKEN=tecdex_ai_internal_2026
+AI_ENGINE_URL=http://192.168.100.140:8001
+```
+
+También se acepta `AI_ENGINE_TOKEN` o `AI_TOKEN` como fallback temporal si `AI_INTERNAL_TOKEN` no está definido.
+
+### SQL adicional
+
+**No se requiere SQL nuevo.**
+
+La corrección fue backend-only. No se agregan columnas a `tenants`, `audits`, `evidences` ni tablas heredadas.
+
+### Validaciones de corrección
+
+```bash
+node -c backend/src/services/auditPreparationContext.service.js
+node -c backend/src/services/auditPreparation.service.js
+node -c backend/src/controllers/auditPreparation.controller.js
+node -c backend/src/routes/auditPreparation.routes.js
+node -c backend/src/services/aiEngineClient.service.js
+node -c backend/src/app.js
+cd backend && npm run check
+cd backend && npm test
+git diff --check
+```
+
+Resultado esperado en runtime:
+
+- `build-context` devuelve `ok=true`.
+- Puede incluir `gaps`, fuentes no disponibles y `source_trace`, pero no debe fallar por `42703`.
+- `generate-documents` no debe fallar por contexto ni por `Unauthorized AI internal token`.
+
 ## BD - Antes de probar esta pasada
 
 **SI.**

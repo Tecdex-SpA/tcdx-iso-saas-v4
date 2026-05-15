@@ -73,10 +73,15 @@ async function getExistingColumns(tableName) {
   return new Set(result.rows.map((row) => row.column_name));
 }
 
-function selectExisting(columns, candidates) {
+function selectExisting(columns, candidates = []) {
   return candidates
     .filter((column) => columns.has(column))
     .map((column) => `${column}`);
+}
+
+function selectExpression(alias, column) {
+  if (String(column).includes(' AS ')) return column;
+  return `${alias}.${column}`;
 }
 
 function dateFilterFor(columns, alias, params, periodYear) {
@@ -115,10 +120,13 @@ async function safeQuerySource({
       table,
       available: false,
       records_count: 0,
-      reason: 'source_table_unavailable',
+      reason: 'table_not_found',
       queried_at: new Date().toISOString(),
     };
-    gaps.push(publicGap(key, `Fuente ${key} no disponible en este entorno.`));
+    const message = key === 'risks'
+      ? 'No existe tabla risks; se requiere mapear matriz de riesgos desde la estructura real del sistema o módulo equivalente.'
+      : `Fuente ${key} no disponible en este entorno.`;
+    gaps.push(publicGap(key, message));
     return [];
   }
 
@@ -137,7 +145,7 @@ async function safeQuerySource({
   }
 
   const selected = selectExisting(columns, requestedColumns);
-  if (!selected.length) selected.push('id');
+  if (!selected.length) selected.push(columns.has('id') ? 'id' : 'NULL::text AS source_record_id');
 
   const params = [];
   const where = [];
@@ -151,6 +159,8 @@ async function safeQuerySource({
   if (standardCode && standardColumn) {
     params.push(standardCode);
     where.push(`UPPER(REPLACE(COALESCE(t.${standardColumn}::text, ''), ' ', '')) = $${params.length}`);
+  } else if (standardCode && key === 'evidences') {
+    gaps.push(publicGap('evidences_standard_filter_unavailable', 'Las evidencias no tienen columna directa de norma; se consultan por tenant y período.', 'baja'));
   }
 
   const auditColumn = auditColumns.find((column) => columns.has(column));
@@ -163,7 +173,7 @@ async function safeQuerySource({
   const orderColumn = ['updated_at', 'created_at', 'generated_at', 'due_date'].find((column) => columns.has(column));
 
   const sql = `
-    SELECT ${selected.map((column) => `t.${column}`).join(', ')}
+    SELECT ${selected.map((column) => selectExpression('t', column)).join(', ')}
     FROM ${table} t
     ${where.length ? `WHERE ${where.join(' AND ')}` : 'WHERE true'}
       ${extraDateFilter}
@@ -194,9 +204,10 @@ async function safeQuerySource({
       queried_at: new Date().toISOString(),
     };
     gaps.push(publicGap(key, `No fue posible consultar ${key} con el esquema actual.`));
-    console.error('AUDIT PREPARATION CONTEXT SOURCE ERROR:', {
+    console.warn(`AUDIT PREPARATION SAFE SOURCE WARN [${key}]:`, {
       source: key,
       table,
+      code: error.code,
       message: error.message,
     });
     return [];
@@ -204,11 +215,27 @@ async function safeQuerySource({
 }
 
 async function getTenant(tenantId) {
+  if (!(await tableExists('tenants'))) return {};
+  const columns = await getExistingColumns('tenants');
+  const selected = selectExisting(columns, [
+    'id',
+    'name',
+    'rut',
+    'address',
+    'business',
+    'branches',
+    'logo_url',
+    'service_status',
+    'created_at',
+    'updated_at',
+  ]);
+  if (!selected.length) return {};
+
   const result = await pool.query(
     `
-    SELECT id, name, service_status, created_at, updated_at
-    FROM tenants
-    WHERE id = $1::uuid
+    SELECT ${selected.map((column) => selectExpression('t', column)).join(', ')}
+    FROM tenants t
+    WHERE t.id = $1::uuid
     LIMIT 1
     `,
     [tenantId]
@@ -223,16 +250,32 @@ async function getStandard(tenantId, standardCode, sourceTrace, gaps) {
   };
 
   if (await tableExists('iso_standards')) {
-    const result = await pool.query(
-      `
-      SELECT standard_code, display_name, family, description, is_active
-      FROM iso_standards
-      WHERE standard_code = $1
-      LIMIT 1
-      `,
-      [standardCode]
-    );
-    Object.assign(standard, result.rows[0] || {});
+    const columns = await getExistingColumns('iso_standards');
+    const standardColumn = ['standard_code', 'iso', 'iso_code', 'code'].find((column) => columns.has(column));
+    const selected = selectExisting(columns, [
+      'standard_code',
+      'iso',
+      'iso_code',
+      'code',
+      'display_name',
+      'name',
+      'family',
+      'description',
+      'is_active',
+    ]);
+
+    if (standardColumn && selected.length) {
+      const result = await pool.query(
+        `
+        SELECT ${selected.map((column) => selectExpression('s', column)).join(', ')}
+        FROM iso_standards s
+        WHERE UPPER(REPLACE(COALESCE(s.${standardColumn}::text, ''), ' ', '')) = $1
+        LIMIT 1
+        `,
+        [standardCode]
+      );
+      Object.assign(standard, result.rows[0] || {});
+    }
   }
 
   if (await tableExists('tenant_standards')) {
@@ -373,7 +416,7 @@ async function buildAuditPreparationContext({
     safeQuerySource({ ...common, key: 'uploaded_zip', table: 'audit_uploaded_zip_files', tenantId, columns: ['id', 'package_id', 'audit_id', 'standard_code', 'period_year', 'original_filename', 'file_url', 'analysis_status', 'inventory_json', 'gaps_json', 'created_at'], limit: 10 }),
     safeQuerySource({ ...common, key: 'risks', table: 'risks', tenantId, columns: ['id', 'title', 'name', 'description', 'severity', 'risk_level', 'status', 'owner_id', 'created_at', 'updated_at'], limit: 25 }),
     safeQuerySource({ ...common, key: 'controls', table: 'v_iso_control_effective_health', tenantId, columns: ['tenant_control_id', 'catalog_control_id', 'iso', 'standard_code', 'clause', 'control_description', 'effective_health_score', 'effective_health_status', 'evidence_count', 'official_evidence_count', 'open_findings_count', 'open_nonconformities_count', 'overdue_action_plans_count', 'is_in_active_operational_scope'], standardColumns: ['standard_code', 'iso'], limit: 50 }),
-    safeQuerySource({ ...common, key: 'evidences', table: 'evidences', tenantId, columns: ['id', 'title', 'name', 'description', 'status', 'evidence_type', 'file_url', 'tenant_control_id', 'control_id', 'created_at', 'updated_at'], limit: 50 }),
+    safeQuerySource({ ...common, key: 'evidences', table: 'evidences', tenantId, columns: ['id', 'title', 'name', 'description', 'file_name', 'file_path', 'status', 'validated', 'evidence_type', 'file_url', 'file_mime_type', 'file_size_bytes', 'tenant_control_id', 'control_id', 'created_at', 'reviewed_at', 'expires_at', 'updated_at'], limit: 50 }),
     safeQuerySource({ ...common, key: 'audits', table: 'audits', tenantId, columns: ['id', 'iso', 'standard_code', 'status', 'start_date', 'end_date', 'auditor_name', 'requester_name', 'created_at', 'updated_at'], standardColumns: ['standard_code', 'iso'], limit: 15 }),
     safeQuerySource({ ...common, key: 'findings', table: 'findings', tenantId, columns: ['id', 'audit_id', 'iso_code', 'standard_code', 'title', 'description', 'severity', 'status', 'created_at', 'updated_at'], standardColumns: ['standard_code', 'iso_code'], limit: 30 }),
     safeQuerySource({ ...common, key: 'nonconformities', table: 'tenant_nonconformities', tenantId, columns: ['id', 'audit_id', 'iso_code', 'standard_code', 'title', 'description', 'severity', 'status', 'created_at', 'updated_at'], standardColumns: ['standard_code', 'iso_code'], limit: 30 }),

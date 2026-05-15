@@ -3,15 +3,19 @@ const auditPreparationService = require('../services/auditPreparation.service');
 function handleError(res, error) {
   const status = Number(error.status || error.statusCode || 500);
   const safeStatus = status >= 400 && status < 600 ? status : 500;
-  const code = error.code || (safeStatus === 500 ? 'AUDIT_PREPARATION_ERROR' : 'AUDIT_PREPARATION_REQUEST_ERROR');
+  const code = safeStatus === 500
+    ? 'AUDIT_PREPARATION_ERROR'
+    : (error.code || 'AUDIT_PREPARATION_REQUEST_ERROR');
   const message = safeStatus === 500
     ? 'No fue posible procesar la preparación documental'
     : error.message;
 
   if (safeStatus === 500) {
     console.error('AUDIT PREPARATION CONTROLLER ERROR:', {
-      code,
+      code: error.code || code,
       message: error.message,
+      stack: error.stack,
+      sourceKey: error.sourceKey || null,
     });
   }
 

@@ -6,7 +6,7 @@ class AiEngineClient {
         'http://localhost:8001'
     ).replace(/\/+$/, '');
     this.timeout = Number.parseInt(process.env.AI_ENGINE_TIMEOUT_MS || '120000', 10) || 120000;
-    this.token = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
+    this.token = process.env.AI_INTERNAL_TOKEN || process.env.AI_ENGINE_TOKEN || process.env.AI_TOKEN || '';
   }
 
   async postJson(path, payload) {
@@ -18,7 +18,7 @@ class AiEngineClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-AI-Token': this.token,
+          'x-ai-token': this.token,
           'x-tcdx-locale': 'es',
         },
         body: JSON.stringify(payload),
