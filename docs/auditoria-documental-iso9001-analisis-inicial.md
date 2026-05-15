@@ -75,3 +75,17 @@ El ZIP se usa solo como referencia de arquitectura documental, tipos de document
 4. Integrar endpoints bajo `/api/audit-preparation` con `auth` y RBAC.
 5. Integrar la experiencia como tab/sección dentro de `/auditorias`, sin crear módulo aislado.
 6. Implementar export ZIP inicial con documentos generados en Markdown/HTML/PDF antes de DOCX/XLSX avanzado.
+
+## Estado después de Fase 4, 5 y 6
+
+Se agregó la base backend y ai-engine para operar la preparación documental sin frontend todavía:
+
+- contexto documental multi-tenant en `backend/src/services/auditPreparationContext.service.js`;
+- servicio principal en `backend/src/services/auditPreparation.service.js`;
+- controlador y rutas `/api/audit-preparation`;
+- cliente backend hacia ai-engine para `generateAuditDocument`;
+- endpoint ai-engine `POST /api/ai-compliance/audit-documents/generate`;
+- prompt versionado `ai-engine/prompts/iso9001_audit_document_generator_v1.md`;
+- migración y seed opcionales para knowledge base documental `iso9001_audit_document_pack_structure_v1`.
+
+La documentación operativa de esta fase quedó en `docs/modulo-preparacion-auditoria-iso9001-fase-2.md`, incluyendo comandos exactos de BD, despliegue y validación.

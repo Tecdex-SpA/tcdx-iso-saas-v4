@@ -264,6 +264,11 @@ const API_RULES = [
     write: ['admin', 'tenant_admin', 'auditor'],
   },
   {
+    prefix: '/api/audit-preparation',
+    read: TENANT_READ_ROLES,
+    write: ['admin', 'tenant_admin', 'auditor'],
+  },
+  {
     prefix: '/api/ai-auditor',
     read: TENANT_READ_ROLES,
     write: ['admin', 'tenant_admin', 'auditor'],

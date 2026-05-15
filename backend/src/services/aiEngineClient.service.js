@@ -71,6 +71,64 @@ class AiEngineClient {
     }
   }
 
+  async generateAuditDocument(payload) {
+    if (!this.baseUrl || !this.token) {
+      return this.buildAuditDocumentFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
+    }
+
+    try {
+      return await this.postJson('/api/ai-compliance/audit-documents/generate', payload);
+    } catch (error) {
+      if (this.isNetworkError(error)) {
+        try {
+          return await this.postJson('/api/ai-compliance/audit-documents/generate', payload);
+        } catch (retryError) {
+          return this.buildAuditDocumentFallback(payload, retryError);
+        }
+      }
+
+      return this.buildAuditDocumentFallback(payload, error);
+    }
+  }
+
+  buildAuditDocumentFallback(payload, error = null) {
+    const template = payload?.document_template || {};
+    const periodYear = payload?.period_year || new Date().getFullYear();
+    const title = template.document_name || 'Documento de auditoría ISO 9001';
+    const pendingItems = [
+      '[PENDIENTE DE VALIDACIÓN] ai-engine no disponible para redacción documental completa.',
+      '[REQUIERE COMPLETAR CON DATO REAL] Revisar y completar contenido antes de uso en auditoría.',
+    ];
+
+    return {
+      status: 'fallback',
+      document: {
+        title,
+        version: template.version || '1.0',
+        period_year: periodYear,
+        sections: [
+          {
+            title: 'Borrador pendiente de generación IA',
+            content: 'El documento no pudo ser redactado por ai-engine. Use el contexto de plataforma y complete la información real requerida.',
+          },
+        ],
+        content_markdown: `# ${title}\n\n[PENDIENTE DE VALIDACIÓN] ai-engine no disponible. Documento pendiente de generación formal.\n`,
+        content_json: {
+          fallback: true,
+          reason: 'ai-engine unavailable',
+        },
+        pending_items: pendingItems,
+        evidence_suggestions: [],
+        source_trace: {
+          ai_engine: {
+            available: false,
+            reason: 'fallback',
+          },
+        },
+      },
+    };
+  }
+
   buildFallback(payload, error = null) {
     const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
     const message = error?.message ? String(error.message).slice(0, 220) : 'ai-engine no disponible';

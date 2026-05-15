@@ -25,6 +25,7 @@ const documentIntegrationsAnalysisRoutes = require('./routes/document-integratio
 const policyRoutes = require('./routes/policy.routes');
 const auditsRoutes = require('./routes/audits.routes');
 const auditExecutionRoutes = require('./routes/audit-execution.routes');
+const auditPreparationRoutes = require('./routes/auditPreparation.routes');
 const assetsRoutes = require('./routes/assets.routes');
 const usersRoutes = require('./routes/users.routes');
 const tenantsRoutes = require('./routes/tenants.routes');
@@ -233,6 +234,7 @@ app.use('/api/document-integrations', documentIntegrationsRoutes);
 app.use('/api/policy', policyRoutes);
 app.use('/api/audits', auditsRoutes);
 app.use('/api/audit-execution', auditExecutionRoutes);
+app.use('/api/audit-preparation', auditPreparationRoutes);
 app.use('/api/assets', assetsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/tenants', tenantsRoutes);
