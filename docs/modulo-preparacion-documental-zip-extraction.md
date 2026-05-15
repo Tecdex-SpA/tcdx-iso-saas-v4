@@ -46,8 +46,14 @@ Cada documento detectado puede incluir:
 
 - tipo probable;
 - vigencia probable;
+- MIME detectado por extensión;
+- `crc32` del registro ZIP y `sha256` cuando el contenido pudo extraerse de forma segura;
+- versión o año detectado en nombre/texto cuando exista;
 - parser usado;
 - extracto textual;
+- encabezados DOCX y tablas simples cuando el archivo lo permite;
+- hojas, encabezados y primeras filas útiles para XLSX;
+- texto de slides y notas básicas para PPTX;
 - template sugerida;
 - carpeta sugerida;
 - warnings de extracción.
@@ -66,7 +72,20 @@ Categorías típicas:
 - índice de evidencias;
 - auditoría;
 - revisión por la dirección;
+- plantilla;
+- histórico/obsoleto;
 - desconocido.
+
+## Conflictos detectados
+
+El análisis registra conflictos razonables para revisión documental:
+
+- duplicados por hash o por nombre normalizado;
+- múltiples versiones probables del mismo documento;
+- documentos sin versión explícita;
+- documentos antiguos marcados como vigentes;
+- documentos sin fecha, versión o vigencia confirmable;
+- PDF textual insuficiente marcado como `pdf_scanned_or_low_text`.
 
 ## Limitaciones
 

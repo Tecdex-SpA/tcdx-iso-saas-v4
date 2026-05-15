@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
 const XLSX = require('xlsx');
+const { readZipEntriesFromBuffer } = require('./auditZipExtraction.service');
 
 function ensureGeneratedDir() {
   const dir = path.join(__dirname, '..', '..', 'uploads', 'audit-preparation-generated');
@@ -135,6 +136,59 @@ function docxParagraph(line) {
   return `<w:p><w:pPr>${style}${bullet}</w:pPr><w:r><w:rPr>${boldStart}</w:rPr><w:t xml:space="preserve">${text || ' '}</w:t></w:r></w:p>`;
 }
 
+function docxParagraphXml(line) {
+  return docxParagraph(line);
+}
+
+function markdownToDocxXml(markdown) {
+  return markdownLines(markdown).slice(0, 240).map(docxParagraphXml).join('');
+}
+
+function tryBuildPreservedDocxBuffer({ originalBuffer, markdown }) {
+  if (!originalBuffer) return { buffer: null, reason: 'original_docx_not_available' };
+  const nested = readZipEntriesFromBuffer(originalBuffer, { includeContent: true, maxContentBytes: 20 * 1024 * 1024 });
+  const documentEntry = nested.entries.find((entry) => entry.full_path === 'word/document.xml' && entry.content);
+  if (!documentEntry) return { buffer: null, reason: 'docx_document_xml_not_found' };
+
+  const xml = documentEntry.content.toString('utf8');
+  const markerPatterns = [
+    /\{\{TCDX_CONTENT\}\}/,
+    /\{\{tcdx_content\}\}/,
+    /\{\{contenido_tcdx\}\}/,
+    /\[TCDX_CONTENT\]/,
+    /\[CONTENIDO_TCDX\]/,
+  ];
+  const hasMarker = markerPatterns.some((pattern) => pattern.test(xml));
+  if (!hasMarker) return { buffer: null, reason: 'no_supported_docx_markers_found' };
+
+  const replacement = markdownToDocxXml(markdown);
+  let updatedXml = xml;
+  const paragraphs = xml.match(/<w:p[\s\S]*?<\/w:p>/g) || [];
+  for (const paragraph of paragraphs) {
+    if (markerPatterns.some((pattern) => pattern.test(paragraph))) {
+      updatedXml = updatedXml.replace(paragraph, replacement);
+    }
+  }
+
+  if (updatedXml === xml) {
+    for (const pattern of markerPatterns) {
+      updatedXml = updatedXml.replace(pattern, escapeXml(markdown.slice(0, 20000)));
+    }
+  }
+
+  const zipEntries = nested.entries
+    .filter((entry) => !entry.is_directory && !entry.unsafe_path && entry.content)
+    .map((entry) => ({
+      path: entry.full_path,
+      content: entry.full_path === 'word/document.xml' ? Buffer.from(updatedXml, 'utf8') : entry.content,
+    }));
+
+  return {
+    buffer: buildZip(zipEntries),
+    reason: 'updated_original_docx_with_markers',
+  };
+}
+
 function buildDocxBuffer({ title, markdown, meta = {} }) {
   const body = [
     docxParagraph(`# ${title}`),
@@ -236,7 +290,7 @@ function mimeForFormat(format) {
   }[format] || 'application/octet-stream';
 }
 
-async function renderDocumentArtifact({ pkg, template, document }) {
+async function renderDocumentArtifact({ pkg, template, document, originalCandidate = null }) {
   const format = String(template.output_format || 'docx').toLowerCase();
   const safeFormat = ['docx', 'xlsx', 'pptx', 'pdf', 'md'].includes(format) ? format : 'docx';
   const title = document.title || template.document_name;
@@ -249,11 +303,36 @@ async function renderDocumentArtifact({ pkg, template, document }) {
   };
 
   let buffer;
-  if (safeFormat === 'docx') buffer = buildDocxBuffer({ title, markdown, meta });
-  else if (safeFormat === 'xlsx') buffer = buildXlsxBuffer({ title, markdown, meta });
-  else if (safeFormat === 'pptx') buffer = buildPptxBuffer({ title, markdown, meta });
-  else if (safeFormat === 'pdf') buffer = await buildPdfBuffer({ title, markdown, meta });
-  else buffer = Buffer.from(markdown, 'utf8');
+  let preservation = {
+    mode: 'generated_tcdx_new_document',
+    reason: 'no_original_candidate',
+  };
+
+  if (safeFormat === 'docx' && originalCandidate?.buffer) {
+    const preserved = tryBuildPreservedDocxBuffer({ originalBuffer: originalCandidate.buffer, markdown });
+    if (preserved.buffer) {
+      buffer = preserved.buffer;
+      preservation = {
+        mode: 'updated_original_docx_with_markers',
+        reason: preserved.reason,
+        original_file: originalCandidate.full_path || null,
+      };
+    } else {
+      preservation = {
+        mode: 'generated_tcdx_copy_original_preserved',
+        reason: preserved.reason,
+        original_file: originalCandidate.full_path || null,
+      };
+    }
+  }
+
+  if (!buffer) {
+    if (safeFormat === 'docx') buffer = buildDocxBuffer({ title, markdown, meta });
+    else if (safeFormat === 'xlsx') buffer = buildXlsxBuffer({ title, markdown, meta });
+    else if (safeFormat === 'pptx') buffer = buildPptxBuffer({ title, markdown, meta });
+    else if (safeFormat === 'pdf') buffer = await buildPdfBuffer({ title, markdown, meta });
+    else buffer = Buffer.from(markdown, 'utf8');
+  }
 
   const dir = ensureGeneratedDir();
   const filename = `${Date.now()}-${crypto.randomUUID()}-${sanitizeFileName(title)}.${safeFormat}`;
@@ -268,6 +347,7 @@ async function renderDocumentArtifact({ pkg, template, document }) {
     mime_type: mimeForFormat(safeFormat),
     file_size_bytes: buffer.length,
     file_hash: crypto.createHash('sha256').update(buffer).digest('hex'),
+    preservation,
   };
 }
 

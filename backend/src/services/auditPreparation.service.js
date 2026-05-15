@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const XLSX = require('xlsx');
 const pool = require('../config/db');
 const aiEngineClient = require('./aiEngineClient.service');
-const { analyzeUploadedZip } = require('./auditZipExtraction.service');
+const { analyzeUploadedZip, readZipEntriesFromBuffer } = require('./auditZipExtraction.service');
 const { renderDocumentArtifact, ensureGeneratedDir } = require('./auditDocumentRenderer.service');
 const {
   buildAuditPreparationContext,
@@ -363,20 +363,25 @@ async function generateDocuments({ packageId, user, payload = {} }) {
     try {
       const aiResult = await aiEngineClient.generateAuditDocument(requestPayload);
       const doc = normalizeAiDocument(aiResult, template, pkg.period_year);
-      const status = doc.pending_items.length ? 'requires_validation' : 'generated';
-      const artifact = await renderDocumentArtifact({ pkg, template, document: doc });
       const documentId = crypto.randomUUID();
       const generatedFileUrl = `/api/audit-preparation/documents/${documentId}/download`;
       const zipMatch = zipMatches.get(template.template_key);
       const originalFileUrl = zipMatch && context.uploaded_zip?.file_url
         ? `${context.uploaded_zip.file_url}#${zipMatch.matched_file}`
         : null;
+      const originalCandidate = getOriginalCandidateFromZip(context.uploaded_zip, zipMatch?.matched_file);
+      const artifact = await renderDocumentArtifact({ pkg, template, document: doc, originalCandidate });
+      const status = artifact.preservation?.mode === 'updated_original_docx_with_markers'
+        ? (doc.pending_items.length ? 'requires_validation' : 'updated_from_platform')
+        : (doc.pending_items.length || originalFileUrl ? 'requires_validation' : 'generated');
       const changeSummary = {
-        strategy: originalFileUrl ? 'generated_tcdx_with_original_preserved' : 'generated_tcdx_new_document',
+        strategy: artifact.preservation?.mode || (originalFileUrl ? 'generated_tcdx_with_original_preserved' : 'generated_tcdx_new_document'),
         original_file_reference: originalFileUrl,
-        preservation_note: originalFileUrl
-          ? 'El original del cliente se conserva intacto dentro del ZIP importado. Esta versión genera un documento nuevo TCDX; la edición preservando formato original queda condicionada a extracción/plantillas compatibles.'
-          : 'No se encontró original compatible en ZIP; se generó documento nuevo con formato TCDX.',
+        preservation_note: artifact.preservation?.mode === 'updated_original_docx_with_markers'
+          ? 'Se actualizó una copia DOCX del cliente usando marcadores TCDX compatibles; el original del ZIP se conserva intacto.'
+          : originalFileUrl
+            ? `El original del cliente se conserva intacto. No se hizo actualización in-place segura (${artifact.preservation?.reason || 'sin marcador compatible'}); se generó versión TCDX.`
+            : 'No se encontró original compatible en ZIP; se generó documento nuevo con formato TCDX.',
       };
       const generatedJson = {
         ...(doc.content_json || {}),
@@ -389,6 +394,7 @@ async function generateDocuments({ packageId, user, payload = {} }) {
           generated_at: new Date().toISOString(),
         },
         original_zip_match: zipMatch || null,
+        preservation: artifact.preservation,
       };
 
       const inserted = await pool.query(
@@ -688,6 +694,21 @@ function replacePeriodFolder(folderPath, periodYear) {
   return String(folderPath || '').replace(/\{\{period_year\}\}/g, String(periodYear || ''));
 }
 
+function getOriginalCandidateFromZip(uploadedZip, matchedFile) {
+  if (!uploadedZip?.file_url || !matchedFile) return null;
+  const zipPath = path.join(ensureUploadDir(), path.basename(uploadedZip.file_url));
+  if (!fs.existsSync(zipPath)) return null;
+  const buffer = fs.readFileSync(zipPath);
+  const entries = readZipEntriesFromBuffer(buffer, { includeContent: true, maxContentBytes: 25 * 1024 * 1024 }).entries;
+  const match = entries.find((entry) => entry.full_path === matchedFile && entry.content && entry.extension === '.docx');
+  if (!match) return null;
+  return {
+    buffer: match.content,
+    full_path: match.full_path,
+    file_name: match.file_name,
+  };
+}
+
 const crcTable = (() => {
   const table = new Array(256);
   for (let n = 0; n < 256; n += 1) {
@@ -939,27 +960,54 @@ function buildEvidenceIndexMarkdown(evidences) {
 
 function buildMasterListXlsx({ pkg, docs }) {
   const rows = [
-    ['Código documental', 'Nombre', 'Tipo/formato', 'Norma', 'Versión', 'Revisión', 'Estado', 'Carpeta', 'Origen', 'Hash', 'Pendientes'],
+    [
+      'Código documental',
+      'Nombre',
+      'Tipo',
+      'Norma',
+      'Proceso/carpeta',
+      'Versión',
+      'Revisión',
+      'Estado',
+      'Fecha emisión',
+      'Fecha revisión',
+      'Vigencia',
+      'Responsable',
+      'Aprobador',
+      'Fuente',
+      'Hash',
+      'Archivo original',
+      'Archivo generado',
+      'Observaciones',
+      'Evidencias',
+      'Requiere validación',
+    ],
     ...(docs || []).map((doc, index) => [
       `${pkg.standard_code}-${String(index + 1).padStart(3, '0')}`,
       doc.document_name,
       doc.output_format || 'md',
       pkg.standard_code,
+      replacePeriodFolder(doc.folder_path, pkg.period_year),
       doc.version || '1.0',
       doc.revision_number || 1,
       doc.document_status,
-      replacePeriodFolder(doc.folder_path, pkg.period_year),
+      doc.created_at || '',
+      doc.updated_at || '',
+      doc.expires_at || '',
+      doc.prepared_by || doc.created_by || '',
+      doc.approved_by || '',
       doc.original_file_url ? 'actualizado desde original cliente' : 'generado TCDX',
       doc.file_hash || '',
+      doc.original_file_url || '',
+      doc.generated_file_url || '',
+      doc.change_summary_json?.preservation_note || doc.change_summary_json?.strategy || '',
+      Array.isArray(doc.evidence_links_json) ? doc.evidence_links_json.length : 0,
       Array.isArray(doc.pending_items_json) ? doc.pending_items_json.length : 0,
     ]),
   ];
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet(rows);
-  sheet['!cols'] = [
-    { wch: 18 }, { wch: 42 }, { wch: 14 }, { wch: 12 }, { wch: 10 },
-    { wch: 10 }, { wch: 18 }, { wch: 46 }, { wch: 30 }, { wch: 18 }, { wch: 12 },
-  ];
+  sheet['!cols'] = rows[0].map((_, index) => ({ wch: index === 1 || index === 4 || index === 17 ? 42 : 18 }));
   XLSX.utils.book_append_sheet(workbook, sheet, 'Lista maestra');
   return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 }
@@ -1009,6 +1057,7 @@ async function listPackageDocuments({ packageId, user }) {
     SELECT id, package_id, template_id, document_name, folder_path, document_status,
       generated_file_url, output_format, mime_type, file_size_bytes, file_hash,
       version, revision_number, is_current, pending_items_json, evidence_links_json,
+      original_file_url, change_summary_json,
       created_at, updated_at, approved_at
     FROM audit_package_documents
     WHERE package_id = $1::uuid

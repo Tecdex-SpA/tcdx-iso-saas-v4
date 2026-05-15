@@ -43,6 +43,8 @@ type DocumentRow = {
   pending_items_json?: unknown[];
   evidence_links_json?: unknown[];
   source_trace_json?: JsonRecord;
+  change_summary_json?: JsonRecord;
+  original_file_url?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -98,9 +100,9 @@ function formatDate(value?: string | null) {
 
 function statusBadge(status?: string | null) {
   const value = String(status || '').toLowerCase();
-  if (['approved', 'exported', 'complete', 'audit_ready'].includes(value)) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-  if (['requires_validation', 'partial', 'advanced'].includes(value)) return 'border-amber-200 bg-amber-50 text-amber-700';
-  if (['failed', 'pending', 'insufficient'].includes(value)) return 'border-rose-200 bg-rose-50 text-rose-700';
+  if (['approved', 'published', 'exported', 'complete', 'audit_ready', 'ready'].includes(value)) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (['requires_validation', 'in_review', 'partial', 'advanced', 'ready_with_observations'].includes(value)) return 'border-amber-200 bg-amber-50 text-amber-700';
+  if (['failed', 'pending', 'insufficient', 'rejected', 'obsolete', 'superseded'].includes(value)) return 'border-rose-200 bg-rose-50 text-rose-700';
   return 'border-slate-200 bg-slate-50 text-slate-600';
 }
 
@@ -114,6 +116,11 @@ function readinessColor(score: number) {
 function jsonArrayCount(record: JsonRecord | undefined, key: string) {
   const value = record?.[key];
   return Array.isArray(value) ? value.length : 0;
+}
+
+function jsonArray(record: JsonRecord | undefined, key: string): JsonRecord[] {
+  const value = record?.[key];
+  return Array.isArray(value) ? value.filter((item): item is JsonRecord => Boolean(item) && typeof item === 'object') : [];
 }
 
 const defaultTemplateKeys = [
@@ -567,6 +574,18 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
                       Coincidencias: {jsonArrayCount(zip.detected_structure_json, 'matched_templates')} ·
                       Conflictos: {jsonArrayCount(zip.detected_structure_json, 'conflicts')}
                     </div>
+                    <div className="mt-3 space-y-2">
+                      {jsonArray(zip.detected_structure_json, 'conflicts').slice(0, 3).map((conflict, index) => (
+                        <div key={`conflict-${zip.id}-${index}`} className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                          {String(conflict.message || conflict.type || 'Conflicto documental')}
+                        </div>
+                      ))}
+                      {jsonArray(zip.detected_structure_json, 'detected_documents').slice(0, 4).map((doc, index) => (
+                        <div key={`zip-doc-${zip.id}-${index}`} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
+                          {String(doc.file_name || doc.full_path || 'Documento')} · {String(doc.validity_status || 'requiere validación')} · {String(doc.probable_document_category || doc.document_type || 'sin clasificar')}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -593,6 +612,14 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
                 <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
                   <h4 className="text-xs font-black uppercase text-blue-700">Fuentes</h4>
                   <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-blue-900">{JSON.stringify(selectedDocument.source_trace_json || {}, null, 2)}</pre>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+                  <h4 className="text-xs font-black uppercase text-slate-600">Origen y cambios</h4>
+                  <div className="mt-2 text-xs leading-5 text-slate-700">
+                    <div>Original: {selectedDocument.original_file_url || 'sin original asociado'}</div>
+                    <div>Estrategia: {String(selectedDocument.change_summary_json?.strategy || 'generado TCDX')}</div>
+                    <div>{String(selectedDocument.change_summary_json?.preservation_note || 'Sin observaciones de preservación.')}</div>
+                  </div>
                 </div>
               </div>
             </div>

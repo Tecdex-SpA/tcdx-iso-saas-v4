@@ -20,8 +20,12 @@ Plantillas:
 - `politica_seguridad_informacion`
 - `declaracion_aplicabilidad_soa`
 - `matriz_riesgos_sgsi`
+- `plan_tratamiento_riesgos_sgsi`
+- `inventario_activos_sgsi`
 - `procedimiento_gestion_incidentes_seguridad`
 - `procedimiento_control_accesos`
+- `procedimiento_continuidad_sgsi`
+- `procedimiento_proveedores_sgsi`
 - `revision_direccion_sgsi`
 - `programa_auditoria_interna_sgsi`
 - `indice_evidencias_sgsi`
@@ -54,7 +58,7 @@ WHERE standard_code = 'ISO27001';
 Resultado esperado:
 
 ```txt
-templates_iso27001 = 9
+templates_iso27001 = 13
 ```
 
 ## Limitaciones
