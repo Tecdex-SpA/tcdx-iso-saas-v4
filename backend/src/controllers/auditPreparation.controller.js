@@ -74,6 +74,42 @@ async function getPackage(req, res) {
   }
 }
 
+async function getPackageSummary(req, res) {
+  try {
+    const summary = await auditPreparationService.getPackageSummary({
+      user: req.user,
+      packageId: req.params.id,
+    });
+    return res.json({ ok: true, ...summary });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+async function listPackageDocuments(req, res) {
+  try {
+    const documents = await auditPreparationService.listPackageDocuments({
+      user: req.user,
+      packageId: req.params.id,
+    });
+    return res.json({ ok: true, documents });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+async function getDocumentDetail(req, res) {
+  try {
+    const document = await auditPreparationService.getDocumentDetail({
+      user: req.user,
+      documentId: req.params.documentId,
+    });
+    return res.json({ ok: true, document });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
 async function buildContext(req, res) {
   try {
     const context = await auditPreparationService.buildContextForPackage({
@@ -106,6 +142,18 @@ async function generateEvidenceIndex(req, res) {
       packageId: req.params.id,
     });
     return res.json({ ok: true, ...result });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+async function listUploadedZips(req, res) {
+  try {
+    const uploaded_zips = await auditPreparationService.listUploadedZips({
+      user: req.user,
+      packageId: req.params.id,
+    });
+    return res.json({ ok: true, uploaded_zips });
   } catch (error) {
     return handleError(res, error);
   }
@@ -163,16 +211,46 @@ async function uploadZip(req, res) {
   }
 }
 
+async function exportPackage(req, res) {
+  try {
+    const result = await auditPreparationService.exportPackage({
+      user: req.user,
+      packageId: req.params.id,
+    });
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+async function downloadExport(req, res) {
+  try {
+    const file = await auditPreparationService.getExportFile({
+      user: req.user,
+      packageId: req.params.id,
+    });
+    return res.download(file.path, file.filename);
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
 module.exports = {
   listTemplates,
   createPackage,
   listPackages,
   getPackage,
+  getPackageSummary,
+  listPackageDocuments,
+  getDocumentDetail,
   buildContext,
   generateDocuments,
   generateEvidenceIndex,
+  listUploadedZips,
   getGaps,
   updateDocumentStatus,
   updateEvidenceStatus,
   uploadZip,
+  exportPackage,
+  downloadExport,
 };

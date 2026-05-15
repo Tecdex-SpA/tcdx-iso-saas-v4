@@ -46,6 +46,126 @@ function publicGap(source, message, severity = 'media') {
   };
 }
 
+function groupCount(rows, getter) {
+  return rows.reduce((acc, row) => {
+    const key = String(getter(row) || 'sin_clasificar').trim() || 'sin_clasificar';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function toNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function buildControlSummary(controls) {
+  const rows = Array.isArray(controls) ? controls : [];
+  const active = rows.filter((item) => item.is_in_active_operational_scope !== false);
+  const sorted = [...active].sort((a, b) => toNumber(a.effective_health_score, 999) - toNumber(b.effective_health_score, 999));
+
+  return {
+    total_controls: rows.length,
+    by_clause: groupCount(rows, (row) => row.clause),
+    by_health_status: groupCount(rows, (row) => row.effective_health_status),
+    in_scope_count: active.length,
+    out_of_scope_count: rows.length - active.length,
+    top_relevant_controls: sorted.slice(0, 12).map((row) => ({
+      tenant_control_id: row.tenant_control_id,
+      clause: row.clause,
+      description: row.control_description,
+      effective_health_score: row.effective_health_score,
+      effective_health_status: row.effective_health_status,
+      official_evidence_count: row.official_evidence_count,
+      open_findings_count: row.open_findings_count,
+      open_nonconformities_count: row.open_nonconformities_count,
+      overdue_action_plans_count: row.overdue_action_plans_count,
+    })),
+  };
+}
+
+function buildEvidenceSummary(evidences) {
+  const rows = Array.isArray(evidences) ? evidences : [];
+  const statusOf = (row) => String(row.status || '').toLowerCase();
+
+  return {
+    total_evidences: rows.length,
+    approved_count: rows.filter((row) => ['aprobada', 'approved', 'validada'].includes(statusOf(row)) || row.validated === true).length,
+    pending_count: rows.filter((row) => ['pendiente', 'pending', 'requires_validation'].includes(statusOf(row))).length,
+    rejected_count: rows.filter((row) => ['rechazada', 'rejected'].includes(statusOf(row))).length,
+    by_type: groupCount(rows, (row) => row.evidence_type || row.file_mime_type),
+    recent_evidences: rows.slice(0, 10).map((row) => ({
+      id: row.id,
+      name: row.title || row.name || row.file_name || row.description,
+      status: row.status,
+      evidence_type: row.evidence_type,
+      created_at: row.created_at,
+    })),
+    likely_iso9001_evidences: rows
+      .filter((row) => {
+        const text = `${row.description || ''} ${row.file_name || ''} ${JSON.stringify(row.metadata || {})}`.toLowerCase();
+        return ['calidad', 'cliente', 'proveedor', 'accion', 'auditoria', 'proceso', 'registro'].some((term) => text.includes(term));
+      })
+      .slice(0, 10),
+  };
+}
+
+function buildAuditSummary(audits) {
+  const rows = Array.isArray(audits) ? audits : [];
+  return {
+    total_audits: rows.length,
+    completed_count: rows.filter((row) => ['completada', 'completed', 'closed'].includes(String(row.status || '').toLowerCase())).length,
+    pending_count: rows.filter((row) => !['completada', 'completed', 'closed'].includes(String(row.status || '').toLowerCase())).length,
+    recent_audits: rows.slice(0, 8),
+  };
+}
+
+function buildActionSummary(actions) {
+  const rows = Array.isArray(actions) ? actions : [];
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    open_count: rows.filter((row) => !['completed', 'completado', 'closed', 'cerrado'].includes(String(row.status || '').toLowerCase())).length,
+    overdue_count: rows.filter((row) => row.due_date && String(row.due_date).slice(0, 10) < today).length,
+    high_priority_count: rows.filter((row) => ['alta', 'high', 'critica', 'critical'].includes(String(row.priority || '').toLowerCase())).length,
+    recent_actions: rows.slice(0, 10),
+  };
+}
+
+function buildDocumentGuidance({ templates, evidences, controls, gaps }) {
+  const missingInputsByTemplate = {};
+  const evidenceSuggestionsByTemplate = {};
+
+  for (const template of templates || []) {
+    const schema = template.template_schema_json || {};
+    const required = String(schema.required_inputs || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+
+    missingInputsByTemplate[template.template_key] = required.map((item) => ({
+      input: item,
+      status: 'requires_validation',
+    }));
+
+    evidenceSuggestionsByTemplate[template.template_key] = (evidences || []).slice(0, 5).map((evidence) => ({
+      evidence_id: evidence.id,
+      evidence_name: evidence.title || evidence.name || evidence.file_name || evidence.description,
+      source_module: 'evidences',
+    }));
+  }
+
+  return {
+    recommended_documents_to_generate: (templates || []).slice(0, 10).map((template) => template.template_key),
+    missing_inputs_by_template: missingInputsByTemplate,
+    evidence_suggestions_by_template: evidenceSuggestionsByTemplate,
+    context_priority: {
+      controls_with_low_health: (controls || []).filter((row) => toNumber(row.effective_health_score, 100) < 60).length,
+      gaps_count: (gaps || []).length,
+    },
+  };
+}
+
 async function tableExists(tableName) {
   const result = await pool.query(
     `
@@ -459,6 +579,17 @@ async function buildAuditPreparationContext({
   if (!evidences.length) pendingItems.push('[REQUIERE EVIDENCIA] No se encontraron evidencias para el paquete documental.');
   if (!risks.length) pendingItems.push('[PENDIENTE DE VALIDACIÓN] No se encontraron riesgos de calidad disponibles.');
 
+  const controlSummary = buildControlSummary(controls);
+  const evidenceSummary = buildEvidenceSummary(evidences);
+  const auditSummary = buildAuditSummary(audits);
+  const actionSummary = buildActionSummary(actionPlans);
+  const documentGenerationGuidance = buildDocumentGuidance({
+    templates,
+    evidences,
+    controls,
+    gaps,
+  });
+
   return {
     tenant,
     standard,
@@ -484,6 +615,11 @@ async function buildAuditPreparationContext({
     document_control: documents,
     jira_items: jiraItems,
     uploaded_zip: uploadedZipRows[0] || {},
+    control_summary: controlSummary,
+    evidence_summary: evidenceSummary,
+    audit_summary: auditSummary,
+    action_summary: actionSummary,
+    document_generation_guidance: documentGenerationGuidance,
     gaps,
     pending_items: pendingItems,
     source_trace: sourceTrace,

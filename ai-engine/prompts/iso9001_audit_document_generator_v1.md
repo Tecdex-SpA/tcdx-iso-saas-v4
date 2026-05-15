@@ -42,3 +42,37 @@ Formato de salida esperado:
 - evidencias sugeridas
 - trazabilidad de fuentes
 - resumen de cambios si el documento fue importado desde ZIP
+
+Estructura mínima por tipo documental:
+
+## Manual de Calidad
+
+Debe incluir portada textual, control del documento, objetivo del manual, alcance del SGC, contexto de la organización, partes interesadas, mapa o resumen de procesos, liderazgo y responsabilidades, riesgos y oportunidades, apoyo y recursos, operación/prestación del servicio, evaluación del desempeño, mejora continua, referencias documentales, evidencias asociadas y pendientes.
+
+## Revisión por la Dirección
+
+Debe incluir datos de la revisión, entradas obligatorias, estado de acciones previas, cambios internos/externos, desempeño de procesos y KPIs, satisfacción cliente, proveedores, auditorías, hallazgos y no conformidades, riesgos y oportunidades, recursos, decisiones y acciones, conclusión y pendientes.
+
+## Política de Calidad
+
+Debe incluir declaración, compromisos, enfoque al cliente, cumplimiento, mejora continua, comunicación, revisión y pendientes de validación.
+
+## Objetivos de Calidad
+
+Debe incluir una tabla con objetivo, indicador/KPI, meta, responsable, periodo, estado, evidencia y pendiente.
+
+## Índice de Evidencias
+
+Debe incluir tabla con documento/requisito, evidencia, fuente, carpeta sugerida, estado y observación.
+
+## Guía de Entrevistas
+
+Debe incluir preguntas por rol, preguntas por proceso, evidencia esperada, riesgo asociado y señales de alerta.
+
+Reglas de síntesis:
+
+- No listar grandes volúmenes de controles en bruto.
+- Sintetizar controles por cláusula, salud o tema.
+- Usar máximo 10 evidencias relevantes por documento.
+- Si un control está fuera de alcance, no presentarlo como cumplimiento efectivo.
+- Si falta matriz de riesgos, usar controles, hallazgos y planes como insumo alternativo, dejando pendiente la matriz formal.

@@ -605,6 +605,336 @@ function ensureUploadDir() {
   return dir;
 }
 
+function ensureExportDir() {
+  const dir = path.join(__dirname, '..', '..', 'uploads', 'audit-preparation-exports');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function sanitizeFileName(value, fallback = 'documento') {
+  return String(value || fallback)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._ -]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\s/g, '_')
+    .slice(0, 140) || fallback;
+}
+
+function replacePeriodFolder(folderPath, periodYear) {
+  return String(folderPath || '').replace(/\{\{period_year\}\}/g, String(periodYear || ''));
+}
+
+const crcTable = (() => {
+  const table = new Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function dosDateTime(date = new Date()) {
+  const year = Math.max(1980, date.getFullYear());
+  const dosTime =
+    (date.getHours() << 11) |
+    (date.getMinutes() << 5) |
+    Math.floor(date.getSeconds() / 2);
+  const dosDate =
+    ((year - 1980) << 9) |
+    ((date.getMonth() + 1) << 5) |
+    date.getDate();
+  return { dosTime, dosDate };
+}
+
+function buildZip(entries) {
+  const locals = [];
+  const central = [];
+  let offset = 0;
+  const now = dosDateTime();
+
+  for (const entry of entries) {
+    const name = Buffer.from(entry.path.replace(/^\/+/, ''), 'utf8');
+    const content = Buffer.isBuffer(entry.content) ? entry.content : Buffer.from(String(entry.content || ''), 'utf8');
+    const crc = crc32(content);
+
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt16LE(0, 8);
+    local.writeUInt16LE(now.dosTime, 10);
+    local.writeUInt16LE(now.dosDate, 12);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(content.length, 18);
+    local.writeUInt32LE(content.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28);
+    locals.push(local, name, content);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0x0800, 8);
+    centralHeader.writeUInt16LE(0, 10);
+    centralHeader.writeUInt16LE(now.dosTime, 12);
+    centralHeader.writeUInt16LE(now.dosDate, 14);
+    centralHeader.writeUInt32LE(crc, 16);
+    centralHeader.writeUInt32LE(content.length, 20);
+    centralHeader.writeUInt32LE(content.length, 24);
+    centralHeader.writeUInt16LE(name.length, 28);
+    centralHeader.writeUInt16LE(0, 30);
+    centralHeader.writeUInt16LE(0, 32);
+    centralHeader.writeUInt16LE(0, 34);
+    centralHeader.writeUInt16LE(0, 36);
+    centralHeader.writeUInt32LE(0, 38);
+    centralHeader.writeUInt32LE(offset, 42);
+    central.push(centralHeader, name);
+
+    offset += local.length + name.length + content.length;
+  }
+
+  const centralOffset = offset;
+  const centralBuffer = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(0, 4);
+  end.writeUInt16LE(0, 6);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(centralBuffer.length, 12);
+  end.writeUInt32LE(centralOffset, 16);
+  end.writeUInt16LE(0, 20);
+
+  return Buffer.concat([...locals, centralBuffer, end]);
+}
+
+function parseZipInventory(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  const entries = [];
+  const folders = new Set();
+  const warnings = [];
+  let offset = 0;
+
+  while (offset < buffer.length - 30) {
+    const signature = buffer.readUInt32LE(offset);
+    if (signature !== 0x04034b50) {
+      offset += 1;
+      continue;
+    }
+
+    const flags = buffer.readUInt16LE(offset + 6);
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const fileNameLength = buffer.readUInt16LE(offset + 26);
+    const extraLength = buffer.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const nameEnd = nameStart + fileNameLength;
+    const rawName = buffer.slice(nameStart, nameEnd).toString('utf8').replace(/\\/g, '/');
+
+    if (rawName.includes('..') || path.isAbsolute(rawName)) {
+      warnings.push(`Entrada omitida por ruta insegura: ${rawName}`);
+    } else if (rawName.endsWith('/')) {
+      folders.add(rawName.replace(/\/$/, ''));
+    } else {
+      const parts = rawName.split('/');
+      parts.slice(0, -1).forEach((_, index) => {
+        folders.add(parts.slice(0, index + 1).join('/'));
+      });
+      entries.push({
+        file_name: parts[parts.length - 1],
+        folder_path: parts.slice(0, -1).join('/'),
+        full_path: rawName,
+        extension: path.extname(rawName).toLowerCase(),
+        compressed_size: compressedSize,
+      });
+    }
+
+    if (flags & 0x08) {
+      warnings.push('ZIP usa data descriptors; el inventario puede ser parcial.');
+      break;
+    }
+
+    offset = nameEnd + extraLength + compressedSize;
+  }
+
+  return {
+    files: entries,
+    folders: Array.from(folders).filter(Boolean).sort(),
+    warnings,
+  };
+}
+
+function normalizeMatchText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function analyzeZipAgainstTemplates(inventory, templates) {
+  const detectedDocuments = inventory.files.map((file) => ({
+    file_name: file.file_name,
+    folder_path: file.folder_path,
+    full_path: file.full_path,
+    extension: file.extension,
+  }));
+
+  const matchedTemplates = [];
+  const matchedFiles = new Set();
+  for (const template of templates) {
+    const keyText = normalizeMatchText(template.template_key);
+    const nameText = normalizeMatchText(template.document_name);
+    const folderText = normalizeMatchText(template.folder_path);
+    const match = inventory.files.find((file) => {
+      const full = normalizeMatchText(`${file.full_path} ${file.file_name}`);
+      return (
+        (keyText && full.includes(keyText)) ||
+        (nameText && full.includes(nameText.split(' ').slice(0, 3).join(' '))) ||
+        (folderText && normalizeMatchText(file.folder_path).includes(folderText.split(' ').slice(0, 2).join(' ')))
+      );
+    });
+
+    if (match) {
+      matchedFiles.add(match.full_path);
+      matchedTemplates.push({
+        template_key: template.template_key,
+        document_name: template.document_name,
+        matched_file: match.full_path,
+        confidence: 'medium',
+      });
+    }
+  }
+
+  const unmatchedFiles = inventory.files
+    .filter((file) => !matchedFiles.has(file.full_path))
+    .map((file) => file.full_path);
+
+  return {
+    file_count: inventory.files.length,
+    folder_count: inventory.folders.length,
+    detected_documents: detectedDocuments,
+    matched_templates: matchedTemplates,
+    unmatched_files: unmatchedFiles,
+    warnings: inventory.warnings,
+  };
+}
+
+function buildReadme(pkg, detail) {
+  const summary = detail.completion_summary || {};
+  const score = summary.estimated_readiness_score ?? 'pendiente';
+  const status = summary.readiness_status || 'pending';
+  const documents = detail.documents || [];
+  const pendingDocuments = documents.filter((doc) => doc.document_status === 'requires_validation');
+
+  return `# ${pkg.package_name}
+
+Norma: ${pkg.standard_code}
+Periodo: ${pkg.period_year}
+Estado del paquete: ${pkg.status}
+Readiness: ${status} (${score})
+Fecha de exportación: ${new Date().toISOString()}
+
+## Advertencia de uso
+
+Este paquete es un borrador de preparación documental. Los documentos con estado requires_validation deben ser revisados y aprobados antes de presentarse en auditoría externa.
+
+## Documentos incluidos
+
+${documents.map((doc) => `- ${doc.document_name} (${doc.document_status})`).join('\n') || '- Sin documentos generados'}
+
+## Documentos pendientes de validación
+
+${pendingDocuments.map((doc) => `- ${doc.document_name}`).join('\n') || '- No hay documentos pendientes de validación'}
+`;
+}
+
+function buildEvidenceIndexMarkdown(evidences) {
+  const rows = evidences || [];
+  return [
+    '# Índice de evidencias',
+    '',
+    '| Evidencia | Fuente | Estado | Carpeta | Observación |',
+    '| --- | --- | --- | --- | --- |',
+    ...rows.map((item) => `| ${String(item.evidence_name || '').replace(/\|/g, '/')} | ${item.source_module || '-'} | ${item.status || '-'} | ${String(item.folder_path || '').replace(/\|/g, '/')} | ${String(item.notes || '').replace(/\|/g, '/')} |`),
+    '',
+  ].join('\n');
+}
+
+async function getPackageSummary({ packageId, user }) {
+  const detail = await getPackageDetail({ packageId, user });
+  const summary = detail.completion_summary || {};
+  const docs = detail.documents || [];
+  const evidences = detail.evidences || [];
+
+  return {
+    package: detail.package,
+    completion_summary: summary,
+    counters: {
+      total_documents: docs.length,
+      generated_documents: docs.filter((doc) => ['generated', 'requires_validation', 'approved', 'exported'].includes(doc.document_status)).length,
+      approved_documents: docs.filter((doc) => doc.document_status === 'approved').length,
+      requires_validation_documents: docs.filter((doc) => doc.document_status === 'requires_validation').length,
+      total_evidences: evidences.length,
+      complete_evidences: evidences.filter((item) => item.status === 'complete').length,
+      pending_evidences: evidences.filter((item) => ['pending', 'requires_validation'].includes(item.status)).length,
+    },
+    latest_run: (detail.generation_runs || [])[0] || null,
+    latest_zip: (detail.uploaded_zips || [])[0] || null,
+  };
+}
+
+async function listPackageDocuments({ packageId, user }) {
+  await getPackageForUser(packageId, user);
+  const result = await pool.query(
+    `
+    SELECT id, package_id, template_id, document_name, folder_path, document_status,
+      pending_items_json, evidence_links_json, created_at, updated_at
+    FROM audit_package_documents
+    WHERE package_id = $1::uuid
+    ORDER BY folder_path, document_name
+    `,
+    [packageId]
+  );
+  return result.rows;
+}
+
+async function getDocumentDetail({ documentId, user }) {
+  const current = await pool.query(`SELECT * FROM audit_package_documents WHERE id = $1::uuid LIMIT 1`, [documentId]);
+  const doc = current.rows[0];
+  if (!doc) throw publicError(404, 'DOCUMENT_NOT_FOUND', 'Documento no encontrado');
+  assertTenantAccess(user, doc.tenant_id);
+  return doc;
+}
+
+async function listUploadedZips({ packageId, user }) {
+  await getPackageForUser(packageId, user);
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM audit_uploaded_zip_files
+    WHERE package_id = $1::uuid
+    ORDER BY created_at DESC
+    `,
+    [packageId]
+  );
+  return result.rows;
+}
+
 async function registerUploadedZip({ user, file, payload }) {
   if (!file) throw publicError(400, 'ZIP_FILE_REQUIRED', 'Archivo ZIP requerido');
 
@@ -637,6 +967,9 @@ async function registerUploadedZip({ user, file, payload }) {
 
   const hash = crypto.createHash('sha256').update(fs.readFileSync(file.path)).digest('hex');
   const fileUrl = `/uploads/audit-preparation-zips/${path.basename(file.path)}`;
+  const templates = await listTemplates({ standardCode });
+  const inventory = parseZipInventory(file.path);
+  const analysis = analyzeZipAgainstTemplates(inventory, templates);
 
   const result = await pool.query(
     `
@@ -655,7 +988,7 @@ async function registerUploadedZip({ user, file, payload }) {
       gaps_json,
       created_by
     )
-    VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,'pending',$9::jsonb,$10::jsonb,$11::jsonb,$12::uuid)
+    VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,'analyzed',$9::jsonb,$10::jsonb,$11::jsonb,$12::uuid)
     RETURNING *
     `,
     [
@@ -667,9 +1000,9 @@ async function registerUploadedZip({ user, file, payload }) {
       file.originalname,
       fileUrl,
       hash,
-      JSON.stringify([{ file_name: file.originalname, status: 'uploaded_pending_analysis' }]),
-      JSON.stringify({ original_filename: file.originalname, deep_analysis_pending: true }),
-      JSON.stringify(['[PENDIENTE DE VALIDACIÓN] ZIP registrado; análisis profundo queda para siguiente fase.']),
+      JSON.stringify(analysis.detected_documents),
+      JSON.stringify(analysis),
+      JSON.stringify(analysis.warnings || []),
       userId,
     ]
   );
@@ -689,6 +1022,108 @@ async function registerUploadedZip({ user, file, payload }) {
   return {
     package_id: packageId,
     uploaded_zip: result.rows[0],
+    analysis,
+  };
+}
+
+async function exportPackage({ packageId, user }) {
+  const detail = await getPackageDetail({ packageId, user });
+  const pkg = detail.package;
+  const docs = detail.documents || [];
+  const evidences = detail.evidences || [];
+
+  const root = sanitizeFileName(`Auditoria_${pkg.package_name}_${pkg.standard_code}_${pkg.period_year}`, 'Auditoria_ISO9001');
+  const entries = [
+    {
+      path: `${root}/00_INDICE_Y_GUIA_DE_USO/README.md`,
+      content: buildReadme(pkg, detail),
+    },
+    {
+      path: `${root}/00_INDICE_Y_GUIA_DE_USO/00_INVENTARIO_DOCUMENTAL.json`,
+      content: JSON.stringify({
+        package: pkg,
+        completion_summary: detail.completion_summary,
+        exported_at: new Date().toISOString(),
+        documents: docs.map((doc) => ({
+          document_name: doc.document_name,
+          folder_path: replacePeriodFolder(doc.folder_path, pkg.period_year),
+          status: doc.document_status,
+        })),
+      }, null, 2),
+    },
+    {
+      path: `${root}/03_EVIDENCIAS_PARA_VALIDAR/00_INDICE_EVIDENCIAS.md`,
+      content: buildEvidenceIndexMarkdown(evidences),
+    },
+    {
+      path: `${root}/00_INDICE_Y_GUIA_DE_USO/00_PENDIENTES_PARA_AUDITORIA.md`,
+      content: [
+        '# Pendientes para auditoría',
+        '',
+        ...docs.flatMap((doc) => {
+          const pending = Array.isArray(doc.pending_items_json) ? doc.pending_items_json : [];
+          return pending.length ? [`## ${doc.document_name}`, '', ...pending.map((item) => `- ${item}`), ''] : [];
+        }),
+        docs.every((doc) => !Array.isArray(doc.pending_items_json) || doc.pending_items_json.length === 0)
+          ? 'No hay pendientes registrados en documentos generados.'
+          : '',
+      ].join('\n'),
+    },
+  ];
+
+  for (const doc of docs) {
+    const folder = replacePeriodFolder(doc.folder_path, pkg.period_year) || '01_DOCUMENTOS_VIGENTES';
+    const fileName = `${sanitizeFileName(doc.document_name)}.md`;
+    entries.push({
+      path: `${root}/${folder}/${fileName}`,
+      content: doc.generated_content || `# ${doc.document_name}\n\n[PENDIENTE DE VALIDACIÓN]\n`,
+    });
+  }
+
+  const exportDir = ensureExportDir();
+  const exportFileName = `${Date.now()}-${pkg.id}-${sanitizeFileName(pkg.standard_code)}-${pkg.period_year}.zip`;
+  const exportPath = path.join(exportDir, exportFileName);
+  fs.writeFileSync(exportPath, buildZip(entries));
+  const exportFileUrl = `/api/audit-preparation/packages/${pkg.id}/download-export`;
+
+  await pool.query(
+    `
+    UPDATE audit_preparation_packages
+    SET latest_export_file_url = $2, status = 'exported', updated_at = now()
+    WHERE id = $1::uuid
+    `,
+    [pkg.id, exportFileUrl]
+  );
+
+  return {
+    export_file_url: exportFileUrl,
+    export_path: exportPath,
+    file_count: entries.length,
+  };
+}
+
+async function getExportFile({ packageId, user }) {
+  const pkg = await getPackageForUser(packageId, user);
+  if (!pkg.latest_export_file_url) {
+    throw publicError(404, 'EXPORT_NOT_FOUND', 'El paquete aún no tiene export generado');
+  }
+
+  const exportDir = ensureExportDir();
+  const files = fs.readdirSync(exportDir)
+    .filter((file) => file.includes(String(pkg.id)))
+    .map((file) => ({
+      file,
+      path: path.join(exportDir, file),
+      mtimeMs: fs.statSync(path.join(exportDir, file)).mtimeMs,
+    }))
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  const match = files[0];
+  if (!match) throw publicError(404, 'EXPORT_FILE_NOT_FOUND', 'Archivo exportado no encontrado en disco');
+
+  return {
+    path: match.path,
+    filename: `${sanitizeFileName(pkg.package_name)}.zip`,
   };
 }
 
@@ -701,9 +1136,15 @@ module.exports = {
   generateDocuments,
   generateEvidenceIndex,
   getGaps,
+  getPackageSummary,
+  listPackageDocuments,
+  getDocumentDetail,
+  listUploadedZips,
   updateDocumentStatus,
   updateEvidenceStatus,
   registerUploadedZip,
+  exportPackage,
+  getExportFile,
   ensureUploadDir,
   publicError,
 };

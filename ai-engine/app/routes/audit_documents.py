@@ -69,6 +69,183 @@ def summarize_records(records: List[Any], label: str, max_items: int = 8) -> Lis
     return output
 
 
+def markdown_table(headers: List[str], rows: List[List[Any]]) -> str:
+    clean_headers = [to_text(h).replace("|", "/") for h in headers]
+    lines = [
+        "| " + " | ".join(clean_headers) + " |",
+        "| " + " | ".join(["---"] * len(clean_headers)) + " |",
+    ]
+    for row in rows:
+        lines.append("| " + " | ".join(to_text(cell).replace("|", "/") or "-" for cell in row) + " |")
+    return "\n".join(lines)
+
+
+def evidence_name(evidence: Dict[str, Any]) -> str:
+    return (
+        evidence.get("title")
+        or evidence.get("name")
+        or evidence.get("file_name")
+        or evidence.get("file_url")
+        or evidence.get("file_path")
+        or evidence.get("description")
+        or "Evidencia registrada"
+    )
+
+
+def compact_control_lines(context: Dict[str, Any], max_items: int = 8) -> str:
+    control_summary = safe_dict(context.get("control_summary"))
+    controls = safe_list(control_summary.get("top_relevant_controls")) or safe_list(context.get("controls"))
+    lines = []
+    for control in controls[:max_items]:
+        if not isinstance(control, dict):
+            continue
+        scope_note = ""
+        if control.get("is_in_active_operational_scope") is False:
+            scope_note = " - revisar alcance activo"
+        lines.append(
+            f"- {control.get('clause') or 'cláusula pendiente'}: "
+            f"{control.get('description') or control.get('control_description') or '[PENDIENTE DE VALIDACIÓN]'} "
+            f"(salud: {control.get('effective_health_status') or control.get('effective_health_score') or 'sin dato'}{scope_note})"
+        )
+    return "\n".join(lines) or "- [REQUIERE COMPLETAR CON DATO REAL] No hay controles suficientes para esta sección."
+
+
+def compact_evidence_lines(context: Dict[str, Any], max_items: int = 10) -> str:
+    evidence_summary = safe_dict(context.get("evidence_summary"))
+    evidences = safe_list(evidence_summary.get("likely_iso9001_evidences")) or safe_list(context.get("evidences"))
+    lines = []
+    for evidence in evidences[:max_items]:
+        if not isinstance(evidence, dict):
+            continue
+        lines.append(
+            f"- {evidence_name(evidence)} (estado: {evidence.get('status') or 'requiere validación'}, tipo: {evidence.get('evidence_type') or evidence.get('file_mime_type') or 'sin clasificar'})"
+        )
+    return "\n".join(lines) or "- [REQUIERE EVIDENCIA] No hay evidencias ISO 9001 suficientes vinculadas en plataforma."
+
+
+def source_summary(context: Dict[str, Any]) -> str:
+    trace = safe_dict(context.get("source_trace"))
+    available = [key for key, item in trace.items() if isinstance(item, dict) and item.get("available")]
+    unavailable = [key for key, item in trace.items() if isinstance(item, dict) and item.get("available") is False]
+    return (
+        f"Fuentes disponibles: {', '.join(available[:12]) or '[PENDIENTE DE VALIDACIÓN]'}\n"
+        f"Fuentes no disponibles: {', '.join(unavailable[:12]) or 'ninguna crítica registrada'}"
+    )
+
+
+def build_specific_sections(payload: Dict[str, Any], base: Dict[str, Any]) -> List[Dict[str, Any]]:
+    template = safe_dict(payload.get("document_template"))
+    context = safe_dict(payload.get("context"))
+    key = to_text(template.get("template_key"))
+    doc_type = to_text(template.get("document_type"))
+    tenant_name = base["tenant_name"]
+    standard_code = base["standard_code"]
+    period_year = base["period_year"]
+    audit_reference = base["audit_reference"]
+    readiness = base["readiness"]
+    score_text = base["score_text"]
+
+    identity = {
+        "title": "Portada y control del documento",
+        "content": (
+            f"Organización: {tenant_name}\n"
+            f"Documento: {template.get('document_name') or 'Documento ISO 9001'}\n"
+            f"Norma: {standard_code}\n"
+            f"Periodo: {period_year}\n"
+            f"Auditoría asociada: {audit_reference}\n"
+            "Versión: 1.0\n"
+            "Estado: borrador generado para revisión y aprobación."
+        ),
+    }
+
+    pending = {
+        "title": "Pendientes y validaciones",
+        "content": "\n".join(f"- {item}" for item in extract_pending_items(context, template)[:18]) or "- [PENDIENTE DE VALIDACIÓN] Confirmar vigencia, responsables y evidencias.",
+    }
+
+    trace_section = {
+        "title": "Trazabilidad de fuentes",
+        "content": source_summary(context),
+    }
+
+    if key == "manual_calidad":
+        return [
+            identity,
+            {"title": "Objetivo del manual", "content": "Establecer una descripción controlada del Sistema de Gestión de Calidad, su alcance, procesos, responsabilidades, evidencias y mecanismos de mejora usando información real disponible en TCDX Compliance."},
+            {"title": "Alcance del SGC", "content": f"Alcance documentado para {tenant_name}: [PENDIENTE DE VALIDACIÓN]. La auditoría asociada es {audit_reference}. Cualquier exclusión o límite operativo debe confirmarse con evidencia formal."},
+            {"title": "Contexto de la organización", "content": f"Readiness documental actual: {readiness} ({score_text}). Las fuentes disponibles permiten sustentar parcialmente el contexto; los factores externos, FODA formal y partes interesadas deben validarse si no existen registros específicos."},
+            {"title": "Partes interesadas", "content": "Clientes, proveedores, colaboradores, reguladores y socios deben registrarse con requisitos verificables. [REQUIERE COMPLETAR CON DATO REAL] si no existe matriz vigente en plataforma."},
+            {"title": "Mapa/resumen de procesos", "content": compact_control_lines(context, 10)},
+            {"title": "Liderazgo y responsabilidades", "content": "La asignación formal de responsabilidades del SGC debe validarse contra organigrama, actas o documentos vigentes. [REQUIERE EVIDENCIA] cuando no exista responsable explícito."},
+            {"title": "Gestión de riesgos y oportunidades", "content": compact_control_lines(context, 8) + "\n\nSi no existe matriz de riesgos formal, usar estos controles y planes de acción como insumo alternativo, no como reemplazo de la matriz aprobada."},
+            {"title": "Apoyo, recursos y operación", "content": "La prestación del servicio debe sustentarse con registros operativos, evidencias aprobadas, controles activos y acciones de seguimiento. No presentar controles fuera de alcance como cumplimiento efectivo."},
+            {"title": "Evaluación del desempeño", "content": f"KPIs/registros disponibles: {len(safe_list(context.get('kpis')))}. Auditorías disponibles: {len(safe_list(context.get('audits')))}. Hallazgos: {len(safe_list(context.get('findings')))}. No conformidades: {len(safe_list(context.get('nonconformities')))}."},
+            {"title": "Mejora continua", "content": "\n".join(summarize_records(safe_list(context.get("action_plans")), "Acción", 10)) or "[REQUIERE COMPLETAR CON DATO REAL] No hay acciones de mejora suficientes."},
+            {"title": "Referencias documentales", "content": "\n".join(summarize_records(safe_list(safe_dict(context.get("documents")).get("package_documents")), "Documento", 12)) or "[PENDIENTE DE VALIDACIÓN] Generar o cargar documentos vigentes."},
+            {"title": "Evidencias asociadas", "content": compact_evidence_lines(context, 10)},
+            trace_section,
+            pending,
+        ]
+
+    if key == "revision_por_la_direccion" or doc_type == "management_review":
+        return [
+            identity,
+            {"title": "Datos de la revisión", "content": f"Revisión del SGC para {tenant_name}, periodo {period_year}. Responsable y fecha de sesión: [PENDIENTE DE VALIDACIÓN]."},
+            {"title": "Entradas obligatorias", "content": "Objetivos, desempeño de procesos, resultados de auditoría, satisfacción cliente, proveedores, riesgos, acciones correctivas, recursos y oportunidades de mejora deben sustentarse con evidencia vigente."},
+            {"title": "Estado de acciones previas", "content": "\n".join(summarize_records(safe_list(context.get("action_plans")), "Acción", 10)) or "[REQUIERE COMPLETAR CON DATO REAL] No hay acciones previas registradas."},
+            {"title": "Cambios internos/externos", "content": "[PENDIENTE DE VALIDACIÓN] Registrar cambios organizacionales, tecnológicos, comerciales o regulatorios del periodo."},
+            {"title": "Desempeño de procesos y KPIs", "content": f"KPIs disponibles: {len(safe_list(context.get('kpis')))}. Controles priorizados:\n{compact_control_lines(context, 8)}"},
+            {"title": "Satisfacción cliente", "content": "\n".join(summarize_records(safe_list(context.get("customer_satisfaction")), "Satisfacción", 8)) or "[REQUIERE EVIDENCIA] No hay registros de satisfacción cliente disponibles."},
+            {"title": "Proveedores", "content": "\n".join(summarize_records(safe_list(context.get("suppliers")), "Proveedor", 8)) or "[REQUIERE COMPLETAR CON DATO REAL] No hay registro de proveedores disponible."},
+            {"title": "Auditorías, hallazgos y no conformidades", "content": "\n".join(summarize_records(safe_list(context.get("audits")), "Auditoría", 6) + summarize_records(safe_list(context.get("findings")), "Hallazgo", 6) + summarize_records(safe_list(context.get("nonconformities")), "No conformidad", 6)) or "[PENDIENTE DE VALIDACIÓN] No hay resultados de auditoría suficientes."},
+            {"title": "Riesgos y oportunidades", "content": "\n".join(summarize_records(safe_list(context.get("risks")), "Riesgo", 8)) or "[REQUIERE COMPLETAR CON DATO REAL] Matriz de riesgos no disponible; usar controles y acciones como insumo alternativo."},
+            {"title": "Recursos, decisiones y acciones", "content": "[PENDIENTE DE VALIDACIÓN] Registrar decisiones, responsables, recursos aprobados y fechas de seguimiento."},
+            {"title": "Conclusión", "content": f"La preparación documental se encuentra en estado {readiness} ({score_text}). El acta no debe aprobarse hasta cerrar pendientes críticos y evidencias faltantes."},
+            trace_section,
+            pending,
+        ]
+
+    if key == "politica_calidad":
+        return [
+            identity,
+            {"title": "Declaración", "content": f"{tenant_name} declara su compromiso con la calidad, el cumplimiento de requisitos aplicables, la satisfacción del cliente y la mejora continua. [PENDIENTE DE VALIDACIÓN] La dirección debe aprobar el texto final."},
+            {"title": "Compromisos", "content": "- Cumplir requisitos aplicables.\n- Mantener procesos controlados.\n- Gestionar riesgos y oportunidades.\n- Mejorar continuamente el SGC.\n- Sustentar decisiones con evidencia."},
+            {"title": "Enfoque al cliente", "content": "[REQUIERE EVIDENCIA] Vincular mediciones reales de satisfacción, reclamos o feedback del periodo."},
+            {"title": "Comunicación y revisión", "content": "[PENDIENTE DE VALIDACIÓN] Registrar fecha de aprobación, responsable de comunicación y evidencia de difusión."},
+            trace_section,
+            pending,
+        ]
+
+    if key == "objetivos_calidad":
+        rows = safe_list(context.get("kpis"))[:8]
+        table_rows = [
+            [item.get("title") or item.get("standard_code") or "Objetivo derivado de KPI", item.get("effective_health_status") or item.get("status_color") or "sin dato", "[PENDIENTE]", "[PENDIENTE]", period_year, item.get("effective_health_score") or item.get("value") or "sin dato", "[REQUIERE EVIDENCIA]", "[PENDIENTE DE VALIDACIÓN]"]
+            for item in rows if isinstance(item, dict)
+        ] or [["[PENDIENTE]", "[PENDIENTE]", "[PENDIENTE]", "[PENDIENTE]", period_year, "sin dato", "[REQUIERE EVIDENCIA]", "[REQUIERE COMPLETAR CON DATO REAL]"]]
+        return [identity, {"title": "Tabla de objetivos de calidad", "content": markdown_table(["Objetivo", "Indicador/KPI", "Meta", "Responsable", "Periodo", "Estado", "Evidencia", "Pendiente"], table_rows)}, trace_section, pending]
+
+    if key == "indice_evidencias" or doc_type == "evidence_index":
+        evidences = safe_list(context.get("evidences"))[:20]
+        rows = [
+            [template.get("document_name") or "Documento ISO 9001", evidence_name(e), "evidences", "03_EVIDENCIAS_PARA_VALIDAR", e.get("status") or "requiere validación", "Validar aplicabilidad"]
+            for e in evidences if isinstance(e, dict)
+        ] or [["Documento ISO 9001", "[REQUIERE EVIDENCIA]", "pending", "03_EVIDENCIAS_PARA_VALIDAR", "pending", "No hay evidencia suficiente"]]
+        return [identity, {"title": "Índice de evidencias", "content": markdown_table(["Documento/requisito", "Evidencia", "Fuente", "Carpeta sugerida", "Estado", "Observación"], rows)}, trace_section, pending]
+
+    if key == "guia_entrevistas_auditoria" or doc_type == "audit_interview_guide":
+        return [
+            identity,
+            {"title": "Preguntas por rol", "content": "- Dirección: ¿Cómo se revisan objetivos, riesgos y recursos del SGC?\n- Responsable de calidad: ¿Cómo se controla la vigencia documental?\n- Operación: ¿Cómo se demuestra control del servicio y tratamiento de incidentes?\n- Dueños de proceso: ¿Qué indicadores y evidencias respaldan el desempeño?"},
+            {"title": "Preguntas por proceso", "content": compact_control_lines(context, 8)},
+            {"title": "Evidencia esperada", "content": compact_evidence_lines(context, 10)},
+            {"title": "Riesgos y señales de alerta", "content": "- Evidencia inexistente o no aprobada.\n- Documentos sin versión o responsable.\n- Acciones vencidas sin cierre.\n- Proveedores o satisfacción cliente sin registros reales."},
+            trace_section,
+            pending,
+        ]
+
+    return []
+
+
 def extract_pending_items(context: Dict[str, Any], template: Dict[str, Any]) -> List[str]:
     pending: List[str] = []
 
@@ -165,6 +342,18 @@ def build_sections(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     readiness = completion.get("readiness_status") or "insufficient"
     score = completion.get("estimated_readiness_score")
     score_text = f"{score}%" if isinstance(score, int) else "[PENDIENTE DE VALIDACIÓN]"
+    base = {
+        "tenant_name": tenant_name,
+        "standard_code": standard_code,
+        "period_year": period_year,
+        "audit_reference": audit_reference,
+        "readiness": readiness,
+        "score_text": score_text,
+    }
+
+    specific = build_specific_sections(payload, base)
+    if specific:
+        return specific
 
     sections = [
         {

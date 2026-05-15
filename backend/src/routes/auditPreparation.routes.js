@@ -61,11 +61,17 @@ function zipUpload(req, res, next) {
 router.get('/templates', auditPreparationController.listTemplates);
 router.post('/packages', auditPreparationController.createPackage);
 router.get('/packages', auditPreparationController.listPackages);
-router.get('/packages/:id', auditPreparationController.getPackage);
+router.get('/packages/:id/summary', auditPreparationController.getPackageSummary);
+router.get('/packages/:id/documents', auditPreparationController.listPackageDocuments);
 router.post('/packages/:id/build-context', auditPreparationController.buildContext);
 router.post('/packages/:id/generate-documents', auditPreparationController.generateDocuments);
 router.post('/packages/:id/generate-evidence-index', auditPreparationController.generateEvidenceIndex);
+router.get('/packages/:id/uploaded-zips', auditPreparationController.listUploadedZips);
 router.get('/packages/:id/gaps', auditPreparationController.getGaps);
+router.post('/packages/:id/export', auditPreparationController.exportPackage);
+router.get('/packages/:id/download-export', auditPreparationController.downloadExport);
+router.get('/packages/:id', auditPreparationController.getPackage);
+router.get('/documents/:documentId', auditPreparationController.getDocumentDetail);
 router.patch('/documents/:documentId/status', auditPreparationController.updateDocumentStatus);
 router.patch('/evidences/:evidenceId/status', auditPreparationController.updateEvidenceStatus);
 router.post('/upload-zip', zipUpload, auditPreparationController.uploadZip);

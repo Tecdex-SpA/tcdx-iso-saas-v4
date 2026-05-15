@@ -2,7 +2,7 @@
 
 ## Alcance implementado
 
-Esta pasada agrega backend, ai-engine y documentación para las fases 4, 5 y 6. No incluye frontend ni export ZIP completo.
+La primera parte de esta fase agregó backend, ai-engine y documentación para las fases 4, 5 y 6. El cierre funcional posterior integra la preparación documental dentro de `/auditorias`, agrega análisis básico de ZIP, export inicial a ZIP y mejora la generación determinística para producir documentos ISO 9001 más auditables.
 
 ## Servicios creados
 
@@ -32,6 +32,12 @@ Todos los endpoints quedan detrás de `auth` y `enforceApiAccess`, y el RBAC per
 | PATCH | `/api/audit-preparation/documents/:documentId/status` | Actualiza estado documental validando tenant. |
 | PATCH | `/api/audit-preparation/evidences/:evidenceId/status` | Actualiza estado de evidencia validando tenant. |
 | POST | `/api/audit-preparation/upload-zip` | Registra ZIP documental subido; análisis profundo queda preparado para próxima fase. |
+| GET | `/api/audit-preparation/packages/:id/summary` | Resumen liviano para UI. |
+| GET | `/api/audit-preparation/packages/:id/documents` | Lista documentos del paquete. |
+| GET | `/api/audit-preparation/documents/:documentId` | Detalle de documento generado, pendientes y trazabilidad. |
+| GET | `/api/audit-preparation/packages/:id/uploaded-zips` | Lista ZIPs registrados para el paquete. |
+| POST | `/api/audit-preparation/packages/:id/export` | Exporta ZIP inicial con estructura documental y Markdown. |
+| GET | `/api/audit-preparation/packages/:id/download-export` | Descarga autenticada del último ZIP exportado. |
 
 ## Endpoint ai-engine
 
@@ -139,12 +145,67 @@ iso9001_audit_document_pack_structure_v1
 
 Incluye 15 registros sobre estructura de carpeta, manual, política, objetivos, contexto/FODA, partes interesadas, mapa de procesos, riesgos, control documental, proveedores, satisfacción cliente, acciones correctivas, revisión por la dirección, índice de evidencias y guía de entrevistas.
 
-## Limitaciones de esta fase
+## Flujo desde Auditorías
 
-- No se implementó frontend.
-- No se descomprime ni analiza profundamente el ZIP todavía; solo se registra metadata, hash, paquete asociado y estado inicial.
-- No se implementó export ZIP completo.
-- La generación documental en ai-engine es determinística y segura; LLM/Ollama puede incorporarse después sobre este contrato.
+La vista `/auditorias` incluye la pestaña **Preparación documental**. Desde ahí el usuario puede:
+
+- crear un paquete documental ISO 9001 por año;
+- listar paquetes existentes;
+- construir contexto desde la plataforma;
+- ver readiness score, fuentes disponibles/no disponibles y brechas;
+- seleccionar plantillas y generar documentos;
+- revisar contenido Markdown, pendientes, evidencias sugeridas y trazabilidad;
+- aprobar documentos o marcarlos como `requires_validation`;
+- generar índice de evidencias;
+- subir un ZIP documental existente;
+- exportar una carpeta ZIP inicial con estructura de auditoría.
+
+La pestaña no reemplaza el programa de auditorías ni IA Auditor. Es una capacidad integrada y accesible dentro del workspace consolidado de Auditorías.
+
+## ZIP documental
+
+`POST /api/audit-preparation/upload-zip` ahora guarda el ZIP, calcula hash, registra metadata e inventaría su estructura interna sin ejecutar ni modificar archivos. El análisis básico detecta:
+
+- cantidad de archivos y carpetas;
+- extensiones;
+- carpetas detectadas;
+- archivos con posible path traversal;
+- documentos que coinciden por nombre o carpeta con plantillas ISO 9001;
+- archivos no mapeados.
+
+El resultado queda en `audit_uploaded_zip_files.detected_structure_json` e incorpora el ZIP como fuente en el contexto documental. El ZIP original se conserva intacto.
+
+## Export inicial
+
+`POST /api/audit-preparation/packages/:id/export` genera un ZIP inicial con:
+
+- `README.md` del paquete;
+- documentos generados como Markdown;
+- `03_EVIDENCIAS_PARA_VALIDAR/00_INDICE_EVIDENCIAS.md`;
+- `00_PENDIENTES_PARA_AUDITORIA.md`;
+- `99_RESPALDO_GENERACIONES/00_INVENTARIO_DOCUMENTAL.json`.
+
+Los `folder_path` de plantillas reemplazan `{{period_year}}` por el año del paquete. El ZIP queda disponible mediante descarga autenticada en `/api/audit-preparation/packages/:id/download-export`.
+
+## Calidad documental
+
+El ai-engine genera salidas determinísticas más específicas por `template_key`:
+
+- `manual_calidad`: portada, control documental, objetivo, alcance, contexto, partes interesadas, procesos, liderazgo, riesgos, operación, desempeño, mejora, evidencias y pendientes.
+- `revision_por_la_direccion`: entradas, acciones previas, cambios, KPIs, satisfacción cliente, proveedores, auditorías, hallazgos, riesgos, recursos, decisiones y pendientes.
+- `politica_calidad`: declaración, compromisos, enfoque al cliente, cumplimiento, mejora, comunicación y pendientes.
+- `objetivos_calidad`: tabla Markdown de objetivo, KPI, meta, responsable, periodo, estado, evidencia y pendiente.
+- `indice_evidencias`: tabla Markdown de requisito/documento, evidencia, fuente, carpeta sugerida, estado y observación.
+- `guia_entrevistas_auditoria`: preguntas por rol/proceso, evidencia esperada, riesgo asociado y señales de alerta.
+
+La regla sigue siendo conservadora: no inventar proveedores, responsables, fechas, resultados ni tickets. Cuando falta información se marca con los placeholders definidos.
+
+## Limitaciones actuales
+
+- El ZIP se inventaría y se mapea por estructura/nombre, pero no extrae texto profundo desde DOCX/PDF.
+- La exportación inicial usa Markdown dentro del ZIP; DOCX/XLSX/PDF quedan para una evolución posterior.
+- La generación sigue siendo determinística y segura; un refinamiento LLM puede añadirse después usando el mismo contrato.
+- Fuentes inexistentes como proveedores, satisfacción cliente o riesgos se muestran como brechas accionables, no como errores.
 
 ## Corrección de compatibilidad con schema real
 
@@ -383,9 +444,26 @@ curl -s -H "Authorization: Bearer $TOKEN" \
   | python3 -m json.tool
 ```
 
-## Pendiente para la siguiente pasada
+Exportar paquete:
 
-- Integración frontend dentro de `/auditorias`.
-- Análisis profundo del ZIP y mapeo automático a plantillas.
-- Actualización de documentos importados preservando estructura.
-- Export ZIP con Markdown/PDF y estructura completa.
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -X POST "http://localhost:3000/api/audit-preparation/packages/$PACKAGE_ID/export" \
+  | python3 -m json.tool
+```
+
+Descargar ZIP exportado:
+
+```bash
+curl -L -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3000/api/audit-preparation/packages/$PACKAGE_ID/download-export" \
+  -o audit-preparation.zip
+```
+
+## Pendientes posteriores
+
+- Extracción profunda de texto desde DOCX/PDF del ZIP importado.
+- Actualización automática documento-a-documento preservando el formato original.
+- Export DOCX/XLSX/PDF además de Markdown.
+- Integración posterior con IA Auditor para sugerir cierre de brechas desde el paquete documental.

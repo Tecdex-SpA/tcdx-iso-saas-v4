@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import IsoAuditorPreview from '@/components/auditor-iso/IsoAuditorPreview';
+import AuditPreparationPanel from '@/components/auditorias/AuditPreparationPanel';
 import IaAuditorPanel from '@/components/auditorias/IaAuditorPanel';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -187,6 +188,7 @@ export default function AuditoriasPage() {
 
 const auditWorkspaceTabs = [
   { value: 'programa', label: 'Programa de auditorías' },
+  { value: 'preparacion', label: 'Preparación documental' },
   { value: 'preauditoria', label: 'Preauditoría ISO' },
   { value: 'ia', label: 'IA Auditor Senior' },
 ];
@@ -222,7 +224,7 @@ function AuditoriasWorkspaceContent() {
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-4">
             {auditWorkspaceTabs.map((tab) => {
               const active = activeView === tab.value;
 
@@ -246,6 +248,8 @@ function AuditoriasWorkspaceContent() {
 
         {activeView === 'preauditoria' ? (
           <IsoAuditorPreview />
+        ) : activeView === 'preparacion' ? (
+          <AuditPreparationPanel auditId={searchParams.get('id') || ''} />
         ) : activeView === 'ia' ? (
           <IaAuditorPanel />
         ) : (
