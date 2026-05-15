@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
 const XLSX = require('xlsx');
 const { readZipEntriesFromBuffer } = require('./auditZipExtraction.service');
+const { convertDocxBufferToPdf } = require('./auditDocumentConversion.service');
 
 function ensureGeneratedDir() {
   const dir = path.join(__dirname, '..', '..', 'uploads', 'audit-preparation-generated');
@@ -144,6 +145,20 @@ function markdownToDocxXml(markdown) {
   return markdownLines(markdown).slice(0, 240).map(docxParagraphXml).join('');
 }
 
+function findTcdxMarkers(xml) {
+  const markers = [];
+  const markerRegex = /\{\{TCDX_(SECTION|FIELD|TABLE):([A-Za-z0-9_.-]+)\}\}/g;
+  let match;
+  while ((match = markerRegex.exec(xml))) {
+    markers.push({
+      raw: match[0],
+      type: match[1].toLowerCase(),
+      key: match[2],
+    });
+  }
+  return markers;
+}
+
 function tryBuildPreservedDocxBuffer({ originalBuffer, markdown }) {
   if (!originalBuffer) return { buffer: null, reason: 'original_docx_not_available' };
   const nested = readZipEntriesFromBuffer(originalBuffer, { includeContent: true, maxContentBytes: 20 * 1024 * 1024 });
@@ -151,6 +166,7 @@ function tryBuildPreservedDocxBuffer({ originalBuffer, markdown }) {
   if (!documentEntry) return { buffer: null, reason: 'docx_document_xml_not_found' };
 
   const xml = documentEntry.content.toString('utf8');
+  const structuredMarkers = findTcdxMarkers(xml);
   const markerPatterns = [
     /\{\{TCDX_CONTENT\}\}/,
     /\{\{tcdx_content\}\}/,
@@ -158,21 +174,35 @@ function tryBuildPreservedDocxBuffer({ originalBuffer, markdown }) {
     /\[TCDX_CONTENT\]/,
     /\[CONTENIDO_TCDX\]/,
   ];
-  const hasMarker = markerPatterns.some((pattern) => pattern.test(xml));
+  const hasMarker = structuredMarkers.length > 0 || markerPatterns.some((pattern) => pattern.test(xml));
   if (!hasMarker) return { buffer: null, reason: 'no_supported_docx_markers_found' };
 
   const replacement = markdownToDocxXml(markdown);
   let updatedXml = xml;
   const paragraphs = xml.match(/<w:p[\s\S]*?<\/w:p>/g) || [];
+  const markersReplaced = [];
+
+  for (const marker of structuredMarkers) {
+    const paragraph = paragraphs.find((item) => item.includes(marker.raw));
+    if (paragraph) {
+      updatedXml = updatedXml.replace(paragraph, replacement);
+    } else {
+      updatedXml = updatedXml.replace(marker.raw, escapeXml(markdown.slice(0, 20000)));
+    }
+    markersReplaced.push(marker.raw);
+  }
+
   for (const paragraph of paragraphs) {
     if (markerPatterns.some((pattern) => pattern.test(paragraph))) {
       updatedXml = updatedXml.replace(paragraph, replacement);
+      markersReplaced.push('TCDX_CONTENT');
     }
   }
 
   if (updatedXml === xml) {
     for (const pattern of markerPatterns) {
       updatedXml = updatedXml.replace(pattern, escapeXml(markdown.slice(0, 20000)));
+      markersReplaced.push(String(pattern));
     }
   }
 
@@ -185,7 +215,10 @@ function tryBuildPreservedDocxBuffer({ originalBuffer, markdown }) {
 
   return {
     buffer: buildZip(zipEntries),
-    reason: 'updated_original_docx_with_markers',
+    reason: structuredMarkers.length ? 'preserve_exact_with_markers' : 'updated_original_docx_with_markers',
+    markers_replaced: Array.from(new Set(markersReplaced)),
+    markers_missing: [],
+    layout_preserved: true,
   };
 }
 
@@ -303,25 +336,43 @@ async function renderDocumentArtifact({ pkg, template, document, originalCandida
   };
 
   let buffer;
+  let sourceDocxBuffer = null;
+  let conversion = {
+    pdf_conversion_attempted: false,
+    pdf_conversion_success: false,
+    pdf_conversion_engine: 'libreoffice',
+    pdf_conversion_error: null,
+  };
   let preservation = {
-    mode: 'generated_tcdx_new_document',
+    mode: 'generate_tcdx_new',
     reason: 'no_original_candidate',
+    layout_preserved: false,
   };
 
-  if (safeFormat === 'docx' && originalCandidate?.buffer) {
+  if (['docx', 'pdf'].includes(safeFormat) && originalCandidate?.buffer) {
     const preserved = tryBuildPreservedDocxBuffer({ originalBuffer: originalCandidate.buffer, markdown });
     if (preserved.buffer) {
-      buffer = preserved.buffer;
+      sourceDocxBuffer = preserved.buffer;
+      if (safeFormat === 'docx') buffer = preserved.buffer;
       preservation = {
-        mode: 'updated_original_docx_with_markers',
+        mode: 'preserve_exact_with_markers',
         reason: preserved.reason,
         original_file: originalCandidate.full_path || null,
+        original_file_id: originalCandidate.full_path || null,
+        markers_replaced: preserved.markers_replaced || [],
+        markers_missing: preserved.markers_missing || [],
+        layout_preserved: true,
       };
     } else {
       preservation = {
-        mode: 'generated_tcdx_copy_original_preserved',
+        mode: 'preserve_original_attach_generated_annex',
         reason: preserved.reason,
         original_file: originalCandidate.full_path || null,
+        original_file_id: originalCandidate.full_path || null,
+        markers_replaced: [],
+        markers_missing: ['TCDX_SECTION', 'TCDX_FIELD', 'TCDX_TABLE'],
+        layout_preserved: 'original_preserved_generated_annex',
+        warning: 'No se modificó el DOCX original porque no contiene marcadores compatibles.',
       };
     }
   }
@@ -330,7 +381,17 @@ async function renderDocumentArtifact({ pkg, template, document, originalCandida
     if (safeFormat === 'docx') buffer = buildDocxBuffer({ title, markdown, meta });
     else if (safeFormat === 'xlsx') buffer = buildXlsxBuffer({ title, markdown, meta });
     else if (safeFormat === 'pptx') buffer = buildPptxBuffer({ title, markdown, meta });
-    else if (safeFormat === 'pdf') buffer = await buildPdfBuffer({ title, markdown, meta });
+    else if (safeFormat === 'pdf') {
+      sourceDocxBuffer = sourceDocxBuffer || buildDocxBuffer({ title, markdown, meta });
+      const converted = await convertDocxBufferToPdf(sourceDocxBuffer);
+      conversion = {
+        pdf_conversion_attempted: converted.pdf_conversion_attempted,
+        pdf_conversion_success: converted.pdf_conversion_success,
+        pdf_conversion_engine: converted.pdf_conversion_engine,
+        pdf_conversion_error: converted.pdf_conversion_error,
+      };
+      buffer = converted.buffer || await buildPdfBuffer({ title, markdown, meta });
+    }
     else buffer = Buffer.from(markdown, 'utf8');
   }
 
@@ -338,6 +399,11 @@ async function renderDocumentArtifact({ pkg, template, document, originalCandida
   const filename = `${Date.now()}-${crypto.randomUUID()}-${sanitizeFileName(title)}.${safeFormat}`;
   const filePath = path.join(dir, filename);
   fs.writeFileSync(filePath, buffer);
+  let sourceDocxFilename = null;
+  if (safeFormat === 'pdf' && sourceDocxBuffer) {
+    sourceDocxFilename = `${Date.now()}-${crypto.randomUUID()}-${sanitizeFileName(title)}.source.docx`;
+    fs.writeFileSync(path.join(dir, sourceDocxFilename), sourceDocxBuffer);
+  }
 
   return {
     file_path: filePath,
@@ -348,6 +414,8 @@ async function renderDocumentArtifact({ pkg, template, document, originalCandida
     file_size_bytes: buffer.length,
     file_hash: crypto.createHash('sha256').update(buffer).digest('hex'),
     preservation,
+    conversion,
+    source_docx_filename: sourceDocxFilename,
   };
 }
 

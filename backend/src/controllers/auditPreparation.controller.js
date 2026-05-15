@@ -184,6 +184,55 @@ async function listUploadedZips(req, res) {
   }
 }
 
+async function listDocumentarySources(req, res) {
+  try {
+    const sources = await auditPreparationService.listDocumentarySources({
+      user: req.user,
+      filters: req.query || {},
+    });
+    return res.json({ ok: true, sources });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+async function createDocumentarySource(req, res) {
+  try {
+    const source = await auditPreparationService.createDocumentarySource({
+      user: req.user,
+      payload: req.body || {},
+    });
+    return res.status(201).json({ ok: true, source });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+async function updateDocumentarySource(req, res) {
+  try {
+    const source = await auditPreparationService.updateDocumentarySource({
+      user: req.user,
+      sourceId: req.params.sourceId,
+      payload: req.body || {},
+    });
+    return res.json({ ok: true, source });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+async function deleteDocumentarySource(req, res) {
+  try {
+    const source = await auditPreparationService.deleteDocumentarySource({
+      user: req.user,
+      sourceId: req.params.sourceId,
+    });
+    return res.json({ ok: true, source });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
 async function getGaps(req, res) {
   try {
     const gaps = await auditPreparationService.getGaps({
@@ -274,6 +323,10 @@ module.exports = {
   generateDocuments,
   generateEvidenceIndex,
   listUploadedZips,
+  listDocumentarySources,
+  createDocumentarySource,
+  updateDocumentarySource,
+  deleteDocumentarySource,
   getGaps,
   updateDocumentStatus,
   updateEvidenceStatus,

@@ -567,6 +567,7 @@ async function buildAuditPreparationContext({
     packages,
     packageDocuments,
     uploadedZipRows,
+    documentarySources,
     formalRiskMatrix,
     risks,
     controls,
@@ -586,6 +587,7 @@ async function buildAuditPreparationContext({
     safeQuerySource({ ...common, key: 'documents.packages', table: 'audit_preparation_packages', tenantId, columns: ['id', 'audit_id', 'standard_code', 'period_year', 'package_name', 'status', 'package_source', 'summary_json', 'updated_at'], limit: 20 }),
     safeQuerySource({ ...common, key: 'documents.package_documents', table: 'audit_package_documents', tenantId, columns: ['id', 'package_id', 'audit_id', 'standard_code', 'document_name', 'folder_path', 'document_status', 'pending_items_json', 'evidence_links_json', 'updated_at'], limit: 50 }),
     safeQuerySource({ ...common, key: 'uploaded_zip', table: 'audit_uploaded_zip_files', tenantId, columns: ['id', 'package_id', 'audit_id', 'standard_code', 'period_year', 'original_filename', 'file_url', 'file_hash', 'analysis_status', 'inventory_json', 'detected_structure_json', 'gaps_json', 'created_at'], limit: 10 }),
+    safeQuerySource({ ...common, key: 'documentary_sources', table: 'audit_documentary_sources', tenantId, columns: ['id', 'package_id', 'audit_id', 'standard_code', 'period_year', 'source_type', 'title', 'description', 'status', 'source_origin', 'source_file_name', 'source_file_url', 'extracted_text_preview', 'metadata_json', 'confidence_score', 'created_at', 'updated_at'], standardColumns: ['standard_code'], limit: 80 }),
     safeQuerySource({ ...common, key: 'risks.iso_risk_matrix_items', table: 'iso_risk_matrix_items', tenantId, columns: ['id', 'run_id', 'standard_code', 'risk_title', 'title', 'risk_statement', 'description', 'risk_level', 'residual_risk_level', 'inherent_risk_score', 'residual_risk_score', 'treatment_status', 'status', 'created_at', 'updated_at'], standardColumns: ['standard_code'], limit: 30 }),
     safeQuerySource({ ...common, key: 'risks', table: 'risks', tenantId, columns: ['id', 'title', 'name', 'description', 'severity', 'risk_level', 'status', 'owner_id', 'created_at', 'updated_at'], limit: 25 }),
     safeQuerySource({ ...common, key: 'controls', table: 'v_iso_control_effective_health', tenantId, columns: ['tenant_control_id', 'catalog_control_id', 'iso', 'standard_code', 'clause', 'control_description', 'effective_health_score', 'effective_health_status', 'evidence_count', 'official_evidence_count', 'open_findings_count', 'open_nonconformities_count', 'overdue_action_plans_count', 'is_in_active_operational_scope'], standardColumns: ['standard_code', 'iso'], limit: 50 }),
@@ -606,6 +608,16 @@ async function buildAuditPreparationContext({
   const availableSources = sourceEntries.filter((item) => item.available);
   const recordsFound = sourceEntries.reduce((acc, item) => acc + Number(item.records_count || 0), 0);
   const criticalGaps = gaps.filter((gap) => gap.severity === 'alta' || gap.severity === 'critica');
+  const sourceRows = Array.isArray(documentarySources) ? documentarySources : [];
+  const sourcesByType = (type) => sourceRows.filter((row) => row.source_type === type && row.status !== 'inactive');
+  const alternativeRisks = sourcesByType('risk').map((row) => ({
+    source: 'documentary_sources',
+    title: row.title,
+    description: row.description || row.extracted_text_preview,
+    severity: row.metadata_json?.severity || 'requires_validation',
+    status: row.status,
+    disclaimer: 'Fuente documental alternativa; requiere validación humana antes de tratarse como matriz formal.',
+  }));
   const formalRisks = formalRiskMatrix.length ? formalRiskMatrix.map((row) => ({
     ...row,
     title: row.risk_title || row.title,
@@ -614,10 +626,12 @@ async function buildAuditPreparationContext({
     status: row.treatment_status || row.status,
     source: 'iso_risk_matrix_items',
   })) : risks;
-  const riskFallback = formalRisks.length ? formalRisks : buildRiskFallback({ controls, findings, nonconformities, actionPlans, uploadedZipRows });
+  const riskFallback = formalRisks.length ? formalRisks : (alternativeRisks.length ? alternativeRisks : buildRiskFallback({ controls, findings, nonconformities, actionPlans, uploadedZipRows }));
 
-  if (!risks.length && riskFallback.length) {
-    gaps.push(publicGap('risks_fallback', 'Se generó una lectura de riesgos inferida desde controles, hallazgos, no conformidades, acciones y ZIP. Debe validarse como matriz formal antes de auditoría.', 'media'));
+  if (!risks.length && !formalRiskMatrix.length && riskFallback.length) {
+    gaps.push(publicGap('risks_fallback', alternativeRisks.length
+      ? 'Se usaron fuentes documentales alternativas de riesgo. Deben validarse antes de auditoría externa.'
+      : 'Se generó una lectura de riesgos inferida desde controles, hallazgos, no conformidades, acciones y ZIP. Debe validarse como matriz formal antes de auditoría.', 'media'));
   }
 
   if (controls.length && controls.every((control) => control.is_in_active_operational_scope === false)) {
@@ -688,10 +702,14 @@ async function buildAuditPreparationContext({
     corrective_actions: actionPlans,
     action_plans: actionPlans,
     suppliers,
-    supplier_evaluations: supplierEvaluations,
-    customer_satisfaction: customerSatisfaction,
+    supplier_evaluations: supplierEvaluations.length ? supplierEvaluations : sourcesByType('supplier_evaluation'),
+    customer_satisfaction: customerSatisfaction.length ? customerSatisfaction : sourcesByType('customer_satisfaction'),
     kpis,
-    document_control: documents,
+    document_control: documents.length ? documents : sourcesByType('document_control'),
+    documentary_sources: documentarySources,
+    complaints: sourcesByType('complaint'),
+    surveys: sourcesByType('survey'),
+    interested_parties: sourcesByType('interested_party'),
     jira_items: jiraItems,
     uploaded_zip: uploadedZipRows[0] || {},
     control_summary: controlSummary,

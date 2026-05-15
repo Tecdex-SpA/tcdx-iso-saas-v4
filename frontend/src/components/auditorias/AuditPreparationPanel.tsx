@@ -77,6 +77,27 @@ type UploadedZipRow = {
   created_at?: string | null;
 };
 
+type DocumentarySourceRow = {
+  id: string;
+  source_type: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  source_origin?: string | null;
+  source_file_name?: string | null;
+  confidence_score?: number | null;
+};
+
+type SourceForm = {
+  source_type: string;
+  title: string;
+  description: string;
+};
+
+type ExtendedPackageDetail = PackageDetail & {
+  documentary_sources?: DocumentarySourceRow[];
+};
+
 const maxZipBytes = 50 * 1024 * 1024;
 
 function authHeaders(token: string) {
@@ -142,10 +163,11 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [packages, setPackages] = useState<PackageRow[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState('');
-  const [detail, setDetail] = useState<PackageDetail | null>(null);
+  const [detail, setDetail] = useState<ExtendedPackageDetail | null>(null);
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>(defaultTemplateKeys);
   const [selectedDocument, setSelectedDocument] = useState<DocumentRow | null>(null);
   const [zipFile, setZipFile] = useState<File | null>(null);
+  const [sourceForm, setSourceForm] = useState<SourceForm>({ source_type: 'supplier', title: '', description: '' });
   const [loading, setLoading] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -310,6 +332,36 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
       body: JSON.stringify({ status }),
     });
     setMessage('Estado de evidencia actualizado.');
+    await loadDetail();
+  });
+
+  const createDocumentarySource = async () => runAction('source', async () => {
+    if (!sourceForm.title.trim()) throw new Error('Ingresa un título para la fuente documental');
+    await request('/api/audit-preparation/documentary-sources', {
+      method: 'POST',
+      body: JSON.stringify({
+        package_id: selectedPackageId || null,
+        audit_id: auditId || null,
+        standard_code: standardCode,
+        period_year: Number(periodYear),
+        source_type: sourceForm.source_type,
+        title: sourceForm.title,
+        description: sourceForm.description,
+        status: 'requires_validation',
+        source_origin: 'manual',
+      }),
+    });
+    setSourceForm((prev) => ({ ...prev, title: '', description: '' }));
+    setMessage('Fuente documental registrada.');
+    await loadDetail();
+  });
+
+  const validateDocumentarySource = async (sourceId: string) => runAction(`source-${sourceId}`, async () => {
+    await request(`/api/audit-preparation/documentary-sources/${sourceId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'validated' }),
+    });
+    setMessage('Fuente documental validada.');
     await loadDetail();
   });
 
@@ -583,6 +635,7 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
                       {jsonArray(zip.detected_structure_json, 'detected_documents').slice(0, 4).map((doc, index) => (
                         <div key={`zip-doc-${zip.id}-${index}`} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
                           {String(doc.file_name || doc.full_path || 'Documento')} · {String(doc.validity_status || 'requiere validación')} · {String(doc.probable_document_category || doc.document_type || 'sin clasificar')}
+                          {doc.parser_details && typeof doc.parser_details === 'object' && 'ocr_attempted' in doc.parser_details ? ` · OCR: ${String((doc.parser_details as JsonRecord).ocr_success ? 'ok' : (doc.parser_details as JsonRecord).ocr_attempted ? 'intentado' : 'no')}` : ''}
                         </div>
                       ))}
                     </div>
@@ -591,6 +644,51 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
               </div>
             </div>
           ) : null}
+
+          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Fuentes documentales normalizadas</h3>
+                <p className="mt-1 text-xs text-slate-500">Cubre proveedores, satisfacción, reclamos, encuestas, riesgos o control documental desde ZIP, evidencias o carga manual sin crear módulos paralelos.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[160px_220px_1fr_auto]">
+                <select value={sourceForm.source_type} onChange={(e) => setSourceForm((prev) => ({ ...prev, source_type: e.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-xs">
+                  <option value="supplier">Proveedor</option>
+                  <option value="supplier_evaluation">Evaluación proveedor</option>
+                  <option value="customer_satisfaction">Satisfacción cliente</option>
+                  <option value="complaint">Reclamo</option>
+                  <option value="survey">Encuesta</option>
+                  <option value="document_control">Control documental</option>
+                  <option value="risk">Riesgo</option>
+                  <option value="process">Proceso</option>
+                  <option value="interested_party">Parte interesada</option>
+                  <option value="other">Otra</option>
+                </select>
+                <input value={sourceForm.title} onChange={(e) => setSourceForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Título fuente" className="rounded-xl border border-slate-200 px-3 py-2 text-xs" />
+                <input value={sourceForm.description} onChange={(e) => setSourceForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Descripción / evidencia" className="rounded-xl border border-slate-200 px-3 py-2 text-xs" />
+                <button onClick={createDocumentarySource} disabled={!selectedPackageId || loading === 'source'} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white disabled:opacity-50">Agregar</button>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {(detail?.documentary_sources || []).slice(0, 12).map((source) => (
+                <div key={source.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-black text-slate-900">{source.title}</div>
+                      <div className="mt-1 text-slate-500">{source.source_type} · {source.source_origin || 'manual'}</div>
+                    </div>
+                    <span className={`rounded-full border px-2 py-1 text-[11px] font-black ${statusBadge(source.status)}`}>{source.status}</span>
+                  </div>
+                  {source.source_file_name && <div className="mt-2 text-slate-500">{source.source_file_name}</div>}
+                  {source.description && <div className="mt-2 text-slate-600">{source.description}</div>}
+                  <button onClick={() => validateDocumentarySource(source.id)} className="mt-2 rounded-lg border border-emerald-200 px-2 py-1 text-xs font-bold text-emerald-700">Validar fuente</button>
+                </div>
+              ))}
+              {(!detail?.documentary_sources || detail.documentary_sources.length === 0) && (
+                <div className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">Sin fuentes alternativas registradas aún.</div>
+              )}
+            </div>
+          </div>
 
           {selectedDocument && (
             <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
@@ -617,7 +715,8 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
                   <h4 className="text-xs font-black uppercase text-slate-600">Origen y cambios</h4>
                   <div className="mt-2 text-xs leading-5 text-slate-700">
                     <div>Original: {selectedDocument.original_file_url || 'sin original asociado'}</div>
-                    <div>Estrategia: {String(selectedDocument.change_summary_json?.strategy || 'generado TCDX')}</div>
+                    <div>Estrategia: {String(selectedDocument.change_summary_json?.preservation_mode || selectedDocument.change_summary_json?.strategy || 'generado TCDX')}</div>
+                    <div>Layout: {String(selectedDocument.change_summary_json?.layout_preserved || 'formato TCDX')}</div>
                     <div>{String(selectedDocument.change_summary_json?.preservation_note || 'Sin observaciones de preservación.')}</div>
                   </div>
                 </div>

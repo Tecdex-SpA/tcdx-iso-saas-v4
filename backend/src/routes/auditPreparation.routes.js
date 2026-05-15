@@ -60,6 +60,10 @@ function zipUpload(req, res, next) {
 }
 
 router.get('/templates', auditPreparationController.listTemplates);
+router.get('/documentary-sources', auditPreparationController.listDocumentarySources);
+router.post('/documentary-sources', auditPreparationController.createDocumentarySource);
+router.put('/documentary-sources/:sourceId', auditPreparationController.updateDocumentarySource);
+router.delete('/documentary-sources/:sourceId', auditPreparationController.deleteDocumentarySource);
 router.post('/packages', auditPreparationController.createPackage);
 router.get('/packages', auditPreparationController.listPackages);
 router.get('/packages/:id/summary', auditPreparationController.getPackageSummary);

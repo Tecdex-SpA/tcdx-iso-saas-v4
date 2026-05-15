@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
+const { runPdfOcr } = require('./auditOcr.service');
 
 function mimeForExtension(ext) {
   return {
@@ -194,11 +195,35 @@ async function extractEntryText(entry) {
     if (entry.extension === '.pdf') {
       const pdfParse = require('pdf-parse');
       const result = await pdfParse(buffer);
+      const text = String(result.text || '').trim();
+      if (text.length < 80) {
+        const ocr = await runPdfOcr(buffer);
+        const mergedText = [text, ocr.text].filter(Boolean).join('\n\n').trim();
+        return {
+          text: mergedText.slice(0, 50000),
+          parser: ocr.ocr_success ? 'pdf-parse+ocr' : 'pdf-parse',
+          details: {
+            pages: result.numpages || null,
+            ocr_attempted: ocr.ocr_attempted,
+            ocr_success: ocr.ocr_success,
+            ocr_pages_processed: ocr.ocr_pages_processed,
+            ocr_error: ocr.ocr_error,
+            extraction_method: ocr.ocr_success ? (text ? 'mixed' : 'ocr') : 'failed',
+          },
+          warning: ocr.warning || 'pdf_scanned_or_low_text: PDF sin texto suficiente; requiere revisión humana.',
+        };
+      }
       return {
-        text: String(result.text || '').slice(0, 50000),
+        text: text.slice(0, 50000),
         parser: 'pdf-parse',
-        details: { pages: result.numpages || null },
-        warning: String(result.text || '').trim().length < 80 ? 'pdf_scanned_or_low_text: PDF sin texto suficiente; OCR no disponible en esta etapa.' : null,
+        details: {
+          pages: result.numpages || null,
+          ocr_attempted: false,
+          ocr_success: false,
+          ocr_pages_processed: 0,
+          extraction_method: 'text',
+        },
+        warning: null,
       };
     }
 
@@ -209,7 +234,7 @@ async function extractEntryText(entry) {
       const chunks = [];
       const previews = [];
       for (const sheetName of sheets.slice(0, 10)) {
-        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName] || {}, { header: 1, defval: '' }).slice(0, 8);
+        const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName] || {}, { header: 1, defval: '' }).slice(0, 8);
         previews.push({
           sheet_name: sheetName,
           headers: Array.isArray(rows[0]) ? rows[0].slice(0, 12) : [],

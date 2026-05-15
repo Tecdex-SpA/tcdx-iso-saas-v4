@@ -72,7 +72,35 @@ Para DOCX existe una estrategia segura de preservación parcial:
 - el archivo original del cliente no se sobrescribe;
 - si no hay marcador compatible o no es técnicamente seguro modificar el DOCX, el sistema genera una copia TCDX nueva, registra la razón en `change_summary_json` y deja el documento en `requires_validation` cuando corresponde.
 
-La UI muestra si la estrategia fue `updated_original_docx_with_markers`, `generated_tcdx_copy_original_preserved` o `generated_tcdx_new_document`.
+La UI muestra si la estrategia fue:
+
+- `preserve_exact_with_markers`
+- `preserve_original_attach_generated_annex`
+- `generate_tcdx_new`
+
+## Conversión DOCX a PDF
+
+Cuando `AUDIT_DOCX_TO_PDF_ENABLED=true` y un template requiere PDF, el backend genera primero un DOCX fuente y luego intenta convertirlo con LibreOffice headless:
+
+```bash
+libreoffice --headless --convert-to pdf --outdir <output_dir> <input_docx>
+```
+
+Variables:
+
+```env
+AUDIT_DOCX_TO_PDF_ENABLED=false
+LIBREOFFICE_BIN=/usr/bin/libreoffice
+AUDIT_DOCX_TO_PDF_TIMEOUT_MS=60000
+```
+
+Paquetes Ubuntu:
+
+```bash
+sudo apt-get install -y libreoffice fonts-dejavu fonts-liberation
+```
+
+Si LibreOffice no está disponible, la generación no falla; se registra `pdf_conversion_error` y se usa PDF nativo TCDX como fallback.
 
 ## Export ZIP
 

@@ -227,11 +227,14 @@ async function listPackages({ user, filters = {} }) {
 
 async function getPackageDetail({ packageId, user }) {
   const pkg = await getPackageForUser(packageId, user);
-  const [documents, evidences, runs, zips] = await Promise.all([
+  const [documents, evidences, runs, zips, sources] = await Promise.all([
     pool.query(`SELECT * FROM audit_package_documents WHERE package_id = $1::uuid ORDER BY folder_path, document_name`, [packageId]),
     pool.query(`SELECT * FROM audit_evidence_index WHERE package_id = $1::uuid ORDER BY folder_path, evidence_name`, [packageId]),
     pool.query(`SELECT * FROM audit_document_generation_runs WHERE package_id = $1::uuid ORDER BY created_at DESC LIMIT 50`, [packageId]),
     pool.query(`SELECT * FROM audit_uploaded_zip_files WHERE package_id = $1::uuid ORDER BY created_at DESC`, [packageId]),
+    tableExists('audit_documentary_sources')
+      ? pool.query(`SELECT * FROM audit_documentary_sources WHERE package_id = $1::uuid AND status <> 'inactive' ORDER BY updated_at DESC, created_at DESC`, [packageId])
+      : Promise.resolve({ rows: [] }),
   ]);
 
   return {
@@ -240,6 +243,7 @@ async function getPackageDetail({ packageId, user }) {
     evidences: evidences.rows,
     generation_runs: runs.rows,
     uploaded_zips: zips.rows,
+    documentary_sources: sources.rows,
     completion_summary: pkg.summary_json?.completion_summary || pkg.summary_json || {},
   };
 }
@@ -371,13 +375,15 @@ async function generateDocuments({ packageId, user, payload = {} }) {
         : null;
       const originalCandidate = getOriginalCandidateFromZip(context.uploaded_zip, zipMatch?.matched_file);
       const artifact = await renderDocumentArtifact({ pkg, template, document: doc, originalCandidate });
-      const status = artifact.preservation?.mode === 'updated_original_docx_with_markers'
+      const status = artifact.preservation?.mode === 'preserve_exact_with_markers'
         ? (doc.pending_items.length ? 'requires_validation' : 'updated_from_platform')
         : (doc.pending_items.length || originalFileUrl ? 'requires_validation' : 'generated');
       const changeSummary = {
         strategy: artifact.preservation?.mode || (originalFileUrl ? 'generated_tcdx_with_original_preserved' : 'generated_tcdx_new_document'),
         original_file_reference: originalFileUrl,
-        preservation_note: artifact.preservation?.mode === 'updated_original_docx_with_markers'
+        preservation_mode: artifact.preservation?.mode,
+        layout_preserved: artifact.preservation?.layout_preserved,
+        preservation_note: artifact.preservation?.mode === 'preserve_exact_with_markers'
           ? 'Se actualizó una copia DOCX del cliente usando marcadores TCDX compatibles; el original del ZIP se conserva intacto.'
           : originalFileUrl
             ? `El original del cliente se conserva intacto. No se hizo actualización in-place segura (${artifact.preservation?.reason || 'sin marcador compatible'}); se generó versión TCDX.`
@@ -391,6 +397,8 @@ async function generateDocuments({ packageId, user, payload = {} }) {
           mime_type: artifact.mime_type,
           file_size_bytes: artifact.file_size_bytes,
           file_hash: artifact.file_hash,
+          source_docx_filename: artifact.source_docx_filename || null,
+          pdf_conversion: artifact.conversion || null,
           generated_at: new Date().toISOString(),
         },
         original_zip_match: zipMatch || null,
@@ -692,6 +700,100 @@ function sanitizeFileName(value, fallback = 'documento') {
 
 function replacePeriodFolder(folderPath, periodYear) {
   return String(folderPath || '').replace(/\{\{period_year\}\}/g, String(periodYear || ''));
+}
+
+const DOCUMENTARY_SOURCE_TYPES = new Set([
+  'supplier',
+  'supplier_evaluation',
+  'customer_satisfaction',
+  'complaint',
+  'survey',
+  'document_control',
+  'risk',
+  'process',
+  'interested_party',
+  'other',
+]);
+
+function normalizeDocumentarySourceType(value) {
+  const normalized = String(value || 'other').trim().toLowerCase();
+  return DOCUMENTARY_SOURCE_TYPES.has(normalized) ? normalized : 'other';
+}
+
+function sourceTypeFromDetectedDocument(doc) {
+  const text = `${doc.document_type || ''} ${doc.probable_document_category || ''} ${doc.file_name || ''} ${doc.full_path || ''}`.toLowerCase();
+  if (text.includes('proveedor') || text.includes('supplier')) return text.includes('evalu') ? 'supplier_evaluation' : 'supplier';
+  if (text.includes('satisfaccion') || text.includes('satisfacción') || text.includes('cliente')) return 'customer_satisfaction';
+  if (text.includes('reclamo') || text.includes('complaint')) return 'complaint';
+  if (text.includes('encuesta') || text.includes('survey')) return 'survey';
+  if (text.includes('lista maestra') || text.includes('control documental') || text.includes('document_control')) return 'document_control';
+  if (text.includes('riesgo') || text.includes('risk')) return 'risk';
+  if (text.includes('proceso') || text.includes('process')) return 'process';
+  if (text.includes('partes interesadas') || text.includes('interested')) return 'interested_party';
+  return 'other';
+}
+
+async function createDocumentarySourcesFromZip({ packageId, tenantId, auditId, standardCode, periodYear, userId, fileUrl, analysis }) {
+  const detected = Array.isArray(analysis?.detected_documents) ? analysis.detected_documents : [];
+  const rows = detected
+    .map((doc) => ({
+      source_type: sourceTypeFromDetectedDocument(doc),
+      title: doc.file_name || doc.full_path || 'Fuente documental ZIP',
+      description: `Fuente detectada desde ZIP: ${doc.probable_document_category || doc.document_type || 'sin clasificar'}`,
+      status: doc.validity_status === 'vigente' ? 'requires_validation' : 'requires_validation',
+      source_origin: 'zip',
+      source_file_name: doc.full_path || doc.file_name || null,
+      source_file_url: fileUrl ? `${fileUrl}#${doc.full_path || doc.file_name || ''}` : null,
+      extracted_text_preview: doc.text_excerpt || null,
+      metadata_json: {
+        extension: doc.extension,
+        mime_type: doc.mime_type,
+        validity_status: doc.validity_status,
+        matched_template: doc.matched_template || null,
+        crc32: doc.crc32 || null,
+        sha256: doc.sha256 || null,
+        parser: doc.parser || null,
+        parser_details: doc.parser_details || {},
+        extraction_warning: doc.extraction_warning || null,
+      },
+      confidence_score: doc.matched_template ? 0.75 : 0.45,
+    }))
+    .filter((row) => row.source_type !== 'other' || row.extracted_text_preview);
+
+  const inserted = [];
+  for (const row of rows.slice(0, 120)) {
+    const result = await pool.query(
+      `
+      INSERT INTO audit_documentary_sources (
+        package_id, audit_id, tenant_id, standard_code, period_year, source_type,
+        title, description, status, source_origin, source_file_name, source_file_url,
+        extracted_text_preview, metadata_json, confidence_score, created_by
+      )
+      VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::uuid)
+      RETURNING *
+      `,
+      [
+        packageId,
+        auditId,
+        tenantId,
+        standardCode,
+        periodYear,
+        row.source_type,
+        row.title,
+        row.description,
+        row.status,
+        row.source_origin,
+        row.source_file_name,
+        row.source_file_url,
+        row.extracted_text_preview,
+        JSON.stringify(row.metadata_json),
+        row.confidence_score,
+        userId,
+      ]
+    );
+    inserted.push(result.rows[0]);
+  }
+  return inserted;
 }
 
 function getOriginalCandidateFromZip(uploadedZip, matchedFile) {
@@ -1120,6 +1222,137 @@ async function listUploadedZips({ packageId, user }) {
   return result.rows;
 }
 
+async function listDocumentarySources({ user, filters = {} }) {
+  const params = [];
+  const where = [];
+  const tenantId = isPlatform(user) && filters.tenant_id ? filters.tenant_id : getUserTenantId(user);
+  if (!tenantId) throw publicError(400, 'TENANT_REQUIRED', 'tenant_id no disponible');
+  assertTenantAccess(user, tenantId);
+  params.push(tenantId);
+  where.push(`tenant_id = $${params.length}::uuid`);
+
+  if (filters.package_id) {
+    await getPackageForUser(filters.package_id, user);
+    params.push(filters.package_id);
+    where.push(`package_id = $${params.length}::uuid`);
+  }
+  if (filters.standard_code) {
+    params.push(normalizeStandardCode(filters.standard_code));
+    where.push(`standard_code = $${params.length}`);
+  }
+  if (filters.period_year) {
+    params.push(normalizeYear(filters.period_year));
+    where.push(`period_year = $${params.length}`);
+  }
+  if (filters.source_type) {
+    params.push(normalizeDocumentarySourceType(filters.source_type));
+    where.push(`source_type = $${params.length}`);
+  }
+  where.push(`status <> 'inactive'`);
+
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM audit_documentary_sources
+    WHERE ${where.join(' AND ')}
+    ORDER BY updated_at DESC, created_at DESC
+    LIMIT 200
+    `,
+    params
+  );
+  return result.rows;
+}
+
+async function createDocumentarySource({ user, payload = {} }) {
+  const tenantId = isPlatform(user) && payload.tenant_id ? payload.tenant_id : getUserTenantId(user);
+  const standardCode = normalizeStandardCode(payload.standard_code || 'ISO9001');
+  const periodYear = normalizeYear(payload.period_year || new Date().getFullYear());
+  const packageId = payload.package_id || null;
+  const auditId = payload.audit_id || null;
+  const title = String(payload.title || '').trim();
+  if (!tenantId) throw publicError(400, 'TENANT_REQUIRED', 'tenant_id no disponible');
+  if (!title) throw publicError(400, 'DOCUMENTARY_SOURCE_TITLE_REQUIRED', 'title es obligatorio');
+  assertTenantAccess(user, tenantId);
+  if (packageId) await getPackageForUser(packageId, user);
+  await assertAuditBelongsToTenant({ tenantId, auditId });
+
+  const result = await pool.query(
+    `
+    INSERT INTO audit_documentary_sources (
+      package_id, audit_id, tenant_id, standard_code, period_year, source_type,
+      title, description, status, source_origin, source_file_name, source_file_url,
+      extracted_text_preview, metadata_json, confidence_score, created_by
+    )
+    VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::uuid)
+    RETURNING *
+    `,
+    [
+      packageId,
+      auditId,
+      tenantId,
+      standardCode,
+      periodYear,
+      normalizeDocumentarySourceType(payload.source_type),
+      title,
+      payload.description || null,
+      payload.status || 'requires_validation',
+      payload.source_origin || 'manual',
+      payload.source_file_name || null,
+      payload.source_file_url || null,
+      payload.extracted_text_preview || null,
+      JSON.stringify(payload.metadata_json || {}),
+      payload.confidence_score === undefined ? null : Number(payload.confidence_score),
+      getUserId(user),
+    ]
+  );
+  return result.rows[0];
+}
+
+async function updateDocumentarySource({ sourceId, user, payload = {} }) {
+  const current = await pool.query(`SELECT * FROM audit_documentary_sources WHERE id = $1::uuid LIMIT 1`, [sourceId]);
+  const source = current.rows[0];
+  if (!source) throw publicError(404, 'DOCUMENTARY_SOURCE_NOT_FOUND', 'Fuente documental no encontrada');
+  assertTenantAccess(user, source.tenant_id);
+
+  const result = await pool.query(
+    `
+    UPDATE audit_documentary_sources
+    SET
+      source_type = COALESCE($2, source_type),
+      title = COALESCE($3, title),
+      description = COALESCE($4, description),
+      status = COALESCE($5, status),
+      source_origin = COALESCE($6, source_origin),
+      source_file_name = COALESCE($7, source_file_name),
+      source_file_url = COALESCE($8, source_file_url),
+      extracted_text_preview = COALESCE($9, extracted_text_preview),
+      metadata_json = COALESCE($10::jsonb, metadata_json),
+      confidence_score = COALESCE($11, confidence_score),
+      updated_at = now()
+    WHERE id = $1::uuid
+    RETURNING *
+    `,
+    [
+      sourceId,
+      payload.source_type ? normalizeDocumentarySourceType(payload.source_type) : null,
+      payload.title || null,
+      payload.description || null,
+      payload.status || null,
+      payload.source_origin || null,
+      payload.source_file_name || null,
+      payload.source_file_url || null,
+      payload.extracted_text_preview || null,
+      payload.metadata_json ? JSON.stringify(payload.metadata_json) : null,
+      payload.confidence_score === undefined ? null : Number(payload.confidence_score),
+    ]
+  );
+  return result.rows[0];
+}
+
+async function deleteDocumentarySource({ sourceId, user }) {
+  return updateDocumentarySource({ sourceId, user, payload: { status: 'inactive' } });
+}
+
 async function registerUploadedZip({ user, file, payload }) {
   if (!file) throw publicError(400, 'ZIP_FILE_REQUIRED', 'Archivo ZIP requerido');
 
@@ -1207,10 +1440,25 @@ async function registerUploadedZip({ user, file, payload }) {
     [packageId, fileUrl]
   );
 
+  let documentary_sources = [];
+  if (await tableExists('audit_documentary_sources')) {
+    documentary_sources = await createDocumentarySourcesFromZip({
+      packageId,
+      auditId,
+      tenantId,
+      standardCode,
+      periodYear,
+      userId,
+      fileUrl,
+      analysis,
+    });
+  }
+
   return {
     package_id: packageId,
     uploaded_zip: result.rows[0],
     analysis,
+    documentary_sources,
   };
 }
 
@@ -1220,15 +1468,16 @@ async function exportPackage({ packageId, user }) {
   const docs = detail.documents || [];
   const evidences = detail.evidences || [];
   const zips = detail.uploaded_zips || [];
+  const sources = detail.documentary_sources || [];
 
   const root = sanitizeFileName(`Auditoria_${pkg.package_name}_${pkg.standard_code}_${pkg.period_year}`, 'Auditoria_ISO9001');
   const entries = [
     {
-      path: `${root}/00_INDICE_Y_GUIA_DE_USO/README.md`,
+      path: `${root}/README_EXPORT.md`,
       content: buildReadme(pkg, detail),
     },
     {
-      path: `${root}/07_REPORTES_TCDX/00_LISTA_MAESTRA_DOCUMENTAL.xlsx`,
+      path: `${root}/04_LISTA_MAESTRA/00_LISTA_MAESTRA_DOCUMENTAL.xlsx`,
       content: buildMasterListXlsx({ pkg, docs }),
     },
     {
@@ -1236,11 +1485,11 @@ async function exportPackage({ packageId, user }) {
       content: buildEvidenceIndexMarkdown(evidences),
     },
     {
-      path: `${root}/07_REPORTES_TCDX/00_BRECHAS_FINALES_PARA_CIERRE.md`,
+      path: `${root}/06_GAPS_Y_VALIDACIONES/00_BRECHAS_FINALES_PARA_CIERRE.md`,
       content: buildGapsMarkdown(detail),
     },
     {
-      path: `${root}/07_REPORTES_TCDX/00_TRAZABILIDAD_TCDX.json`,
+      path: `${root}/05_TRAZABILIDAD/00_TRAZABILIDAD_TCDX.json`,
       content: JSON.stringify({
         package: pkg,
         completion_summary: detail.completion_summary,
@@ -1257,6 +1506,14 @@ async function exportPackage({ packageId, user }) {
           original_filename: zip.original_filename,
           analysis_status: zip.analysis_status,
           file_hash: zip.file_hash,
+        })),
+        documentary_sources: sources.map((source) => ({
+          source_type: source.source_type,
+          title: source.title,
+          status: source.status,
+          source_origin: source.source_origin,
+          source_file_name: source.source_file_name,
+          confidence_score: source.confidence_score,
         })),
       }, null, 2),
     },
@@ -1277,7 +1534,7 @@ async function exportPackage({ packageId, user }) {
   ];
 
   for (const doc of docs) {
-    const folder = replacePeriodFolder(doc.folder_path, pkg.period_year) || '01_DOCUMENTOS_VIGENTES';
+    const folder = replacePeriodFolder(doc.folder_path, pkg.period_year) || '01_DOCUMENTOS_GENERADOS';
     const artifact = doc.generated_json?.rendered_artifact || {};
     const artifactPath = artifact.filename ? path.join(ensureGeneratedDir(), path.basename(artifact.filename)) : null;
     const format = doc.output_format || artifact.output_format || 'md';
@@ -1289,9 +1546,19 @@ async function exportPackage({ packageId, user }) {
         : (doc.generated_content || `# ${doc.document_name}\n\n[PENDIENTE DE VALIDACIÓN]\n`),
     });
 
+    if (artifact.source_docx_filename) {
+      const sourceDocxPath = path.join(ensureGeneratedDir(), path.basename(artifact.source_docx_filename));
+      if (fs.existsSync(sourceDocxPath)) {
+        entries.push({
+          path: `${root}/03_ANEXOS_TCDX/${sanitizeFileName(doc.document_name)}.source.docx`,
+          content: fs.readFileSync(sourceDocxPath),
+        });
+      }
+    }
+
     if (doc.generated_content) {
       entries.push({
-        path: `${root}/99_RESPALDO_GENERACIONES/${sanitizeFileName(doc.document_name)}.preview.md`,
+        path: `${root}/03_ANEXOS_TCDX/${sanitizeFileName(doc.document_name)}.preview.md`,
         content: doc.generated_content,
       });
     }
@@ -1301,11 +1568,16 @@ async function exportPackage({ packageId, user }) {
     const sourcePath = zip.file_url ? path.join(ensureUploadDir(), path.basename(zip.file_url)) : null;
     if (sourcePath && fs.existsSync(sourcePath)) {
       entries.push({
-        path: `${root}/06_ORIGINALES_CLIENTE_NO_MODIFICADOS/${sanitizeFileName(zip.original_filename, 'original.zip')}`,
+        path: `${root}/02_ORIGINALES_CLIENTE/${sanitizeFileName(zip.original_filename, 'original.zip')}`,
         content: fs.readFileSync(sourcePath),
       });
     }
   }
+
+  entries.push({
+    path: `${root}/05_TRAZABILIDAD/00_FUENTES_DOCUMENTALES_NORMALIZADAS.json`,
+    content: JSON.stringify(sources, null, 2),
+  });
 
   const exportDir = ensureExportDir();
   const exportFileName = `${Date.now()}-${pkg.id}-${sanitizeFileName(pkg.standard_code)}-${pkg.period_year}.zip`;
@@ -1369,6 +1641,10 @@ module.exports = {
   getDocumentFile,
   getDocumentHistory,
   listUploadedZips,
+  listDocumentarySources,
+  createDocumentarySource,
+  updateDocumentarySource,
+  deleteDocumentarySource,
   updateDocumentStatus,
   updateEvidenceStatus,
   registerUploadedZip,

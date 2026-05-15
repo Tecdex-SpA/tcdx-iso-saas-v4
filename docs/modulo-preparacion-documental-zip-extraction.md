@@ -28,6 +28,12 @@ Formatos analizados:
 - PPTX: lectura básica de XML interno
 - TXT/CSV/MD: texto plano
 
+PDF escaneado:
+
+- si `pdf-parse` entrega texto insuficiente, el archivo se marca como candidato OCR;
+- si `AUDIT_OCR_ENABLED=true`, el backend intenta OCR con `pdftoppm` + `tesseract`;
+- si OCR falla o está deshabilitado, el ZIP no falla y se registra gap/warning de revisión humana.
+
 El análisis guarda en `audit_uploaded_zip_files.detected_structure_json`:
 
 - `file_count`
@@ -86,6 +92,23 @@ El análisis registra conflictos razonables para revisión documental:
 - documentos antiguos marcados como vigentes;
 - documentos sin fecha, versión o vigencia confirmable;
 - PDF textual insuficiente marcado como `pdf_scanned_or_low_text`.
+
+## Variables OCR
+
+```env
+AUDIT_OCR_ENABLED=false
+AUDIT_OCR_MAX_PAGES=10
+AUDIT_OCR_LANG=spa+eng
+AUDIT_OCR_TIMEOUT_MS=45000
+PDFTOPPM_BIN=pdftoppm
+TESSERACT_BIN=tesseract
+```
+
+Paquetes Ubuntu:
+
+```bash
+sudo apt-get install -y tesseract-ocr tesseract-ocr-spa tesseract-ocr-eng poppler-utils
+```
 
 ## Limitaciones
 
