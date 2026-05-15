@@ -24,11 +24,12 @@ function zipFileFilter(_req, file, cb) {
   const allowedMimeTypes = new Set([
     'application/zip',
     'application/x-zip-compressed',
+    'application/x-zip',
     'application/octet-stream',
     'multipart/x-zip',
   ]);
 
-  if (ext !== '.zip' || !allowedMimeTypes.has(mimeType)) {
+  if (ext !== '.zip' || (mimeType && !allowedMimeTypes.has(mimeType))) {
     const error = new Error('Solo se permiten archivos ZIP para preparación documental');
     error.code = 'AUDIT_PREPARATION_ZIP_TYPE_NOT_ALLOWED';
     return cb(error);
@@ -72,6 +73,8 @@ router.post('/packages/:id/export', auditPreparationController.exportPackage);
 router.get('/packages/:id/download-export', auditPreparationController.downloadExport);
 router.get('/packages/:id', auditPreparationController.getPackage);
 router.get('/documents/:documentId', auditPreparationController.getDocumentDetail);
+router.get('/documents/:documentId/download', auditPreparationController.downloadDocument);
+router.get('/documents/:documentId/history', auditPreparationController.getDocumentHistory);
 router.patch('/documents/:documentId/status', auditPreparationController.updateDocumentStatus);
 router.patch('/evidences/:evidenceId/status', auditPreparationController.updateEvidenceStatus);
 router.post('/upload-zip', zipUpload, auditPreparationController.uploadZip);

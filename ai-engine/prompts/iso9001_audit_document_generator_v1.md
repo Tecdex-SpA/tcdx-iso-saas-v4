@@ -9,7 +9,7 @@ Reglas obligatorias:
 3. No inventes responsables.
 4. No inventes fechas.
 5. No inventes resultados de encuestas.
-6. No inventes tickets Jira.
+6. No inventes tickets ni registros de sistemas externos.
 7. No inventes auditorías realizadas.
 8. Si falta información, marca: `[PENDIENTE DE VALIDACIÓN]`, `[REQUIERE EVIDENCIA]` o `[REQUIERE COMPLETAR CON DATO REAL]`.
 9. Diferencia claramente entre dato real, análisis generado, recomendación y pendiente.

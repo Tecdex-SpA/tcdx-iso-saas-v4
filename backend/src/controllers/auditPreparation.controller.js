@@ -110,6 +110,31 @@ async function getDocumentDetail(req, res) {
   }
 }
 
+async function downloadDocument(req, res) {
+  try {
+    const file = await auditPreparationService.getDocumentFile({
+      user: req.user,
+      documentId: req.params.documentId,
+    });
+    res.setHeader('Content-Type', file.mime_type || 'application/octet-stream');
+    return res.download(file.path, file.filename);
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+async function getDocumentHistory(req, res) {
+  try {
+    const versions = await auditPreparationService.getDocumentHistory({
+      user: req.user,
+      documentId: req.params.documentId,
+    });
+    return res.json({ ok: true, versions });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
 async function buildContext(req, res) {
   try {
     const context = await auditPreparationService.buildContextForPackage({
@@ -243,6 +268,8 @@ module.exports = {
   getPackageSummary,
   listPackageDocuments,
   getDocumentDetail,
+  downloadDocument,
+  getDocumentHistory,
   buildContext,
   generateDocuments,
   generateEvidenceIndex,

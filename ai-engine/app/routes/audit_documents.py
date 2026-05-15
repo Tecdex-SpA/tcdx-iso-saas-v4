@@ -8,7 +8,7 @@ from app.core.config import settings
 router = APIRouter(prefix="/api/ai-compliance/audit-documents", tags=["Audit Documents"])
 
 
-PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "iso9001_audit_document_generator_v1.md"
+PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 
 
 def validate_internal_token(token: Optional[str]) -> None:
@@ -30,12 +30,18 @@ def to_text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def load_prompt_version() -> str:
+def prompt_path_for_standard(standard_code: str) -> Path:
+    if to_text(standard_code).upper().replace(" ", "") == "ISO27001":
+        return PROMPTS_DIR / "iso27001_audit_document_generator_v1.md"
+    return PROMPTS_DIR / "iso9001_audit_document_generator_v1.md"
+
+
+def load_prompt_version(standard_code: str = "ISO9001") -> str:
     try:
-        text = PROMPT_PATH.read_text(encoding="utf-8")
+        text = prompt_path_for_standard(standard_code).read_text(encoding="utf-8")
         return text[:240]
     except Exception:
-        return "Prompt documental ISO9001 no disponible en disco."
+        return "Prompt documental no disponible en disco."
 
 
 def normalize_marker(text: str, marker: str = "[PENDIENTE DE VALIDACIÓN]") -> str:
@@ -120,7 +126,7 @@ def compact_evidence_lines(context: Dict[str, Any], max_items: int = 10) -> str:
         lines.append(
             f"- {evidence_name(evidence)} (estado: {evidence.get('status') or 'requiere validación'}, tipo: {evidence.get('evidence_type') or evidence.get('file_mime_type') or 'sin clasificar'})"
         )
-    return "\n".join(lines) or "- [REQUIERE EVIDENCIA] No hay evidencias ISO 9001 suficientes vinculadas en plataforma."
+    return "\n".join(lines) or "- [REQUIERE EVIDENCIA] No hay evidencias suficientes vinculadas en plataforma."
 
 
 def source_summary(context: Dict[str, Any]) -> str:
@@ -242,6 +248,40 @@ def build_specific_sections(payload: Dict[str, Any], base: Dict[str, Any]) -> Li
             trace_section,
             pending,
         ]
+
+    if standard_code == "ISO27001":
+        if key == "declaracion_aplicabilidad_soa":
+            controls = safe_list(context.get("controls"))[:30]
+            rows = [
+                [
+                    control.get("clause") or control.get("catalog_control_id") or "control",
+                    control.get("description") or control.get("control_description") or "[PENDIENTE]",
+                    "requiere validación",
+                    "[PENDIENTE DE VALIDACIÓN]",
+                    control.get("effective_health_status") or "sin dato",
+                    "[REQUIERE EVIDENCIA]",
+                ]
+                for control in controls if isinstance(control, dict)
+            ] or [["[PENDIENTE]", "[PENDIENTE]", "requiere validación", "[PENDIENTE]", "sin dato", "[REQUIERE EVIDENCIA]"]]
+            return [identity, {"title": "Declaración de aplicabilidad", "content": markdown_table(["Control", "Descripción", "Aplicabilidad", "Justificación", "Estado", "Evidencia"], rows)}, trace_section, pending]
+
+        if key == "matriz_riesgos_sgsi":
+            risks = safe_list(context.get("risks"))[:20]
+            rows = [
+                [risk.get("title") or "Riesgo SGSI", risk.get("description") or "[PENDIENTE]", risk.get("severity") or "media", risk.get("status") or "requires_validation", risk.get("disclaimer") or "[PENDIENTE DE VALIDACIÓN]"]
+                for risk in risks if isinstance(risk, dict)
+            ] or [["[PENDIENTE]", "[PENDIENTE]", "media", "requires_validation", "No existe matriz formal aprobada."]]
+            return [identity, {"title": "Matriz de riesgos SGSI", "content": markdown_table(["Riesgo", "Descripción", "Severidad", "Estado", "Observación"], rows)}, trace_section, pending]
+
+        if key in {"politica_seguridad_informacion", "alcance_sgsi", "procedimiento_gestion_incidentes_seguridad", "procedimiento_control_accesos", "revision_direccion_sgsi", "programa_auditoria_interna_sgsi", "indice_evidencias_sgsi"}:
+            return [
+                identity,
+                {"title": "Propósito y alcance", "content": f"Documento base {standard_code} generado para {tenant_name}. Usar solo como borrador hasta validar alcance, controles aplicables y evidencias."},
+                {"title": "Datos reales disponibles", "content": f"{compact_control_lines(context, 10)}\n\n{compact_evidence_lines(context, 10)}"},
+                {"title": "Requisitos de seguridad a validar", "content": "Confirmar activos, riesgos, controles aplicables, incidentes, responsables, métricas, revisiones y evidencias antes de publicación."},
+                trace_section,
+                pending,
+            ]
 
     return []
 
@@ -425,7 +465,8 @@ def sections_to_markdown(title: str, sections: List[Dict[str, Any]]) -> str:
 def build_document(payload: Dict[str, Any]) -> Dict[str, Any]:
     template = safe_dict(payload.get("document_template"))
     context = safe_dict(payload.get("context"))
-    title = template.get("document_name") or "Documento de auditoría ISO 9001"
+    standard_code = to_text(payload.get("standard_code") or "ISO9001").upper().replace(" ", "")
+    title = template.get("document_name") or f"Documento de auditoría {standard_code}"
     sections = build_sections(payload)
     pending_items = extract_pending_items(context, template)
     evidence_suggestions = build_evidence_suggestions(context, template)
@@ -440,9 +481,9 @@ def build_document(payload: Dict[str, Any]) -> Dict[str, Any]:
             "template_key": template.get("template_key"),
             "document_type": template.get("document_type"),
             "generation_scope": payload.get("generation_scope") or "general_preparation",
-            "prompt_reference": "iso9001_audit_document_generator_v1",
+            "prompt_reference": "iso27001_audit_document_generator_v1" if standard_code == "ISO27001" else "iso9001_audit_document_generator_v1",
             "rules_applied": safe_dict(payload.get("generation_rules")),
-            "prompt_preview": load_prompt_version(),
+            "prompt_preview": load_prompt_version(standard_code),
         },
         "pending_items": pending_items,
         "evidence_suggestions": evidence_suggestions,

@@ -202,8 +202,8 @@ La regla sigue siendo conservadora: no inventar proveedores, responsables, fecha
 
 ## Limitaciones actuales
 
-- El ZIP se inventaría y se mapea por estructura/nombre, pero no extrae texto profundo desde DOCX/PDF.
-- La exportación inicial usa Markdown dentro del ZIP; DOCX/XLSX/PDF quedan para una evolución posterior.
+- La pasada de cierre funcional avanzado ya agrega extracción textual básica desde ZIP para DOCX/PDF/XLSX/PPTX y artefactos reales DOCX/XLSX/PPTX/PDF/MD según plantilla.
+- La edición in-place preservando formato exacto del DOCX original sigue condicionada a documentos con estructura/marcadores compatibles; por defecto se conserva el original intacto y se genera versión TCDX nueva.
 - La generación sigue siendo determinística y segura; un refinamiento LLM puede añadirse después usando el mismo contrato.
 - Fuentes inexistentes como proveedores, satisfacción cliente o riesgos se muestran como brechas accionables, no como errores.
 

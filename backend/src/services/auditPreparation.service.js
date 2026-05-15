@@ -1,8 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const XLSX = require('xlsx');
 const pool = require('../config/db');
 const aiEngineClient = require('./aiEngineClient.service');
+const { analyzeUploadedZip } = require('./auditZipExtraction.service');
+const { renderDocumentArtifact, ensureGeneratedDir } = require('./auditDocumentRenderer.service');
 const {
   buildAuditPreparationContext,
   getUserTenantId,
@@ -327,6 +330,11 @@ async function generateDocuments({ packageId, user, payload = {} }) {
     errors: [],
     documents: [],
   };
+  const zipMatches = new Map(
+    ((context.uploaded_zip?.detected_structure_json?.matched_templates) || [])
+      .filter((item) => item && item.template_key)
+      .map((item) => [item.template_key, item])
+  );
 
   for (const template of templates.rows) {
     const requestPayload = {
@@ -356,10 +364,37 @@ async function generateDocuments({ packageId, user, payload = {} }) {
       const aiResult = await aiEngineClient.generateAuditDocument(requestPayload);
       const doc = normalizeAiDocument(aiResult, template, pkg.period_year);
       const status = doc.pending_items.length ? 'requires_validation' : 'generated';
+      const artifact = await renderDocumentArtifact({ pkg, template, document: doc });
+      const documentId = crypto.randomUUID();
+      const generatedFileUrl = `/api/audit-preparation/documents/${documentId}/download`;
+      const zipMatch = zipMatches.get(template.template_key);
+      const originalFileUrl = zipMatch && context.uploaded_zip?.file_url
+        ? `${context.uploaded_zip.file_url}#${zipMatch.matched_file}`
+        : null;
+      const changeSummary = {
+        strategy: originalFileUrl ? 'generated_tcdx_with_original_preserved' : 'generated_tcdx_new_document',
+        original_file_reference: originalFileUrl,
+        preservation_note: originalFileUrl
+          ? 'El original del cliente se conserva intacto dentro del ZIP importado. Esta versión genera un documento nuevo TCDX; la edición preservando formato original queda condicionada a extracción/plantillas compatibles.'
+          : 'No se encontró original compatible en ZIP; se generó documento nuevo con formato TCDX.',
+      };
+      const generatedJson = {
+        ...(doc.content_json || {}),
+        rendered_artifact: {
+          filename: artifact.filename,
+          output_format: artifact.output_format,
+          mime_type: artifact.mime_type,
+          file_size_bytes: artifact.file_size_bytes,
+          file_hash: artifact.file_hash,
+          generated_at: new Date().toISOString(),
+        },
+        original_zip_match: zipMatch || null,
+      };
 
       const inserted = await pool.query(
         `
         INSERT INTO audit_package_documents (
+          id,
           package_id,
           audit_id,
           template_id,
@@ -368,17 +403,28 @@ async function generateDocuments({ packageId, user, payload = {} }) {
           document_name,
           folder_path,
           document_status,
+          original_file_url,
+          generated_file_url,
+          output_format,
+          mime_type,
+          file_size_bytes,
+          file_hash,
+          version,
+          revision_number,
+          prepared_by,
           generated_content,
           generated_json,
           pending_items_json,
           evidence_links_json,
           source_trace_json,
+          change_summary_json,
           created_by
         )
-        VALUES ($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13::jsonb,$14::uuid)
+        VALUES ($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::uuid,$19,$20::jsonb,$21::jsonb,$22::jsonb,$23::jsonb,$24::jsonb,$25::uuid)
         RETURNING *
         `,
         [
+          documentId,
           pkg.id,
           pkg.audit_id,
           template.id,
@@ -387,11 +433,21 @@ async function generateDocuments({ packageId, user, payload = {} }) {
           doc.title,
           template.folder_path,
           status,
+          originalFileUrl,
+          generatedFileUrl,
+          artifact.output_format,
+          artifact.mime_type,
+          artifact.file_size_bytes,
+          artifact.file_hash,
+          doc.version || template.version || '1.0',
+          1,
+          userId,
           doc.content_markdown,
-          JSON.stringify(doc.content_json),
+          JSON.stringify(generatedJson),
           JSON.stringify(doc.pending_items),
           JSON.stringify(doc.evidence_suggestions),
           JSON.stringify(doc.source_trace),
+          JSON.stringify(changeSummary),
           userId,
         ]
       );
@@ -556,7 +612,7 @@ async function getGaps({ packageId, user }) {
 }
 
 async function updateDocumentStatus({ documentId, documentStatus, user }) {
-  const allowed = ['draft', 'imported', 'analyzed', 'generated', 'updated_from_platform', 'requires_validation', 'approved', 'exported'];
+  const allowed = ['draft', 'imported', 'analyzed', 'generated', 'updated_from_platform', 'requires_validation', 'in_review', 'approved', 'rejected', 'obsolete', 'superseded', 'published', 'exported'];
   const status = normalizeStatus(documentStatus, allowed, '');
   if (!status) throw publicError(400, 'INVALID_DOCUMENT_STATUS', 'Estado documental inválido');
 
@@ -568,11 +624,17 @@ async function updateDocumentStatus({ documentId, documentStatus, user }) {
   const result = await pool.query(
     `
     UPDATE audit_package_documents
-    SET document_status = $2, updated_at = now()
+    SET
+      document_status = $2,
+      reviewed_by = CASE WHEN $2 IN ('in_review', 'rejected') THEN $3::uuid ELSE reviewed_by END,
+      approved_by = CASE WHEN $2 IN ('approved', 'published') THEN $3::uuid ELSE approved_by END,
+      approved_at = CASE WHEN $2 IN ('approved', 'published') THEN now() ELSE approved_at END,
+      is_current = CASE WHEN $2 IN ('obsolete', 'superseded') THEN false ELSE is_current END,
+      updated_at = now()
     WHERE id = $1::uuid
     RETURNING *
     `,
-    [documentId, status]
+    [documentId, status, getUserId(user)]
   );
   return result.rows[0];
 }
@@ -875,6 +937,48 @@ function buildEvidenceIndexMarkdown(evidences) {
   ].join('\n');
 }
 
+function buildMasterListXlsx({ pkg, docs }) {
+  const rows = [
+    ['Código documental', 'Nombre', 'Tipo/formato', 'Norma', 'Versión', 'Revisión', 'Estado', 'Carpeta', 'Origen', 'Hash', 'Pendientes'],
+    ...(docs || []).map((doc, index) => [
+      `${pkg.standard_code}-${String(index + 1).padStart(3, '0')}`,
+      doc.document_name,
+      doc.output_format || 'md',
+      pkg.standard_code,
+      doc.version || '1.0',
+      doc.revision_number || 1,
+      doc.document_status,
+      replacePeriodFolder(doc.folder_path, pkg.period_year),
+      doc.original_file_url ? 'actualizado desde original cliente' : 'generado TCDX',
+      doc.file_hash || '',
+      Array.isArray(doc.pending_items_json) ? doc.pending_items_json.length : 0,
+    ]),
+  ];
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet['!cols'] = [
+    { wch: 18 }, { wch: 42 }, { wch: 14 }, { wch: 12 }, { wch: 10 },
+    { wch: 10 }, { wch: 18 }, { wch: 46 }, { wch: 30 }, { wch: 18 }, { wch: 12 },
+  ];
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Lista maestra');
+  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+}
+
+function buildGapsMarkdown(detail) {
+  const summary = detail.completion_summary || {};
+  const gaps = summary.gaps || [];
+  return [
+    '# Brechas finales para cierre',
+    '',
+    `Readiness: ${summary.readiness_status || 'pending'} (${summary.estimated_readiness_score ?? 'pendiente'})`,
+    '',
+    '| Severidad | Fuente | Mensaje |',
+    '| --- | --- | --- |',
+    ...(Array.isArray(gaps) ? gaps : []).map((gap) => `| ${gap.severity || '-'} | ${gap.source || '-'} | ${String(gap.message || '').replace(/\|/g, '/')} |`),
+    '',
+  ].join('\n');
+}
+
 async function getPackageSummary({ packageId, user }) {
   const detail = await getPackageDetail({ packageId, user });
   const summary = detail.completion_summary || {};
@@ -903,7 +1007,9 @@ async function listPackageDocuments({ packageId, user }) {
   const result = await pool.query(
     `
     SELECT id, package_id, template_id, document_name, folder_path, document_status,
-      pending_items_json, evidence_links_json, created_at, updated_at
+      generated_file_url, output_format, mime_type, file_size_bytes, file_hash,
+      version, revision_number, is_current, pending_items_json, evidence_links_json,
+      created_at, updated_at, approved_at
     FROM audit_package_documents
     WHERE package_id = $1::uuid
     ORDER BY folder_path, document_name
@@ -919,6 +1025,36 @@ async function getDocumentDetail({ documentId, user }) {
   if (!doc) throw publicError(404, 'DOCUMENT_NOT_FOUND', 'Documento no encontrado');
   assertTenantAccess(user, doc.tenant_id);
   return doc;
+}
+
+async function getDocumentFile({ documentId, user }) {
+  const doc = await getDocumentDetail({ documentId, user });
+  const artifact = doc.generated_json?.rendered_artifact || {};
+  if (!artifact.filename) throw publicError(404, 'DOCUMENT_FILE_NOT_FOUND', 'El documento no tiene archivo generado');
+  const filePath = path.join(ensureGeneratedDir(), path.basename(artifact.filename));
+  if (!fs.existsSync(filePath)) throw publicError(404, 'DOCUMENT_FILE_NOT_FOUND', 'Archivo generado no encontrado en disco');
+  return {
+    path: filePath,
+    filename: `${sanitizeFileName(doc.document_name)}.${doc.output_format || artifact.output_format || 'docx'}`,
+    mime_type: doc.mime_type || artifact.mime_type || 'application/octet-stream',
+  };
+}
+
+async function getDocumentHistory({ documentId, user }) {
+  const doc = await getDocumentDetail({ documentId, user });
+  const result = await pool.query(
+    `
+    SELECT id, document_name, document_status, version, revision_number, is_current,
+      created_at, updated_at, approved_at, supersedes_document_id
+    FROM audit_package_documents
+    WHERE package_id = $1::uuid
+      AND COALESCE(template_id::text, '') = COALESCE($2::text, '')
+      AND document_name = $3
+    ORDER BY revision_number DESC, created_at DESC
+    `,
+    [doc.package_id, doc.template_id, doc.document_name]
+  );
+  return result.rows;
 }
 
 async function listUploadedZips({ packageId, user }) {
@@ -968,8 +1104,11 @@ async function registerUploadedZip({ user, file, payload }) {
   const hash = crypto.createHash('sha256').update(fs.readFileSync(file.path)).digest('hex');
   const fileUrl = `/uploads/audit-preparation-zips/${path.basename(file.path)}`;
   const templates = await listTemplates({ standardCode });
-  const inventory = parseZipInventory(file.path);
-  const analysis = analyzeZipAgainstTemplates(inventory, templates);
+  const analysis = await analyzeUploadedZip({ filePath: file.path, templates });
+  const gaps = [
+    ...(analysis.warnings || []).map((message) => ({ severity: 'media', source: 'uploaded_zip', message })),
+    ...(analysis.conflicts || []).map((conflict) => ({ severity: 'alta', source: 'uploaded_zip', message: conflict.message, files: conflict.files })),
+  ];
 
   const result = await pool.query(
     `
@@ -1002,7 +1141,7 @@ async function registerUploadedZip({ user, file, payload }) {
       hash,
       JSON.stringify(analysis.detected_documents),
       JSON.stringify(analysis),
-      JSON.stringify(analysis.warnings || []),
+      JSON.stringify(gaps),
       userId,
     ]
   );
@@ -1031,6 +1170,7 @@ async function exportPackage({ packageId, user }) {
   const pkg = detail.package;
   const docs = detail.documents || [];
   const evidences = detail.evidences || [];
+  const zips = detail.uploaded_zips || [];
 
   const root = sanitizeFileName(`Auditoria_${pkg.package_name}_${pkg.standard_code}_${pkg.period_year}`, 'Auditoria_ISO9001');
   const entries = [
@@ -1039,7 +1179,19 @@ async function exportPackage({ packageId, user }) {
       content: buildReadme(pkg, detail),
     },
     {
-      path: `${root}/00_INDICE_Y_GUIA_DE_USO/00_INVENTARIO_DOCUMENTAL.json`,
+      path: `${root}/07_REPORTES_TCDX/00_LISTA_MAESTRA_DOCUMENTAL.xlsx`,
+      content: buildMasterListXlsx({ pkg, docs }),
+    },
+    {
+      path: `${root}/03_EVIDENCIAS_PARA_VALIDAR/00_INDICE_EVIDENCIAS.md`,
+      content: buildEvidenceIndexMarkdown(evidences),
+    },
+    {
+      path: `${root}/07_REPORTES_TCDX/00_BRECHAS_FINALES_PARA_CIERRE.md`,
+      content: buildGapsMarkdown(detail),
+    },
+    {
+      path: `${root}/07_REPORTES_TCDX/00_TRAZABILIDAD_TCDX.json`,
       content: JSON.stringify({
         package: pkg,
         completion_summary: detail.completion_summary,
@@ -1048,12 +1200,16 @@ async function exportPackage({ packageId, user }) {
           document_name: doc.document_name,
           folder_path: replacePeriodFolder(doc.folder_path, pkg.period_year),
           status: doc.document_status,
+          output_format: doc.output_format,
+          file_hash: doc.file_hash,
+          source_trace: doc.source_trace_json,
+        })),
+        uploaded_zips: zips.map((zip) => ({
+          original_filename: zip.original_filename,
+          analysis_status: zip.analysis_status,
+          file_hash: zip.file_hash,
         })),
       }, null, 2),
-    },
-    {
-      path: `${root}/03_EVIDENCIAS_PARA_VALIDAR/00_INDICE_EVIDENCIAS.md`,
-      content: buildEvidenceIndexMarkdown(evidences),
     },
     {
       path: `${root}/00_INDICE_Y_GUIA_DE_USO/00_PENDIENTES_PARA_AUDITORIA.md`,
@@ -1073,11 +1229,33 @@ async function exportPackage({ packageId, user }) {
 
   for (const doc of docs) {
     const folder = replacePeriodFolder(doc.folder_path, pkg.period_year) || '01_DOCUMENTOS_VIGENTES';
-    const fileName = `${sanitizeFileName(doc.document_name)}.md`;
+    const artifact = doc.generated_json?.rendered_artifact || {};
+    const artifactPath = artifact.filename ? path.join(ensureGeneratedDir(), path.basename(artifact.filename)) : null;
+    const format = doc.output_format || artifact.output_format || 'md';
+    const fileName = `${sanitizeFileName(doc.document_name)}.${format}`;
     entries.push({
       path: `${root}/${folder}/${fileName}`,
-      content: doc.generated_content || `# ${doc.document_name}\n\n[PENDIENTE DE VALIDACIÓN]\n`,
+      content: artifactPath && fs.existsSync(artifactPath)
+        ? fs.readFileSync(artifactPath)
+        : (doc.generated_content || `# ${doc.document_name}\n\n[PENDIENTE DE VALIDACIÓN]\n`),
     });
+
+    if (doc.generated_content) {
+      entries.push({
+        path: `${root}/99_RESPALDO_GENERACIONES/${sanitizeFileName(doc.document_name)}.preview.md`,
+        content: doc.generated_content,
+      });
+    }
+  }
+
+  for (const zip of zips) {
+    const sourcePath = zip.file_url ? path.join(ensureUploadDir(), path.basename(zip.file_url)) : null;
+    if (sourcePath && fs.existsSync(sourcePath)) {
+      entries.push({
+        path: `${root}/06_ORIGINALES_CLIENTE_NO_MODIFICADOS/${sanitizeFileName(zip.original_filename, 'original.zip')}`,
+        content: fs.readFileSync(sourcePath),
+      });
+    }
   }
 
   const exportDir = ensureExportDir();
@@ -1139,6 +1317,8 @@ module.exports = {
   getPackageSummary,
   listPackageDocuments,
   getDocumentDetail,
+  getDocumentFile,
+  getDocumentHistory,
   listUploadedZips,
   updateDocumentStatus,
   updateEvidenceStatus,

@@ -4,7 +4,7 @@
 
 El módulo queda usable desde `/auditorias` mediante la pestaña **Preparación documental**. La implementación permite crear paquetes documentales ISO 9001, construir contexto desde datos reales del tenant, generar documentos, revisar pendientes, aprobar borradores, generar índice de evidencias, subir un ZIP documental existente y exportar un paquete ZIP inicial.
 
-No se agregó SQL nuevo en esta pasada de cierre. Se reutilizan las tablas y seeds ya aplicados en fases anteriores.
+La pasada avanzada agrega salida real de documentos, extracción profunda básica desde ZIP, versionado/aprobación y base inicial ISO 27001:2022.
 
 ## Archivos principales
 
@@ -13,6 +13,8 @@ No se agregó SQL nuevo en esta pasada de cierre. Se reutilizan las tablas y see
 | `frontend/src/app/auditorias/page.tsx` | Agrega la pestaña Preparación documental. |
 | `frontend/src/components/auditorias/AuditPreparationPanel.tsx` | UI completa de paquetes, contexto, documentos, evidencias, ZIP y export. |
 | `backend/src/services/auditPreparation.service.js` | Agrega inventario ZIP, resumen, documentos livianos, export y descarga. |
+| `backend/src/services/auditZipExtraction.service.js` | Extrae estructura y texto básico desde ZIP/DOCX/PDF/XLSX/PPTX. |
+| `backend/src/services/auditDocumentRenderer.service.js` | Renderiza DOCX/XLSX/PPTX/PDF/MD reales para documentos generados. |
 | `backend/src/services/auditPreparationContext.service.js` | Agrega resúmenes de controles, evidencias, auditorías, acciones y guía documental. |
 | `backend/src/controllers/auditPreparation.controller.js` | Expone nuevos handlers de summary, documents, uploaded-zips, export y download. |
 | `backend/src/routes/auditPreparation.routes.js` | Registra endpoints adicionales. |
@@ -52,16 +54,18 @@ Frontend debe mantener la variable existente de URL API si se usa en el entorno 
 
 ## BD - SQL nuevo
 
-**NO.**
+**SI.**
 
-No se requiere ejecutar SQL nuevo para esta pasada. Las tablas requeridas ya son:
+Antes de probar esta pasada avanzada se debe ejecutar:
 
-- `audit_preparation_packages`
-- `audit_document_templates`
-- `audit_package_documents`
-- `audit_evidence_index`
-- `audit_document_generation_runs`
-- `audit_uploaded_zip_files`
+```bash
+cd /home/tecdex/tcdx-iso-saas
+psql -d tecdex_saas -f database/migrations/20260515_audit_preparation_formats_versioning.sql
+psql -d tecdex_saas -f database/seeds/20260515_seed_audit_document_templates_iso9001.sql
+psql -d tecdex_saas -f database/seeds/20260515_seed_audit_document_templates_iso27001.sql
+```
+
+La migración agrega campos de archivo real, hash, formato, versión, revisión, revisión/aprobación, vigencia, obsolescencia y estado actual en `audit_package_documents`. Los seeds dejan ISO 9001 sin dependencia funcional de Jira y agregan plantillas mínimas ISO 27001.
 
 ## Validaciones BD
 
@@ -90,6 +94,10 @@ SELECT original_filename, standard_code, period_year, analysis_status, created_a
 FROM audit_uploaded_zip_files
 ORDER BY created_at DESC
 LIMIT 5;
+
+SELECT COUNT(*) AS templates_iso27001
+FROM audit_document_templates
+WHERE standard_code = 'ISO27001';
 ```
 
 ## Pruebas curl
@@ -236,7 +244,8 @@ npm start
 
 ## Limitaciones conocidas
 
-- El análisis de ZIP no extrae contenido profundo de DOCX/PDF; inventaría y mapea por estructura/nombre.
-- La exportación genera Markdown dentro del ZIP, no DOCX/XLSX todavía.
+- La extracción ZIP obtiene texto de DOCX/PDF/XLSX/PPTX cuando el archivo y parser lo permiten; no ejecuta macros ni modifica originales.
+- La preservación de formato original queda en modo conservador: el ZIP original se conserva intacto y el sistema genera una versión TCDX nueva. La edición in-place preservando estilos del DOCX original requiere plantillas/markers compatibles y queda como evolución.
+- La exportación incluye documentos reales DOCX/XLSX/PPTX/PDF/MD según plantilla, más preview Markdown en respaldo.
 - Las fuentes que no existen en el schema real se muestran como brechas accionables.
 - El refinamiento con LLM puede mejorar redacción más adelante, pero el flujo no depende de Ollama para quedar usable.

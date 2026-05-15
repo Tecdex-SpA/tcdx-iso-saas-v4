@@ -166,6 +166,55 @@ function buildDocumentGuidance({ templates, evidences, controls, gaps }) {
   };
 }
 
+function buildRiskFallback({ controls, findings, nonconformities, actionPlans, uploadedZipRows }) {
+  const inferred = [];
+  for (const control of (controls || []).filter((row) => toNumber(row.effective_health_score, 100) < 60).slice(0, 12)) {
+    inferred.push({
+      source: 'controls_fallback',
+      title: `Riesgo inferido por bajo desempeño de control ${control.clause || ''}`.trim(),
+      description: control.control_description || 'Control con baja salud efectiva requiere análisis formal de riesgo.',
+      severity: toNumber(control.effective_health_score, 100) < 40 ? 'alta' : 'media',
+      status: 'requires_formal_risk_matrix_validation',
+      related_control_id: control.tenant_control_id,
+      disclaimer: 'Inferencia operativa para preparación documental; no reemplaza una matriz formal aprobada.',
+    });
+  }
+  for (const item of [...(findings || []), ...(nonconformities || [])].slice(0, 8)) {
+    inferred.push({
+      source: 'findings_nonconformities_fallback',
+      title: item.title || item.description || 'Hallazgo/no conformidad requiere evaluación de riesgo',
+      description: item.description || item.title || '',
+      severity: item.severity || 'media',
+      status: item.status || 'requires_validation',
+      disclaimer: 'Inferencia operativa para preparación documental; no reemplaza una matriz formal aprobada.',
+    });
+  }
+  for (const action of (actionPlans || []).filter((row) => !['closed', 'cerrado', 'completed', 'completado'].includes(String(row.status || '').toLowerCase())).slice(0, 8)) {
+    inferred.push({
+      source: 'action_plans_fallback',
+      title: action.title || 'Acción abierta requiere evaluación de riesgo',
+      description: action.description || '',
+      severity: action.priority || 'media',
+      status: action.status || 'open',
+      disclaimer: 'Inferencia operativa para preparación documental; no reemplaza una matriz formal aprobada.',
+    });
+  }
+  for (const zip of uploadedZipRows || []) {
+    const conflicts = zip.detected_structure_json?.conflicts || [];
+    for (const conflict of conflicts.slice(0, 5)) {
+      inferred.push({
+        source: 'uploaded_zip_conflicts',
+        title: conflict.message || 'Conflicto documental en ZIP',
+        description: Array.isArray(conflict.files) ? conflict.files.join(', ') : '',
+        severity: 'media',
+        status: 'requires_validation',
+        disclaimer: 'Riesgo documental inferido desde ZIP importado.',
+      });
+    }
+  }
+  return inferred;
+}
+
 async function tableExists(tableName) {
   const result = await pool.query(
     `
@@ -244,7 +293,9 @@ async function safeQuerySource({
       queried_at: new Date().toISOString(),
     };
     const message = key === 'risks'
-      ? 'No existe tabla risks; se requiere mapear matriz de riesgos desde la estructura real del sistema o módulo equivalente.'
+      ? 'No existe una matriz formal de riesgos en el esquema actual; se usará fallback desde controles, hallazgos, no conformidades, acciones y ZIP sin reemplazar la matriz aprobada.'
+      : key === 'jira_items'
+        ? 'Fuente futura de tickets no configurada; no se usa como dependencia funcional de esta etapa.'
       : `Fuente ${key} no disponible en este entorno.`;
     gaps.push(publicGap(key, message));
     return [];
@@ -533,7 +584,7 @@ async function buildAuditPreparationContext({
     safeQuerySource({ ...common, key: 'documents.templates', table: 'audit_document_templates', tenantId, tenantScoped: false, dateFilter: false, columns: ['id', 'template_key', 'document_name', 'document_type', 'output_format', 'folder_path', 'template_schema_json'], standardColumns: ['standard_code'], limit: 100 }),
     safeQuerySource({ ...common, key: 'documents.packages', table: 'audit_preparation_packages', tenantId, columns: ['id', 'audit_id', 'standard_code', 'period_year', 'package_name', 'status', 'package_source', 'summary_json', 'updated_at'], limit: 20 }),
     safeQuerySource({ ...common, key: 'documents.package_documents', table: 'audit_package_documents', tenantId, columns: ['id', 'package_id', 'audit_id', 'standard_code', 'document_name', 'folder_path', 'document_status', 'pending_items_json', 'evidence_links_json', 'updated_at'], limit: 50 }),
-    safeQuerySource({ ...common, key: 'uploaded_zip', table: 'audit_uploaded_zip_files', tenantId, columns: ['id', 'package_id', 'audit_id', 'standard_code', 'period_year', 'original_filename', 'file_url', 'analysis_status', 'inventory_json', 'gaps_json', 'created_at'], limit: 10 }),
+    safeQuerySource({ ...common, key: 'uploaded_zip', table: 'audit_uploaded_zip_files', tenantId, columns: ['id', 'package_id', 'audit_id', 'standard_code', 'period_year', 'original_filename', 'file_url', 'file_hash', 'analysis_status', 'inventory_json', 'detected_structure_json', 'gaps_json', 'created_at'], limit: 10 }),
     safeQuerySource({ ...common, key: 'risks', table: 'risks', tenantId, columns: ['id', 'title', 'name', 'description', 'severity', 'risk_level', 'status', 'owner_id', 'created_at', 'updated_at'], limit: 25 }),
     safeQuerySource({ ...common, key: 'controls', table: 'v_iso_control_effective_health', tenantId, columns: ['tenant_control_id', 'catalog_control_id', 'iso', 'standard_code', 'clause', 'control_description', 'effective_health_score', 'effective_health_status', 'evidence_count', 'official_evidence_count', 'open_findings_count', 'open_nonconformities_count', 'overdue_action_plans_count', 'is_in_active_operational_scope'], standardColumns: ['standard_code', 'iso'], limit: 50 }),
     safeQuerySource({ ...common, key: 'evidences', table: 'evidences', tenantId, columns: ['id', 'title', 'name', 'description', 'file_name', 'file_path', 'status', 'validated', 'evidence_type', 'file_url', 'file_mime_type', 'file_size_bytes', 'tenant_control_id', 'control_id', 'created_at', 'reviewed_at', 'expires_at', 'updated_at'], limit: 50 }),
@@ -553,10 +604,23 @@ async function buildAuditPreparationContext({
   const availableSources = sourceEntries.filter((item) => item.available);
   const recordsFound = sourceEntries.reduce((acc, item) => acc + Number(item.records_count || 0), 0);
   const criticalGaps = gaps.filter((gap) => gap.severity === 'alta' || gap.severity === 'critica');
+  const riskFallback = risks.length ? risks : buildRiskFallback({ controls, findings, nonconformities, actionPlans, uploadedZipRows });
+
+  if (!risks.length && riskFallback.length) {
+    gaps.push(publicGap('risks_fallback', 'Se generó una lectura de riesgos inferida desde controles, hallazgos, no conformidades, acciones y ZIP. Debe validarse como matriz formal antes de auditoría.', 'media'));
+  }
+
+  if (controls.length && controls.every((control) => control.is_in_active_operational_scope === false)) {
+    gaps.push(publicGap(
+      'controls_scope',
+      'Todos los controles consultados aparecen fuera de alcance operativo activo. Revisar operaciones activas, tenant_controls y configuración de alcance antes de usar estos documentos como evidencia vigente.',
+      'alta'
+    ));
+  }
 
   const documentRatio = templates.length ? Math.min(1, packageDocuments.length / templates.length) : 0;
   const evidenceRatio = Math.min(1, evidences.length / 10);
-  const operationalRatio = Math.min(1, (risks.length + actionPlans.length + kpis.length) / 15);
+  const operationalRatio = Math.min(1, (riskFallback.length + actionPlans.length + kpis.length) / 15);
   const criticalGapRatio = criticalGaps.length ? 0 : 1;
   const score = Math.round((documentRatio * 40) + (evidenceRatio * 30) + (operationalRatio * 20) + (criticalGapRatio * 10));
 
@@ -569,15 +633,20 @@ async function buildAuditPreparationContext({
     critical_gaps_count: criticalGaps.length,
     estimated_readiness_score: score,
     readiness_status:
-      score >= 90 ? 'audit_ready' :
-      score >= 75 ? 'advanced' :
+      score >= 90 ? 'ready' :
+      score >= 75 ? 'ready_with_observations' :
       score >= 50 ? 'partial' :
       'insufficient',
+    documents_generated: packageDocuments.filter((doc) => ['generated', 'requires_validation', 'approved', 'published', 'exported'].includes(doc.document_status)).length,
+    documents_pending_validation: packageDocuments.filter((doc) => doc.document_status === 'requires_validation').length,
+    documents_approved: packageDocuments.filter((doc) => ['approved', 'published', 'exported'].includes(doc.document_status)).length,
+    zip_conflicts_count: uploadedZipRows.reduce((acc, zip) => acc + Number(zip.detected_structure_json?.conflicts?.length || 0), 0),
+    zip_duplicates_count: uploadedZipRows.reduce((acc, zip) => acc + Number(zip.detected_structure_json?.duplicates?.length || 0), 0),
   };
 
   if (!templates.length) pendingItems.push('[REQUIERE COMPLETAR CON DATO REAL] No hay plantillas documentales activas para la norma.');
   if (!evidences.length) pendingItems.push('[REQUIERE EVIDENCIA] No se encontraron evidencias para el paquete documental.');
-  if (!risks.length) pendingItems.push('[PENDIENTE DE VALIDACIÓN] No se encontraron riesgos de calidad disponibles.');
+  if (!risks.length) pendingItems.push('[PENDIENTE DE VALIDACIÓN] No se encontró matriz formal de riesgos; se usará fallback inferido solo como apoyo documental.');
 
   const controlSummary = buildControlSummary(controls);
   const evidenceSummary = buildEvidenceSummary(evidences);
@@ -600,7 +669,7 @@ async function buildAuditPreparationContext({
       packages,
       package_documents: packageDocuments,
     },
-    risks,
+    risks: riskFallback,
     controls,
     evidences,
     audits,

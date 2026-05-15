@@ -32,6 +32,13 @@ type DocumentRow = {
   document_name: string;
   folder_path: string;
   document_status: string;
+  generated_file_url?: string | null;
+  output_format?: string | null;
+  mime_type?: string | null;
+  file_size_bytes?: number | null;
+  version?: string | null;
+  revision_number?: number | null;
+  approved_at?: string | null;
   generated_content?: string | null;
   pending_items_json?: unknown[];
   evidence_links_json?: unknown[];
@@ -68,6 +75,8 @@ type UploadedZipRow = {
   created_at?: string | null;
 };
 
+const maxZipBytes = 50 * 1024 * 1024;
+
 function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}` };
 }
@@ -100,6 +109,11 @@ function readinessColor(score: number) {
   if (score >= 75) return 'bg-blue-500';
   if (score >= 50) return 'bg-amber-500';
   return 'bg-rose-500';
+}
+
+function jsonArrayCount(record: JsonRecord | undefined, key: string) {
+  const value = record?.[key];
+  return Array.isArray(value) ? value.length : 0;
 }
 
 const defaultTemplateKeys = [
@@ -137,7 +151,8 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
 
   const visibleTemplates = useMemo(() => {
     const preferred = new Set(defaultTemplateKeys);
-    return templates.filter((template) => preferred.has(template.template_key));
+    const preferredRows = templates.filter((template) => preferred.has(template.template_key));
+    return preferredRows.length ? preferredRows : templates.slice(0, 12);
   }, [templates]);
 
   const selectedTemplateNames = useMemo(() => {
@@ -162,7 +177,14 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
       headers: authHeaders(activeToken),
     });
     const json = await parseJsonResponse(res);
-    setTemplates(Array.isArray(json.templates) ? json.templates : []);
+    const rows = Array.isArray(json.templates) ? json.templates : [];
+    setTemplates(rows);
+    setSelectedTemplates((prev) => {
+      const available = new Set(rows.map((item: TemplateRow) => item.template_key));
+      const kept = prev.filter((key) => available.has(key));
+      if (kept.length) return kept;
+      return rows.slice(0, 6).map((item: TemplateRow) => item.template_key);
+    });
   };
 
   const loadPackages = async (activeToken = token) => {
@@ -286,6 +308,8 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
 
   const uploadZip = async () => runAction('zip', async () => {
     if (!zipFile) throw new Error('Selecciona un ZIP');
+    if (!zipFile.name.toLowerCase().endsWith('.zip')) throw new Error('El archivo debe tener extensión .zip');
+    if (zipFile.size > maxZipBytes) throw new Error('El ZIP supera el máximo de 50 MB para esta etapa.');
     const fd = new FormData();
     fd.append('file', zipFile);
     fd.append('standard_code', standardCode);
@@ -330,6 +354,24 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
     setMessage('Markdown copiado.');
   };
 
+  const downloadDocument = async (doc: DocumentRow) => {
+    if (!token) return;
+    const res = await fetch(`${API_URL}/api/audit-preparation/documents/${doc.id}/download`, {
+      headers: authHeaders(token),
+    });
+    if (!res.ok) {
+      setError('No fue posible descargar el documento.');
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${doc.document_name || 'documento'}.${doc.output_format || 'docx'}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <section className="mx-auto max-w-[1800px] space-y-5">
       <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -346,7 +388,7 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
               Norma
               <select value={standardCode} onChange={(e) => setStandardCode(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                 <option value="ISO9001">ISO9001</option>
-                <option value="ISO27001" disabled>ISO27001 próximamente</option>
+                <option value="ISO27001">ISO27001</option>
                 <option value="ISO42001" disabled>ISO42001 próximamente</option>
               </select>
             </label>
@@ -383,8 +425,23 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
 
           <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="text-sm font-black text-slate-900">Subir ZIP existente</h3>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Se inventaría estructura y se conserva el ZIP original sin modificar.</p>
-            <input type="file" accept=".zip,application/zip" onChange={(e) => setZipFile(e.target.files?.[0] || null)} className="mt-3 w-full text-xs" />
+            <p className="mt-1 text-xs leading-5 text-slate-500">Se extrae texto de DOCX/PDF/XLSX/PPTX cuando es posible y se conserva el ZIP original sin modificar.</p>
+            <input
+              type="file"
+              accept=".zip,application/zip,application/x-zip-compressed"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                if (file && (!file.name.toLowerCase().endsWith('.zip') || file.size > maxZipBytes)) {
+                  setError(!file.name.toLowerCase().endsWith('.zip') ? 'Selecciona un archivo .zip válido.' : 'El ZIP supera el máximo de 50 MB.');
+                  setZipFile(null);
+                  return;
+                }
+                setError('');
+                setZipFile(file);
+              }}
+              className="mt-3 w-full text-xs"
+            />
+            {zipFile && <div className="mt-2 text-xs font-semibold text-slate-600">{zipFile.name} · {(zipFile.size / 1024 / 1024).toFixed(2)} MB</div>}
             <button onClick={uploadZip} disabled={!zipFile || loading === 'zip'} className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 disabled:opacity-50">
               {loading === 'zip' ? 'Subiendo...' : 'Subir ZIP'}
             </button>
@@ -451,9 +508,16 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
                           <button onClick={() => setSelectedDocument(doc)} className="text-left font-bold text-slate-900 hover:text-blue-700">{doc.document_name}</button>
                           <div className="text-xs text-slate-500">{doc.folder_path?.replace(/\{\{period_year\}\}/g, periodYear)}</div>
                         </td>
-                        <td><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${statusBadge(doc.document_status)}`}>{doc.document_status}</span></td>
-                        <td className="space-x-1">
+                        <td>
+                          <span className={`rounded-full border px-2 py-1 text-[11px] font-black ${statusBadge(doc.document_status)}`}>{doc.document_status}</span>
+                          <div className="mt-1 text-[11px] text-slate-500">v{doc.version || '1.0'} r{doc.revision_number || 1} · {doc.output_format || 'md'}</div>
+                        </td>
+                        <td className="space-x-1 space-y-1">
+                          <button onClick={() => downloadDocument(doc)} disabled={!doc.generated_file_url} className="rounded-lg border border-blue-200 px-2 py-1 text-xs font-bold text-blue-700 disabled:opacity-50">Descargar</button>
+                          <button onClick={() => updateDocumentStatus(doc.id, 'in_review')} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-700">Revisión</button>
                           <button onClick={() => updateDocumentStatus(doc.id, 'approved')} className="rounded-lg border border-emerald-200 px-2 py-1 text-xs font-bold text-emerald-700">Aprobar</button>
+                          <button onClick={() => updateDocumentStatus(doc.id, 'rejected')} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-bold text-rose-700">Rechazar</button>
+                          <button onClick={() => updateDocumentStatus(doc.id, 'obsolete')} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Obsoleto</button>
                           <button onClick={() => updateDocumentStatus(doc.id, 'requires_validation')} className="rounded-lg border border-amber-200 px-2 py-1 text-xs font-bold text-amber-700">Validar</button>
                         </td>
                       </tr>
@@ -499,6 +563,10 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
                     <div className="font-black text-slate-900">{zip.original_filename}</div>
                     <div className="mt-1 text-xs text-slate-500">Estado: {zip.analysis_status} · {formatDate(zip.created_at)}</div>
                     <div className="mt-2 text-xs text-slate-600">Archivos detectados: {Array.isArray(zip.inventory_json) ? zip.inventory_json.length : 0}</div>
+                    <div className="mt-2 text-xs text-slate-600">
+                      Coincidencias: {jsonArrayCount(zip.detected_structure_json, 'matched_templates')} ·
+                      Conflictos: {jsonArrayCount(zip.detected_structure_json, 'conflicts')}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -509,7 +577,10 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
             <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-lg font-black text-slate-950">{selectedDocument.document_name}</h3>
-                <button onClick={() => copyMarkdown(selectedDocument.generated_content)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700">Copiar markdown</button>
+                <div className="flex gap-2">
+                  <button onClick={() => downloadDocument(selectedDocument)} disabled={!selectedDocument.generated_file_url} className="rounded-xl border border-blue-300 px-3 py-2 text-xs font-black text-blue-700 disabled:opacity-50">Descargar {selectedDocument.output_format || ''}</button>
+                  <button onClick={() => copyMarkdown(selectedDocument.generated_content)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700">Copiar markdown</button>
+                </div>
               </div>
               <pre className="mt-4 max-h-[520px] overflow-auto whitespace-pre-wrap rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-slate-100">{selectedDocument.generated_content || '[PENDIENTE DE VALIDACIÓN]'}</pre>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
