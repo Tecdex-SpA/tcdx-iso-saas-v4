@@ -97,11 +97,7 @@ function interpolate(value: string, params?: TranslationParams) {
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<SupportedLocale>(DEFAULT_LOCALE);
-
-  useEffect(() => {
-    setLocaleState(resolveClientLocale());
-  }, []);
+  const [locale, setLocaleState] = useState<SupportedLocale>(() => resolveClientLocale());
 
   useEffect(() => {
     const direction = getLocaleDirection(locale);

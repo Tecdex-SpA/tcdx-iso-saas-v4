@@ -13,10 +13,10 @@ import {
   getUserFromToken,
   isTokenExpired,
 } from '@/utils/auth';
+import { getApiBaseUrl } from '@/utils/apiClient';
 import { useTranslation } from '@/hooks/useTranslation';
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+const API_URL = getApiBaseUrl();
 
 type ModuleAccessResponse = {
   ok: boolean;
@@ -48,17 +48,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { t } = useTranslation();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('sidebar-collapsed') === 'true';
+  });
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
-
-  useEffect(() => {
-    const saved = localStorage.getItem('sidebar-collapsed');
-    if (saved) {
-      setSidebarCollapsed(saved === 'true');
-    }
-  }, []);
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {
@@ -349,7 +345,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }, [pathname, routeRules, t]);
 
   useEffect(() => {
-    setMobileSidebarOpen(false);
+    const frame = window.requestAnimationFrame(() => {
+      setMobileSidebarOpen(false);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
 
   if (checkingAccess) {

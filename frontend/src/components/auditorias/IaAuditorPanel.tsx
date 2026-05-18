@@ -516,22 +516,6 @@ export default function IaAuditorPanel() {
     }
   };
 
-  const reviewLabel = (status?: string) => {
-    const key = String(status || 'pending');
-    if (key === 'accepted') return copy.accepted;
-    if (key === 'rejected') return copy.rejected;
-    if (key === 'needs_more_evidence') return copy.needsMoreEvidence;
-    if (key === 'reviewed') return copy.reviewed;
-    return copy.pending;
-  };
-
-  const openHistoryDetailForReview = (item: any) => {
-    setSelectedHistory(item);
-    setReviewStatus(item?.human_review_status || 'reviewed');
-    setReviewComment(item?.human_review_comment || '');
-    setReviewMessage('');
-  };
-
   const saveHumanReview = async () => {
     if (!token || !selectedHistory?.id) return;
 
