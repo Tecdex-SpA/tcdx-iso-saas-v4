@@ -47,7 +47,6 @@ def get_connection():
         sslmode=os.getenv("AI_CORE_DB_SSLMODE", "disable"),
         cursor_factory=RealDictCursor,
     )
-)
 
 def fetch_all(query: str, params: Optional[Sequence[Any]] = None) -> List[Dict[str, Any]]:
     """
