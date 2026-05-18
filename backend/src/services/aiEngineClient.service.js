@@ -12,6 +12,10 @@ class AiEngineClient {
   async postJson(path, payload) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeout);
+    const requestId =
+      payload?.request_metadata?.request_id ||
+      payload?.request_id ||
+      null;
 
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
@@ -20,6 +24,7 @@ class AiEngineClient {
           'Content-Type': 'application/json',
           'x-ai-token': this.token,
           'x-tcdx-locale': 'es',
+          ...(requestId ? { 'x-request-id': requestId } : {}),
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
@@ -30,7 +35,12 @@ class AiEngineClient {
       try {
         json = text ? JSON.parse(text) : {};
       } catch (error) {
-        throw new Error(`ai-engine JSON inválido: ${String(text || '').slice(0, 180)}`);
+        const preview = String(text || '')
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 180);
+        throw new Error(`ai-engine JSON inválido o respuesta intermedia no JSON: ${preview}`);
       }
 
       if (!response.ok) {

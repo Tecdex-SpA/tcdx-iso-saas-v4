@@ -5,7 +5,7 @@ import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://192.168.100.120:3000").rstrip("/")
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://bk.tcdx.int:3000").rstrip("/")
 AI_INTERNAL_TOKEN = os.getenv("AI_INTERNAL_TOKEN") or os.getenv("AI_TOKEN") or ""
 KNOWLEDGE_TIMEOUT = int(os.getenv("KNOWLEDGE_TIMEOUT", "15"))
 
@@ -54,6 +54,7 @@ def _post_json(url: str, payload: dict) -> dict:
         method="POST",
         headers={
             "Content-Type": "application/json",
+            "x-ai-token": AI_INTERNAL_TOKEN,
             "x-ai-internal-token": AI_INTERNAL_TOKEN,
         },
     )

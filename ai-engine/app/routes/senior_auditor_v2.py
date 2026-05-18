@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.services.senior_auditor_orchestrator import analyze_with_senior_auditor_v2
@@ -16,7 +17,11 @@ def validate_internal_token(token: Optional[str]) -> None:
 
 
 @router.post("/analyze")
-async def analyze(request: Request, x_ai_token: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+async def analyze(
+    request: Request,
+    x_ai_token: Optional[str] = Header(default=None),
+    x_request_id: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
     validate_internal_token(x_ai_token)
     payload = await request.json()
     if not isinstance(payload, dict):
@@ -26,8 +31,23 @@ async def analyze(request: Request, x_ai_token: Optional[str] = Header(default=N
     if payload.get("locale") not in (None, "", "es"):
         payload["locale"] = "es"
     try:
-        return analyze_with_senior_auditor_v2(payload)
+        result = analyze_with_senior_auditor_v2(payload)
+        if isinstance(result, dict) and x_request_id:
+            result.setdefault("request_id", x_request_id)
+            result.setdefault("engine", {})
+            if isinstance(result["engine"], dict):
+                result["engine"].setdefault("request_id", x_request_id)
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"senior-auditor-v2 error: {str(exc)[:180]}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "code": "SENIOR_AUDITOR_ERROR",
+                "message": "No fue posible ejecutar el Auditor Senior en ai-engine.",
+                "request_id": x_request_id,
+                "detail": str(exc)[:180] if settings.APP_ENV != "production" else None,
+            },
+        )

@@ -27,6 +27,7 @@ Categorías principales:
 - `src/app/auditorias/page.tsx`
 - `src/components/Sidebar.tsx`
 - `src/components/ia-auditor/IaAuditorPanel.tsx`
+- `src/components/auditorias/IaAuditorPanel.tsx`
 - `src/components/evidences/*`
 - `src/context/LanguageContext.tsx`
 
@@ -52,6 +53,10 @@ El objetivo es impedir que Preparación documental incorpore nueva deuda mientra
 - `npm run lint:audit-preparation` pasa.
 - Los errores globales no provienen de los cambios de cierre documental.
 - Corregir los 440 errores globales requiere una tarea dedicada para evitar regresiones funcionales en pantallas históricas.
+
+## Nota IA Auditor ESXi
+
+Durante la corrección de IA Auditor para ESXi se validó el archivo nuevo `src/utils/apiClient.ts` con ESLint específico y pasa sin errores. El panel consolidado `src/components/auditorias/IaAuditorPanel.tsx` sigue arrastrando deuda histórica de tipado `any` y dos warnings de funciones no usadas; el build productivo sí pasa. Esta deuda no bloquea la corrección aplicada: manejo robusto de respuestas no JSON, mensajes de timeout y propagación de `request_id`.
 
 ## Plan de saneamiento posterior
 

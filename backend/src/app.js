@@ -67,6 +67,9 @@ app.use(aiLocaleResponseGuard);
 
 const defaultFrontendUrl = 'http://192.168.100.130:3000';
 const defaultFrontendInternalUrl = 'http://192.168.100.130:8080';
+const esxiFrontendUrl = 'https://181.212.166.187:8443';
+const esxiFrontendInternalUrl = 'http://192.168.2.33:8080';
+const esxiFrontendDnsUrl = 'http://www.tcdx.int:8080';
 const allowedCorsOrigins = Array.from(new Set([
   ...String(process.env.CORS_ORIGINS || '')
     .split(',')
@@ -77,6 +80,9 @@ const allowedCorsOrigins = Array.from(new Set([
   process.env.FRONTEND_INTERNAL_URL,
   defaultFrontendUrl,
   defaultFrontendInternalUrl,
+  esxiFrontendUrl,
+  esxiFrontendInternalUrl,
+  esxiFrontendDnsUrl,
 ].filter(Boolean)));
 // =============================
 // FASE 4B SECURITY HARDENING

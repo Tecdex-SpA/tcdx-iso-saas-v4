@@ -1,0 +1,90 @@
+export function getApiBaseUrl() {
+  return String(
+    process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      ''
+  ).replace(/\/+$/, '');
+}
+
+type ApiJsonObject = Record<string, unknown>;
+
+function localizedDefaultMessage(locale: string, status: number) {
+  const en = locale === 'en';
+
+  if (status === 401) {
+    return en
+      ? 'Your session expired or is not valid. Please sign in again.'
+      : 'La sesión expiró o no es válida. Vuelve a iniciar sesión.';
+  }
+
+  if (status === 408 || status === 504) {
+    return en
+      ? 'The AI service took too long to respond. Please try again in a few minutes.'
+      : 'El servicio de IA tardó demasiado en responder. Intenta nuevamente en unos minutos.';
+  }
+
+  if (status === 502 || status === 503) {
+    return en
+      ? 'The AI service is temporarily unavailable. Please try again shortly.'
+      : 'El servicio de IA no está disponible temporalmente. Intenta nuevamente en unos minutos.';
+  }
+
+  return en
+    ? 'The request could not be completed.'
+    : 'No fue posible completar la solicitud.';
+}
+
+function extractPayloadMessage(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return '';
+  const data = payload as ApiJsonObject;
+  if (typeof data.message === 'string') return data.message;
+  if (typeof data.error === 'string') return data.error;
+  if (typeof data.detail === 'string') return data.detail;
+  if (
+    data.error &&
+    typeof data.error === 'object' &&
+    typeof (data.error as ApiJsonObject).message === 'string'
+  ) {
+    return (data.error as ApiJsonObject).message as string;
+  }
+  return '';
+}
+
+export async function readJsonResponse<T = ApiJsonObject>(
+  response: Response,
+  {
+    fallbackMessage = 'No fue posible completar la solicitud.',
+    locale = 'es',
+  }: { fallbackMessage?: string; locale?: string } = {}
+): Promise<T> {
+  const contentType = response.headers.get('content-type') || '';
+  const requestId =
+    response.headers.get('x-request-id') ||
+    response.headers.get('x-correlation-id') ||
+    '';
+  let payload: ApiJsonObject | null = null;
+
+  if (contentType.includes('application/json')) {
+    payload = await response.json().catch(() => null);
+  } else {
+    const text = await response.text().catch(() => '');
+    payload = text
+      ? {
+          message: localizedDefaultMessage(locale, response.status),
+          non_json_response: true,
+          response_preview: text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160),
+        }
+      : {};
+  }
+
+  if (!response.ok || payload?.ok === false) {
+    const message =
+      extractPayloadMessage(payload) ||
+      localizedDefaultMessage(locale, response.status) ||
+      fallbackMessage;
+    const suffix = requestId ? ` (request_id: ${requestId})` : '';
+    throw new Error(`${message}${suffix}`);
+  }
+
+  return (payload || {}) as T;
+}

@@ -1146,12 +1146,12 @@ function getAiAuditorEngineBaseUrl() {
   return String(
     process.env.AI_ENGINE_URL ||
     process.env.AI_ENGINE_BASE_URL ||
-    'http://192.168.100.140:8000'
+    'http://localhost:8001'
   ).replace(/\/+$/, '');
 }
 
 function getAiAuditorEngineToken() {
-  return process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
+  return process.env.AI_INTERNAL_TOKEN || process.env.AI_ENGINE_TOKEN || process.env.AI_TOKEN || '';
 }
 
 function compactAiAuditorScope(scope) {
@@ -1214,7 +1214,12 @@ function buildAiAuditorEnginePayload({ tenantId, standardCode, locale, scope, fa
   };
 }
 
-async function callAiAuditorEngine(payload, locale) {
+function compactAiEngineErrorMessage(error) {
+  if (error?.name === 'AbortError') return 'ai-engine timeout';
+  return String(error?.message || error || 'ai-engine unavailable').slice(0, 260);
+}
+
+async function callAiAuditorEngine(payload, locale, requestId = null) {
   const baseUrl = getAiAuditorEngineBaseUrl();
   const token = getAiAuditorEngineToken();
 
@@ -1237,8 +1242,10 @@ async function callAiAuditorEngine(payload, locale) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-ai-token': token,
         'X-AI-Token': token,
         'x-tcdx-locale': locale,
+        ...(requestId ? { 'x-request-id': requestId } : {}),
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -1250,7 +1257,7 @@ async function callAiAuditorEngine(payload, locale) {
     try {
       json = text ? JSON.parse(text) : {};
     } catch (parseError) {
-      throw new Error(`ai-engine JSON inválido: ${String(text || '').slice(0, 180)}`);
+      throw new Error(`ai-engine JSON inválido o respuesta intermedia no JSON: ${String(text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180)}`);
     }
 
     if (!response.ok) {
@@ -1409,9 +1416,7 @@ function sanitizeAiAuditorEngineResponse(engineJson, fallback, locale, scope) {
 }
 
 function markAiAuditorFallback(fallback, error) {
-  const message = error?.name === 'AbortError'
-    ? 'ai-engine timeout'
-    : String(error?.message || error || 'ai-engine unavailable').slice(0, 240);
+  const message = compactAiEngineErrorMessage(error);
 
   return {
     ...fallback,
@@ -1473,7 +1478,7 @@ async function buildSeniorAuditorContext({ tenantId, body }) {
   return aiContextBuilder.buildAiTenantContext({ tenantId });
 }
 
-function buildSeniorAuditorPayload({ tenantId, locale, context, body }) {
+function buildSeniorAuditorPayload({ tenantId, locale, context, body, requestId = null }) {
   const depth = ['executive', 'standard', 'deep'].includes(body?.depth) ? body.depth : 'standard';
   return {
     task_type: normalizeSeniorAuditorTask(body),
@@ -1496,6 +1501,7 @@ function buildSeniorAuditorPayload({ tenantId, locale, context, body }) {
     request_metadata: {
       requested_locale: locale || 'es',
       audit_focus: body?.audit_focus || 'general',
+      request_id: requestId || body?.request_id || null,
     },
   };
 }
@@ -2427,6 +2433,7 @@ router.post('/analyze', auth, async (req, res) => {
         locale,
         context,
         body: req.body || {},
+        requestId: req.requestId,
       });
 
       const engineJson = await aiEngineClient.analyzeWithSeniorAuditor(enginePayload);

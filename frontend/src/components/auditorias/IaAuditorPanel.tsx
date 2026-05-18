@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { getUserFromToken } from '@/utils/auth';
+import { getApiBaseUrl, readJsonResponse } from '@/utils/apiClient';
 import { useTranslation } from '@/hooks/useTranslation';
 import { translateDisplayText, translatePriorityLabel, translateSeverityLabel, translateStandardLabel } from '@/i18n/displayText';
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+const API_URL = getApiBaseUrl();
 
 type SelectOption = {
   value: string;
@@ -479,11 +479,10 @@ export default function IaAuditorPanel() {
         },
       });
 
-      const json = await res.json();
-
-      if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || copy.error);
-      }
+      const json = await readJsonResponse<{ scope?: unknown }>(res, {
+        fallbackMessage: copy.error,
+        locale,
+      });
 
       setScope(json.scope || null);
     } catch (err: any) {
@@ -553,10 +552,15 @@ export default function IaAuditorPanel() {
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.ok === false) {
-        throw new Error(data?.message || data?.error?.message || copy.pdfError);
-      }
+      const data = await readJsonResponse<{
+        item?: {
+          human_review_status?: string;
+          human_review_comment?: string;
+        };
+      }>(res, {
+        fallbackMessage: copy.pdfError,
+        locale,
+      });
 
       setSelectedHistory(data.item || selectedHistory);
       setReviewStatus(data.item?.human_review_status || reviewStatus);
@@ -651,11 +655,10 @@ export default function IaAuditorPanel() {
         },
       });
 
-      const json = await res.json();
-
-      if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || copy.historyUnavailable);
-      }
+      const json = await readJsonResponse<{ items?: unknown[]; warning?: string }>(res, {
+        fallbackMessage: copy.historyUnavailable,
+        locale,
+      });
 
       setHistoryItems(Array.isArray(json.items) ? json.items : []);
       setHistoryError(json.warning || '');
@@ -680,11 +683,10 @@ export default function IaAuditorPanel() {
         },
       });
 
-      const json = await res.json();
-
-      if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || copy.historyUnavailable);
-      }
+      const json = await readJsonResponse<{ item?: unknown }>(res, {
+        fallbackMessage: copy.historyUnavailable,
+        locale,
+      });
 
       setSelectedHistory(json.item || null);
     } catch (err: any) {
@@ -725,11 +727,15 @@ export default function IaAuditorPanel() {
         body: JSON.stringify(body),
       });
 
-      const json = await res.json();
-
-      if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || copy.error);
-      }
+      const json = await readJsonResponse<{
+        scope?: unknown;
+        trace?: {
+          history_saved?: boolean;
+        };
+      }>(res, {
+        fallbackMessage: copy.error,
+        locale,
+      });
 
       setAnalysis(json);
       setScope(json.scope || scope);
@@ -764,11 +770,14 @@ export default function IaAuditorPanel() {
         }),
       });
 
-      const json = await res.json();
-
-      if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || copy.prepareError);
-      }
+      const json = await readJsonResponse<{
+        storage_key?: string;
+        prepared_payload?: unknown;
+        deep_link?: string;
+      }>(res, {
+        fallbackMessage: copy.prepareError,
+        locale,
+      });
 
       const storageKey = json.storage_key;
       const deepLink = json.deep_link;
