@@ -8,11 +8,15 @@ from datetime import datetime
 
 AI_HOST = os.getenv("AI_HOST", "127.0.0.1")
 AI_PORT = os.getenv("AI_PORT", "8001")
-AI_TOKEN = os.getenv("AI_TOKEN", "tecdex_ai_internal_2026")
+AI_TOKEN = os.getenv("AI_TOKEN", "")
 TENANT_ID = os.getenv("TENANT_ID", "697eefa4-3b56-4c8a-a7d4-6d512c40233e")
 FINDING_ID = os.getenv("FINDING_ID", "00000000-0000-0000-0000-000000000000")
 
 URL = f"http://{AI_HOST}:{AI_PORT}/api/ai/suggest/finding-analysis"
+
+if not AI_TOKEN:
+    print("ERROR: AI_TOKEN requerido para ejecutar regresión multi-norma", file=sys.stderr)
+    sys.exit(2)
 
 REPORT_DIR = Path("/home/tecdex/ai-engine/reports")
 REPORT_DIR.mkdir(parents=True, exist_ok=True)

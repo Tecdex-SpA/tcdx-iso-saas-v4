@@ -47,7 +47,7 @@ Backend:
 
 ```bash
 AI_ENGINE_URL=http://192.168.100.140:8001
-AI_INTERNAL_TOKEN=tecdex_ai_internal_2026
+AI_INTERNAL_TOKEN=<AI_INTERNAL_TOKEN>
 ```
 
 Frontend debe mantener la variable existente de URL API si se usa en el entorno actual.
