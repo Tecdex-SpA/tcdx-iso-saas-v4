@@ -342,6 +342,13 @@ function enforceApiAccess(req, res, next) {
     return next();
   }
 
+  if (
+    role === 'internal_ai' &&
+    path === '/api/ai-compliance/knowledge/internal-search'
+  ) {
+    return next();
+  }
+
   if (path.startsWith('/api/auth')) {
     return next();
   }

@@ -52,6 +52,30 @@ function getUserTenantId(user) {
   );
 }
 
+function getPath(req) {
+  return String(req.originalUrl || req.url || '').split('?')[0];
+}
+
+function getInternalAiToken(req) {
+  return (
+    req.headers['x-ai-token'] ||
+    req.headers['x-internal-token'] ||
+    req.headers['x-ai-internal-token'] ||
+    ''
+  );
+}
+
+function isInternalAiKnowledgePath(req) {
+  return getPath(req) === '/api/ai-compliance/knowledge/internal-search';
+}
+
+function isValidInternalAiRequest(req) {
+  const configuredToken = process.env.AI_INTERNAL_TOKEN || '';
+  const incomingToken = getInternalAiToken(req);
+
+  return Boolean(configuredToken) && Boolean(incomingToken) && incomingToken === configuredToken;
+}
+
 async function validateTenantServiceStatus(req, res, decoded) {
   const role = normalizeRole(
     decoded?.role ||
@@ -145,9 +169,32 @@ module.exports = async function auth(req, res, next) {
     const token = getBearerToken(req);
 
     if (!token) {
+      if (isInternalAiKnowledgePath(req)) {
+        const incomingToken = getInternalAiToken(req);
+
+        if (isValidInternalAiRequest(req)) {
+          req.user = {
+            role: 'internal_ai',
+            is_internal_ai: true,
+            tenant_id: null,
+          };
+          return next();
+        }
+
+        if (incomingToken) {
+          return res.status(401).json({
+            ok: false,
+            error: 'Token interno IA inválido',
+            code: 'INTERNAL_AI_TOKEN_INVALID',
+            request_id: req.requestId || null,
+          });
+        }
+      }
+
       return res.status(401).json({
         error: 'sin Token',
         code: 'NO_TOKEN',
+        request_id: req.requestId || null,
       });
     }
 
@@ -159,6 +206,7 @@ module.exports = async function auth(req, res, next) {
       return res.status(500).json({
         error: 'Servicio de autenticación no disponible',
         code: 'JWT_SECRET_MISSING',
+        request_id: req.requestId || null,
       });
     }
 
@@ -180,6 +228,7 @@ module.exports = async function auth(req, res, next) {
     return res.status(401).json({
       error: 'Invalid token',
       code: 'INVALID_TOKEN',
+      request_id: req.requestId || null,
     });
   }
 };

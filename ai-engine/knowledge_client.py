@@ -55,7 +55,9 @@ def _post_json(url: str, payload: dict) -> dict:
         headers={
             "Content-Type": "application/json",
             "x-ai-token": AI_INTERNAL_TOKEN,
+            "x-internal-token": AI_INTERNAL_TOKEN,
             "x-ai-internal-token": AI_INTERNAL_TOKEN,
+            "x-tcdx-locale": "es",
         },
     )
 
