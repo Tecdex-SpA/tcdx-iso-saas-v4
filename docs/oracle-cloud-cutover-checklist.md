@@ -3,9 +3,9 @@
 ## 1. Prechecks en laboratorio
 
 ```bash
-API_URL=http://192.168.100.120:3000 FRONTEND_URL=http://192.168.100.130:3000 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-security-basic.sh
-API_URL=http://192.168.100.120:3000 FRONTEND_URL=http://192.168.100.130:3000 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-rbac-basic.sh
-API_URL=http://192.168.100.120:3000 FRONTEND_URL=http://192.168.100.130:3000 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-ai-auditor-full.sh
+API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-security-basic.sh
+API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-rbac-basic.sh
+API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-ai-auditor-full.sh
 ```
 
 ## 2. Congelar cambios

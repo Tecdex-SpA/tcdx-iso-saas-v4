@@ -4,8 +4,8 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-API_URL="${API_URL:-http://192.168.100.120:3000}"
-FRONTEND_URL="${FRONTEND_URL:-http://192.168.100.130:3000}"
+API_URL="${API_URL:-https://181.212.166.187:8443}"
+FRONTEND_URL="${FRONTEND_URL:-https://181.212.166.187:8443}"
 EMAIL="${EMAIL:-admin@rieltec.com}"
 PASSWORD="${PASSWORD:-123456}"
 TS="$(date '+%Y%m%d_%H%M%S')"
@@ -173,7 +173,7 @@ PY
 
   CORS_ALLOWED_HEADERS="qa-results/security-cors-allowed-$TS.headers"
   curl -s -D "$CORS_ALLOWED_HEADERS" -o /dev/null \
-    -H "Origin: http://192.168.100.130:3000" \
+    -H "Origin: https://181.212.166.187:8443" \
     "$API_URL/api/ai-auditor/scope" || true
   if grep -qi '^Access-Control-Allow-Origin: http://192\.168\.100\.130:3000' "$CORS_ALLOWED_HEADERS"; then
     record PASS "cors.allowed_origin" "Access-Control-Allow-Origin permitido para lab 3000"

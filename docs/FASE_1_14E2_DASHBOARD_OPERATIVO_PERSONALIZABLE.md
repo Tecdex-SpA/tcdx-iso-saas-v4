@@ -123,8 +123,8 @@ bash scripts/validate-dashboard-operational-replacement.sh
 Variables:
 
 ```bash
-API_URL="http://192.168.100.120:3000"
-FRONTEND_URL="http://192.168.100.130:3000"
+API_URL="http://bk.tcdx.int:3000"
+FRONTEND_URL="https://181.212.166.187:8443"
 TEST_EMAIL="admin@rieltec.com"
 TEST_PASSWORD="123456"
 ALLOW_WRITE_TEST="false"

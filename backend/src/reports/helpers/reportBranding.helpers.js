@@ -8,7 +8,7 @@ function getBaseUrl() {
     process.env.PUBLIC_BASE_URL ||
     process.env.API_PUBLIC_URL ||
     process.env.BACKEND_PUBLIC_URL ||
-    'http://192.168.100.120:3000'
+    'http://bk.tcdx.int:3000'
   ).replace(/\/+$/, '');
 }
 

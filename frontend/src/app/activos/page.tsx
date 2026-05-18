@@ -8,7 +8,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
 type ScopeStandard = {
   code: string;

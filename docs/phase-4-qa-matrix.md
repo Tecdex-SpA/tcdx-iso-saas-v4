@@ -10,7 +10,7 @@
 | `scripts/qa-observability.sh` | Observabilidad | Pre/post deploy | `API_URL=... FRONTEND_URL=... AI_ENGINE_URL=... EMAIL=... PASSWORD=... bash scripts/qa-observability.sh` | FAIL 0 |
 | `scripts/qa-ai-auditor-full.sh` | IA Auditor E2E | Pre/post deploy | `API_URL=... FRONTEND_URL=... EMAIL=... PASSWORD=... bash scripts/qa-ai-auditor-full.sh` | FAIL 0 |
 | `scripts/qa-bilingual-full.sh` | i18n básico | Cambios frontend/i18n | `bash scripts/qa-bilingual-full.sh` | FAIL 0 |
-| `scripts/monitor-runtime.sh` | Monitor runtime | Operación diaria/post-deploy | `AI_ENGINE_URL=http://192.168.100.140:8001 bash scripts/monitor-runtime.sh` | FAIL 0 |
+| `scripts/monitor-runtime.sh` | Monitor runtime | Operación diaria/post-deploy | `AI_ENGINE_URL=http://ai.tcdx.int:8001 bash scripts/monitor-runtime.sh` | FAIL 0 |
 | `scripts/backup-runtime.sh` | Backup real/dry-run | Pre-cambio y operación | `DRY_RUN=true bash scripts/backup-runtime.sh` | OK |
 | `scripts/restore-test.sh` | Restore seguro | Restore drill | `DRY_RUN=true bash scripts/restore-test.sh` | OK |
 | `scripts/collect-runtime-inventory.sh` | Inventario | Auditoría técnica | `bash scripts/collect-runtime-inventory.sh` | Archivo generado |

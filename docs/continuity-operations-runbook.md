@@ -149,9 +149,9 @@ sudo systemctl reload nginx
 ## QA post-incidente
 
 ```bash
-API_URL=http://192.168.100.120:3000 FRONTEND_URL=http://192.168.100.130:3000 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-security-basic.sh
-API_URL=http://192.168.100.120:3000 FRONTEND_URL=http://192.168.100.130:3000 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-rbac-basic.sh
-API_URL=http://192.168.100.120:3000 FRONTEND_URL=http://192.168.100.130:3000 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-ai-auditor-full.sh
+API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-security-basic.sh
+API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-rbac-basic.sh
+API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL=<admin> PASSWORD=<password> bash ./scripts/qa-ai-auditor-full.sh
 ```
 
 ## Checklist post-incidente
@@ -177,9 +177,9 @@ bash scripts/qa-observability.sh
 Uso recomendado post-deploy:
 
 ```bash
-API_URL=http://192.168.100.120:3000 \
-FRONTEND_URL=http://192.168.100.130:3000 \
-AI_ENGINE_URL=http://192.168.100.140:8000 \
+API_URL=http://bk.tcdx.int:3000 \
+FRONTEND_URL=https://181.212.166.187:8443 \
+AI_ENGINE_URL=http://ai.tcdx.int:8001 \
 EMAIL=<admin> \
 PASSWORD=<password> \
 bash scripts/qa-observability.sh

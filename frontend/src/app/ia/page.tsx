@@ -6,7 +6,7 @@ import { getUserFromToken } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
 export default function IACompliancePage() {
   const [data, setData] = useState<any>(null);

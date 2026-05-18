@@ -13,6 +13,9 @@ const SOA_STANDARDS = [
   'ISO/IEC27018'
 ];
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
+
 export default function SoAPage() {
   const { locale } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
@@ -46,7 +49,7 @@ export default function SoAPage() {
       setLoadingStandards(true);
 
       const res = await fetch(
-        `http://192.168.100.120:3000/api/tenant-standards/${tenantId}`,
+        `${API_URL}/api/tenant-standards/${tenantId}`,
         {
           headers: { Authorization: `Bearer ${authToken}` }
         }
@@ -91,7 +94,7 @@ export default function SoAPage() {
       setLoadingData(true);
 
       const res = await fetch(
-        `http://192.168.100.120:3000/api/soa/${tenantId}?iso=${encodeURIComponent(iso)}`,
+        `${API_URL}/api/soa/${tenantId}?iso=${encodeURIComponent(iso)}`,
         {
           headers: { Authorization: `Bearer ${authToken}` }
         }
@@ -156,7 +159,7 @@ export default function SoAPage() {
       setSavingId(row.tenant_control_id);
 
       const res = await fetch(
-        `http://192.168.100.120:3000/api/soa/${row.tenant_control_id}`,
+        `${API_URL}/api/soa/${row.tenant_control_id}`,
         {
           method: 'PUT',
           headers: {
@@ -227,7 +230,7 @@ export default function SoAPage() {
     try {
       setActionLoading(`finding-${row.tenant_control_id}`);
 
-      const res = await fetch(`http://192.168.100.120:3000/api/findings`, {
+      const res = await fetch(`${API_URL}/api/findings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -292,7 +295,7 @@ export default function SoAPage() {
     try {
       setActionLoading(`action-${row.tenant_control_id}`);
 
-      const res = await fetch(`http://192.168.100.120:3000/api/action-plans`, {
+      const res = await fetch(`${API_URL}/api/action-plans`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

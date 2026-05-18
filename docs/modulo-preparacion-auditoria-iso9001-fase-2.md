@@ -246,7 +246,7 @@ Variables esperadas:
 
 ```bash
 AI_INTERNAL_TOKEN=<AI_INTERNAL_TOKEN>
-AI_ENGINE_URL=http://192.168.100.140:8001
+AI_ENGINE_URL=http://ai.tcdx.int:8001
 ```
 
 También se acepta `AI_ENGINE_TOKEN` o `AI_TOKEN` como fallback temporal si `AI_INTERNAL_TOKEN` no está definido.
@@ -283,7 +283,7 @@ Resultado esperado en runtime:
 
 Motivo: el backend nuevo depende de las 6 tablas `audit_preparation_*`, las 34 plantillas ISO 9001 y, si se quiere activar knowledge documental, de las tablas `ai_knowledge_*`.
 
-VM: `192.168.100.110`
+VM: `db.tcdx.int`
 
 Usuario recomendado: usuario PostgreSQL de la aplicación, normalmente `tecdex` o el usuario configurado en `.env` (`DB_USER`).
 
@@ -343,7 +343,7 @@ Resultado esperado:
 
 ## Backend - despliegue
 
-VM backend `192.168.100.120`:
+VM backend `bk.tcdx.int`:
 
 ```bash
 cd /home/tecdex/backend
@@ -361,7 +361,7 @@ sudo systemctl status tecdex-backend --no-pager
 
 ## AI engine - despliegue
 
-VM IA `192.168.100.140`:
+VM IA `ai.tcdx.int`:
 
 ```bash
 cd /home/tecdex/ai-engine

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKEND_URL="${BACKEND_URL:-http://192.168.100.120:3000}"
+BACKEND_URL="${BACKEND_URL:-https://181.212.166.187:8443}"
 
 fail() {
   echo "FAIL $1" >&2

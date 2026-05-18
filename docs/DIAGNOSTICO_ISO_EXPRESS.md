@@ -124,7 +124,7 @@ Los conteos operativos esperados siguen siendo:
 ## Validar API
 
 ```bash
-export API="http://192.168.100.120:3000"
+export API="http://bk.tcdx.int:3000"
 export TOKEN="PEGAR_TOKEN_VALIDO"
 export TENANT_ID="PEGAR_TENANT_ID_VALIDO"
 

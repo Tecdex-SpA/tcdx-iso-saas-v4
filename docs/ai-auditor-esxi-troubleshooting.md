@@ -17,7 +17,7 @@ This message can be caused by an actual backend error, ai-engine timeout, unauth
 - `x-request-id` from backend/Nginx responses is appended to UI errors when present.
 - Backend IA Auditor calls propagate `request_id` to ai-engine through `x-request-id`.
 - Backend ai-engine client sends the required `x-ai-token` header.
-- Legacy IA Auditor helper fallback no longer points at the old `192.168.100.140:8000`; it defaults to local development `http://localhost:8001` and production must use `AI_ENGINE_URL`.
+- Legacy IA Auditor helper fallback no longer points at the old `ai.tcdx.int:8000`; it defaults to local development `http://localhost:8001` and production must use `AI_ENGINE_URL`.
 - AI engine knowledge client now sends both `x-ai-token` and legacy `x-ai-internal-token` for compatibility.
 - ESXi CORS origins were added while keeping UTM lab origins.
 

@@ -66,7 +66,7 @@ OLLAMA_MODEL=qwen2.5:1.5b
 AI_ENGINE_LLM_TIMEOUT_MS=90000
 ```
 
-UTM compatibility remains available by setting the same variables to `192.168.100.x` values. Do not rely on legacy defaults in production.
+UTM compatibility remains available by setting the same variables to explicit legacy lab values. Do not rely on legacy defaults in production.
 
 ## Nginx frontend proxy
 
@@ -138,4 +138,3 @@ curl -s http://ai.tcdx.int:8001/health || curl -s http://ai.tcdx.int:8001/docs
 ```
 
 The dashboard health API should return JSON. If Nginx returns HTML for `/api/...`, check the proxy location order before debugging the application.
-

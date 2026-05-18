@@ -6,7 +6,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
 const passwordPolicyMessage =
   'Mínimo 8 caracteres, con mayúsculas, minúsculas, números y símbolos.';

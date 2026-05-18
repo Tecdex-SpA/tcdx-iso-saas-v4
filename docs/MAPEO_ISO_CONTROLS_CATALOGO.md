@@ -171,7 +171,7 @@ El POST acepta:
 ## Curls de validacion
 
 ```bash
-export API="http://192.168.100.120:3000"
+export API="http://bk.tcdx.int:3000"
 export TOKEN="PEGAR_TOKEN_VALIDO"
 
 curl -s "$API/api/iso-control-mapping/coverage" \
@@ -365,7 +365,7 @@ psql "$DATABASE_URL_ADMIN" -v ON_ERROR_STOP=1 -c "GRANT SELECT, INSERT ON iso_co
 Dry-run:
 
 ```bash
-export API="http://192.168.100.120:3000"
+export API="http://bk.tcdx.int:3000"
 export TOKEN="TOKEN_VALIDO"
 export APPLY_REAL="false"
 export MIN_CONFIDENCE="0.85"

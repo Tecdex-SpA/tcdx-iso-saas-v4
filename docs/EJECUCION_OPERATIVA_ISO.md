@@ -146,7 +146,7 @@ psql "$DATABASE_URL_ADMIN" -v ON_ERROR_STOP=1 -c "GRANT SELECT ON v_iso_operatio
 Validar API:
 
 ```bash
-export API_URL="http://192.168.100.120:3000"
+export API_URL="http://bk.tcdx.int:3000"
 export TEST_EMAIL="admin@rieltec.com"
 export TEST_PASSWORD="123456"
 

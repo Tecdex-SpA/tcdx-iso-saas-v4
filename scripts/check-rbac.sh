@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-API="${API:-http://192.168.100.120:3000}"
+API="${API:-https://181.212.166.187:8443}"
 
 GREEN="\033[0;32m"
 RED="\033[0;31m"

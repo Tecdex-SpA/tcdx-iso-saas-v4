@@ -44,7 +44,7 @@ function resolveTenantId(req) {
 }
 
 function getFrontendUrl() {
-  return String(process.env.FRONTEND_URL || 'http://192.168.100.130:3000').replace(/\/$/, '')
+  return String(process.env.FRONTEND_URL || 'https://181.212.166.187:8443').replace(/\/$/, '')
 }
 
 function getStateSecret() {

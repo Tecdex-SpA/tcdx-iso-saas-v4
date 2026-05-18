@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AI_ENGINE_URL="${AI_ENGINE_URL:-http://192.168.100.140:8001}"
+AI_ENGINE_URL="${AI_ENGINE_URL:-http://ai.tcdx.int:8001}"
 AI_INTERNAL_TOKEN="${AI_INTERNAL_TOKEN:-${AI_TOKEN:-}}"
 
 fail() {

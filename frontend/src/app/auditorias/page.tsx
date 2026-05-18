@@ -12,7 +12,7 @@ import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabe
 import { translateDisplayText, translateStatusLabel, translatePriorityLabel, translateSeverityLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
 type AuditRow = {
   id: string;

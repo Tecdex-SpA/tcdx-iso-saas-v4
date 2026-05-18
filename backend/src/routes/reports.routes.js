@@ -1288,7 +1288,7 @@ function getReportPublicBaseUrl() {
     process.env.REPORT_PUBLIC_BASE_URL ||
     process.env.PUBLIC_BASE_URL ||
     process.env.API_PUBLIC_URL ||
-    'http://192.168.100.120:3000'
+    'http://bk.tcdx.int:3000'
   ).replace(/\/+$/, '');
 }
 
@@ -1377,7 +1377,7 @@ function getTcdxLogoSourceForReport() {
   return (
     process.env.REPORT_TCDX_LOGO_URL ||
     process.env.TCDX_LOGO_URL ||
-    'http://192.168.100.130:3000/logo.png'
+    'https://181.212.166.187:8443/logo.png'
   );
 }
 

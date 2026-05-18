@@ -137,7 +137,7 @@ En producción avanzada se recomienda complementar con Oracle Monitoring, métri
 
 ## Cierre Fase 4 y nota AI Engine 8001
 
-El laboratorio validado mantiene AI Engine en `192.168.100.140:8001`.
+El laboratorio validado mantiene AI Engine en `ai.tcdx.int:8001`.
 
 Para Oracle Cloud se recomienda decidir explícitamente antes del cutover:
 

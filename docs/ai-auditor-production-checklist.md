@@ -36,8 +36,8 @@ bash -n scripts/qa-ai-auditor-full.sh
 QA operacional:
 
 ```bash
-API_URL=http://192.168.100.120:3000 \
-FRONTEND_URL=http://192.168.100.130:3000 \
+API_URL=http://bk.tcdx.int:3000 \
+FRONTEND_URL=https://181.212.166.187:8443 \
 EMAIL=admin@rieltec.com \
 PASSWORD=123456 \
 bash ./scripts/qa-ai-auditor-full.sh
