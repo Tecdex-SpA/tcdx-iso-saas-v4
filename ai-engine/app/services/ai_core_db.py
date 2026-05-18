@@ -39,15 +39,15 @@ def get_connection():
     Conexión PostgreSQL usando el usuario solo lectura ai_reader.
     """
     return psycopg2.connect(
-        host=os.getenv("AI_CORE_DB_HOST", "192.168.100.110"),
-        port=int(os.getenv("AI_CORE_DB_PORT", "5432")),
-        dbname=os.getenv("AI_CORE_DB_NAME", "tecdex_saas"),
-        user=os.getenv("AI_CORE_DB_USER", "ai_reader"),
-        password=os.getenv("AI_CORE_DB_PASSWORD", ""),
+        host=os.getenv("AI_CORE_DB_HOST") or os.getenv("DB_HOST", "db.tcdx.int"),
+        port=os.getenv("AI_CORE_DB_PORT") or os.getenv("DB_PORT", "5432"),
+        dbname=os.getenv("AI_CORE_DB_NAME") or os.getenv("DB_NAME", "tecdex_saas"),
+        user=os.getenv("AI_CORE_DB_USER") or os.getenv("DB_USER", "tecdex_user"),
+        password=os.getenv("AI_CORE_DB_PASSWORD") or os.getenv("DB_PASSWORD"),
         sslmode=os.getenv("AI_CORE_DB_SSLMODE", "disable"),
         cursor_factory=RealDictCursor,
     )
-
+)
 
 def fetch_all(query: str, params: Optional[Sequence[Any]] = None) -> List[Dict[str, Any]]:
     """
