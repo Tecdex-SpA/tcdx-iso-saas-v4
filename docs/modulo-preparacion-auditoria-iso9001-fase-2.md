@@ -245,7 +245,7 @@ x-ai-token: $AI_INTERNAL_TOKEN
 Variables esperadas:
 
 ```bash
-AI_INTERNAL_TOKEN=tecdex_ai_internal_2026
+AI_INTERNAL_TOKEN=<AI_INTERNAL_TOKEN>
 AI_ENGINE_URL=http://192.168.100.140:8001
 ```
 

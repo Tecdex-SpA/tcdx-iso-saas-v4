@@ -28,7 +28,7 @@ echo "4) Regresión multi-norma"
 echo "------------------------------------------------------------"
 AI_HOST="127.0.0.1" \
 AI_PORT="8001" \
-AI_TOKEN="tecdex_ai_internal_2026" \
+AI_TOKEN="${AI_TOKEN:?AI_TOKEN requerido para regresión multi-norma}" \
 TENANT_ID="697eefa4-3b56-4c8a-a7d4-6d512c40233e" \
 PYTHONPATH=/home/tecdex/ai-engine \
 ./venv/bin/python app/scripts/qa/test_ai_regression_multinorma.py
