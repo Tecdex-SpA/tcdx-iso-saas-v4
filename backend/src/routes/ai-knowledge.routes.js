@@ -42,6 +42,8 @@ function sanitizeLimit(value, fallback = 8) {
 
 function internalAuth(req, res, next) {
   const incoming =
+    req.headers['x-ai-token'] ||
+    req.headers['x-internal-token'] ||
     req.headers['x-ai-internal-token'] ||
     req.headers['x-ai-engine-token'] ||
     '';
@@ -49,14 +51,18 @@ function internalAuth(req, res, next) {
   if (!process.env.AI_INTERNAL_TOKEN) {
     return res.status(500).json({
       ok: false,
-      error: 'AI_INTERNAL_TOKEN no está definido en backend',
+      code: 'AI_INTERNAL_AUTH_UNAVAILABLE',
+      error: 'Autenticación interna IA no disponible',
+      request_id: req.requestId || null,
     });
   }
 
   if (incoming !== process.env.AI_INTERNAL_TOKEN) {
     return res.status(401).json({
       ok: false,
-      error: 'Token interno inválido',
+      code: 'INTERNAL_AI_TOKEN_INVALID',
+      error: 'Token interno IA inválido',
+      request_id: req.requestId || null,
     });
   }
 
