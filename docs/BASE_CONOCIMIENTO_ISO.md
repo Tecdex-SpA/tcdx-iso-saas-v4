@@ -124,7 +124,7 @@ Versiones permitidas en fase 1.1:
 ## Validaciones curl
 
 ```bash
-export API="http://192.168.100.120:3000"
+export API="http://bk.tcdx.int:3000"
 export TOKEN="PEGAR_TOKEN_VALIDO"
 
 curl -s "$API/api/iso-knowledge/standards" \
@@ -147,7 +147,7 @@ Tambien existe:
 
 ```bash
 chmod +x scripts/validate-iso-knowledge.sh
-API="http://192.168.100.120:3000" TOKEN="$TOKEN" bash scripts/validate-iso-knowledge.sh
+API="http://bk.tcdx.int:3000" TOKEN="$TOKEN" bash scripts/validate-iso-knowledge.sh
 ```
 
 ## Consultas SQL de validacion

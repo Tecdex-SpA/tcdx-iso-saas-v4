@@ -19,12 +19,12 @@ No se deben commitear archivos `.env` reales.
 ## Laboratorio actual
 
 ```text
-Mac/Navegador → http://192.168.100.130:3000
+Mac/Navegador → https://181.212.166.187:8443
 Nginx VM frontend :3000 → http://127.0.0.1:8080
 Next.js interno → 8080
-Backend → http://192.168.100.120:3000
-ai-engine → http://192.168.100.140:8000
-PostgreSQL → 192.168.100.110:5432
+Backend → http://bk.tcdx.int:3000
+ai-engine → http://ai.tcdx.int:8001
+PostgreSQL → db.tcdx.int:5432
 ```
 
 ## Frontend
@@ -39,8 +39,8 @@ Contenido base:
 
 ```env
 NEXT_PUBLIC_APP_ENV=development
-NEXT_PUBLIC_API_URL=http://192.168.100.120:3000
-NEXT_PUBLIC_FRONTEND_URL=http://192.168.100.130:3000
+NEXT_PUBLIC_API_URL=http://bk.tcdx.int:3000
+NEXT_PUBLIC_FRONTEND_URL=https://181.212.166.187:8443
 NEXT_PUBLIC_FRONTEND_INTERNAL_URL=http://127.0.0.1:8080
 ```
 
@@ -57,16 +57,16 @@ Contenido base sin secretos:
 ```env
 NODE_ENV=development
 PORT=3000
-DB_HOST=192.168.100.110
+DB_HOST=db.tcdx.int
 DB_PORT=5432
 DB_NAME=tecdex_saas
 DB_USER=<usuario_real>
 DB_PASSWORD=<password_real>
-AI_ENGINE_URL=http://192.168.100.140:8000
-FRONTEND_URL=http://192.168.100.130:3000
+AI_ENGINE_URL=http://ai.tcdx.int:8001
+FRONTEND_URL=https://181.212.166.187:8443
 FRONTEND_INTERNAL_URL=http://127.0.0.1:8080
-CORS_ORIGIN=http://192.168.100.130:3000
-CORS_ORIGINS=http://192.168.100.130:3000,http://192.168.100.130:8080
+CORS_ORIGIN=https://181.212.166.187:8443
+CORS_ORIGINS=https://181.212.166.187:8443,http://www.tcdx.int:8080
 JWT_SECRET=<secreto_real>
 AI_INTERNAL_TOKEN=<token_real>
 ```
@@ -84,7 +84,7 @@ Contenido base sin secretos:
 ```env
 AI_ENGINE_HOST=0.0.0.0
 AI_ENGINE_PORT=8000
-BACKEND_API_URL=http://192.168.100.120:3000
+BACKEND_API_URL=http://bk.tcdx.int:3000
 DATABASE_URL=<url_real_si_aplica>
 AI_INTERNAL_TOKEN=<token_real>
 BRAVE_API_KEY=<key_real_si_aplica>
@@ -122,7 +122,7 @@ Estas variables controlan rate limiting en memoria y límite de payload JSON. No
 Aunque la arquitectura objetivo puede normalizar AI Engine en `8000`, el laboratorio actual validado opera en:
 
 ```text
-AI_ENGINE_URL=http://192.168.100.140:8001
+AI_ENGINE_URL=http://ai.tcdx.int:8001
 ```
 
 La normalización a `8000` queda como pendiente controlado para una fase posterior.

@@ -83,7 +83,7 @@ function postJsonToAI(path, payload) {
     const aiHost =
       process.env.AI_HOST ||
       process.env.AI_ENGINE_HOST ||
-      '192.168.100.140';
+      'ai.tcdx.int';
 
     const aiPort =
       process.env.AI_PORT ||

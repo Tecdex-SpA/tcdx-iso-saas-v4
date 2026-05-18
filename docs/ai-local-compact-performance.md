@@ -137,7 +137,7 @@ Las llamadas v2 de resumen/brief se ajustan a `local_compact`, `depth=executive`
 ## Pruebas Post-Deploy
 
 ```bash
-time curl --connect-timeout 3 --max-time 10 -i -s http://192.168.100.140:8001/health | head -n 40
+time curl --connect-timeout 3 --max-time 10 -i -s http://ai.tcdx.int:8001/health | head -n 40
 ```
 
 ```bash

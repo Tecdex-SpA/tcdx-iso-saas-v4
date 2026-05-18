@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKEND_HOST="${BACKEND_HOST:-192.168.100.120}"
-AI_ENGINE_HOST="${AI_ENGINE_HOST:-192.168.100.140}"
+BACKEND_HOST="${BACKEND_HOST:-bk.tcdx.int}"
+AI_ENGINE_HOST="${AI_ENGINE_HOST:-ai.tcdx.int}"
 BACKEND_ENV_FILE="${BACKEND_ENV_FILE:-/etc/tecdex/backend.env}"
 AI_ENGINE_ENV_FILE="${AI_ENGINE_ENV_FILE:-/etc/tecdex/ai-engine.env}"
 SSH_USER="${SSH_USER:-tecdex}"

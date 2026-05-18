@@ -4,10 +4,10 @@ Repositorio privado del proyecto SaaS ISO/TCDX.
 
 ## Arquitectura actual
 
-- Base de datos PostgreSQL: 192.168.100.110
-- Backend Node.js/Express: 192.168.100.120
-- Frontend Next.js: 192.168.100.130
-- Motor IA: 192.168.100.140
+- Base de datos PostgreSQL: db.tcdx.int
+- Backend Node.js/Express: bk.tcdx.int
+- Frontend Next.js: www.tcdx.int
+- Motor IA: ai.tcdx.int
 
 ## Estructura
 

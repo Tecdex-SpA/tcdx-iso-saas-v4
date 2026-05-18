@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DB_HOST="${DB_HOST:-192.168.100.110}"
+DB_HOST="${DB_HOST:-db.tcdx.int}"
 DB_NAME="${DB_NAME:-tecdex_saas}"
 TENANT_ID="${TENANT_ID:-697eefa4-3b56-4c8a-a7d4-6d512c40233e}"
 

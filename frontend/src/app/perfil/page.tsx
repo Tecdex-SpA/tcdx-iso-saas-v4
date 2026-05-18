@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
+
 export default function PerfilPage() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -27,7 +30,7 @@ export default function PerfilPage() {
     try {
       setLoading(true);
 
-      const res = await fetch(`http://192.168.100.120:3000/api/user/me`, {
+      const res = await fetch(`${API_URL}/api/user/me`, {
         headers: { Authorization: `Bearer ${authToken}` }
       });
 
@@ -69,7 +72,7 @@ export default function PerfilPage() {
     try {
       setSavingProfile(true);
 
-      const res = await fetch(`http://192.168.100.120:3000/api/user/me`, {
+      const res = await fetch(`${API_URL}/api/user/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -111,7 +114,7 @@ export default function PerfilPage() {
     try {
       setSavingPassword(true);
 
-      const res = await fetch(`http://192.168.100.120:3000/api/user/me/password`, {
+      const res = await fetch(`${API_URL}/api/user/me/password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -154,7 +157,7 @@ export default function PerfilPage() {
       const fd = new FormData();
       fd.append('avatar', file);
 
-      const res = await fetch(`http://192.168.100.120:3000/api/user/me/avatar`, {
+      const res = await fetch(`${API_URL}/api/user/me/avatar`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`
@@ -180,7 +183,7 @@ export default function PerfilPage() {
   };
 
   const avatarUrl = user?.avatar
-    ? `http://192.168.100.120:3000/uploads/profiles/${user.avatar}?t=${Date.now()}`
+    ? `${API_URL}/uploads/profiles/${user.avatar}?t=${Date.now()}`
     : null;
 
   if (loading) {

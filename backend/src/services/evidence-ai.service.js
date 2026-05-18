@@ -27,7 +27,7 @@ const EVIDENCE_AI_SERVICE_USER_ID = String(
 ).trim();
 
 const OWN_AI_BASE_URL = String(
-  process.env.OWN_AI_BASE_URL || 'http://192.168.100.140:8001'
+  process.env.OWN_AI_BASE_URL || 'http://ai.tcdx.int:8001'
 ).replace(/\/+$/, '');
 
 const OWN_AI_EVIDENCE_PROCESS_ENDPOINT = String(
@@ -37,7 +37,7 @@ const OWN_AI_EVIDENCE_PROCESS_ENDPOINT = String(
 const OWN_AI_TIMEOUT_MS = Number(process.env.OWN_AI_TIMEOUT_MS || 45000);
 
 const BACKEND_PUBLIC_URL = String(
-  process.env.BACKEND_PUBLIC_URL || 'http://192.168.100.120:3000'
+  process.env.BACKEND_PUBLIC_URL || 'http://bk.tcdx.int:3000'
 ).replace(/\/+$/, '');
 
 const OWN_AI_SHARED_SECRET = String(

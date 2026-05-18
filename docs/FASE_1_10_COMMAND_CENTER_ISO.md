@@ -108,8 +108,8 @@ npx eslint src/app/command-center-iso/page.tsx src/components/command-center-iso
 Script:
 
 ```bash
-export API_URL="http://192.168.100.120:3000"
-export FRONTEND_URL="http://192.168.100.130:3000"
+export API_URL="http://bk.tcdx.int:3000"
+export FRONTEND_URL="https://181.212.166.187:8443"
 export TEST_EMAIL="admin@rieltec.com"
 export TEST_PASSWORD="123456"
 bash scripts/validate-iso-command-center.sh

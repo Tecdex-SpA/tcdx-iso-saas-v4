@@ -5,7 +5,7 @@
 El frontend público del laboratorio no se expone directamente por 8080.
 
 ```text
-http://192.168.100.130:3000 → Nginx → http://127.0.0.1:8080
+https://181.212.166.187:8443 → Nginx → http://127.0.0.1:8080
 ```
 
 Next.js corre interno en 8080. Nginx expone 3000 porque el acceso directo a 8080 queda bloqueado fuera de Ubuntu/Next/UFW en el laboratorio.

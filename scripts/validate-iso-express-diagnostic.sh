@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-API="${API:-http://192.168.100.120:3000}"
+API="${API:-https://181.212.166.187:8443}"
 TOKEN="${TOKEN:-}"
 TENANT_ID="${TENANT_ID:-}"
 

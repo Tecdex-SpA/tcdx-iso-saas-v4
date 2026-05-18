@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
 type Suggestion = {
   id: string;

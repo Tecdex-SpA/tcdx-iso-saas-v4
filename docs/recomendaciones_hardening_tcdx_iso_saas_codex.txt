@@ -10,10 +10,10 @@ baruj77/tcdx-iso-saas sin romper la línea actual del proyecto.
 Contexto general:
 El proyecto TCDX ISO SaaS está compuesto por:
 
-- Base de datos PostgreSQL en VM 192.168.100.110
-- Backend Node.js / Express en VM 192.168.100.120
-- Frontend Next.js en VM 192.168.100.130
-- AI Engine FastAPI en VM 192.168.100.140
+- Base de datos PostgreSQL en VM db.tcdx.int
+- Backend Node.js / Express en VM bk.tcdx.int
+- Frontend Next.js en VM www.tcdx.int
+- AI Engine FastAPI en VM ai.tcdx.int
 
 La arquitectura objetivo para producción real será privada:
 - Backend, AI Engine y BD NO tendrán exposición directa a internet.
@@ -56,7 +56,7 @@ Estandarizar configuración segura fuera del repositorio:
 Backend:
   /etc/tecdex/backend.env
   OWN_AI_SHARED_SECRET=<mismo_token_real>
-  DB_HOST=192.168.100.110
+  DB_HOST=db.tcdx.int
   DB_PORT=5432
   DB_NAME=tecdex_saas
   DB_USER=<usuario_db>
@@ -68,13 +68,13 @@ Backend:
 AI Engine:
   /etc/tecdex/ai-engine.env
   AI_INTERNAL_TOKEN=<mismo_token_real>
-  DB_HOST=192.168.100.110
+  DB_HOST=db.tcdx.int
   DB_PORT=5432
   DB_NAME=tecdex_saas
   DB_USER=<usuario_db>
   DB_PASSWORD=<password_db>
-  BACKEND_API_URL=http://192.168.100.120:3000
-  FRONTEND_URL=http://192.168.100.130:3000
+  BACKEND_API_URL=http://bk.tcdx.int:3000
+  FRONTEND_URL=https://181.212.166.187:8443
   APP_ENV=production
 
 Tareas para Codex:
@@ -107,7 +107,7 @@ Criterios de aceptación:
 =====================================================
 
 Problema detectado:
-curl -I http://192.168.100.140:8001 responde 404 porque FastAPI no tiene ruta raíz / definida.
+curl -I http://ai.tcdx.int:8001 responde 404 porque FastAPI no tiene ruta raíz / definida.
 Esto no significa que el servicio esté caído, pero confunde validaciones y monitoreo.
 
 Recomendación:
@@ -134,15 +134,15 @@ Implementación esperada:
 - Usar get_configured_ai_token() / require_ai_token() ya existente.
 
 Criterios de aceptación:
-curl -I http://192.168.100.140:8001 debe devolver HTTP 200.
-curl -s http://192.168.100.140:8001/health debe devolver:
+curl -I http://ai.tcdx.int:8001 debe devolver HTTP 200.
+curl -s http://ai.tcdx.int:8001/health debe devolver:
 {
   "ok": true,
   "service": "AI Compliance Engine",
   "status": "running"
 }
 
-curl -s http://192.168.100.140:8001/health/deep -H "x-ai-token: $AI_INTERNAL_TOKEN" debe devolver:
+curl -s http://ai.tcdx.int:8001/health/deep -H "x-ai-token: $AI_INTERNAL_TOKEN" debe devolver:
 {
   "ok": true,
   "service": "AI Compliance Engine",
@@ -360,19 +360,19 @@ Criterios de aceptación:
 
 Pruebas mínimas:
 Backend:
-curl -I http://192.168.100.120:3000
-curl -s http://192.168.100.120:3000/
+curl -I http://bk.tcdx.int:3000
+curl -s http://bk.tcdx.int:3000/
 
 Frontend:
-curl -I http://192.168.100.130:3000/login
-curl -I http://192.168.100.130:3000/dashboard
-curl -I http://192.168.100.130:3000/auditorias
-curl -I http://192.168.100.130:3000/evidencias
-curl -I http://192.168.100.130:3000/prefacturacion
+curl -I https://181.212.166.187:8443/login
+curl -I https://181.212.166.187:8443/dashboard
+curl -I https://181.212.166.187:8443/auditorias
+curl -I https://181.212.166.187:8443/evidencias
+curl -I https://181.212.166.187:8443/prefacturacion
 
 AI Engine:
-curl -I http://192.168.100.140:8001
-curl -s http://192.168.100.140:8001/health
+curl -I http://ai.tcdx.int:8001
+curl -s http://ai.tcdx.int:8001/health
 
 DB:
 Validar tablas, vistas y funciones críticas.
@@ -405,7 +405,7 @@ Aun así, se recomienda restringirlo preventivamente, especialmente si algún d�
 
 Recomendación:
 Usar variable:
-CORS_ORIGINS=http://192.168.100.130:3000,https://saas.tcdx.cl
+CORS_ORIGINS=https://181.212.166.187:8443,https://saas.tcdx.cl
 
 Implementación sugerida:
 const allowedOrigins = String(process.env.CORS_ORIGINS || '')
@@ -608,7 +608,7 @@ Criterios:
 
 Problema:
 Frontend usa fallback:
-NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000'
+NEXT_PUBLIC_API_URL || 'http://bk.tcdx.int:3000'
 
 Para laboratorio está bien.
 Para producción privada/publicada puede ser riesgoso si se olvida definir variable.
@@ -830,10 +830,10 @@ grep -R "detail: error.message" backend/src/routes backend/src/controllers backe
 grep -R "app.use(cors())" backend/src || true
 grep -R "AI_INTERNAL_TOKEN\|AI_TOKEN\|OWN_AI_SHARED_SECRET" backend ai-engine scripts docs || true
 grep -R "bcryptjs\|bcrypt" backend/src backend/package.json || true
-grep -R "192.168.100" backend frontend ai-engine scripts || true
+grep -R "<legacy-lab-ip-prefix>" backend frontend ai-engine scripts || true
 
 Backend VM:
-ssh tecdex@192.168.100.120
+ssh tecdex@bk.tcdx.int
 sudo systemctl cat tecdex-backend
 sudo systemctl status tecdex-backend --no-pager
 
@@ -841,17 +841,17 @@ cd /home/tecdex/backend
 sudo grep -E '^(DB_|JWT_|OWN_AI_SHARED_SECRET|AI_INTERNAL_TOKEN|AI_TOKEN|PORT|NODE_ENV)=' .env 2>/dev/null | awk -F= '{print $1 " LEN=" length($2)}'
 
 AI Engine VM:
-ssh tecdex@192.168.100.140
+ssh tecdex@ai.tcdx.int
 sudo systemctl cat ai-engine
 sudo systemctl status ai-engine --no-pager
 
 sudo grep -E '^(AI_INTERNAL_TOKEN|AI_TOKEN|DB_|BACKEND_API_URL)=' /etc/tecdex/ai-engine.env 2>/dev/null | awk -F= '{print $1 " LEN=" length($2)}'
 
-curl -I http://192.168.100.140:8001
-curl -s http://192.168.100.140:8001/health | python3 -m json.tool
+curl -I http://ai.tcdx.int:8001
+curl -s http://ai.tcdx.int:8001/health | python3 -m json.tool
 
 DB VM:
-ssh tecdex@192.168.100.110
+ssh tecdex@db.tcdx.int
 
 sudo -u postgres psql -d tecdex_saas -c "
 SELECT to_regclass('public.audit_control_reviews') AS audit_control_reviews,

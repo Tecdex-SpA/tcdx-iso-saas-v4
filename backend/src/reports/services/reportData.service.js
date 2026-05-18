@@ -3,7 +3,7 @@ const { renderAiAuditorPremiumTemplate } = require('../../reports/templates/aiAu
 const { buildReportAiEnrichment } = require('../../services/reportAiEnrichment.service');
 
 const AI_ENGINE_URL =
-  process.env.AI_ENGINE_URL || 'http://192.168.100.140:8001';
+  process.env.AI_ENGINE_URL || 'http://ai.tcdx.int:8001';
 
 function getAiInternalToken() {
   const token = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';

@@ -117,7 +117,7 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=
 GOOGLE_DRIVE_SCOPES=https://www.googleapis.com/auth/drive.metadata.readonly
 TOKEN_ENCRYPTION_KEY=
-AI_ENGINE_URL=http://192.168.100.140:8001
+AI_ENGINE_URL=http://ai.tcdx.int:8001
 ```
 
 Microsoft futuro:
@@ -175,13 +175,13 @@ app.use('/api/document-integrations', documentIntegrationsRoutes);
 ### 4. Aplicar migración BD
 
 ```bash
-psql -h 192.168.100.110 -U tecdex -d tecdex_saas -f database/migrations/20260512_001_centro_inteligente_evidencias_base.sql
+psql -h db.tcdx.int -U tecdex -d tecdex_saas -f database/migrations/20260512_001_centro_inteligente_evidencias_base.sql
 ```
 
 ### 5. Validar tablas
 
 ```bash
-psql -h 192.168.100.110 -U tecdex -d tecdex_saas
+psql -h db.tcdx.int -U tecdex -d tecdex_saas
 ```
 
 Dentro de `psql`:
@@ -236,7 +236,7 @@ cd ~/repos/tcdx-iso-saas
 ### 11. Deploy manual backend si hace falta
 
 ```bash
-ssh tecdex@192.168.100.120
+ssh tecdex@bk.tcdx.int
 cd /home/tecdex/backend
 git pull origin main
 npm install
@@ -247,7 +247,7 @@ sudo systemctl status tecdex-backend --no-pager
 ### 12. Deploy manual frontend si hace falta
 
 ```bash
-ssh tecdex@192.168.100.130
+ssh tecdex@www.tcdx.int
 cd /home/tecdex/frontend
 git pull origin main
 npm install
@@ -260,7 +260,7 @@ npm start
 Backend health:
 
 ```bash
-curl http://192.168.100.120:3000/
+curl http://bk.tcdx.int:3000/
 ```
 
 Con token real:
@@ -269,21 +269,21 @@ Con token real:
 TOKEN="PEGAR_TOKEN_REAL"
 TENANT_ID="PEGAR_TENANT_ID_REAL"
 
-curl -H "Authorization: Bearer $TOKEN" "http://192.168.100.120:3000/api/document-integrations/providers"
+curl -H "Authorization: Bearer $TOKEN" "http://bk.tcdx.int:3000/api/document-integrations/providers"
 
-curl -H "Authorization: Bearer $TOKEN" "http://192.168.100.120:3000/api/document-integrations/integrations?tenant_id=$TENANT_ID"
+curl -H "Authorization: Bearer $TOKEN" "http://bk.tcdx.int:3000/api/document-integrations/integrations?tenant_id=$TENANT_ID"
 
-curl -H "Authorization: Bearer $TOKEN" "http://192.168.100.120:3000/api/document-integrations/sources?tenant_id=$TENANT_ID"
+curl -H "Authorization: Bearer $TOKEN" "http://bk.tcdx.int:3000/api/document-integrations/sources?tenant_id=$TENANT_ID"
 
-curl -H "Authorization: Bearer $TOKEN" "http://192.168.100.120:3000/api/document-integrations/documents?tenant_id=$TENANT_ID"
+curl -H "Authorization: Bearer $TOKEN" "http://bk.tcdx.int:3000/api/document-integrations/documents?tenant_id=$TENANT_ID"
 
-curl -H "Authorization: Bearer $TOKEN" "http://192.168.100.120:3000/api/document-integrations/suggestions?tenant_id=$TENANT_ID"
+curl -H "Authorization: Bearer $TOKEN" "http://bk.tcdx.int:3000/api/document-integrations/suggestions?tenant_id=$TENANT_ID"
 ```
 
 Frontend:
 
 ```text
-http://192.168.100.130:3000/evidencias
+https://181.212.166.187:8443/evidencias
 ```
 
 Validar:

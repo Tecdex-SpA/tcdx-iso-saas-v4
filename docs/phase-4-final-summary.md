@@ -35,16 +35,16 @@ Convertir el sistema desde un producto funcional de laboratorio a una base produ
 
 ```text
 Usuario/Mac
-  -> http://192.168.100.130:3000
+  -> https://181.212.166.187:8443
   -> Nginx frontend
   -> Next.js interno 127.0.0.1:8080
 
 Frontend
-  -> Backend http://192.168.100.120:3000
+  -> Backend http://bk.tcdx.int:3000
 
 Backend
-  -> PostgreSQL 192.168.100.110:5432
-  -> AI Engine 192.168.100.140:8001
+  -> PostgreSQL db.tcdx.int:5432
+  -> AI Engine ai.tcdx.int:8001
 ```
 
 ## Arquitectura cloud objetivo

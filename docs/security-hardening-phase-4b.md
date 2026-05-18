@@ -19,9 +19,9 @@ Fortalecer la seguridad base del backend TCDX ISO SaaS antes de pilotos y despli
 Origenes permitidos:
 
 ```env
-CORS_ORIGIN=http://192.168.100.130:3000
-CORS_ORIGINS=http://192.168.100.130:3000,http://192.168.100.130:8080
-FRONTEND_URL=http://192.168.100.130:3000
+CORS_ORIGIN=https://181.212.166.187:8443
+CORS_ORIGINS=https://181.212.166.187:8443,http://www.tcdx.int:8080
+FRONTEND_URL=https://181.212.166.187:8443
 FRONTEND_INTERNAL_URL=http://127.0.0.1:8080
 ```
 
@@ -81,8 +81,8 @@ El rate limit es en memoria y apto para laboratorio / single instance. Para prod
 Ejecutar:
 
 ```bash
-API_URL=http://192.168.100.120:3000 \
-FRONTEND_URL=http://192.168.100.130:3000 \
+API_URL=http://bk.tcdx.int:3000 \
+FRONTEND_URL=https://181.212.166.187:8443 \
 EMAIL=admin@rieltec.com \
 PASSWORD=123456 \
 bash ./scripts/qa-security-basic.sh

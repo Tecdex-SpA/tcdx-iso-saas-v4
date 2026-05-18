@@ -10,10 +10,10 @@ Esta fase no incorpora herramientas pesadas. Usa scripts versionados, `curl`, sy
 
 | Componente | Validación |
 |---|---|
-| Frontend externo lab | `http://192.168.100.130:3000/login` |
+| Frontend externo lab | `https://181.212.166.187:8443/login` |
 | Next interno | `http://127.0.0.1:8080/login` desde VM frontend |
-| Backend | `http://192.168.100.120:3000/` |
-| AI Engine | `http://192.168.100.140:8001/health` |
+| Backend | `http://bk.tcdx.int:3000/` |
+| AI Engine | `http://ai.tcdx.int:8001/health` |
 | IA Auditor | `/api/ai-auditor/scope` con token |
 | IA Compliance | `/api/ai-compliance/engine-health` con token |
 | Nginx | `systemctl status nginx` y proxy 3000 |
@@ -26,9 +26,9 @@ Esta fase no incorpora herramientas pesadas. Usa scripts versionados, `curl`, sy
 ### Monitor runtime
 
 ```bash
-API_URL=http://192.168.100.120:3000 \
-FRONTEND_URL=http://192.168.100.130:3000 \
-AI_ENGINE_URL=http://192.168.100.140:8001 \
+API_URL=http://bk.tcdx.int:3000 \
+FRONTEND_URL=https://181.212.166.187:8443 \
+AI_ENGINE_URL=http://ai.tcdx.int:8001 \
 EMAIL=admin@rieltec.com \
 PASSWORD=123456 \
 bash scripts/monitor-runtime.sh
@@ -59,9 +59,9 @@ En Mac puede producir advertencias porque no existen `systemctl` o `journalctl`.
 ### QA observability
 
 ```bash
-API_URL=http://192.168.100.120:3000 \
-FRONTEND_URL=http://192.168.100.130:3000 \
-AI_ENGINE_URL=http://192.168.100.140:8001 \
+API_URL=http://bk.tcdx.int:3000 \
+FRONTEND_URL=https://181.212.166.187:8443 \
+AI_ENGINE_URL=http://ai.tcdx.int:8001 \
 EMAIL=admin@rieltec.com \
 PASSWORD=123456 \
 bash scripts/qa-observability.sh
@@ -149,7 +149,7 @@ para diagnóstico y recuperación.
 El estado real validado del laboratorio es:
 
 ```text
-AI Engine: http://192.168.100.140:8001
+AI Engine: http://ai.tcdx.int:8001
 ```
 
 El objetivo futuro puede normalizarse a `8000`, pero no es bloqueo operativo mientras backend, IA Auditor e IA Compliance validen contra `8001`.

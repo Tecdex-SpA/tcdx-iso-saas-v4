@@ -7,7 +7,7 @@ import { getUserFromToken } from '@/utils/auth';
 import { translateDisplayText, translateStatusLabel, translateStandardLabel, translateBillingConceptLabel } from '@/i18n/displayText';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
 const ui = {
   es: {

@@ -202,7 +202,7 @@ const aiEngineClient = require('../services/aiEngineClient.service');
 const { createAiTimer, resolveAiMode } = require('../services/aiRuntimeMetrics.service');
 
 const AI_ENGINE_URL =
-  process.env.AI_ENGINE_URL || 'http://192.168.100.140:8000';
+  process.env.AI_ENGINE_URL || 'http://ai.tcdx.int:8001';
 
 function getUserTenantId(user) {
   return (

@@ -139,7 +139,7 @@ type LifecycleHistoryRow = {
 };
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://192.168.100.120:3000';
+  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
 function getToken(): string {
   if (typeof window === 'undefined') return '';

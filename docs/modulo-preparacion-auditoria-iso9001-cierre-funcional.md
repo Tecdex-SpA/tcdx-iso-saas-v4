@@ -46,7 +46,7 @@ La pasada avanzada agrega salida real de documentos, extracción profunda básic
 Backend:
 
 ```bash
-AI_ENGINE_URL=http://192.168.100.140:8001
+AI_ENGINE_URL=http://ai.tcdx.int:8001
 AI_INTERNAL_TOKEN=<AI_INTERNAL_TOKEN>
 ```
 
@@ -206,7 +206,7 @@ curl -L -H "Authorization: Bearer $TOKEN" \
 
 ## Deploy
 
-Backend VM `192.168.100.120`:
+Backend VM `bk.tcdx.int`:
 
 ```bash
 cd /home/tecdex/backend
@@ -222,7 +222,7 @@ sudo systemctl restart tecdex-backend
 sudo systemctl status tecdex-backend --no-pager
 ```
 
-AI engine VM `192.168.100.140`:
+AI engine VM `ai.tcdx.int`:
 
 ```bash
 cd /home/tecdex/ai-engine
@@ -232,7 +232,7 @@ sudo systemctl restart ai-engine
 curl -s http://localhost:8001/health | python3 -m json.tool
 ```
 
-Frontend VM `192.168.100.130`:
+Frontend VM `www.tcdx.int`:
 
 ```bash
 cd /home/tecdex/frontend

@@ -15,14 +15,14 @@ Variables minimas:
 ```ini
 NODE_ENV=production
 PORT=3000
-DB_HOST=192.168.100.110
+DB_HOST=db.tcdx.int
 DB_PORT=5432
 DB_NAME=tecdex_saas
 DB_USER=<usuario_db>
 DB_PASSWORD=<password_db>
 JWT_SECRET=<jwt_secret>
 OWN_AI_SHARED_SECRET=<mismo_token_real_del_ai_engine>
-CORS_ORIGINS=http://192.168.100.130:3000,https://saas.tcdx.cl
+CORS_ORIGINS=https://181.212.166.187:8443,https://saas.tcdx.cl
 ```
 
 Override systemd recomendado:
@@ -53,14 +53,14 @@ Variables minimas:
 
 ```ini
 APP_ENV=production
-DB_HOST=192.168.100.110
+DB_HOST=db.tcdx.int
 DB_PORT=5432
 DB_NAME=tecdex_saas
 DB_USER=<usuario_db>
 DB_PASSWORD=<password_db>
 AI_INTERNAL_TOKEN=<mismo_token_real_del_backend>
-BACKEND_API_URL=http://192.168.100.120:3000
-FRONTEND_URL=http://192.168.100.130:3000
+BACKEND_API_URL=http://bk.tcdx.int:3000
+FRONTEND_URL=https://181.212.166.187:8443
 ```
 
 Override systemd recomendado:
