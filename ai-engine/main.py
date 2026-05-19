@@ -19,7 +19,15 @@ from app.routes.senior_auditor_v2 import router as senior_auditor_v2_router
 from app.core.config import settings
 from app.core.db import test_db_connection
 
-app = FastAPI(title=settings.APP_NAME)
+docs_options = {}
+if not getattr(settings, "AI_ENGINE_PUBLIC_DOCS", False):
+    docs_options = {
+        "docs_url": None,
+        "redoc_url": None,
+        "openapi_url": None,
+    }
+
+app = FastAPI(title=settings.APP_NAME, **docs_options)
 
 MAX_REMOTE_FILE_BYTES = int(os.getenv("AI_REMOTE_FILE_MAX_BYTES", str(15 * 1024 * 1024)))
 ALLOWED_REMOTE_SCHEMES = {"http", "https"}

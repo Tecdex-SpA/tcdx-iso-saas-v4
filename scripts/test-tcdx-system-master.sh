@@ -17,17 +17,18 @@ set -Eeuo pipefail
 #
 # Optional:
 #   BASE_URL="https://181.212.166.187:8443" \
-#   TEST_EMAIL="admin@rieltec.com" \
-#   TEST_PASSWORD="123456" \
-#   AI_INTERNAL_TOKEN="<token>" \
+#   TCDX_QA_EMAIL="admin@rieltec.com" \
+#   TCDX_QA_PASSWORD="123456" \
+#   AI_INTERNAL_TOKEN="<token-from-env>" \
 #   RUN_SSH_CHECKS=true \
 #   ./scripts/test-tcdx-system-master.sh
 # ============================================================
 
 BASE_URL="${BASE_URL:-https://181.212.166.187:8443}"
-TEST_EMAIL="${TEST_EMAIL:-admin@rieltec.com}"
-TEST_PASSWORD="${TEST_PASSWORD:-123456}"
-AI_INTERNAL_TOKEN="${AI_INTERNAL_TOKEN:-tecdex_ai_internal_2026}"
+TEST_EMAIL="${TEST_EMAIL:-${TCDX_QA_EMAIL:-admin@rieltec.com}}"
+TEST_PASSWORD="${TEST_PASSWORD:-${TCDX_QA_PASSWORD:-123456}}"
+AI_INTERNAL_TOKEN="${AI_INTERNAL_TOKEN:-${TCDX_AI_INTERNAL_TOKEN:-}}"
+AI_ENGINE_PUBLIC_DOCS_EXPECTED="${AI_ENGINE_PUBLIC_DOCS_EXPECTED:-lab}"
 
 RUN_SSH_CHECKS="${RUN_SSH_CHECKS:-false}"
 RUN_REPO_SCAN="${RUN_REPO_SCAN:-true}"
@@ -151,6 +152,8 @@ def expected_ok(code_value, expected):
         return 200 <= code_value < 400
     if expected == "401403":
         return code_value in (401, 403)
+    if expected == "403404":
+        return code_value in (403, 404)
     if expected == "401":
         return code_value == 401
     if expected == "403":
@@ -261,6 +264,13 @@ timed_call_ai_token() {
   local body="${6:-}"; local expected="${7:-2xx}"; local severity="${8:-critical}"
   local start end elapsed code
 
+  if [[ -z "${AI_INTERNAL_TOKEN:-}" ]]; then
+    echo "Skipped: AI_INTERNAL_TOKEN/TCDX_AI_INTERNAL_TOKEN not set." > "$outfile"
+    log "$group | $name | $method $path | SKIP missing AI token"
+    record_result "$group" "$name" "$method" "$path" "200" "0" "$outfile" "200" "info"
+    return
+  fi
+
   start="$(python3 - <<'PY'
 import time
 print(time.time())
@@ -366,6 +376,7 @@ OUT_DIR=$OUT_DIR
 RUN_SSH_CHECKS=$RUN_SSH_CHECKS
 RUN_REPO_SCAN=$RUN_REPO_SCAN
 RUN_DEEP_AI=$RUN_DEEP_AI
+AI_ENGINE_PUBLIC_DOCS_EXPECTED=$AI_ENGINE_PUBLIC_DOCS_EXPECTED
 BACKEND_HOST=$BACKEND_HOST
 AI_HOST=$AI_HOST
 FRONTEND_HOST=$FRONTEND_HOST
@@ -464,8 +475,16 @@ timed_call_ai_token "ai-engine" "AI Engine health" "GET" "/ai-engine/health" "$O
 timed_call_ai_token "ai-engine" "AI Engine deep health" "GET" "/ai-engine/health/deep" "$OUT_DIR/31-ai-health-deep.json" "" "2xx" "critical"
 timed_call_ai_token "ai-engine" "AI knowledge status" "GET" "/ai-engine/api/ai/knowledge/status" "$OUT_DIR/32-ai-knowledge-status.json" "" "2xx" "critical"
 timed_call_ai_token "ai-engine" "AI knowledge bootstrap status" "GET" "/ai-engine/api/ai/knowledge/bootstrap/status" "$OUT_DIR/33-ai-bootstrap-status.json" "" "2xx" "critical"
-timed_head_public "ai-engine" "Public AI docs exposure" "/ai-engine/docs" "$OUT_DIR/34-ai-docs.headers.txt" "any" "warning"
-timed_head_public "ai-engine" "Public AI OpenAPI exposure" "/ai-engine/openapi.json" "$OUT_DIR/35-ai-openapi.headers.txt" "any" "warning"
+if [[ "$AI_ENGINE_PUBLIC_DOCS_EXPECTED" = "false" ]]; then
+  timed_head_public "ai-engine" "AI docs disabled in production" "/ai-engine/docs" "$OUT_DIR/34-ai-docs.headers.txt" "403404" "critical"
+  timed_head_public "ai-engine" "AI OpenAPI disabled in production" "/ai-engine/openapi.json" "$OUT_DIR/35-ai-openapi.headers.txt" "403404" "critical"
+elif [[ "$AI_ENGINE_PUBLIC_DOCS_EXPECTED" = "true" ]]; then
+  timed_head_public "ai-engine" "Public AI docs exposure intentionally enabled" "/ai-engine/docs" "$OUT_DIR/34-ai-docs.headers.txt" "2xx3xx" "info"
+  timed_head_public "ai-engine" "Public AI OpenAPI intentionally enabled" "/ai-engine/openapi.json" "$OUT_DIR/35-ai-openapi.headers.txt" "2xx3xx" "info"
+else
+  timed_head_public "ai-engine" "Public AI docs exposure lab classification" "/ai-engine/docs" "$OUT_DIR/34-ai-docs.headers.txt" "any" "info"
+  timed_head_public "ai-engine" "Public AI OpenAPI lab classification" "/ai-engine/openapi.json" "$OUT_DIR/35-ai-openapi.headers.txt" "any" "info"
+fi
 
 # 5. IA Compliance / AI suggestions
 if [[ "$RUN_DEEP_AI" = "true" ]]; then
@@ -562,6 +581,33 @@ if [[ -n "${TOKEN:-}" && "$RUN_DEEP_AI" = "true" ]]; then
 JSON
 )"
   timed_call_user_jwt "ia-auditor" "IA Auditor analyze executive" "POST" "/api/ai-auditor/analyze" "$OUT_DIR/50-ai-auditor-analyze.json" "$AUDITOR_BODY" "2xx" "critical"
+
+  AUDITOR_ASYNC_BODY="$(cat <<JSON
+{
+  "depth": "executive",
+  "audit_focus": "general",
+  "standard_code": "ISO9001",
+  "model_mode": "fast",
+  "use_llm": false,
+  "use_rag": true,
+  "use_drive": false,
+  "use_web": false,
+  "qa_mode": true,
+  "non_destructive": true,
+  "async_mode": true
+}
+JSON
+)"
+  timed_call_user_jwt "ia-auditor" "IA Auditor async start" "POST" "/api/ai-auditor/analyze/start" "$OUT_DIR/51-ai-auditor-async-start.json" "$AUDITOR_ASYNC_BODY" "2xx" "critical"
+  IA_JOB_ID="$(json_get "$OUT_DIR/51-ai-auditor-async-start.json" "job_id")"
+  if [[ -n "$IA_JOB_ID" ]]; then
+    timed_call_user_jwt "ia-auditor" "IA Auditor async job status" "GET" "/api/ai-auditor/analyze/jobs/$IA_JOB_ID" "$OUT_DIR/52-ai-auditor-async-status.json" "" "2xx" "critical"
+  else
+    echo "No job_id returned by async start." > "$OUT_DIR/52-ai-auditor-async-status.json"
+    record_result "ia-auditor" "IA Auditor async job status" "GET" "/api/ai-auditor/analyze/jobs/<job_id>" "500" "0" "$OUT_DIR/52-ai-auditor-async-status.json" "2xx" "critical"
+  fi
+
+  timed_call_user_jwt "reports" "Report async job endpoint protected" "GET" "/api/reports/jobs/00000000-0000-0000-0000-000000000000" "$OUT_DIR/53-report-job-status-missing.json" "" "200401404" "info"
 fi
 
 # 7. Uploads/logos

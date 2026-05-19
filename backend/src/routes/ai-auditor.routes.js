@@ -8,8 +8,9 @@ const { resolveLocale } = require('../utils/locale');
 const { renderAiAuditorPremiumPdf } = require('../reports/helpers/aiAuditorPdfKitPremium.helpers');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
+const asyncJobs = require('../services/asyncJob.service');
 
-const aiAuditorJobs = new Map();
+const aiAuditorRuntimeJobs = new Map();
 const AI_AUDITOR_JOB_TTL_MS = Number(process.env.AI_AUDITOR_JOB_TTL_MS || 1000 * 60 * 60 * 6);
 
 function buildAiAuditorJobId() {
@@ -18,9 +19,9 @@ function buildAiAuditorJobId() {
 
 function pruneAiAuditorJobs() {
   const now = Date.now();
-  for (const [jobId, job] of aiAuditorJobs.entries()) {
+  for (const [jobId, job] of aiAuditorRuntimeJobs.entries()) {
     if (now - Number(job.created_at_ms || 0) > AI_AUDITOR_JOB_TTL_MS) {
-      aiAuditorJobs.delete(jobId);
+      aiAuditorRuntimeJobs.delete(jobId);
     }
   }
 }
@@ -2568,12 +2569,13 @@ function buildAiAuditorRequestSnapshot(req, requestId) {
 }
 
 async function runAiAuditorJob(jobId) {
-  const job = aiAuditorJobs.get(jobId);
+  const job = aiAuditorRuntimeJobs.get(jobId);
   if (!job) return;
   job.status = 'running';
   job.started_at = new Date().toISOString();
   job.updated_at = job.started_at;
   try {
+    await asyncJobs.markRunning(jobId);
     const reqSnapshot = buildAiAuditorRequestSnapshot(job.req, job.request_id);
     const result = await runAiAuditorAnalysis({ req: reqSnapshot, requestId: job.request_id });
     result.trace = {
@@ -2598,6 +2600,8 @@ async function runAiAuditorJob(jobId) {
     job.result = result;
     job.completed_at = new Date().toISOString();
     job.updated_at = job.completed_at;
+    await asyncJobs.markCompleted(jobId, { result_json: result });
+    aiAuditorRuntimeJobs.delete(jobId);
   } catch (error) {
     job.status = 'failed';
     job.error = {
@@ -2607,6 +2611,15 @@ async function runAiAuditorJob(jobId) {
     };
     job.failed_at = new Date().toISOString();
     job.updated_at = job.failed_at;
+    try {
+      await asyncJobs.markFailed(jobId, { error_json: job.error });
+    } catch (dbError) {
+      console.error('AI AUDITOR JOB DB ERROR:', {
+        job_id: jobId,
+        request_id: job.request_id,
+        error: dbError.message,
+      });
+    }
     console.error('AI AUDITOR JOB ERROR:', {
       job_id: jobId,
       request_id: job.request_id,
@@ -2616,9 +2629,12 @@ async function runAiAuditorJob(jobId) {
 }
 
 function publicAiAuditorJob(job) {
+  const jobId = job.job_id || job.id;
+  const result = job.result || job.result_json || null;
+  const error = job.error || job.error_json || null;
   return {
     ok: true,
-    job_id: job.job_id,
+    job_id: jobId,
     request_id: job.request_id,
     status: job.status,
     created_at: job.created_at,
@@ -2626,11 +2642,72 @@ function publicAiAuditorJob(job) {
     completed_at: job.completed_at || null,
     failed_at: job.failed_at || null,
     model_mode: job.model_mode,
-    depth: job.depth,
-    estimated_mode_cost: job.estimated_mode_cost,
-    result_available: job.status === 'completed' && Boolean(job.result),
-    error: job.error || null,
+    depth: job.depth || job.request_payload_json?.depth || null,
+    estimated_mode_cost: job.estimated_mode_cost || job.request_payload_json?.estimated_mode_cost || null,
+    job_type: job.job_type || 'ia_auditor_analysis',
+    source_module: job.source_module || 'ia_auditor',
+    result_available: job.status === 'completed' && Boolean(result),
+    error,
   };
+}
+
+function buildAsyncJobScope(req) {
+  return {
+    tenant_id: getUserTenantId(req.user),
+    user_id: getUserId(req.user),
+    is_platform: isPlatform(req.user),
+  };
+}
+
+async function getAiAuditorJobScoped(req, jobId) {
+  try {
+    return await asyncJobs.getJobScoped(jobId, buildAsyncJobScope(req));
+  } catch (error) {
+    const runtimeJob = aiAuditorRuntimeJobs.get(String(jobId || ''));
+    if (runtimeJob && ensureTenantAccess(req, runtimeJob.tenant_id)) return runtimeJob;
+    throw error;
+  }
+}
+
+async function createPersistentAiAuditorJob({ req, validated, requestId, modelMode, depth }) {
+  const payload = {
+    ...(req.body || {}),
+    depth,
+    model_mode: modelMode,
+    estimated_mode_cost: getAiAuditorEstimatedModeCost(modelMode),
+  };
+  const expiresAt = new Date(Date.now() + AI_AUDITOR_JOB_TTL_MS).toISOString();
+  return asyncJobs.createJob({
+    tenant_id: validated.tenantId,
+    user_id: getUserId(req.user),
+    job_type: 'ia_auditor_analysis',
+    source_module: 'ia_auditor',
+    model_mode: modelMode,
+    payload,
+    request_id: requestId,
+    expires_at: expiresAt,
+  });
+}
+
+function registerAiAuditorRuntimeJob({ job, req, validated, requestId, modelMode, depth }) {
+  const createdAt = job.created_at || new Date().toISOString();
+  const runtimeJob = {
+    job_id: job.id || job.job_id,
+    request_id: requestId,
+    tenant_id: validated.tenantId,
+    locale: validated.locale,
+    model_mode: modelMode,
+    depth,
+    estimated_mode_cost: getAiAuditorEstimatedModeCost(modelMode),
+    status: job.status || 'queued',
+    created_at: createdAt,
+    updated_at: createdAt,
+    created_at_ms: Date.now(),
+    req: buildAiAuditorRequestSnapshot(req, requestId),
+  };
+  aiAuditorRuntimeJobs.set(runtimeJob.job_id, runtimeJob);
+  setImmediate(() => runAiAuditorJob(runtimeJob.job_id));
+  return runtimeJob;
 }
 
 function validateAiAuditorAnalyzeRequest(req, res, requestId) {
@@ -2678,66 +2755,65 @@ function validateAiAuditorAnalyzeRequest(req, res, requestId) {
 }
 
 router.post('/analyze/start', auth, async (req, res) => {
-  pruneAiAuditorJobs();
   const requestId = getAiAuditorRequestId(req) || buildAiAuditorJobId();
-  const validated = validateAiAuditorAnalyzeRequest(req, res, requestId);
-  if (!validated) return;
+  try {
+    pruneAiAuditorJobs();
+    const validated = validateAiAuditorAnalyzeRequest(req, res, requestId);
+    if (!validated) return;
 
-  const modelMode = normalizeAiAuditorModelMode(req.body || {});
-  const depth = normalizeAiAuditorDepth(req.body || {});
-  const jobId = buildAiAuditorJobId();
-  const createdAt = new Date().toISOString();
-  const job = {
-    job_id: jobId,
-    request_id: requestId,
-    tenant_id: validated.tenantId,
-    locale: validated.locale,
-    model_mode: modelMode,
-    depth,
-    estimated_mode_cost: getAiAuditorEstimatedModeCost(modelMode),
-    status: 'queued',
-    created_at: createdAt,
-    updated_at: createdAt,
-    created_at_ms: Date.now(),
-    req: buildAiAuditorRequestSnapshot(req, requestId),
-  };
-  aiAuditorJobs.set(jobId, job);
-  setImmediate(() => runAiAuditorJob(jobId));
+    const modelMode = normalizeAiAuditorModelMode(req.body || {});
+    const depth = normalizeAiAuditorDepth(req.body || {});
+    const job = await createPersistentAiAuditorJob({ req, validated, requestId, modelMode, depth });
+    registerAiAuditorRuntimeJob({ job, req, validated, requestId, modelMode, depth });
 
-  return res.status(202).json({
-    ...publicAiAuditorJob(job),
-    async_mode: true,
-    message: validated.locale === 'en'
-      ? 'AI analysis is running. You can continue using the platform. We will notify you when it is available.'
-      : 'Análisis IA en ejecución. Puedes seguir usando la plataforma. Te avisaremos cuando esté disponible.',
-  });
+    return res.status(202).json({
+      ...publicAiAuditorJob(job),
+      async_mode: true,
+      message: validated.locale === 'en'
+        ? 'AI analysis is running. You can continue using the platform. We will notify you when it is available.'
+        : 'Análisis IA en ejecución. Puedes seguir usando la plataforma. Te avisaremos cuando esté disponible.',
+    });
+  } catch (error) {
+    console.error('AI AUDITOR JOB START ERROR:', {
+      request_id: requestId,
+      error: error.message,
+    });
+    return res.status(500).json({
+      ok: false,
+      code: 'AI_AUDITOR_JOB_START_FAILED',
+      error: 'No fue posible iniciar el análisis IA asincrónico.',
+      request_id: requestId,
+    });
+  }
 });
 
 router.get('/analyze/jobs/:job_id', auth, async (req, res) => {
-  pruneAiAuditorJobs();
-  const job = aiAuditorJobs.get(String(req.params.job_id || ''));
-  if (!job) {
-    return res.status(404).json({ ok: false, code: 'AI_AUDITOR_JOB_NOT_FOUND', error: 'Job no encontrado' });
+  try {
+    pruneAiAuditorJobs();
+    const job = await getAiAuditorJobScoped(req, String(req.params.job_id || ''));
+    if (!job) {
+      return res.status(404).json({ ok: false, code: 'AI_AUDITOR_JOB_NOT_FOUND', error: 'Job no encontrado' });
+    }
+    return res.json(publicAiAuditorJob(job));
+  } catch (error) {
+    return res.status(500).json({ ok: false, code: 'AI_AUDITOR_JOB_STATUS_FAILED', error: 'No fue posible consultar el job IA.' });
   }
-  if (!ensureTenantAccess(req, job.tenant_id)) {
-    return res.status(403).json({ ok: false, code: 'RBAC_DENIED', error: 'No autorizado para este tenant' });
-  }
-  return res.json(publicAiAuditorJob(job));
 });
 
 router.get('/analyze/jobs/:job_id/result', auth, async (req, res) => {
-  pruneAiAuditorJobs();
-  const job = aiAuditorJobs.get(String(req.params.job_id || ''));
-  if (!job) {
-    return res.status(404).json({ ok: false, code: 'AI_AUDITOR_JOB_NOT_FOUND', error: 'Job no encontrado' });
+  try {
+    pruneAiAuditorJobs();
+    const job = await getAiAuditorJobScoped(req, String(req.params.job_id || ''));
+    if (!job) {
+      return res.status(404).json({ ok: false, code: 'AI_AUDITOR_JOB_NOT_FOUND', error: 'Job no encontrado' });
+    }
+    if (job.status !== 'completed') {
+      return res.status(202).json(publicAiAuditorJob(job));
+    }
+    return res.json(job.result || job.result_json);
+  } catch (error) {
+    return res.status(500).json({ ok: false, code: 'AI_AUDITOR_JOB_RESULT_FAILED', error: 'No fue posible consultar el resultado IA.' });
   }
-  if (!ensureTenantAccess(req, job.tenant_id)) {
-    return res.status(403).json({ ok: false, code: 'RBAC_DENIED', error: 'No autorizado para este tenant' });
-  }
-  if (job.status !== 'completed') {
-    return res.status(202).json(publicAiAuditorJob(job));
-  }
-  return res.json(job.result);
 });
 
 router.post('/analyze', auth, async (req, res) => {
@@ -2749,26 +2825,24 @@ router.post('/analyze', auth, async (req, res) => {
 
     if (requiresAiAuditorAsync(req.body || {})) {
       req.body = { ...(req.body || {}), async_mode: true };
-      const jobId = buildAiAuditorJobId();
       const modelMode = normalizeAiAuditorModelMode(req.body || {});
       const depth = normalizeAiAuditorDepth(req.body || {});
-      const createdAt = new Date().toISOString();
-      const job = {
-        job_id: jobId,
-        request_id: requestId || jobId,
-        tenant_id: validated.tenantId,
-        locale: validated.locale,
-        model_mode: modelMode,
+      const effectiveRequestId = requestId || buildAiAuditorJobId();
+      const job = await createPersistentAiAuditorJob({
+        req,
+        validated,
+        requestId: effectiveRequestId,
+        modelMode,
         depth,
-        estimated_mode_cost: getAiAuditorEstimatedModeCost(modelMode),
-        status: 'queued',
-        created_at: createdAt,
-        updated_at: createdAt,
-        created_at_ms: Date.now(),
-        req: buildAiAuditorRequestSnapshot(req, requestId || jobId),
-      };
-      aiAuditorJobs.set(jobId, job);
-      setImmediate(() => runAiAuditorJob(jobId));
+      });
+      registerAiAuditorRuntimeJob({
+        job,
+        req,
+        validated,
+        requestId: effectiveRequestId,
+        modelMode,
+        depth,
+      });
       return res.status(202).json({
         ...publicAiAuditorJob(job),
         async_mode: true,

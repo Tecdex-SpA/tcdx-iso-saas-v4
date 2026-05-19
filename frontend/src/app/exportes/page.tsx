@@ -688,6 +688,38 @@ export default function ExportesPage() {
     }
   }, [orderedReportTypes, selectedReportCode]);
 
+  const pollReportJob = async (jobId: string, token: string) => {
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 2500 : 6000));
+      const statusRes = await fetch(`${API_URL}/api/reports/jobs/${encodeURIComponent(jobId)}`, {
+        headers: buildLocaleHeaders(token, locale),
+      });
+      const statusJson = await statusRes.json();
+      if (!statusRes.ok || statusJson?.ok === false) {
+        throw new Error(statusJson?.error || 'No fue posible consultar el estado del reporte.');
+      }
+
+      if (statusJson.status === 'completed') {
+        const resultRes = await fetch(`${API_URL}/api/reports/jobs/${encodeURIComponent(jobId)}/result`, {
+          headers: buildLocaleHeaders(token, locale),
+        });
+        const resultJson = await resultRes.json();
+        if (!resultRes.ok || resultJson?.ok === false) {
+          throw new Error(resultJson?.error || 'No fue posible obtener el reporte generado.');
+        }
+        return resultJson;
+      }
+
+      if (statusJson.status === 'failed') {
+        throw new Error(statusJson?.error?.message || statusJson?.error || 'La generación del reporte falló.');
+      }
+
+      setReportJobMessage(`Reporte en generación (${statusJson.status}). Puedes seguir usando la plataforma.`);
+    }
+
+    throw new Error('El reporte sigue en generación. Revisa el historial de exportes en unos minutos.');
+  };
+
   const generateReport = async (reportTypeCode: string) => {
     if (isReadOnlyReports) {
       setError(t('exports.readonlyError'));
@@ -736,7 +768,7 @@ export default function ExportesPage() {
         };
       }
 
-      const res = await fetch(`${API_URL}/api/reports/generate`, {
+      let res = await fetch(`${API_URL}/api/reports/generate/start`, {
         method: 'POST',
         headers: {
           ...buildLocaleHeaders(token, locale),
@@ -745,10 +777,27 @@ export default function ExportesPage() {
         body: JSON.stringify(payload),
       });
 
-      const json = await res.json();
+      let json = await res.json();
+
+      if (res.status === 404) {
+        res = await fetch(`${API_URL}/api/reports/generate`, {
+          method: 'POST',
+          headers: {
+            ...buildLocaleHeaders(token, locale),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        json = await res.json();
+      }
 
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || json?.detail || t('exports.generateError'));
+      }
+
+      if (res.status === 202 && json?.job_id) {
+        setReportJobMessage(json?.message || 'Reporte en generación. Puedes seguir usando la plataforma.');
+        json = await pollReportJob(json.job_id, token);
       }
 
       setSuccessMessage(t('exports.generatedSuccessfully'));

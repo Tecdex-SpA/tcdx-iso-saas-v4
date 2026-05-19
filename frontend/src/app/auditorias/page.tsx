@@ -318,7 +318,7 @@ function AuditProgramPanel() {
   const [actions, setActions] = useState<ActionPlanRow[]>([]);
   const [scope, setScope] = useState<ScopeResponse>({ operations: [], standards: [] });
   const [auditSummary, setAuditSummary] = useState<AuditSummaryResponse | null>(null);
-  const [loadingAuditSummary, setLoadingAuditSummary] = useState(true);
+  const [, setLoadingAuditSummary] = useState(true);
 
   const [loadingStandards, setLoadingStandards] = useState(true);
   const [loadingAudits, setLoadingAudits] = useState(true);

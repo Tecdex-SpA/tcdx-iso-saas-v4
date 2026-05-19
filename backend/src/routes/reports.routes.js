@@ -8,6 +8,7 @@ const { resolveLocale, isEnglishLocale } = require('../utils/locale');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const asyncJobs = require('../services/asyncJob.service');
 
 const { buildReportData } = require('../reports/services/reportData.service');
 const { buildReportAiEnrichment } = require('../services/reportAiEnrichment.service');
@@ -75,6 +76,8 @@ const SYSTEM_CHROME_CANDIDATES = [
 ];
 
 const SNAP_CHROMIUM_PATH = '/snap/bin/chromium';
+const reportRuntimeJobs = new Map();
+const REPORT_JOB_TTL_MS = Number(process.env.REPORT_JOB_TTL_MS || 1000 * 60 * 60 * 6);
 
 class ReportBrowserError extends Error {
   constructor(code, message, meta = {}) {
@@ -307,6 +310,151 @@ function resolvePuppeteerExecutablePath() {
 
 function getReportDownloadUrl(exportId) {
   return `/api/reports/download/${encodeURIComponent(String(exportId))}`;
+}
+
+function buildReportJobId() {
+  return `report_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function pruneReportRuntimeJobs() {
+  const now = Date.now();
+  for (const [jobId, job] of reportRuntimeJobs.entries()) {
+    if (now - Number(job.created_at_ms || 0) > REPORT_JOB_TTL_MS) {
+      reportRuntimeJobs.delete(jobId);
+    }
+  }
+}
+
+function buildReportJobScope(req) {
+  return {
+    tenant_id: getUserTenantId(req.user),
+    user_id: getUserId(req.user),
+    is_platform: isPlatformRole(req.user?.role || req.user?.user_role || req.user?.userRole),
+  };
+}
+
+function publicReportJob(job) {
+  const result = job.result || job.result_json || null;
+  const error = job.error || job.error_json || null;
+  return {
+    ok: true,
+    job_id: job.job_id || job.id,
+    request_id: job.request_id || null,
+    status: job.status,
+    created_at: job.created_at,
+    started_at: job.started_at || null,
+    completed_at: job.completed_at || null,
+    failed_at: job.failed_at || null,
+    job_type: job.job_type || 'report_generation',
+    source_module: job.source_module || 'exportes',
+    result_available: job.status === 'completed' && Boolean(result),
+    result_download_url: job.result_download_url || result?.data?.file_url || result?.file_url || null,
+    result_file_url: job.result_file_url || result?.data?.export?.file_url || null,
+    error,
+  };
+}
+
+function getReportAsyncBaseUrl() {
+  return String(
+    process.env.REPORT_ASYNC_INTERNAL_BASE_URL ||
+    process.env.BACKEND_INTERNAL_URL ||
+    `http://127.0.0.1:${process.env.PORT || 3000}`
+  ).replace(/\/+$/, '');
+}
+
+async function getReportJobScoped(req, jobId) {
+  try {
+    return await asyncJobs.getJobScoped(jobId, buildReportJobScope(req));
+  } catch (error) {
+    const runtimeJob = reportRuntimeJobs.get(String(jobId || ''));
+    if (runtimeJob && canAccessReportExport({
+      role: normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole),
+      userId: getUserId(req.user),
+      userTenantId: getUserTenantId(req.user),
+      row: { tenant_id: runtimeJob.tenant_id, requested_by: runtimeJob.user_id },
+    })) {
+      return runtimeJob;
+    }
+    throw error;
+  }
+}
+
+async function runReportGenerationJob(jobId) {
+  const job = reportRuntimeJobs.get(jobId);
+  if (!job) return;
+  job.status = 'running';
+  job.started_at = new Date().toISOString();
+  job.updated_at = job.started_at;
+  try {
+    await asyncJobs.markRunning(jobId);
+    const response = await fetch(`${getReportAsyncBaseUrl()}/api/reports/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: job.authorization,
+        'x-request-id': job.request_id,
+        'x-tcdx-locale': job.locale || 'es',
+      },
+      body: JSON.stringify(job.payload || {}),
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    const parsed = contentType.includes('application/json')
+      ? await response.json()
+      : { ok: false, code: 'REPORT_ASYNC_NON_JSON_RESPONSE', error: await response.text() };
+
+    if (!response.ok || parsed?.ok === false) {
+      const failure = {
+        code: parsed?.code || 'REPORT_ASYNC_GENERATION_FAILED',
+        message: parsed?.error || parsed?.message || 'No fue posible generar el reporte.',
+        request_id: job.request_id,
+      };
+      job.status = 'failed';
+      job.error = failure;
+      job.failed_at = new Date().toISOString();
+      job.updated_at = job.failed_at;
+      await asyncJobs.markFailed(jobId, { error_json: failure });
+      return;
+    }
+
+    const exportRow = parsed?.data?.export || null;
+    const downloadUrl = parsed?.data?.file_url || exportRow?.file_url || null;
+    job.status = 'completed';
+    job.result = parsed;
+    job.completed_at = new Date().toISOString();
+    job.updated_at = job.completed_at;
+    await asyncJobs.markCompleted(jobId, {
+      result_json: parsed,
+      result_file_id: exportRow?.id || null,
+      result_file_url: exportRow?.file_url || null,
+      result_download_url: downloadUrl,
+    });
+    reportRuntimeJobs.delete(jobId);
+  } catch (error) {
+    const failure = {
+      code: error?.name === 'AbortError' ? 'REPORT_ASYNC_TIMEOUT' : 'REPORT_ASYNC_GENERATION_FAILED',
+      message: 'No fue posible completar la generación del reporte.',
+      request_id: job.request_id,
+    };
+    job.status = 'failed';
+    job.error = failure;
+    job.failed_at = new Date().toISOString();
+    job.updated_at = job.failed_at;
+    try {
+      await asyncJobs.markFailed(jobId, { error_json: failure });
+    } catch (dbError) {
+      console.error('REPORT ASYNC JOB DB ERROR:', {
+        job_id: jobId,
+        request_id: job.request_id,
+        error: dbError.message,
+      });
+    }
+    console.error('REPORT ASYNC JOB ERROR:', {
+      job_id: jobId,
+      request_id: job.request_id,
+      error: error.message,
+    });
+  }
 }
 
 function resolveReportFilePath(tenantId, fileUrl) {
@@ -2639,6 +2787,135 @@ async function getTenantBrandingForReport(tenantId) {
     return {};
   }
 }
+
+// =====================================================
+// POST /api/reports/generate/start
+// Encola generacion asincrona de reportes premium.
+// =====================================================
+router.post('/generate/start', auth, async (req, res) => {
+  pruneReportRuntimeJobs();
+  const requestId = req.requestId || buildReportJobId();
+  try {
+    const locale = resolveLocale(req);
+    const originalRole = req.user?.role || req.user?.user_role || req.user?.userRole;
+    const role = normalizeRole(originalRole);
+    const userId = getUserId(req.user);
+    const userTenantId = getUserTenantId(req.user);
+    const { report_type_code, tenant_id, period, metadata } = req.body || {};
+
+    if (!userId) {
+      return res.status(401).json({ ok: false, code: 'NO_USER', error: 'Usuario no identificado en token', request_id: requestId });
+    }
+
+    if (!report_type_code) {
+      return res.status(400).json({ ok: false, code: 'REPORT_TYPE_REQUIRED', error: 'report_type_code es obligatorio', request_id: requestId });
+    }
+
+    const resolvedReportTypeCode = resolveReportTypeCode(report_type_code);
+    const reportType = await getReportType(resolvedReportTypeCode);
+    if (!reportType) {
+      return res.status(404).json({ ok: false, code: 'REPORT_TYPE_NOT_FOUND', error: 'El tipo de reporte no existe o no está activo', request_id: requestId });
+    }
+
+    const access = await getReportAccess(resolvedReportTypeCode || report_type_code, role);
+    if (!access.can_generate) {
+      return res.status(403).json({ ok: false, code: 'RBAC_DENIED', error: 'El perfil del usuario no puede generar este tipo de informe', request_id: requestId });
+    }
+
+    const targetTenantId = await resolveTargetTenantId({
+      role,
+      userId,
+      userTenantId,
+      requestedTenantId: tenant_id,
+    });
+    await ensureTargetTenantAccess({ role, userId, userTenantId, targetTenantId });
+
+    const authorization = req.headers.authorization || '';
+    if (!authorization) {
+      return res.status(401).json({ ok: false, code: 'NO_TOKEN', error: 'sin Token', request_id: requestId });
+    }
+
+    const job = await asyncJobs.createJob({
+      tenant_id: targetTenantId,
+      user_id: userId,
+      job_type: 'report_generation',
+      source_module: 'exportes',
+      model_mode: safeObject(metadata).model_mode || null,
+      payload: {
+        ...(req.body || {}),
+        period: period || null,
+        report_type_code,
+      },
+      request_id: requestId,
+      expires_at: new Date(Date.now() + REPORT_JOB_TTL_MS).toISOString(),
+    });
+
+    reportRuntimeJobs.set(job.id, {
+      job_id: job.id,
+      request_id: requestId,
+      tenant_id: targetTenantId,
+      user_id: userId,
+      locale,
+      authorization,
+      payload: req.body || {},
+      status: 'queued',
+      created_at: job.created_at,
+      updated_at: job.updated_at,
+      created_at_ms: Date.now(),
+    });
+    setImmediate(() => runReportGenerationJob(job.id));
+
+    return res.status(202).json({
+      ...publicReportJob(job),
+      async_mode: true,
+      poll_url: `/api/reports/jobs/${job.id}`,
+      result_url: `/api/reports/jobs/${job.id}/result`,
+      message: locale === 'en'
+        ? 'Report generation is running. You can continue using the platform. We will notify you when it is ready to download.'
+        : 'Reporte en generación. Puedes seguir usando la plataforma. Te avisaremos cuando esté disponible para descarga.',
+    });
+  } catch (error) {
+    console.error('REPORT ASYNC START ERROR:', {
+      request_id: requestId,
+      error: error.message,
+    });
+    return res.status(500).json({
+      ok: false,
+      code: 'REPORT_ASYNC_START_FAILED',
+      error: 'No fue posible iniciar la generación asincrónica del reporte.',
+      request_id: requestId,
+    });
+  }
+});
+
+router.get('/jobs/:job_id', auth, async (req, res) => {
+  pruneReportRuntimeJobs();
+  try {
+    const job = await getReportJobScoped(req, String(req.params.job_id || ''));
+    if (!job) {
+      return res.status(404).json({ ok: false, code: 'REPORT_JOB_NOT_FOUND', error: 'Job no encontrado' });
+    }
+    return res.json(publicReportJob(job));
+  } catch (error) {
+    return res.status(500).json({ ok: false, code: 'REPORT_JOB_STATUS_FAILED', error: 'No fue posible consultar el job de reporte.' });
+  }
+});
+
+router.get('/jobs/:job_id/result', auth, async (req, res) => {
+  pruneReportRuntimeJobs();
+  try {
+    const job = await getReportJobScoped(req, String(req.params.job_id || ''));
+    if (!job) {
+      return res.status(404).json({ ok: false, code: 'REPORT_JOB_NOT_FOUND', error: 'Job no encontrado' });
+    }
+    if (job.status !== 'completed') {
+      return res.status(202).json(publicReportJob(job));
+    }
+    return res.json(job.result || job.result_json);
+  } catch (error) {
+    return res.status(500).json({ ok: false, code: 'REPORT_JOB_RESULT_FAILED', error: 'No fue posible consultar el resultado del reporte.' });
+  }
+});
 
 // =====================================================
 // POST /api/reports/generate
