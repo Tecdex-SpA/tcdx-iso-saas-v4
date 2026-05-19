@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
-import { translateDisplayText, translateStatusLabel, translateStandardLabel, translateBillingConceptLabel } from '@/i18n/displayText';
+import { translateStatusLabel } from '@/i18n/displayText';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 

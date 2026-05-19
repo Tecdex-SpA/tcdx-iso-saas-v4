@@ -81,6 +81,20 @@ def _compact_limits() -> Dict[str, int]:
     }
 
 
+def _compact_limits_from_options(options: Dict[str, Any]) -> Dict[str, int]:
+    limits = _compact_limits()
+    for option_key, limit_key in [
+        ("max_controls", "max_controls"),
+        ("max_evidences", "max_evidences"),
+        ("max_findings", "max_findings"),
+        ("max_actions", "max_actions"),
+    ]:
+        value = options.get(option_key)
+        if value is not None:
+            limits[limit_key] = max(1, min(_int(value), limits[limit_key]))
+    return limits
+
+
 def resolve_source_policy(payload: dict, local_compact: bool, depth: str) -> dict:
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
     if not local_compact:
@@ -633,13 +647,18 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     payload["locale"] = "es"
     original_context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    request_metadata = payload.get("request_metadata") if isinstance(payload.get("request_metadata"), dict) else {}
+    request_id = str(request_metadata.get("request_id") or payload.get("request_id") or "")
+    timings_ms: Dict[str, int] = {}
     depth = str(options.get("depth") or "standard")
     if depth not in {"executive", "standard", "deep"}:
         depth = "standard"
-    llm_metadata = get_llm_metadata()
+    llm_metadata = get_llm_metadata(depth=depth)
     local_compact = is_local_compact_mode(payload, llm_metadata)
-    limits = _compact_limits()
+    limits = _compact_limits_from_options(options)
+    context_started_at = time.perf_counter()
     context = build_compact_ai_context(original_context, depth, limits) if local_compact else original_context
+    timings_ms["context_compact_ms"] = int((time.perf_counter() - context_started_at) * 1000)
     payload_for_sources = {**payload, "context": context, "options": dict(options)}
     source_policy = resolve_source_policy(payload_for_sources, local_compact, depth)
     payload_for_sources["options"].update({
@@ -659,6 +678,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     source_trace.extend(pre.get("source_trace") or [])
 
     rag = drive = web = {"used": False, "limitations": []}
+    sources_started_at = time.perf_counter()
     for name, fn, args in [
         ("rag", build_rag_context, (payload_for_sources,)),
         ("drive", build_drive_context, (payload_for_sources,)),
@@ -678,6 +698,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
                 web = result
         except Exception as exc:
             limitations.append(f"{name}: fuente complementaria no disponible ({str(exc)[:120]})")
+    timings_ms["sources_ms"] = int((time.perf_counter() - sources_started_at) * 1000)
 
     limitations.extend(rag.get("limitations") or [])
     limitations.extend(drive.get("limitations") or [])
@@ -690,7 +711,9 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     elif web.get("reason"):
         limitations.append(str(web.get("reason")))
 
+    preanalysis_started_at = time.perf_counter()
     preanalysis = build_deterministic_preanalysis(context, _rag_results(rag), depth)
+    timings_ms["preanalysis_ms"] = int((time.perf_counter() - preanalysis_started_at) * 1000)
     readiness = preanalysis["readiness"]
     active = preanalysis["active"]
     complies = preanalysis["complies"]
@@ -799,6 +822,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
         ))
     elif is_llm_available():
         try:
+            llm_started_at = time.perf_counter()
             llm_raw = call_llm_json(
                 prompt=_build_llm_user_prompt(
                     payload,
@@ -813,6 +837,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
                 depth=depth,
                 local_compact=local_compact,
             )
+            timings_ms["llm_ms"] = int((time.perf_counter() - llm_started_at) * 1000)
             llm_structured = normalize_ai_structured_result(llm_raw, defaults=structured)
             llm_structured["confidence"] = structured["confidence"]
             llm_structured["source_trace"] = normalize_source_trace(
@@ -826,6 +851,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             llm_used = True
             engine_model = f"{llm_metadata.get('provider')}/{llm_metadata.get('model')}"
         except Exception as exc:
+            timings_ms["llm_ms"] = timings_ms.get("llm_ms", 0)
             provider = llm_metadata.get("provider") or "desconocido"
             model = llm_metadata.get("model") or "sin_modelo"
             structured["limitations"].append(
@@ -834,12 +860,14 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             limitations.append(f"Proveedor LLM falló — análisis generado por fallback determinístico. Modelo intentado: {model}")
             engine_model = "deterministic_senior_auditor_v2"
     else:
+        timings_ms["llm_ms"] = 0
         structured["limitations"].append(
             "Proveedor LLM no configurado — análisis generado por motor determinístico basado en contexto interno"
         )
         limitations.append("Proveedor LLM no configurado — análisis generado por motor determinístico basado en contexto interno")
 
     duration_ms = int((time.perf_counter() - started_at) * 1000)
+    timings_ms["total_ms"] = duration_ms
     mode = "fast_mode" if fast_mode else ("llm" if llm_used else ("local_compact" if local_compact else "deterministic"))
     result = {
         "ok": True,
@@ -852,7 +880,9 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "prompt_version": PROMPT_VERSION,
             "context_version": context.get("scope", {}).get("context_version") or CONTEXT_VERSION,
             "model": engine_model,
+            "request_id": request_id or None,
             "llm_provider": llm_metadata.get("provider"),
+            "model_mode": llm_metadata.get("model_mode"),
             "llm_available": llm_metadata.get("available") is True,
             "used_llm": llm_used,
             "fast_mode": fast_mode,
@@ -868,9 +898,11 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "ollama_options": get_ollama_generation_options(depth, local_compact, 0.2) if llm_metadata.get("provider") == "ollama" else {},
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "duration_ms": duration_ms,
+            "timings_ms": timings_ms,
         },
         "metrics": {
             "duration_ms": duration_ms,
+            "request_id": request_id or None,
             "mode": mode,
             "fast_mode": fast_mode,
             "local_compact": local_compact,
@@ -878,6 +910,17 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "used_rag": bool(rag.get("used")),
             "used_drive": bool(drive.get("used")),
             "used_web": bool(web.get("used")),
+            "model": engine_model,
+            "timings_ms": timings_ms,
         },
     }
+    print(json.dumps({
+        "event": "senior_auditor_v2_timing",
+        "request_id": request_id or None,
+        "tenant_id": tenant_id,
+        "depth": depth,
+        "mode": mode,
+        "model": engine_model,
+        "timings_ms": timings_ms,
+    }, ensure_ascii=False, default=str))
     return apply_post_analysis_guardrails(result, context)
