@@ -66,6 +66,16 @@ function localText(locale: string) {
     allStandards: en ? 'All standards' : 'Todas las normas',
     auditFocus: en ? 'Audit focus' : 'Foco auditor',
     depth: en ? 'Depth' : 'Profundidad',
+    modelMode: en ? 'Mode' : 'Modo',
+    modelFast: en ? 'Fast' : 'Rápido',
+    modelBalanced: en ? 'Balanced' : 'Balanceado',
+    modelDeep: en ? 'Deep async' : 'Profundo async',
+    asyncRunning: en
+      ? 'AI analysis is running. You can continue using the platform. We will notify you when it is available.'
+      : 'Análisis IA en ejecución. Puedes seguir usando la plataforma. Te avisaremos cuando esté disponible.',
+    asyncCompleted: en ? 'AI analysis is ready.' : 'Análisis IA disponible.',
+    asyncFailed: en ? 'AI analysis failed.' : 'El análisis IA falló.',
+    viewResult: en ? 'View result' : 'Ver resultado',
     engineTrace: en ? 'AI engine trace' : 'Trazabilidad motor IA',
     structuredResult: en ? 'Senior auditor structured result' : 'Resultado estructurado Auditor Senior',
     diagnosis: en ? 'Diagnosis' : 'Diagnóstico',
@@ -416,6 +426,9 @@ export default function IaAuditorPanel() {
   const [selectedStandard, setSelectedStandard] = useState('all');
   const [selectedFocus, setSelectedFocus] = useState('general');
   const [selectedDepth, setSelectedDepth] = useState('executive');
+  const [selectedModelMode, setSelectedModelMode] = useState('fast');
+  const [activeJob, setActiveJob] = useState<any>(null);
+  const [jobMessage, setJobMessage] = useState('');
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token') || '';
@@ -458,6 +471,15 @@ export default function IaAuditorPanel() {
       { value: 'executive', label: copy.depthExecutive },
       { value: 'standard', label: copy.depthStandard },
       { value: 'deep', label: copy.depthDeep },
+    ],
+    [copy]
+  );
+
+  const modelModeOptions = useMemo<SelectOption[]>(
+    () => [
+      { value: 'fast', label: copy.modelFast },
+      { value: 'balanced', label: copy.modelBalanced },
+      { value: 'deep', label: copy.modelDeep },
     ],
     [copy]
   );
@@ -711,27 +733,37 @@ export default function IaAuditorPanel() {
       setAnalyzing(true);
       setError('');
       setAnalysis(null);
+      setActiveJob(null);
+      setJobMessage('');
       const requestId = buildRequestId();
       const executiveMode = selectedDepth === 'executive';
+      const asyncMode = selectedModelMode !== 'fast' || selectedDepth === 'deep';
 
       const body: Record<string, any> = {
         locale,
         audit_focus: selectedFocus,
         depth: selectedDepth,
+        model_mode: selectedModelMode,
         request_id: requestId,
-        include_internet: !executiveMode,
-        use_web: !executiveMode,
-        use_drive: executiveMode ? 'auto' : true,
+        include_internet: !executiveMode && selectedModelMode !== 'fast',
+        use_web: !executiveMode && selectedModelMode !== 'fast',
+        use_drive: false,
         use_rag: true,
-        local_compact: executiveMode,
-        fast_mode: executiveMode,
+        use_llm: selectedModelMode !== 'fast',
+        local_compact: true,
+        fast_mode: selectedModelMode === 'fast' && executiveMode,
+        async_mode: asyncMode,
       };
 
       if (selectedStandard !== 'all') {
         body.standard_code = selectedStandard;
       }
 
-      const res = await fetch(`${API_URL}/api/ai-auditor/analyze`, {
+      const endpoint = asyncMode
+        ? `${API_URL}/api/ai-auditor/analyze/start`
+        : `${API_URL}/api/ai-auditor/analyze`;
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -743,6 +775,9 @@ export default function IaAuditorPanel() {
       });
 
       const json = await readJsonResponse<{
+        job_id?: string;
+        status?: string;
+        message?: string;
         scope?: unknown;
         trace?: {
           history_saved?: boolean;
@@ -751,6 +786,13 @@ export default function IaAuditorPanel() {
         fallbackMessage: copy.error,
         locale,
       });
+
+      if (asyncMode && json.job_id) {
+        setActiveJob(json);
+        setJobMessage(json.message || copy.asyncRunning);
+        void pollAiAuditorJob(json.job_id);
+        return;
+      }
 
       setAnalysis(json);
       setScope(json.scope || scope);
@@ -761,6 +803,51 @@ export default function IaAuditorPanel() {
       setError(err?.message || copy.error);
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const pollAiAuditorJob = async (jobId: string) => {
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+      try {
+        const statusRes = await fetch(`${API_URL}/api/ai-auditor/analyze/jobs/${jobId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'x-tcdx-locale': locale,
+          },
+        });
+        const statusJson = await readJsonResponse<any>(statusRes, {
+          fallbackMessage: copy.asyncFailed,
+          locale,
+        });
+        setActiveJob(statusJson);
+
+        if (statusJson.status === 'failed') {
+          setJobMessage(statusJson.error?.message || copy.asyncFailed);
+          return;
+        }
+
+        if (statusJson.status === 'completed') {
+          const resultRes = await fetch(`${API_URL}/api/ai-auditor/analyze/jobs/${jobId}/result`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'x-tcdx-locale': locale,
+            },
+          });
+          const resultJson = await readJsonResponse<any>(resultRes, {
+            fallbackMessage: copy.asyncFailed,
+            locale,
+          });
+          setAnalysis(resultJson);
+          setScope(resultJson.scope || scope);
+          setJobMessage(copy.asyncCompleted);
+          void loadHistory();
+          return;
+        }
+      } catch (err: any) {
+        setJobMessage(err?.message || copy.asyncFailed);
+        return;
+      }
     }
   };
 
@@ -861,7 +948,7 @@ export default function IaAuditorPanel() {
             </div>
           </div>
 
-          <div className="grid gap-4 border-t border-slate-200 bg-slate-50 p-5 xl:grid-cols-[1fr_1fr_1fr_auto_auto]">
+          <div className="grid gap-4 border-t border-slate-200 bg-slate-50 p-5 xl:grid-cols-[1fr_1fr_1fr_1fr_auto_auto]">
             <Field label={copy.standard}>
               <Select
                 value={selectedStandard}
@@ -886,6 +973,14 @@ export default function IaAuditorPanel() {
               />
             </Field>
 
+            <Field label={copy.modelMode}>
+              <Select
+                value={selectedModelMode}
+                options={modelModeOptions}
+                onChange={setSelectedModelMode}
+              />
+            </Field>
+
             <button
               onClick={loadScope}
               disabled={loading || analyzing}
@@ -907,6 +1002,29 @@ export default function IaAuditorPanel() {
         {pdfError && (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             {pdfError}
+          </div>
+        )}
+
+        {jobMessage && (
+          <div className="fixed bottom-6 right-6 z-50 max-w-md rounded-2xl border border-indigo-200 bg-white px-5 py-4 text-sm font-semibold text-slate-800 shadow-2xl">
+            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-indigo-600">
+              IA Auditor
+            </div>
+            <div className="mt-1">{jobMessage}</div>
+            {activeJob?.job_id && (
+              <div className="mt-2 text-xs text-slate-500">
+                job_id: {activeJob.job_id} · {activeJob.status}
+              </div>
+            )}
+            {analysis && activeJob?.status === 'completed' && (
+              <button
+                type="button"
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="mt-3 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white"
+              >
+                {copy.viewResult}
+              </button>
+            )}
           </div>
         )}
 

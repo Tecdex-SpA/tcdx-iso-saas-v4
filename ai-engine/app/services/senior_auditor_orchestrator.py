@@ -95,6 +95,19 @@ def _compact_limits_from_options(options: Dict[str, Any]) -> Dict[str, int]:
     return limits
 
 
+def _normalize_model_mode(options: Dict[str, Any]) -> str:
+    value = str(options.get("model_mode") or os.getenv("AI_AUDITOR_MODEL_MODE") or "fast").strip().lower()
+    return value if value in {"fast", "balanced", "deep"} else "fast"
+
+
+def _estimated_mode_cost(model_mode: str) -> str:
+    if model_mode == "deep":
+        return "high"
+    if model_mode == "balanced":
+        return "moderate"
+    return "fast"
+
+
 def resolve_source_policy(payload: dict, local_compact: bool, depth: str) -> dict:
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
     if not local_compact:
@@ -632,7 +645,13 @@ def _build_llm_user_prompt(
             "structured_result": deterministic_result.get("structured_result"),
             "preanalysis": deterministic_result.get("preanalysis"),
         },
-        "required_output": "Devuelve JSON válido con answer y structured_result completo. Todo en español. Usa CONOCIMIENTO NORMATIVO INTERNO DISPONIBLE como guía compacta, no inventes evidencia.",
+        "required_output": (
+            "Devuelve JSON válido con answer y structured_result completo, todo en español. "
+            "structured_result debe incluir confirmed_facts, reasoned_inferences, evidence_requested, "
+            "auditor_questions, business_risk, action_plan_recommendations y limitations. "
+            "No inventes hechos ni evidencias. Los datos internos del tenant son la fuente de verdad. "
+            "RAG, web y Drive son solo contexto de apoyo y nunca reemplazan evidencia interna."
+        ),
     }
     return json.dumps(compact, ensure_ascii=False, default=str)
 
@@ -653,7 +672,8 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     depth = str(options.get("depth") or "standard")
     if depth not in {"executive", "standard", "deep"}:
         depth = "standard"
-    llm_metadata = get_llm_metadata(depth=depth)
+    model_mode = _normalize_model_mode(options)
+    llm_metadata = get_llm_metadata(depth=depth, model_mode=model_mode)
     local_compact = is_local_compact_mode(payload, llm_metadata)
     limits = _compact_limits_from_options(options)
     context_started_at = time.perf_counter()
@@ -814,6 +834,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     fast_mode = is_fast_mode(payload, local_compact, depth)
     use_llm_in_fast_mode = options.get("use_llm_in_fast_mode") is True
     llm_skipped_reason = ""
+    llm_error_safe = ""
     if fast_mode and not use_llm_in_fast_mode:
         llm_skipped_reason = "fast_mode_deterministic_response"
         structured["limitations"] = list(dict.fromkeys(
@@ -836,6 +857,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
                 timeout=60,
                 depth=depth,
                 local_compact=local_compact,
+                model_mode=model_mode,
             )
             timings_ms["llm_ms"] = int((time.perf_counter() - llm_started_at) * 1000)
             llm_structured = normalize_ai_structured_result(llm_raw, defaults=structured)
@@ -854,6 +876,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             timings_ms["llm_ms"] = timings_ms.get("llm_ms", 0)
             provider = llm_metadata.get("provider") or "desconocido"
             model = llm_metadata.get("model") or "sin_modelo"
+            llm_error_safe = "LLM unavailable, deterministic fallback used"
             structured["limitations"].append(
                 f"Proveedor LLM falló — análisis generado por fallback determinístico. Proveedor: {provider}, modelo: {model}."
             )
@@ -883,10 +906,14 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "request_id": request_id or None,
             "llm_provider": llm_metadata.get("provider"),
             "model_mode": llm_metadata.get("model_mode"),
+            "selected_model": llm_metadata.get("model"),
+            "async_mode": bool(options.get("async_mode") is True),
+            "estimated_mode_cost": _estimated_mode_cost(model_mode),
             "llm_available": llm_metadata.get("available") is True,
             "used_llm": llm_used,
             "fast_mode": fast_mode,
             "llm_skipped_reason": llm_skipped_reason,
+            "llm_error_safe": llm_error_safe,
             "used_internal_context": True,
             "used_rag": bool(rag.get("used")),
             "used_drive": bool(drive.get("used")),
@@ -904,6 +931,9 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "duration_ms": duration_ms,
             "request_id": request_id or None,
             "mode": mode,
+            "model_mode": model_mode,
+            "async_mode": bool(options.get("async_mode") is True),
+            "estimated_mode_cost": _estimated_mode_cost(model_mode),
             "fast_mode": fast_mode,
             "local_compact": local_compact,
             "used_llm": llm_used,

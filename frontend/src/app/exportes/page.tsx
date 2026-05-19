@@ -5,8 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import { getUserRoleFromToken } from '@/utils/auth';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
-import { getStatusLabel as getCatalogStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel as getCatalogCategoryLabel } from '@/i18n/statusLabels';
-import { translateDisplayText, translateStatusLabel } from '@/i18n/displayText';
+import { translateDisplayText } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
@@ -169,18 +168,6 @@ function formatDate(value?: string, locale = 'es') {
 
 
 
-function getExportHistoryReportName(item: ReportExport, t: (key: string) => string) {
-  const key = `exports.reportTypes.${item.report_type_code}.name`;
-  const translated = t(key);
-  return translated !== key ? translated : item.report_type_name || item.report_title || item.report_type_code;
-}
-
-function getExportHistoryReportTitle(item: ReportExport, t: (key: string) => string) {
-  const key = `exports.reportTypes.${item.report_type_code}.name`;
-  const translated = t(key);
-  return translated !== key ? translated : item.report_title || item.report_type_name || item.report_type_code;
-}
-
 function getReportTypeName(report: ReportType, t: (key: string) => string, locale: string = 'es') {
   const key = `exports.reportTypes.${report.code}.name`;
   const translated = t(key);
@@ -321,26 +308,6 @@ function getStandardFullLabel(standard?: StandardOption | null) {
   );
 }
 
-function canGenerateSelectedReportForStandard(
-  reportCode: string,
-  standard?: StandardOption | null
-) {
-  if (!standard) return false;
-
-  if (reportCode === 'executive_summary' || reportCode === 'executive_iso_status') {
-    return standard.can_generate_executive === true;
-  }
-
-  if (
-    reportCode === 'audit_report' ||
-    reportCode === 'internal_audit_report'
-  ) {
-    return standard.can_generate_audit === true;
-  }
-
-  return standard.can_generate_operational === true;
-}
-
 function isToday(dateStr?: string) {
   if (!dateStr) return false;
 
@@ -395,6 +362,7 @@ export default function ExportesPage() {
 
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [reportJobMessage, setReportJobMessage] = useState('');
 
   const [reportTypes, setReportTypes] = useState<ReportType[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -731,6 +699,7 @@ export default function ExportesPage() {
       setGeneratingCode(reportTypeCode);
       setError('');
       setSuccessMessage('');
+      setReportJobMessage('Reporte en generación. Puedes seguir usando la plataforma. Te avisaremos cuando esté disponible para descarga.');
 
       const token = localStorage.getItem('token');
 
@@ -783,6 +752,7 @@ export default function ExportesPage() {
       }
 
       setSuccessMessage(t('exports.generatedSuccessfully'));
+      setReportJobMessage('');
       setActiveTab('history');
       await loadHistory();
 
@@ -793,6 +763,7 @@ export default function ExportesPage() {
       }
     } catch (err: any) {
       console.error('ERROR GENERATE REPORT:', err);
+      setReportJobMessage('');
       setError(err.message || t('exports.generateError'));
     } finally {
       setGeneratingCode(null);
@@ -1061,6 +1032,15 @@ export default function ExportesPage() {
         {successMessage && (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-700">
             {successMessage}
+          </div>
+        )}
+
+        {reportJobMessage && (
+          <div className="fixed bottom-6 right-6 z-50 max-w-md rounded-2xl border border-indigo-200 bg-white px-5 py-4 text-sm font-semibold text-slate-800 shadow-2xl">
+            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-indigo-600">
+              Reportes TCDX
+            </div>
+            <div className="mt-1">{reportJobMessage}</div>
           </div>
         )}
 

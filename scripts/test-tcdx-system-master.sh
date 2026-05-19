@@ -429,7 +429,7 @@ fi
 # 3. Protected backend checks
 if [[ -n "${TOKEN:-}" ]]; then
   log "3) Protected backend checks"
-  timed_call_user_jwt "backend" "Backend API root candidate" "GET" "/api/" "$OUT_DIR/20-api-root.json" "" "any" "warning"
+  timed_call_user_jwt "backend" "Backend API root candidate" "GET" "/api/" "$OUT_DIR/20-api-root.json" "" "any" "info"
   timed_call_user_jwt "backend" "ISO Health dashboard API" "GET" "/health/dashboard" "$OUT_DIR/21-health-dashboard.json" "" "2xx" "critical"
   timed_call_user_jwt "backend" "ISO Health standards API" "GET" "/health/standards" "$OUT_DIR/22-health-standards.json" "" "2xx" "warning"
   timed_call_user_jwt "backend" "ISO Health root causes API" "GET" "/health/root-causes" "$OUT_DIR/23-health-root-causes.json" "" "2xx" "warning"
@@ -454,7 +454,7 @@ if [[ -n "${TOKEN:-}" ]]; then
     fi
     cidx=$((cidx+1))
     safe="$(echo "$endpoint" | sed 's#[/:?=&]#_#g' | sed 's#^_##')"
-    timed_call_user_jwt "backend-candidate" "Candidate $endpoint" "GET" "$endpoint" "$OUT_DIR/25-candidate-${cidx}-${safe}.json" "" "200401404" "warning"
+    timed_call_user_jwt "backend-candidate" "Candidate $endpoint" "GET" "$endpoint" "$OUT_DIR/25-candidate-${cidx}-${safe}.json" "" "200401404" "info"
   done
 fi
 
@@ -602,10 +602,16 @@ if [[ "$RUN_REPO_SCAN" = "true" && -d ".git" ]]; then
   GREP_RC="$?"
   set -e
   if [[ "$GREP_RC" = "0" ]]; then
-    record_result "repo-scan" "Legacy 192.168.100 references remain" "GREP" "192.168.100" "200" "0" "$REPO_LEGACY" "any" "warning"
+    RUNTIME_LEGACY="$OUT_DIR/91-repo-runtime-legacy-192-168-100.txt"
+    grep -vE '^(scripts/deploy-vms\.sh|scripts/test-tcdx-system-master\.sh|docs/|qa-results/)' "$REPO_LEGACY" > "$RUNTIME_LEGACY" || true
+    if [[ -s "$RUNTIME_LEGACY" ]]; then
+      record_result "repo-scan" "Runtime legacy 192.168.100 references remain" "GREP" "192.168.100" "200" "0" "$RUNTIME_LEGACY" "any" "warning"
+    else
+      record_result "repo-scan" "Legacy 192.168.100 references are legacy selector/docs only" "GREP" "192.168.100" "200" "0" "$REPO_LEGACY" "any" "info"
+    fi
   else
     echo "No 192.168.100 references found." > "$REPO_LEGACY"
-    record_result "repo-scan" "No legacy 192.168.100 references found" "GREP" "192.168.100" "200" "0" "$REPO_LEGACY" "200" "warning"
+    record_result "repo-scan" "No legacy 192.168.100 references found" "GREP" "192.168.100" "200" "0" "$REPO_LEGACY" "200" "info"
   fi
 fi
 

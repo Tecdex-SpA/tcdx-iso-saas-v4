@@ -31,21 +31,35 @@ def is_llm_available() -> bool:
     return False
 
 
-def _resolve_ollama_model(depth: str = "standard", local_compact: bool = False) -> str:
+def _resolve_ollama_model(
+    depth: str = "standard",
+    local_compact: bool = False,
+    model_mode: str = "",
+) -> str:
     depth = depth if depth in {"executive", "standard", "deep"} else "standard"
-    mode = _env("AI_AUDITOR_MODEL_MODE").lower()
-    fallback = _env("OLLAMA_MODEL") or _env("MODEL_NAME") or _env("OLLAMA_MODEL_FALLBACK") or "qwen2.5:1.5b"
+    mode = (model_mode or _env("AI_AUDITOR_MODEL_MODE") or "fast").lower()
+    default_model = _env("OLLAMA_MODEL") or _env("MODEL_NAME")
+    fallback = _env("OLLAMA_MODEL_FALLBACK") or default_model or "qwen2.5:1.5b"
 
-    if mode == "fast" or depth == "executive" or local_compact:
-        return _env("OLLAMA_MODEL_FAST") or fallback
+    if mode == "deep":
+        return _env("OLLAMA_MODEL_DEEP") or _env("OLLAMA_MODEL_AUDITOR") or default_model or fallback
 
-    if mode in {"balanced", "deep"} or depth in {"standard", "deep"}:
-        return _env("OLLAMA_MODEL_AUDITOR") or fallback
+    if mode == "balanced":
+        return _env("OLLAMA_MODEL_AUDITOR") or _env("OLLAMA_MODEL_FAST") or default_model or fallback
+
+    if mode == "fast":
+        return _env("OLLAMA_MODEL_FAST") or fallback or default_model
+
+    if depth == "deep":
+        return _env("OLLAMA_MODEL_DEEP") or _env("OLLAMA_MODEL_AUDITOR") or default_model or fallback
+
+    if depth == "standard":
+        return _env("OLLAMA_MODEL_AUDITOR") or _env("OLLAMA_MODEL_FAST") or default_model or fallback
 
     return fallback
 
 
-def get_llm_metadata(depth: str = "standard", local_compact: bool = False) -> dict:
+def get_llm_metadata(depth: str = "standard", local_compact: bool = False, model_mode: str = "") -> dict:
     provider = _provider()
     if provider in {"openai", "openai_compatible", "azure_openai"}:
         return {
@@ -55,12 +69,13 @@ def get_llm_metadata(depth: str = "standard", local_compact: bool = False) -> di
             "base_url": _env("OPENAI_BASE_URL") or "https://api.openai.com/v1",
         }
     if provider == "ollama":
+        resolved_mode = (model_mode or _env("AI_AUDITOR_MODEL_MODE") or "fast").lower()
         return {
             "available": True,
             "provider": "ollama",
-            "model": _resolve_ollama_model(depth, local_compact),
+            "model": _resolve_ollama_model(depth, local_compact, resolved_mode),
             "base_url": _env("OLLAMA_HOST") or "http://localhost:11434",
-            "model_mode": _env("AI_AUDITOR_MODEL_MODE") or "auto",
+            "model_mode": resolved_mode,
         }
     return {
         "available": False,
@@ -132,8 +147,9 @@ def call_llm_json(
     timeout: int = 60,
     depth: str = "standard",
     local_compact: bool = False,
+    model_mode: str = "",
 ) -> dict:
-    metadata = get_llm_metadata(depth, local_compact)
+    metadata = get_llm_metadata(depth, local_compact, model_mode)
     if not metadata["available"]:
         raise RuntimeError("LLM provider not configured")
 
