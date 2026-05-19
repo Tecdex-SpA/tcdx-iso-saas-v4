@@ -120,13 +120,34 @@ function buildLocaleHeadersForReport(token: string) {
   };
 }
 
+async function readDownloadError(res: Response, fallback: string) {
+  const contentType = res.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      const json = await res.json();
+      return json?.error || json?.message || json?.detail || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  if (contentType.includes('text/html')) {
+    return 'El servidor devolvió HTML en vez del archivo esperado. Revisa sesión, permisos o proxy.';
+  }
+
+  return fallback;
+}
+
 async function openAuthenticatedReport(fileUrl: string, token: string) {
   const res = await fetch(getAbsoluteFileUrl(fileUrl), {
     headers: buildLocaleHeadersForReport(token),
   });
 
-  if (!res.ok) {
-    throw new Error('No fue posible descargar el reporte.');
+  const contentType = res.headers.get('content-type') || '';
+
+  if (!res.ok || contentType.includes('application/json') || contentType.includes('text/html')) {
+    throw new Error(await readDownloadError(res, 'No fue posible descargar el reporte.'));
   }
 
   const blobUrl = URL.createObjectURL(await res.blob());

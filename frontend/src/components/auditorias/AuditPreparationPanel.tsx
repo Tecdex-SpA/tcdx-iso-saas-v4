@@ -104,6 +104,27 @@ function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}` };
 }
 
+async function readDownloadError(res: Response, fallback: string) {
+  const contentType = res.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    const json = await res.json().catch(() => ({}));
+    return json?.error || json?.message || json?.detail || fallback;
+  }
+
+  if (contentType.includes('text/html')) {
+    return 'El servidor devolvió HTML en vez del archivo esperado. Revisa sesión, permisos o proxy.';
+  }
+
+  return fallback;
+}
+
+async function ensureDownloadResponse(res: Response, fallback: string) {
+  const contentType = res.headers.get('content-type') || '';
+  if (res.ok && !contentType.includes('application/json') && !contentType.includes('text/html')) return;
+  throw new Error(await readDownloadError(res, fallback));
+}
+
 async function parseJsonResponse(res: Response) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json?.ok === false) {
@@ -395,8 +416,10 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
     const res = await fetch(`${API_URL}/api/audit-preparation/packages/${selectedPackageId}/download-export`, {
       headers: authHeaders(token),
     });
-    if (!res.ok) {
-      setError('No fue posible descargar el export.');
+    try {
+      await ensureDownloadResponse(res, 'No fue posible descargar el export.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No fue posible descargar el export.');
       return;
     }
     const blob = await res.blob();
@@ -418,8 +441,10 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
     const res = await fetch(`${API_URL}/api/audit-preparation/documents/${doc.id}/download`, {
       headers: authHeaders(token),
     });
-    if (!res.ok) {
-      setError('No fue posible descargar el documento.');
+    try {
+      await ensureDownloadResponse(res, 'No fue posible descargar el documento.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No fue posible descargar el documento.');
       return;
     }
     const blob = await res.blob();
