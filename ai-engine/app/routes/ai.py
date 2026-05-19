@@ -405,7 +405,9 @@ async def auditor_analyze(
     request: Request,
     x_ai_token: Optional[str] = Header(default=None),
     x_tcdx_locale: Optional[str] = Header(default=None),
+    x_request_id: Optional[str] = Header(default=None),
 ):
+    started_at = time.perf_counter()
     validate_internal_token(x_ai_token)
 
     try:
@@ -414,7 +416,23 @@ async def auditor_analyze(
             raise ValueError("payload must be a JSON object")
         locale = _request_locale(payload_dict, x_tcdx_locale)
         payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
-        return localize_ai_response(analyze_as_senior_auditor(payload_dict), locale)
+        result = localize_ai_response(analyze_as_senior_auditor(payload_dict), locale)
+        if isinstance(result, dict):
+            result.setdefault("request_id", x_request_id)
+            result.setdefault("metrics", {})
+            if isinstance(result["metrics"], dict):
+                result["metrics"].update({
+                    "request_id": x_request_id,
+                    "duration_ms": int((time.perf_counter() - started_at) * 1000),
+                    "mode": payload_dict.get("depth") or payload_dict.get("mode") or "deterministic",
+                })
+        print({
+            "event": "legacy_auditor_analyze_timing",
+            "request_id": x_request_id,
+            "tenant_id": payload_dict.get("tenant_id"),
+            "duration_ms": int((time.perf_counter() - started_at) * 1000),
+        })
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

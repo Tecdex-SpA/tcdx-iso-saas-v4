@@ -31,7 +31,21 @@ def is_llm_available() -> bool:
     return False
 
 
-def get_llm_metadata() -> dict:
+def _resolve_ollama_model(depth: str = "standard", local_compact: bool = False) -> str:
+    depth = depth if depth in {"executive", "standard", "deep"} else "standard"
+    mode = _env("AI_AUDITOR_MODEL_MODE").lower()
+    fallback = _env("OLLAMA_MODEL") or _env("MODEL_NAME") or _env("OLLAMA_MODEL_FALLBACK") or "qwen2.5:1.5b"
+
+    if mode == "fast" or depth == "executive" or local_compact:
+        return _env("OLLAMA_MODEL_FAST") or fallback
+
+    if mode in {"balanced", "deep"} or depth in {"standard", "deep"}:
+        return _env("OLLAMA_MODEL_AUDITOR") or fallback
+
+    return fallback
+
+
+def get_llm_metadata(depth: str = "standard", local_compact: bool = False) -> dict:
     provider = _provider()
     if provider in {"openai", "openai_compatible", "azure_openai"}:
         return {
@@ -44,8 +58,9 @@ def get_llm_metadata() -> dict:
         return {
             "available": True,
             "provider": "ollama",
-            "model": _env("OLLAMA_MODEL") or _env("MODEL_NAME") or "qwen2.5:7b",
+            "model": _resolve_ollama_model(depth, local_compact),
             "base_url": _env("OLLAMA_HOST") or "http://localhost:11434",
+            "model_mode": _env("AI_AUDITOR_MODEL_MODE") or "auto",
         }
     return {
         "available": False,
@@ -118,7 +133,7 @@ def call_llm_json(
     depth: str = "standard",
     local_compact: bool = False,
 ) -> dict:
-    metadata = get_llm_metadata()
+    metadata = get_llm_metadata(depth, local_compact)
     if not metadata["available"]:
         raise RuntimeError("LLM provider not configured")
 

@@ -6,12 +6,20 @@ class AiEngineClient {
         'http://localhost:8001'
     ).replace(/\/+$/, '');
     this.timeout = Number.parseInt(process.env.AI_ENGINE_TIMEOUT_MS || '120000', 10) || 120000;
+    this.auditorTimeout = Number.parseInt(
+      process.env.AI_AUDITOR_TIMEOUT_MS ||
+        process.env.AI_ENGINE_TIMEOUT_MS ||
+        process.env.AI_AUDITOR_ENGINE_TIMEOUT_MS ||
+        String(this.timeout),
+      10
+    ) || this.timeout;
     this.token = process.env.AI_INTERNAL_TOKEN || process.env.AI_ENGINE_TOKEN || process.env.AI_TOKEN || '';
   }
 
-  async postJson(path, payload) {
+  async postJson(path, payload, options = {}) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeout);
+    const timeoutMs = Number.parseInt(String(options.timeoutMs || this.timeout), 10) || this.timeout;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const requestId =
       payload?.request_metadata?.request_id ||
       payload?.request_id ||
@@ -49,6 +57,11 @@ class AiEngineClient {
       }
 
       return json;
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        error.message = `ai-engine timeout after ${timeoutMs}ms`;
+      }
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
@@ -67,11 +80,15 @@ class AiEngineClient {
     }
 
     try {
-      return await this.postJson('/api/ai/senior-auditor/analyze', payload);
+      return await this.postJson('/api/ai/senior-auditor/analyze', payload, {
+        timeoutMs: this.auditorTimeout,
+      });
     } catch (error) {
       if (this.isNetworkError(error)) {
         try {
-          return await this.postJson('/api/ai/senior-auditor/analyze', payload);
+          return await this.postJson('/api/ai/senior-auditor/analyze', payload, {
+            timeoutMs: this.auditorTimeout,
+          });
         } catch (retryError) {
           return this.buildFallback(payload, retryError);
         }
@@ -141,10 +158,18 @@ class AiEngineClient {
 
   buildFallback(payload, error = null) {
     const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
+    const requestId =
+      payload?.request_metadata?.request_id ||
+      payload?.request_id ||
+      null;
     const message = error?.message ? String(error.message).slice(0, 220) : 'ai-engine no disponible';
 
     return {
       ok: false,
+      code: error?.name === 'AbortError' || message.includes('timeout')
+        ? 'AI_AUDITOR_TIMEOUT'
+        : 'AI_ENGINE_UNAVAILABLE',
+      request_id: requestId,
       answer: 'El motor de análisis no está disponible temporalmente. Los datos internos del sistema siguen accesibles. Por favor intente nuevamente en unos minutos.',
       structured_result: {
         executive_summary: 'Análisis no disponible: motor IA temporalmente fuera de servicio.',
@@ -199,6 +224,7 @@ class AiEngineClient {
         prompt_version: 'fallback',
         context_version: payload?.context?.scope?.context_version || '',
         model: 'backend_fallback',
+        request_id: requestId,
         used_internal_context: true,
         used_rag: false,
         used_drive: false,

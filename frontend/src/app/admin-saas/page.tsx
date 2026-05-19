@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { useTranslation } from '@/hooks/useTranslation';
 import { useLanguage } from '@/context/LanguageContext';
 import { translateStandardLabel } from '@/i18n/displayText';
 
@@ -248,11 +247,6 @@ function getExternalLookupMonthlyPrice(limit: any) {
 }
 
 
-function toNumber(value: any): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
 function formatDate(value?: string) {
   if (!value) return '-';
 
@@ -414,7 +408,7 @@ export default function AdminSaasPage() {
   const [loadingTenant, setLoadingTenant] = useState(false);
   const [savingKey, setSavingKey] = useState('');
   const [error, setError] = useState('');
-  const [isSuperadminUi, setIsSuperadminUi] = useState(false);
+  const [isSuperadminUi] = useState(false);
   const [activeAdminTab, setActiveAdminTab] = useState('empresa');
 
   const isPlatform = governance?.data?.scope?.is_platform === true;

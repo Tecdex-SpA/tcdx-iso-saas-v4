@@ -1219,6 +1219,18 @@ function compactAiEngineErrorMessage(error) {
   return String(error?.message || error || 'ai-engine unavailable').slice(0, 260);
 }
 
+function nowMs() {
+  return Date.now();
+}
+
+function elapsedMs(startedAt) {
+  return Math.max(0, Date.now() - startedAt);
+}
+
+function getAiAuditorRequestId(req) {
+  return String(req.requestId || req.body?.request_id || req.headers?.['x-request-id'] || '').trim();
+}
+
 async function callAiAuditorEngine(payload, locale, requestId = null) {
   const baseUrl = getAiAuditorEngineBaseUrl();
   const token = getAiAuditorEngineToken();
@@ -1480,6 +1492,10 @@ async function buildSeniorAuditorContext({ tenantId, body }) {
 
 function buildSeniorAuditorPayload({ tenantId, locale, context, body, requestId = null }) {
   const depth = ['executive', 'standard', 'deep'].includes(body?.depth) ? body.depth : 'standard';
+  const executiveMode = depth === 'executive';
+  const explicitDrive = body?.force_drive === true || body?.use_drive === true;
+  const explicitWeb = body?.force_web === true || body?.use_web === true;
+
   return {
     task_type: normalizeSeniorAuditorTask(body),
     tenant_id: tenantId,
@@ -1490,18 +1506,25 @@ function buildSeniorAuditorPayload({ tenantId, locale, context, body, requestId 
     options: {
       local_compact: body?.local_compact !== false,
       use_rag: body?.use_rag !== false,
-      use_drive: body?.use_drive === undefined ? 'auto' : body.use_drive !== false,
-      use_web: body?.force_web === true || body?.use_web === true,
+      use_drive: executiveMode ? body?.force_drive === true : (body?.use_drive === undefined ? 'auto' : body.use_drive !== false),
+      use_web: executiveMode ? body?.force_web === true : explicitWeb,
       force_web: body?.force_web === true,
-      fast_mode: body?.fast_mode === undefined ? false : body.fast_mode === true,
+      fast_mode: body?.fast_mode === undefined ? executiveMode : body.fast_mode === true,
       use_llm_in_fast_mode: body?.use_llm_in_fast_mode === true,
       depth,
+      max_controls: executiveMode ? 8 : undefined,
+      max_evidences: executiveMode ? 6 : undefined,
+      max_findings: executiveMode ? 5 : undefined,
+      max_actions: executiveMode ? 5 : undefined,
       return_structured_result: true,
     },
     request_metadata: {
       requested_locale: locale || 'es',
       audit_focus: body?.audit_focus || 'general',
       request_id: requestId || body?.request_id || null,
+      executive_compact: executiveMode,
+      requested_drive: explicitDrive,
+      requested_web: explicitWeb,
     },
   };
 }
@@ -2384,21 +2407,30 @@ router.get('/scope', auth, async (req, res) => {
 });
 
 router.post('/analyze', auth, async (req, res) => {
+  const totalStartedAt = nowMs();
+  const timings = {};
+  const requestId = getAiAuditorRequestId(req);
+
   try {
     const locale = normalizeAiAuditorLocale(req);
     res.set('x-tcdx-locale', locale);
+    if (requestId) res.set('x-request-id', requestId);
 
     if (!canAnalyze(req.user)) {
       return res.status(403).json({
         ok: false,
         code: 'RBAC_DENIED',
         error: 'No autorizado para ejecutar IA Auditor',
+        request_id: requestId || null,
         locale,
       });
     }
 
     const tenantId = resolveAiAuditorTenantId(req);
     const standardCode = req.body?.standard_code ? String(req.body.standard_code) : null;
+    const depth = ['executive', 'standard', 'deep'].includes(req.body?.depth)
+      ? req.body.depth
+      : 'standard';
 
     if (!tenantId) {
       return res.status(400).json({
@@ -2407,6 +2439,7 @@ router.post('/analyze', auth, async (req, res) => {
         code: 'TENANT_REQUIRED',
         message: 'tenant_id requerido',
         error: 'tenant_id requerido',
+        request_id: requestId || null,
         locale,
       });
     }
@@ -2416,39 +2449,96 @@ router.post('/analyze', auth, async (req, res) => {
         ok: false,
         code: 'RBAC_DENIED',
         error: 'No autorizado para este tenant',
+        request_id: requestId || null,
         locale,
       });
     }
 
+    const scopeStartedAt = nowMs();
     const scope = await buildGlobalAiAuditorScope(tenantId, standardCode);
+    timings.scope_ms = elapsedMs(scopeStartedAt);
     const fallback = buildGlobalSeniorAuditAnalysis(scope, locale, {
       audit_focus: req.body?.audit_focus,
-      depth: req.body?.depth,
+      depth,
     });
 
     try {
+      const contextStartedAt = nowMs();
       const context = await buildSeniorAuditorContext({ tenantId, body: req.body || {} });
+      timings.context_ms = elapsedMs(contextStartedAt);
       const enginePayload = buildSeniorAuditorPayload({
         tenantId,
         locale,
         context,
         body: req.body || {},
-        requestId: req.requestId,
+        requestId,
       });
 
+      const engineStartedAt = nowMs();
       const engineJson = await aiEngineClient.analyzeWithSeniorAuditor(enginePayload);
+      timings.ai_engine_ms = elapsedMs(engineStartedAt);
+      if (engineJson?.ok === false) {
+        const controlledError = new Error(engineJson?.answer || engineJson?.message || 'ai-engine returned fallback');
+        controlledError.code = engineJson?.code || 'AI_ENGINE_FALLBACK';
+        throw controlledError;
+      }
       const analysis = adaptSeniorAuditorV2Response(engineJson, fallback, locale, scope, context);
+      timings.total_ms = elapsedMs(totalStartedAt);
+
+      analysis.request_id = requestId || analysis.request_id || null;
+      analysis.trace = {
+        ...(analysis.trace || {}),
+        request_id: requestId || null,
+        depth,
+        timings_ms: timings,
+      };
+
+      console.info('AI AUDITOR ANALYZE TIMING:', {
+        request_id: requestId || null,
+        tenant_id: tenantId,
+        standard_code: standardCode,
+        depth,
+        timings_ms: timings,
+        engine_model: analysis?.engine?.model || analysis?.trace?.engine?.model || null,
+      });
 
       return res.json(analysis);
     } catch (engineError) {
-      console.warn('AI AUDITOR ENGINE FALLBACK:', engineError.message);
-      return res.json(markAiAuditorFallback(fallback, engineError));
+      timings.total_ms = elapsedMs(totalStartedAt);
+      console.warn('AI AUDITOR ENGINE FALLBACK:', {
+        request_id: requestId || null,
+        tenant_id: tenantId,
+        standard_code: standardCode,
+        depth,
+        timings_ms: timings,
+        error: engineError.message,
+      });
+      const fallbackResult = markAiAuditorFallback(fallback, engineError);
+      fallbackResult.request_id = requestId || null;
+      fallbackResult.code = engineError?.name === 'AbortError' ? 'AI_AUDITOR_TIMEOUT' : 'AI_AUDITOR_ENGINE_FALLBACK';
+      fallbackResult.message = locale === 'en'
+        ? 'Senior AI Auditor returned a controlled fallback response.'
+        : 'IA Auditor Senior devolvió una respuesta controlada de respaldo.';
+      fallbackResult.trace = {
+        ...(fallbackResult.trace || {}),
+        request_id: requestId || null,
+        depth,
+        timings_ms: timings,
+      };
+      return res.json(fallbackResult);
     }
   } catch (error) {
-    console.error('ERROR AI AUDITOR GLOBAL ANALYZE:', error);
+    timings.total_ms = elapsedMs(totalStartedAt);
+    console.error('ERROR AI AUDITOR GLOBAL ANALYZE:', {
+      request_id: requestId || null,
+      timings_ms: timings,
+      error: error.message,
+    });
     return res.status(500).json({
       ok: false,
+      code: error?.name === 'AbortError' ? 'AI_AUDITOR_TIMEOUT' : 'AI_AUDITOR_ANALYZE_FAILED',
       error: 'Error ejecutando IA Auditor global',
+      request_id: requestId || null,
       ...errorDetail(error),
     });
   }

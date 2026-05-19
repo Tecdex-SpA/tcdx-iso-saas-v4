@@ -8,6 +8,10 @@ import { translateDisplayText, translatePriorityLabel, translateSeverityLabel, t
 
 const API_URL = getApiBaseUrl();
 
+function buildRequestId(prefix = 'ia-auditor') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 type SelectOption = {
   value: string;
   label: string;
@@ -707,15 +711,20 @@ export default function IaAuditorPanel() {
       setAnalyzing(true);
       setError('');
       setAnalysis(null);
+      const requestId = buildRequestId();
+      const executiveMode = selectedDepth === 'executive';
 
       const body: Record<string, any> = {
         locale,
         audit_focus: selectedFocus,
         depth: selectedDepth,
-        include_internet: true,
-        use_web: true,
-        use_drive: true,
+        request_id: requestId,
+        include_internet: !executiveMode,
+        use_web: !executiveMode,
+        use_drive: executiveMode ? 'auto' : true,
         use_rag: true,
+        local_compact: executiveMode,
+        fast_mode: executiveMode,
       };
 
       if (selectedStandard !== 'all') {
@@ -728,6 +737,7 @@ export default function IaAuditorPanel() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'x-tcdx-locale': locale,
+          'x-request-id': requestId,
         },
         body: JSON.stringify(body),
       });
