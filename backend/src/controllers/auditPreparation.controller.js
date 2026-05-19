@@ -303,6 +303,7 @@ async function downloadExport(req, res) {
       user: req.user,
       packageId: req.params.id,
     });
+    res.setHeader('Content-Type', 'application/zip');
     return res.download(file.path, file.filename);
   } catch (error) {
     return handleError(res, error);

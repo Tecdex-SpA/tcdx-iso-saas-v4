@@ -160,8 +160,17 @@ async function openAuthorizedFile(url: string, token: string | null) {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  if (!res.ok) {
-    alert('No fue posible abrir el archivo.');
+  const contentType = res.headers.get('content-type') || '';
+
+  if (!res.ok || contentType.includes('application/json') || contentType.includes('text/html')) {
+    let message = 'No fue posible abrir el archivo.';
+    if (contentType.includes('application/json')) {
+      const json = await res.json().catch(() => ({}));
+      message = json?.error || json?.message || json?.detail || message;
+    } else if (contentType.includes('text/html')) {
+      message = 'El servidor devolvió HTML en vez del archivo esperado. Revisa sesión, permisos o proxy.';
+    }
+    alert(message);
     return;
   }
 

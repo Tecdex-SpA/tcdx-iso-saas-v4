@@ -63,6 +63,7 @@ function isPremiumReportTypeCode(reportTypeCode) {
 const CHROME_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
   process.env.CHROME_EXECUTABLE_PATH,
+  '/snap/bin/chromium',
   '/usr/bin/chromium-browser',
   '/usr/bin/chromium',
   '/usr/bin/google-chrome',
@@ -464,6 +465,13 @@ function buildReportTitle(reportType, reportTypeCode, period, locale = 'es', pro
 }
 
 async function generatePdfFromHtml(html, outputPath) {
+  const startedAt = Date.now();
+  const htmlSize = Buffer.byteLength(String(html || ''), 'utf8');
+
+  if (!String(html || '').trim()) {
+    throw new Error('El HTML del reporte está vacío; no se puede generar PDF.');
+  }
+
   const executablePath = firstExistingPath(CHROME_CANDIDATES);
 
   if (!executablePath) {
@@ -475,6 +483,9 @@ async function generatePdfFromHtml(html, outputPath) {
   const browser = await puppeteer.launch({
     headless: 'new',
     executablePath,
+    timeout: Number(process.env.REPORT_PDF_BROWSER_TIMEOUT_MS || 120000),
+    protocolTimeout: Number(process.env.REPORT_PDF_PROTOCOL_TIMEOUT_MS || 120000),
+    acceptInsecureCerts: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -488,10 +499,14 @@ async function generatePdfFromHtml(html, outputPath) {
 
   try {
     const page = await browser.newPage();
+    const pageTimeoutMs = Number(process.env.REPORT_PDF_PAGE_TIMEOUT_MS || 120000);
 
+    page.setDefaultTimeout(pageTimeoutMs);
+    page.setDefaultNavigationTimeout(pageTimeoutMs);
     await page.setViewport({ width: 1440, height: 1100 });
     await page.setContent(html, {
       waitUntil: ['domcontentloaded', 'networkidle0'],
+      timeout: pageTimeoutMs,
     });
 
     await page.emulateMediaType('screen');
@@ -543,6 +558,19 @@ async function generatePdfFromHtml(html, outputPath) {
         bottom: '0mm',
         left: '0mm',
       },
+    });
+
+    const size = fs.existsSync(outputPath) ? fs.statSync(outputPath).size : 0;
+    if (!size) {
+      throw new Error('Puppeteer no generó un PDF válido en disco.');
+    }
+
+    console.info('REPORT PDF GENERATED:', {
+      output_path: outputPath,
+      bytes: size,
+      html_bytes: htmlSize,
+      duration_ms: Date.now() - startedAt,
+      chromium: executablePath,
     });
   } finally {
     await browser.close();
@@ -2673,7 +2701,7 @@ router.post('/generate', auth, async (req, res) => {
       ...enrichedReportMetadata,
     };
 
-const html = renderReportHtmlByType(reportData);
+    const html = renderReportHtmlByType(reportData);
 
     const reportTitle = buildReportTitle(reportType, resolvedReportTypeCode || report_type_code, period, locale, profileContext);
     const tenantFolder = path.join(
@@ -2692,6 +2720,13 @@ const html = renderReportHtmlByType(reportData);
     )}-${Date.now()}.pdf`;
 
     const outputPath = path.join(tenantFolder, fileName);
+
+    console.info('REPORT GENERATION START:', {
+      request_id: req.requestId || null,
+      tenant_id: targetTenantId,
+      report_type_code,
+      output_path: outputPath,
+    });
 
     await generatePdfFromHtml(html, outputPath);
 
@@ -2761,11 +2796,18 @@ const html = renderReportHtmlByType(reportData);
       },
     });
   } catch (error) {
-    console.error('ERROR GENERATE REPORT:', error);
+    console.error('ERROR GENERATE REPORT:', {
+      request_id: req.requestId || null,
+      code: error.code || null,
+      message: error.message,
+      stack: error.stack,
+    });
 
     return res.status(500).json({
       ok: false,
+      code: 'REPORT_GENERATION_FAILED',
       error: 'Error generando informe',
+      request_id: req.requestId || null,
       ...errorDetail(error),
     });
   }

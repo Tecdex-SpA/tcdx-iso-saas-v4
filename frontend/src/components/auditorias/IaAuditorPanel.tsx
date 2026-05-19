@@ -505,6 +505,27 @@ export default function IaAuditorPanel() {
     window.URL.revokeObjectURL(url);
   };
 
+  const readPdfError = async (res: Response) => {
+    const contentType = res.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const json = await res.json().catch(() => ({}));
+      return json?.error || json?.message || json?.detail || copy.pdfError;
+    }
+
+    if (contentType.includes('text/html')) {
+      return 'El servidor devolvió HTML en vez del PDF esperado. Revisa sesión, permisos o proxy.';
+    }
+
+    return copy.pdfError;
+  };
+
+  const ensurePdfResponse = async (res: Response) => {
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/pdf')) return;
+    throw new Error(await readPdfError(res));
+  };
+
 
   const formatDate = (value?: string | null) => {
     if (!value) return '-';
@@ -583,7 +604,7 @@ export default function IaAuditorPanel() {
         }),
       });
 
-      if (!res.ok) throw new Error(copy.pdfError);
+      await ensurePdfResponse(res);
       const blob = await res.blob();
       downloadBlobAsFile(blob, `tcdx-ai-auditor-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err: any) {
@@ -607,7 +628,7 @@ export default function IaAuditorPanel() {
         },
       });
 
-      if (!res.ok) throw new Error(copy.pdfError);
+      await ensurePdfResponse(res);
       const blob = await res.blob();
       downloadBlobAsFile(blob, `tcdx-ai-auditor-${historyId}.pdf`);
     } catch (err: any) {
