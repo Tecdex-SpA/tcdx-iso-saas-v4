@@ -12,12 +12,18 @@ function buildRequestId(prefix = 'ia-auditor') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 type SelectOption = {
   value: string;
   label: string;
 };
 
-function resolveTenantId(user: any) {
+type LooseRecord = Record<string, any>;
+
+function resolveTenantId(user: LooseRecord | null) {
   return user?.tenant_id || user?.tenantId || user?.tenant || '';
 }
 
@@ -144,13 +150,13 @@ function scoreTone(score: number) {
   return 'border-red-200 bg-red-50 text-red-800';
 }
 
-function badgeTone(value: any) {
+function badgeTone(value: unknown) {
   if (value === true || value === 'true') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   if (value === false || value === 'false') return 'border-slate-200 bg-slate-50 text-slate-700';
   return 'border-indigo-200 bg-indigo-50 text-indigo-700';
 }
 
-function severityTone(value: any) {
+function severityTone(value: unknown) {
   const normalized = String(value || '').toLowerCase();
   if (['alta', 'high', 'critical', 'critica', 'crítica'].includes(normalized)) {
     return 'border-red-200 bg-red-50 text-red-700';
@@ -161,14 +167,14 @@ function severityTone(value: any) {
   return 'border-emerald-200 bg-emerald-50 text-emerald-700';
 }
 
-function confidenceTone(value: any) {
+function confidenceTone(value: unknown) {
   const numeric = Number(value || 0);
   if (numeric >= 0.7) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   if (numeric >= 0.4) return 'border-amber-200 bg-amber-50 text-amber-700';
   return 'border-red-200 bg-red-50 text-red-700';
 }
 
-function sourceTone(value: any) {
+function sourceTone(value: unknown) {
   const normalized = String(value || '').toLowerCase();
   if (normalized === 'internal_db') return 'border-indigo-200 bg-indigo-50 text-indigo-700';
   if (normalized === 'rag') return 'border-violet-200 bg-violet-50 text-violet-700';
@@ -177,7 +183,7 @@ function sourceTone(value: any) {
   return 'border-slate-200 bg-slate-50 text-slate-700';
 }
 
-function Card({ title, value, helper }: { title: string; value: any; helper?: string }) {
+function Card({ title, value, helper }: { title: string; value: React.ReactNode; helper?: string }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
@@ -230,7 +236,7 @@ function Select({
   );
 }
 
-function TraceItem({ label, value }: { label: string; value: any }) {
+function TraceItem({ label, value }: { label: string; value: unknown }) {
   const rendered = value === undefined || value === null || value === '' ? '-' : String(value);
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -242,7 +248,7 @@ function TraceItem({ label, value }: { label: string; value: any }) {
   );
 }
 
-function Pill({ children, value }: { children: React.ReactNode; value?: any }) {
+function Pill({ children, value }: { children: React.ReactNode; value?: unknown }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-black ${badgeTone(value)}`}>
       {children}
@@ -257,9 +263,9 @@ function ListSection({
   render,
 }: {
   title: string;
-  items: any[];
+  items: LooseRecord[];
   empty: string;
-  render: (item: any, index: number) => React.ReactNode;
+  render: (item: LooseRecord, index: number) => React.ReactNode;
 }) {
   return (
     <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
@@ -280,7 +286,7 @@ function StructuredResultPanel({
   result,
   copy,
 }: {
-  result: any;
+  result: LooseRecord | null;
   copy: ReturnType<typeof localText>;
 }) {
   if (!result || typeof result !== 'object') return null;
@@ -320,7 +326,7 @@ function StructuredResultPanel({
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <h3 className="text-sm font-black text-slate-900">{copy.detectedGaps}</h3>
             <div className="mt-3 space-y-3">
-              {gaps.map((gap: any, index: number) => (
+              {gaps.map((gap: LooseRecord, index: number) => (
                 <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="flex flex-wrap gap-2">
                     <span className={`rounded-full border px-2 py-1 text-[11px] font-black ${severityTone(gap.severity)}`}>{gap.severity || '-'}</span>
@@ -340,7 +346,7 @@ function StructuredResultPanel({
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
             <h3 className="text-sm font-black text-indigo-950">{copy.recommendedActions}</h3>
             <div className="mt-3 space-y-3">
-              {actions.map((action: any, index: number) => (
+              {actions.map((action: LooseRecord, index: number) => (
                 <div key={index} className="rounded-xl border border-indigo-100 bg-white p-3">
                   <div className="flex flex-wrap gap-2">
                     <span className={`rounded-full border px-2 py-1 text-[11px] font-black ${severityTone(action.priority)}`}>{action.priority || '-'}</span>
@@ -362,7 +368,7 @@ function StructuredResultPanel({
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <h3 className="text-sm font-black text-amber-900">{copy.missingEvidence}</h3>
             <ul className="mt-3 space-y-2 text-sm text-amber-900">
-              {missingEvidence.map((item: any, index: number) => <li key={index}>{String(item)}</li>)}
+              {missingEvidence.map((item: unknown, index: number) => <li key={index}>{String(item)}</li>)}
             </ul>
           </div>
         )}
@@ -371,7 +377,7 @@ function StructuredResultPanel({
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <h3 className="text-sm font-black text-slate-900">{copy.auditorQuestions}</h3>
             <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              {questions.map((item: any, index: number) => <li key={index}>{String(item)}</li>)}
+              {questions.map((item: unknown, index: number) => <li key={index}>{String(item)}</li>)}
             </ul>
           </div>
         )}
@@ -380,7 +386,7 @@ function StructuredResultPanel({
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <h3 className="text-sm font-black text-slate-900">{copy.limitations}</h3>
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
-              {limitations.map((item: any, index: number) => <li key={index}>{String(item)}</li>)}
+              {limitations.map((item: unknown, index: number) => <li key={index}>{String(item)}</li>)}
             </ul>
           </div>
         )}
@@ -390,7 +396,7 @@ function StructuredResultPanel({
         <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
           <h3 className="text-sm font-black text-slate-900">{copy.sourcesUsed}</h3>
           <div className="mt-3 flex flex-wrap gap-2">
-            {sources.map((source: any, index: number) => (
+            {sources.map((source: LooseRecord, index: number) => (
               <span key={index} className={`rounded-full border px-3 py-1 text-xs font-black ${sourceTone(source.source)}`}>
                 {source.source}: {source.reference}
               </span>
@@ -407,15 +413,15 @@ export default function IaAuditorPanel() {
   const copy = localText(locale);
 
   const [token, setToken] = useState('');
-  const [scope, setScope] = useState<any>(null);
-  const [analysis, setAnalysis] = useState<any>(null);
+  const [scope, setScope] = useState<LooseRecord | null>(null);
+  const [analysis, setAnalysis] = useState<LooseRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
-  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [historyItems, setHistoryItems] = useState<LooseRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
-  const [selectedHistory, setSelectedHistory] = useState<any>(null);
+  const [selectedHistory, setSelectedHistory] = useState<LooseRecord | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState('');
   const [reviewStatus, setReviewStatus] = useState('reviewed');
@@ -427,7 +433,7 @@ export default function IaAuditorPanel() {
   const [selectedFocus, setSelectedFocus] = useState('general');
   const [selectedDepth, setSelectedDepth] = useState('executive');
   const [selectedModelMode, setSelectedModelMode] = useState('fast');
-  const [activeJob, setActiveJob] = useState<any>(null);
+  const [activeJob, setActiveJob] = useState<LooseRecord | null>(null);
   const [jobMessage, setJobMessage] = useState('');
 
   useEffect(() => {
@@ -505,14 +511,14 @@ export default function IaAuditorPanel() {
         },
       });
 
-      const json = await readJsonResponse<{ scope?: unknown }>(res, {
+      const json = await readJsonResponse<{ scope?: LooseRecord }>(res, {
         fallbackMessage: copy.error,
         locale,
       });
 
       setScope(json.scope || null);
-    } catch (err: any) {
-      setError(err?.message || copy.error);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, copy.error));
     } finally {
       setLoading(false);
     }
@@ -598,8 +604,8 @@ export default function IaAuditorPanel() {
       setReviewComment(data.item?.human_review_comment || reviewComment);
       setReviewMessage(copy.humanReviewSaved);
       await loadHistory();
-    } catch (err: any) {
-      setReviewMessage(err?.message || copy.pdfError);
+    } catch (err: unknown) {
+      setReviewMessage(getErrorMessage(err, copy.pdfError));
     } finally {
       setReviewLoading(false);
     }
@@ -633,8 +639,8 @@ export default function IaAuditorPanel() {
       await ensurePdfResponse(res);
       const blob = await res.blob();
       downloadBlobAsFile(blob, `tcdx-ai-auditor-${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch (err: any) {
-      setPdfError(err?.message || copy.pdfError);
+    } catch (err: unknown) {
+      setPdfError(getErrorMessage(err, copy.pdfError));
     } finally {
       setPdfLoading(false);
     }
@@ -657,8 +663,8 @@ export default function IaAuditorPanel() {
       await ensurePdfResponse(res);
       const blob = await res.blob();
       downloadBlobAsFile(blob, `tcdx-ai-auditor-${historyId}.pdf`);
-    } catch (err: any) {
-      setPdfError(err?.message || copy.pdfError);
+    } catch (err: unknown) {
+      setPdfError(getErrorMessage(err, copy.pdfError));
     } finally {
       setPdfLoading(false);
     }
@@ -686,15 +692,15 @@ export default function IaAuditorPanel() {
         },
       });
 
-      const json = await readJsonResponse<{ items?: unknown[]; warning?: string }>(res, {
+      const json = await readJsonResponse<{ items?: LooseRecord[]; warning?: string }>(res, {
         fallbackMessage: copy.historyUnavailable,
         locale,
       });
 
       setHistoryItems(Array.isArray(json.items) ? json.items : []);
       setHistoryError(json.warning || '');
-    } catch (err: any) {
-      setHistoryError(err?.message || copy.historyUnavailable);
+    } catch (err: unknown) {
+      setHistoryError(getErrorMessage(err, copy.historyUnavailable));
       setHistoryItems([]);
     } finally {
       setHistoryLoading(false);
@@ -714,14 +720,14 @@ export default function IaAuditorPanel() {
         },
       });
 
-      const json = await readJsonResponse<{ item?: unknown }>(res, {
+      const json = await readJsonResponse<{ item?: LooseRecord }>(res, {
         fallbackMessage: copy.historyUnavailable,
         locale,
       });
 
       setSelectedHistory(json.item || null);
-    } catch (err: any) {
-      setHistoryError(err?.message || copy.historyUnavailable);
+    } catch (err: unknown) {
+      setHistoryError(getErrorMessage(err, copy.historyUnavailable));
     }
   };
 
@@ -739,7 +745,7 @@ export default function IaAuditorPanel() {
       const executiveMode = selectedDepth === 'executive';
       const asyncMode = selectedModelMode !== 'fast' || selectedDepth === 'deep';
 
-      const body: Record<string, any> = {
+      const body: LooseRecord = {
         locale,
         audit_focus: selectedFocus,
         depth: selectedDepth,
@@ -778,7 +784,7 @@ export default function IaAuditorPanel() {
         job_id?: string;
         status?: string;
         message?: string;
-        scope?: unknown;
+        scope?: LooseRecord;
         trace?: {
           history_saved?: boolean;
         };
@@ -799,8 +805,8 @@ export default function IaAuditorPanel() {
       if (json?.trace?.history_saved === true) {
         void loadHistory();
       }
-    } catch (err: any) {
-      setError(err?.message || copy.error);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, copy.error));
     } finally {
       setAnalyzing(false);
     }
@@ -816,7 +822,7 @@ export default function IaAuditorPanel() {
             'x-tcdx-locale': locale,
           },
         });
-        const statusJson = await readJsonResponse<any>(statusRes, {
+        const statusJson = await readJsonResponse<LooseRecord>(statusRes, {
           fallbackMessage: copy.asyncFailed,
           locale,
         });
@@ -834,7 +840,7 @@ export default function IaAuditorPanel() {
               'x-tcdx-locale': locale,
             },
           });
-          const resultJson = await readJsonResponse<any>(resultRes, {
+          const resultJson = await readJsonResponse<LooseRecord>(resultRes, {
             fallbackMessage: copy.asyncFailed,
             locale,
           });
@@ -844,15 +850,15 @@ export default function IaAuditorPanel() {
           void loadHistory();
           return;
         }
-      } catch (err: any) {
-        setJobMessage(err?.message || copy.asyncFailed);
+      } catch (err: unknown) {
+        setJobMessage(getErrorMessage(err, copy.asyncFailed));
         return;
       }
     }
   };
 
 
-  const prepareSuggestion = async (type: string, suggestion: any) => {
+  const prepareSuggestion = async (type: string, suggestion: LooseRecord) => {
     if (!token) return;
 
     try {
@@ -891,8 +897,8 @@ export default function IaAuditorPanel() {
       if (deepLink) {
         window.location.href = deepLink;
       }
-    } catch (err: any) {
-      setError(err?.message || copy.prepareError);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, copy.prepareError));
     }
   };
 
@@ -1053,7 +1059,7 @@ export default function IaAuditorPanel() {
             </div>
 
             <div className="mt-5 space-y-3">
-              {controlsByStandard.map((item: any) => (
+              {controlsByStandard.map((item: LooseRecord) => (
                 <div key={item.standard_code} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -1443,7 +1449,7 @@ export default function IaAuditorPanel() {
               empty={copy.noData}
               render={(item, index) => (
                 <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-700">
-                  {item}
+                  {String(item)}
                 </div>
               )}
             />

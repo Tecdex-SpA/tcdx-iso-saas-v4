@@ -26,6 +26,7 @@ class Settings:
     AI_AUDITOR_MODEL_MODE = os.getenv("AI_AUDITOR_MODEL_MODE", "fast")
     AI_AUDITOR_ASYNC_THRESHOLD_MS = int(os.getenv("AI_AUDITOR_ASYNC_THRESHOLD_MS", "30000"))
     AI_AUDITOR_DEEP_ASYNC_REQUIRED = os.getenv("AI_AUDITOR_DEEP_ASYNC_REQUIRED", "true").lower() != "false"
+    AI_ENGINE_PUBLIC_DOCS = os.getenv("AI_ENGINE_PUBLIC_DOCS", "false").lower() == "true"
     AI_ENGINE_LLM_TIMEOUT_MS = int(os.getenv("AI_ENGINE_LLM_TIMEOUT_MS", "60000"))
 
 settings = Settings()
