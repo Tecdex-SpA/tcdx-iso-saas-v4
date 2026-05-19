@@ -60,15 +60,31 @@ function isPremiumReportTypeCode(reportTypeCode) {
   return Object.values(REPORT_TYPE_ALIASES).includes(String(reportTypeCode || '').trim());
 }
 
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  process.env.CHROME_EXECUTABLE_PATH,
-  '/snap/bin/chromium',
-  '/usr/bin/chromium-browser',
-  '/usr/bin/chromium',
-  '/usr/bin/google-chrome',
+const CHROME_ENV_CANDIDATES = [
+  ['PUPPETEER_EXECUTABLE_PATH', process.env.PUPPETEER_EXECUTABLE_PATH],
+  ['CHROME_PATH', process.env.CHROME_PATH],
+  ['CHROMIUM_PATH', process.env.CHROMIUM_PATH],
+  ['CHROME_EXECUTABLE_PATH', process.env.CHROME_EXECUTABLE_PATH],
+];
+
+const SYSTEM_CHROME_CANDIDATES = [
   '/usr/bin/google-chrome-stable',
-].filter(Boolean);
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+];
+
+const SNAP_CHROMIUM_PATH = '/snap/bin/chromium';
+
+class ReportBrowserError extends Error {
+  constructor(code, message, meta = {}) {
+    super(message);
+    this.name = 'ReportBrowserError';
+    this.code = code;
+    this.stage = 'BROWSER_LAUNCH';
+    this.meta = meta;
+  }
+}
 
 function normalizeRole(role) {
   const raw = String(role || '')
@@ -203,14 +219,90 @@ function safeObject(value) {
   }
 }
 
-function firstExistingPath(paths) {
-  for (const candidate of paths) {
-    if (candidate && fs.existsSync(candidate)) {
-      return candidate;
+function isSnapChromiumPath(value) {
+  const normalized = String(value || '').trim();
+  return normalized === SNAP_CHROMIUM_PATH || normalized.startsWith('/snap/');
+}
+
+function addBrowserCandidateDiagnostic(checked, source, candidate) {
+  const value = String(candidate || '').trim();
+  if (!value) return false;
+
+  const exists = fs.existsSync(value);
+  const isSnap = isSnapChromiumPath(value);
+  checked.push({
+    source,
+    path: value,
+    exists,
+    skipped: isSnap,
+    reason: isSnap ? 'snap_chromium_not_supported_under_systemd' : null,
+  });
+
+  return exists && !isSnap;
+}
+
+function resolvePuppeteerExecutablePath() {
+  const checked = [];
+
+  for (const [name, candidate] of CHROME_ENV_CANDIDATES) {
+    if (addBrowserCandidateDiagnostic(checked, name, candidate)) {
+      return {
+        executablePath: String(candidate).trim(),
+        checked,
+        managedBrowser: false,
+      };
     }
   }
 
-  return null;
+  for (const candidate of SYSTEM_CHROME_CANDIDATES) {
+    if (addBrowserCandidateDiagnostic(checked, 'system', candidate)) {
+      return {
+        executablePath: candidate,
+        checked,
+        managedBrowser: false,
+      };
+    }
+  }
+
+  let managedCandidate = null;
+  try {
+    managedCandidate = puppeteer.executablePath();
+    if (addBrowserCandidateDiagnostic(checked, 'puppeteer-managed', managedCandidate)) {
+      return {
+        executablePath: managedCandidate,
+        checked,
+        managedBrowser: true,
+      };
+    }
+  } catch (error) {
+    checked.push({
+      source: 'puppeteer-managed',
+      path: null,
+      exists: false,
+      skipped: false,
+      reason: `managed_browser_lookup_failed: ${error.message}`,
+    });
+  }
+
+  const snapExists = fs.existsSync(SNAP_CHROMIUM_PATH);
+  if (snapExists) {
+    checked.push({
+      source: 'snap-diagnostic',
+      path: SNAP_CHROMIUM_PATH,
+      exists: true,
+      skipped: true,
+      reason: 'snap_chromium_detected_but_not_used_under_systemd',
+    });
+  }
+
+  throw new ReportBrowserError(
+    'REPORT_BROWSER_UNAVAILABLE',
+    'No hay un navegador Chromium/Chrome compatible con Puppeteer bajo systemd. Instale chromium/chrome no-snap o configure PUPPETEER_EXECUTABLE_PATH.',
+    {
+      checked,
+      snap_chromium_detected: snapExists,
+    }
+  );
 }
 
 function getReportDownloadUrl(exportId) {
@@ -472,32 +564,36 @@ async function generatePdfFromHtml(html, outputPath) {
     throw new Error('El HTML del reporte está vacío; no se puede generar PDF.');
   }
 
-  const executablePath = firstExistingPath(CHROME_CANDIDATES);
+  const browserResolution = resolvePuppeteerExecutablePath();
+  const executablePath = browserResolution.executablePath;
 
-  if (!executablePath) {
-    throw new Error(
-      'No se encontró Chromium/Chrome. Verifica PUPPETEER_EXECUTABLE_PATH o instala chromium.'
-    );
+  const skippedSnapCandidates = browserResolution.checked.filter((item) => item.skipped);
+  if (skippedSnapCandidates.length) {
+    console.warn('REPORT PDF BROWSER WARN:', {
+      message: 'Chromium Snap detectado y omitido para Puppeteer bajo systemd.',
+      skipped: skippedSnapCandidates,
+    });
   }
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    executablePath,
-    timeout: Number(process.env.REPORT_PDF_BROWSER_TIMEOUT_MS || 120000),
-    protocolTimeout: Number(process.env.REPORT_PDF_PROTOCOL_TIMEOUT_MS || 120000),
-    acceptInsecureCerts: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-software-rasterizer',
-      '--no-zygote',
-      '--single-process',
-    ],
-  });
+  let browser;
 
   try {
+    browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath,
+      timeout: Number(process.env.REPORT_PDF_BROWSER_TIMEOUT_MS || 120000),
+      protocolTimeout: Number(process.env.REPORT_PDF_PROTOCOL_TIMEOUT_MS || 120000),
+      acceptInsecureCerts: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-zygote',
+        '--disable-software-rasterizer',
+      ],
+    });
+
     const page = await browser.newPage();
     const pageTimeoutMs = Number(process.env.REPORT_PDF_PAGE_TIMEOUT_MS || 120000);
 
@@ -571,9 +667,24 @@ async function generatePdfFromHtml(html, outputPath) {
       html_bytes: htmlSize,
       duration_ms: Date.now() - startedAt,
       chromium: executablePath,
+      managed_browser: browserResolution.managedBrowser,
     });
+  } catch (error) {
+    if (error instanceof ReportBrowserError) throw error;
+    throw new ReportBrowserError(
+      'REPORT_BROWSER_LAUNCH_FAILED',
+      'No fue posible iniciar el motor de generación PDF.',
+      {
+        selected_executable: executablePath,
+        managed_browser: browserResolution.managedBrowser,
+        checked: browserResolution.checked,
+        cause: error.message,
+      }
+    );
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
 }
 
@@ -2796,17 +2907,26 @@ router.post('/generate', auth, async (req, res) => {
       },
     });
   } catch (error) {
+    const errorCode = error.code === 'REPORT_BROWSER_UNAVAILABLE' || error.code === 'REPORT_BROWSER_LAUNCH_FAILED'
+      ? error.code
+      : 'REPORT_GENERATION_FAILED';
+    const errorStage = error.stage || null;
     console.error('ERROR GENERATE REPORT:', {
       request_id: req.requestId || null,
-      code: error.code || null,
+      code: errorCode,
+      stage: errorStage,
       message: error.message,
+      meta: error.meta || null,
       stack: error.stack,
     });
 
     return res.status(500).json({
       ok: false,
-      code: 'REPORT_GENERATION_FAILED',
-      error: 'Error generando informe',
+      code: errorCode,
+      ...(errorStage ? { stage: errorStage } : {}),
+      error: errorStage === 'BROWSER_LAUNCH'
+        ? 'No fue posible iniciar el motor de generación PDF.'
+        : 'Error generando informe',
       request_id: req.requestId || null,
       ...errorDetail(error),
     });

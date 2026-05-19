@@ -37,6 +37,12 @@ AI_ENGINE_URL=http://ai.tcdx.int:8001
 AI_INTERNAL_TOKEN=<same internal token used by ai-engine>
 AI_ENGINE_TIMEOUT_MS=120000
 AI_AUDITOR_ENGINE_TIMEOUT_MS=25000
+REPORT_PUBLIC_BASE_URL=https://181.212.166.187:8443
+REPORT_TCDX_LOGO_URL=https://181.212.166.187:8443/uploads/logos/tcdx-logo.png
+TCDX_LOGO_URL=https://181.212.166.187:8443/uploads/logos/tcdx-logo.png
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+REPORT_PDF_BROWSER_TIMEOUT_MS=120000
+REPORT_PDF_PAGE_TIMEOUT_MS=120000
 ```
 
 Frontend `/home/tecdex/frontend/.env`:
@@ -67,6 +73,45 @@ AI_ENGINE_LLM_TIMEOUT_MS=90000
 ```
 
 UTM compatibility remains available by setting the same variables to explicit legacy lab values. Do not rely on legacy defaults in production.
+
+## PDF generation browser dependency
+
+`tecdex-backend` runs under `systemd`, so Puppeteer must not use Chromium installed as Snap (`/snap/bin/chromium`). Snap Chromium expects a Snap cgroup and fails from the normal backend service with an error similar to:
+
+```text
+/system.slice/tecdex-backend.service is not a snap cgroup for tag snap.chromium.chromium
+```
+
+Install a non-Snap Chrome/Chromium and point the backend to it with `PUPPETEER_EXECUTABLE_PATH`. Preferred option on Ubuntu Server:
+
+```bash
+wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+sudo apt install -y /tmp/google-chrome.deb
+```
+
+Then set in `/home/tecdex/backend/.env`:
+
+```bash
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+```
+
+Common runtime packages for headless Chrome:
+
+```bash
+sudo apt install -y \
+  fonts-liberation \
+  libnss3 \
+  libatk-bridge2.0-0 \
+  libgtk-3-0 \
+  libx11-xcb1 \
+  libxcomposite1 \
+  libxdamage1 \
+  libxrandr2 \
+  libgbm1 \
+  libasound2t64
+```
+
+If `libasound2t64` is not available on the Ubuntu version, use `libasound2`. Avoid `sudo apt install chromium` unless you confirm it installs a real `/usr/bin/chromium` binary rather than Snap.
 
 ## Nginx frontend proxy
 
