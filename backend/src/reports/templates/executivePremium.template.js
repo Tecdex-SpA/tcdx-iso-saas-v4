@@ -100,7 +100,7 @@ function getBaseUrl() {
     process.env.REPORT_PUBLIC_BASE_URL ||
     process.env.PUBLIC_BASE_URL ||
     process.env.API_PUBLIC_URL ||
-    'http://bk.tcdx.int:3000'
+    'https://181.212.166.187:8443'
   ).replace(/\/+$/, '');
 }
 
@@ -151,10 +151,11 @@ function renderLogo(rawSrc, fallbackText, side = 'left') {
   const fallback1 = candidates[1] || '';
   const fallback2 = candidates[2] || '';
   const safeText = escapeHtml(fallbackText || 'Logo');
+  const logoRole = side === 'right' ? 'tenant' : 'tcdx';
 
   if (!first) {
     return `
-      <div class="logoBox logoFallback ${side === 'right' ? 'logoRight' : ''}">
+      <div class="logoBox logoFallback ${side === 'right' ? 'logoRight' : ''}" data-logo-role="${logoRole}" data-logo-loaded="fallback">
         <span>${safeText}</span>
       </div>
     `;
@@ -173,6 +174,8 @@ function renderLogo(rawSrc, fallbackText, side = 'left') {
         src="${escapeHtml(first)}"
         data-fallback1="${escapeHtml(fallback1)}"
         data-fallback2="${escapeHtml(fallback2)}"
+        data-logo-role="${logoRole}"
+        data-logo-source="${escapeHtml(first)}"
         onerror="${onError}"
         alt="${safeText}"
       />
@@ -185,7 +188,7 @@ function getTcdxLogo() {
   return (
     process.env.REPORT_TCDX_LOGO_URL ||
     process.env.TCDX_LOGO_URL ||
-    'http://bk.tcdx.int:3000/uploads/logos/tcdx-logo.png'
+    '/uploads/logos/tcdx-logo.png'
   );
 }
 
@@ -193,6 +196,8 @@ function getTenantLogo(tenant) {
   return (
     tenant?.report_logo_url ||
     tenant?.logo_url ||
+    tenant?.logo_path ||
+    tenant?.client_logo_url ||
     tenant?.brand_logo_url ||
     tenant?.logo ||
     ''
@@ -987,6 +992,69 @@ function renderAiPage(data) {
   const ai = data.ai_report_addendum || {};
   const fallbackSummary = tr('ai.defaultSummary');
   const summary = cleanText(ai.summary || fallbackSummary, 650);
+  const rootCauses = asArray(ai.root_cause_analysis).slice(0, 4);
+  const correctiveActions = asArray(ai.corrective_actions).slice(0, 5);
+  const evidenceRequests = asArray(ai.evidence_requests).slice(0, 5);
+  const auditQuestions = asArray(ai.audit_questions).slice(0, 4);
+  const metrics = ai.ai_metrics || {};
+  const short = (value, fallback, max = 120) => cleanText(value || fallback, max);
+
+  const renderRootCauses = () => {
+    if (!rootCauses.length) return bulletList(ai.priorities);
+    return `
+      <table class="compactTable">
+        <thead><tr><th>Brecha</th><th>Causa probable</th><th>Riesgo</th><th>Acción correctiva</th></tr></thead>
+        <tbody>
+          ${rootCauses.map((item) => `
+            <tr>
+              <td>${escapeHtml(short(item.issue, 'Brecha prioritaria', 120))}</td>
+              <td>${escapeHtml(short(item.probable_cause, 'Causa por confirmar', 150))}</td>
+              <td>${escapeHtml(short(item.risk_if_not_corrected, 'Riesgo auditor si no se corrige', 150))}</td>
+              <td>${escapeHtml(short(item.recommended_corrective_action, 'Definir acción correctiva verificable', 160))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  };
+
+  const renderCorrectiveActions = () => {
+    if (!correctiveActions.length) return bulletList(ai.priorities);
+    return `
+      <table class="compactTable">
+        <thead><tr><th>Prioridad</th><th>Acción</th><th>Responsable</th><th>Cierre / eficacia</th></tr></thead>
+        <tbody>
+          ${correctiveActions.map((item) => `
+            <tr>
+              <td>${escapeHtml(short(item.priority, 'media', 30))}</td>
+              <td><strong>${escapeHtml(short(item.title, 'Acción correctiva', 90))}</strong><br>${escapeHtml(short(item.description, '', 130))}</td>
+              <td>${escapeHtml(short(item.owner_role, 'Responsable del proceso', 90))}<br>${escapeHtml(`${Number(item.due_days || 15)} días`)}</td>
+              <td>${escapeHtml(short(item.effectiveness_check || asArray(item.closure_criteria)[0], 'Validar cierre y eficacia con revisión humana', 150))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  };
+
+  const renderEvidenceRequests = () => {
+    if (!evidenceRequests.length) return bulletList(ai.priorities);
+    return `
+      <table class="compactTable">
+        <thead><tr><th>Evidencia esperada</th><th>Razón auditora</th><th>Prioridad</th><th>Control</th></tr></thead>
+        <tbody>
+          ${evidenceRequests.map((item) => `
+            <tr>
+              <td>${escapeHtml(short(item.title, 'Evidencia requerida', 120))}</td>
+              <td>${escapeHtml(short(item.reason, 'Demostrar operación y trazabilidad', 150))}</td>
+              <td>${escapeHtml(short(item.priority, 'media', 30))}</td>
+              <td>${escapeHtml(short(item.related_control || item.related_clause, '-', 80))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  };
 
   return `
     <div class="pageTitleBlock">
@@ -1001,16 +1069,24 @@ function renderAiPage(data) {
     `, 'wideCard')}
 
     <div class="twoCol">
+      ${card('Causa raíz probable y riesgo', renderRootCauses())}
+      ${card('Acciones correctivas auditables', renderCorrectiveActions())}
+    </div>
+
+    ${card('Evidencias esperadas para cierre', renderEvidenceRequests(), 'wideCard')}
+
+    <div class="twoCol">
       ${card(tr('ai.recommendedPriorities'), bulletList(ai.priorities))}
       ${card(tr('ai.executiveRisks'), bulletList(ai.risks))}
     </div>
 
     <div class="twoCol">
       ${card(tr('ai.suggestedDecisions'), bulletList(ai.decisions))}
-      ${card(tr('ai.recommendedUse'), bulletList([
-        tr('ai.use.1'),
-        tr('ai.use.2'),
-        tr('ai.use.3'),
+      ${card('Preguntas auditoras y trazabilidad IA', bulletList([
+        ...auditQuestions.map((item) => `${short(item.question, 'Pregunta auditora', 120)} — ${short(item.expected_answer_or_evidence, 'Evidencia objetiva esperada', 120)}`),
+        `Modo IA: ${cleanText(ai.model_mode_used || metrics.model_mode_used || 'fast')}`,
+        `Motor IA usado: ${metrics.llm_used || ai.llm_used ? 'Sí' : 'No'}${metrics.model_name || ai.model_name ? ` · Modelo: ${metrics.model_name || ai.model_name}` : ''}`,
+        `Fallback: ${metrics.fallback_used || ai.fallback_used ? 'Sí' : 'No'}`,
       ]))}
     </div>
   `;

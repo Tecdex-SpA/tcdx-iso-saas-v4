@@ -108,6 +108,19 @@ function validatePdfOutput(outputPath, minBytes = 10 * 1024) {
   return fileSize;
 }
 
+function summarizeLogoDiagnostics(logos = []) {
+  const findRole = (role) => logos.find((item) => item.role === role) || null;
+  const tcdx = findRole('tcdx');
+  const tenant = findRole('tenant');
+  return {
+    tcdx_logo_loaded: tcdx ? tcdx.loaded === true : null,
+    tcdx_logo_resolved: tcdx?.resolved || tcdx?.source || null,
+    tenant_logo_loaded: tenant ? tenant.loaded === true : null,
+    tenant_logo_source: tenant?.source || null,
+    tenant_logo_resolved: tenant?.resolved || tenant?.source || null,
+  };
+}
+
 async function renderHtmlToPdf({
   html,
   outputPath,
@@ -189,6 +202,25 @@ async function renderHtmlToPdf({
         });
       }));
     });
+    const logoDiagnostics = await page.evaluate(() => {
+      const byRole = new Map();
+      const logoNodes = Array.from(document.querySelectorAll('[data-logo-role]'));
+      for (const node of logoNodes) {
+        const role = String(node.getAttribute('data-logo-role') || '').trim();
+        if (!role || byRole.has(role)) continue;
+        const img = node.tagName === 'IMG' ? node : node.querySelector('img');
+        const fallbackLoaded = node.getAttribute('data-logo-loaded') === 'fallback';
+        byRole.set(role, {
+          role,
+          source: img ? (img.getAttribute('data-logo-source') || img.getAttribute('src') || '') : '',
+          resolved: img ? (img.currentSrc || img.src || '') : '',
+          loaded: img ? Boolean(img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) : fallbackLoaded,
+          fallback: fallbackLoaded,
+        });
+      }
+      return Array.from(byRole.values());
+    });
+    const logoSummary = summarizeLogoDiagnostics(logoDiagnostics);
 
     await page.pdf({
       path: outputPath,
@@ -209,6 +241,12 @@ async function renderHtmlToPdf({
       browser_path: browserResolution.executablePath,
       file_size: fileSize,
       render_engine: 'puppeteer',
+      ai_engine_used: metadata.ai_engine_used ?? null,
+      used_llm: metadata.used_llm ?? null,
+      model_mode: metadata.model_mode ?? null,
+      selected_model: metadata.selected_model ?? null,
+      fallback_used: metadata.fallback_used ?? null,
+      ...logoSummary,
     });
 
     return {
@@ -218,6 +256,8 @@ async function renderHtmlToPdf({
       duration_ms: durationMs,
       browser_path: browserResolution.executablePath,
       render_engine: 'puppeteer',
+      logo_diagnostics: logoDiagnostics,
+      ...logoSummary,
     };
   } catch (error) {
     if (error instanceof HtmlPdfRendererError) throw error;

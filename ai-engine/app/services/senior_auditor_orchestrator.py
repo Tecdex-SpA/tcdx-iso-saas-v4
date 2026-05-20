@@ -492,6 +492,8 @@ def build_deterministic_preanalysis(context: dict, rag_results: list = None, dep
 
     structured_result = {
         "executive_summary": executive_summary,
+        "executive_narrative": executive_summary,
+        "auditor_opinion": diagnosis,
         "diagnosis": diagnosis,
         "confirmed_facts": confirmed_facts,
         "inferences": inferences,
@@ -513,6 +515,59 @@ def build_deterministic_preanalysis(context: dict, rag_results: list = None, dep
             ] + common_gaps[:3],
         },
         "recommended_actions": actions,
+        "root_cause_analysis": [
+            {
+                "issue": gap.get("title"),
+                "probable_cause": "Evidencia objetiva insuficiente, responsable de control no formalizado o trazabilidad de cierre incompleta.",
+                "evidence_basis": gap.get("evidence_status") or "sin_evidencia",
+                "risk_if_not_corrected": gap.get("business_impact") or "Riesgo de observación o no conformidad si no se demuestra operación efectiva.",
+                "recommended_corrective_action": gap.get("recommendation") or "Solicitar evidencia oficial, asignar responsable y cerrar brecha con criterio verificable.",
+                "owner_role": "Responsable del proceso y auditor interno ISO",
+                "due_days": 15 if gap.get("severity") == "alta" else 30,
+                "effectiveness_criteria": "Evidencia vigente aprobada, control operando y mejora verificable en el siguiente ciclo de revisión.",
+            }
+            for gap in gaps[:5]
+        ],
+        "corrective_actions": [
+            {
+                "title": action.get("title"),
+                "priority": action.get("priority") or "media",
+                "description": action.get("description"),
+                "owner_role": action.get("suggested_owner_role") or "Responsable del proceso",
+                "due_days": action.get("due_days") or 15,
+                "required_evidence": (action.get("acceptance_criteria") or [])[:3],
+                "closure_criteria": (action.get("acceptance_criteria") or [])[:3],
+                "effectiveness_check": "Validar con revisión humana que la acción eliminó la causa y dejó evidencia objetiva del periodo.",
+            }
+            for action in actions[:6]
+        ],
+        "evidence_requests": [
+            {
+                "title": item,
+                "reason": "Necesaria para demostrar ejecución real, responsable, periodo cubierto y resultado verificable.",
+                "priority": "alta" if index < 3 else "media",
+                "related_clause": "",
+                "related_control": "",
+            }
+            for index, item in enumerate((documents_to_request[: limits["questions"]] or missing_evidence[: limits["questions"]]))
+        ],
+        "audit_questions": [
+            {
+                "question": item,
+                "why_it_matters": "Permite confirmar suficiencia, trazabilidad y eficacia del control.",
+                "expected_answer_or_evidence": "Evidencia objetiva vigente, responsable formal, periodo auditado y criterio de aceptación.",
+            }
+            for item in (audit_questions[: limits["questions"]] or [
+                "¿Cuál es el criterio formal para marcar una evidencia como oficial?",
+                "¿Qué controles críticos siguen sin evidencia en alcance activo?",
+                "¿Quién es responsable del cierre de planes vencidos?",
+            ][: limits["questions"]])
+        ],
+        "management_focus": [
+            "Cerrar controles sin evidencia oficial antes de declarar preparación.",
+            "Regularizar planes vencidos con responsable, plazo y evidencia de avance.",
+            "Validar eficacia de acciones correctivas mediante revisión humana.",
+        ],
         "auditor_questions": audit_questions[: limits["questions"]] or [
             "¿Cuál es el criterio formal para marcar una evidencia como oficial?",
             "¿Qué controles críticos siguen sin evidencia en alcance activo?",

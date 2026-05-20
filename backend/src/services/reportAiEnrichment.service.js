@@ -14,6 +14,11 @@ function emptyEnrichment({ reportType, metrics, limitation }) {
     executive_summary: '',
     key_findings: [],
     recommended_actions: [],
+    root_cause_analysis: [],
+    corrective_actions: [],
+    evidence_requests: [],
+    audit_questions: [],
+    management_focus: [],
     audit_readiness: {},
     confidence: 0,
     limitations: [limitation || 'Enriquecimiento IA no disponible; reporte generado con datos internos.'],
@@ -42,6 +47,118 @@ function boolOption(value, fallback = false) {
   if (value === undefined || value === null || value === '') return fallback;
   if (typeof value === 'boolean') return value;
   return ['1', 'true', 'yes', 's'].includes(String(value).trim().toLowerCase());
+}
+
+function text(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') return value.trim() || fallback;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    return text(value.title || value.name || value.label || value.description || value.summary, fallback);
+  }
+  return fallback;
+}
+
+function priority(value, fallback = 'media') {
+  const raw = String(value || fallback).trim().toLowerCase();
+  if (['alta', 'high', 'critica', 'critical'].includes(raw)) return 'alta';
+  if (['baja', 'low'].includes(raw)) return 'baja';
+  return 'media';
+}
+
+function normalizeStringList(value, limit = 6) {
+  return asArray(value).map((item) => text(item)).filter(Boolean).slice(0, limit);
+}
+
+function buildFallbackRootCause(gaps = [], actions = []) {
+  const source = gaps.length ? gaps : actions;
+  return source.slice(0, 5).map((item, index) => ({
+    issue: text(item.title || item.issue || item.description, `Brecha prioritaria ${index + 1}`),
+    probable_cause: text(
+      item.probable_cause || item.cause,
+      'Evidencia insuficiente, trazabilidad incompleta o responsable de cierre no formalizado.'
+    ),
+    evidence_basis: text(
+      item.evidence_basis || item.evidence_status,
+      'Datos internos TCDX: controles, evidencias, hallazgos, planes de acción y KPIs disponibles.'
+    ),
+    risk_if_not_corrected: text(
+      item.risk_if_not_corrected || item.business_impact || item.risk_impact,
+      'Riesgo de observación o no conformidad por falta de evidencia objetiva y cierre verificable.'
+    ),
+    recommended_corrective_action: text(
+      item.recommended_corrective_action || item.recommendation || item.description,
+      'Formalizar evidencia, asignar responsable, cerrar brecha y validar eficacia con revisión humana.'
+    ),
+    owner_role: text(item.owner_role || item.suggested_owner_role, 'Responsable del proceso y auditor interno'),
+    due_days: Number(item.due_days || item.deadline_days || 15),
+    effectiveness_criteria: text(
+      item.effectiveness_criteria || item.effectiveness_check,
+      'Evidencia vigente aprobada, control operando y mejora reflejada en trazabilidad/KPI del periodo siguiente.'
+    ),
+  }));
+}
+
+function buildFallbackCorrectiveActions(actions = [], rootCauses = []) {
+  const source = actions.length ? actions : rootCauses;
+  return source.slice(0, 6).map((item, index) => ({
+    title: text(item.title || item.issue || item.action, `Acción correctiva ${index + 1}`),
+    priority: priority(item.priority || item.severity),
+    description: text(
+      item.description || item.recommended_action || item.recommended_corrective_action,
+      'Ejecutar corrección documentada con responsable, plazo, evidencia de cierre y validación de eficacia.'
+    ),
+    owner_role: text(item.owner_role || item.suggested_owner_role, 'Responsable del proceso'),
+    due_days: Number(item.due_days || item.deadline_days || 15),
+    required_evidence: normalizeStringList(item.required_evidence || item.acceptance_criteria, 4),
+    closure_criteria: normalizeStringList(item.closure_criteria || item.acceptance_criteria, 4),
+    effectiveness_check: text(
+      item.effectiveness_check || item.effectiveness_criteria,
+      'Revisión humana posterior y evidencia de que la causa no se repite en el siguiente ciclo.'
+    ),
+  }));
+}
+
+function buildFallbackEvidenceRequests(structured = {}) {
+  const assessment = structured.evidence_assessment || {};
+  const raw = [
+    ...asArray(structured.evidence_requests),
+    ...asArray(assessment.missing_evidence),
+    ...asArray(structured.documents_to_request),
+  ];
+  return raw.slice(0, 8).map((item, index) => ({
+    title: text(item.title || item.evidence || item, `Evidencia requerida ${index + 1}`),
+    reason: text(
+      item.reason || item.description,
+      'Necesaria para demostrar ejecución real, periodo cubierto, responsable y resultado verificable.'
+    ),
+    priority: priority(item.priority || item.severity, index < 3 ? 'alta' : 'media'),
+    related_clause: text(item.related_clause || item.clause, ''),
+    related_control: text(item.related_control || item.control || item.control_name, ''),
+  }));
+}
+
+function buildFallbackAuditQuestions(structured = {}) {
+  const raw = [
+    ...asArray(structured.audit_questions),
+    ...asArray(structured.audit_readiness?.auditor_concerns),
+  ];
+  return raw.slice(0, 6).map((item) => ({
+    question: text(item.question || item),
+    why_it_matters: text(item.why_it_matters, 'Permite confirmar suficiencia, trazabilidad y eficacia del control.'),
+    expected_answer_or_evidence: text(
+      item.expected_answer_or_evidence,
+      'Evidencia objetiva vigente, responsable formal, periodo auditado y criterio de aceptación.'
+    ),
+  })).filter((item) => item.question);
+}
+
+function buildManagementFocus(structured = {}, actions = []) {
+  return normalizeStringList([
+    ...asArray(structured.management_focus),
+    ...actions.map((item) => item.title || item.description),
+    structured.risk_impact,
+  ], 6);
 }
 
 async function buildReportAiEnrichment({
@@ -106,7 +223,12 @@ async function buildReportAiEnrichment({
       tenant_id: tenantId,
       module_origin: 'reports',
       question: requestedLlm
-        ? 'Genera enriquecimiento premium de reporte con resumen ejecutivo, riesgos clave, decisiones recomendadas, prioridades de evidencia, próximos pasos y comentario auditor. No inventes datos: los datos internos son la fuente de verdad.'
+        ? [
+            'Genera enriquecimiento premium de reporte para un auditor ISO senior.',
+            'Devuelve JSON renderizable con executive_narrative, auditor_opinion, root_cause_analysis, corrective_actions, evidence_requests, audit_questions, management_focus, limitations y trace.',
+            'Cada acción debe incluir causa probable, acción correctiva, evidencia requerida, responsable sugerido, plazo, criterio de cierre y criterio de eficacia.',
+            'No inventes certificación ni cumplimiento. Separa hechos internos de inferencias. Los datos internos del tenant son la fuente de verdad; RAG/web/Drive son solo apoyo.',
+          ].join(' ')
         : 'Genera enriquecimiento ejecutivo de reporte con brechas, readiness y acciones prioritarias.',
       locale: 'es',
       context,
@@ -125,6 +247,17 @@ async function buildReportAiEnrichment({
       : {};
     const gaps = asArray(structured.gaps);
     const recommendedActions = asArray(structured.recommended_actions);
+    const rootCauseAnalysis = asArray(structured.root_cause_analysis).length
+      ? asArray(structured.root_cause_analysis)
+      : buildFallbackRootCause(gaps, recommendedActions);
+    const correctiveActions = asArray(structured.corrective_actions).length
+      ? asArray(structured.corrective_actions)
+      : buildFallbackCorrectiveActions(recommendedActions, rootCauseAnalysis);
+    const evidenceRequests = asArray(structured.evidence_requests).length
+      ? asArray(structured.evidence_requests)
+      : buildFallbackEvidenceRequests(structured);
+    const auditQuestions = buildFallbackAuditQuestions(structured);
+    const managementFocus = buildManagementFocus(structured, correctiveActions);
     const engine = aiResult?.engine || {};
     const metrics = timer.finish({
       mode: resolveAiMode(options, engine),
@@ -142,9 +275,16 @@ async function buildReportAiEnrichment({
       ok: aiResult?.ok !== false,
       answer: aiResult?.answer || '',
       structured_result: structured,
-      executive_summary: structured.executive_summary || aiResult?.answer || '',
+      executive_summary: structured.executive_narrative || structured.executive_summary || aiResult?.answer || '',
+      executive_narrative: structured.executive_narrative || structured.executive_summary || aiResult?.answer || '',
+      auditor_opinion: structured.auditor_opinion || structured.diagnosis || '',
       key_findings: gaps.map((gap) => gap.title || gap.description).filter(Boolean),
       recommended_actions: recommendedActions,
+      root_cause_analysis: rootCauseAnalysis,
+      corrective_actions: correctiveActions,
+      evidence_requests: evidenceRequests,
+      audit_questions: auditQuestions,
+      management_focus: managementFocus,
       audit_readiness: structured.audit_readiness || {},
       confidence: Number(aiResult?.confidence ?? structured.confidence ?? 0),
       limitations: aiResult?.limitations || structured.limitations || [],
@@ -165,6 +305,17 @@ async function buildReportAiEnrichment({
       model_name: engine.model || null,
       source: engine.used_llm === true ? 'ai-engine-v2-report-llm' : 'ai-engine-v2-report-fast',
       duration_ms: metrics.duration_ms,
+      trace: {
+        ai_engine_used: true,
+        used_llm: engine.used_llm === true,
+        model_mode: normalizedModelMode,
+        selected_model: engine.selected_model || engine.model || null,
+        used_rag: engine.used_rag === true,
+        used_web: engine.used_web === true,
+        used_drive: engine.used_drive === true,
+        fallback_used: false,
+        duration_ms: metrics.duration_ms,
+      },
       ai_enrichment_failed: false,
       fallback_used: false,
     };

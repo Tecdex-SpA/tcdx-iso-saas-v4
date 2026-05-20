@@ -8,7 +8,7 @@ function getBaseUrl() {
     process.env.PUBLIC_BASE_URL ||
     process.env.API_PUBLIC_URL ||
     process.env.BACKEND_PUBLIC_URL ||
-    'http://bk.tcdx.int:3000'
+    'https://181.212.166.187:8443'
   ).replace(/\/+$/, '');
 }
 
@@ -36,6 +36,8 @@ function resolveTenantLogoUrl(tenant = {}) {
   return absolutizeUrl(
     tenant.report_logo_url ||
     tenant.logo_url ||
+    tenant.logo_path ||
+    tenant.client_logo_url ||
     tenant.brand_logo_url ||
     tenant.logo ||
     tenant.logoUrl ||
@@ -58,15 +60,21 @@ function renderLogoOrFallback(src, label, options = {}) {
   const safeLabel = sanitizePdfText(label || 'Logo');
   const initials = getInitials(safeLabel);
   const className = options.className || '';
+  const role = options.role || (/tcdx/i.test(safeLabel) ? 'tcdx' : 'tenant');
 
   if (!resolved) {
-    return `<div class="logoFallback ${className}">${escapeHtml(initials)}</div>`;
+    return `<div class="logoFallback ${className}" data-logo-role="${escapeHtml(role)}" data-logo-loaded="fallback">${escapeHtml(initials)}</div>`;
   }
 
+  const onError = [
+    "this.style.display='none';",
+    "if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}",
+  ].join('');
+
   return `
-    <div class="logoImageWrap ${className}">
-      <img src="${escapeHtml(resolved)}" alt="${escapeHtml(safeLabel)}" />
-      <div class="logoFallback logoFallbackBehind">${escapeHtml(initials)}</div>
+    <div class="logoImageWrap ${className}" data-logo-role="${escapeHtml(role)}">
+      <img src="${escapeHtml(resolved)}" alt="${escapeHtml(safeLabel)}" data-logo-role="${escapeHtml(role)}" data-logo-source="${escapeHtml(resolved)}" onerror="${onError}" />
+      <div class="logoFallback logoFallbackBehind" data-logo-loaded="fallback">${escapeHtml(initials)}</div>
     </div>
   `;
 }

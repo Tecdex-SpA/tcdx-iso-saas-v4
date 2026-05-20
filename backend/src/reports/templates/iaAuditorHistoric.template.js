@@ -4,6 +4,11 @@ const { renderBaseTemplate } = require('./common/baseTemplate');
 const { escapeHtml, truncateText } = require('./common/sanitize');
 const { displayStatus, severityClass, yesNo } = require('./common/formatters');
 const { _internal: aiAuditorPdfInternals } = require('../helpers/aiAuditorPdfKitPremium.helpers');
+const {
+  resolveTcdxLogoUrl,
+  resolveTenantLogoUrl,
+  renderLogoOrFallback,
+} = require('../helpers/reportBranding.helpers');
 
 function pct(value) {
   const n = Number(value);
@@ -118,10 +123,15 @@ function renderTrace(data) {
 
 function renderIaAuditorHistoricTemplate(input = {}) {
   const data = normalize(input);
+  const tenant = input.tenant || {};
   const body = `
     <main>
       <section class="page">
         <div class="hero keep-together">
+          <div class="logoRow">
+            ${renderLogoOrFallback(resolveTcdxLogoUrl(), 'TCDX by Tecdex', { role: 'tcdx' })}
+            ${renderLogoOrFallback(resolveTenantLogoUrl(tenant), data.tenantName, { role: 'tenant' })}
+          </div>
           <div class="hero-top">
             <div>
               <div class="brand">TCDX by Tecdex</div>

@@ -72,6 +72,30 @@ const basePdfStyles = `
   }
   .hero .meta-item span { color: #bfdbfe; }
   .meta-item strong { display: block; margin-top: 3px; font-size: 9px; color: #fff; }
+  .logoRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+  .logoImageWrap,
+  .logoFallback {
+    width: 120px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+  }
+  .logoImageWrap img {
+    display: block;
+    max-width: 120px;
+    max-height: 42px;
+    object-fit: contain;
+  }
+  .logoFallback {
+    color: #ffffff;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.2);
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .logoFallbackBehind { display: none; }
   .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
