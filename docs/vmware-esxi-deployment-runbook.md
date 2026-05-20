@@ -41,8 +41,11 @@ REPORT_PUBLIC_BASE_URL=https://181.212.166.187:8443
 REPORT_TCDX_LOGO_URL=https://181.212.166.187:8443/uploads/logos/tcdx-logo.png
 TCDX_LOGO_URL=https://181.212.166.187:8443/uploads/logos/tcdx-logo.png
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
-REPORT_PDF_BROWSER_TIMEOUT_MS=120000
-REPORT_PDF_PAGE_TIMEOUT_MS=120000
+PDF_RENDER_ENGINE=puppeteer
+PDF_RENDER_TIMEOUT_MS=120000
+PDF_RENDER_FORMAT=A4
+PDF_RENDER_PRINT_BACKGROUND=true
+PDF_RENDER_CACHE_ENABLED=true
 ```
 
 Frontend `/home/tecdex/frontend/.env`:
@@ -93,21 +96,39 @@ Then set in `/home/tecdex/backend/.env`:
 
 ```bash
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+PDF_RENDER_ENGINE=puppeteer
+PDF_RENDER_TIMEOUT_MS=120000
+PDF_RENDER_FORMAT=A4
+PDF_RENDER_PRINT_BACKGROUND=true
+PDF_RENDER_CACHE_ENABLED=true
 ```
 
 Common runtime packages for headless Chrome:
 
 ```bash
 sudo apt install -y \
+  ca-certificates \
   fonts-liberation \
+  fonts-dejavu \
+  fonts-noto \
+  fonts-noto-color-emoji \
   libnss3 \
   libatk-bridge2.0-0 \
+  libatk1.0-0 \
+  libcups2 \
+  libdrm2 \
+  libxkbcommon0 \
   libgtk-3-0 \
   libx11-xcb1 \
   libxcomposite1 \
   libxdamage1 \
+  libxfixes3 \
   libxrandr2 \
   libgbm1 \
+  libxshmfence1 \
+  libpangocairo-1.0-0 \
+  libpango-1.0-0 \
+  libcairo2 \
   libasound2t64
 ```
 

@@ -89,6 +89,33 @@ Para exigirlo como crítico:
 REQUIRE_AI_ENGINE=true bash scripts/monitor-runtime.sh
 ```
 
+## PDF HTML/Puppeteer
+
+Los reportes cliente premium usan HTML/CSS + Puppeteer desde el backend. Diagnostico rapido:
+
+```bash
+sudo journalctl -u tecdex-backend -n 200 --no-pager | grep -E 'HTML PDF RENDER|PDF_BROWSER|PDF_RENDER|render_engine'
+```
+
+Senales esperadas:
+
+- `HTML PDF RENDER OK`
+- `render_engine=puppeteer`
+- `browser_path=/usr/bin/google-chrome-stable`
+
+Alertas a revisar:
+
+- `PDF_BROWSER_UNAVAILABLE`: Chrome/Chromium no-Snap no esta disponible o `PUPPETEER_EXECUTABLE_PATH` apunta mal.
+- `PDF_RENDER_FAILED`: el template o Chromium fallo durante render.
+- `PDF_EMPTY_OUTPUT`: se genero un archivo vacio o demasiado pequeno.
+- `/snap/bin/chromium`: no debe usarse bajo `systemd`.
+
+QA local del renderer:
+
+```bash
+node scripts/qa/test-html-pdf-renderer.js
+```
+
 ## Comandos por VM
 
 ### Frontend

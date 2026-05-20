@@ -1,11 +1,13 @@
 const express = require('express');
-const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
 const { resolveLocale } = require('../utils/locale');
-const { renderAiAuditorPremiumPdf } = require('../reports/helpers/aiAuditorPdfKitPremium.helpers');
+const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
+const { renderIaAuditorHistoricTemplate } = require('../reports/templates/iaAuditorHistoric.template');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
 const asyncJobs = require('../services/asyncJob.service');
@@ -2243,18 +2245,68 @@ function addAiAuditorGovernancePdfSection(doc, locale, analysis, review) {
 }
 
 
-function streamAiAuditorPdfReport({ res, locale, tenant, analysis, fileName }) {
-  const doc = new PDFDocument({
-    size: 'LETTER',
-    margins: { top: 50, bottom: 54, left: 50, right: 50 },
-    info: { Title: aiAuditorPdfText(locale, 'title'), Author: 'TCDX by Tecdex', Subject: aiAuditorPdfText(locale, 'subtitle') },
-  });
+function sanitizeAiAuditorCacheSegment(value, fallback = 'unknown') {
+  return String(value || fallback)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/(^-|-$)+/g, '')
+    .slice(0, 90) || fallback;
+}
 
+function getAiAuditorPdfCachePath({ tenantId, historyId }) {
+  return path.join(
+    __dirname,
+    '..',
+    '..',
+    'uploads',
+    'reports',
+    'ai-auditor',
+    sanitizeAiAuditorCacheSegment(tenantId, 'tenant'),
+    `${sanitizeAiAuditorCacheSegment(historyId, 'history')}.pdf`
+  );
+}
+
+async function streamFileAsPdf({ res, filePath, fileName }) {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${sanitizeAiAuditorPdfFileName(fileName)}.pdf"`);
-  doc.pipe(res);
-  renderAiAuditorPremiumPdf(doc, { locale, tenant, analysis });
-  doc.end();
+  return new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', reject);
+    stream.on('end', resolve);
+    stream.pipe(res);
+  });
+}
+
+async function renderAiAuditorHtmlPdfToFile({ locale, tenant, analysis, outputPath, requestId, templateName = 'iaAuditorHistoric' }) {
+  const html = renderIaAuditorHistoricTemplate({ locale, tenant, analysis });
+  return renderHtmlToPdf({
+    html,
+    outputPath,
+    requestId,
+    format: process.env.PDF_RENDER_FORMAT || 'A4',
+    printBackground: process.env.PDF_RENDER_PRINT_BACKGROUND !== 'false',
+    timeoutMs: Number(process.env.PDF_RENDER_TIMEOUT_MS || 120000),
+    metadata: { templateName },
+  });
+}
+
+async function streamAiAuditorPdfReport({ req, res, locale, tenant, analysis, fileName, cachePath = null }) {
+  const outputPath = cachePath || path.join(
+    '/tmp',
+    `${sanitizeAiAuditorPdfFileName(fileName)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`
+  );
+  await renderAiAuditorHtmlPdfToFile({
+    locale,
+    tenant,
+    analysis,
+    outputPath,
+    requestId: getAiAuditorRequestId(req) || null,
+  });
+  await streamFileAsPdf({ res, filePath: outputPath, fileName });
+  if (!cachePath) {
+    fs.unlink(outputPath, () => {});
+  }
 }
 
 router.post('/report', auth, async (req, res) => {
@@ -2270,7 +2322,14 @@ router.post('/report', auth, async (req, res) => {
     const analysis = req.body?.analysis || {};
     const safeAnalysis = { ...analysis, human_review_required: true, can_create_records: false, trace: { ...(analysis.trace || {}), db_write: false } };
     safeAnalysis.__pdf_review = getAiAuditorPdfReview(safeAnalysis, null);
-    return streamAiAuditorPdfReport({ res, locale, tenant, analysis: safeAnalysis, fileName: `tcdx-ai-auditor-${new Date().toISOString().slice(0, 10)}` });
+    return streamAiAuditorPdfReport({
+      req,
+      res,
+      locale,
+      tenant,
+      analysis: safeAnalysis,
+      fileName: `tcdx-ai-auditor-${new Date().toISOString().slice(0, 10)}`,
+    });
   } catch (error) {
     console.error('AI AUDITOR PDF REPORT ERROR:', error);
     return res.status(500).json(errorDetail('AI_AUDITOR_REPORT_ERROR', locale, {
@@ -2419,21 +2478,63 @@ router.get('/history/:id/report', auth, async (req, res) => {
     const analysis = pickAiAuditorPdfAnalysisFromHistory(row);
     analysis.trace = { ...(analysis.trace || row.trace_json || {}), history_run_id: row.id, history_saved: true, db_write: false };
     analysis.__pdf_review = getAiAuditorPdfReview(analysis, row);
+    const cacheRoot = path.join(__dirname, '..', '..', 'uploads', 'reports', 'ai-auditor');
+    const storedCachePath = row.rendered_pdf_file_path ? path.resolve(String(row.rendered_pdf_file_path)) : null;
+    const safeStoredCachePath = storedCachePath && storedCachePath.startsWith(path.resolve(cacheRoot)) ? storedCachePath : null;
+    const pdfCacheHit = Boolean(safeStoredCachePath && fs.existsSync(safeStoredCachePath));
     console.info('AI AUDITOR HISTORY PDF REPORT:', {
       request_id: getAiAuditorRequestId(req) || null,
       history_id: row.id,
       tenant_id: tenantId,
-      pdf_cache_hit: false,
-      regenerated_pdf_from_history: true,
+      pdf_cache_hit: pdfCacheHit,
+      regenerated_pdf_from_history: !pdfCacheHit,
       ai_engine_called: false,
+      render_engine: pdfCacheHit ? (row.pdf_render_engine || 'puppeteer') : 'puppeteer',
     });
-    return streamAiAuditorPdfReport({
+    const fileName = `tcdx-ai-auditor-${row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)}-${row.id ? String(row.id).slice(0, 8) : 'history'}`;
+    if (pdfCacheHit) {
+      return streamFileAsPdf({ res, filePath: safeStoredCachePath, fileName });
+    }
+    const cachePath = getAiAuditorPdfCachePath({ tenantId, historyId: row.id });
+    await streamAiAuditorPdfReport({
+      req,
       res,
       locale,
       tenant,
       analysis,
-      fileName: `tcdx-ai-auditor-${row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)}-${row.id ? String(row.id).slice(0, 8) : 'history'}`,
+      fileName,
+      cachePath,
     });
+    try {
+      await pool.query(
+        `
+        UPDATE ai_auditor_runs
+        SET rendered_pdf_file_path = $1,
+            rendered_pdf_at = now(),
+            pdf_render_engine = 'puppeteer',
+            pdf_render_trace_json = $2::jsonb
+        WHERE id = $3::uuid AND tenant_id = $4::uuid
+        `,
+        [
+          cachePath,
+          JSON.stringify({
+            request_id: getAiAuditorRequestId(req) || null,
+            render_engine: 'puppeteer',
+            ai_engine_called: false,
+            rendered_from_history: true,
+          }),
+          row.id,
+          tenantId,
+        ]
+      );
+    } catch (cacheError) {
+      console.warn('AI AUDITOR HISTORY PDF CACHE UPDATE WARN:', {
+        request_id: getAiAuditorRequestId(req) || null,
+        history_id: row.id,
+        error: cacheError.message,
+      });
+    }
+    return null;
   } catch (error) {
     console.error('AI AUDITOR HISTORY PDF REPORT ERROR:', error);
     return res.status(500).json(errorDetail('AI_AUDITOR_REPORT_ERROR', locale, {
