@@ -27,7 +27,8 @@ async function safeQuery(sql, params = [], fallback = []) {
 
 async function safeAiCall(path, payload = {}, fallback = null, timeoutMs = 18000) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const requestedTimeoutMs = Number.parseInt(String(timeoutMs || 0), 10) || 18000;
+  const timeout = setTimeout(() => controller.abort(), requestedTimeoutMs);
 
   try {
     const response = await fetch(`${AI_ENGINE_URL}${path}`, {
@@ -35,6 +36,7 @@ async function safeAiCall(path, payload = {}, fallback = null, timeoutMs = 18000
       headers: {
         'Content-Type': 'application/json',
         'X-AI-Token': getAiInternalToken(),
+        ...(payload?.request_id ? { 'x-request-id': payload.request_id } : {}),
       },
       body: JSON.stringify(payload || {}),
       signal: controller.signal,
@@ -55,11 +57,35 @@ async function safeAiCall(path, payload = {}, fallback = null, timeoutMs = 18000
 
     return json;
   } catch (error) {
-    console.error(`REPORT AI CALL ERROR [${path}]:`, error.message);
+    console.error(`REPORT AI CALL ERROR [${path}]:`, {
+      error: error.message,
+      timeout_ms: requestedTimeoutMs,
+      request_id: payload?.request_id || null,
+      model_mode: payload?.model_mode || payload?.options?.model_mode || null,
+    });
     return fallback;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function resolveReportDataAiTimeoutMs(aiOptions = {}) {
+  const mode = String(aiOptions.model_mode || '').toLowerCase();
+  const configured = Number.parseInt(
+    String(
+      mode === 'deep'
+        ? (process.env.REPORT_DEEP_JOB_TIMEOUT_MS ||
+            process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS ||
+            process.env.AI_ENGINE_REQUEST_TIMEOUT_MS)
+        : (process.env.REPORT_AUX_AI_TIMEOUT_MS ||
+            process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS ||
+            process.env.AI_ENGINE_REQUEST_TIMEOUT_MS)
+    ),
+    10
+  );
+  const fallback = mode === 'deep' ? 600000 : 60000;
+  const timeoutMs = Number.isFinite(configured) && configured > 0 ? configured : fallback;
+  return mode === 'deep' ? Math.max(timeoutMs, 600000) : timeoutMs;
 }
 
 function asArray(value) {
@@ -2161,6 +2187,15 @@ async function getAiEnhancements({
     stats,
     latestKpis,
   });
+  seniorAuditorPayload.request_id = aiOptions.request_id || null;
+  seniorAuditorPayload.model_mode = aiOptions.model_mode || 'fast';
+  seniorAuditorPayload.options = {
+    ...(seniorAuditorPayload.options || {}),
+    model_mode: aiOptions.model_mode || 'fast',
+    use_llm: aiOptions.use_llm === true,
+    depth: aiOptions.depth || (aiOptions.model_mode === 'deep' ? 'deep' : 'executive'),
+  };
+  const auxiliaryAiTimeoutMs = resolveReportDataAiTimeoutMs(aiOptions);
 
   const primaryStandardCode = executiveBriefPayload.standards.length === 1
     ? executiveBriefPayload.standards[0]
@@ -2181,7 +2216,7 @@ async function getAiEnhancements({
       quality: aiOptions.quality || null,
       requestId: aiOptions.request_id || null,
     }),
-    safeAiCall('/api/ai/auditor/analyze', seniorAuditorPayload, null, 20000),
+    safeAiCall('/api/ai/auditor/analyze', seniorAuditorPayload, null, auxiliaryAiTimeoutMs),
   ]);
 
   const seniorAuditor = normalizeSeniorAuditorResponse(seniorAuditorRaw);

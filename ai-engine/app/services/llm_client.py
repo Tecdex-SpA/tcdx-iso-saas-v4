@@ -158,7 +158,11 @@ def call_llm_json(
         if metadata.get("provider") == "ollama"
         else None
     ) or os.getenv("AI_ENGINE_LLM_TIMEOUT_MS", str(timeout * 1000))
-    timeout = int(timeout_ms or timeout * 1000) / 1000
+    resolved_timeout_ms = int(timeout_ms or timeout * 1000)
+    mode = (model_mode or metadata.get("model_mode") or "").lower()
+    if mode == "deep" or depth == "deep":
+        resolved_timeout_ms = max(resolved_timeout_ms, int(os.getenv("AI_ENGINE_DEEP_LLM_TIMEOUT_MS", "600000") or "600000"))
+    timeout = resolved_timeout_ms / 1000
     provider = metadata["provider"]
 
     if provider in {"openai", "openai_compatible", "azure_openai"}:

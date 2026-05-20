@@ -38,6 +38,14 @@ function renderCompanyProfileContextTemplate(data = {}) {
   const tenantName = cleanText(profile.company_name || tenant.name, 'Cliente');
   const tcdxLogo = resolveTcdxLogoUrl();
   const tenantLogo = resolveTenantLogoUrl(tenant);
+  const fallbackUsed = trace.fallback_used === true || String(trace.selected_model || '').toLowerCase() === 'backend_fallback';
+  const hasRealAi = trace.ai_engine_used === true && trace.used_llm === true && !fallbackUsed;
+  const executiveText = hasRealAi
+    ? (ai.executive_narrative || ai.summary || profile.business_model || 'Perfil empresa analizado con IA y contexto interno TCDX.')
+    : 'El perfil empresa fue guardado como contexto operativo. El enriquecimiento IA no se completó en esta ejecución; las recomendaciones deben tratarse como base determinística hasta ejecutar un análisis IA exitoso.';
+  const limitationsText = hasRealAi
+    ? asArray(ai.limitations || trace.limitations).join(' ')
+    : 'IA no ejecutada o completada con fallback controlado. La evidencia interna y la revisión humana siguen siendo obligatorias antes de usar este documento como soporte de auditoría.';
 
   const body = `
     <main class="pdfDocument">
@@ -64,7 +72,7 @@ function renderCompanyProfileContextTemplate(data = {}) {
       <section class="section">
         <h2>Resumen ejecutivo</h2>
         <div class="callout">
-          ${escapeHtml(truncateText(ai.executive_narrative || ai.summary || profile.business_model || 'Perfil empresa registrado como contexto operativo para reportes, auditorías y recomendaciones IA.', 900))}
+          ${escapeHtml(truncateText(executiveText, 900))}
         </div>
         <div class="kpiGrid four">
           <div class="kpiCard"><span>Modelo de negocio</span><strong>${escapeHtml(truncateText(profile.business_model, 80, 'No informado'))}</strong></div>
@@ -115,12 +123,12 @@ function renderCompanyProfileContextTemplate(data = {}) {
       <section class="section traceBox">
         <h2>Trazabilidad IA y límites</h2>
         <div class="gridFour">
-          ${field('AI Engine', yesNo(trace.ai_engine_used))}
-          ${field('Modelo', trace.selected_model || trace.model_name || 'No disponible')}
+          ${field('AI Engine', hasRealAi ? 'Ejecutado' : 'No ejecutado / fallback')}
+          ${field('Modelo', hasRealAi ? (trace.selected_model || trace.model_name || 'No disponible') : 'No disponible')}
           ${field('RAG', yesNo(trace.used_rag))}
           ${field('Web', yesNo(trace.used_web))}
         </div>
-        <p class="muted">${escapeHtml(truncateText(asArray(ai.limitations || trace.limitations).join(' '), 520, 'La información externa y la IA no reemplazan evidencia interna ni auditoría formal.'))}</p>
+        <p class="muted">${escapeHtml(truncateText(limitationsText, 520, 'La información externa y la IA no reemplazan evidencia interna ni auditoría formal.'))}</p>
       </section>
     </main>
   `;

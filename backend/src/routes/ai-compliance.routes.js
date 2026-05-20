@@ -909,7 +909,17 @@ async function callAiEngine(path, payload) {
   };
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const modelMode = String(payload?.model_mode || payload?.options?.model_mode || '').toLowerCase();
+  const requestedTimeoutMs = Number.parseInt(
+    String(
+      modelMode === 'deep'
+        ? (process.env.REPORT_DEEP_JOB_TIMEOUT_MS || process.env.AI_ENGINE_REQUEST_TIMEOUT_MS || '600000')
+        : (process.env.AI_COMPLIANCE_ENGINE_TIMEOUT_MS || process.env.AI_ENGINE_REQUEST_TIMEOUT_MS || '20000')
+    ),
+    10
+  ) || 20000;
+  const timeoutMs = modelMode === 'deep' ? Math.max(requestedTimeoutMs, 600000) : requestedTimeoutMs;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(`${AI_ENGINE_URL}${path}`, {

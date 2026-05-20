@@ -63,6 +63,71 @@ function isPremiumReportTypeCode(reportTypeCode) {
 
 const reportRuntimeJobs = new Map();
 const REPORT_JOB_TTL_MS = Number(process.env.REPORT_JOB_TTL_MS || 1000 * 60 * 60 * 6);
+const REPORT_DEEP_MIN_TIMEOUT_MS = 600000;
+
+function parsePositiveInt(value, fallback = null) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function resolveReportJobTimeoutMs(payload = {}) {
+  const metadata = safeObject(payload.metadata);
+  const modelMode = normalizeReportModelMode(
+    payload.model_mode ||
+      payload.modelMode ||
+      metadata.model_mode ||
+      metadata.modelMode ||
+      (parseReportBoolean(payload.use_llm ?? metadata.use_llm, false) ? 'balanced' : 'fast')
+  );
+  const configured = parsePositiveInt(
+    modelMode === 'deep'
+      ? (process.env.REPORT_DEEP_JOB_TIMEOUT_MS ||
+          process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS ||
+          process.env.AI_ENGINE_REQUEST_TIMEOUT_MS)
+      : (process.env.REPORT_JOB_TIMEOUT_MS ||
+          process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS ||
+          process.env.AI_ENGINE_REQUEST_TIMEOUT_MS),
+    modelMode === 'deep' ? REPORT_DEEP_MIN_TIMEOUT_MS : 300000
+  );
+
+  return modelMode === 'deep'
+    ? Math.max(configured, REPORT_DEEP_MIN_TIMEOUT_MS)
+    : configured;
+}
+
+function buildReportAsyncFailure({ error = null, parsed = null, job = {}, timeoutMs = null, startedAtMs = null, stage = null } = {}) {
+  const errorCode =
+    parsed?.code ||
+    error?.code ||
+    (error?.name === 'AbortError' ? 'REPORT_ASYNC_TIMEOUT' : 'REPORT_ASYNC_GENERATION_FAILED');
+  const modelMode = normalizeReportModelMode(
+    job.payload?.model_mode ||
+      job.payload?.modelMode ||
+      parsed?.model_mode_used ||
+      parsed?.data?.export?.payload_json?.ai_report_addendum?.model_mode_used ||
+      'fast'
+  );
+  const isTimeout = error?.name === 'AbortError' || errorCode.includes('TIMEOUT') || String(parsed?.error || parsed?.message || '').toLowerCase().includes('timeout');
+  const safeMessage =
+    parsed?.error ||
+    parsed?.message ||
+    error?.message ||
+    'No fue posible completar la generación del reporte.';
+
+  return {
+    code: errorCode,
+    error_type: errorCode,
+    message: 'No fue posible completar la generación del reporte.',
+    error_message: String(safeMessage).slice(0, 500),
+    timeout_stage: parsed?.timeout_stage || parsed?.stage || error?.timeout_stage || (isTimeout ? (stage || 'report_async_job') : null),
+    timeout_ms: parsed?.timeout_ms || error?.timeout_ms || timeoutMs || null,
+    selected_model: parsed?.selected_model || parsed?.model_name || parsed?.data?.export?.payload_json?.ai_report_addendum?.model_name || null,
+    model_mode: modelMode,
+    request_id: job.request_id || parsed?.request_id || null,
+    ai_engine_request_id: parsed?.ai_engine_request_id || parsed?.request_id || null,
+    duration_ms: startedAtMs ? Date.now() - startedAtMs : null,
+  };
+}
 
 function normalizeRole(role) {
   const raw = String(role || '')
@@ -305,6 +370,10 @@ async function runReportGenerationJob(jobId) {
   job.status = 'running';
   job.started_at = new Date().toISOString();
   job.updated_at = job.started_at;
+  const startedAtMs = Date.now();
+  const timeoutMs = resolveReportJobTimeoutMs(job.payload || {});
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     await asyncJobs.markRunning(jobId);
     const response = await fetch(`${getReportAsyncBaseUrl()}/api/reports/generate`, {
@@ -316,6 +385,7 @@ async function runReportGenerationJob(jobId) {
         'x-tcdx-locale': job.locale || 'es',
       },
       body: JSON.stringify(job.payload || {}),
+      signal: controller.signal,
     });
 
     const contentType = response.headers.get('content-type') || '';
@@ -324,11 +394,13 @@ async function runReportGenerationJob(jobId) {
       : { ok: false, code: 'REPORT_ASYNC_NON_JSON_RESPONSE', error: await response.text() };
 
     if (!response.ok || parsed?.ok === false) {
-      const failure = {
-        code: parsed?.code || 'REPORT_ASYNC_GENERATION_FAILED',
-        message: parsed?.error || parsed?.message || 'No fue posible generar el reporte.',
-        request_id: job.request_id,
-      };
+      const failure = buildReportAsyncFailure({
+        parsed,
+        job,
+        timeoutMs,
+        startedAtMs,
+        stage: 'report_async_internal_generate',
+      });
       job.status = 'failed';
       job.error = failure;
       job.failed_at = new Date().toISOString();
@@ -351,11 +423,13 @@ async function runReportGenerationJob(jobId) {
     });
     reportRuntimeJobs.delete(jobId);
   } catch (error) {
-    const failure = {
-      code: error?.name === 'AbortError' ? 'REPORT_ASYNC_TIMEOUT' : 'REPORT_ASYNC_GENERATION_FAILED',
-      message: 'No fue posible completar la generación del reporte.',
-      request_id: job.request_id,
-    };
+    const failure = buildReportAsyncFailure({
+      error,
+      job,
+      timeoutMs,
+      startedAtMs,
+      stage: 'report_async_internal_generate_fetch',
+    });
     job.status = 'failed';
     job.error = failure;
     job.failed_at = new Date().toISOString();
@@ -373,7 +447,13 @@ async function runReportGenerationJob(jobId) {
       job_id: jobId,
       request_id: job.request_id,
       error: error.message,
+      timeout_stage: failure.timeout_stage,
+      timeout_ms: failure.timeout_ms,
+      model_mode: failure.model_mode,
+      duration_ms: failure.duration_ms,
     });
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -631,7 +711,7 @@ async function generatePdfFromHtml(html, outputPath, context = {}) {
     requestId: context.requestId || null,
     format: process.env.PDF_RENDER_FORMAT || 'A4',
     printBackground: process.env.PDF_RENDER_PRINT_BACKGROUND !== 'false',
-    timeoutMs: Number(process.env.PDF_RENDER_TIMEOUT_MS || 120000),
+    timeoutMs: Number(process.env.PDF_RENDER_TIMEOUT_MS || 300000),
     metadata: { templateName: context.templateName || 'report-export', ...(context.metadata || {}) },
   });
 }
@@ -3080,6 +3160,11 @@ router.post('/generate', auth, async (req, res) => {
       ok: false,
       code: errorCode,
       ...(errorStage ? { stage: errorStage } : {}),
+      timeout_stage: error.timeout_stage || (error.name === 'AbortError' ? errorStage || 'report_generate' : null),
+      timeout_ms: error.timeout_ms || null,
+      error_type: error.code || error.name || errorCode,
+      error_message: error.message ? String(error.message).slice(0, 500) : 'Error generando informe',
+      selected_model: error.selected_model || null,
       error: errorStage === 'BROWSER_LAUNCH'
         ? 'No fue posible iniciar el motor de generación PDF.'
         : 'Error generando informe',

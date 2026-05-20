@@ -320,6 +320,25 @@ app.use(securityErrorHandler);
 
 const port = Number(process.env.PORT || 3000);
 
-app.listen(port, '0.0.0.0', () => {
+const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
 });
+
+const backendRequestTimeoutMs = Math.max(
+  Number.parseInt(
+    process.env.BACKEND_REQUEST_TIMEOUT_MS ||
+      process.env.REPORT_DEEP_JOB_TIMEOUT_MS ||
+      '660000',
+    10
+  ) || 660000,
+  660000
+);
+server.requestTimeout = backendRequestTimeoutMs;
+server.headersTimeout = Math.max(
+  Number.parseInt(process.env.BACKEND_HEADERS_TIMEOUT_MS || String(backendRequestTimeoutMs + 10000), 10) || (backendRequestTimeoutMs + 10000),
+  backendRequestTimeoutMs + 10000
+);
+server.keepAliveTimeout = Math.max(
+  Number.parseInt(process.env.BACKEND_KEEP_ALIVE_TIMEOUT_MS || '65000', 10) || 65000,
+  65000
+);
