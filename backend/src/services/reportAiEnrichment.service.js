@@ -266,6 +266,18 @@ async function buildReportAiEnrichment({
     const payload = {
       task_type: reportType === 'audit_report' ? 'audit_analysis' : 'standard_gap_analysis',
       tenant_id: tenantId,
+      report_type_code: reportType,
+      standard_code: standardCode,
+      model_mode: normalizedModelMode,
+      use_llm: requestedLlm,
+      use_rag: boolOption(useRag, true),
+      use_web: boolOption(useWeb, false),
+      use_drive: useDrive === 'auto' ? 'auto' : boolOption(useDrive, false),
+      allow_web_research: boolOption(useWeb, false) || context.company_profile?.allow_web_research === true,
+      allow_document_context: useDrive === 'auto' ? context.company_profile?.allow_document_context !== false : boolOption(useDrive, false),
+      used_company_profile: Boolean(context.company_profile),
+      depth: requestedDepth,
+      quality,
       module_origin: 'reports',
       question: requestedLlm
         ? [

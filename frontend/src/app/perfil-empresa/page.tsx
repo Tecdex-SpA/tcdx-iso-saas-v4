@@ -131,6 +131,15 @@ const listFields = new Set([
   'approval_workflows',
 ]);
 
+async function readJsonResponse(res: Response, fallbackMessage: string) {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    const preview = (await res.text()).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
+    throw new Error(`${fallbackMessage}. Respuesta no JSON del servidor${preview ? `: ${preview}` : ''}`);
+  }
+  return res.json();
+}
+
 function toLines(value: unknown): string {
   if (Array.isArray(value)) return value.join('\n');
   return String(value || '');
@@ -233,7 +242,7 @@ export default function PerfilEmpresaPage() {
       const res = await fetch(`${API_URL}/api/company-profile`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      const json = await res.json();
+      const json = await readJsonResponse(res, 'No fue posible guardar perfil empresa');
       if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible cargar perfil empresa');
       const data = json.data || {};
       hydrateForm(data.profile_json || {});
@@ -295,11 +304,14 @@ export default function PerfilEmpresaPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ model_mode: 'balanced' }),
       });
-      const json = await res.json();
+      const json = await readJsonResponse(res, 'No fue posible analizar perfil empresa');
       if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible analizar');
       setAiSummary(json.data?.ai_profile_summary_json || null);
+      const trace = json.data?.ai_research_trace_json || {};
       setOperationMessage(json.data?.ai_profile_summary_json
-        ? 'Análisis IA del perfil empresa actualizado.'
+        ? (trace.fallback_used
+          ? 'Análisis completado con fallback controlado. Revisa la trazabilidad antes de usarlo como enriquecimiento IA.'
+          : `IA completada${trace.selected_model ? ` con modelo ${trace.selected_model}` : ''}.`)
         : 'Análisis finalizado, pero no se recibió resumen IA persistido. Revisa la trazabilidad del backend.');
     } catch (error) {
       setOperationMessage(error instanceof Error ? error.message : 'No fue posible analizar perfil empresa');
@@ -357,7 +369,7 @@ export default function PerfilEmpresaPage() {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
-      const json = await res.json();
+      const json = await readJsonResponse(res, 'No fue posible exportar el documento');
       if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible exportar');
       const nextDownloadUrl = json.data?.download_url || '/api/company-profile/context-document/download';
       setDownloadUrl(nextDownloadUrl);

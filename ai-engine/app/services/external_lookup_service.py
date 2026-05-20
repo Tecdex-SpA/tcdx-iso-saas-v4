@@ -397,6 +397,27 @@ def _domain_allowed(url: str, allowed_domains: List[str]) -> bool:
     return False
 
 
+def _result_usable_as_context(item: Dict[str, Any]) -> bool:
+    text = " ".join([
+        str(item.get("title") or ""),
+        str(item.get("description") or ""),
+        str(item.get("url") or ""),
+    ]).lower()
+    if any(blocked in text for blocked in ["casino", "gambling", "adult", "coupon", "torrent"]):
+        return False
+    return any(term in text for term in [
+        "iso",
+        "audit",
+        "auditor",
+        "risk",
+        "evidence",
+        "management system",
+        "certification",
+        "quality management",
+        "information security",
+    ])
+
+
 def _collect_allowed_domains(sources: List[Dict[str, Any]]) -> List[str]:
     domains = []
 
@@ -1020,6 +1041,7 @@ def execute_external_lookup_search(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     all_results = []
     trusted_results = []
+    usable_context_results = []
     rejected_results = []
 
     for query in queries:
@@ -1032,6 +1054,13 @@ def execute_external_lookup_search(payload: Dict[str, Any]) -> Dict[str, Any]:
                     **item,
                     "matched_trusted_domain": urlparse(item.get("url") or "").netloc.lower().replace("www.", ""),
                     "query": query,
+                    "classification": "trusted",
+                })
+            elif _result_usable_as_context(item):
+                usable_context_results.append({
+                    **item,
+                    "query": query,
+                    "classification": "usable_context",
                 })
             else:
                 rejected_results.append({
@@ -1052,21 +1081,36 @@ def execute_external_lookup_search(payload: Dict[str, Any]) -> Dict[str, Any]:
         seen_urls.add(url)
 
     trusted_results = deduped[:12]
+    if not trusted_results and usable_context_results:
+        deduped_usable = []
+        seen_urls = set()
+        for item in usable_context_results:
+            url = item.get("url")
+            if not url or url in seen_urls:
+                continue
+            deduped_usable.append(item)
+            seen_urls.add(url)
+        usable_context_results = deduped_usable[:12]
+    else:
+        usable_context_results = usable_context_results[:12]
 
     result_summary = (
         f"Búsqueda externa ejecutada con Brave Search. "
         f"Consultas ejecutadas: {len(queries)}. "
-        f"Resultados confiables filtrados: {len(trusted_results)}."
+        f"Resultados confiables filtrados: {len(trusted_results)}. "
+        f"Resultados de contexto usable: {len(usable_context_results)}."
     )
 
     quality_score = 0.0
     if trusted_results:
         quality_score = min(100.0, 50.0 + len(trusted_results) * 8)
+    elif usable_context_results:
+        quality_score = min(100.0, 35.0 + len(usable_context_results) * 5)
 
     external_guidance = _build_external_guidance_from_results(
         scenario=scenario,
-        trusted_results=trusted_results,
-    ) if trusted_results else None
+        trusted_results=trusted_results or usable_context_results,
+    ) if (trusted_results or usable_context_results) else None
 
     log_id = _log_external_search_result(
         tenant_id=tenant_id,
@@ -1100,9 +1144,12 @@ def execute_external_lookup_search(payload: Dict[str, Any]) -> Dict[str, Any]:
         "trusted_domains": allowed_domains,
         "trusted_results_count": len(trusted_results),
         "trusted_results": trusted_results,
+        "usable_context_count": len(usable_context_results),
+        "usable_context_results": usable_context_results,
         "external_guidance": external_guidance,
         "raw_batches": all_results,
         "rejected_results_count": len(rejected_results),
+        "context_limitation": None if trusted_results else "Referencias externas usadas como apoyo contextual, no como fuente normativa oficial.",
         "result_summary": result_summary,
         "quality_score": quality_score if quality_score else None,
         "quota": quota,
@@ -1192,4 +1239,3 @@ def get_cached_external_lookup(payload: Dict[str, Any]) -> Dict[str, Any]:
             "trusted_domain_filtering": True,
         },
     }
-
