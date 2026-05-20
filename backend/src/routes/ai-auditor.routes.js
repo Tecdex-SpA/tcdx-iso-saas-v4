@@ -2287,7 +2287,14 @@ async function renderAiAuditorHtmlPdfToFile({ locale, tenant, analysis, outputPa
     format: process.env.PDF_RENDER_FORMAT || 'A4',
     printBackground: process.env.PDF_RENDER_PRINT_BACKGROUND !== 'false',
     timeoutMs: Number(process.env.PDF_RENDER_TIMEOUT_MS || 120000),
-    metadata: { templateName },
+    metadata: {
+      templateName,
+      ai_engine_used: analysis?.trace?.ai_engine_used ?? analysis?.ai_engine_used ?? null,
+      used_llm: analysis?.trace?.used_llm ?? analysis?.trace?.llm_used ?? null,
+      model_mode: analysis?.trace?.model_mode ?? null,
+      selected_model: analysis?.trace?.selected_model || analysis?.trace?.model_name || null,
+      fallback_used: analysis?.trace?.fallback_used ?? null,
+    },
   });
 }
 

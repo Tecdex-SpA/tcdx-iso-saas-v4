@@ -44,6 +44,13 @@ def build_empty_structured_result() -> dict:
             "auditor_concerns": [],
         },
         "recommended_actions": [],
+        "executive_narrative": "",
+        "auditor_opinion": "",
+        "root_cause_analysis": [],
+        "corrective_actions": [],
+        "evidence_requests": [],
+        "audit_questions": [],
+        "management_focus": [],
         "auditor_questions": [],
         "documents_to_request": [],
         "web_context_used": [],
@@ -85,6 +92,61 @@ def _sanitize_action(item: Any) -> dict:
         "related_control_id": _string(item.get("related_control_id")),
         "related_iso": _string(item.get("related_iso") or item.get("iso")),
         "related_clause": _string(item.get("related_clause") or item.get("clause")),
+    }
+
+def _sanitize_root_cause(item: Any) -> dict:
+    item = item if isinstance(item, dict) else {"issue": _string(item)}
+    try:
+        due_days = int(item.get("due_days") or 15)
+    except (TypeError, ValueError):
+        due_days = 15
+    return {
+        "issue": _string(item.get("issue") or item.get("title")),
+        "probable_cause": _string(item.get("probable_cause") or item.get("cause")),
+        "evidence_basis": _string(item.get("evidence_basis") or item.get("evidence_status")),
+        "risk_if_not_corrected": _string(item.get("risk_if_not_corrected") or item.get("business_impact")),
+        "recommended_corrective_action": _string(item.get("recommended_corrective_action") or item.get("recommendation") or item.get("description")),
+        "owner_role": _string(item.get("owner_role") or item.get("suggested_owner_role") or "Responsable del proceso"),
+        "due_days": due_days,
+        "effectiveness_criteria": _string(item.get("effectiveness_criteria") or item.get("effectiveness_check")),
+    }
+
+
+def _sanitize_corrective_action(item: Any) -> dict:
+    item = item if isinstance(item, dict) else {"title": _string(item)}
+    try:
+        due_days = int(item.get("due_days") or 15)
+    except (TypeError, ValueError):
+        due_days = 15
+    return {
+        "title": _string(item.get("title") or item.get("issue")),
+        "priority": _string(item.get("priority") or "media"),
+        "description": _string(item.get("description") or item.get("recommended_action") or item.get("recommended_corrective_action")),
+        "owner_role": _string(item.get("owner_role") or item.get("suggested_owner_role") or "Responsable del proceso"),
+        "due_days": due_days,
+        "required_evidence": [_string(value) for value in _list(item.get("required_evidence"))],
+        "closure_criteria": [_string(value) for value in _list(item.get("closure_criteria") or item.get("acceptance_criteria"))],
+        "effectiveness_check": _string(item.get("effectiveness_check") or item.get("effectiveness_criteria")),
+    }
+
+
+def _sanitize_evidence_request(item: Any) -> dict:
+    item = item if isinstance(item, dict) else {"title": _string(item)}
+    return {
+        "title": _string(item.get("title") or item.get("evidence")),
+        "reason": _string(item.get("reason") or item.get("description")),
+        "priority": _string(item.get("priority") or "media"),
+        "related_clause": _string(item.get("related_clause") or item.get("clause")),
+        "related_control": _string(item.get("related_control") or item.get("control") or item.get("control_name")),
+    }
+
+
+def _sanitize_audit_question(item: Any) -> dict:
+    item = item if isinstance(item, dict) else {"question": _string(item)}
+    return {
+        "question": _string(item.get("question")),
+        "why_it_matters": _string(item.get("why_it_matters")),
+        "expected_answer_or_evidence": _string(item.get("expected_answer_or_evidence")),
     }
 
 
@@ -132,6 +194,8 @@ def normalize_ai_structured_result(raw: Any, defaults: Optional[dict] = None) ->
 
       result = deepcopy(base)
       result["executive_summary"] = _string(data.get("executive_summary") or result["executive_summary"])
+      result["executive_narrative"] = _string(data.get("executive_narrative") or data.get("executive_summary") or result.get("executive_narrative"))
+      result["auditor_opinion"] = _string(data.get("auditor_opinion") or data.get("diagnosis") or result.get("auditor_opinion"))
       result["diagnosis"] = _string(data.get("diagnosis") or result["diagnosis"])
       result["confirmed_facts"] = [_string(value) for value in _list(data.get("confirmed_facts"))]
       result["inferences"] = [_string(value) for value in _list(data.get("inferences"))]
@@ -153,6 +217,11 @@ def normalize_ai_structured_result(raw: Any, defaults: Optional[dict] = None) ->
           "auditor_concerns": [_string(value) for value in _list(readiness.get("auditor_concerns"))],
       }
       result["recommended_actions"] = [_sanitize_action(item) for item in _list(data.get("recommended_actions"))]
+      result["root_cause_analysis"] = [_sanitize_root_cause(item) for item in _list(data.get("root_cause_analysis"))]
+      result["corrective_actions"] = [_sanitize_corrective_action(item) for item in _list(data.get("corrective_actions"))]
+      result["evidence_requests"] = [_sanitize_evidence_request(item) for item in _list(data.get("evidence_requests"))]
+      result["audit_questions"] = [_sanitize_audit_question(item) for item in _list(data.get("audit_questions"))]
+      result["management_focus"] = [_string(value) for value in _list(data.get("management_focus"))]
       result["auditor_questions"] = [_string(value) for value in _list(data.get("auditor_questions"))]
       result["documents_to_request"] = [_string(value) for value in _list(data.get("documents_to_request"))]
       result["web_context_used"] = [_string(value) for value in _list(data.get("web_context_used"))]

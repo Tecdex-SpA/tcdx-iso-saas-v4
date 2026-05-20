@@ -219,6 +219,19 @@ async function assertPdf(outputPath, label) {
   console.log(`OK ${label}: ${outputPath} ${stats.size} bytes`);
 }
 
+function assertHtmlQuality(html, label) {
+  const checks = [
+    { ok: /data-logo-role="tcdx"/.test(html), message: 'falta logo TCDX trazable' },
+    { ok: /data-logo-role="tenant"/.test(html), message: 'falta logo cliente/fallback tenant trazable' },
+    { ok: !/undefined|\[object Object\]/.test(html), message: 'contiene undefined o [object Object]' },
+    { ok: !/<pre>|JSON\.stringify|db_write|ai_engine_used|human_review_required/.test(html), message: 'contiene JSON crudo o labels tecnicos visibles' },
+  ];
+  const failed = checks.find((item) => !item.ok);
+  if (failed) {
+    throw new Error(`${label}: ${failed.message}`);
+  }
+}
+
 async function main() {
   const outputs = [
     {
@@ -240,6 +253,7 @@ async function main() {
   ];
 
   for (const item of outputs) {
+    assertHtmlQuality(item.html, item.label);
     await renderHtmlToPdf({
       html: item.html,
       outputPath: item.outputPath,

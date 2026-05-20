@@ -630,7 +630,7 @@ async function generatePdfFromHtml(html, outputPath, context = {}) {
     format: process.env.PDF_RENDER_FORMAT || 'A4',
     printBackground: process.env.PDF_RENDER_PRINT_BACKGROUND !== 'false',
     timeoutMs: Number(process.env.PDF_RENDER_TIMEOUT_MS || 120000),
-    metadata: { templateName: context.templateName || 'report-export' },
+    metadata: { templateName: context.templateName || 'report-export', ...(context.metadata || {}) },
   });
 }
 
@@ -1373,7 +1373,7 @@ function getReportPublicBaseUrl() {
     process.env.REPORT_PUBLIC_BASE_URL ||
     process.env.PUBLIC_BASE_URL ||
     process.env.API_PUBLIC_URL ||
-    'http://bk.tcdx.int:3000'
+    'https://181.212.166.187:8443'
   ).replace(/\/+$/, '');
 }
 
@@ -1416,10 +1416,11 @@ function renderReportLogo(rawSrc, fallbackText, align = 'left') {
 
   const safeText = escapeReportHtml(fallbackText || 'Logo');
   const textAlign = align === 'right' ? 'right' : 'left';
+  const logoRole = align === 'right' ? 'tenant' : 'tcdx';
 
   if (!first) {
     return `
-      <div style="width:42mm;height:17mm;display:flex;align-items:center;justify-content:${align === 'right' ? 'flex-end' : 'flex-start'};">
+      <div data-logo-role="${logoRole}" data-logo-loaded="fallback" style="width:42mm;height:17mm;display:flex;align-items:center;justify-content:${align === 'right' ? 'flex-end' : 'flex-start'};">
         <div style="font-size:13px;font-weight:800;color:#0B2F4F;text-align:${textAlign};line-height:1.1;">${safeText}</div>
       </div>
     `;
@@ -1438,6 +1439,8 @@ function renderReportLogo(rawSrc, fallbackText, align = 'left') {
         src="${escapeReportHtml(first)}"
         data-fallback1="${escapeReportHtml(fallback1)}"
         data-fallback2="${escapeReportHtml(fallback2)}"
+        data-logo-role="${logoRole}"
+        data-logo-source="${escapeReportHtml(first)}"
         onerror="${onError}"
         style="display:block;max-width:42mm;max-height:17mm;object-fit:contain;"
       />
@@ -1452,6 +1455,8 @@ function getTenantLogoSourceForReport(reportData) {
   return (
     tenant.report_logo_url ||
     tenant.logo_url ||
+    tenant.logo_path ||
+    tenant.client_logo_url ||
     tenant.logo ||
     tenant.brand_logo_url ||
     ''
@@ -2007,25 +2012,39 @@ async function buildAiReportAddendum(reportData, aiOptions = {}) {
     });
     const structured = ai.structured_result || {};
     const actions = Array.isArray(ai.recommended_actions) ? ai.recommended_actions : [];
+    const correctiveActions = Array.isArray(ai.corrective_actions) ? ai.corrective_actions : [];
+    const rootCauseAnalysis = Array.isArray(ai.root_cause_analysis) ? ai.root_cause_analysis : [];
+    const evidenceRequests = Array.isArray(ai.evidence_requests) ? ai.evidence_requests : [];
+    const auditQuestions = Array.isArray(ai.audit_questions) ? ai.audit_questions : [];
+    const managementFocus = Array.isArray(ai.management_focus) ? ai.management_focus : [];
     const source = ai.source || ai.metrics?.source || (ai.llm_used ? 'ai-engine-v2-report-llm' : 'ai-engine-v2-report-fast');
 
     return mergeAiReportAddendumWithSenior({
       source,
-      headline: String(fallback.headline || 'Resumen ejecutivo IA').trim(),
-      summary: String(ai.executive_summary || structured.executive_summary || ai.answer || fallback.summary || '').trim(),
+      headline: String(ai.auditor_opinion || structured.auditor_opinion || fallback.headline || 'Resumen ejecutivo IA').trim(),
+      summary: String(ai.executive_narrative || ai.executive_summary || structured.executive_narrative || structured.executive_summary || ai.answer || fallback.summary || '').trim(),
       priorities: normalizeReportList([
+        ...managementFocus,
         ...actions.map((item) => item.title || item.description),
+        ...correctiveActions.map((item) => item.title || item.description),
         ...fallback.priorities,
       ], 6),
       risks: normalizeReportList([
         structured.risk_impact,
+        ...rootCauseAnalysis.map((item) => item.risk_if_not_corrected || item.issue),
         ...((structured.audit_readiness || {}).auditor_concerns || []),
         ...fallback.risks,
       ], 4),
       decisions: normalizeReportList([
         (structured.audit_readiness || {}).reason,
+        ...correctiveActions.map((item) => item.effectiveness_check || item.closure_criteria?.[0]),
         ...fallback.decisions,
       ], 4),
+      root_cause_analysis: rootCauseAnalysis,
+      corrective_actions: correctiveActions,
+      evidence_requests: evidenceRequests,
+      audit_questions: auditQuestions,
+      management_focus: managementFocus,
       ai_metrics: {
         ...(ai.metrics || {}),
         model_mode_used: ai.model_mode_used || modelMode,
@@ -2967,6 +2986,13 @@ router.post('/generate', auth, async (req, res) => {
     await generatePdfFromHtml(html, outputPath, {
       requestId: req.requestId || null,
       templateName: resolvedReportTypeCode || report_type_code,
+      metadata: {
+        ai_engine_used: reportData.ai_report_addendum?.ai_metrics ? true : null,
+        used_llm: reportData.ai_report_addendum?.ai_metrics?.llm_used ?? reportData.ai_report_addendum?.llm_used ?? null,
+        model_mode: reportData.ai_report_addendum?.model_mode_used || reportAiOptions.model_mode || null,
+        selected_model: reportData.ai_report_addendum?.model_name || reportData.ai_report_addendum?.ai_metrics?.model_name || null,
+        fallback_used: reportData.ai_report_addendum?.fallback_used ?? reportData.ai_report_addendum?.ai_metrics?.fallback_used ?? null,
+      },
     });
 
     const legacyFileUrl = `/uploads/reports/${targetTenantId}/${fileName}`;
