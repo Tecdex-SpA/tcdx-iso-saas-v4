@@ -141,6 +141,12 @@ function localText(locale: string) {
     reviewedBy: en ? 'Reviewed by' : 'Revisado por',
     reviewedAt: en ? 'Reviewed at' : 'Revisado el',
     pdfError: en ? 'Could not generate PDF report.' : 'No fue posible generar el PDF.',
+    traceUnavailable: en ? 'Trace not available in older analysis' : 'Trazabilidad no disponible en análisis antiguo',
+    analysisEngine: en ? 'Analysis engine' : 'Motor de análisis',
+    model: en ? 'Model' : 'Modelo',
+    rag: 'RAG',
+    web: 'Web',
+    drive: 'Drive',
   };
 }
 
@@ -210,6 +216,70 @@ function displayStatus(value: unknown, locale: string) {
     deep: 'Deep',
   };
   return (locale === 'en' ? en : es)[normalized] || String(value || '-');
+}
+
+function boolDisplay(value: unknown, locale: string, fallback = '-') {
+  if (value === true || value === 'true') return locale === 'en' ? 'Yes' : 'Sí';
+  if (value === false || value === 'false') return locale === 'en' ? 'No' : 'No';
+  return fallback;
+}
+
+function resolveTraceFlag(trace: LooseRecord, full: LooseRecord, key: string) {
+  const engine = trace?.engine || full?.engine || {};
+  const metrics = trace?.metrics || full?.metrics || full?.ai_metrics || {};
+  return trace?.[key] ?? engine?.[key] ?? metrics?.[key] ?? full?.[key];
+}
+
+function resolveHistoryTraceInfo({
+  selectedHistory,
+  historyFull,
+  historyTrace,
+  locale,
+  copy,
+}: {
+  selectedHistory: LooseRecord | null;
+  historyFull: LooseRecord;
+  historyTrace: LooseRecord;
+  locale: string;
+  copy: ReturnType<typeof localText>;
+}) {
+  const engine = historyTrace?.engine || historyFull?.engine || {};
+  const metrics = historyTrace?.metrics || historyFull?.metrics || historyFull?.ai_metrics || {};
+  const usedLlm = resolveTraceFlag(historyTrace, historyFull, 'used_llm');
+  const aiEngineUsed = historyTrace?.ai_engine_used ?? selectedHistory?.ai_engine_used ?? historyFull?.ai_engine_used;
+  const hasTrace = Boolean(
+    historyTrace?.request_id ||
+    historyTrace?.model_mode ||
+    historyTrace?.history_run_id ||
+    historyTrace?.used_llm !== undefined ||
+    engine?.used_llm !== undefined ||
+    metrics?.used_llm !== undefined
+  );
+  const traceFallback = copy.traceUnavailable;
+  const modelMode = historyTrace?.model_mode || historyFull?.model_mode || metrics?.model_mode || metrics?.model_mode_used;
+  const modelName = historyTrace?.model_name || historyTrace?.selected_model || historyTrace?.model || engine?.model || metrics?.model || metrics?.selected_model;
+  const provider = historyTrace?.llm_provider || engine?.llm_provider || metrics?.llm_provider || (usedLlm === true ? 'ollama' : '');
+
+  let engineLabel = copy.traceUnavailable;
+  if (hasTrace) {
+    if (usedLlm === true) engineLabel = 'LLM/Ollama';
+    else if (aiEngineUsed === true) engineLabel = locale === 'en' ? 'AI Engine deterministic' : 'AI Engine determinístico';
+    else engineLabel = locale === 'en' ? 'Saved historical result' : 'Histórico guardado';
+  }
+
+  return {
+    hasTrace,
+    engineLabel,
+    modelMode: hasTrace ? displayStatus(modelMode || '-', locale) : traceFallback,
+    modelName: hasTrace ? String(modelName || (usedLlm === true ? '-' : locale === 'en' ? 'Not applicable' : 'No aplica')) : traceFallback,
+    provider: hasTrace ? String(provider || (usedLlm === true ? 'ollama' : locale === 'en' ? 'Not applicable' : 'No aplica')) : traceFallback,
+    llm: hasTrace ? boolDisplay(usedLlm, locale) : traceFallback,
+    rag: hasTrace ? boolDisplay(resolveTraceFlag(historyTrace, historyFull, 'used_rag'), locale) : traceFallback,
+    web: hasTrace ? boolDisplay(resolveTraceFlag(historyTrace, historyFull, 'used_web'), locale) : traceFallback,
+    drive: hasTrace ? boolDisplay(resolveTraceFlag(historyTrace, historyFull, 'used_drive'), locale) : traceFallback,
+    dbWrite: locale === 'en' ? 'No automatic changes' : 'Sin cambios automáticos',
+    humanReview: locale === 'en' ? 'Required' : 'Requerida',
+  };
 }
 
 function confidenceTone(value: unknown) {
@@ -980,6 +1050,13 @@ export default function IaAuditorPanel() {
     ...(Array.isArray(historyStructured.recommended_actions) ? historyStructured.recommended_actions : []),
     ...(Array.isArray(historySuggestions.action_plan_suggestions) ? historySuggestions.action_plan_suggestions : []),
   ].slice(0, 6);
+  const historyTraceInfo = resolveHistoryTraceInfo({
+    selectedHistory,
+    historyFull,
+    historyTrace,
+    locale,
+    copy,
+  });
 
   const counts = scope?.counts || {};
   const summary = analysis?.summary || {};
@@ -1167,10 +1244,10 @@ export default function IaAuditorPanel() {
           <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-black text-slate-900">{copy.engineTrace}</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <TraceItem label={copy.engineUsed} value={trace?.ai_engine_used === true ? copy.yes : trace?.ai_engine_used === false ? copy.no : '-'} />
+              <TraceItem label={copy.engineUsed} value={trace?.used_llm === true ? 'LLM/Ollama' : trace?.ai_engine_used === true ? (locale === 'en' ? 'AI Engine deterministic' : 'AI Engine determinístico') : trace?.ai_engine_used === false ? (locale === 'en' ? 'Saved historical result' : 'Histórico guardado') : '-'} />
               <TraceItem label={copy.source} value={trace?.source || '-'} />
               <TraceItem label={copy.endpoint} value={trace?.endpoint || '-'} />
-              <TraceItem label={copy.dbWrite} value={String(trace?.db_write ?? false)} />
+              <TraceItem label={copy.dbWrite} value={copy.noRecords} />
               <TraceItem label={copy.generatedAt} value={trace?.generated_at || '-'} />
               <TraceItem label={copy.scope} value={selectedStandard === 'all' ? copy.allStandards : selectedStandard} />
             </div>
@@ -1214,7 +1291,7 @@ export default function IaAuditorPanel() {
                       {item.summary_preview || copy.noData}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Pill value={item.ai_engine_used}>{copy.engineUsed}: {item.ai_engine_used ? copy.yes : copy.no}</Pill>
+                      <Pill value={item.ai_engine_used}>{copy.engineUsed}: {item.ai_engine_used ? 'AI Engine' : copy.traceUnavailable}</Pill>
                       <Pill value={false}>{copy.noRecords}</Pill>
                       <Pill value={item.human_review_required}>{copy.humanReview}</Pill>
                     </div>
@@ -1263,6 +1340,7 @@ export default function IaAuditorPanel() {
                     <button
                       onClick={() => downloadHistoryPdf(selectedHistory.id)}
                       disabled={pdfLoading}
+                      title={locale === 'en' ? 'Downloads the saved analysis without regenerating AI content.' : 'Descarga el análisis existente sin regenerar contenido IA.'}
                       className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-900 disabled:opacity-50"
                     >
                       {pdfLoading ? '...' : copy.downloadHistoricalPdf}
@@ -1337,8 +1415,15 @@ export default function IaAuditorPanel() {
                 <TraceItem label={copy.score} value={selectedHistory.score ?? '-'} />
                 <TraceItem label={copy.confidence} value={historySummary.confidence_score ?? historyFull.confidence ?? '-'} />
                 <TraceItem label={copy.readiness} value={displayStatus(selectedHistory.readiness_level || historySummary.readiness_level || '-', locale)} />
-                <TraceItem label={copy.engineUsed} value={selectedHistory.ai_engine_used ? 'IA Engine' : 'Determinístico'} />
-                <TraceItem label={copy.dbWrite} value={displayStatus(selectedHistory.db_write ?? false, locale)} />
+                <TraceItem label={copy.analysisEngine} value={historyTraceInfo.engineLabel} />
+                <TraceItem label={copy.modelMode} value={historyTraceInfo.modelMode} />
+                <TraceItem label={copy.model} value={historyTraceInfo.modelName} />
+                <TraceItem label="LLM/Ollama" value={historyTraceInfo.llm} />
+                <TraceItem label={copy.rag} value={historyTraceInfo.rag} />
+                <TraceItem label={copy.web} value={historyTraceInfo.web} />
+                <TraceItem label={copy.drive} value={historyTraceInfo.drive} />
+                <TraceItem label={copy.dbWrite} value={historyTraceInfo.dbWrite} />
+                <TraceItem label={copy.humanReview} value={historyTraceInfo.humanReview} />
                 <TraceItem label={copy.controls} value={historyCoverage.controls_reviewed ?? '-'} />
                 <TraceItem label={copy.evidence} value={historyCoverage.evidences_reviewed ?? '-'} />
                 <TraceItem label={copy.findings} value={historyCoverage.findings_reviewed ?? '-'} />
@@ -1434,6 +1519,14 @@ export default function IaAuditorPanel() {
 
               <details className="mt-4 rounded-2xl bg-white p-4">
                 <summary className="cursor-pointer text-sm font-black text-slate-900">{copy.engineTrace}</summary>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <TraceItem label={copy.analysisEngine} value={historyTraceInfo.engineLabel} />
+                  <TraceItem label={copy.modelMode} value={historyTraceInfo.modelMode} />
+                  <TraceItem label={copy.model} value={historyTraceInfo.modelName} />
+                  <TraceItem label="LLM/Ollama" value={historyTraceInfo.llm} />
+                  <TraceItem label={copy.rag} value={historyTraceInfo.rag} />
+                  <TraceItem label={copy.web} value={historyTraceInfo.web} />
+                </div>
                 <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap text-xs text-slate-600">
                   {JSON.stringify({
                     trace: historyTrace,

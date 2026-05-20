@@ -1598,10 +1598,18 @@ function adaptSeniorAuditorV2Response(engineJson, fallback, locale, scope, conte
   const structured = engineJson?.structured_result && typeof engineJson.structured_result === 'object'
     ? engineJson.structured_result
     : {};
+  const engine = engineJson?.engine && typeof engineJson.engine === 'object' ? engineJson.engine : {};
+  const metrics = engineJson?.metrics && typeof engineJson.metrics === 'object' ? engineJson.metrics : {};
   const confidence = Number(engineJson?.confidence ?? structured?.confidence ?? 0);
   const score = clampAiAuditorScore(confidence * 100, fallback?.summary?.score || 0);
   const readinessStatus = structured?.audit_readiness?.status || 'sin_datos';
   const recommendedActions = safeAiAuditorArray(structured?.recommended_actions);
+  const engineDurationMs = engine.duration_ms || metrics.duration_ms || engineJson?.duration_ms || null;
+  const selectedModel = engine.model || engine.selected_model || metrics.model || metrics.selected_model || null;
+  const usedLlm = engine.used_llm === true || metrics.used_llm === true || engineJson?.used_llm === true;
+  const usedRag = engine.used_rag === true || metrics.used_rag === true || engineJson?.used_rag === true;
+  const usedWeb = engine.used_web === true || metrics.used_web === true || engineJson?.used_web === true;
+  const usedDrive = engine.used_drive === true || metrics.used_drive === true || engineJson?.used_drive === true;
 
   return {
     ...fallback,
@@ -1613,7 +1621,7 @@ function adaptSeniorAuditorV2Response(engineJson, fallback, locale, scope, conte
     source_trace: safeAiAuditorArray(engineJson?.source_trace, safeAiAuditorArray(structured?.source_trace)),
     confidence,
     limitations: safeAiAuditorArray(engineJson?.limitations, safeAiAuditorArray(structured?.limitations)),
-    engine: engineJson?.engine || {},
+    engine,
     summary: {
       ...(fallback?.summary || {}),
       score,
@@ -1667,9 +1675,18 @@ function adaptSeniorAuditorV2Response(engineJson, fallback, locale, scope, conte
       source: 'ai_engine_senior_auditor_v2',
       endpoint: '/api/ai/senior-auditor/analyze',
       ai_engine_used: engineJson?.ok !== false,
+      used_llm: usedLlm,
+      llm_provider: engine.llm_provider || metrics.llm_provider || 'ollama',
+      model_name: selectedModel,
+      selected_model: selectedModel,
+      used_rag: usedRag,
+      used_web: usedWeb,
+      used_drive: usedDrive,
+      duration_ms: engineDurationMs,
       db_write: false,
       generated_at: new Date().toISOString(),
-      engine: engineJson?.engine || {},
+      engine,
+      metrics,
     },
   };
 }
@@ -2402,6 +2419,14 @@ router.get('/history/:id/report', auth, async (req, res) => {
     const analysis = pickAiAuditorPdfAnalysisFromHistory(row);
     analysis.trace = { ...(analysis.trace || row.trace_json || {}), history_run_id: row.id, history_saved: true, db_write: false };
     analysis.__pdf_review = getAiAuditorPdfReview(analysis, row);
+    console.info('AI AUDITOR HISTORY PDF REPORT:', {
+      request_id: getAiAuditorRequestId(req) || null,
+      history_id: row.id,
+      tenant_id: tenantId,
+      pdf_cache_hit: false,
+      regenerated_pdf_from_history: true,
+      ai_engine_called: false,
+    });
     return streamAiAuditorPdfReport({
       res,
       locale,
@@ -2519,7 +2544,15 @@ async function runAiAuditorAnalysis({ req, requestId = null }) {
       model_mode: modelMode,
       async_mode: false,
       estimated_mode_cost: getAiAuditorEstimatedModeCost(modelMode),
-      selected_model: analysis?.engine?.model || analysis?.trace?.engine?.model || null,
+      selected_model: analysis?.engine?.model || analysis?.trace?.engine?.model || analysis?.trace?.selected_model || analysis?.trace?.model_name || null,
+      model_name: analysis?.engine?.model || analysis?.trace?.engine?.model || analysis?.trace?.model_name || analysis?.trace?.selected_model || null,
+      llm_provider: analysis?.engine?.llm_provider || analysis?.trace?.engine?.llm_provider || analysis?.trace?.llm_provider || 'ollama',
+      used_llm: analysis?.engine?.used_llm === true || analysis?.trace?.engine?.used_llm === true || analysis?.trace?.used_llm === true,
+      used_rag: analysis?.engine?.used_rag === true || analysis?.trace?.engine?.used_rag === true || analysis?.trace?.used_rag === true || req.body?.use_rag === true,
+      used_web: analysis?.engine?.used_web === true || analysis?.trace?.engine?.used_web === true || analysis?.trace?.used_web === true || req.body?.use_web === true || req.body?.force_web === true,
+      used_drive: analysis?.engine?.used_drive === true || analysis?.trace?.engine?.used_drive === true || analysis?.trace?.used_drive === true || req.body?.use_drive === true || req.body?.force_drive === true,
+      duration_ms: timings.ai_engine_ms || timings.total_ms,
+      ai_engine_used: true,
       timings_ms: timings,
     };
 
@@ -2558,6 +2591,14 @@ async function runAiAuditorAnalysis({ req, requestId = null }) {
       model_mode: modelMode,
       async_mode: false,
       estimated_mode_cost: getAiAuditorEstimatedModeCost(modelMode),
+      ai_engine_used: false,
+      used_llm: false,
+      used_rag: req.body?.use_rag === true,
+      used_web: req.body?.use_web === true || req.body?.force_web === true,
+      used_drive: req.body?.use_drive === true || req.body?.force_drive === true,
+      fallback_used: true,
+      fallback_reason: compactAiEngineErrorMessage(engineError),
+      duration_ms: timings.total_ms,
       timings_ms: timings,
     };
     return fallbackResult;
