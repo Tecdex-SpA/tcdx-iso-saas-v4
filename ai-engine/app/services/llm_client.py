@@ -45,7 +45,7 @@ def _resolve_ollama_model(
         return _env("OLLAMA_MODEL_DEEP") or _env("OLLAMA_MODEL_AUDITOR") or default_model or fallback
 
     if mode == "balanced":
-        return _env("OLLAMA_MODEL_AUDITOR") or _env("OLLAMA_MODEL_FAST") or default_model or fallback
+        return _env("OLLAMA_MODEL_REPORTS") or _env("OLLAMA_MODEL_AUDITOR") or _env("OLLAMA_MODEL_FAST") or default_model or fallback
 
     if mode == "fast":
         return _env("OLLAMA_MODEL_FAST") or fallback or default_model
@@ -54,7 +54,7 @@ def _resolve_ollama_model(
         return _env("OLLAMA_MODEL_DEEP") or _env("OLLAMA_MODEL_AUDITOR") or default_model or fallback
 
     if depth == "standard":
-        return _env("OLLAMA_MODEL_AUDITOR") or _env("OLLAMA_MODEL_FAST") or default_model or fallback
+        return _env("OLLAMA_MODEL_REPORTS") or _env("OLLAMA_MODEL_AUDITOR") or _env("OLLAMA_MODEL_FAST") or default_model or fallback
 
     return fallback
 
@@ -153,7 +153,12 @@ def call_llm_json(
     if not metadata["available"]:
         raise RuntimeError("LLM provider not configured")
 
-    timeout = int(os.getenv("AI_ENGINE_LLM_TIMEOUT_MS", str(timeout * 1000)) or timeout * 1000) / 1000
+    timeout_ms = (
+        os.getenv("OLLAMA_TIMEOUT_MS")
+        if metadata.get("provider") == "ollama"
+        else None
+    ) or os.getenv("AI_ENGINE_LLM_TIMEOUT_MS", str(timeout * 1000))
+    timeout = int(timeout_ms or timeout * 1000) / 1000
     provider = metadata["provider"]
 
     if provider in {"openai", "openai_compatible", "azure_openai"}:

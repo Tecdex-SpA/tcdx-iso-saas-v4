@@ -210,7 +210,9 @@ function parseReportBoolean(value, fallback = false) {
 
 function resolveReportAiOptions(body = {}) {
   const metadata = safeObject(body.metadata);
-  const modelMode = normalizeReportModelMode(body.model_mode || body.modelMode || metadata.model_mode || metadata.modelMode);
+  const explicitMode = body.model_mode || body.modelMode || metadata.model_mode || metadata.modelMode;
+  const requestedUseLlm = body.use_llm ?? metadata.use_llm;
+  const modelMode = normalizeReportModelMode(explicitMode || (parseReportBoolean(requestedUseLlm, false) ? 'balanced' : 'fast'));
   const useLlm = parseReportBoolean(body.use_llm ?? metadata.use_llm, modelMode !== 'fast');
   const depth = String(body.depth || metadata.depth || (modelMode === 'deep' ? 'deep' : 'executive')).trim();
 

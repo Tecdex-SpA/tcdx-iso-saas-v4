@@ -17,6 +17,7 @@ Modo recomendado:
 - `AI_AUDITOR_MODEL_MODE=fast`
 - `OLLAMA_MODEL_FAST=qwen2.5:1.5b`
 - `OLLAMA_MODEL_AUDITOR=qwen2.5:7b`
+- `OLLAMA_MODEL_REPORTS=qwen2.5:7b`
 - `OLLAMA_MODEL_DEEP=qwen2.5:14b`
 - `OLLAMA_MODEL_FALLBACK=qwen2.5:1.5b`
 - `AI_AUDITOR_DEEP_ASYNC_REQUIRED=true`
@@ -25,7 +26,13 @@ Uso esperado:
 
 - Fast: deterministico por defecto, sin LLM, para pantallas ejecutivas interactivas.
 - Balanced: usar `qwen2.5:7b` solo bajo flujo asincrono.
-- Deep: usar `qwen2.5:14b` solo bajo flujo asincrono o reportes premium.
+- Reportes cliente: usar `qwen2.5:7b` como modelo balanceado por defecto.
+- Deep: usar `qwen2.5:14b` solo bajo flujo asincrono o reportes premium explicitamente solicitados.
+- Timeouts recomendados para reportes deep:
+  - `AI_ENGINE_REQUEST_TIMEOUT_MS=420000`
+  - `AI_REPORT_ENRICHMENT_TIMEOUT_MS=420000`
+  - `OLLAMA_TIMEOUT_MS=420000`
+  - `REPORT_DEEP_JOB_TIMEOUT_MS=600000`
 
 ## Jobs asincronos persistentes
 
@@ -46,6 +53,12 @@ Para cache de PDF historico IA Auditor, aplicar tambien:
 
 ```bash
 sudo -u postgres psql -d tecdex_saas -f /ruta/database/migrations/20260520_ai_auditor_pdf_cache.sql
+```
+
+Para habilitar Perfil empresa y el documento "Contexto de la organizacion":
+
+```bash
+sudo -u postgres psql -d tecdex_saas -f /ruta/database/migrations/20260520_tenant_company_profiles.sql
 ```
 
 Validacion:
@@ -76,7 +89,7 @@ ssh tcdx-backend "/usr/bin/google-chrome-stable --version || true"
 - Configurar el motor HTML/CSS oficial:
   - `PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable`
   - `PDF_RENDER_ENGINE=puppeteer`
-  - `PDF_RENDER_TIMEOUT_MS=120000`
+  - `PDF_RENDER_TIMEOUT_MS=300000`
   - `PDF_RENDER_FORMAT=A4`
   - `PDF_RENDER_PRINT_BACKGROUND=true`
   - `PDF_RENDER_CACHE_ENABLED=true`
@@ -87,6 +100,18 @@ node scripts/qa/test-html-pdf-renderer.js
 ```
 
 - Ver documentacion completa en `docs/pdf-rendering-html-puppeteer.md`.
+
+## Perfil empresa
+
+- Ruta frontend: `/perfil-empresa`, bajo administracion/usuarios.
+- API backend:
+  - `GET /api/company-profile`
+  - `PUT /api/company-profile`
+  - `POST /api/company-profile/analyze`
+  - `POST /api/company-profile/export-context-document`
+  - `GET /api/company-profile/context-document/download`
+- La informacion queda aislada por `tenant_id` y se usa como contexto de calibracion para reportes, IA Auditor, controles, riesgos, evidencias y recomendaciones.
+- El perfil no reemplaza evidencia interna ni puede declarar certificacion; solo mejora el criterio de priorizacion y redaccion IA.
 
 ## Backups
 

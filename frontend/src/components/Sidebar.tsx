@@ -753,6 +753,20 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                       </svg>
                     }
                   />
+                  <NavItem
+                    href="/perfil-empresa"
+                    label="Perfil empresa"
+                    collapsed={collapsed}
+                    active={isActive('/perfil-empresa')}
+                    icon={
+                      <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path d="M3 21h18" />
+                        <path d="M5 21V7l7-4 7 4v14" />
+                        <path d="M9 21v-6h6v6" />
+                        <path d="M9 9h.01M12 9h.01M15 9h.01" />
+                      </svg>
+                    }
+                  />
                 </div>
               </>
             )}

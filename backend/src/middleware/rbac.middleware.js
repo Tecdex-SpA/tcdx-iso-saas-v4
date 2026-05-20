@@ -61,6 +61,11 @@ const API_RULES = [
     write: TENANT_READ_ROLES,
   },
   {
+    prefix: '/api/company-profile',
+    read: TENANT_READ_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
     prefix: '/api/tenant-standards',
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,

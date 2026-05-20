@@ -279,6 +279,7 @@ def build_compact_ai_context(context: dict, depth: str = "executive", limits: di
     open_actions = [item for item in full_actions if str(item.get("status") or "").lower() not in {"cerrado", "closed", "completado", "cancelado"}]
     compact = {
         "tenant": _truncate_value(context.get("tenant") if isinstance(context.get("tenant"), dict) else {}),
+        "company_profile": _truncate_value(context.get("company_profile") if isinstance(context.get("company_profile"), dict) else {}),
         "scope": _truncate_value(context.get("scope") if isinstance(context.get("scope"), dict) else {}),
         "effective_health_summary": summaries[:10],
         "priority_controls": [slim_control(item) for item in controls],
@@ -692,6 +693,7 @@ def _build_llm_user_prompt(
             "recent_nonconformities": (context.get("recent_nonconformities") or [])[:10],
             "recent_action_plans": (context.get("recent_action_plans") or [])[:10],
             "documents": (context.get("documents") or [])[:10],
+            "company_profile": context.get("company_profile") or {},
             "source_trace": context.get("source_trace") or [],
             "limitations": context.get("limitations") or [],
         },
@@ -733,6 +735,12 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     limits = _compact_limits_from_options(options)
     context_started_at = time.perf_counter()
     context = build_compact_ai_context(original_context, depth, limits) if local_compact else original_context
+    used_company_profile = bool(
+        original_context.get("company_profile")
+        or context.get("company_profile")
+        or request_metadata.get("used_company_profile")
+        or options.get("used_company_profile")
+    )
     timings_ms["context_compact_ms"] = int((time.perf_counter() - context_started_at) * 1000)
     payload_for_sources = {**payload, "context": context, "options": dict(options)}
     source_policy = resolve_source_policy(payload_for_sources, local_compact, depth)
@@ -898,6 +906,15 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
         ))
     elif is_llm_available():
         try:
+            print(json.dumps({
+                "event": "OLLAMA REQUEST START" if llm_metadata.get("provider") == "ollama" else "LLM REQUEST START",
+                "request_id": request_id or None,
+                "tenant_id": tenant_id,
+                "model_mode": model_mode,
+                "selected_model": llm_metadata.get("model"),
+                "provider": llm_metadata.get("provider"),
+                "used_company_profile": used_company_profile,
+            }, ensure_ascii=False, default=str))
             llm_started_at = time.perf_counter()
             llm_raw = call_llm_json(
                 prompt=_build_llm_user_prompt(
@@ -927,6 +944,15 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             structured = llm_structured
             llm_used = True
             engine_model = f"{llm_metadata.get('provider')}/{llm_metadata.get('model')}"
+            print(json.dumps({
+                "event": "OLLAMA REQUEST OK" if llm_metadata.get("provider") == "ollama" else "LLM REQUEST OK",
+                "request_id": request_id or None,
+                "tenant_id": tenant_id,
+                "model_mode": model_mode,
+                "selected_model": llm_metadata.get("model"),
+                "duration_ms": timings_ms.get("llm_ms", 0),
+                "used_company_profile": used_company_profile,
+            }, ensure_ascii=False, default=str))
         except Exception as exc:
             timings_ms["llm_ms"] = timings_ms.get("llm_ms", 0)
             provider = llm_metadata.get("provider") or "desconocido"
@@ -937,6 +963,15 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             )
             limitations.append(f"Proveedor LLM falló — análisis generado por fallback determinístico. Modelo intentado: {model}")
             engine_model = "deterministic_senior_auditor_v2"
+            print(json.dumps({
+                "event": "OLLAMA REQUEST ERROR" if llm_metadata.get("provider") == "ollama" else "LLM REQUEST ERROR",
+                "request_id": request_id or None,
+                "tenant_id": tenant_id,
+                "model_mode": model_mode,
+                "selected_model": model,
+                "error": str(exc)[:220],
+                "used_company_profile": used_company_profile,
+            }, ensure_ascii=False, default=str))
     else:
         timings_ms["llm_ms"] = 0
         structured["limitations"].append(
@@ -973,6 +1008,8 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "used_rag": bool(rag.get("used")),
             "used_drive": bool(drive.get("used")),
             "used_web": bool(web.get("used")),
+            "used_company_profile": used_company_profile,
+            "used_documents": bool(drive.get("used")) or bool((context.get("documents") or [])),
             "local_compact": local_compact,
             "compact_reason": "ollama_provider" if local_compact and llm_metadata.get("provider") == "ollama" else ("request_or_env" if local_compact else ""),
             "context_limits": limits if local_compact else {},
@@ -995,6 +1032,8 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             "used_rag": bool(rag.get("used")),
             "used_drive": bool(drive.get("used")),
             "used_web": bool(web.get("used")),
+            "used_company_profile": used_company_profile,
+            "used_documents": bool(drive.get("used")) or bool((context.get("documents") or [])),
             "model": engine_model,
             "timings_ms": timings_ms,
         },

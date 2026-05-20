@@ -68,7 +68,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return {
       platformOnly: ['/admin-saas', '/empresas'],
       dealerOnly: ['/dealer', '/cotizador', '/prefacturacion'],
-      adminOrPlatform: ['/usuarios'],
+      adminOrPlatform: ['/usuarios', '/perfil-empresa'],
       moduleProtected: [
         {
           module_key: 'ai',
@@ -243,6 +243,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         const operativeBlockedRoutes = [
           '/usuarios',
+          '/perfil-empresa',
           '/administrar-kpis',
           '/prefacturacion',
           '/admin-saas',
@@ -253,6 +254,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         const auditorBlockedRoutes = [
           '/usuarios',
+          '/perfil-empresa',
           '/administrar-kpis',
           '/prefacturacion',
           '/admin-saas',

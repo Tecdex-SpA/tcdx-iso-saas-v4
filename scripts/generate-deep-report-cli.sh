@@ -17,7 +17,7 @@ DEPTH="${TCDX_DEPTH:-deep}"
 QUALITY="${TCDX_QUALITY:-premium_deep}"
 
 OUT_DIR="${TCDX_OUT_DIR:-./qa-results/generated-reports}"
-POLL_INTERVAL="${TCDX_POLL_INTERVAL:-5}"
+POLL_INTERVAL="${TCDX_POLL_INTERVAL_SECONDS:-${TCDX_POLL_INTERVAL:-5}}"
 MAX_WAIT_SECONDS="${TCDX_MAX_WAIT_SECONDS:-900}"
 
 mkdir -p "$OUT_DIR"
@@ -51,6 +51,28 @@ try:
 except Exception:
     print("")
 ' "$1"
+}
+
+json_first() {
+  python3 -c '
+import json, sys
+paths = sys.argv[1:]
+try:
+    data = json.load(sys.stdin)
+    for raw in paths:
+        cur = data
+        for part in raw.split("."):
+            if isinstance(cur, dict):
+                cur = cur.get(part)
+            else:
+                cur = None
+                break
+        if cur not in (None, ""):
+            print(cur if not isinstance(cur, bool) else ("true" if cur else "false"))
+            break
+except Exception:
+    print("")
+' "$@"
 }
 
 log "============================================================"
@@ -163,11 +185,13 @@ RESULT_RESPONSE="$(curl -sk "$BASE_URL/api/reports/jobs/$JOB_ID/result" \
 
 echo "$RESULT_RESPONSE" > "$OUT_DIR/result-$JOB_ID.json"
 
-DOWNLOAD_URL="$(printf '%s' "$RESULT_RESPONSE" | json_get result_download_url)"
-
-if [[ -z "$DOWNLOAD_URL" ]]; then
-  DOWNLOAD_URL="$(printf '%s' "$RESULT_RESPONSE" | json_get data.result_download_url)"
-fi
+DOWNLOAD_URL="$(printf '%s' "$RESULT_RESPONSE" | json_first \
+  result_download_url \
+  data.result_download_url \
+  data.file_url \
+  data.export.file_url \
+  data.export.result_download_url \
+  data.export.legacy_file_url)"
 
 if [[ -z "$DOWNLOAD_URL" ]]; then
   log "ERROR: No se encontró result_download_url. Revisar $OUT_DIR/result-$JOB_ID.json"
@@ -183,6 +207,8 @@ log "Download URL: $DOWNLOAD_URL"
 PDF_FILE="$OUT_DIR/tcdx-report-${REPORT_TYPE_CODE}-${MODEL_MODE}-${JOB_ID}.pdf"
 SUMMARY_FILE="$OUT_DIR/report-summary-$JOB_ID.txt"
 HEADERS_FILE="$OUT_DIR/report-headers-$JOB_ID.txt"
+JOB_JSON_FILE="$OUT_DIR/job-$JOB_ID-latest.json"
+RESULT_JSON_FILE="$OUT_DIR/result-$JOB_ID.json"
 
 log "5) Descargando PDF..."
 
@@ -196,6 +222,10 @@ if [[ ! -s "$PDF_FILE" ]]; then
 fi
 
 BYTES="$(wc -c < "$PDF_FILE" | tr -d ' ')"
+if (( BYTES < 20480 )); then
+  log "ERROR: PDF demasiado pequeño (${BYTES} bytes)."
+  exit 1
+fi
 MIME="$(python3 - <<PY
 import mimetypes
 print(mimetypes.guess_type("$PDF_FILE")[0] or "unknown")
@@ -212,6 +242,19 @@ curl -skI "$DOWNLOAD_URL" \
   -H "Authorization: Bearer $TOKEN" \
   > "$HEADERS_FILE"
 
+if ! grep -qi 'content-type: application/pdf' "$HEADERS_FILE"; then
+  log "ERROR: headers remotos no confirman application/pdf. Revisar $HEADERS_FILE"
+  exit 1
+fi
+
+REPORT_ID="$(printf '%s' "$RESULT_RESPONSE" | json_first data.export.id data.export_id export_id data.id)"
+TRACE_MODEL_MODE="$(printf '%s' "$RESULT_RESPONSE" | json_first data.export.payload_json.ai.ai_metrics.model_mode_used data.export.payload_json.ai.ai_metrics.model_mode data.export.payload_json.ai_report_addendum.model_mode_used data.export.payload_json.ai_report_addendum.ai_metrics.model_mode_used)"
+TRACE_LLM_USED="$(printf '%s' "$RESULT_RESPONSE" | json_first data.export.payload_json.ai.ai_metrics.llm_used data.export.payload_json.ai_report_addendum.llm_used data.export.payload_json.ai_report_addendum.ai_metrics.llm_used)"
+TRACE_MODEL_NAME="$(printf '%s' "$RESULT_RESPONSE" | json_first data.export.payload_json.ai.ai_metrics.model_name data.export.payload_json.ai_report_addendum.model_name data.export.payload_json.ai_report_addendum.ai_metrics.model_name)"
+TRACE_FALLBACK="$(printf '%s' "$RESULT_RESPONSE" | json_first data.export.payload_json.ai.ai_metrics.fallback_used data.export.payload_json.ai_report_addendum.fallback_used data.export.payload_json.ai_report_addendum.ai_metrics.fallback_used)"
+TRACE_AI_FAILED="$(printf '%s' "$RESULT_RESPONSE" | json_first data.export.payload_json.ai.ai_metrics.ai_enrichment_failed data.export.payload_json.ai_report_addendum.ai_enrichment_failed data.export.payload_json.ai_report_addendum.ai_metrics.ai_enrichment_failed)"
+TRACE_DURATION="$(printf '%s' "$RESULT_RESPONSE" | json_first data.export.payload_json.ai.ai_metrics.duration_ms data.export.payload_json.ai_report_addendum.duration_ms data.export.payload_json.ai_report_addendum.ai_metrics.duration_ms)"
+
 {
   echo "TCDX Deep Report CLI Summary"
   echo "============================================================"
@@ -227,9 +270,18 @@ curl -skI "$DOWNLOAD_URL" \
   echo "depth=$DEPTH"
   echo "quality=$QUALITY"
   echo "job_id=$JOB_ID"
+  echo "report_id=$REPORT_ID"
   echo "pdf_file=$PDF_FILE"
+  echo "job_json=$JOB_JSON_FILE"
+  echo "result_json=$RESULT_JSON_FILE"
   echo "bytes=$BYTES"
   echo "download_url=$DOWNLOAD_URL"
+  echo "trace_model_mode=${TRACE_MODEL_MODE:-$MODEL_MODE}"
+  echo "trace_llm_used=${TRACE_LLM_USED:-unknown}"
+  echo "trace_model_name=${TRACE_MODEL_NAME:-unknown}"
+  echo "trace_fallback_used=${TRACE_FALLBACK:-unknown}"
+  echo "trace_ai_enrichment_failed=${TRACE_AI_FAILED:-unknown}"
+  echo "trace_duration_ms=${TRACE_DURATION:-unknown}"
   echo
   echo "Remote headers:"
   cat "$HEADERS_FILE"
@@ -239,4 +291,5 @@ log "============================================================"
 log "REPORTE GENERADO OK"
 log "PDF: $PDF_FILE"
 log "Resumen: $SUMMARY_FILE"
+log "job_id=$JOB_ID report_id=${REPORT_ID:-unknown} model_mode=${TRACE_MODEL_MODE:-$MODEL_MODE} llm_used=${TRACE_LLM_USED:-unknown} model=${TRACE_MODEL_NAME:-unknown} fallback=${TRACE_FALLBACK:-unknown} ai_failed=${TRACE_AI_FAILED:-unknown} duration_ms=${TRACE_DURATION:-unknown}"
 log "============================================================"

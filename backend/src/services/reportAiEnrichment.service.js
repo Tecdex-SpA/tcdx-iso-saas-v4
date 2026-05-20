@@ -1,6 +1,7 @@
 const aiContextBuilder = require('./aiContextBuilder.service');
 const aiEngineClient = require('./aiEngineClient.service');
 const { createAiTimer, resolveAiMode } = require('./aiRuntimeMetrics.service');
+const { getCompanyProfileForTenant } = require('./companyProfile.service');
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -161,6 +162,16 @@ function buildManagementFocus(structured = {}, actions = []) {
   ], 6);
 }
 
+function isBackendFallback(aiResult = {}, engine = {}) {
+  const model = String(engine.model || aiResult?.model_name || '').toLowerCase();
+  return (
+    aiResult?.ok === false ||
+    model === 'backend_fallback' ||
+    engine.fallback_used === true ||
+    engine.ai_enrichment_failed === true
+  );
+}
+
 async function buildReportAiEnrichment({
   tenantId,
   standardCode = null,
@@ -214,9 +225,43 @@ async function buildReportAiEnrichment({
   };
 
   try {
+    console.info('REPORT AI ENRICHMENT START:', {
+      request_id: requestId || null,
+      tenant_id: tenantId,
+      report_type: reportType,
+      model_mode: normalizedModelMode,
+      use_llm: requestedLlm,
+      use_rag: boolOption(useRag, true),
+      use_web: boolOption(useWeb, false),
+      use_drive: useDrive,
+    });
+
     const context = standardCode
       ? await aiContextBuilder.buildAiStandardContext({ tenantId, standardCode, operationId })
       : await aiContextBuilder.buildAiTenantContext({ tenantId });
+    const companyProfile = await getCompanyProfileForTenant(tenantId);
+    if (companyProfile?.profile_json) {
+      context.company_profile = {
+        profile_json: companyProfile.profile_json || {},
+        industry: companyProfile.industry || '',
+        subindustry: companyProfile.subindustry || '',
+        company_size: companyProfile.company_size || '',
+        maturity_level: companyProfile.maturity_level || '',
+        risk_appetite: companyProfile.risk_appetite || '',
+        allow_web_research: companyProfile.allow_web_research === true,
+        allow_document_context: companyProfile.allow_document_context !== false,
+        allow_ai_recommendations: companyProfile.allow_ai_recommendations !== false,
+        ai_profile_summary_json: companyProfile.ai_profile_summary_json || null,
+      };
+      context.source_trace = [
+        ...(context.source_trace || []),
+        {
+          source: 'internal_db',
+          reference: 'tenant_company_profiles',
+          used_for: 'perfil empresa usado como contexto operativo para recomendaciones IA',
+        },
+      ];
+    }
 
     const payload = {
       task_type: reportType === 'audit_report' ? 'audit_analysis' : 'standard_gap_analysis',
@@ -228,6 +273,7 @@ async function buildReportAiEnrichment({
             'Devuelve JSON renderizable con executive_narrative, auditor_opinion, root_cause_analysis, corrective_actions, evidence_requests, audit_questions, management_focus, limitations y trace.',
             'Cada acción debe incluir causa probable, acción correctiva, evidencia requerida, responsable sugerido, plazo, criterio de cierre y criterio de eficacia.',
             'No inventes certificación ni cumplimiento. Separa hechos internos de inferencias. Los datos internos del tenant son la fuente de verdad; RAG/web/Drive son solo apoyo.',
+            'Si existe company_profile en el contexto, úsalo para ajustar riesgos, evidencias esperadas, objetivos, controles y tono ejecutivo, sin sobreescribir los hechos de base de datos.',
           ].join(' ')
         : 'Genera enriquecimiento ejecutivo de reporte con brechas, readiness y acciones prioritarias.',
       locale: 'es',
@@ -238,10 +284,11 @@ async function buildReportAiEnrichment({
         request_id: requestId || null,
         model_mode: normalizedModelMode,
         quality,
+        used_company_profile: Boolean(context.company_profile),
       },
     };
 
-    const aiResult = await aiEngineClient.analyzeWithSeniorAuditor(payload);
+    const aiResult = await aiEngineClient.analyzeReport(payload);
     const structured = aiResult?.structured_result && typeof aiResult.structured_result === 'object'
       ? aiResult.structured_result
       : {};
@@ -259,20 +306,39 @@ async function buildReportAiEnrichment({
     const auditQuestions = buildFallbackAuditQuestions(structured);
     const managementFocus = buildManagementFocus(structured, correctiveActions);
     const engine = aiResult?.engine || {};
+    const fallbackUsed = isBackendFallback(aiResult, engine);
+    const llmUsed = engine.used_llm === true && !fallbackUsed;
     const metrics = timer.finish({
       mode: resolveAiMode(options, engine),
       report_type: reportType,
       request_id: requestId || null,
-      used_llm: engine.used_llm === true,
+      used_llm: llmUsed,
       fast_mode: engine.fast_mode === true,
       local_compact: engine.local_compact === true,
       used_rag: engine.used_rag === true,
       used_drive: engine.used_drive === true,
       used_web: engine.used_web === true,
+      used_company_profile: Boolean(context.company_profile),
+      fallback_used: fallbackUsed,
+    });
+
+    console.info(fallbackUsed ? 'REPORT AI ENRICHMENT FALLBACK:' : 'REPORT AI ENRICHMENT OK:', {
+      request_id: requestId || null,
+      tenant_id: tenantId,
+      report_type: reportType,
+      model_mode: normalizedModelMode,
+      selected_model: engine.selected_model || engine.model || null,
+      used_llm: llmUsed,
+      used_rag: engine.used_rag === true,
+      used_web: engine.used_web === true,
+      used_drive: engine.used_drive === true,
+      used_company_profile: Boolean(context.company_profile),
+      fallback_used: fallbackUsed,
+      duration_ms: metrics.duration_ms,
     });
 
     return {
-      ok: aiResult?.ok !== false,
+      ok: aiResult?.ok !== false && !fallbackUsed,
       answer: aiResult?.answer || '',
       structured_result: structured,
       executive_summary: structured.executive_narrative || structured.executive_summary || aiResult?.answer || '',
@@ -293,31 +359,37 @@ async function buildReportAiEnrichment({
       metrics: {
         ...metrics,
         model_mode_used: normalizedModelMode,
-        llm_used: engine.used_llm === true,
+        llm_used: llmUsed,
         llm_provider: engine.llm_provider || null,
         model_name: engine.model || null,
-        source: engine.used_llm === true ? 'ai-engine-v2-report-llm' : 'ai-engine-v2-report-fast',
+        source: fallbackUsed ? 'ai-engine-v2-report-fallback' : (llmUsed ? 'ai-engine-v2-report-llm' : 'ai-engine-v2-report-fast'),
         duration_ms: metrics.duration_ms,
+        fallback_used: fallbackUsed,
+        ai_enrichment_failed: fallbackUsed,
       },
       model_mode_used: normalizedModelMode,
-      llm_used: engine.used_llm === true,
+      llm_used: llmUsed,
       llm_provider: engine.llm_provider || null,
       model_name: engine.model || null,
-      source: engine.used_llm === true ? 'ai-engine-v2-report-llm' : 'ai-engine-v2-report-fast',
+      source: fallbackUsed ? 'ai-engine-v2-report-fallback' : (llmUsed ? 'ai-engine-v2-report-llm' : 'ai-engine-v2-report-fast'),
       duration_ms: metrics.duration_ms,
       trace: {
-        ai_engine_used: true,
-        used_llm: engine.used_llm === true,
+        ai_engine_used: !fallbackUsed || aiResult?.ok === false,
+        used_llm: llmUsed,
         model_mode: normalizedModelMode,
         selected_model: engine.selected_model || engine.model || null,
         used_rag: engine.used_rag === true,
         used_web: engine.used_web === true,
         used_drive: engine.used_drive === true,
-        fallback_used: false,
+        used_company_profile: Boolean(context.company_profile),
+        used_documents: engine.used_drive === true || Boolean((context.documents || []).length),
+        fallback_used: fallbackUsed,
+        ai_enrichment_failed: fallbackUsed,
         duration_ms: metrics.duration_ms,
+        request_id: requestId || null,
       },
-      ai_enrichment_failed: false,
-      fallback_used: false,
+      ai_enrichment_failed: fallbackUsed,
+      fallback_used: fallbackUsed,
     };
   } catch (error) {
     const metrics = timer.finish({
@@ -326,7 +398,13 @@ async function buildReportAiEnrichment({
       request_id: requestId || null,
       used_llm: false,
     });
-    console.error('REPORT AI ENRICHMENT ERROR:', error.message);
+    console.error('REPORT AI ENRICHMENT ERROR:', {
+      request_id: requestId || null,
+      tenant_id: tenantId,
+      report_type: reportType,
+      model_mode: normalizedModelMode,
+      error: error.message,
+    });
     const fallback = emptyEnrichment({
       reportType,
       metrics,
@@ -337,6 +415,15 @@ async function buildReportAiEnrichment({
       model_mode_used: normalizedModelMode,
       llm_used: false,
       source: 'ai-engine-v2-report-fallback',
+      trace: {
+        ai_engine_used: false,
+        used_llm: false,
+        model_mode: normalizedModelMode,
+        selected_model: 'backend_fallback',
+        fallback_used: true,
+        ai_enrichment_failed: true,
+        request_id: requestId || null,
+      },
     };
   }
 }
