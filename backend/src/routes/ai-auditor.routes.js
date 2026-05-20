@@ -1294,10 +1294,17 @@ async function callAiAuditorEngine(payload, locale, requestId = null) {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    Number(process.env.AI_AUDITOR_ENGINE_TIMEOUT_MS || 25000)
-  );
+  const modelMode = String(payload?.model_mode || payload?.options?.model_mode || '').toLowerCase();
+  const requestedTimeoutMs = Number.parseInt(
+    String(
+      modelMode === 'deep'
+        ? (process.env.REPORT_DEEP_JOB_TIMEOUT_MS || process.env.AI_AUDITOR_DEEP_TIMEOUT_MS || process.env.AI_ENGINE_REQUEST_TIMEOUT_MS || '600000')
+        : (process.env.AI_AUDITOR_ENGINE_TIMEOUT_MS || process.env.AI_ENGINE_REQUEST_TIMEOUT_MS || '25000')
+    ),
+    10
+  ) || 25000;
+  const timeoutMs = modelMode === 'deep' ? Math.max(requestedTimeoutMs, 600000) : requestedTimeoutMs;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${baseUrl}/api/ai/auditor/analyze`, {

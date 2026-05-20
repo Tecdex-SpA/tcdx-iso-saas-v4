@@ -238,14 +238,29 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     },
   };
 
-  const aiResult = profile.allow_ai_recommendations
-    ? await aiEngineClient.analyzeReport(payload)
-    : null;
+  let aiResult = null;
+  let aiError = null;
+  if (profile.allow_ai_recommendations) {
+    try {
+      aiResult = await aiEngineClient.analyzeReport(payload, {
+        timeoutMs: modelMode === 'deep'
+          ? Number.parseInt(process.env.REPORT_DEEP_JOB_TIMEOUT_MS || '600000', 10)
+          : Number.parseInt(process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS || process.env.AI_ENGINE_REQUEST_TIMEOUT_MS || '420000', 10),
+      });
+    } catch (error) {
+      aiError = error;
+    }
+  }
   const engine = aiResult?.engine || {};
-  const structured = aiResult?.structured_result || buildCompanyProfileStructuredFallback(profile, context);
+  const aiStructured = aiResult?.structured_result && typeof aiResult.structured_result === 'object'
+    ? aiResult.structured_result
+    : null;
+  const structured = aiStructured && Object.keys(aiStructured).length
+    ? aiStructured
+    : buildCompanyProfileStructuredFallback(profile, context);
   const fallbackUsed = !aiResult || aiResult?.ok === false || String(engine.model || '').toLowerCase() === 'backend_fallback';
   const trace = {
-    ai_engine_used: Boolean(aiResult),
+    ai_engine_used: !fallbackUsed,
     used_llm: engine.used_llm === true && !fallbackUsed,
     llm_provider: engine.llm_provider || null,
     selected_model: engine.selected_model || engine.model || null,
@@ -257,8 +272,14 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     fallback_used: fallbackUsed,
     ai_enrichment_failed: fallbackUsed,
     duration_ms: engine.duration_ms || aiResult?.metrics?.duration_ms || null,
+    timeout_stage: engine.timeout_stage || (aiError?.name === 'AbortError' ? 'backend_to_ai_engine' : null),
+    timeout_ms: engine.timeout_ms || aiError?.timeout_ms || null,
+    error_type: engine.error_type || aiError?.code || aiError?.name || null,
+    error_message: engine.error_message || (aiError?.message ? String(aiError.message).slice(0, 500) : null),
     request_id: requestId,
-    limitations: aiResult?.limitations || structured.limitations || [],
+    limitations: fallbackUsed
+      ? ['El análisis IA no se completó; se conserva contexto interno y se requiere reintento para enriquecimiento IA real.']
+      : (aiResult?.limitations || structured.limitations || []),
   };
 
   const result = await pool.query(
@@ -274,7 +295,7 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     [tenantId, JSON.stringify(structured), JSON.stringify(trace), userId]
   );
 
-  console.info('COMPANY PROFILE AI ANALYSIS OK:', {
+  console.info(fallbackUsed ? 'COMPANY PROFILE AI ANALYSIS COMPLETED WITH FALLBACK:' : 'COMPANY PROFILE AI ANALYSIS OK:', {
     request_id: requestId,
     tenant_id: tenantId,
     user_id: userId,
@@ -284,6 +305,9 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     used_web: trace.used_web,
     used_company_profile: true,
     fallback_used: trace.fallback_used,
+    ai_enrichment_failed: trace.ai_enrichment_failed,
+    timeout_stage: trace.timeout_stage,
+    timeout_ms: trace.timeout_ms,
     duration_ms: trace.duration_ms,
   });
 

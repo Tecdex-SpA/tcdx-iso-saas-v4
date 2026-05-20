@@ -29,6 +29,26 @@ class AiEngineClient {
     this.token = process.env.AI_INTERNAL_TOKEN || process.env.AI_ENGINE_TOKEN || process.env.AI_TOKEN || '';
   }
 
+  resolveReportTimeoutMs(modelMode = '', options = {}) {
+    const mode = String(modelMode || '').toLowerCase();
+    const configured = Number.parseInt(
+      String(
+        options.timeoutMs ||
+          (mode === 'deep'
+            ? (process.env.REPORT_DEEP_JOB_TIMEOUT_MS ||
+                process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS ||
+                process.env.AI_ENGINE_REQUEST_TIMEOUT_MS)
+            : (process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS ||
+                process.env.AI_ENGINE_REQUEST_TIMEOUT_MS)) ||
+          this.reportTimeout
+      ),
+      10
+    );
+    const fallback = mode === 'deep' ? 600000 : this.reportTimeout;
+    const timeoutMs = Number.isFinite(configured) && configured > 0 ? configured : fallback;
+    return mode === 'deep' ? Math.max(timeoutMs, 600000) : timeoutMs;
+  }
+
   async postJson(path, payload, options = {}) {
     const controller = new AbortController();
     const timeoutMs = Number.parseInt(String(options.timeoutMs || this.timeout), 10) || this.timeout;
@@ -126,16 +146,7 @@ class AiEngineClient {
         payload?.request_metadata?.model_mode ||
         ''
     ).toLowerCase();
-    const timeoutMs = Number.parseInt(
-      String(
-        options.timeoutMs ||
-          (modelMode === 'deep'
-            ? (process.env.REPORT_DEEP_JOB_TIMEOUT_MS || process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS)
-            : process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS) ||
-          this.reportTimeout
-      ),
-      10
-    ) || this.reportTimeout;
+    const timeoutMs = this.resolveReportTimeoutMs(modelMode, options);
 
     try {
       return await this.postJson('/api/ai/senior-auditor/analyze', payload, { timeoutMs });
@@ -217,6 +228,7 @@ class AiEngineClient {
       payload?.request_id ||
       null;
     const message = error?.message ? String(error.message).slice(0, 220) : 'ai-engine no disponible';
+    const timeoutMs = error?.timeout_ms || null;
 
     return {
       ok: false,
@@ -278,13 +290,21 @@ class AiEngineClient {
         prompt_version: 'fallback',
         context_version: payload?.context?.scope?.context_version || '',
         model: 'backend_fallback',
+        selected_model: 'backend_fallback',
         request_id: requestId,
         used_internal_context: true,
         used_rag: false,
         used_drive: false,
         used_web: false,
+        ai_engine_used: false,
         fallback_used: true,
         ai_enrichment_failed: true,
+        error_type: error?.code || error?.name || 'AI_ENGINE_UNAVAILABLE',
+        error_message: message,
+        timeout_stage: error?.name === 'AbortError' || error?.code === 'AI_ENGINE_TIMEOUT'
+          ? 'backend_to_ai_engine'
+          : null,
+        timeout_ms: timeoutMs,
       },
     };
   }

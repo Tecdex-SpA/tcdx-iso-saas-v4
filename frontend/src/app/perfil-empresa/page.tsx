@@ -191,6 +191,7 @@ export default function PerfilEmpresaPage() {
   const [lastUpdated, setLastUpdated] = useState('');
   const [aiSummary, setAiSummary] = useState<AiProfileSummary | null>(null);
   const [downloadUrl, setDownloadUrl] = useState('');
+  const [operationMessage, setOperationMessage] = useState('');
 
   const aiNarrative = useMemo(() => {
     return aiSummary?.executive_narrative || aiSummary?.summary || '';
@@ -259,9 +260,10 @@ export default function PerfilEmpresaPage() {
     loadProfile(authToken);
   }, [loadProfile]);
 
-  const saveProfile = async () => {
-    if (!token) return;
+  const saveProfile = async (): Promise<boolean> => {
+    if (!token) return false;
     setSaving(true);
+    setOperationMessage('');
     try {
       const res = await fetch(`${API_URL}/api/company-profile`, {
         method: 'PUT',
@@ -271,9 +273,11 @@ export default function PerfilEmpresaPage() {
       const json = await res.json();
       if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible guardar');
       setLastUpdated(json.data?.updated_at || '');
-      alert('Perfil empresa guardado.');
+      setOperationMessage('Perfil empresa guardado.');
+      return true;
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'No fue posible guardar perfil empresa');
+      setOperationMessage(error instanceof Error ? error.message : 'No fue posible guardar perfil empresa');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -281,8 +285,10 @@ export default function PerfilEmpresaPage() {
 
   const analyzeProfile = async () => {
     if (!token) return;
-    await saveProfile();
+    const saved = await saveProfile();
+    if (!saved) return;
     setAnalyzing(true);
+    setOperationMessage('Analizando perfil empresa con IA...');
     try {
       const res = await fetch(`${API_URL}/api/company-profile/analyze`, {
         method: 'POST',
@@ -292,17 +298,60 @@ export default function PerfilEmpresaPage() {
       const json = await res.json();
       if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible analizar');
       setAiSummary(json.data?.ai_profile_summary_json || null);
-      alert('Análisis IA del perfil empresa actualizado.');
+      setOperationMessage(json.data?.ai_profile_summary_json
+        ? 'Análisis IA del perfil empresa actualizado.'
+        : 'Análisis finalizado, pero no se recibió resumen IA persistido. Revisa la trazabilidad del backend.');
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'No fue posible analizar perfil empresa');
+      setOperationMessage(error instanceof Error ? error.message : 'No fue posible analizar perfil empresa');
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const downloadContextDocument = async (rawUrl = downloadUrl) => {
+    if (!token) {
+      setOperationMessage('Tu sesión no está disponible. Vuelve a iniciar sesión para descargar el documento.');
+      return;
+    }
+
+    const endpoint = rawUrl || '/api/company-profile/context-document/download';
+    setOperationMessage('Preparando descarga del contexto de la organización...');
+
+    try {
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok || !contentType.toLowerCase().includes('application/pdf')) {
+        let message = 'No fue posible descargar el documento de contexto.';
+        try {
+          const json = await res.json();
+          message = json?.error || json?.message || message;
+        } catch {
+          // La respuesta no fue JSON; mantenemos un mensaje seguro para el usuario.
+        }
+        throw new Error(message);
+      }
+
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = 'contexto-de-la-organizacion.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      setOperationMessage('Documento descargado correctamente.');
+    } catch (error) {
+      setOperationMessage(error instanceof Error ? error.message : 'No fue posible descargar el documento de contexto.');
     }
   };
 
   const exportDocument = async () => {
     if (!token) return;
     setExporting(true);
+    setOperationMessage('Generando contexto de la organización...');
     try {
       const res = await fetch(`${API_URL}/api/company-profile/export-context-document`, {
         method: 'POST',
@@ -310,10 +359,11 @@ export default function PerfilEmpresaPage() {
       });
       const json = await res.json();
       if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible exportar');
-      setDownloadUrl(json.data?.download_url || '/api/company-profile/context-document/download');
-      window.open(`${API_URL}${json.data?.download_url || '/api/company-profile/context-document/download'}`, '_blank');
+      const nextDownloadUrl = json.data?.download_url || '/api/company-profile/context-document/download';
+      setDownloadUrl(nextDownloadUrl);
+      await downloadContextDocument(nextDownloadUrl);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'No fue posible exportar el documento');
+      setOperationMessage(error instanceof Error ? error.message : 'No fue posible exportar el documento');
     } finally {
       setExporting(false);
     }
@@ -399,6 +449,12 @@ export default function PerfilEmpresaPage() {
                 </section>
               )}
 
+              {operationMessage && (
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-700 shadow-sm">
+                  {operationMessage}
+                </section>
+              )}
+
               <div className="sticky bottom-4 z-20 flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
                 <button onClick={saveProfile} disabled={saving} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 disabled:opacity-60">
                   {saving ? 'Guardando...' : 'Guardar perfil'}
@@ -410,9 +466,9 @@ export default function PerfilEmpresaPage() {
                   {exporting ? 'Exportando...' : 'Exportar contexto de la organización'}
                 </button>
                 {downloadUrl && (
-                  <a href={`${API_URL}${downloadUrl}`} target="_blank" className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                  <button type="button" onClick={() => downloadContextDocument(downloadUrl)} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
                     Descargar último PDF
-                  </a>
+                  </button>
                 )}
               </div>
             </>
