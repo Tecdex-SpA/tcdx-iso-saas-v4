@@ -1,0 +1,424 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import AppLayout from '@/components/AppLayout';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
+
+type ProfileForm = {
+  company_name: string;
+  legal_name: string;
+  tax_id: string;
+  industry: string;
+  subindustry: string;
+  business_model: string;
+  company_size: string;
+  employee_count_range: string;
+  countries_locations: string;
+  main_products_services: string;
+  main_customer_segments: string;
+  critical_customers: string;
+  critical_suppliers: string;
+  active_standards: string;
+  target_standards: string;
+  certification_objective: string;
+  certification_deadline: string;
+  audit_scope: string;
+  excluded_scope: string;
+  current_maturity_level: string;
+  previous_audit_results: string;
+  critical_processes: string;
+  critical_assets: string;
+  key_systems: string;
+  key_data_types: string;
+  operational_dependencies: string;
+  outsourced_processes: string;
+  regulatory_constraints: string;
+  strategic_objectives: string;
+  quality_objectives: string;
+  security_objectives: string;
+  compliance_objectives: string;
+  risk_appetite: string;
+  improvement_priorities: string;
+  pain_points: string;
+  known_weaknesses: string;
+  responsible_roles: string;
+  management_review_cadence: string;
+  internal_audit_cadence: string;
+  evidence_owners: string;
+  approval_workflows: string;
+  preferred_language: string;
+  executive_tone: string;
+  industry_benchmark_notes: string;
+};
+
+type AiProfileSummary = {
+  executive_narrative?: string;
+  summary?: string;
+};
+
+const emptyForm: ProfileForm = {
+  company_name: '',
+  legal_name: '',
+  tax_id: '',
+  industry: '',
+  subindustry: '',
+  business_model: '',
+  company_size: '',
+  employee_count_range: '',
+  countries_locations: '',
+  main_products_services: '',
+  main_customer_segments: '',
+  critical_customers: '',
+  critical_suppliers: '',
+  active_standards: '',
+  target_standards: '',
+  certification_objective: '',
+  certification_deadline: '',
+  audit_scope: '',
+  excluded_scope: '',
+  current_maturity_level: '',
+  previous_audit_results: '',
+  critical_processes: '',
+  critical_assets: '',
+  key_systems: '',
+  key_data_types: '',
+  operational_dependencies: '',
+  outsourced_processes: '',
+  regulatory_constraints: '',
+  strategic_objectives: '',
+  quality_objectives: '',
+  security_objectives: '',
+  compliance_objectives: '',
+  risk_appetite: '',
+  improvement_priorities: '',
+  pain_points: '',
+  known_weaknesses: '',
+  responsible_roles: '',
+  management_review_cadence: '',
+  internal_audit_cadence: '',
+  evidence_owners: '',
+  approval_workflows: '',
+  preferred_language: 'es',
+  executive_tone: 'ejecutivo_senior',
+  industry_benchmark_notes: '',
+};
+
+const listFields = new Set([
+  'countries_locations',
+  'main_products_services',
+  'main_customer_segments',
+  'critical_customers',
+  'critical_suppliers',
+  'active_standards',
+  'target_standards',
+  'critical_processes',
+  'critical_assets',
+  'key_systems',
+  'key_data_types',
+  'operational_dependencies',
+  'outsourced_processes',
+  'regulatory_constraints',
+  'strategic_objectives',
+  'quality_objectives',
+  'security_objectives',
+  'compliance_objectives',
+  'improvement_priorities',
+  'pain_points',
+  'known_weaknesses',
+  'responsible_roles',
+  'evidence_owners',
+  'approval_workflows',
+]);
+
+function toLines(value: unknown): string {
+  if (Array.isArray(value)) return value.join('\n');
+  return String(value || '');
+}
+
+function parseList(value: string): string[] {
+  return value
+    .split(/\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function Card({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-[0.18em] text-slate-500">{title}</h2>
+      <div className="grid gap-4 md:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  name,
+  value,
+  onChange,
+  textarea = false,
+}: {
+  label: string;
+  name: keyof ProfileForm;
+  value: string;
+  onChange: (name: keyof ProfileForm, value: string) => void;
+  textarea?: boolean;
+}) {
+  const className = 'w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100';
+  return (
+    <label className={textarea ? 'md:col-span-2' : ''}>
+      <span className="mb-1 block text-xs font-semibold text-slate-600">{label}</span>
+      {textarea ? (
+        <textarea className={className} rows={4} value={value} onChange={(event) => onChange(name, event.target.value)} />
+      ) : (
+        <input className={className} value={value} onChange={(event) => onChange(name, event.target.value)} />
+      )}
+    </label>
+  );
+}
+
+export default function PerfilEmpresaPage() {
+  const [token, setToken] = useState('');
+  const [form, setForm] = useState<ProfileForm>(emptyForm);
+  const [allowWebResearch, setAllowWebResearch] = useState(false);
+  const [allowDocumentContext, setAllowDocumentContext] = useState(true);
+  const [allowAiRecommendations, setAllowAiRecommendations] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState('');
+  const [aiSummary, setAiSummary] = useState<AiProfileSummary | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState('');
+
+  const aiNarrative = useMemo(() => {
+    return aiSummary?.executive_narrative || aiSummary?.summary || '';
+  }, [aiSummary]);
+
+  const onChange = (name: keyof ProfileForm, value: string) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const hydrateForm = useCallback((profileJson: Record<string, unknown>) => {
+    const next = { ...emptyForm };
+    (Object.keys(next) as Array<keyof ProfileForm>).forEach((key) => {
+      next[key] = listFields.has(key) ? toLines(profileJson[key]) : String(profileJson[key] || next[key] || '');
+    });
+    setForm(next);
+  }, []);
+
+  const buildPayload = () => {
+    const profileJson: Record<string, string | string[]> = {};
+    (Object.keys(form) as Array<keyof ProfileForm>).forEach((key) => {
+      profileJson[key] = listFields.has(key) ? parseList(form[key]) : form[key];
+    });
+    return {
+      profile_json: profileJson,
+      industry: form.industry,
+      subindustry: form.subindustry,
+      company_size: form.company_size,
+      maturity_level: form.current_maturity_level,
+      risk_appetite: form.risk_appetite,
+      allow_web_research: allowWebResearch,
+      allow_document_context: allowDocumentContext,
+      allow_ai_recommendations: allowAiRecommendations,
+    };
+  };
+
+  const loadProfile = useCallback(async (authToken: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/company-profile`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const json = await res.json();
+      if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible cargar perfil empresa');
+      const data = json.data || {};
+      hydrateForm(data.profile_json || {});
+      setAllowWebResearch(data.allow_web_research === true);
+      setAllowDocumentContext(data.allow_document_context !== false);
+      setAllowAiRecommendations(data.allow_ai_recommendations !== false);
+      setLastUpdated(data.updated_at || '');
+      setAiSummary(data.ai_profile_summary_json || null);
+      setDownloadUrl(data.context_document_url ? '/api/company-profile/context-document/download' : '');
+    } catch (error) {
+      console.error('COMPANY PROFILE LOAD ERROR:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [hydrateForm]);
+
+  useEffect(() => {
+    const authToken = localStorage.getItem('token') || '';
+    if (!authToken) {
+      window.location.href = '/login';
+      return;
+    }
+    setToken(authToken);
+    loadProfile(authToken);
+  }, [loadProfile]);
+
+  const saveProfile = async () => {
+    if (!token) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/company-profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(buildPayload()),
+      });
+      const json = await res.json();
+      if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible guardar');
+      setLastUpdated(json.data?.updated_at || '');
+      alert('Perfil empresa guardado.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'No fue posible guardar perfil empresa');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const analyzeProfile = async () => {
+    if (!token) return;
+    await saveProfile();
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`${API_URL}/api/company-profile/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ model_mode: 'balanced' }),
+      });
+      const json = await res.json();
+      if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible analizar');
+      setAiSummary(json.data?.ai_profile_summary_json || null);
+      alert('Análisis IA del perfil empresa actualizado.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'No fue posible analizar perfil empresa');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const exportDocument = async () => {
+    if (!token) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/company-profile/export-context-document`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible exportar');
+      setDownloadUrl(json.data?.download_url || '/api/company-profile/context-document/download');
+      window.open(`${API_URL}${json.data?.download_url || '/api/company-profile/context-document/download'}`, '_blank');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'No fue posible exportar el documento');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <AppLayout>
+      <div className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 md:px-8">
+        <div className="mx-auto max-w-7xl space-y-6">
+          <header className="rounded-3xl bg-[#071B3A] p-6 text-white shadow-xl">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-200">Usuarios / Perfil empresa</p>
+            <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h1 className="text-3xl font-black">Perfil empresa</h1>
+                <p className="mt-2 max-w-3xl text-sm text-blue-100">
+                  Contexto operativo del tenant para reportes, IA Auditor, riesgos, evidencias, KPIs y documentos ISO.
+                </p>
+              </div>
+              <div className="text-xs text-blue-100">
+                {lastUpdated ? `Última actualización: ${new Date(lastUpdated).toLocaleString('es-CL')}` : 'Sin actualización registrada'}
+              </div>
+            </div>
+          </header>
+
+          {loading ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Cargando perfil empresa...</div>
+          ) : (
+            <>
+              <Card title="General">
+                <Field label="Nombre comercial" name="company_name" value={form.company_name} onChange={onChange} />
+                <Field label="Razón social" name="legal_name" value={form.legal_name} onChange={onChange} />
+                <Field label="RUT / Tax ID" name="tax_id" value={form.tax_id} onChange={onChange} />
+                <Field label="Industria" name="industry" value={form.industry} onChange={onChange} />
+                <Field label="Subindustria" name="subindustry" value={form.subindustry} onChange={onChange} />
+                <Field label="Tamaño empresa" name="company_size" value={form.company_size} onChange={onChange} />
+                <Field label="Modelo de negocio" name="business_model" value={form.business_model} onChange={onChange} textarea />
+                <Field label="Productos/servicios principales" name="main_products_services" value={form.main_products_services} onChange={onChange} textarea />
+              </Card>
+
+              <Card title="Contexto ISO">
+                <Field label="Normas activas" name="active_standards" value={form.active_standards} onChange={onChange} textarea />
+                <Field label="Normas objetivo" name="target_standards" value={form.target_standards} onChange={onChange} textarea />
+                <Field label="Objetivo de certificación" name="certification_objective" value={form.certification_objective} onChange={onChange} textarea />
+                <Field label="Alcance auditoría" name="audit_scope" value={form.audit_scope} onChange={onChange} textarea />
+                <Field label="Exclusiones" name="excluded_scope" value={form.excluded_scope} onChange={onChange} textarea />
+                <Field label="Nivel de madurez actual" name="current_maturity_level" value={form.current_maturity_level} onChange={onChange} />
+              </Card>
+
+              <Card title="Operación y estrategia">
+                <Field label="Procesos críticos" name="critical_processes" value={form.critical_processes} onChange={onChange} textarea />
+                <Field label="Activos/sistemas críticos" name="critical_assets" value={form.critical_assets} onChange={onChange} textarea />
+                <Field label="Dependencias operacionales" name="operational_dependencies" value={form.operational_dependencies} onChange={onChange} textarea />
+                <Field label="Restricciones regulatorias" name="regulatory_constraints" value={form.regulatory_constraints} onChange={onChange} textarea />
+                <Field label="Objetivos estratégicos" name="strategic_objectives" value={form.strategic_objectives} onChange={onChange} textarea />
+                <Field label="Dolores / debilidades conocidas" name="known_weaknesses" value={form.known_weaknesses} onChange={onChange} textarea />
+              </Card>
+
+              <Card title="Gobernanza e IA">
+                <Field label="Roles responsables" name="responsible_roles" value={form.responsible_roles} onChange={onChange} textarea />
+                <Field label="Cadencia revisión gerencial" name="management_review_cadence" value={form.management_review_cadence} onChange={onChange} />
+                <Field label="Cadencia auditoría interna" name="internal_audit_cadence" value={form.internal_audit_cadence} onChange={onChange} />
+                <Field label="Dueños de evidencia" name="evidence_owners" value={form.evidence_owners} onChange={onChange} textarea />
+                <div className="md:col-span-2 grid gap-3 md:grid-cols-3">
+                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <input type="checkbox" checked={allowWebResearch} onChange={(event) => setAllowWebResearch(event.target.checked)} />
+                    Web research controlado
+                  </label>
+                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <input type="checkbox" checked={allowDocumentContext} onChange={(event) => setAllowDocumentContext(event.target.checked)} />
+                    Contexto documental
+                  </label>
+                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <input type="checkbox" checked={allowAiRecommendations} onChange={(event) => setAllowAiRecommendations(event.target.checked)} />
+                    Recomendaciones IA
+                  </label>
+                </div>
+              </Card>
+
+              {aiNarrative && (
+                <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                  <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-blue-700">Lectura IA del perfil</h2>
+                  <p className="mt-3 text-sm leading-6 text-slate-800">{aiNarrative}</p>
+                </section>
+              )}
+
+              <div className="sticky bottom-4 z-20 flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
+                <button onClick={saveProfile} disabled={saving} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 disabled:opacity-60">
+                  {saving ? 'Guardando...' : 'Guardar perfil'}
+                </button>
+                <button onClick={analyzeProfile} disabled={analyzing || saving} className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60">
+                  {analyzing ? 'Analizando...' : 'Analizar con IA'}
+                </button>
+                <button onClick={exportDocument} disabled={exporting} className="rounded-xl border border-slate-200 bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60">
+                  {exporting ? 'Exportando...' : 'Exportar contexto de la organización'}
+                </button>
+                {downloadUrl && (
+                  <a href={`${API_URL}${downloadUrl}`} target="_blank" className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                    Descargar último PDF
+                  </a>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </AppLayout>
+  );
+}

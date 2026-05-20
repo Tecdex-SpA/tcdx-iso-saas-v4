@@ -60,6 +60,7 @@ const aiExternalLookupRoutes = require('./routes/ai-external-lookup.routes');
 const aiTracesRoutes = require('./routes/ai-traces.routes');
 const quotesRoutes = require('./routes/quotes.routes');
 const objectivesRoutes = require('./routes/objectives.routes');
+const companyProfileRoutes = require('./routes/company-profile.routes');
 const { aiLocaleResponseGuard } = require('./middleware/aiLocaleResponseGuard');
 
 const app = express();
@@ -244,6 +245,7 @@ app.use('/api/audit-preparation', auditPreparationRoutes);
 app.use('/api/assets', assetsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/tenants', tenantsRoutes);
+app.use('/api/company-profile', companyProfileRoutes);
 app.use('/api/tenant-standards', tenantStandardsRoutes);
 app.use('/api/soa', soaRoutes);
 app.use('/api/action-plans', actionPlansRoutes);

@@ -21,12 +21,13 @@ class Settings:
     AI_INTERNAL_TOKEN = os.getenv("AI_INTERNAL_TOKEN") or os.getenv("AI_TOKEN") or ""
     OLLAMA_MODEL_FAST = os.getenv("OLLAMA_MODEL_FAST", "")
     OLLAMA_MODEL_AUDITOR = os.getenv("OLLAMA_MODEL_AUDITOR", "")
+    OLLAMA_MODEL_REPORTS = os.getenv("OLLAMA_MODEL_REPORTS", "")
     OLLAMA_MODEL_DEEP = os.getenv("OLLAMA_MODEL_DEEP", "")
     OLLAMA_MODEL_FALLBACK = os.getenv("OLLAMA_MODEL_FALLBACK", "")
     AI_AUDITOR_MODEL_MODE = os.getenv("AI_AUDITOR_MODEL_MODE", "fast")
     AI_AUDITOR_ASYNC_THRESHOLD_MS = int(os.getenv("AI_AUDITOR_ASYNC_THRESHOLD_MS", "30000"))
     AI_AUDITOR_DEEP_ASYNC_REQUIRED = os.getenv("AI_AUDITOR_DEEP_ASYNC_REQUIRED", "true").lower() != "false"
     AI_ENGINE_PUBLIC_DOCS = os.getenv("AI_ENGINE_PUBLIC_DOCS", "false").lower() == "true"
-    AI_ENGINE_LLM_TIMEOUT_MS = int(os.getenv("AI_ENGINE_LLM_TIMEOUT_MS", "60000"))
+    AI_ENGINE_LLM_TIMEOUT_MS = int(os.getenv("AI_ENGINE_LLM_TIMEOUT_MS", os.getenv("OLLAMA_TIMEOUT_MS", "60000")))
 
 settings = Settings()

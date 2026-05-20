@@ -107,6 +107,32 @@ const basePdfStyles = `
   }
   .kpi-card strong { display: block; color: #0B5FFF; font-size: 17px; margin-top: 3px; line-height: 1.1; }
   .section { margin-top: 10px; }
+  .pdfDocument { background: #f8fafc; }
+  .heroCompact { padding: 17px 19px; }
+  .heroContent { display: grid; grid-template-columns: 1.3fr .9fr; gap: 16px; align-items: start; }
+  .heroLead { margin-top: 8px; max-width: 120mm; color: #dbeafe; font-size: 10px; }
+  .heroMeta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+  .eyebrow { color: #93c5fd; font-size: 8px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+  .miniField { border: 1px solid rgba(255,255,255,.2); border-radius: 11px; padding: 7px; background: rgba(255,255,255,.08); }
+  .miniField span { display: block; color: #bfdbfe; font-size: 7px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+  .miniField strong { display: block; margin-top: 3px; color: #fff; font-size: 8px; line-height: 1.2; }
+  .callout { border-left: 4px solid #0B5FFF; border-radius: 12px; background: #fff; padding: 12px; color: #1f2937; font-size: 10px; }
+  .kpiGrid { display: grid; gap: 8px; margin-top: 9px; }
+  .kpiGrid.four { grid-template-columns: repeat(4, 1fr); }
+  .kpiCard { border: 1px solid #e5e7eb; border-radius: 14px; background: #fff; padding: 10px; }
+  .kpiCard span { display: block; color: #64748b; font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+  .kpiCard strong { display: block; color: #0B5FFF; font-size: 11px; margin-top: 4px; line-height: 1.2; }
+  .gridTwo { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .gridFour { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .cleanList { margin: 0; padding-left: 14px; }
+  .cleanList li { margin-bottom: 4px; }
+  .tableLike { border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; background: #fff; }
+  .tableHeader,
+  .tableRow { display: grid; grid-template-columns: 32mm 1fr; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
+  .tableHeader { background: #eaf2ff; color: #0f172a; font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+  .tableRow:last-child { border-bottom: 0; }
+  .tableRow span:first-child { color: #334155; font-weight: 800; }
+  .traceBox { border-top: 1px solid #dbeafe; padding-top: 8px; }
   .section-title {
     display: flex;
     align-items: center;

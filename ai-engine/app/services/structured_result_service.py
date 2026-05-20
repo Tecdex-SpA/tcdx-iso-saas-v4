@@ -51,6 +51,21 @@ def build_empty_structured_result() -> dict:
         "evidence_requests": [],
         "audit_questions": [],
         "management_focus": [],
+        "normalized_company_profile": {},
+        "industry_assumptions": [],
+        "iso_scope_recommendations": "",
+        "proposed_objectives": [],
+        "proposed_kpis": [],
+        "suggested_controls": [],
+        "typical_industry_risks": [],
+        "suggested_evidence_baseline": [],
+        "maturity_baseline": "",
+        "audit_focus_areas": [],
+        "corrective_action_themes": [],
+        "improvement_roadmap": [],
+        "web_research_summary": "",
+        "web_sources": [],
+        "document_context_summary": "",
         "auditor_questions": [],
         "documents_to_request": [],
         "web_context_used": [],
@@ -222,6 +237,21 @@ def normalize_ai_structured_result(raw: Any, defaults: Optional[dict] = None) ->
       result["evidence_requests"] = [_sanitize_evidence_request(item) for item in _list(data.get("evidence_requests"))]
       result["audit_questions"] = [_sanitize_audit_question(item) for item in _list(data.get("audit_questions"))]
       result["management_focus"] = [_string(value) for value in _list(data.get("management_focus"))]
+      result["normalized_company_profile"] = data.get("normalized_company_profile") if isinstance(data.get("normalized_company_profile"), dict) else result.get("normalized_company_profile", {})
+      result["industry_assumptions"] = [_string(value) for value in _list(data.get("industry_assumptions"))]
+      result["iso_scope_recommendations"] = _string(data.get("iso_scope_recommendations") or result.get("iso_scope_recommendations"))
+      result["proposed_objectives"] = [_string(value) for value in _list(data.get("proposed_objectives"))]
+      result["proposed_kpis"] = [_string(value) for value in _list(data.get("proposed_kpis"))]
+      result["suggested_controls"] = [_string(value) for value in _list(data.get("suggested_controls"))]
+      result["typical_industry_risks"] = [_string(value) for value in _list(data.get("typical_industry_risks"))]
+      result["suggested_evidence_baseline"] = [_string(value) for value in _list(data.get("suggested_evidence_baseline"))]
+      result["maturity_baseline"] = _string(data.get("maturity_baseline") or result.get("maturity_baseline"))
+      result["audit_focus_areas"] = [_string(value) for value in _list(data.get("audit_focus_areas"))]
+      result["corrective_action_themes"] = [_string(value) for value in _list(data.get("corrective_action_themes"))]
+      result["improvement_roadmap"] = [_string(value) for value in _list(data.get("improvement_roadmap"))]
+      result["web_research_summary"] = _string(data.get("web_research_summary") or result.get("web_research_summary"))
+      result["web_sources"] = data.get("web_sources") if isinstance(data.get("web_sources"), list) else []
+      result["document_context_summary"] = _string(data.get("document_context_summary") or result.get("document_context_summary"))
       result["auditor_questions"] = [_string(value) for value in _list(data.get("auditor_questions"))]
       result["documents_to_request"] = [_string(value) for value in _list(data.get("documents_to_request"))]
       result["web_context_used"] = [_string(value) for value in _list(data.get("web_context_used"))]

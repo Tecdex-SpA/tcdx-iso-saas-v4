@@ -5,11 +5,24 @@ class AiEngineClient {
         process.env.AI_ENGINE_BASE_URL ||
         'http://localhost:8001'
     ).replace(/\/+$/, '');
-    this.timeout = Number.parseInt(process.env.AI_ENGINE_TIMEOUT_MS || '120000', 10) || 120000;
+    this.timeout = Number.parseInt(
+      process.env.AI_ENGINE_REQUEST_TIMEOUT_MS ||
+        process.env.AI_ENGINE_TIMEOUT_MS ||
+        '120000',
+      10
+    ) || 120000;
     this.auditorTimeout = Number.parseInt(
       process.env.AI_AUDITOR_TIMEOUT_MS ||
-        process.env.AI_ENGINE_TIMEOUT_MS ||
         process.env.AI_AUDITOR_ENGINE_TIMEOUT_MS ||
+        process.env.AI_ENGINE_REQUEST_TIMEOUT_MS ||
+        process.env.AI_ENGINE_TIMEOUT_MS ||
+        String(this.timeout),
+      10
+    ) || this.timeout;
+    this.reportTimeout = Number.parseInt(
+      process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS ||
+        process.env.AI_ENGINE_REQUEST_TIMEOUT_MS ||
+        process.env.AI_ENGINE_TIMEOUT_MS ||
         String(this.timeout),
       10
     ) || this.timeout;
@@ -59,7 +72,12 @@ class AiEngineClient {
       return json;
     } catch (error) {
       if (error?.name === 'AbortError') {
-        error.message = `ai-engine timeout after ${timeoutMs}ms`;
+        const timeoutError = new Error(`ai-engine timeout after ${timeoutMs}ms`);
+        timeoutError.name = 'AbortError';
+        timeoutError.code = 'AI_ENGINE_TIMEOUT';
+        timeoutError.timeout_ms = timeoutMs;
+        timeoutError.cause = error;
+        throw timeoutError;
       }
       throw error;
     } finally {
@@ -89,6 +107,42 @@ class AiEngineClient {
           return await this.postJson('/api/ai/senior-auditor/analyze', payload, {
             timeoutMs: this.auditorTimeout,
           });
+        } catch (retryError) {
+          return this.buildFallback(payload, retryError);
+        }
+      }
+
+      return this.buildFallback(payload, error);
+    }
+  }
+
+  async analyzeReport(payload, options = {}) {
+    if (!this.baseUrl || !this.token) {
+      return this.buildFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
+    }
+
+    const modelMode = String(
+      payload?.options?.model_mode ||
+        payload?.request_metadata?.model_mode ||
+        ''
+    ).toLowerCase();
+    const timeoutMs = Number.parseInt(
+      String(
+        options.timeoutMs ||
+          (modelMode === 'deep'
+            ? (process.env.REPORT_DEEP_JOB_TIMEOUT_MS || process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS)
+            : process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS) ||
+          this.reportTimeout
+      ),
+      10
+    ) || this.reportTimeout;
+
+    try {
+      return await this.postJson('/api/ai/senior-auditor/analyze', payload, { timeoutMs });
+    } catch (error) {
+      if (this.isNetworkError(error)) {
+        try {
+          return await this.postJson('/api/ai/senior-auditor/analyze', payload, { timeoutMs });
         } catch (retryError) {
           return this.buildFallback(payload, retryError);
         }
@@ -229,6 +283,8 @@ class AiEngineClient {
         used_rag: false,
         used_drive: false,
         used_web: false,
+        fallback_used: true,
+        ai_enrichment_failed: true,
       },
     };
   }
