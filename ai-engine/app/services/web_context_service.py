@@ -27,6 +27,20 @@ TOPIC_QUERIES = {
     "incident_management": "incident response evidence lessons learned best practices",
 }
 
+TRUSTED_WEB_DOMAINS = {
+    "iso.org",
+    "nist.gov",
+    "cisa.gov",
+    "ncsc.gov.uk",
+    "enisa.europa.eu",
+    "nqa.com",
+    "bsigroup.com",
+    "tuvsud.com",
+    "dnv.com",
+    "sgs.com",
+    "lrqa.com",
+}
+
 _CACHE: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
 
 
@@ -284,6 +298,13 @@ def _queries_for_payload(payload: Dict[str, Any]) -> List[str]:
     topics = payload.get("web_context_topics") or []
     queries = []
 
+    for key in ["query", "search_query", "web_query"]:
+        if payload.get(key):
+            queries.append(str(payload.get(key)))
+
+    if isinstance(payload.get("queries"), list):
+        queries.extend([str(item) for item in payload.get("queries") if item])
+
     for topic in topics:
         query = TOPIC_QUERIES.get(str(topic).strip())
         if query:
@@ -292,6 +313,17 @@ def _queries_for_payload(payload: Dict[str, Any]) -> List[str]:
     requested_output = str(payload.get("requested_output") or "").strip().lower()
     if not queries and requested_output in {"report", "audit_preparation", "global_analysis"}:
         queries.append(TOPIC_QUERIES["iso_best_practices"])
+
+    if not queries:
+        industry = str(payload.get("industry") or payload.get("subindustry") or "").strip()
+        title = str(payload.get("title") or payload.get("description") or payload.get("question") or "").strip()
+        standards = payload.get("standards") or payload.get("active_standards") or []
+        if isinstance(standards, list):
+            standards_text = " ".join([str(item) for item in standards[:3]])
+        else:
+            standards_text = str(standards or "")
+        if industry or title or standards_text:
+            queries.append(f"{industry} {standards_text} ISO audit risk evidence best practices {title}".strip())
 
     seen = set()
     deduped = []
@@ -304,14 +336,51 @@ def _queries_for_payload(payload: Dict[str, Any]) -> List[str]:
     return deduped
 
 
+def _web_flag_enabled(payload: Dict[str, Any]) -> bool:
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    metadata = payload.get("request_metadata") if isinstance(payload.get("request_metadata"), dict) else {}
+    company_profile = payload.get("company_profile") if isinstance(payload.get("company_profile"), dict) else {}
+    profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
+    candidates = [
+        payload.get("allow_web_context"),
+        payload.get("use_web"),
+        payload.get("allow_web_research"),
+        options.get("use_web"),
+        metadata.get("use_web"),
+        company_profile.get("allow_web_research"),
+        profile.get("allow_web_research"),
+    ]
+    return any(str(value).strip().lower() in {"1", "true", "yes", "si", "sí", "on"} or value is True for value in candidates)
+
+
+def _domain_for(url: str) -> str:
+    try:
+        return urllib.parse.urlparse(url or "").netloc.lower().replace("www.", "")
+    except Exception:
+        return ""
+
+
+def _classify_source(item: Dict[str, Any]) -> str:
+    domain = _domain_for(str(item.get("url") or ""))
+    if any(domain == trusted or domain.endswith(f".{trusted}") for trusted in TRUSTED_WEB_DOMAINS):
+        return "trusted"
+    title = str(item.get("title") or "").lower()
+    summary = str(item.get("summary") or item.get("description") or "").lower()
+    text = f"{title} {summary}"
+    if any(term in text for term in ["iso", "audit", "risk", "evidence", "management system", "certification"]):
+        return "usable_context"
+    return "rejected"
+
+
 def build_external_context(payload: Dict[str, Any]) -> Dict[str, Any]:
     settings = _web_context_settings()
 
-    if not bool(payload.get("allow_web_context", False)):
+    if not _web_flag_enabled(payload):
         return {
             "used": False,
             "provider": "brave",
             "reason": "El payload no habilito contexto externo para este analisis.",
+            "executed_web_search": False,
         }
 
     if not settings["enabled"]:
@@ -366,6 +435,9 @@ def build_external_context(payload: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     sources = []
+    trusted_sources = []
+    usable_sources = []
+    rejected_sources = []
     failed_queries = []
     seen_urls = set()
 
@@ -380,7 +452,15 @@ def build_external_context(payload: Dict[str, Any]) -> Dict[str, Any]:
             if not url or url in seen_urls:
                 continue
             seen_urls.add(url)
-            sources.append(item)
+            classified = {**item, "domain": _domain_for(url), "classification": _classify_source(item)}
+            if classified["classification"] == "trusted":
+                trusted_sources.append(classified)
+                sources.append(classified)
+            elif classified["classification"] == "usable_context":
+                usable_sources.append(classified)
+                sources.append(classified)
+            else:
+                rejected_sources.append(classified)
 
     if not sources:
         return {
@@ -390,13 +470,29 @@ def build_external_context(payload: Dict[str, Any]) -> Dict[str, Any]:
             "queries": safe_queries,
             "limitations": limitations,
             "failed_queries": failed_queries,
+            "executed_web_search": True,
+            "raw_results_count": 0,
+            "trusted_results_count": 0,
+            "usable_context_count": 0,
+            "rejected_results_count": len(rejected_sources),
         }
+
+    if not trusted_sources and usable_sources:
+        limitations.append("Referencias externas usadas como apoyo contextual, no como fuente normativa oficial.")
 
     return {
         "used": True,
         "provider": "brave",
+        "executed_web_search": True,
         "purpose": "Complementar recomendaciones con buenas practicas publicas actuales.",
         "queries": safe_queries,
         "sources": sources,
+        "trusted_sources": trusted_sources,
+        "usable_context_sources": usable_sources,
+        "raw_results_count": len(sources) + len(rejected_sources),
+        "trusted_results_count": len(trusted_sources),
+        "usable_context_count": len(usable_sources),
+        "rejected_results_count": len(rejected_sources),
         "limitations": limitations,
+        "quota": {"provider": "brave", "max_queries": settings["max_queries"], "max_results": settings["max_results"]},
     }

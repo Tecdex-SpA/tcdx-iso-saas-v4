@@ -59,6 +59,12 @@ class AiEngineClient {
       null;
 
     try {
+      console.info('AI ENGINE CLIENT REQUEST START:', {
+        request_id: requestId,
+        endpoint: path,
+        model_mode: payload?.options?.model_mode || payload?.model_mode || payload?.request_metadata?.model_mode || null,
+        timeout_ms: timeoutMs,
+      });
       const response = await fetch(`${this.baseUrl}${path}`, {
         method: 'POST',
         headers: {
@@ -81,14 +87,30 @@ class AiEngineClient {
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 180);
-        throw new Error(`ai-engine JSON inválido o respuesta intermedia no JSON: ${preview}`);
+        const invalidJsonError = new Error(`ai-engine JSON inválido o respuesta intermedia no JSON: ${preview}`);
+        invalidJsonError.code = 'AI_ENGINE_NON_JSON_RESPONSE';
+        invalidJsonError.path = path;
+        invalidJsonError.status = response.status;
+        invalidJsonError.response_preview = preview;
+        throw invalidJsonError;
       }
 
       if (!response.ok) {
         const detail = json?.detail || json?.error || response.statusText;
-        throw new Error(`ai-engine HTTP ${response.status}: ${detail}`);
+        const httpError = new Error(`ai-engine HTTP ${response.status}: ${detail}`);
+        httpError.code = response.status === 404 ? 'AI_ENGINE_ENDPOINT_NOT_FOUND' : 'AI_ENGINE_HTTP_ERROR';
+        httpError.path = path;
+        httpError.status = response.status;
+        httpError.response_preview = typeof detail === 'string' ? detail.slice(0, 300) : JSON.stringify(detail).slice(0, 300);
+        throw httpError;
       }
 
+      console.info('AI ENGINE CLIENT REQUEST OK:', {
+        request_id: requestId,
+        endpoint: path,
+        status: response.status,
+        timeout_ms: timeoutMs,
+      });
       return json;
     } catch (error) {
       if (error?.name === 'AbortError') {
@@ -97,8 +119,22 @@ class AiEngineClient {
         timeoutError.code = 'AI_ENGINE_TIMEOUT';
         timeoutError.timeout_ms = timeoutMs;
         timeoutError.cause = error;
+        console.error('AI ENGINE CLIENT REQUEST ERROR:', {
+          request_id: requestId,
+          endpoint: path,
+          error_type: timeoutError.code,
+          timeout_ms: timeoutMs,
+        });
         throw timeoutError;
       }
+      console.error('AI ENGINE CLIENT REQUEST ERROR:', {
+        request_id: requestId,
+        endpoint: path,
+        error_type: error?.code || error?.name || 'AI_ENGINE_ERROR',
+        status: error?.status || null,
+        response_preview: error?.response_preview || null,
+        timeout_ms: timeoutMs,
+      });
       throw error;
     } finally {
       clearTimeout(timeout);
@@ -106,9 +142,13 @@ class AiEngineClient {
   }
 
   isNetworkError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    const causeCode = error?.cause?.code || error?.cause?.name || '';
     return (
       error?.name === 'AbortError' ||
-      ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND'].includes(error?.code)
+      ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'].includes(error?.code) ||
+      ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'].includes(causeCode) ||
+      message.includes('fetch failed')
     );
   }
 
@@ -149,11 +189,39 @@ class AiEngineClient {
     const timeoutMs = this.resolveReportTimeoutMs(modelMode, options);
 
     try {
-      return await this.postJson('/api/ai/senior-auditor/analyze', payload, { timeoutMs });
+      return await this.postJson('/api/ai/report-ai-enrichment', payload, { timeoutMs });
     } catch (error) {
       if (this.isNetworkError(error)) {
         try {
-          return await this.postJson('/api/ai/senior-auditor/analyze', payload, { timeoutMs });
+          return await this.postJson('/api/ai/report-ai-enrichment', payload, { timeoutMs });
+        } catch (retryError) {
+          return this.buildFallback(payload, retryError);
+        }
+      }
+
+      return this.buildFallback(payload, error);
+    }
+  }
+
+  async analyzeCompanyProfile(payload, options = {}) {
+    if (!this.baseUrl || !this.token) {
+      return this.buildFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
+    }
+
+    const modelMode = String(
+      payload?.model_mode ||
+        payload?.options?.model_mode ||
+        payload?.request_metadata?.model_mode ||
+        'balanced'
+    ).toLowerCase();
+    const timeoutMs = this.resolveReportTimeoutMs(modelMode, options);
+
+    try {
+      return await this.postJson('/api/ai/company-profile/analyze', payload, { timeoutMs });
+    } catch (error) {
+      if (this.isNetworkError(error)) {
+        try {
+          return await this.postJson('/api/ai/company-profile/analyze', payload, { timeoutMs });
         } catch (retryError) {
           return this.buildFallback(payload, retryError);
         }
@@ -301,6 +369,10 @@ class AiEngineClient {
         ai_enrichment_failed: true,
         error_type: error?.code || error?.name || 'AI_ENGINE_UNAVAILABLE',
         error_message: message,
+        endpoint_not_found: error?.code === 'AI_ENGINE_ENDPOINT_NOT_FOUND',
+        path: error?.path || null,
+        status: error?.status || null,
+        response_preview: error?.response_preview || null,
         timeout_stage: error?.name === 'AbortError' || error?.code === 'AI_ENGINE_TIMEOUT'
           ? 'backend_to_ai_engine'
           : null,

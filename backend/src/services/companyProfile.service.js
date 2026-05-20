@@ -208,8 +208,10 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
 
   const context = await aiContextBuilder.buildAiTenantContext({ tenantId });
   context.company_profile = profile;
+  const normalizedModelMode = modelMode === 'deep' ? 'deep' : 'balanced';
   const payload = {
     tenant_id: tenantId,
+    user_id: userId,
     task_type: 'company_profile_context',
     module_origin: 'company_profile',
     question: [
@@ -218,12 +220,26 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
       'No inventes cumplimiento ni evidencia; usa los datos internos y el perfil como calibración.',
     ].join(' '),
     locale: 'es',
+    model_mode: normalizedModelMode,
+    use_llm: true,
+    use_rag: true,
+    use_web: profile.allow_web_research === true,
+    allow_web_research: profile.allow_web_research === true,
+    use_drive: profile.allow_document_context === true,
+    allow_document_context: profile.allow_document_context === true,
+    used_company_profile: true,
+    company_profile: profile,
+    industry: profile.industry || profile.profile_json?.industry || '',
+    subindustry: profile.subindustry || profile.profile_json?.subindustry || '',
+    company_size: profile.company_size || profile.profile_json?.company_size || '',
+    maturity_level: profile.maturity_level || profile.profile_json?.current_maturity_level || '',
+    risk_appetite: profile.risk_appetite || profile.profile_json?.risk_appetite || '',
     context,
     options: {
       local_compact: true,
       fast_mode: false,
       use_llm: true,
-      model_mode: modelMode === 'deep' ? 'deep' : 'balanced',
+      model_mode: normalizedModelMode,
       depth: modelMode === 'deep' ? 'deep' : 'standard',
       use_rag: true,
       use_web: profile.allow_web_research === true,
@@ -234,6 +250,8 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     request_metadata: {
       request_id: requestId,
       module: 'company_profile',
+      model_mode: normalizedModelMode,
+      use_web: profile.allow_web_research === true,
       used_company_profile: true,
     },
   };
@@ -242,7 +260,7 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
   let aiError = null;
   if (profile.allow_ai_recommendations) {
     try {
-      aiResult = await aiEngineClient.analyzeReport(payload, {
+      aiResult = await aiEngineClient.analyzeCompanyProfile(payload, {
         timeoutMs: modelMode === 'deep'
           ? Number.parseInt(process.env.REPORT_DEEP_JOB_TIMEOUT_MS || '600000', 10)
           : Number.parseInt(process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS || process.env.AI_ENGINE_REQUEST_TIMEOUT_MS || '420000', 10),

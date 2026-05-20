@@ -15,10 +15,35 @@ function asArray(value) {
   return [];
 }
 
+function itemText(item) {
+  if (item && typeof item === 'object') {
+    return cleanText(item.title || item.name || item.objective || item.kpi || item.control || item.description || item.summary || item.url, '');
+  }
+  return cleanText(item, '');
+}
+
 function list(items = [], limit = 8) {
   const rows = asArray(items).slice(0, limit);
   if (!rows.length) return '<p class="muted">Sin información registrada.</p>';
-  return `<ul class="cleanList">${rows.map((item) => `<li>${escapeHtml(truncateText(item, 180))}</li>`).join('')}</ul>`;
+  return `<ul class="cleanList">${rows.map((item) => `<li>${escapeHtml(truncateText(itemText(item), 180))}</li>`).join('')}</ul>`;
+}
+
+function compactJoin(items = [], limit = 6) {
+  return asArray(items).map(itemText).filter(Boolean).slice(0, limit).join('; ');
+}
+
+function references(items = [], limit = 6) {
+  const rows = asArray(items).slice(0, limit);
+  if (!rows.length) return '<p class="muted">Sin referencias externas registradas.</p>';
+  return `<div class="tableLike">
+    <div class="tableHeader"><span>Referencia</span><span>Uso contextual</span></div>
+    ${rows.map((item) => {
+      const domain = cleanText(item.domain || (() => {
+        try { return new URL(item.url || '').hostname.replace('www.', ''); } catch { return ''; }
+      })(), 'Fuente externa');
+      return `<div class="tableRow"><span>${escapeHtml(truncateText(itemText(item), 120))}<br><small>${escapeHtml(domain)}</small></span><span>${escapeHtml(truncateText(item.summary || item.description || 'Referencia de apoyo contextual; no reemplaza evidencia interna.', 220))}</span></div>`;
+    }).join('')}
+  </div>`;
 }
 
 function field(label, value) {
@@ -46,6 +71,7 @@ function renderCompanyProfileContextTemplate(data = {}) {
   const limitationsText = hasRealAi
     ? asArray(ai.limitations || trace.limitations).join(' ')
     : 'IA no ejecutada o completada con fallback controlado. La evidencia interna y la revisión humana siguen siendo obligatorias antes de usar este documento como soporte de auditoría.';
+  const externalReferences = ai.industry_references || ai.external_context?.sources || ai.external_context?.usable_context_sources || [];
 
   const body = `
     <main class="pdfDocument">
@@ -108,12 +134,20 @@ function renderCompanyProfileContextTemplate(data = {}) {
         <h2>Objetivos, KPIs y evidencia esperada</h2>
         <div class="tableLike">
           <div class="tableHeader"><span>Dimensión</span><span>Recomendación</span></div>
-          <div class="tableRow"><span>Objetivos</span><span>${escapeHtml(truncateText(asArray(ai.proposed_objectives || profile.quality_objectives).join('; '), 360, 'No informado'))}</span></div>
-          <div class="tableRow"><span>KPIs</span><span>${escapeHtml(truncateText(asArray(ai.proposed_kpis).join('; '), 360, 'No informado'))}</span></div>
-          <div class="tableRow"><span>Controles base</span><span>${escapeHtml(truncateText(asArray(ai.suggested_controls).join('; '), 360, 'No informado'))}</span></div>
-          <div class="tableRow"><span>Evidencia base</span><span>${escapeHtml(truncateText(asArray(ai.suggested_evidence_baseline).join('; '), 360, 'No informado'))}</span></div>
+          <div class="tableRow"><span>Objetivos</span><span>${escapeHtml(truncateText(compactJoin(ai.proposed_objectives || profile.quality_objectives), 360, 'No informado'))}</span></div>
+          <div class="tableRow"><span>KPIs</span><span>${escapeHtml(truncateText(compactJoin(ai.proposed_kpis), 360, 'No informado'))}</span></div>
+          <div class="tableRow"><span>Controles base</span><span>${escapeHtml(truncateText(compactJoin(ai.suggested_controls), 360, 'No informado'))}</span></div>
+          <div class="tableRow"><span>Evidencia base</span><span>${escapeHtml(truncateText(compactJoin(ai.suggested_evidence_baseline), 360, 'No informado'))}</span></div>
         </div>
       </section>
+
+      ${trace.used_web === true ? `
+      <section class="section keep-together">
+        <h2>Referencias externas de apoyo</h2>
+        ${references(externalReferences, 6)}
+        <p class="muted">Estas referencias se usan como contexto complementario; no son evidencia de cumplimiento ni sustituyen fuentes normativas oficiales.</p>
+      </section>
+      ` : ''}
 
       <section class="section keep-together">
         <h2>Hoja de ruta de mejora</h2>
