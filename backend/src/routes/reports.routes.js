@@ -222,6 +222,35 @@ function safeObject(value) {
   }
 }
 
+function normalizeReportModelMode(value) {
+  const mode = String(value || 'fast').trim().toLowerCase();
+  return ['fast', 'balanced', 'deep'].includes(mode) ? mode : 'fast';
+}
+
+function parseReportBoolean(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  return ['1', 'true', 'yes', 's'].includes(String(value).trim().toLowerCase());
+}
+
+function resolveReportAiOptions(body = {}) {
+  const metadata = safeObject(body.metadata);
+  const modelMode = normalizeReportModelMode(body.model_mode || body.modelMode || metadata.model_mode || metadata.modelMode);
+  const useLlm = parseReportBoolean(body.use_llm ?? metadata.use_llm, modelMode !== 'fast');
+  const depth = String(body.depth || metadata.depth || (modelMode === 'deep' ? 'deep' : 'executive')).trim();
+
+  return {
+    model_mode: modelMode,
+    use_llm: useLlm,
+    use_rag: parseReportBoolean(body.use_rag ?? metadata.use_rag, true),
+    use_web: parseReportBoolean(body.use_web ?? metadata.use_web, false),
+    use_drive: body.use_drive ?? metadata.use_drive ?? false,
+    depth,
+    quality: body.quality || metadata.quality || (modelMode === 'deep' ? 'premium_deep' : modelMode),
+    include_deep_llm: modelMode !== 'fast' || useLlm,
+  };
+}
+
 function isSnapChromiumPath(value) {
   const normalized = String(value || '').trim();
   return normalized === SNAP_CHROMIUM_PATH || normalized.startsWith('/snap/');
@@ -2185,8 +2214,9 @@ async function syncReportSeniorAuditorSuggestionsSafe({
   }
 }
 
-async function buildAiReportAddendum(reportData) {
+async function buildAiReportAddendum(reportData, aiOptions = {}) {
   const fallback = buildFallbackAiReportAddendum(reportData);
+  const modelMode = normalizeReportModelMode(aiOptions.model_mode);
 
   try {
     const standards = Array.isArray(reportData?.standards)
@@ -2196,14 +2226,22 @@ async function buildAiReportAddendum(reportData) {
       tenantId: reportData?.tenant?.id || reportData?.tenant_id || '',
       standardCode: standards.length === 1 ? standards[0] : null,
       reportType: reportData?.report_type_code || reportData?.reportTypeCode || 'executive',
-      depth: 'executive',
-      includeDeepLlm: false,
+      depth: aiOptions.depth || (modelMode === 'deep' ? 'deep' : 'executive'),
+      includeDeepLlm: aiOptions.include_deep_llm === true,
+      modelMode,
+      useLlm: aiOptions.use_llm === true,
+      useRag: aiOptions.use_rag !== false,
+      useWeb: aiOptions.use_web === true,
+      useDrive: aiOptions.use_drive ?? false,
+      quality: aiOptions.quality || null,
+      requestId: aiOptions.request_id || null,
     });
     const structured = ai.structured_result || {};
     const actions = Array.isArray(ai.recommended_actions) ? ai.recommended_actions : [];
+    const source = ai.source || ai.metrics?.source || (ai.llm_used ? 'ai-engine-v2-report-llm' : 'ai-engine-v2-report-fast');
 
     return mergeAiReportAddendumWithSenior({
-      source: 'ai-engine-v2-report-fast',
+      source,
       headline: String(fallback.headline || 'Resumen ejecutivo IA').trim(),
       summary: String(ai.executive_summary || structured.executive_summary || ai.answer || fallback.summary || '').trim(),
       priorities: normalizeReportList([
@@ -2219,11 +2257,32 @@ async function buildAiReportAddendum(reportData) {
         (structured.audit_readiness || {}).reason,
         ...fallback.decisions,
       ], 4),
-      ai_metrics: ai.metrics || {},
+      ai_metrics: {
+        ...(ai.metrics || {}),
+        model_mode_used: ai.model_mode_used || modelMode,
+        llm_used: ai.llm_used === true,
+        llm_provider: ai.llm_provider || ai.engine?.llm_provider || null,
+        model_name: ai.model_name || ai.engine?.model || null,
+        source,
+        duration_ms: ai.duration_ms ?? ai.metrics?.duration_ms ?? null,
+        ai_enrichment_failed: ai.ai_enrichment_failed === true,
+        fallback_used: ai.fallback_used === true,
+      },
+      model_mode_used: ai.model_mode_used || modelMode,
+      llm_used: ai.llm_used === true,
+      llm_provider: ai.llm_provider || ai.engine?.llm_provider || null,
+      model_name: ai.model_name || ai.engine?.model || null,
+      ai_enrichment_failed: ai.ai_enrichment_failed === true,
+      fallback_used: ai.fallback_used === true,
     }, reportData);
   } catch (error) {
     console.error('REPORT AI ADDENDUM ERROR:', error.message);
-    return mergeAiReportAddendumWithSenior(fallback, reportData);
+    return mergeAiReportAddendumWithSenior({
+      ...fallback,
+      model_mode_used: modelMode,
+      ai_enrichment_failed: true,
+      fallback_used: true,
+    }, reportData);
   }
 }
 
@@ -2834,17 +2893,25 @@ router.post('/generate/start', auth, async (req, res) => {
     if (!authorization) {
       return res.status(401).json({ ok: false, code: 'NO_TOKEN', error: 'sin Token', request_id: requestId });
     }
+    const reportAiOptions = resolveReportAiOptions(req.body || {});
 
     const job = await asyncJobs.createJob({
       tenant_id: targetTenantId,
       user_id: userId,
       job_type: 'report_generation',
       source_module: 'exportes',
-      model_mode: safeObject(metadata).model_mode || null,
+      model_mode: reportAiOptions.model_mode,
       payload: {
         ...(req.body || {}),
         period: period || null,
         report_type_code,
+        model_mode: reportAiOptions.model_mode,
+        use_llm: reportAiOptions.use_llm,
+        use_rag: reportAiOptions.use_rag,
+        use_web: reportAiOptions.use_web,
+        use_drive: reportAiOptions.use_drive,
+        depth: reportAiOptions.depth,
+        quality: reportAiOptions.quality,
       },
       request_id: requestId,
       expires_at: new Date(Date.now() + REPORT_JOB_TTL_MS).toISOString(),
@@ -2939,6 +3006,10 @@ router.post('/generate', auth, async (req, res) => {
       standard_code,
       version_code,
     } = req.body || {};
+    const reportAiOptions = {
+      ...resolveReportAiOptions(req.body || {}),
+      request_id: req.requestId || null,
+    };
 
     if (!userId) {
       return res.status(401).json({
@@ -3025,6 +3096,13 @@ router.post('/generate', auth, async (req, res) => {
       report_type_code,
       resolved_report_type_code: resolvedReportTypeCode || report_type_code,
       legacy_report_type_code: legacyReportTypeCode || null,
+      model_mode: reportAiOptions.model_mode,
+      use_llm: reportAiOptions.use_llm,
+      use_rag: reportAiOptions.use_rag,
+      use_web: reportAiOptions.use_web,
+      use_drive: reportAiOptions.use_drive,
+      depth: reportAiOptions.depth,
+      quality: reportAiOptions.quality,
       standard_code: reportCoverage?.standard_code || requestedStandardCode || null,
       version_code: reportCoverage?.version_code || requestedVersionCode || null,
       standard_label: reportCoverage?.display_name || metadata?.standard_label || null,
@@ -3050,10 +3128,11 @@ router.post('/generate', auth, async (req, res) => {
       requestedBy: userId,
       period: period || null,
       requesterRole: role,
+      aiOptions: reportAiOptions,
     });
 
     reportData.lifecycle_history = await getLifecycleHistoryForReport(targetTenantId);
-    reportData.ai_report_addendum = await buildAiReportAddendum(reportData);
+    reportData.ai_report_addendum = await buildAiReportAddendum(reportData, reportAiOptions);
     reportData.senior_auditor_suggestions = await syncReportSeniorAuditorSuggestionsSafe({
       tenantId: targetTenantId,
       userId,

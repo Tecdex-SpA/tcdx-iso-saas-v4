@@ -908,6 +908,27 @@ export default function IaAuditorPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, locale, selectedStandard]);
 
+  const historyFull = selectedHistory?.full_result_json || {};
+  const historySummary = selectedHistory?.summary_json || historyFull.summary || {};
+  const historyCoverage = selectedHistory?.coverage_json || historyFull.coverage || {};
+  const historySuggestions = selectedHistory?.suggestions_json || {};
+  const historyGaps = [
+    ...(Array.isArray(historyFull.gaps) ? historyFull.gaps : []),
+    ...(Array.isArray(historySummary.main_gaps) ? historySummary.main_gaps : []),
+  ].slice(0, 6);
+  const historyNextSteps = [
+    ...(Array.isArray(historySuggestions.next_steps) ? historySuggestions.next_steps : []),
+    ...(Array.isArray(historyFull.next_steps) ? historyFull.next_steps : []),
+  ].slice(0, 8);
+  const historyEvidenceRequests = [
+    ...(Array.isArray(historyFull.evidence_requests) ? historyFull.evidence_requests : []),
+    ...(Array.isArray(historySuggestions.evidence_requests) ? historySuggestions.evidence_requests : []),
+  ].slice(0, 8);
+  const historyActions = [
+    ...(Array.isArray(historyFull.recommended_actions) ? historyFull.recommended_actions : []),
+    ...(Array.isArray(historySuggestions.action_plan_suggestions) ? historySuggestions.action_plan_suggestions : []),
+  ].slice(0, 6);
+
   const counts = scope?.counts || {};
   const summary = analysis?.summary || {};
   const coverage = analysis?.coverage || {};
@@ -1261,29 +1282,109 @@ export default function IaAuditorPanel() {
                 <TraceItem label={copy.readiness} value={selectedHistory.readiness_level || '-'} />
                 <TraceItem label={copy.engineUsed} value={selectedHistory.ai_engine_used ? copy.yes : copy.no} />
                 <TraceItem label={copy.dbWrite} value={String(selectedHistory.db_write ?? false)} />
+                <TraceItem label={copy.controls} value={historyCoverage.controls_reviewed ?? '-'} />
+                <TraceItem label={copy.evidence} value={historyCoverage.evidences_reviewed ?? '-'} />
+                <TraceItem label={copy.findings} value={historyCoverage.findings_reviewed ?? '-'} />
+                <TraceItem label={copy.actions} value={historyCoverage.actions_reviewed ?? '-'} />
               </div>
 
               <div className="mt-4 rounded-2xl bg-white p-4">
                 <div className="text-sm font-black text-slate-900">{copy.summary}</div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {selectedHistory.summary_json?.executive_summary || copy.noData}
+                  {historySummary.executive_summary || historyFull.executive_summary || copy.noData}
                 </p>
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl bg-white p-4">
+              <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                <section className="rounded-2xl bg-white p-4">
                   <div className="text-sm font-black text-slate-900">{copy.gaps}</div>
-                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs text-slate-600">
-                    {JSON.stringify(selectedHistory.summary_json?.main_gaps || [], null, 2)}
-                  </pre>
-                </div>
-                <div className="rounded-2xl bg-white p-4">
+                  <div className="mt-3 space-y-3">
+                    {historyGaps.map((gap: LooseRecord | string, index: number) => {
+                      const row = typeof gap === 'string' ? { title: gap } : gap;
+                      return (
+                        <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full border px-2 py-1 text-[11px] font-black ${severityTone(row.severity || row.priority)}`}>
+                              {String(row.severity || row.priority || 'media')}
+                            </span>
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-black text-slate-700">
+                              {String(row.iso || row.standard_code || 'ISO')} {String(row.clause || row.requirement || '')}
+                            </span>
+                            {row.evidence_status && (
+                              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-700">
+                                {String(row.evidence_status)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-2 text-sm font-black text-slate-900">{String(row.title || row.description || copy.noData)}</div>
+                          <p className="mt-1 text-sm leading-6 text-slate-600">{String(row.description || row.business_impact || row.risk || '')}</p>
+                        </div>
+                      );
+                    })}
+                    {historyGaps.length === 0 && <p className="text-sm text-slate-500">{copy.noData}</p>}
+                  </div>
+                </section>
+                <section className="rounded-2xl bg-white p-4">
                   <div className="text-sm font-black text-slate-900">{copy.nextSteps}</div>
-                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs text-slate-600">
-                    {JSON.stringify(selectedHistory.suggestions_json?.next_steps || selectedHistory.full_result_json?.next_steps || [], null, 2)}
-                  </pre>
-                </div>
+                  <div className="mt-3 space-y-2">
+                    {historyNextSteps.map((step: LooseRecord | string, index: number) => (
+                      <div key={index} className="flex gap-3 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-950">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-black text-white">
+                          {index + 1}
+                        </span>
+                        <span>{String(typeof step === 'string' ? step : step.title || step.description || step.action || copy.noData)}</span>
+                      </div>
+                    ))}
+                    {historyNextSteps.length === 0 && <p className="text-sm text-slate-500">{copy.noData}</p>}
+                  </div>
+                </section>
+                <section className="rounded-2xl bg-white p-4">
+                  <div className="text-sm font-black text-slate-900">{copy.evidenceRequests}</div>
+                  <div className="mt-3 space-y-2">
+                    {historyEvidenceRequests.map((item: LooseRecord | string, index: number) => {
+                      const row = typeof item === 'string' ? { title: item } : item;
+                      return (
+                        <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div className="text-sm font-black text-slate-900">{String(row.title || row.evidence || row.document || row.name || `Evidencia ${index + 1}`)}</div>
+                          <p className="mt-1 text-xs leading-5 text-slate-600">{String(row.reason || row.description || row.expected_evidence || '')}</p>
+                        </div>
+                      );
+                    })}
+                    {historyEvidenceRequests.length === 0 && <p className="text-sm text-slate-500">{copy.noData}</p>}
+                  </div>
+                </section>
+                <section className="rounded-2xl bg-white p-4">
+                  <div className="text-sm font-black text-slate-900">{copy.actionSuggestions}</div>
+                  <div className="mt-3 space-y-3">
+                    {historyActions.map((item: LooseRecord, index: number) => (
+                      <div key={index} className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                        <div className="flex flex-wrap gap-2">
+                          <span className={`rounded-full border px-2 py-1 text-[11px] font-black ${severityTone(item.priority)}`}>
+                            {String(item.priority || 'media')}
+                          </span>
+                          <span className="rounded-full border border-emerald-200 bg-white px-2 py-1 text-[11px] font-black text-emerald-700">
+                            {String(item.suggested_owner_role || item.owner || 'Responsable ISO')}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-sm font-black text-slate-900">{String(item.title || item.action || item.description || copy.noData)}</div>
+                        <p className="mt-1 text-xs leading-5 text-slate-600">{String(item.description || item.recommended_action || '')}</p>
+                      </div>
+                    ))}
+                    {historyActions.length === 0 && <p className="text-sm text-slate-500">{copy.noData}</p>}
+                  </div>
+                </section>
               </div>
+
+              <details className="mt-4 rounded-2xl bg-white p-4">
+                <summary className="cursor-pointer text-sm font-black text-slate-900">{copy.engineTrace}</summary>
+                <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap text-xs text-slate-600">
+                  {JSON.stringify({
+                    trace: selectedHistory.trace_json || historyFull.trace || {},
+                    summary: selectedHistory.summary_json || {},
+                    suggestions: selectedHistory.suggestions_json || {},
+                  }, null, 2)}
+                </pre>
+              </details>
             </div>
           )}
         </section>
