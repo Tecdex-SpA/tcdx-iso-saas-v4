@@ -82,7 +82,7 @@ function localText(locale: string) {
     asyncCompleted: en ? 'AI analysis is ready.' : 'Análisis IA disponible.',
     asyncFailed: en ? 'AI analysis failed.' : 'El análisis IA falló.',
     viewResult: en ? 'View result' : 'Ver resultado',
-    engineTrace: en ? 'AI engine trace' : 'Trazabilidad motor IA',
+    engineTrace: en ? 'Advanced technical trace' : 'Trazabilidad técnica avanzada',
     structuredResult: en ? 'Senior auditor structured result' : 'Resultado estructurado Auditor Senior',
     diagnosis: en ? 'Diagnosis' : 'Diagnóstico',
     detectedGaps: en ? 'Detected gaps' : 'Brechas detectadas',
@@ -92,10 +92,10 @@ function localText(locale: string) {
     sourcesUsed: en ? 'Sources used' : 'Fuentes usadas',
     confidence: en ? 'Confidence' : 'Confianza',
     limitations: en ? 'Analysis limitations' : 'Limitaciones del análisis',
-    engineUsed: en ? 'ai-engine used' : 'ai-engine usado',
+    engineUsed: en ? 'Analytic engine' : 'Motor analítico',
     source: en ? 'Source' : 'Fuente',
     endpoint: en ? 'Endpoint' : 'Endpoint',
-    dbWrite: en ? 'DB write' : 'Escritura BD',
+    dbWrite: en ? 'Automatic write' : 'Escritura automática',
     generatedAt: en ? 'Generated at' : 'Generado',
     controlSource: en ? 'Control source' : 'Fuente de controles',
     controlsByStandard: en ? 'Controls by standard' : 'Controles por norma',
@@ -165,6 +165,51 @@ function severityTone(value: unknown) {
     return 'border-amber-200 bg-amber-50 text-amber-700';
   }
   return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+}
+
+function displayStatus(value: unknown, locale: string) {
+  if (value === true || value === 'true') return locale === 'en' ? 'Yes' : 'Sí';
+  if (value === false || value === 'false') return locale === 'en' ? 'No' : 'No';
+  const normalized = String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+  const es: Record<string, string> = {
+    not_ready: 'No listo',
+    no_listo: 'No listo',
+    ready: 'Listo',
+    partial: 'Parcial',
+    critical: 'Crítico',
+    needs_review: 'Requiere revisión',
+    no_data: 'Sin datos',
+    sin_datos: 'Sin datos',
+    approved: 'Aprobada',
+    rejected: 'Rechazada',
+    pending: 'Pendiente',
+    high: 'Alta',
+    medium: 'Media',
+    low: 'Baja',
+    fast: 'Rápido',
+    balanced: 'Balanceado',
+    deep: 'Profundo',
+  };
+  const en: Record<string, string> = {
+    not_ready: 'Not ready',
+    no_listo: 'Not ready',
+    ready: 'Ready',
+    partial: 'Partial',
+    critical: 'Critical',
+    needs_review: 'Needs review',
+    no_data: 'No data',
+    sin_datos: 'No data',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    pending: 'Pending',
+    high: 'High',
+    medium: 'Medium',
+    low: 'Low',
+    fast: 'Fast',
+    balanced: 'Balanced',
+    deep: 'Deep',
+  };
+  return (locale === 'en' ? en : es)[normalized] || String(value || '-');
 }
 
 function confidenceTone(value: unknown) {
@@ -909,11 +954,14 @@ export default function IaAuditorPanel() {
   }, [token, locale, selectedStandard]);
 
   const historyFull = selectedHistory?.full_result_json || {};
+  const historyStructured = historyFull.structured_result || {};
   const historySummary = selectedHistory?.summary_json || historyFull.summary || {};
   const historyCoverage = selectedHistory?.coverage_json || historyFull.coverage || {};
+  const historyTrace = selectedHistory?.trace_json || historyFull.trace || {};
   const historySuggestions = selectedHistory?.suggestions_json || {};
   const historyGaps = [
     ...(Array.isArray(historyFull.gaps) ? historyFull.gaps : []),
+    ...(Array.isArray(historyStructured.gaps) ? historyStructured.gaps : []),
     ...(Array.isArray(historySummary.main_gaps) ? historySummary.main_gaps : []),
   ].slice(0, 6);
   const historyNextSteps = [
@@ -922,10 +970,14 @@ export default function IaAuditorPanel() {
   ].slice(0, 8);
   const historyEvidenceRequests = [
     ...(Array.isArray(historyFull.evidence_requests) ? historyFull.evidence_requests : []),
+    ...(Array.isArray(historyStructured.evidence_requests) ? historyStructured.evidence_requests : []),
+    ...(Array.isArray(historyStructured.evidence_assessment?.missing_evidence) ? historyStructured.evidence_assessment.missing_evidence : []),
+    ...(Array.isArray(historyStructured.documents_to_request) ? historyStructured.documents_to_request : []),
     ...(Array.isArray(historySuggestions.evidence_requests) ? historySuggestions.evidence_requests : []),
   ].slice(0, 8);
   const historyActions = [
     ...(Array.isArray(historyFull.recommended_actions) ? historyFull.recommended_actions : []),
+    ...(Array.isArray(historyStructured.recommended_actions) ? historyStructured.recommended_actions : []),
     ...(Array.isArray(historySuggestions.action_plan_suggestions) ? historySuggestions.action_plan_suggestions : []),
   ].slice(0, 6);
 
@@ -1194,16 +1246,37 @@ export default function IaAuditorPanel() {
           </div>
 
           {selectedHistory && (
-            <div className="mt-5 rounded-[26px] border border-indigo-100 bg-indigo-50 p-5">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h3 className="text-lg font-black text-slate-900">
-                    {copy.viewHistoryDetail}
-                  </h3>
-                  <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-                    {copy.historyRunId}: {selectedHistory.id}
-                  </p>
+            <div className="mt-5 overflow-hidden rounded-[28px] border border-indigo-100 bg-indigo-50 shadow-sm">
+              <div className="bg-slate-950 p-5 text-white">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-200">TCDX by Tecdex</p>
+                    <h3 className="mt-1 text-xl font-black">
+                      {copy.viewHistoryDetail}
+                    </h3>
+                    <p className="mt-2 text-xs font-semibold text-slate-300">
+                      {copy.historyRunId}: {selectedHistory.id} · {copy.standard}: {translateStandardLabel(historyFull.standard_code || historyTrace.standard_code || '-', locale)} · {copy.depth}: {displayStatus(historyFull.depth || historyTrace.depth || '-', locale)}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => downloadHistoryPdf(selectedHistory.id)}
+                      disabled={pdfLoading}
+                      className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-900 disabled:opacity-50"
+                    >
+                      {pdfLoading ? '...' : copy.downloadHistoricalPdf}
+                    </button>
+                    <button
+                      onClick={() => setSelectedHistory(null)}
+                      className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-white"
+                    >
+                      {copy.closeHistoryDetail}
+                    </button>
+                  </div>
                 </div>
+              </div>
+              <div className="p-5">
 
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
                 <div className="mb-3">
@@ -1260,28 +1333,12 @@ export default function IaAuditorPanel() {
                 </div>
               </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => downloadHistoryPdf(selectedHistory.id)}
-                    disabled={pdfLoading}
-                    className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-                  >
-                    {pdfLoading ? '...' : copy.downloadHistoricalPdf}
-                  </button>
-                  <button
-                    onClick={() => setSelectedHistory(null)}
-                    className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-700"
-                  >
-                    {copy.closeHistoryDetail}
-                  </button>
-                </div>
-              </div>
-
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <TraceItem label={copy.score} value={selectedHistory.score ?? '-'} />
-                <TraceItem label={copy.readiness} value={selectedHistory.readiness_level || '-'} />
-                <TraceItem label={copy.engineUsed} value={selectedHistory.ai_engine_used ? copy.yes : copy.no} />
-                <TraceItem label={copy.dbWrite} value={String(selectedHistory.db_write ?? false)} />
+                <TraceItem label={copy.confidence} value={historySummary.confidence_score ?? historyFull.confidence ?? '-'} />
+                <TraceItem label={copy.readiness} value={displayStatus(selectedHistory.readiness_level || historySummary.readiness_level || '-', locale)} />
+                <TraceItem label={copy.engineUsed} value={selectedHistory.ai_engine_used ? 'IA Engine' : 'Determinístico'} />
+                <TraceItem label={copy.dbWrite} value={displayStatus(selectedHistory.db_write ?? false, locale)} />
                 <TraceItem label={copy.controls} value={historyCoverage.controls_reviewed ?? '-'} />
                 <TraceItem label={copy.evidence} value={historyCoverage.evidences_reviewed ?? '-'} />
                 <TraceItem label={copy.findings} value={historyCoverage.findings_reviewed ?? '-'} />
@@ -1305,14 +1362,14 @@ export default function IaAuditorPanel() {
                         <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`rounded-full border px-2 py-1 text-[11px] font-black ${severityTone(row.severity || row.priority)}`}>
-                              {String(row.severity || row.priority || 'media')}
+                              {displayStatus(row.severity || row.priority || 'media', locale)}
                             </span>
                             <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-black text-slate-700">
-                              {String(row.iso || row.standard_code || 'ISO')} {String(row.clause || row.requirement || '')}
+                              {translateStandardLabel(row.iso || row.standard_code || 'ISO', locale)} {String(row.clause || row.requirement || '')}
                             </span>
                             {row.evidence_status && (
                               <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-700">
-                                {String(row.evidence_status)}
+                                {displayStatus(row.evidence_status, locale)}
                               </span>
                             )}
                           </div>
@@ -1360,7 +1417,7 @@ export default function IaAuditorPanel() {
                       <div key={index} className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
                         <div className="flex flex-wrap gap-2">
                           <span className={`rounded-full border px-2 py-1 text-[11px] font-black ${severityTone(item.priority)}`}>
-                            {String(item.priority || 'media')}
+                            {displayStatus(item.priority || 'media', locale)}
                           </span>
                           <span className="rounded-full border border-emerald-200 bg-white px-2 py-1 text-[11px] font-black text-emerald-700">
                             {String(item.suggested_owner_role || item.owner || 'Responsable ISO')}
@@ -1379,12 +1436,13 @@ export default function IaAuditorPanel() {
                 <summary className="cursor-pointer text-sm font-black text-slate-900">{copy.engineTrace}</summary>
                 <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap text-xs text-slate-600">
                   {JSON.stringify({
-                    trace: selectedHistory.trace_json || historyFull.trace || {},
+                    trace: historyTrace,
                     summary: selectedHistory.summary_json || {},
                     suggestions: selectedHistory.suggestions_json || {},
                   }, null, 2)}
                 </pre>
               </details>
+              </div>
             </div>
           )}
         </section>

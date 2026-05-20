@@ -30,6 +30,69 @@ function cleanText(value, fallback = '-') {
   return String(value).replace(/\s+/g, ' ').trim() || fallback;
 }
 
+function normalizeKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function displayStatus(value, fallback = '-') {
+  if (value === true) return 'Si';
+  if (value === false) return 'No';
+  const raw = normalizeKey(value);
+  const map = {
+    not_ready: 'No listo',
+    no_listo: 'No listo',
+    no_apto: 'No listo',
+    ready: 'Listo',
+    listo: 'Listo',
+    partial: 'Parcial',
+    parcial: 'Parcial',
+    ready_with_observations: 'Listo con observaciones',
+    listo_con_observaciones: 'Listo con observaciones',
+    critical: 'Critico',
+    critica: 'Critico',
+    critico: 'Critico',
+    needs_review: 'Requiere revision',
+    requiere_revision: 'Requiere revision',
+    no_data: 'Sin datos',
+    sin_datos: 'Sin datos',
+    approved: 'Aprobada',
+    aprobada: 'Aprobada',
+    rejected: 'Rechazada',
+    rechazada: 'Rechazada',
+    pending: 'Pendiente',
+    pendiente: 'Pendiente',
+    high: 'Alta',
+    alta: 'Alta',
+    medium: 'Media',
+    media: 'Media',
+    low: 'Baja',
+    baja: 'Baja',
+    fast: 'Rapido',
+    balanced: 'Balanceado',
+    deep: 'Profundo',
+    deterministic: 'Deterministico',
+  };
+  return map[raw] || cleanText(value, fallback);
+}
+
+function boolLabel(value, fallback = 'No') {
+  if (value === true || String(value).toLowerCase() === 'true') return 'Si';
+  if (value === false || String(value).toLowerCase() === 'false') return 'No';
+  return fallback;
+}
+
+function dedupeByText(rows, mapper = (item) => cleanText(item)) {
+  const seen = new Set();
+  const result = [];
+  asArray(rows).forEach((row) => {
+    const key = mapper(row).toLowerCase();
+    if (!key || key === '-' || seen.has(key)) return;
+    seen.add(key);
+    result.push(row);
+  });
+  return result;
+}
+
 function resolveImagePath(value) {
   const raw = String(value || '').trim();
   if (!raw) return null;
@@ -93,7 +156,7 @@ function localeText(locale, key) {
     depth: en ? 'Depth' : 'Profundidad',
     auditScore: en ? 'Audit score' : 'Score auditor',
     confidence: en ? 'Confidence score' : 'Confidence score',
-    readiness: en ? 'Readiness level' : 'Readiness level',
+    readiness: en ? 'Readiness level' : 'Estado de preparacion',
     opinion: en ? 'Executive result' : 'Resultado ejecutivo',
     controls: en ? 'Controls' : 'Controles',
     evidences: en ? 'Evidence' : 'Evidencias',
@@ -115,6 +178,13 @@ function localeText(locale, key) {
     suggestedPlan: en ? 'Suggested plan' : 'Plan sugerido',
     governance: en ? 'Governance' : 'Gobernanza',
     traceability: en ? 'Traceability' : 'Trazabilidad',
+    requiredEvidence: en ? 'Required evidence' : 'Evidencias requeridas',
+    auditorReading: en ? 'Auditor reading' : 'Lectura auditora',
+    executiveDecision: en ? 'Executive decision' : 'Decision ejecutiva',
+    automaticWrite: en ? 'Automatic write' : 'Escritura automatica',
+    analyticEngine: en ? 'Analytic engine' : 'Motor analitico',
+    reviewedSample: en ? 'Priority audited sample' : 'Muestra auditada prioritaria',
+    technicalTrace: en ? 'Controlled technical trace' : 'Trazabilidad tecnica controlada',
     empty: en ? 'No data available for this section.' : 'Sin datos disponibles para esta seccion.',
     footer: en
       ? 'TCDX by Tecdex · AI Auditor · Human review required'
@@ -148,11 +218,13 @@ function nestedArray(...values) {
 
 function normalizeControls(analysis) {
   const full = fullResult(analysis);
+  const structured = asObject(full.structured_result || analysis?.structured_result);
   const controls = nestedArray(
     full.reviewed_controls,
     analysis?.reviewed_controls,
     full.control_recommendations,
     analysis?.control_recommendations,
+    structured.control_recommendations,
     full.critical_controls,
     full.summary?.main_risks,
     analysis?.summary?.main_risks
@@ -171,11 +243,17 @@ function normalizeControls(analysis) {
 
 function normalizeEvidences(analysis) {
   const full = fullResult(analysis);
+  const structured = asObject(full.structured_result || analysis?.structured_result);
+  const evidenceAssessment = asObject(structured.evidence_assessment || full.evidence_assessment);
   const evidences = nestedArray(
     full.reviewed_evidences,
     analysis?.reviewed_evidences,
     full.evidence_requests,
     analysis?.evidence_requests,
+    structured.evidence_requests,
+    evidenceAssessment.missing_evidence,
+    structured.documents_to_request,
+    full.documents_to_request,
     full.evidence_gaps,
     analysis?.summary?.main_gaps
   );
@@ -191,13 +269,15 @@ function normalizeEvidences(analysis) {
 
 function normalizeGaps(analysis) {
   const full = fullResult(analysis);
-  return nestedArray(
+  const structured = asObject(full.structured_result || analysis?.structured_result);
+  return dedupeByText(nestedArray(
     full.gaps,
+    structured.gaps,
     analysis?.gaps,
     full.summary?.main_gaps,
     analysis?.summary?.main_gaps,
     full.evidence_gaps
-  ).slice(0, 24).map((item, index) => ({
+  ), (item) => cleanText(item.title || item.description || item.requirement || item)).slice(0, 24).map((item, index) => ({
     severity: cleanText(item.severity || item.priority || item.level, 'media'),
     title: cleanText(item.title || item.type || item.requirement, `Brecha ${index + 1}`),
     requirement: cleanText(item.requirement || item.control_id || item.control_code || item.standard_code, '-'),
@@ -209,11 +289,13 @@ function normalizeGaps(analysis) {
 
 function normalizeFindings(analysis) {
   const full = fullResult(analysis);
+  const structured = asObject(full.structured_result || analysis?.structured_result);
   return nestedArray(
     full.suggested_findings,
     analysis?.suggested_findings,
     full.findings_suggestions,
     analysis?.findings_suggestions,
+    structured.findings_suggestions,
     analysis?.suggestions_json?.findings_suggestions
   ).slice(0, 24).map((item, index) => ({
     type: cleanText(item.type || item.finding_type || item.category, 'Observacion'),
@@ -226,15 +308,18 @@ function normalizeFindings(analysis) {
 
 function normalizeActions(analysis) {
   const full = fullResult(analysis);
-  return nestedArray(
+  const structured = asObject(full.structured_result || analysis?.structured_result);
+  return dedupeByText(nestedArray(
     full.suggested_actions,
     analysis?.suggested_actions,
+    structured.recommended_actions,
     full.action_plan_suggestions,
     analysis?.action_plan_suggestions,
     analysis?.suggestions_json?.action_plan_suggestions,
     full.next_steps,
-    analysis?.next_steps
-  ).slice(0, 24).map((item, index) => {
+    analysis?.next_steps,
+    structured.next_steps
+  ), (item) => cleanText(item.action || item.title || item.description || item)).slice(0, 24).map((item, index) => {
     const fromString = typeof item === 'string' ? item : '';
     return {
       priority: cleanText(item.priority || item.severity || item.level, index < 3 ? 'alta' : 'media'),
@@ -286,9 +371,11 @@ function opinionFor(readiness) {
 
 function normalizeData({ locale, tenant, analysis }) {
   const full = fullResult(analysis);
+  const structured = asObject(full.structured_result || analysis?.structured_result);
   const summary = asObject(full.summary || analysis?.summary || analysis?.summary_json);
   const coverage = asObject(full.coverage || analysis?.coverage || analysis?.coverage_json);
   const trace = asObject(full.traceability || full.trace || analysis?.trace || analysis?.trace_json);
+  const metrics = asObject(full.metrics || full.ai_metrics || trace.metrics || analysis?.metrics);
   const governance = asObject(full.governance || analysis?.governance);
   const scope = asObject(full.scope || analysis?.scope);
   const controls = normalizeControls(analysis);
@@ -324,8 +411,22 @@ function normalizeData({ locale, tenant, analysis }) {
     auditScore,
     confidenceScore,
     readiness,
-    opinion: cleanText(full.audit_opinion || summary.auditor_opinion, opinionFor(readiness)),
-    executiveSummary: cleanText(full.executive_summary || summary.executive_summary || summary.executive_message, 'El analisis consolida senales de controles, evidencias, brechas y acciones. Requiere revision humana antes de decisiones formales.'),
+    readinessLabel: displayStatus(readiness),
+    opinion: cleanText(full.audit_opinion || summary.auditor_opinion || structured.audit_readiness?.status, opinionFor(readiness)),
+    executiveSummary: cleanText(
+      summary.executive_summary ||
+      structured.executive_summary ||
+      full.executive_summary ||
+      full.answer ||
+      structured.diagnosis ||
+      summary.executive_message,
+      'IA Auditor Senior reviso controles, evidencias, hallazgos y acciones asociadas al alcance seleccionado. La evaluacion identifica brechas que requieren tratamiento y revision humana antes de una auditoria formal.'
+    ),
+    auditorReading: [
+      cleanText(structured.audit_readiness?.reason || summary.audit_readiness?.reason || 'La preparacion debe validarse contra evidencia objetiva vigente.'),
+      cleanText(structured.risk_impact || summary.risk_impact || 'El riesgo principal es declarar preparacion sin trazabilidad suficiente.'),
+      cleanText(structured.limitations?.[0] || full.limitations?.[0] || 'La IA no sustituye el juicio de auditor humano.'),
+    ],
     coverage: {
       controls_reviewed: toNumber(coverage.controls_reviewed, controls.length),
       evidences_reviewed: toNumber(coverage.evidences_reviewed, evidences.length),
@@ -345,12 +446,19 @@ function normalizeData({ locale, tenant, analysis }) {
       critical_record_write: governance.critical_record_write === true || trace.critical_record_write === true,
       can_create_records: governance.can_create_records === true && analysis?.can_create_records === true,
       ai_engine_used: governance.ai_engine_used === true || trace.ai_engine_used === true || analysis?.ai_engine_used === true,
-      history_run_id: cleanText(trace.history_run_id || full.history_run_id || analysis?.history_run_id, '-'),
+      history_run_id: cleanText(trace.history_run_id || full.history_run_id || analysis?.history_run_id || analysis?.id, '-'),
+      request_id: cleanText(trace.request_id || full.request_id || metrics.request_id, '-'),
       user: cleanText(trace.user || full.user || analysis?.requested_by || analysis?.generated_by, '-'),
       timestamp: cleanText(trace.generated_at || full.generated_at || analysis?.created_at, formatDate()),
-      source: cleanText(trace.source || full.source, 'ai-auditor'),
-      provider: cleanText(trace.provider || full.provider, '-'),
-      model: cleanText(trace.model || full.model, '-'),
+      source: cleanText(trace.source || full.source, 'Sistema TCDX'),
+      provider: cleanText(trace.provider || full.provider || metrics.llm_provider, '-'),
+      model: cleanText(trace.model || full.model || metrics.model_name || metrics.selected_model, '-'),
+      model_mode: displayStatus(trace.model_mode || full.model_mode || metrics.model_mode_used || metrics.model_mode, '-'),
+      llm_used: boolLabel(trace.used_llm ?? full.used_llm ?? metrics.used_llm, '-'),
+      rag_used: boolLabel(trace.used_rag ?? full.used_rag ?? metrics.used_rag, '-'),
+      web_used: boolLabel(trace.used_web ?? full.used_web ?? metrics.used_web, '-'),
+      drive_used: boolLabel(trace.used_drive ?? full.used_drive ?? metrics.used_drive, '-'),
+      duration_ms: cleanText(trace.duration_ms || full.duration_ms || metrics.duration_ms, '-'),
     },
   };
 }
@@ -409,8 +517,61 @@ function drawBadge(doc, x, y, value, color = '#2563EB', width = 118) {
 function kpiCard(doc, x, y, width, label, value, helper, color = '#1D4ED8') {
   doc.roundedRect(x, y, width, 58, 10).fillAndStroke('#F8FAFC', '#E2E8F0');
   doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#64748B').text(label, x + 10, y + 9, { width: width - 20 });
-  doc.font('Helvetica-Bold').fontSize(16).fillColor(color).text(cleanText(value), x + 10, y + 25, { width: width - 20 });
+  doc.font('Helvetica-Bold').fontSize(16).fillColor(color).text(displayStatus(value), x + 10, y + 25, { width: width - 20 });
   doc.font('Helvetica').fontSize(6.8).fillColor('#64748B').text(cleanText(helper, ''), x + 10, y + 45, { width: width - 20 });
+}
+
+function compactKpiCard(doc, x, y, width, label, value, color = '#1D4ED8') {
+  doc.roundedRect(x, y, width, 40, 8).fillAndStroke('#FFFFFF', '#E5E7EB');
+  doc.font('Helvetica-Bold').fontSize(6.4).fillColor('#6B7280').text(label, x + 8, y + 7, { width: width - 16, height: 8 });
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(color).text(displayStatus(value), x + 8, y + 20, { width: width - 16, height: 16 });
+}
+
+function drawGauge(doc, x, y, width, label, value, color) {
+  const percent = clampPercent(value, 0);
+  const barY = y + 34;
+  doc.roundedRect(x, y, width, 62, 12).fillAndStroke('#FFFFFF', '#E5E7EB');
+  doc.font('Helvetica-Bold').fontSize(7).fillColor('#4B5563').text(label, x + 12, y + 10, { width: width - 24 });
+  doc.font('Helvetica-Bold').fontSize(18).fillColor(color).text(`${percent}%`, x + 12, y + 21, { width: width - 24 });
+  doc.roundedRect(x + 12, barY + 12, width - 24, 8, 4).fill('#E5E7EB');
+  doc.roundedRect(x + 12, barY + 12, Math.max(8, (width - 24) * percent / 100), 8, 4).fill(color);
+}
+
+function drawReadinessBar(doc, x, y, width, readiness) {
+  const labels = ['No listo', 'Parcial', 'Listo obs.', 'Listo'];
+  const active = readiness === 'ready' ? 3 : readiness === 'partial' ? 1 : 0;
+  doc.font('Helvetica-Bold').fontSize(7).fillColor('#4B5563').text('Barra de preparacion auditora', x, y);
+  const stepW = width / labels.length;
+  labels.forEach((label, index) => {
+    const fill = index <= active ? (index === 0 ? '#EF4444' : index === 1 ? '#F59E0B' : '#16A34A') : '#E5E7EB';
+    doc.roundedRect(x + stepW * index, y + 18, stepW - 4, 10, 5).fill(fill);
+    doc.font('Helvetica').fontSize(6).fillColor(index === active ? '#111827' : '#6B7280')
+      .text(label, x + stepW * index, y + 32, { width: stepW - 4, align: 'center' });
+  });
+}
+
+function drawSeverityBar(doc, x, y, width, gaps) {
+  const counts = { alta: 0, media: 0, baja: 0 };
+  asArray(gaps).forEach((gap) => {
+    const raw = normalizeKey(gap.severity || gap.priority || gap.risk);
+    if (raw.includes('alta') || raw.includes('high') || raw.includes('crit')) counts.alta += 1;
+    else if (raw.includes('baja') || raw.includes('low')) counts.baja += 1;
+    else counts.media += 1;
+  });
+  const total = Math.max(1, counts.alta + counts.media + counts.baja);
+  const segments = [
+    ['Alta', counts.alta, '#EF4444'],
+    ['Media', counts.media, '#F59E0B'],
+    ['Baja', counts.baja, '#16A34A'],
+  ];
+  doc.font('Helvetica-Bold').fontSize(7).fillColor('#4B5563').text('Distribucion de severidad', x, y);
+  let cursor = x;
+  segments.forEach(([label, count, color]) => {
+    const segmentW = Math.max(10, width * Number(count) / total);
+    doc.roundedRect(cursor, y + 18, segmentW, 12, 6).fill(color);
+    doc.font('Helvetica').fontSize(6).fillColor('#374151').text(`${label}: ${count}`, cursor, y + 34, { width: segmentW + 12 });
+    cursor += segmentW;
+  });
 }
 
 function bulletList(doc, rows, mapper = (item) => cleanText(item), limit = 9) {
@@ -478,155 +639,125 @@ function table(doc, data, state, title, rows, columns, limit = 8) {
 
 function renderCover(doc, data, state) {
   newPage(doc, data, state, localeText(data.locale, 'executiveCover'), true);
-  doc.roundedRect(36, 56, doc.page.width - 72, 138, 18).fillAndStroke('#0B1120', '#0B1120');
+  doc.roundedRect(36, 56, doc.page.width - 72, 150, 18).fillAndStroke('#071B3A', '#071B3A');
   drawImageSafe(doc, data.tcdxLogoPath, 60, 75, { fit: [88, 32] }) ||
     doc.font('Helvetica-Bold').fontSize(10).fillColor('#93C5FD').text('TCDX by Tecdex', 60, 82);
   drawImageSafe(doc, data.tenantLogoPath, doc.page.width - 142, 75, { fit: [82, 32], align: 'right' });
   doc.font('Helvetica-Bold').fontSize(24).fillColor('#FFFFFF').text(localeText(data.locale, 'title'), 60, 112, { width: doc.page.width - 120 });
   doc.font('Helvetica').fontSize(9).fillColor('#CBD5E1').text(localeText(data.locale, 'subtitle'), 60, 146, { width: doc.page.width - 120 });
-  doc.font('Helvetica-Bold').fontSize(12).fillColor('#FFFFFF').text(data.tenantName, 60, 172, { width: doc.page.width - 120 });
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#FFFFFF').text(`${data.tenantName} · ${data.standard} · ${displayStatus(data.depth)}`, 60, 174, { width: doc.page.width - 120 });
 
   drawBadge(doc, doc.page.width - 188, 80, data.opinion, severityColor(data.readiness), 128);
 
-  const infoY = 214;
-  const w2 = (doc.page.width - 112) / 2;
-  kpiCard(doc, 46, infoY, w2, localeText(data.locale, 'standard'), `${data.standard}${data.version !== '-' ? ` / ${data.version}` : ''}`, localeText(data.locale, 'standard'), '#2563EB');
-  kpiCard(doc, 56 + w2, infoY, w2, localeText(data.locale, 'emittedAt'), data.emittedAt, 'Trazabilidad temporal', '#0F766E');
-  kpiCard(doc, 46, infoY + 70, w2, localeText(data.locale, 'focus'), data.focus, localeText(data.locale, 'focus'), '#7C3AED');
-  kpiCard(doc, 56 + w2, infoY + 70, w2, localeText(data.locale, 'depth'), data.depth, localeText(data.locale, 'depth'), '#D97706');
+  const metaY = 218;
+  const metaW = (doc.page.width - 122) / 4;
+  compactKpiCard(doc, 46, metaY, metaW, localeText(data.locale, 'standard'), data.standard, '#2563EB');
+  compactKpiCard(doc, 56 + metaW, metaY, metaW, localeText(data.locale, 'focus'), data.focus, '#7C3AED');
+  compactKpiCard(doc, 66 + metaW * 2, metaY, metaW, localeText(data.locale, 'depth'), data.depth, '#D97706');
+  compactKpiCard(doc, 76 + metaW * 3, metaY, metaW, localeText(data.locale, 'emittedAt'), data.emittedAt, '#0F766E');
 
-  const kpiY = infoY + 158;
-  const smallW = (doc.page.width - 122) / 4;
-  kpiCard(doc, 46, kpiY, smallW, localeText(data.locale, 'auditScore'), `${data.auditScore}%`, 'Preparacion/cumplimiento', severityColor(data.readiness));
-  kpiCard(doc, 56 + smallW, kpiY, smallW, localeText(data.locale, 'confidence'), `${data.confidenceScore}%`, 'Suficiencia de datos', data.confidenceScore >= 70 ? '#059669' : '#D97706');
-  kpiCard(doc, 66 + smallW * 2, kpiY, smallW, localeText(data.locale, 'readiness'), data.readiness, 'Nivel auditor', severityColor(data.readiness));
-  kpiCard(doc, 76 + smallW * 3, kpiY, smallW, 'AI Engine', data.governance.ai_engine_used, 'Motor analitico', '#1D4ED8');
+  const kpiY = metaY + 50;
+  compactKpiCard(doc, 46, kpiY, metaW, localeText(data.locale, 'auditScore'), `${data.auditScore}%`, severityColor(data.readiness));
+  compactKpiCard(doc, 56 + metaW, kpiY, metaW, localeText(data.locale, 'confidence'), `${data.confidenceScore}%`, data.confidenceScore >= 70 ? '#059669' : '#D97706');
+  compactKpiCard(doc, 66 + metaW * 2, kpiY, metaW, localeText(data.locale, 'readiness'), data.readinessLabel, severityColor(data.readiness));
+  compactKpiCard(doc, 76 + metaW * 3, kpiY, metaW, localeText(data.locale, 'analyticEngine'), data.governance.ai_engine_used ? 'IA Engine' : 'Deterministico', '#1D4ED8');
 
-  const kpiY2 = kpiY + 72;
-  kpiCard(doc, 46, kpiY2, smallW, localeText(data.locale, 'controls'), data.coverage.controls_reviewed, 'revisados', '#0F766E');
-  kpiCard(doc, 56 + smallW, kpiY2, smallW, localeText(data.locale, 'evidences'), data.coverage.evidences_reviewed, 'revisadas', '#7C3AED');
-  kpiCard(doc, 66 + smallW * 2, kpiY2, smallW, localeText(data.locale, 'findings'), data.coverage.findings_reviewed, 'revisados', '#475569');
-  kpiCard(doc, 76 + smallW * 3, kpiY2, smallW, localeText(data.locale, 'actions'), data.coverage.actions_reviewed, 'revisadas', '#475569');
+  const kpiY2 = kpiY + 50;
+  compactKpiCard(doc, 46, kpiY2, metaW, localeText(data.locale, 'controls'), data.coverage.controls_reviewed, '#0F766E');
+  compactKpiCard(doc, 56 + metaW, kpiY2, metaW, localeText(data.locale, 'evidences'), data.coverage.evidences_reviewed, '#7C3AED');
+  compactKpiCard(doc, 66 + metaW * 2, kpiY2, metaW, localeText(data.locale, 'findings'), data.coverage.findings_reviewed, '#475569');
+  compactKpiCard(doc, 76 + metaW * 3, kpiY2, metaW, localeText(data.locale, 'actions'), data.coverage.actions_reviewed, '#475569');
 
-  const alertY = kpiY2 + 72;
-  kpiCard(doc, 46, alertY, smallW, localeText(data.locale, 'controlsAlert'), data.coverage.controls_with_alert, 'senales de atencion', data.coverage.controls_with_alert ? '#DC2626' : '#059669');
-  kpiCard(doc, 56 + smallW, alertY, smallW, localeText(data.locale, 'evidencesAlert'), data.coverage.evidences_with_alert, 'suficiencia/vigencia', data.coverage.evidences_with_alert ? '#DC2626' : '#059669');
-  kpiCard(doc, 66 + smallW * 2, alertY, smallW, 'human_review', data.governance.human_review_required, 'obligatoria', '#D97706');
-  kpiCard(doc, 76 + smallW * 3, alertY, smallW, 'db_write', data.governance.db_write, 'sin escritura automatica', '#059669');
+  const kpiY3 = kpiY2 + 50;
+  compactKpiCard(doc, 46, kpiY3, metaW, localeText(data.locale, 'controlsAlert'), data.coverage.controls_with_alert, data.coverage.controls_with_alert ? '#DC2626' : '#059669');
+  compactKpiCard(doc, 56 + metaW, kpiY3, metaW, localeText(data.locale, 'evidencesAlert'), data.coverage.evidences_with_alert, data.coverage.evidences_with_alert ? '#DC2626' : '#059669');
+  compactKpiCard(doc, 66 + metaW * 2, kpiY3, metaW, localeText(data.locale, 'humanReview'), boolLabel(data.governance.human_review_required), '#D97706');
+  compactKpiCard(doc, 76 + metaW * 3, kpiY3, metaW, localeText(data.locale, 'automaticWrite'), boolLabel(data.governance.db_write), '#059669');
 
-  doc.y = alertY + 82;
+  doc.y = kpiY3 + 52;
+  const gaugeY = doc.y;
+  const gaugeW = (doc.page.width - 112) / 2;
+  drawGauge(doc, 46, gaugeY, gaugeW, localeText(data.locale, 'auditScore'), data.auditScore, severityColor(data.readiness));
+  drawGauge(doc, 56 + gaugeW, gaugeY, gaugeW, localeText(data.locale, 'confidence'), data.confidenceScore, data.confidenceScore >= 70 ? '#16A34A' : '#F59E0B');
+  drawReadinessBar(doc, 46, gaugeY + 78, gaugeW, data.readiness);
+  drawSeverityBar(doc, 56 + gaugeW, gaugeY + 78, gaugeW, data.gaps);
+  doc.y = gaugeY + 128;
+
   sectionTitle(doc, 'Resumen ejecutivo');
   paragraph(doc, data.executiveSummary, { size: 9.2 });
+  sectionTitle(doc, localeText(data.locale, 'auditorReading'));
+  bulletList(doc, data.auditorReading, (item) => cleanText(item), 4);
 }
 
-function renderScope(doc, data, state) {
-  newPage(doc, data, state, localeText(data.locale, 'scopeMethodology'));
-  sectionTitle(doc, localeText(data.locale, 'objective'));
-  paragraph(doc, 'Entregar una lectura auditora preliminar, formal y no destructiva sobre preparacion, brechas y prioridades, para uso de cliente, gerencia, auditor interno y equipo tecnico.');
-  sectionTitle(doc, localeText(data.locale, 'scope'));
-  bulletList(doc, [
-    `Cliente/tenant: ${data.tenantName}`,
-    `Norma/version: ${data.standard}${data.version !== '-' ? ` / ${data.version}` : ''}`,
-    `Foco auditor: ${data.focus}`,
-    `Profundidad: ${data.depth}`,
-  ]);
-  sectionTitle(doc, localeText(data.locale, 'dataSources'));
-  bulletList(doc, [
-    `${data.coverage.controls_reviewed} controles revisados o considerados.`,
-    `${data.coverage.evidences_reviewed} evidencias revisadas o requeridas.`,
-    `${data.coverage.findings_reviewed} hallazgos revisados/sugeridos.`,
-    `${data.coverage.actions_reviewed} acciones revisadas/sugeridas.`,
-    `ai_engine_used: ${cleanText(data.governance.ai_engine_used)}.`,
-  ]);
-  sectionTitle(doc, localeText(data.locale, 'criteria'));
-  bulletList(doc, [
-    'Estado de controles, salud operativa, evidencia objetiva y trazabilidad.',
-    'Brechas declaradas, suficiencia de evidencia y riesgos asociados.',
-    'Acciones abiertas, planes sugeridos y necesidad de revision humana.',
-    'No se reproduce texto oficial extenso de normas ISO; se usan criterios operativos propios.',
-  ]);
-  sectionTitle(doc, localeText(data.locale, 'methodology'));
-  paragraph(doc, 'IA Auditor contrasta senales internas, resume la muestra, calcula score auditor y confidence score por separado, identifica brechas, sugiere hallazgos y propone acciones sin crear registros ni modificar datos.');
-  sectionTitle(doc, localeText(data.locale, 'limitations'));
-  bulletList(doc, [
-    'La conclusion depende de la completitud, vigencia y calidad de los datos disponibles.',
-    'Confidence bajo limita cualquier resultado positivo, aunque el audit_score sea alto.',
-    'Evidencias pendientes, controles con alerta o brechas criticas impiden mostrar cumplimiento pleno.',
-  ]);
-  sectionTitle(doc, localeText(data.locale, 'humanReview'));
-  paragraph(doc, 'Todo resultado requiere revision humana. IA Auditor no certifica, no aprueba controles, no cierra acciones, no modifica evidencias y no crea registros criticos automaticamente.');
-}
+function renderFinalAssessment(doc, data, state) {
+  newPage(doc, data, state, 'Brechas, evidencia y plan');
 
-function renderSample(doc, data, state) {
-  newPage(doc, data, state, localeText(data.locale, 'auditedSample'));
-  sectionTitle(doc, localeText(data.locale, 'reviewedControls'));
-  table(doc, data, state, localeText(data.locale, 'auditedSample'), data.controls, [
-    { label: 'Clausula / criterio', width: 78, value: 'clause' },
-    { label: 'Control', width: 122, value: 'control' },
-    { label: 'Estado / score', width: 78, value: (row) => `${row.status}${row.score !== null && row.score !== undefined ? ` · ${row.score}` : ''}` },
-    { label: 'Evidencia', width: 76, value: 'evidence' },
-    { label: 'Evaluacion IA / accion sugerida', width: 158, value: (row) => `${row.observation} ${row.action}` },
-  ], 8);
-  sectionTitle(doc, localeText(data.locale, 'reviewedEvidences'));
-  table(doc, data, state, localeText(data.locale, 'auditedSample'), data.evidences, [
-    { label: 'Evidencia', width: 142, value: 'evidence' },
-    { label: 'Control', width: 78, value: 'control' },
-    { label: 'Estado', width: 70, value: 'status' },
-    { label: 'Vigencia / suficiencia', width: 112, value: 'sufficiency' },
-    { label: 'Observacion IA', width: 110, value: 'observation' },
-  ], 7);
-}
-
-function renderGaps(doc, data, state) {
-  newPage(doc, data, state, localeText(data.locale, 'gapsFindings'));
   sectionTitle(doc, localeText(data.locale, 'mainGaps'));
-  table(doc, data, state, localeText(data.locale, 'gapsFindings'), data.gaps, [
-    { label: 'Severidad', width: 68, value: 'severity', color: (row) => severityColor(row.severity) },
-    { label: 'Brecha', width: 126, value: 'title' },
-    { label: 'Requisito/control', width: 96, value: 'requirement' },
-    { label: 'Evidencia/causa', width: 112, value: 'cause' },
-    { label: 'Riesgo / recomendacion', width: 110, value: (row) => `${row.risk}. ${row.recommendation}` },
-  ], 8);
-  sectionTitle(doc, localeText(data.locale, 'suggestedFindings'));
-  table(doc, data, state, localeText(data.locale, 'gapsFindings'), data.findings, [
-    { label: 'Tipo sugerido', width: 94, value: 'type' },
-    { label: 'Severidad', width: 68, value: 'severity', color: (row) => severityColor(row.severity) },
-    { label: 'Requisito', width: 82, value: 'requirement' },
-    { label: 'Descripcion', width: 148, value: 'description' },
-    { label: 'Recomendacion', width: 120, value: 'recommendation' },
-  ], 7);
-}
+  table(doc, data, state, 'Brechas, evidencia y plan', data.gaps, [
+    { label: 'Severidad', width: 64, value: (row) => displayStatus(row.severity), color: (row) => severityColor(row.severity) },
+    { label: 'Brecha', width: 118, value: 'title' },
+    { label: 'Control / requisito', width: 88, value: 'requirement' },
+    { label: 'Evidencia o causa', width: 116, value: 'cause' },
+    { label: 'Riesgo y recomendacion', width: 126, value: (row) => `${displayStatus(row.risk)}. ${row.recommendation}` },
+  ], 5);
 
-function renderConclusion(doc, data, state) {
-  newPage(doc, data, state, localeText(data.locale, 'conclusionTrace'));
-  sectionTitle(doc, 'Conclusion auditora');
-  paragraph(doc, `${data.opinion}. Audit score ${data.auditScore}%, confidence score ${data.confidenceScore}%, readiness ${data.readiness}. ${data.executiveSummary}`, { size: 9.2 });
+  sectionTitle(doc, localeText(data.locale, 'requiredEvidence'));
+  table(doc, data, state, 'Brechas, evidencia y plan', data.evidences, [
+    { label: 'Evidencia solicitada', width: 150, value: 'evidence' },
+    { label: 'Control / modulo', width: 88, value: 'control' },
+    { label: 'Prioridad', width: 70, value: (row) => displayStatus(row.status), color: (row) => severityColor(row.status) },
+    { label: 'Razon auditora', width: 204, value: (row) => `${displayStatus(row.sufficiency)}. ${row.observation}` },
+  ], 6);
+
   sectionTitle(doc, localeText(data.locale, 'suggestedPlan'));
-  table(doc, data, state, localeText(data.locale, 'conclusionTrace'), data.actions, [
-    { label: 'Prioridad', width: 68, value: 'priority', color: (row) => severityColor(row.priority) },
-    { label: 'Accion', width: 158, value: 'action' },
+  table(doc, data, state, 'Brechas, evidencia y plan', data.actions, [
+    { label: 'Prioridad', width: 62, value: (row) => displayStatus(row.priority), color: (row) => severityColor(row.priority) },
+    { label: 'Accion sugerida', width: 170, value: 'action' },
     { label: 'Responsable', width: 92, value: 'owner' },
-    { label: 'Plazo', width: 70, value: 'due' },
-    { label: 'Evidencia esperada', width: 124, value: 'evidence' },
-  ], 8);
-  sectionTitle(doc, localeText(data.locale, 'governance'));
-  bulletList(doc, [
-    `human_review_required: ${cleanText(data.governance.human_review_required)}`,
-    `db_write: ${cleanText(data.governance.db_write)}`,
-    `critical_record_write: ${cleanText(data.governance.critical_record_write)}`,
-    `can_create_records: ${cleanText(data.governance.can_create_records)}`,
-    `ai_engine_used: ${cleanText(data.governance.ai_engine_used)}`,
-  ]);
-  sectionTitle(doc, localeText(data.locale, 'traceability'));
-  bulletList(doc, [
-    `history_run_id: ${data.governance.history_run_id}`,
-    `usuario: ${data.governance.user}`,
-    `timestamp: ${data.governance.timestamp}`,
-    `source: ${data.governance.source}`,
-    `provider/model: ${data.governance.provider} / ${data.governance.model}`,
-  ]);
-  sectionTitle(doc, 'Declaracion');
-  paragraph(doc, 'IA Auditor no aprueba, no cierra, no modifica evidencias ni crea registros criticos sin validacion humana.', { bold: true, color: '#854D0E' });
+    { label: 'Plazo', width: 58, value: 'due' },
+    { label: 'Evidencia esperada', width: 130, value: 'evidence' },
+  ], 6);
+
+  ensureSpace(doc, data, state, 'Brechas, evidencia y plan', 92);
+  sectionTitle(doc, 'Conclusion auditora');
+  const conclusionY = doc.y;
+  doc.roundedRect(46, conclusionY, doc.page.width - 92, 76, 12).fillAndStroke('#FFF7ED', '#FED7AA');
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('#9A3412')
+    .text(`${data.opinion} · ${data.readinessLabel}`, 60, conclusionY + 12, { width: doc.page.width - 120 });
+  doc.font('Helvetica').fontSize(8).fillColor('#7C2D12')
+    .text(`La decision ejecutiva debe priorizar el cierre de brechas de evidencia, trazabilidad y acciones vencidas antes de declarar preparacion formal. ${data.governance.human_review_required ? 'La revision humana es obligatoria.' : 'Se recomienda revision humana antes de uso formal.'}`, 60, conclusionY + 32, { width: doc.page.width - 120, lineGap: 2 });
+  doc.y = conclusionY + 88;
+
+  ensureSpace(doc, data, state, 'Brechas, evidencia y plan', 100);
+  sectionTitle(doc, localeText(data.locale, 'technicalTrace'));
+  const traceRows = [
+    ['ID analisis', data.governance.history_run_id],
+    ['Request ID', data.governance.request_id],
+    ['Tenant', data.tenantName],
+    ['Norma', `${data.standard}${data.version !== '-' ? ` / ${data.version}` : ''}`],
+    ['Profundidad', displayStatus(data.depth)],
+    ['Modo modelo', data.governance.model_mode],
+    ['LLM usado', data.governance.llm_used],
+    ['RAG / Web / Drive', `${data.governance.rag_used} / ${data.governance.web_used} / ${data.governance.drive_used}`],
+    ['Duracion', data.governance.duration_ms !== '-' ? `${data.governance.duration_ms} ms` : '-'],
+    ['Fuente de datos', 'Sistema TCDX'],
+  ];
+  const left = 46;
+  const width = doc.page.width - 92;
+  traceRows.forEach(([label, value], index) => {
+    const y = doc.y;
+    if (y + 20 > doc.page.height - 58) {
+      newPage(doc, data, state, localeText(data.locale, 'technicalTrace'));
+    }
+    doc.roundedRect(left, doc.y, width, 18, 4).fillAndStroke(index % 2 ? '#FFFFFF' : '#F8FAFC', '#E5E7EB');
+    doc.font('Helvetica-Bold').fontSize(6.8).fillColor('#475569').text(label, left + 8, doc.y + 5, { width: 120 });
+    doc.font('Helvetica').fontSize(6.8).fillColor('#111827').text(cleanText(value), left + 134, doc.y + 5, { width: width - 146 });
+    doc.y += 20;
+  });
+
+  ensureSpace(doc, data, state, 'Declaracion', 44);
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#854D0E')
+    .text('IA Auditor no aprueba, no cierra, no modifica evidencias ni crea registros criticos sin validacion humana.', 46, doc.y + 6, { width: doc.page.width - 92 });
 }
 
 function renderAiAuditorPremiumPdf(doc, { locale = 'es', tenant = {}, analysis = {} } = {}) {
@@ -634,10 +765,7 @@ function renderAiAuditorPremiumPdf(doc, { locale = 'es', tenant = {}, analysis =
   const state = { page: 0 };
 
   renderCover(doc, data, state);
-  renderScope(doc, data, state);
-  renderSample(doc, data, state);
-  renderGaps(doc, data, state);
-  renderConclusion(doc, data, state);
+  renderFinalAssessment(doc, data, state);
   footer(doc, data, state.page);
 }
 
