@@ -11,7 +11,7 @@ El módulo genera artefactos documentales reales para demo comercial controlada,
 | `docx` | Documento Word OOXML básico con portada TCDX, metadatos, secciones y pendientes | generador OOXML interno |
 | `xlsx` | Libro Excel con tabla documental o matriz | `xlsx` |
 | `pptx` | Presentación OOXML básica para mapa/proceso o resumen | generador OOXML interno |
-| `pdf` | PDF nativo con estilo corporativo sobrio | `pdfkit` |
+| `pdf` | PDF nativo con estilo corporativo sobrio | HTML/CSS + Puppeteer; LibreOffice si conserva DOCX original |
 | `md` | Markdown técnico o preview | texto interno |
 
 Los archivos se guardan en `backend/uploads/audit-preparation-generated` y se descargan mediante endpoint autenticado:

@@ -42,6 +42,12 @@ Si se ejecuta en la VM de base de datos con usuario postgres:
 sudo -u postgres psql -d tecdex_saas -f /ruta/database/migrations/20260519_tcdx_async_jobs.sql
 ```
 
+Para cache de PDF historico IA Auditor, aplicar tambien:
+
+```bash
+sudo -u postgres psql -d tecdex_saas -f /ruta/database/migrations/20260520_ai_auditor_pdf_cache.sql
+```
+
 Validacion:
 
 ```sql
@@ -67,6 +73,20 @@ ssh tcdx-backend "/usr/bin/google-chrome-stable --version || true"
   - `REPORT_PUBLIC_BASE_URL=https://181.212.166.187:8443`
   - `TCDX_LOGO_URL=https://181.212.166.187:8443/uploads/logos/tcdx-logo.png`
   - `REPORT_ASYNC_INTERNAL_BASE_URL=http://127.0.0.1:3000`
+- Configurar el motor HTML/CSS oficial:
+  - `PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable`
+  - `PDF_RENDER_ENGINE=puppeteer`
+  - `PDF_RENDER_TIMEOUT_MS=120000`
+  - `PDF_RENDER_FORMAT=A4`
+  - `PDF_RENDER_PRINT_BACKGROUND=true`
+  - `PDF_RENDER_CACHE_ENABLED=true`
+- Validar renderer local antes de deploy:
+
+```bash
+node scripts/qa/test-html-pdf-renderer.js
+```
+
+- Ver documentacion completa en `docs/pdf-rendering-html-puppeteer.md`.
 
 ## Backups
 

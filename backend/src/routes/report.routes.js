@@ -2,7 +2,12 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
-const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
+const { renderBaseTemplate } = require('../reports/templates/common/baseTemplate');
+const { escapeHtml } = require('../reports/templates/common/sanitize');
 
 router.get('/:tenant_id', auth, async (req, res) => {
   try {
@@ -66,66 +71,60 @@ router.get('/:tenant_id', auth, async (req, res) => {
       return acc;
     }, {});
 
-    const doc = new PDFDocument({
-      margin: 50,
-      size: 'A4'
+    const html = renderBaseTemplate({
+      title: 'Informe de Auditoría IA Compliance',
+      body: `
+        <main class="page">
+          <section class="hero keep-together">
+            <div class="brand">TCDX by Tecdex</div>
+            <h1>Informe de Auditoría IA Compliance</h1>
+            <p class="subtitle">Empresa: ${escapeHtml(tenantName)} · Fecha: ${escapeHtml(new Date().toLocaleString('es-CL'))}</p>
+          </section>
+          <section class="section grid-4">
+            ${[
+              ['Controles totales', total],
+              ['Cumple', cumple],
+              ['Parcial', parcial],
+              ['No cumple', noCumple],
+              ['Pendiente', pendiente],
+            ].map(([label, value]) => `<div class="kpi-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')}
+          </section>
+          <section class="section card">
+            <h2>Resumen por norma</h2>
+            <table><tbody>${Object.keys(grouped).map((iso) => {
+              const list = grouped[iso];
+              const ok = list.filter(r => r.status === 'cumple').length;
+              const part = list.filter(r => r.status === 'parcial').length;
+              const fail = list.filter(r => r.status === 'no cumple').length;
+              const pend = list.filter(r => r.status === 'pendiente' || r.status === '-').length;
+              return `<tr><td><strong>${escapeHtml(iso)}</strong></td><td>Total ${list.length}</td><td>Cumple ${ok}</td><td>Parcial ${part}</td><td>No cumple ${fail}</td><td>Pendiente ${pend}</td></tr>`;
+            }).join('')}</tbody></table>
+          </section>
+          ${Object.keys(grouped).map((iso) => `
+            <section class="section card">
+              <h2>Norma: ${escapeHtml(iso)}</h2>
+              <table>
+                <thead><tr><th>Clausula</th><th>Categoria</th><th>Control</th><th>Estado</th></tr></thead>
+                <tbody>${grouped[iso].map((r) => `<tr class="table-row"><td>${escapeHtml(r.clause)}</td><td>${escapeHtml(r.category || 'General')}</td><td>${escapeHtml(r.description)}</td><td>${escapeHtml(r.status)}</td></tr>`).join('')}</tbody>
+              </table>
+            </section>
+          `).join('')}
+        </main>
+      `,
+    });
+    const outputPath = path.join('/tmp', `tcdx-legacy-report-${crypto.randomUUID()}.pdf`);
+    await renderHtmlToPdf({
+      html,
+      outputPath,
+      requestId: req.requestId || null,
+      metadata: { templateName: 'legacy-ia-compliance-report' },
     });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename=auditoria.pdf');
-
-    doc.pipe(res);
-
-    // HEADER
-    doc.fontSize(18).text('Informe de Auditoría IA Compliance', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(11).text(`Empresa: ${tenantName}`);
-    doc.text(`Fecha: ${new Date().toLocaleString('es-CL')}`);
-    doc.moveDown();
-
-    // RESUMEN GENERAL
-    doc.fontSize(14).text('Resumen general');
-    doc.moveDown(0.5);
-    doc.fontSize(11).text(`Controles totales: ${total}`);
-    doc.text(`Cumple: ${cumple}`);
-    doc.text(`Parcial: ${parcial}`);
-    doc.text(`No cumple: ${noCumple}`);
-    doc.text(`Pendiente: ${pendiente}`);
-    doc.moveDown();
-
-    // RESUMEN POR NORMA
-    doc.fontSize(14).text('Resumen por norma');
-    doc.moveDown(0.5);
-
-    Object.keys(grouped).forEach((iso) => {
-      const list = grouped[iso];
-      const ok = list.filter(r => r.status === 'cumple').length;
-      const part = list.filter(r => r.status === 'parcial').length;
-      const fail = list.filter(r => r.status === 'no cumple').length;
-      const pend = list.filter(r => r.status === 'pendiente' || r.status === '-').length;
-
-      doc.fontSize(11).text(`${iso}: total ${list.length} | cumple ${ok} | parcial ${part} | no cumple ${fail} | pendiente ${pend}`);
-    });
-
-    doc.moveDown();
-
-    // DETALLE
-    Object.keys(grouped).forEach((iso, index) => {
-      if (index > 0) doc.addPage();
-
-      doc.fontSize(16).text(`Norma: ${iso}`);
-      doc.moveDown();
-
-      grouped[iso].forEach((r) => {
-        doc.fontSize(11).text(`Cláusula: ${r.clause}`);
-        doc.text(`Categoría: ${r.category || 'General'}`);
-        doc.text(`Control: ${r.description}`);
-        doc.text(`Estado: ${r.status}`);
-        doc.moveDown(0.7);
-      });
-    });
-
-    doc.end();
+    fs.createReadStream(outputPath)
+      .on('close', () => fs.unlink(outputPath, () => {}))
+      .pipe(res);
 
   } catch (err) {
     console.error('ERROR REPORT PDF:', err);

@@ -1,10 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const PDFDocument = require('pdfkit');
 const XLSX = require('xlsx');
 const { readZipEntriesFromBuffer } = require('./auditZipExtraction.service');
 const { convertDocxBufferToPdf } = require('./auditDocumentConversion.service');
+const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
+const { renderBaseTemplate } = require('../reports/templates/common/baseTemplate');
+const { escapeHtml } = require('../reports/templates/common/sanitize');
 
 function ensureGeneratedDir() {
   const dir = path.join(__dirname, '..', '..', 'uploads', 'audit-preparation-generated');
@@ -288,29 +290,50 @@ function buildPptxBuffer({ title, markdown, meta = {} }) {
   ]);
 }
 
-function buildPdfBuffer({ title, markdown, meta = {} }) {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 44, info: { Title: title } });
-    const chunks = [];
-    doc.on('data', (chunk) => chunks.push(chunk));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', reject);
-    doc.fontSize(9).fillColor('#2563eb').text('TCDX by Tecdex', { align: 'right' });
-    doc.moveDown(0.5);
-    doc.fontSize(22).fillColor('#0f172a').text(title, { align: 'left' });
-    doc.moveDown(0.5);
-    doc.fontSize(10).fillColor('#475569').text(`${meta.standardCode || ''} · ${meta.periodYear || ''} · ${meta.status || 'draft'} · versión ${meta.version || '1.0'}`);
-    doc.moveDown(1);
-    for (const line of markdownLines(markdown)) {
-      if (/^#\s/.test(line)) doc.moveDown(0.6).fontSize(17).fillColor('#0f172a').text(line.replace(/^#\s*/, ''));
-      else if (/^##\s/.test(line)) doc.moveDown(0.5).fontSize(14).fillColor('#1e293b').text(line.replace(/^##\s*/, ''));
-      else if (/^[-*]\s/.test(line)) doc.fontSize(10).fillColor('#334155').text(`• ${line.replace(/^[-*]\s*/, '')}`, { indent: 12 });
-      else doc.fontSize(10).fillColor('#334155').text(line || ' ', { lineGap: 3 });
-    }
-    doc.moveDown(1);
-    doc.fontSize(8).fillColor('#64748b').text('Documento generado por TCDX Compliance. Validar pendientes antes de uso externo.');
-    doc.end();
+function markdownToHtml(markdown) {
+  return markdownLines(markdown).slice(0, 260).map((line) => {
+    if (/^#\s/.test(line)) return `<h2>${escapeHtml(line.replace(/^#\s*/, ''))}</h2>`;
+    if (/^##\s/.test(line)) return `<h3>${escapeHtml(line.replace(/^##\s*/, ''))}</h3>`;
+    if (/^[-*]\s/.test(line)) return `<p class="bullet">• ${escapeHtml(line.replace(/^[-*]\s*/, ''))}</p>`;
+    return `<p>${escapeHtml(line || ' ')}</p>`;
+  }).join('');
+}
+
+async function buildPdfBuffer({ title, markdown, meta = {} }) {
+  const outputPath = path.join('/tmp', `tcdx-audit-document-${crypto.randomUUID()}.pdf`);
+  const html = renderBaseTemplate({
+    title,
+    body: `
+      <main class="page">
+        <section class="hero keep-together">
+          <div class="brand">TCDX by Tecdex</div>
+          <h1>${escapeHtml(title)}</h1>
+          <p class="subtitle">${escapeHtml(`${meta.standardCode || ''} · ${meta.periodYear || ''} · ${meta.status || 'draft'} · version ${meta.version || '1.0'}`)}</p>
+        </section>
+        <section class="section card document-body">
+          ${markdownToHtml(markdown)}
+        </section>
+        <p class="footer-note">Documento generado por TCDX Compliance. Validar pendientes antes de uso externo.</p>
+      </main>
+    `,
+    extraStyles: `
+      .document-body h2 { margin: 10px 0 6px; font-size: 16px; color: #0f172a; }
+      .document-body h3 { margin: 8px 0 5px; font-size: 13px; color: #1e293b; }
+      .document-body p { margin: 0 0 6px; font-size: 10px; color: #334155; }
+      .document-body .bullet { padding-left: 10px; }
+    `,
   });
+  await renderHtmlToPdf({
+    html,
+    outputPath,
+    metadata: { templateName: 'audit-preparation-document' },
+    minBytes: 6 * 1024,
+  });
+  try {
+    return fs.readFileSync(outputPath);
+  } finally {
+    fs.unlink(outputPath, () => {});
+  }
 }
 
 function mimeForFormat(format) {
