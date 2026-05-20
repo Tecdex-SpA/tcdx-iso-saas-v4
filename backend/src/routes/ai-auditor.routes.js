@@ -2048,11 +2048,19 @@ async function getAiAuditorTenantForPdf(tenantId) {
 }
 
 function pickAiAuditorPdfAnalysisFromHistory(row) {
-  return row?.full_result_json || {
+  return {
+    ...(row?.full_result_json || {}),
     summary: row?.summary_json || {},
     coverage: row?.coverage_json || {},
     trace: row?.trace_json || {},
     suggestions_json: row?.suggestions_json || {},
+    score: row?.score,
+    readiness_level: row?.readiness_level,
+    ai_engine_used: row?.ai_engine_used,
+    db_write: row?.db_write,
+    human_review_required: row?.human_review_required,
+    can_create_records: row?.can_create_records,
+    created_at: row?.created_at,
   };
 }
 

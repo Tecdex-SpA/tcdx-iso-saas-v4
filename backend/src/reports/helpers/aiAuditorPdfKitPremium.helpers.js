@@ -1,5 +1,8 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+
 function asObject(value) {
   if (!value) return {};
   if (typeof value === 'object' && !Array.isArray(value)) return value;
@@ -25,6 +28,29 @@ function cleanText(value, fallback = '-') {
     return cleanText(value.title || value.name || value.label || value.description || value.summary, fallback);
   }
   return String(value).replace(/\s+/g, ' ').trim() || fallback;
+}
+
+function resolveImagePath(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const candidates = [];
+  if (path.isAbsolute(raw)) candidates.push(raw);
+  const fileName = path.basename(raw);
+  if (fileName && fileName === path.basename(fileName)) {
+    candidates.push(path.join(__dirname, '..', '..', '..', 'uploads', 'logos', fileName));
+    candidates.push(path.join(__dirname, '..', '..', '..', 'uploads', fileName));
+  }
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function drawImageSafe(doc, imagePath, x, y, options = {}) {
+  if (!imagePath) return false;
+  try {
+    doc.image(imagePath, x, y, options);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function toNumber(value, fallback = 0) {
@@ -288,6 +314,8 @@ function normalizeData({ locale, tenant, analysis }) {
   return {
     locale,
     tenantName: cleanText(tenant?.name || tenant?.company_name || tenant?.business_name, 'Tenant'),
+    tenantLogoPath: resolveImagePath(tenant?.logo_url || tenant?.logo),
+    tcdxLogoPath: resolveImagePath(process.env.TCDX_LOGO_PATH || process.env.REPORT_TCDX_LOGO_PATH || 'tcdx-logo.png'),
     standard: cleanText(full.standard_code || scope.standard_code || analysis?.standard_code || (Array.isArray(scope.standards) ? scope.standards.join(', ') : ''), 'Multinorma'),
     version: cleanText(full.version_code || scope.version_code || analysis?.version_code, ''),
     emittedAt: formatDate(),
@@ -335,10 +363,18 @@ function footer(doc, data, pageNumber) {
 }
 
 function header(doc, data, title) {
-  doc.rect(0, 0, doc.page.width, 28).fill('#0F172A');
-  doc.font('Helvetica-Bold').fontSize(8).fillColor('#93C5FD').text('TCDX by Tecdex', 46, 10);
-  doc.fillColor('#FFFFFF').text(title, doc.page.width - 302, 10, { width: 256, align: 'right' });
-  doc.y = 50;
+  doc.rect(0, 0, doc.page.width, 42).fill('#0F172A');
+  const drewLogo = drawImageSafe(doc, data.tcdxLogoPath, 46, 8, { fit: [66, 24] });
+  if (!drewLogo) {
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#93C5FD').text('TCDX by Tecdex', 46, 14);
+  }
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#FFFFFF').text(title, 142, 10, { width: doc.page.width - 284, align: 'center' });
+  doc.font('Helvetica').fontSize(6.5).fillColor('#CBD5E1').text(`${data.tenantName} · ${data.emittedAt}`, 142, 24, { width: doc.page.width - 284, align: 'center' });
+  const drewTenantLogo = drawImageSafe(doc, data.tenantLogoPath, doc.page.width - 112, 8, { fit: [66, 24], align: 'right' });
+  if (!drewTenantLogo) {
+    doc.font('Helvetica-Bold').fontSize(7).fillColor('#CBD5E1').text(data.tenantName, doc.page.width - 126, 14, { width: 80, align: 'right' });
+  }
+  doc.y = 58;
 }
 
 function newPage(doc, data, state, title, first = false) {
@@ -442,15 +478,17 @@ function table(doc, data, state, title, rows, columns, limit = 8) {
 
 function renderCover(doc, data, state) {
   newPage(doc, data, state, localeText(data.locale, 'executiveCover'), true);
-  doc.roundedRect(36, 44, doc.page.width - 72, 130, 18).fillAndStroke('#0B1120', '#0B1120');
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#93C5FD').text('TCDX by Tecdex', 60, 66);
-  doc.font('Helvetica-Bold').fontSize(24).fillColor('#FFFFFF').text(localeText(data.locale, 'title'), 60, 88, { width: doc.page.width - 120 });
-  doc.font('Helvetica').fontSize(9).fillColor('#CBD5E1').text(localeText(data.locale, 'subtitle'), 60, 122, { width: doc.page.width - 120 });
-  doc.font('Helvetica-Bold').fontSize(12).fillColor('#FFFFFF').text(data.tenantName, 60, 150, { width: doc.page.width - 120 });
+  doc.roundedRect(36, 56, doc.page.width - 72, 138, 18).fillAndStroke('#0B1120', '#0B1120');
+  drawImageSafe(doc, data.tcdxLogoPath, 60, 75, { fit: [88, 32] }) ||
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#93C5FD').text('TCDX by Tecdex', 60, 82);
+  drawImageSafe(doc, data.tenantLogoPath, doc.page.width - 142, 75, { fit: [82, 32], align: 'right' });
+  doc.font('Helvetica-Bold').fontSize(24).fillColor('#FFFFFF').text(localeText(data.locale, 'title'), 60, 112, { width: doc.page.width - 120 });
+  doc.font('Helvetica').fontSize(9).fillColor('#CBD5E1').text(localeText(data.locale, 'subtitle'), 60, 146, { width: doc.page.width - 120 });
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#FFFFFF').text(data.tenantName, 60, 172, { width: doc.page.width - 120 });
 
-  drawBadge(doc, doc.page.width - 188, 62, data.opinion, severityColor(data.readiness), 128);
+  drawBadge(doc, doc.page.width - 188, 80, data.opinion, severityColor(data.readiness), 128);
 
-  const infoY = 198;
+  const infoY = 214;
   const w2 = (doc.page.width - 112) / 2;
   kpiCard(doc, 46, infoY, w2, localeText(data.locale, 'standard'), `${data.standard}${data.version !== '-' ? ` / ${data.version}` : ''}`, localeText(data.locale, 'standard'), '#2563EB');
   kpiCard(doc, 56 + w2, infoY, w2, localeText(data.locale, 'emittedAt'), data.emittedAt, 'Trazabilidad temporal', '#0F766E');

@@ -2124,6 +2124,7 @@ async function getAiEnhancements({
   openFindings,
   latestKpis,
   platformMonthlyStats,
+  aiOptions = {},
 }) {
   const weakestStandards = buildWeakestStandardsList(complianceByStandard);
 
@@ -2170,8 +2171,15 @@ async function getAiEnhancements({
       tenantId,
       standardCode: primaryStandardCode,
       reportType: reportTypeCode || 'executive',
-      depth: 'executive',
-      includeDeepLlm: false,
+      depth: aiOptions.depth || 'executive',
+      includeDeepLlm: aiOptions.include_deep_llm === true,
+      modelMode: aiOptions.model_mode || 'fast',
+      useLlm: aiOptions.use_llm === true,
+      useRag: aiOptions.use_rag !== false,
+      useWeb: aiOptions.use_web === true,
+      useDrive: aiOptions.use_drive ?? false,
+      quality: aiOptions.quality || null,
+      requestId: aiOptions.request_id || null,
     }),
     safeAiCall('/api/ai/auditor/analyze', seniorAuditorPayload, null, 20000),
   ]);
@@ -2542,6 +2550,7 @@ async function buildReportData({
   requestedBy,
   period,
   requesterRole,
+  aiOptions = {},
 }) {
   const audience = getAudience(reportTypeCode, requesterRole);
 
@@ -2593,6 +2602,7 @@ async function buildReportData({
     openFindings,
     latestKpis,
     platformMonthlyStats,
+    aiOptions,
   });
 
   let baseRecommendations = buildExecutiveRecommendations({
