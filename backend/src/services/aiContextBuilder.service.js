@@ -78,6 +78,11 @@ function buildBaseContext({ tenantId, moduleOrigin = 'ia-auditor', standardCode 
     kpis: [],
     company_profile: null,
     company_profile_impact: null,
+    company_applicability_universe: null,
+    applicable_controls: [],
+    applicable_kpis: [],
+    applicable_evidence_requirements: [],
+    applicability_exclusions_summary: null,
     company_profile_trace: null,
     source_trace: [],
     limitations: [],
@@ -339,6 +344,106 @@ async function loadCompanyProfile(context, tenantId) {
       management_focus: asArray(rows[0].ai_profile_summary_json?.management_focus),
     };
   }
+}
+
+async function loadApplicabilityUniverse(context, tenantId) {
+  if (!(await tableExists('tenant_applicable_controls'))) return;
+  const [summaryRows, controls, kpis, evidenceRequirements, exclusions] = await Promise.all([
+    safeQuery(
+      context,
+      'tenant_applicability_profiles',
+      `
+      SELECT *
+      FROM tenant_applicability_profiles
+      WHERE tenant_id = $1::uuid
+      ORDER BY updated_at DESC
+      LIMIT 1
+      `,
+      [tenantId],
+      'perfil de aplicabilidad tenant-scoped'
+    ),
+    safeQuery(
+      context,
+      'tenant_applicable_controls',
+      `
+      SELECT *
+      FROM tenant_applicable_controls
+      WHERE tenant_id = $1::uuid
+        AND active = true
+        AND visible_to_tenant = true
+      ORDER BY
+        CASE priority WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END,
+        applicability_score DESC NULLS LAST
+      LIMIT 50
+      `,
+      [tenantId],
+      'controles dentro del universo aplicable'
+    ),
+    safeQuery(
+      context,
+      'tenant_applicable_kpis',
+      `
+      SELECT *
+      FROM tenant_applicable_kpis
+      WHERE tenant_id = $1::uuid
+        AND active = true
+        AND visible_to_tenant = true
+      ORDER BY
+        CASE priority WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END,
+        applicability_score DESC NULLS LAST
+      LIMIT 40
+      `,
+      [tenantId],
+      'KPIs dentro del universo aplicable'
+    ),
+    safeQuery(
+      context,
+      'tenant_applicable_evidence_requirements',
+      `
+      SELECT *
+      FROM tenant_applicable_evidence_requirements
+      WHERE tenant_id = $1::uuid
+        AND active = true
+        AND visible_to_tenant = true
+      ORDER BY
+        CASE priority WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END,
+        evidence_name
+      LIMIT 40
+      `,
+      [tenantId],
+      'evidencias esperadas dentro del universo aplicable'
+    ),
+    safeQuery(
+      context,
+      'tenant_applicability_exclusions',
+      `
+      SELECT object_type, COUNT(*)::int AS count
+      FROM tenant_applicability_exclusions
+      WHERE tenant_id = $1::uuid
+        AND active = true
+      GROUP BY object_type
+      ORDER BY object_type
+      `,
+      [tenantId],
+      'resumen de exclusiones por perfil empresa'
+    ),
+  ]);
+
+  context.company_applicability_universe = {
+    tenant_id: tenantId,
+    active_universe: controls.length > 0 || kpis.length > 0,
+    profile: summaryRows[0] || null,
+    applicable_controls_count: controls.length,
+    applicable_kpis_count: kpis.length,
+    applicable_evidence_requirements_count: evidenceRequirements.length,
+    exclusions_summary: exclusions,
+    tenant_filter_enforced: true,
+    filtered_by_tenant_id: true,
+  };
+  context.applicable_controls = assertTenantScopedRows(controls, tenantId, 'tenant_applicable_controls', context);
+  context.applicable_kpis = assertTenantScopedRows(kpis, tenantId, 'tenant_applicable_kpis', context);
+  context.applicable_evidence_requirements = assertTenantScopedRows(evidenceRequirements, tenantId, 'tenant_applicable_evidence_requirements', context);
+  context.applicability_exclusions_summary = exclusions;
 }
 
 function standardFilterClause(baseParamIndex = 2) {
@@ -801,6 +906,7 @@ async function buildAiTenantContext({ tenantId }) {
   const context = buildBaseContext({ tenantId });
   await loadTenantProfile(context, tenantId);
   await loadCompanyProfile(context, tenantId);
+  await loadApplicabilityUniverse(context, tenantId);
   await loadEffectiveHealth(context, { tenantId });
   await loadRecentEntities(context, { tenantId });
   await loadOptionalEntities(context, { tenantId });
@@ -929,6 +1035,7 @@ async function buildCompanyProfileAiContext({
   const context = buildBaseContext({ tenantId, moduleOrigin: 'company_profile', standardCode });
   await loadTenantProfile(context, tenantId);
   await loadCompanyProfile(context, tenantId);
+  await loadApplicabilityUniverse(context, tenantId);
   if (includeHealth || includeControls) await loadEffectiveHealth(context, { tenantId, standardCode });
   if (includeEvidence || includeFindings || includeNonconformities || includeActionPlans || includeAudits) {
     await loadRecentEntities(context, { tenantId, standardCode });
@@ -936,7 +1043,7 @@ async function buildCompanyProfileAiContext({
   if (includeRisks || includeKpis) await loadOptionalEntities(context, { tenantId, standardCode });
 
   const healthRows = assertTenantScopedRows(context.effective_health_summary, tenantId, 'public.v_iso_effective_kpi_summary', context);
-  const controls = assertTenantScopedRows(context.priority_controls, tenantId, 'public.v_iso_control_effective_health', context);
+  let controls = assertTenantScopedRows(context.priority_controls, tenantId, 'public.v_iso_control_effective_health', context);
   const evidences = assertTenantScopedRows(context.recent_evidences, tenantId, 'evidences', context);
   const findings = assertTenantScopedRows(context.recent_findings, tenantId, 'findings', context);
   const nonconformities = assertTenantScopedRows(context.recent_nonconformities, tenantId, 'tenant_nonconformities', context);
@@ -944,7 +1051,21 @@ async function buildCompanyProfileAiContext({
   const risks = assertTenantScopedRows(context.risks, tenantId, 'risks', context);
   const audits = assertTenantScopedRows(context.audits, tenantId, 'audits', context);
   const documents = assertTenantScopedRows(context.documents, tenantId, 'document_index', context);
-  const kpis = assertTenantScopedRows(context.kpis, tenantId, 'kpi_snapshots', context);
+  let kpis = assertTenantScopedRows(context.kpis, tenantId, 'kpi_snapshots', context);
+  if (context.applicable_controls.length) {
+    const applicableControlIds = new Set(context.applicable_controls.flatMap((row) => [
+      row.tenant_control_id,
+      row.control_catalog_id,
+    ]).filter(Boolean).map(String));
+    controls = controls.filter((row) => applicableControlIds.has(String(row.tenant_control_id)) || applicableControlIds.has(String(row.catalog_control_id)));
+  }
+  if (context.applicable_kpis.length) {
+    const applicableKpiIds = new Set(context.applicable_kpis.flatMap((row) => [
+      row.kpi_definition_id,
+      row.kpi_code,
+    ]).filter(Boolean).map(String));
+    kpis = kpis.filter((row) => applicableKpiIds.has(String(row.kpi_id)) || applicableKpiIds.has(String(row.kpi_code)));
+  }
 
   const controlsWithoutEvidence = controls.filter((row) => Number(row.evidence_count || row.official_evidence_count || 0) === 0);
   const lowHealth = controls.filter((row) => Number(row.effective_health_score || 0) < 60);
@@ -1094,6 +1215,11 @@ async function buildCompanyProfileAiContext({
     tenant_context: tenantContext,
     company_profile: context.company_profile,
     company_profile_impact: context.company_profile_impact,
+    company_applicability_universe: context.company_applicability_universe,
+    applicable_controls: compactRows(context.applicable_controls, 30),
+    applicable_kpis: compactRows(context.applicable_kpis, 30),
+    applicable_evidence_requirements: compactRows(context.applicable_evidence_requirements, 30),
+    applicability_exclusions_summary: context.applicability_exclusions_summary,
     company_profile_trace: context.company_profile_trace,
     iso_context: isoContext,
     ...sections,
@@ -1119,6 +1245,8 @@ async function buildCompanyProfileAiContext({
     internal_context_counts: internalContextCounts,
     source_trace: {
       tenant_filter_enforced: true,
+      applicability_universe_applied: context.company_applicability_universe?.active_universe === true,
+      filtered_by_applicability_universe: context.company_applicability_universe?.active_universe === true,
       tenant_id: tenantId,
       standard_code_filter: standardCode || null,
       sources: context.source_trace.map((item) => ({
@@ -1136,6 +1264,7 @@ async function buildAiStandardContext({ tenantId, standardCode, operationId = nu
   const context = buildBaseContext({ tenantId, standardCode, operationId });
   await loadTenantProfile(context, tenantId);
   await loadCompanyProfile(context, tenantId);
+  await loadApplicabilityUniverse(context, tenantId);
   await loadEffectiveHealth(context, { tenantId, standardCode, operationId });
   await loadRecentEntities(context, { tenantId, standardCode });
   await loadOptionalEntities(context, { tenantId, standardCode, operationId });
@@ -1147,6 +1276,7 @@ async function buildAiControlContext({ tenantId, tenantControlId, standardCode =
   context.scope.tenant_control_id = tenantControlId || '';
   await loadTenantProfile(context, tenantId);
   await loadCompanyProfile(context, tenantId);
+  await loadApplicabilityUniverse(context, tenantId);
   await loadEffectiveHealth(context, { tenantId, standardCode, operationId, tenantControlId });
   await loadRecentEntities(context, { tenantId, standardCode });
   await loadOptionalEntities(context, { tenantId, standardCode, operationId });

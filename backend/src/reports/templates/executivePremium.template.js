@@ -1096,6 +1096,7 @@ function renderCompanyProfileImpactPage(data) {
   const impact = data.company_profile_impact || {};
   const profile = impact.impact_profile || {};
   const trace = impact.trace || {};
+  const applicability = profile.applicability_universe || trace.applicability_summary || {};
   const impactText = (item, keys, max = 150) => {
     if (typeof item === 'string') return cleanText(item, max);
     if (!item || typeof item !== 'object') return '';
@@ -1128,7 +1129,7 @@ function renderCompanyProfileImpactPage(data) {
       ${miniMetric('Industria', cleanText(impact.industry || 'No declarada', 40), 'Contexto declarado')}
       ${miniMetric('Madurez', cleanText(impact.maturity_level || 'No declarada', 40), 'Calibración de roadmap')}
       ${miniMetric('Apetito riesgo', cleanText(impact.risk_appetite || 'No declarado', 40), 'Calibración de prioridad')}
-      ${miniMetric('IA / Web', `${trace.selected_model || 'No informado'} · ${trace.used_web ? 'web sí' : 'web no'}`, 'Trazabilidad')}
+      ${miniMetric('Universo aplicable', `${applicability.applicable_controls_count || 0} controles · ${applicability.applicable_kpis_count || 0} KPIs`, `${applicability.exclusions_count || 0} excluidos por perfil`)}
     </div>
 
     <div class="twoCol">

@@ -7,6 +7,10 @@ const {
   getJwtSecret,
   getJwtVerifyOptions,
 } = require('../config/security');
+const {
+  filterApplicableControls,
+  filterApplicableKpis,
+} = require('../services/applicabilityScope.service');
 
 // =====================================================
 // Middleware local de autenticación para rutas Health
@@ -227,12 +231,21 @@ router.get('/dashboard', async (req, res) => {
 
     const result = await pool.query(query, params);
 
+    const rows = scope.isSuperAdmin && req.query.include_exclusions === 'true'
+      ? result.rows
+      : await filterApplicableKpis(result.rows, scope.tenantId);
+
     return res.json({
       ok: true,
-      data: result.rows,
+      data: rows,
       scope: {
         is_superadmin: scope.isSuperAdmin,
         tenant_id: scope.tenantId,
+        applicability_scope: {
+          tenant_filter_enforced: true,
+          filtered_by_tenant_id: true,
+          active_universe: true,
+        },
       },
     });
   } catch (error) {
@@ -276,12 +289,21 @@ router.get('/standards', async (req, res) => {
 
     const result = await pool.query(query, params);
 
+    const rows = scope.isSuperAdmin && req.query.include_exclusions === 'true'
+      ? result.rows
+      : await filterApplicableControls(result.rows, scope.tenantId, { standardCode });
+
     return res.json({
       ok: true,
-      data: result.rows,
+      data: rows,
       scope: {
         is_superadmin: scope.isSuperAdmin,
         tenant_id: scope.tenantId,
+        applicability_scope: {
+          tenant_filter_enforced: true,
+          filtered_by_tenant_id: true,
+          active_universe: true,
+        },
       },
     });
   } catch (error) {

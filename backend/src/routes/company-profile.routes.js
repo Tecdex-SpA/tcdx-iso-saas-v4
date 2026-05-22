@@ -15,6 +15,14 @@ const {
   buildCompanyProfileImpact,
   buildCompanyProfileModuleImpact,
 } = require('../services/companyProfileImpact.service');
+const {
+  buildTenantApplicabilityUniverse,
+  getTenantApplicabilitySummary,
+  getTenantApplicableControls,
+  getTenantApplicableKpis,
+  getTenantApplicableEvidenceRequirements,
+  getTenantApplicabilityExclusions,
+} = require('../services/companyProfileApplicabilityEngine.service');
 
 const router = express.Router();
 
@@ -79,6 +87,30 @@ function buildJobPayload({ tenantId, userId, profile, modelMode, requestId }) {
       task_type: 'company_profile_context',
     },
   };
+}
+
+function runApplicabilityRebuildInBackground({ tenantId, userId = null, requestId = null, forceRebuild = false }) {
+  setImmediate(() => {
+    buildTenantApplicabilityUniverse({ tenantId, userId, forceRebuild })
+      .then((result) => {
+        console.info('COMPANY PROFILE APPLICABILITY REBUILD OK:', {
+          request_id: requestId,
+          tenant_id: tenantId,
+          run_id: result.run_id,
+          applicable_controls_count: result.summary?.applicable_controls_count,
+          applicable_kpis_count: result.summary?.applicable_kpis_count,
+          exclusions_count: result.summary?.exclusions_count,
+        });
+      })
+      .catch((error) => {
+        console.error('COMPANY PROFILE APPLICABILITY REBUILD ERROR:', {
+          request_id: requestId,
+          tenant_id: tenantId,
+          error_type: error?.code || error?.name,
+          error: error?.message,
+        });
+      });
+  });
 }
 
 async function runCompanyProfileAnalysisJob({ jobId, tenantId, userId, requestId, modelMode }) {
@@ -169,6 +201,21 @@ async function runCompanyProfileAnalysisJob({ jobId, tenantId, userId, requestId
       duration_ms: resultJson.duration_ms,
     });
     await asyncJobs.markCompleted(jobId, { result_json: resultJson });
+    try {
+      await buildTenantApplicabilityUniverse({
+        tenantId,
+        userId,
+        forceRebuild: true,
+      });
+    } catch (applicabilityError) {
+      console.warn('COMPANY PROFILE AI APPLICABILITY REFRESH WARNING:', {
+        request_id: requestId,
+        tenant_id: tenantId,
+        job_id: jobId,
+        error_type: applicabilityError?.code || applicabilityError?.name,
+        error: applicabilityError?.message,
+      });
+    }
     console.info('COMPANY PROFILE AI JOB COMPLETED:', {
       request_id: requestId,
       tenant_id: tenantId,
@@ -338,6 +385,150 @@ router.get('/impact/module/:moduleCode', auth, async (req, res) => {
   }
 });
 
+router.post('/applicability/rebuild', auth, async (req, res) => {
+  try {
+    const { tenantId, userId } = await getCompanyProfileForRequest(req, req.body?.tenant_id || null);
+    const result = await buildTenantApplicabilityUniverse({
+      tenantId,
+      userId,
+      forceRebuild: req.body?.force_rebuild !== false,
+    });
+    return res.status(202).json({
+      ok: true,
+      tenant_id: tenantId,
+      tenant_filter_enforced: true,
+      filtered_by_tenant_id: true,
+      profile_used: true,
+      active_universe: true,
+      ...result,
+      request_id: req.requestId || null,
+    });
+  } catch (error) {
+    console.error('COMPANY PROFILE APPLICABILITY REBUILD ENDPOINT ERROR:', {
+      request_id: req.requestId || null,
+      error: error.message,
+    });
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/applicability/summary', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const summary = await getTenantApplicabilitySummary({ tenantId });
+    return res.json({
+      ok: true,
+      tenant_id: tenantId,
+      tenant_filter_enforced: true,
+      filtered_by_tenant_id: true,
+      profile_used: true,
+      active_universe: true,
+      data: summary,
+      request_id: req.requestId || null,
+    });
+  } catch (error) {
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/applicability/controls', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const controls = await getTenantApplicableControls({
+      tenantId,
+      filters: {
+        standard_code: req.query.standard_code || req.query.iso || null,
+        limit: req.query.limit || 200,
+      },
+    });
+    return res.json({
+      ok: true,
+      tenant_id: tenantId,
+      tenant_filter_enforced: true,
+      filtered_by_tenant_id: true,
+      profile_used: true,
+      active_universe: true,
+      total: controls.length,
+      data: controls,
+      request_id: req.requestId || null,
+    });
+  } catch (error) {
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/applicability/kpis', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const kpis = await getTenantApplicableKpis({ tenantId, filters: { limit: req.query.limit || 200 } });
+    return res.json({
+      ok: true,
+      tenant_id: tenantId,
+      tenant_filter_enforced: true,
+      filtered_by_tenant_id: true,
+      profile_used: true,
+      active_universe: true,
+      total: kpis.length,
+      data: kpis,
+      request_id: req.requestId || null,
+    });
+  } catch (error) {
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/applicability/evidence-requirements', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const evidence = await getTenantApplicableEvidenceRequirements({ tenantId, filters: { limit: req.query.limit || 200 } });
+    return res.json({
+      ok: true,
+      tenant_id: tenantId,
+      tenant_filter_enforced: true,
+      filtered_by_tenant_id: true,
+      profile_used: true,
+      active_universe: true,
+      total: evidence.length,
+      data: evidence,
+      request_id: req.requestId || null,
+    });
+  } catch (error) {
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/applicability/exclusions', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const exclusions = await getTenantApplicabilityExclusions({
+      tenantId,
+      filters: {
+        object_type: req.query.object_type || null,
+        limit: req.query.limit || 200,
+      },
+    });
+    return res.json({
+      ok: true,
+      tenant_id: tenantId,
+      tenant_filter_enforced: true,
+      filtered_by_tenant_id: true,
+      profile_used: true,
+      active_universe: true,
+      total: exclusions.length,
+      data: exclusions,
+      request_id: req.requestId || null,
+    });
+  } catch (error) {
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
 router.put('/', auth, async (req, res) => {
   try {
     const { tenantId, userId } = await getCompanyProfileForRequest(req, req.body?.tenant_id || null);
@@ -345,6 +536,12 @@ router.put('/', auth, async (req, res) => {
       tenantId,
       userId,
       profile: req.body || {},
+    });
+    runApplicabilityRebuildInBackground({
+      tenantId,
+      userId,
+      requestId: req.requestId || null,
+      forceRebuild: true,
     });
     return res.json({ ok: true, data: profile });
   } catch (error) {

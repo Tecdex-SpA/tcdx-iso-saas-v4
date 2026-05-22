@@ -2,6 +2,12 @@
 
 const pool = require('../config/db');
 const aiContextBuilder = require('./aiContextBuilder.service');
+const {
+  getTenantApplicabilitySummary,
+  getTenantApplicableControls,
+  getTenantApplicableKpis,
+  getTenantApplicableEvidenceRequirements,
+} = require('./companyProfileApplicabilityEngine.service');
 
 function asArray(value) {
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -345,7 +351,7 @@ function normalizeModuleCode(value) {
   return allowed.has(code) ? code : 'dashboard';
 }
 
-function buildImpactFromProfileAndContext(profileRow, context) {
+function buildImpactFromProfileAndContext(profileRow, context, applicability = {}) {
   const profile = normalizeProfile(profileRow);
   const ai = safeObject(profileRow.ai_profile_summary_json);
   const trace = safeObject(profileRow.ai_research_trace_json);
@@ -417,6 +423,7 @@ function buildImpactFromProfileAndContext(profileRow, context) {
     critical_processes: profile.critical_processes,
     operational_scope: profile.operational_scope,
     impact_profile: {
+      applicability_universe: applicability.summary || null,
       control_domain_weights: weights,
       kpi_target_adjustments: {
         action_closure_on_time: '>= 90%',
@@ -439,6 +446,7 @@ function buildImpactFromProfileAndContext(profileRow, context) {
       suggested_kpis: suggestedKpis,
       suggested_controls: suggestedControls,
       suggested_evidence_baseline: uniq([
+        ...(asArray(applicability.evidence_requirements).map((item) => item.evidence_name || item.requirement_reason)),
         ...(asArray(ai.evidence_baseline || ai.suggested_evidence_baseline)),
         'Alcance ISO aprobado y exclusiones justificadas.',
         'Mapa de procesos críticos y responsables.',
@@ -446,8 +454,26 @@ function buildImpactFromProfileAndContext(profileRow, context) {
         'Registro de revisión gerencial y decisiones.',
         'CAPA con causa raíz, cierre y verificación de eficacia.',
       ], 12),
-      prioritized_controls: prioritizedControls,
-      profile_adjusted_controls: prioritizedControls,
+      prioritized_controls: asArray(applicability.controls).length
+        ? asArray(applicability.controls).slice(0, 12).map((item) => ({
+            control_id: item.tenant_control_id || item.control_catalog_id || item.id,
+            standard_code: item.standard_code,
+            clause: item.control_code,
+            description: item.control_name,
+            health_status: null,
+            health_score: null,
+            evidence_count: 0,
+            profile_relevance: item.priority === 'alta' ? 'alta' : item.priority || 'media',
+            profile_priority_weight: Number(item.calculation_weight || item.applicability_score || 1),
+            profile_priority_reason: item.applicability_reason,
+            profile_adjusted_priority: item.priority || 'media',
+            profile_recommended_attention: 'Gestionar este elemento dentro del universo aplicable del tenant.',
+            company_profile_context_applied: true,
+          }))
+        : prioritizedControls,
+      profile_adjusted_controls: asArray(applicability.controls).length
+        ? asArray(applicability.controls)
+        : prioritizedControls,
       recommended_kpis_missing: suggestedKpis
         .filter((item) => typeof item === 'object')
         .map((item) => ({
@@ -479,6 +505,7 @@ function buildImpactFromProfileAndContext(profileRow, context) {
       calculated_at: new Date().toISOString(),
       source_trace: context.source_trace || null,
       internal_context_counts: context.internal_context_counts || {},
+      applicability_summary: applicability.summary || null,
     },
   };
 }
@@ -549,7 +576,30 @@ async function buildCompanyProfileImpact({ tenantId, standardCodes = [] } = {}) 
     tenantId,
     standardCodes: standards,
   });
-  return buildImpactFromProfileAndContext(profile, context);
+  let applicability = {};
+  try {
+    const [summary, controls, kpis, evidenceRequirements] = await Promise.all([
+      getTenantApplicabilitySummary({ tenantId }),
+      getTenantApplicableControls({ tenantId, filters: { limit: 25 } }),
+      getTenantApplicableKpis({ tenantId, filters: { limit: 25 } }),
+      getTenantApplicableEvidenceRequirements({ tenantId, filters: { limit: 25 } }),
+    ]);
+    applicability = {
+      summary,
+      controls,
+      kpis,
+      evidence_requirements: evidenceRequirements,
+    };
+  } catch (error) {
+    applicability = {
+      summary: {
+        tenant_id: tenantId,
+        active_universe: false,
+        limitation: 'Universo aplicable no disponible; se usa impacto determinístico temporal.',
+      },
+    };
+  }
+  return buildImpactFromProfileAndContext(profile, context, applicability);
 }
 
 function buildModulePayload(impact, moduleCode) {
@@ -704,6 +754,7 @@ function buildModulePayload(impact, moduleCode) {
     tenant_id: impact.tenant_id,
     module_code: code,
     module_label: moduleLabel(code),
+    applicability_summary: impactProfile.applicability_universe || impact.trace?.applicability_summary || null,
     company_profile_used: Boolean(impact.profile),
     ai_profile_used: impact.trace?.ai_enriched === true,
     tenant_filter_enforced: true,
