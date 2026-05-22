@@ -1092,6 +1092,59 @@ function renderAiPage(data) {
   `;
 }
 
+function renderCompanyProfileImpactPage(data) {
+  const impact = data.company_profile_impact || {};
+  const profile = impact.impact_profile || {};
+  const trace = impact.trace || {};
+  const impactText = (item, keys, max = 150) => {
+    if (typeof item === 'string') return cleanText(item, max);
+    if (!item || typeof item !== 'object') return '';
+    for (const key of keys) {
+      if (item[key]) return cleanText(item[key], max);
+    }
+    return '';
+  };
+  const kpis = asArray(profile.suggested_kpis).slice(0, 6).map((item) => impactText(item, ['kpi', 'title', 'reason'])).filter(Boolean);
+  const controls = asArray(profile.prioritized_controls || profile.profile_adjusted_controls || profile.suggested_controls)
+    .slice(0, 6)
+    .map((item) => impactText(item, ['description', 'control', 'profile_priority_reason', 'reason'], 160))
+    .filter(Boolean);
+  const risks = asArray(profile.risk_focus_areas).slice(0, 6).map((item) => impactText(item, ['risk', 'title', 'reason'], 150)).filter(Boolean);
+  const roadmap = asArray(profile.improvement_roadmap).slice(0, 4).map((item) => {
+    if (typeof item === 'string') return cleanText(item, 160);
+    return `${cleanText(item.horizon || 'Mejora', 40)}: ${cleanText(asArray(item.actions).join('; ') || item.description || item.title, 150)}`;
+  });
+
+  if (!kpis.length && !controls.length && !risks.length && !roadmap.length) return '';
+
+  return `
+    <div class="pageTitleBlock">
+      <span>Perfil empresa aplicado</span>
+      <h2>Impacto del Perfil Empresa en el análisis</h2>
+      <p>Priorización operativa derivada del perfil tenant-scoped. No modifica cumplimiento formal sin evidencia interna.</p>
+    </div>
+
+    <div class="metricGrid four">
+      ${miniMetric('Industria', cleanText(impact.industry || 'No declarada', 40), 'Contexto declarado')}
+      ${miniMetric('Madurez', cleanText(impact.maturity_level || 'No declarada', 40), 'Calibración de roadmap')}
+      ${miniMetric('Apetito riesgo', cleanText(impact.risk_appetite || 'No declarado', 40), 'Calibración de prioridad')}
+      ${miniMetric('IA / Web', `${trace.selected_model || 'No informado'} · ${trace.used_web ? 'web sí' : 'web no'}`, 'Trazabilidad')}
+    </div>
+
+    <div class="twoCol">
+      ${card('KPIs priorizados por perfil', bulletList(kpis))}
+      ${card('Controles críticos por perfil', bulletList(controls))}
+    </div>
+
+    <div class="twoCol">
+      ${card('Riesgos típicos relevantes', bulletList(risks))}
+      ${card('Hoja de ruta de mejora', bulletList(roadmap))}
+    </div>
+
+    ${card('Limitación auditora', '<p class="bodyText">El Perfil Empresa calibra prioridad, foco auditor y recomendaciones. Las referencias externas son apoyo contextual y la evidencia interna sigue siendo la fuente de verdad.</p>', 'wideCard')}
+  `;
+}
+
 
 function renderAuditSummaryPage(data) {
   const auditData = data.audit_summary || {};
@@ -2342,6 +2395,7 @@ function renderExecutivePremiumTemplate(data = {}, options = {}) {
     renderPage1(data),
     ...(getStandardContext(data).hasStandard ? [renderIsoContextPage(data), renderIsoChartsPage(data)] : []),
     renderAiPage(data),
+    renderCompanyProfileImpactPage(data),
     renderAuditSummaryPage(data),
     renderHealthPage(data),
     renderRecommendationsPage(data),

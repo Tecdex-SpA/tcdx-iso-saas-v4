@@ -65,6 +65,31 @@ type AiTrace = {
   duration_ms?: number | string | null;
 };
 
+type ImpactItem = Record<string, unknown>;
+
+type CompanyProfileImpact = {
+  industry?: string;
+  subindustry?: string;
+  active_standards?: string[];
+  impact_profile?: {
+    suggested_kpis?: ImpactItem[];
+    suggested_controls?: ImpactItem[];
+    prioritized_controls?: ImpactItem[];
+    profile_adjusted_controls?: ImpactItem[];
+    risk_focus_areas?: ImpactItem[];
+    suggested_evidence_baseline?: Array<string | ImpactItem>;
+    improvement_roadmap?: ImpactItem[];
+    management_focus?: Array<string | ImpactItem>;
+    limitations?: string[];
+  };
+  trace?: {
+    selected_model?: string | null;
+    used_web?: boolean;
+    fallback_used?: boolean;
+    internal_context_counts?: Record<string, number>;
+  };
+};
+
 const emptyForm: ProfileForm = {
   company_name: '',
   legal_name: '',
@@ -164,6 +189,30 @@ function parseList(value: string): string[] {
     .filter(Boolean);
 }
 
+function itemLabel(item: unknown, keys: string[] = []): string {
+  if (typeof item === 'string') return item;
+  if (!item || typeof item !== 'object') return '';
+  const record = item as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value;
+    if (typeof value === 'number') return String(value);
+  }
+  return String(record.title || record.name || record.description || record.summary || '').trim();
+}
+
+function renderImpactList(items: unknown[] = [], keys: string[], limit = 5) {
+  const rows = items.map((item) => itemLabel(item, keys)).filter(Boolean).slice(0, limit);
+  if (!rows.length) return <p className="text-sm text-slate-500">Sin recomendaciones disponibles todavía.</p>;
+  return (
+    <ul className="space-y-2 text-sm text-slate-700">
+      {rows.map((row) => (
+        <li key={row} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">{row}</li>
+      ))}
+    </ul>
+  );
+}
+
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -212,6 +261,7 @@ export default function PerfilEmpresaPage() {
   const [lastUpdated, setLastUpdated] = useState('');
   const [aiSummary, setAiSummary] = useState<AiProfileSummary | null>(null);
   const [aiTrace, setAiTrace] = useState<AiTrace | null>(null);
+  const [impact, setImpact] = useState<CompanyProfileImpact | null>(null);
   const [analysisJobId, setAnalysisJobId] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
   const [operationMessage, setOperationMessage] = useState('');
@@ -267,6 +317,13 @@ export default function PerfilEmpresaPage() {
       setAiSummary(data.ai_profile_summary_json || null);
       setAiTrace(data.ai_research_trace_json || null);
       setDownloadUrl(data.context_document_url ? '/api/company-profile/context-document/download' : '');
+      const impactRes = await fetch(`${API_URL}/api/company-profile/impact`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const impactJson = await readJsonResponse(impactRes, 'No fue posible cargar impacto operativo del perfil');
+      if (impactRes.ok && impactJson?.ok !== false) {
+        setImpact(impactJson.data || null);
+      }
     } catch (error) {
       console.error('COMPANY PROFILE LOAD ERROR:', error);
     } finally {
@@ -514,6 +571,49 @@ export default function PerfilEmpresaPage() {
                       <span>Duración: {aiTrace.duration_ms ? `${aiTrace.duration_ms} ms` : 'No informada'}</span>
                     </div>
                   )}
+                </section>
+              )}
+
+              {impact?.impact_profile && (
+                <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">Impacto operativo del perfil</h2>
+                      <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                        Capa tenant-scoped usada para priorizar KPIs, controles, evidencias, riesgos y roadmap sin alterar el cumplimiento formal.
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">
+                      {impact.industry || 'Industria no declarada'} · {impact.trace?.fallback_used ? 'fallback' : 'perfil aplicado'}
+                    </div>
+                  </div>
+                  <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                    <article className="rounded-2xl border border-slate-200 p-4">
+                      <h3 className="mb-3 text-sm font-bold text-slate-800">KPIs priorizados</h3>
+                      {renderImpactList(impact.impact_profile.suggested_kpis || [], ['kpi', 'title', 'reason'])}
+                    </article>
+                    <article className="rounded-2xl border border-slate-200 p-4">
+                      <h3 className="mb-3 text-sm font-bold text-slate-800">Controles priorizados</h3>
+                      {renderImpactList(
+                        impact.impact_profile.prioritized_controls || impact.impact_profile.profile_adjusted_controls || impact.impact_profile.suggested_controls || [],
+                        ['description', 'control', 'profile_priority_reason', 'reason']
+                      )}
+                    </article>
+                    <article className="rounded-2xl border border-slate-200 p-4">
+                      <h3 className="mb-3 text-sm font-bold text-slate-800">Riesgos sugeridos</h3>
+                      {renderImpactList(impact.impact_profile.risk_focus_areas || [], ['risk', 'title', 'reason'])}
+                    </article>
+                    <article className="rounded-2xl border border-slate-200 p-4">
+                      <h3 className="mb-3 text-sm font-bold text-slate-800">Evidencia base</h3>
+                      {renderImpactList(impact.impact_profile.suggested_evidence_baseline || [], ['title', 'evidence', 'description'])}
+                    </article>
+                  </div>
+                  <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600 md:grid-cols-4">
+                    <span>Modelo: {impact.trace?.fallback_used ? 'No disponible' : (impact.trace?.selected_model || 'No informado')}</span>
+                    <span>Web: {impact.trace?.used_web ? 'Sí' : 'No'}</span>
+                    <span>Controles: {impact.trace?.internal_context_counts?.controls_analyzed ?? 0}</span>
+                    <span>KPIs: {impact.trace?.internal_context_counts?.kpis_analyzed ?? 0}</span>
+                  </div>
                 </section>
               )}
 

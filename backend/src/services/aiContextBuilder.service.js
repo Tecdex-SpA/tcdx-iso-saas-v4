@@ -77,6 +77,8 @@ function buildBaseContext({ tenantId, moduleOrigin = 'ia-auditor', standardCode 
     documents: [],
     kpis: [],
     company_profile: null,
+    company_profile_impact: null,
+    company_profile_trace: null,
     source_trace: [],
     limitations: [],
   };
@@ -299,6 +301,7 @@ async function loadCompanyProfile(context, tenantId) {
     'tenant_company_profiles',
     `
     SELECT
+      tenant_id,
       profile_json,
       industry,
       subindustry,
@@ -321,6 +324,20 @@ async function loadCompanyProfile(context, tenantId) {
 
   if (rows[0]) {
     context.company_profile = rows[0];
+    context.company_profile_trace = rows[0].ai_research_trace_json || null;
+    context.company_profile_impact = {
+      source: 'tenant_company_profiles',
+      tenant_filter_enforced: true,
+      ai_enriched: rows[0].ai_research_trace_json?.fallback_used !== true && !!rows[0].ai_profile_summary_json,
+      selected_model: rows[0].ai_research_trace_json?.selected_model || null,
+      used_web: rows[0].ai_research_trace_json?.used_web === true,
+      fallback_used: rows[0].ai_research_trace_json?.fallback_used === true,
+      suggested_kpis: asArray(rows[0].ai_profile_summary_json?.proposed_kpis),
+      suggested_controls: asArray(rows[0].ai_profile_summary_json?.suggested_controls),
+      suggested_evidence_baseline: asArray(rows[0].ai_profile_summary_json?.evidence_baseline || rows[0].ai_profile_summary_json?.suggested_evidence_baseline),
+      improvement_roadmap: asArray(rows[0].ai_profile_summary_json?.improvement_roadmap),
+      management_focus: asArray(rows[0].ai_profile_summary_json?.management_focus),
+    };
   }
 }
 
@@ -1076,6 +1093,8 @@ async function buildCompanyProfileAiContext({
   return {
     tenant_context: tenantContext,
     company_profile: context.company_profile,
+    company_profile_impact: context.company_profile_impact,
+    company_profile_trace: context.company_profile_trace,
     iso_context: isoContext,
     ...sections,
     data_quality_context: dataQualityContext,

@@ -58,6 +58,10 @@ function references(items = [], limit = 6) {
   </div>`;
 }
 
+function firstNonEmpty(...values) {
+  return values.find((value) => asArray(value).length > 0) || [];
+}
+
 function field(label, value) {
   return `
     <div class="miniField">
@@ -72,6 +76,8 @@ function renderCompanyProfileContextTemplate(data = {}) {
   const profile = data.profile_json || {};
   const ai = data.ai_profile_summary_json || {};
   const trace = data.ai_research_trace_json || {};
+  const impact = data.company_profile_impact || {};
+  const impactProfile = impact.impact_profile || {};
   const tenantName = cleanText(profile.company_name || tenant.name, 'Cliente');
   const tcdxLogo = resolveTcdxLogoUrl();
   const tenantLogo = resolveTenantLogoUrl(tenant);
@@ -172,14 +178,14 @@ function renderCompanyProfileContextTemplate(data = {}) {
         <div class="gridTwo">
           <article class="card">
             <h3>KPIs propuestos</h3>
-            ${objectTable(ai.proposed_kpis, [
+        ${objectTable(firstNonEmpty(ai.proposed_kpis, impactProfile.suggested_kpis), [
               { label: 'KPI', value: (item) => item.kpi || item.title || itemText(item), max: 140 },
               { label: 'Fórmula / fuente', value: (item) => item.formula || item.source_data_needed || item.reason, max: 220 },
             ], 5)}
           </article>
           <article class="card">
             <h3>Controles sugeridos</h3>
-            ${objectTable(ai.suggested_controls, [
+        ${objectTable(firstNonEmpty(ai.suggested_controls, impactProfile.suggested_controls), [
               { label: 'Control', value: (item) => item.control || item.title || itemText(item), max: 140 },
               { label: 'Brecha / evidencia', value: (item) => item.linked_internal_gap || asArray(item.required_evidence).join(', ') || item.reason, max: 220 },
             ], 5)}
@@ -192,11 +198,11 @@ function renderCompanyProfileContextTemplate(data = {}) {
         <div class="gridTwo">
           <article class="card">
             <h3>Evidencia esperada</h3>
-            ${list(ai.evidence_baseline || ai.suggested_evidence_baseline, 7)}
+            ${list(firstNonEmpty(ai.evidence_baseline, ai.suggested_evidence_baseline, impactProfile.suggested_evidence_baseline), 7)}
           </article>
           <article class="card">
             <h3>Foco de gestión</h3>
-            ${list(ai.management_focus || ai.audit_focus_areas, 7)}
+            ${list(firstNonEmpty(ai.management_focus, ai.audit_focus_areas, impactProfile.management_focus), 7)}
           </article>
         </div>
       </section>
@@ -211,11 +217,32 @@ function renderCompanyProfileContextTemplate(data = {}) {
 
       <section class="section keep-together">
         <h2>Hoja de ruta de mejora</h2>
-        ${objectTable(ai.improvement_roadmap || profile.improvement_priorities, [
+        ${objectTable(firstNonEmpty(ai.improvement_roadmap, impactProfile.improvement_roadmap, profile.improvement_priorities), [
           { label: 'Horizonte', value: (item) => item.horizon || item.title || 'Mejora continua', max: 80 },
           { label: 'Acciones', value: (item) => asArray(item.actions).join('; ') || itemText(item), max: 260 },
           { label: 'Criterio / evidencia', value: (item) => `${asArray(item.success_criteria).join('; ')} ${asArray(item.evidence_to_collect).join('; ')}`, max: 260 },
         ], 6)}
+      </section>
+
+      <section class="section keep-together">
+        <h2>Impacto operativo del perfil</h2>
+        <div class="gridTwo">
+          <article class="card">
+            <h3>Controles priorizados por perfil</h3>
+            ${objectTable(impactProfile.prioritized_controls || impactProfile.profile_adjusted_controls, [
+              { label: 'Control', value: (item) => item.description || item.control || itemText(item), max: 150 },
+              { label: 'Razón / acción', value: (item) => item.profile_priority_reason || item.profile_recommended_attention || item.reason, max: 230 },
+            ], 5)}
+          </article>
+          <article class="card">
+            <h3>Riesgos típicos relevantes</h3>
+            ${objectTable(impactProfile.risk_focus_areas, [
+              { label: 'Riesgo', value: (item) => item.risk || item.title || itemText(item), max: 140 },
+              { label: 'Fundamento', value: (item) => item.reason || item.source || item.description, max: 220 },
+            ], 5)}
+          </article>
+        </div>
+        <p class="muted">Esta capa ajusta prioridad operativa y recomendaciones. No cambia cumplimiento formal ni reemplaza evidencia interna aprobada.</p>
       </section>
 
       <section class="section keep-together">

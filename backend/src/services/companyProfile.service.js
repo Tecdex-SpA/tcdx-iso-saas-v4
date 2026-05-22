@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const pool = require('../config/db');
 const aiContextBuilder = require('./aiContextBuilder.service');
 const aiEngineClient = require('./aiEngineClient.service');
+const { buildCompanyProfileImpact } = require('./companyProfileImpact.service');
 const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
 const { renderCompanyProfileContextTemplate } = require('../reports/templates/companyProfileContext.template');
 
@@ -333,6 +334,8 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     allow_document_context: profile.allow_document_context === true,
     used_company_profile: true,
     company_profile: profile,
+    company_profile_impact: context.company_profile_impact,
+    company_profile_trace: context.company_profile_trace,
     tenant_context: context.tenant_context,
     iso_context: context.iso_context,
     controls_context: context.controls_context,
@@ -506,9 +509,10 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
 }
 
 async function exportCompanyProfileContextPdf({ tenantId, userId = null, requestId = null }) {
-  const [profile, tenant] = await Promise.all([
+  const [profile, tenant, impact] = await Promise.all([
     getCompanyProfileForTenant(tenantId),
     getTenant(tenantId),
+    buildCompanyProfileImpact({ tenantId }),
   ]);
   if (!profile) {
     const error = new Error('Perfil empresa no existe para este tenant');
@@ -523,6 +527,7 @@ async function exportCompanyProfileContextPdf({ tenantId, userId = null, request
   const html = renderCompanyProfileContextTemplate({
     ...(profile || {}),
     tenant: tenant || { id: tenantId, name: profile.profile_json?.company_name || 'Cliente' },
+    company_profile_impact: impact,
   });
 
   const renderResult = await renderHtmlToPdf({

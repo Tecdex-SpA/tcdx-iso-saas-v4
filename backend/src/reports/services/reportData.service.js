@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { renderAiAuditorPremiumTemplate } = require('../../reports/templates/aiAuditorPremium.template');
 const { buildReportAiEnrichment } = require('../../services/reportAiEnrichment.service');
+const { buildCompanyProfileImpact } = require('../../services/companyProfileImpact.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://ai.tcdx.int:8001';
@@ -2611,6 +2612,7 @@ async function buildReportData({
   const openActionPlans = await getOpenActionPlans(tenantId);
   const latestKpis = await getLatestKpis(tenantId);
   const platformMonthlyStats = await getPlatformMonthlyStats(tenantId);
+  const companyProfileImpact = await buildCompanyProfileImpact({ tenantId });
 
   const stats = {
     controls,
@@ -2694,6 +2696,7 @@ async function buildReportData({
     open_action_plans: openActionPlans,
     latest_kpis: latestKpis,
     platform_monthly_stats: platformMonthlyStats,
+    company_profile_impact: companyProfileImpact,
 
     recommendations,
     ai,
