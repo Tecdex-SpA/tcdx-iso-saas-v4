@@ -3,6 +3,7 @@
 const express = require('express');
 const fs = require('fs');
 const auth = require('../middleware/auth');
+const asyncJobs = require('../services/asyncJob.service');
 const {
   getCompanyProfileForRequest,
   getCompanyProfileForTenant,
@@ -30,6 +31,232 @@ function safeError(error) {
     return { status: 400, code: 'TENANT_REQUIRED', error: 'Tenant no identificado.' };
   }
   return { status: 500, code: 'COMPANY_PROFILE_ERROR', error: 'No fue posible procesar el perfil empresa.' };
+}
+
+function getRequestId(req) {
+  return String(req.requestId || req.headers?.['x-request-id'] || '').trim() || null;
+}
+
+function publicJob(job, { includeResult = false } = {}) {
+  if (!job) return null;
+  return {
+    ok: true,
+    job_id: job.id || job.job_id,
+    status: job.status,
+    result_available: job.status === 'completed' && !!job.result_json,
+    result_json: includeResult || job.status === 'completed' ? job.result_json : undefined,
+    error_json: job.status === 'failed' ? job.error_json : undefined,
+    created_at: job.created_at,
+    started_at: job.started_at,
+    completed_at: job.completed_at,
+    model_mode: job.model_mode || null,
+    source_module: job.source_module || null,
+    request_id: job.request_id || null,
+  };
+}
+
+function buildJobPayload({ tenantId, userId, profile, modelMode, requestId }) {
+  return {
+    tenant_id: tenantId,
+    user_id: userId,
+    locale: 'es',
+    model_mode: modelMode,
+    use_llm: true,
+    use_rag: true,
+    use_web: profile?.allow_web_research === true,
+    allow_web_research: profile?.allow_web_research === true,
+    use_drive: profile?.allow_document_context === true,
+    allow_document_context: profile?.allow_document_context === true,
+    used_company_profile: true,
+    request_id: requestId,
+    request_metadata: {
+      request_id: requestId,
+      module_origin: 'company_profile',
+      task_type: 'company_profile_context',
+    },
+  };
+}
+
+async function runCompanyProfileAnalysisJob({ jobId, tenantId, userId, requestId, modelMode }) {
+  const startedAt = Date.now();
+  try {
+    await asyncJobs.markRunning(jobId);
+    console.info('COMPANY PROFILE AI JOB START:', {
+      request_id: requestId,
+      tenant_id: tenantId,
+      user_id: userId,
+      job_id: jobId,
+      model_mode: modelMode,
+    });
+    console.info('COMPANY PROFILE AI ENGINE CALL START:', {
+      request_id: requestId,
+      tenant_id: tenantId,
+      job_id: jobId,
+      model_mode: modelMode,
+    });
+
+    const profile = await analyzeCompanyProfile({ tenantId, userId, requestId, modelMode });
+    const trace = profile?.ai_research_trace_json || {};
+    const durationMs = Date.now() - startedAt;
+    const isFallback = trace.fallback_used === true || String(trace.selected_model || '').toLowerCase() === 'backend_fallback';
+
+    if (isFallback) {
+      const errorJson = {
+        code: 'COMPANY_PROFILE_AI_FALLBACK',
+        error_type: trace.error_type || 'AI_ENGINE_FALLBACK',
+        error_message: trace.error_message || 'El análisis IA terminó en fallback controlado.',
+        selected_model: trace.selected_model || 'backend_fallback',
+        model_mode: trace.model_mode || modelMode,
+        used_web: trace.used_web === true,
+        used_rag: trace.used_rag === true,
+        fallback_used: true,
+        ai_enrichment_failed: true,
+        timeout_stage: trace.timeout_stage || null,
+        timeout_ms: trace.timeout_ms || null,
+        duration_ms: trace.duration_ms || durationMs,
+        request_id: requestId,
+      };
+      await asyncJobs.markFailed(jobId, { error_json: errorJson });
+      console.warn('COMPANY PROFILE AI ENGINE CALL FALLBACK:', {
+        request_id: requestId,
+        tenant_id: tenantId,
+        job_id: jobId,
+        model_mode: modelMode,
+        selected_model: errorJson.selected_model,
+        used_web: errorJson.used_web,
+        used_rag: errorJson.used_rag,
+        fallback_used: true,
+        duration_ms: errorJson.duration_ms,
+      });
+      console.warn('COMPANY PROFILE AI JOB FAILED:', {
+        request_id: requestId,
+        tenant_id: tenantId,
+        job_id: jobId,
+        model_mode: modelMode,
+        selected_model: errorJson.selected_model,
+        fallback_used: true,
+        duration_ms: errorJson.duration_ms,
+      });
+      return;
+    }
+
+    const resultJson = {
+      profile,
+      ai_profile_summary_json: profile.ai_profile_summary_json || null,
+      ai_research_trace_json: trace,
+      model_mode: trace.model_mode || modelMode,
+      selected_model: trace.selected_model || null,
+      used_web: trace.used_web === true,
+      used_rag: trace.used_rag === true,
+      fallback_used: false,
+      ai_enrichment_failed: false,
+      duration_ms: trace.duration_ms || durationMs,
+      request_id: requestId,
+    };
+    console.info('COMPANY PROFILE AI ENGINE CALL OK:', {
+      request_id: requestId,
+      tenant_id: tenantId,
+      job_id: jobId,
+      model_mode: modelMode,
+      selected_model: resultJson.selected_model,
+      used_web: resultJson.used_web,
+      used_rag: resultJson.used_rag,
+      fallback_used: false,
+      duration_ms: resultJson.duration_ms,
+    });
+    await asyncJobs.markCompleted(jobId, { result_json: resultJson });
+    console.info('COMPANY PROFILE AI JOB COMPLETED:', {
+      request_id: requestId,
+      tenant_id: tenantId,
+      job_id: jobId,
+      model_mode: modelMode,
+      selected_model: resultJson.selected_model,
+      used_web: resultJson.used_web,
+      fallback_used: false,
+      duration_ms: resultJson.duration_ms,
+    });
+  } catch (error) {
+    const durationMs = Date.now() - startedAt;
+    const errorJson = {
+      code: 'COMPANY_PROFILE_AI_JOB_FAILED',
+      error_type: error?.code || error?.name || 'COMPANY_PROFILE_AI_ERROR',
+      error_message: error?.message ? String(error.message).slice(0, 500) : 'No fue posible completar el análisis IA de Perfil Empresa.',
+      model_mode: modelMode,
+      fallback_used: true,
+      ai_enrichment_failed: true,
+      duration_ms: durationMs,
+      request_id: requestId,
+    };
+    await asyncJobs.markFailed(jobId, { error_json: errorJson });
+    console.error('COMPANY PROFILE AI JOB FAILED:', {
+      request_id: requestId,
+      tenant_id: tenantId,
+      job_id: jobId,
+      model_mode: modelMode,
+      error_type: errorJson.error_type,
+      duration_ms: durationMs,
+    });
+  }
+}
+
+async function createOrReuseAnalysisJob(req) {
+  const requestId = getRequestId(req);
+  const { tenantId, userId } = await getCompanyProfileForRequest(req, req.body?.tenant_id || null);
+  const profile = await getCompanyProfileForTenant(tenantId);
+  if (!profile) {
+    const error = new Error('Perfil empresa no existe para este tenant');
+    error.code = 'COMPANY_PROFILE_NOT_FOUND';
+    throw error;
+  }
+
+  const scope = { tenant_id: tenantId, is_platform: false };
+  const activeJob = await asyncJobs.findLatestActiveJobScoped(scope, {
+    job_type: 'company_profile_analysis',
+    source_module: 'company_profile',
+  });
+  if (activeJob) {
+    return { job: activeJob, reused: true, tenantId, userId, requestId: activeJob.request_id || requestId };
+  }
+
+  const modelMode = String(req.body?.model_mode || 'balanced').toLowerCase() === 'deep' ? 'deep' : 'balanced';
+  const job = await asyncJobs.createJob({
+    tenant_id: tenantId,
+    user_id: userId,
+    job_type: 'company_profile_analysis',
+    source_module: 'company_profile',
+    model_mode: modelMode,
+    payload: buildJobPayload({ tenantId, userId, profile, modelMode, requestId }),
+    request_id: requestId,
+  });
+
+  console.info('COMPANY PROFILE AI JOB CREATED:', {
+    request_id: requestId,
+    tenant_id: tenantId,
+    user_id: userId,
+    job_id: job.id,
+    model_mode: modelMode,
+    use_web: profile.allow_web_research === true,
+    use_rag: true,
+  });
+
+  setImmediate(() => {
+    runCompanyProfileAnalysisJob({
+      jobId: job.id,
+      tenantId,
+      userId,
+      requestId,
+      modelMode,
+    }).catch((error) => {
+      console.error('COMPANY PROFILE AI JOB UNHANDLED ERROR:', {
+        request_id: requestId,
+        tenant_id: tenantId,
+        job_id: job.id,
+        error: error?.message,
+      });
+    });
+  });
+
+  return { job, reused: false, tenantId, userId, requestId };
 }
 
 router.get('/', auth, async (req, res) => {
@@ -62,16 +289,73 @@ router.put('/', auth, async (req, res) => {
   }
 });
 
+router.post('/analyze/start', auth, async (req, res) => {
+  try {
+    const { job, reused, requestId } = await createOrReuseAnalysisJob(req);
+    return res.status(reused ? 200 : 202).json({
+      ok: true,
+      job_id: job.id,
+      status: job.status,
+      reused,
+      request_id: requestId,
+      poll_url: `/api/company-profile/analyze/jobs/${job.id}`,
+      result_url: `/api/company-profile/analyze/jobs/${job.id}/result`,
+    });
+  } catch (error) {
+    console.error('COMPANY PROFILE AI JOB CREATE ERROR:', {
+      request_id: req.requestId || null,
+      error: error.message,
+    });
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/analyze/jobs/:jobId', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const job = await asyncJobs.getJobScoped(req.params.jobId, { tenant_id: tenantId, is_platform: false });
+    if (!job) {
+      return res.status(404).json({ ok: false, code: 'COMPANY_PROFILE_JOB_NOT_FOUND', error: 'Job de análisis no encontrado.', request_id: req.requestId || null });
+    }
+    return res.json(publicJob(job));
+  } catch (error) {
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/analyze/jobs/:jobId/result', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const job = await asyncJobs.getJobScoped(req.params.jobId, { tenant_id: tenantId, is_platform: false });
+    if (!job) {
+      return res.status(404).json({ ok: false, code: 'COMPANY_PROFILE_JOB_NOT_FOUND', error: 'Job de análisis no encontrado.', request_id: req.requestId || null });
+    }
+    if (job.status !== 'completed') {
+      return res.status(job.status === 'failed' ? 422 : 202).json(publicJob(job));
+    }
+    return res.json(publicJob(job, { includeResult: true }));
+  } catch (error) {
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
 router.post('/analyze', auth, async (req, res) => {
   try {
-    const { tenantId, userId } = await getCompanyProfileForRequest(req, req.body?.tenant_id || null);
-    const profile = await analyzeCompanyProfile({
-      tenantId,
-      userId,
-      requestId: req.requestId || null,
-      modelMode: req.body?.model_mode || 'balanced',
+    const { job, reused, requestId } = await createOrReuseAnalysisJob(req);
+    return res.status(202).json({
+      ok: true,
+      async: true,
+      message: 'Análisis IA iniciado en segundo plano.',
+      job_id: job.id,
+      status: job.status,
+      reused,
+      request_id: requestId,
+      poll_url: `/api/company-profile/analyze/jobs/${job.id}`,
+      result_url: `/api/company-profile/analyze/jobs/${job.id}/result`,
     });
-    return res.json({ ok: true, data: profile });
   } catch (error) {
     console.error('COMPANY PROFILE AI ANALYSIS ERROR:', {
       request_id: req.requestId || null,

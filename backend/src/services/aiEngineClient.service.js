@@ -49,6 +49,23 @@ class AiEngineClient {
     return mode === 'deep' ? Math.max(timeoutMs, 600000) : timeoutMs;
   }
 
+  resolveCompanyProfileTimeoutMs(modelMode = '', options = {}) {
+    const mode = String(modelMode || '').toLowerCase();
+    const configured = Number.parseInt(
+      String(
+        options.timeoutMs ||
+          process.env.AI_COMPANY_PROFILE_ANALYSIS_TIMEOUT_MS ||
+          process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS ||
+          process.env.AI_ENGINE_REQUEST_TIMEOUT_MS ||
+          this.reportTimeout
+      ),
+      10
+    );
+    const minimum = mode === 'deep' ? 900000 : 600000;
+    const timeoutMs = Number.isFinite(configured) && configured > 0 ? configured : minimum;
+    return Math.max(timeoutMs, minimum);
+  }
+
   async postJson(path, payload, options = {}) {
     const controller = new AbortController();
     const timeoutMs = Number.parseInt(String(options.timeoutMs || this.timeout), 10) || this.timeout;
@@ -214,7 +231,7 @@ class AiEngineClient {
         payload?.request_metadata?.model_mode ||
         'balanced'
     ).toLowerCase();
-    const timeoutMs = this.resolveReportTimeoutMs(modelMode, options);
+    const timeoutMs = this.resolveCompanyProfileTimeoutMs(modelMode, options);
 
     try {
       return await this.postJson('/api/ai/company-profile/analyze', payload, { timeoutMs });

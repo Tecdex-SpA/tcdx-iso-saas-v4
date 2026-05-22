@@ -57,6 +57,14 @@ type AiProfileSummary = {
   summary?: string;
 };
 
+type AiTrace = {
+  selected_model?: string;
+  used_web?: boolean;
+  used_rag?: boolean;
+  fallback_used?: boolean;
+  duration_ms?: number | string | null;
+};
+
 const emptyForm: ProfileForm = {
   company_name: '',
   legal_name: '',
@@ -140,6 +148,10 @@ async function readJsonResponse(res: Response, fallbackMessage: string) {
   return res.json();
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function toLines(value: unknown): string {
   if (Array.isArray(value)) return value.join('\n');
   return String(value || '');
@@ -199,6 +211,8 @@ export default function PerfilEmpresaPage() {
   const [exporting, setExporting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
   const [aiSummary, setAiSummary] = useState<AiProfileSummary | null>(null);
+  const [aiTrace, setAiTrace] = useState<AiTrace | null>(null);
+  const [analysisJobId, setAnalysisJobId] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
   const [operationMessage, setOperationMessage] = useState('');
 
@@ -251,6 +265,7 @@ export default function PerfilEmpresaPage() {
       setAllowAiRecommendations(data.allow_ai_recommendations !== false);
       setLastUpdated(data.updated_at || '');
       setAiSummary(data.ai_profile_summary_json || null);
+      setAiTrace(data.ai_research_trace_json || null);
       setDownloadUrl(data.context_document_url ? '/api/company-profile/context-document/download' : '');
     } catch (error) {
       console.error('COMPANY PROFILE LOAD ERROR:', error);
@@ -279,7 +294,7 @@ export default function PerfilEmpresaPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(buildPayload()),
       });
-      const json = await res.json();
+      const json = await readJsonResponse(res, 'No fue posible guardar perfil empresa');
       if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible guardar');
       setLastUpdated(json.data?.updated_at || '');
       setOperationMessage('Perfil empresa guardado.');
@@ -297,22 +312,55 @@ export default function PerfilEmpresaPage() {
     const saved = await saveProfile();
     if (!saved) return;
     setAnalyzing(true);
-    setOperationMessage('Analizando perfil empresa con IA...');
+    setOperationMessage('Análisis IA iniciado...');
     try {
-      const res = await fetch(`${API_URL}/api/company-profile/analyze`, {
+      const res = await fetch(`${API_URL}/api/company-profile/analyze/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ model_mode: 'balanced' }),
       });
-      const json = await readJsonResponse(res, 'No fue posible analizar perfil empresa');
-      if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible analizar');
-      setAiSummary(json.data?.ai_profile_summary_json || null);
-      const trace = json.data?.ai_research_trace_json || {};
-      setOperationMessage(json.data?.ai_profile_summary_json
-        ? (trace.fallback_used
-          ? 'Análisis completado con fallback controlado. Revisa la trazabilidad antes de usarlo como enriquecimiento IA.'
-          : `IA completada${trace.selected_model ? ` con modelo ${trace.selected_model}` : ''}.`)
-        : 'Análisis finalizado, pero no se recibió resumen IA persistido. Revisa la trazabilidad del backend.');
+      const json = await readJsonResponse(res, 'No fue posible iniciar análisis de Perfil Empresa');
+      if (!res.ok || json?.ok === false || !json.job_id) throw new Error(json?.error || 'No fue posible iniciar análisis IA');
+      setAnalysisJobId(json.job_id);
+      setOperationMessage(json.reused ? 'Ya hay un análisis IA en ejecución para este tenant. Consultando estado...' : 'Análisis IA en cola. Puedes seguir usando la plataforma.');
+
+      const maxWaitMs = 15 * 60 * 1000;
+      const pollIntervalMs = 5000;
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < maxWaitMs) {
+        await sleep(pollIntervalMs);
+        const jobRes = await fetch(`${API_URL}/api/company-profile/analyze/jobs/${json.job_id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const jobJson = await readJsonResponse(jobRes, 'No fue posible consultar el estado del análisis IA');
+        if (!jobRes.ok || jobJson?.ok === false) throw new Error(jobJson?.error || 'No fue posible consultar el análisis IA');
+
+        const status = String(jobJson.status || '').toLowerCase();
+        if (status === 'queued') {
+          setOperationMessage('Análisis IA en cola. Esperando turno de ai-engine...');
+          continue;
+        }
+        if (status === 'running') {
+          setOperationMessage('Consultando ai-engine, Brave/web y Ollama. Esto puede tardar varios minutos.');
+          continue;
+        }
+        if (status === 'completed') {
+          const trace = jobJson.result_json?.ai_research_trace_json || {};
+          await loadProfile(token);
+          setAiTrace(trace);
+          setOperationMessage(
+            trace.fallback_used
+              ? 'Análisis completado con fallback controlado. No se considera enriquecimiento IA real.'
+              : `IA completada${trace.selected_model ? ` con modelo ${trace.selected_model}` : ''}${trace.used_web ? ' y referencias web.' : '.'}`
+          );
+          return;
+        }
+        if (status === 'failed') {
+          const errorJson = jobJson.error_json || {};
+          throw new Error(errorJson.error_message || errorJson.message || 'El análisis IA no pudo completarse.');
+        }
+      }
+      throw new Error('El análisis IA sigue en ejecución. Revisa el estado del job más tarde.');
     } catch (error) {
       setOperationMessage(error instanceof Error ? error.message : 'No fue posible analizar perfil empresa');
     } finally {
@@ -458,6 +506,14 @@ export default function PerfilEmpresaPage() {
                 <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
                   <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-blue-700">Lectura IA del perfil</h2>
                   <p className="mt-3 text-sm leading-6 text-slate-800">{aiNarrative}</p>
+                  {aiTrace && (
+                    <div className="mt-4 grid gap-2 text-xs font-semibold text-blue-900 md:grid-cols-4">
+                      <span>Modelo: {aiTrace.fallback_used ? 'No disponible' : (aiTrace.selected_model || 'No informado')}</span>
+                      <span>Web: {aiTrace.used_web ? 'Sí' : 'No'}</span>
+                      <span>RAG: {aiTrace.used_rag ? 'Sí' : 'No'}</span>
+                      <span>Duración: {aiTrace.duration_ms ? `${aiTrace.duration_ms} ms` : 'No informada'}</span>
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -474,6 +530,9 @@ export default function PerfilEmpresaPage() {
                 <button onClick={analyzeProfile} disabled={analyzing || saving} className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60">
                   {analyzing ? 'Analizando...' : 'Analizar con IA'}
                 </button>
+                {analysisJobId && analyzing && (
+                  <span className="self-center text-xs font-semibold text-slate-500">Job: {analysisJobId.slice(0, 8)}...</span>
+                )}
                 <button onClick={exportDocument} disabled={exporting} className="rounded-xl border border-slate-200 bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60">
                   {exporting ? 'Exportando...' : 'Exportar contexto de la organización'}
                 </button>
