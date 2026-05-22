@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import IsoAuditorPreview from '@/components/auditor-iso/IsoAuditorPreview';
 import AuditPreparationPanel from '@/components/auditorias/AuditPreparationPanel';
 import IaAuditorPanel from '@/components/auditorias/IaAuditorPanel';
@@ -253,6 +254,12 @@ function AuditoriasWorkspaceContent() {
             })}
           </div>
         </section>
+
+        <CompanyProfileImpactPanel
+          moduleCode="audits"
+          title="Foco auditor según Perfil Empresa"
+          compact
+        />
 
         {activeView === 'preauditoria' ? (
           <IsoAuditorPreview />

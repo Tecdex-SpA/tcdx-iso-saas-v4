@@ -301,6 +301,50 @@ function deterministicRisks(profile, context) {
   return uniq(risks, 8);
 }
 
+function recommendation({
+  title,
+  reason,
+  internalSignal,
+  evidence,
+  moduleCode,
+  source = 'company_profile_impact',
+  priority = 'media',
+}) {
+  return {
+    title,
+    reason,
+    linked_internal_signal: internalSignal || 'No hay evidencia interna suficiente para sostener esta recomendación. Se propone como hipótesis de mejora basada en perfil empresa.',
+    required_evidence: asArray(evidence).length ? asArray(evidence) : ['Evidencia objetiva vigente', 'Responsable', 'Criterio de cierre/eficacia'],
+    target_module: moduleCode,
+    source,
+    priority,
+  };
+}
+
+function itemTitle(item, fallback = 'Elemento priorizado') {
+  if (typeof item === 'string') return item;
+  if (!item || typeof item !== 'object') return fallback;
+  return item.title || item.name || item.control || item.kpi || item.risk || item.description || item.objective || fallback;
+}
+
+function moduleLabel(moduleCode) {
+  return {
+    dashboard: 'Dashboard',
+    health: 'Salud de controles',
+    controls: 'Controles',
+    kpis: 'KPIs',
+    audits: 'Auditorías',
+    'action-plans': 'Planes de acción',
+    reports: 'Reportes',
+  }[moduleCode] || moduleCode;
+}
+
+function normalizeModuleCode(value) {
+  const code = lower(value).replace(/_/g, '-');
+  const allowed = new Set(['dashboard', 'health', 'controls', 'kpis', 'audits', 'action-plans', 'reports']);
+  return allowed.has(code) ? code : 'dashboard';
+}
+
 function buildImpactFromProfileAndContext(profileRow, context) {
   const profile = normalizeProfile(profileRow);
   const ai = safeObject(profileRow.ai_profile_summary_json);
@@ -508,6 +552,194 @@ async function buildCompanyProfileImpact({ tenantId, standardCodes = [] } = {}) 
   return buildImpactFromProfileAndContext(profile, context);
 }
 
+function buildModulePayload(impact, moduleCode) {
+  const code = normalizeModuleCode(moduleCode);
+  const profile = impact.profile || {};
+  const impactProfile = impact.impact_profile || {};
+  const prioritizedControls = asArray(impactProfile.prioritized_controls || impactProfile.profile_adjusted_controls);
+  const suggestedKpis = asArray(impactProfile.suggested_kpis);
+  const risks = asArray(impactProfile.risk_focus_areas);
+  const evidence = asArray(impactProfile.suggested_evidence_baseline);
+  const roadmap = asArray(impactProfile.improvement_roadmap);
+  const management = asArray(impactProfile.management_focus);
+  const highControls = prioritizedControls.filter((item) => item.profile_relevance === 'alta').slice(0, 5);
+  const sourceCounts = impact.trace?.internal_context_counts || {};
+
+  const commonFocus = [
+    ...management.map((item) => itemTitle(item)).filter(Boolean),
+    ...risks.map((item) => itemTitle(item)).filter(Boolean),
+    ...suggestedKpis.map((item) => itemTitle(item)).filter(Boolean),
+  ].slice(0, 5);
+
+  const moduleMap = {
+    dashboard: {
+      prioritized_items: [
+        ...highControls.slice(0, 2),
+        ...risks.slice(0, 2),
+        ...suggestedKpis.slice(0, 2),
+      ],
+      business_relevance: `El dashboard prioriza ${impact.industry || 'el perfil declarado'} con foco en controles críticos, KPIs bajo atención y riesgos operativos del tenant.`,
+      recommended_focus: commonFocus.slice(0, 5),
+      suggested_actions: [
+        recommendation({
+          title: 'Revisar foco operativo semanal',
+          reason: 'Conecta perfil empresa, salud de controles, KPIs y riesgos para comité ejecutivo.',
+          internalSignal: `Controles analizados: ${sourceCounts.controls_analyzed || 0}; KPIs analizados: ${sourceCounts.kpis_analyzed || 0}.`,
+          evidence: ['Acta de seguimiento', 'Tablero KPI actualizado', 'Backlog de acciones priorizadas'],
+          moduleCode: code,
+          priority: 'alta',
+        }),
+      ],
+    },
+    health: {
+      prioritized_items: highControls,
+      business_relevance: 'La salud mantiene su score base, pero Perfil Empresa eleva atención sobre controles con mayor impacto de negocio.',
+      recommended_focus: [
+        'Controles deteriorados con alta relevancia por perfil.',
+        'Controles saludables pero críticos para procesos declarados.',
+        'Controles sin evidencia suficiente y apetito de riesgo bajo.',
+      ],
+      suggested_actions: highControls.slice(0, 3).map((control) => recommendation({
+        title: `Reforzar ${control.description}`,
+        reason: control.profile_priority_reason,
+        internalSignal: `Health=${control.health_status || 'no informado'}; evidencia=${control.evidence_count}.`,
+        evidence: ['Evidencia vigente', 'Responsable asignado', 'Verificación de operación'],
+        moduleCode: code,
+        priority: control.profile_adjusted_priority || 'alta',
+      })),
+    },
+    controls: {
+      prioritized_items: prioritizedControls.slice(0, 8),
+      business_relevance: 'Los controles se priorizan por industria, normas activas, madurez, apetito de riesgo y brechas internas.',
+      recommended_focus: highControls.map((item) => item.description).slice(0, 5),
+      suggested_actions: prioritizedControls.slice(0, 5).map((control) => recommendation({
+        title: control.profile_recommended_attention,
+        reason: control.profile_priority_reason,
+        internalSignal: `${control.standard_code || 'ISO'} ${control.clause || ''} · salud=${control.health_status || 'sin dato'} · evidencias=${control.evidence_count}.`,
+        evidence: ['Evidencia por control', 'Dueño del control', 'Criterio de aceptación'],
+        moduleCode: code,
+        priority: control.profile_adjusted_priority || 'media',
+      })),
+    },
+    kpis: {
+      prioritized_items: suggestedKpis.slice(0, 8),
+      business_relevance: 'Los KPIs sugeridos no modifican snapshots; orientan configuración y lectura ejecutiva según perfil.',
+      recommended_focus: suggestedKpis.map((item) => itemTitle(item)).slice(0, 5),
+      suggested_actions: suggestedKpis.slice(0, 5).map((kpi) => recommendation({
+        title: `Activar o revisar KPI: ${itemTitle(kpi, 'KPI recomendado')}`,
+        reason: kpi.reason || 'KPI recomendado por perfil empresa y datos internos disponibles.',
+        internalSignal: kpi.source_data_needed || 'Requiere fuente de datos interna antes de medir.',
+        evidence: [kpi.source_data_needed || 'Definición de fuente de datos', 'Fórmula aprobada', 'Responsable KPI'],
+        moduleCode: code,
+        priority: kpi.priority || 'media',
+      })),
+      kpi_interpretation: suggestedKpis.slice(0, 5).map((kpi) => ({
+        kpi: itemTitle(kpi, 'KPI recomendado'),
+        why_it_matters: kpi.reason || 'Relevante por perfil empresa.',
+        target_suggestion: kpi.target_suggestion || 'Definir meta con línea base interna.',
+        source_data_needed: kpi.source_data_needed || 'Datos internos por configurar.',
+      })),
+    },
+    audits: {
+      prioritized_items: highControls.slice(0, 5),
+      business_relevance: 'El foco auditor se ajusta a procesos críticos, controles sin evidencia, riesgos y madurez declarada.',
+      recommended_focus: asArray(impactProfile.audit_focus_areas).slice(0, 5),
+      suggested_actions: highControls.slice(0, 4).map((control) => recommendation({
+        title: `Incluir en muestra auditora: ${control.description}`,
+        reason: control.profile_priority_reason,
+        internalSignal: `Evidencia=${control.evidence_count}; hallazgos=${control.open_findings_count}; NC=${control.open_nonconformities_count}.`,
+        evidence: ['Muestra de auditoría', 'Evidencia de control', 'Pregunta auditora y resultado'],
+        moduleCode: code,
+        priority: 'alta',
+      })),
+      audit_focus: asArray(impactProfile.audit_focus_areas).slice(0, 8),
+    },
+    'action-plans': {
+      prioritized_items: [
+        ...highControls.slice(0, 4),
+        ...risks.slice(0, 4),
+      ],
+      business_relevance: 'Perfil Empresa sugiere acciones proporcionales al tamaño, madurez, riesgos y brechas internas; no crea acciones automáticamente.',
+      recommended_focus: [
+        'Cerrar acciones vinculadas a controles de alta relevancia.',
+        'Agregar criterio de eficacia antes de cierre.',
+        'Conectar acción con evidencia esperada y KPI de seguimiento.',
+      ],
+      suggested_actions: highControls.slice(0, 5).map((control) => recommendation({
+        title: `Preparar acción para ${control.description}`,
+        reason: control.profile_priority_reason,
+        internalSignal: `Control priorizado por perfil; salud=${control.health_status || 'sin dato'}; evidencias=${control.evidence_count}.`,
+        evidence: ['Plan CAPA', 'Causa raíz', 'Evidencia de implementación', 'Verificación de eficacia'],
+        moduleCode: code,
+        priority: control.profile_adjusted_priority || 'alta',
+      })),
+    },
+    reports: {
+      prioritized_items: [
+        ...risks.slice(0, 4),
+        ...suggestedKpis.slice(0, 4),
+        ...highControls.slice(0, 4),
+      ],
+      business_relevance: 'Los reportes premium incorporan Perfil Empresa como contexto ejecutivo y trazabilidad de interpretación.',
+      recommended_focus: commonFocus.slice(0, 5),
+      suggested_actions: [
+        recommendation({
+          title: 'Incluir lectura ejecutiva del perfil en reportes premium',
+          reason: 'El perfil mejora interpretación de riesgos, KPIs, controles y hoja de ruta sin alterar datos base.',
+          internalSignal: `Fuentes internas analizadas: ${Object.values(sourceCounts).reduce((acc, value) => acc + Number(value || 0), 0)} registros resumidos.`,
+          evidence: ['Sección Impacto operativo del Perfil Empresa', 'Trazabilidad IA compacta', 'Limitaciones de evidencia'],
+          moduleCode: code,
+          priority: 'alta',
+        }),
+      ],
+    },
+  };
+
+  const selected = moduleMap[code] || moduleMap.dashboard;
+  const fallbackMessage = 'No hay datos internos suficientes para generar priorización completa; completar evidencias, controles y KPIs.';
+  const prioritizedItems = asArray(selected.prioritized_items).slice(0, 8);
+  const recommendedFocus = asArray(selected.recommended_focus).filter(Boolean).slice(0, 6);
+
+  return {
+    tenant_id: impact.tenant_id,
+    module_code: code,
+    module_label: moduleLabel(code),
+    company_profile_used: Boolean(impact.profile),
+    ai_profile_used: impact.trace?.ai_enriched === true,
+    tenant_filter_enforced: true,
+    filtered_by_tenant_id: true,
+    generated_at: new Date().toISOString(),
+    prioritized_items: prioritizedItems,
+    business_relevance: selected.business_relevance || fallbackMessage,
+    recommended_focus: recommendedFocus.length ? recommendedFocus : [fallbackMessage],
+    suggested_actions: asArray(selected.suggested_actions).slice(0, 8),
+    suggested_evidence: evidence.slice(0, 8),
+    maturity_gap: {
+      maturity_level: impact.maturity_level || 'No declarado',
+      interpretation: impact.maturity_level
+        ? `Roadmap calibrado para madurez ${impact.maturity_level}.`
+        : 'Madurez no declarada; completar perfil para priorización más precisa.',
+    },
+    risk_alignment: risks.slice(0, 6),
+    kpi_interpretation: selected.kpi_interpretation || suggestedKpis.slice(0, 6),
+    audit_focus: selected.audit_focus || asArray(impactProfile.audit_focus_areas).slice(0, 6),
+    roadmap_items: roadmap.slice(0, 6),
+    trace: {
+      ...(impact.trace || {}),
+      source_module: `company_profile_impact_${code}`,
+      tenant_filter_enforced: true,
+      filtered_by_tenant_id: true,
+      company_profile_used: Boolean(impact.profile),
+      ai_profile_used: impact.trace?.ai_enriched === true,
+    },
+  };
+}
+
+async function buildCompanyProfileModuleImpact({ tenantId, moduleCode, standardCodes = [] } = {}) {
+  const impact = await buildCompanyProfileImpact({ tenantId, standardCodes });
+  return buildModulePayload(impact, moduleCode);
+}
+
 function enrichControlsWithProfileImpact(controls = [], impact = {}) {
   const weights = impact?.impact_profile?.control_domain_weights || {};
   const profile = {
@@ -538,6 +770,7 @@ function enrichKpisWithProfileImpact(kpis = [], impact = {}) {
 
 module.exports = {
   buildCompanyProfileImpact,
+  buildCompanyProfileModuleImpact,
   enrichControlsWithProfileImpact,
   enrichKpisWithProfileImpact,
 };

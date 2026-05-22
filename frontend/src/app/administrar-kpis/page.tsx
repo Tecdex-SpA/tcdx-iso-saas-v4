@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -917,6 +918,12 @@ export default function AdministrarKpisPage() {
           <MetricCard title={t('kpiAdmin.custom')} value={stats.custom} />
           <MetricCard title={t('kpiAdmin.filtered')} value={stats.filtered} />
         </div>
+
+        <CompanyProfileImpactPanel
+          moduleCode="kpis"
+          title="Lectura KPI según Perfil Empresa"
+          compact
+        />
 
         {manualPendingKpis.length > 0 && (
           <section className="rounded-[28px] border border-amber-200 bg-amber-50/70 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">

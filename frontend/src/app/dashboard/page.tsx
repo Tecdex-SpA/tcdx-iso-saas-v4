@@ -11,6 +11,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
+import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -1511,6 +1512,12 @@ function DashboardPageContent() {
               {errorMessage}
             </div>
           )}
+
+          <CompanyProfileImpactPanel
+            moduleCode="dashboard"
+            title="Foco operativo según Perfil Empresa"
+            compact
+          />
 
           {activeView === 'executive' && (
             <>

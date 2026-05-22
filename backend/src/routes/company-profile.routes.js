@@ -13,6 +13,7 @@ const {
 } = require('../services/companyProfile.service');
 const {
   buildCompanyProfileImpact,
+  buildCompanyProfileModuleImpact,
 } = require('../services/companyProfileImpact.service');
 
 const router = express.Router();
@@ -309,6 +310,29 @@ router.get('/impact/summary', auth, async (req, res) => {
       request_id: req.requestId || null,
     });
   } catch (error) {
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/impact/module/:moduleCode', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const data = await buildCompanyProfileModuleImpact({
+      tenantId,
+      moduleCode: req.params.moduleCode,
+    });
+    return res.json({
+      ok: true,
+      ...data,
+      request_id: req.requestId || null,
+    });
+  } catch (error) {
+    console.error('COMPANY PROFILE MODULE IMPACT ERROR:', {
+      request_id: req.requestId || null,
+      module_code: req.params.moduleCode,
+      error: error.message,
+    });
     const safe = safeError(error);
     return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
   }

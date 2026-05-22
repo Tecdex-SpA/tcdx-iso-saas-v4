@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import { getUserFromToken } from '@/utils/auth';
 import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -1150,6 +1151,12 @@ function PlanAccionPageContent() {
             <MetricInline label={t('actionPlan.statuses.blocked')} value={metrics.bloqueados} />
           </div>
         </section>
+
+        <CompanyProfileImpactPanel
+          moduleCode="action-plans"
+          title="Recomendaciones de planes por Perfil Empresa"
+          compact
+        />
 
         {(errorMessage || openingFromControl || focusTenantControlId || focusControlId) && (
           <div className="space-y-3">
