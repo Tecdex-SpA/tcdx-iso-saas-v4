@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 
@@ -1290,6 +1291,14 @@ export default function HealthDashboardPage() {
                 {error}
               </div>
             )}
+
+            <div className="mb-6">
+              <CompanyProfileImpactPanel
+                moduleCode="health"
+                title="Interpretación de salud según Perfil Empresa"
+                compact
+              />
+            </div>
 
             {selectedSummary && (
               <>

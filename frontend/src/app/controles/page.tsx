@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStatusLabel } from '@/i18n/displayText';
@@ -1496,6 +1497,12 @@ function ControlesPageContent() {
             </div>
           )}
         </section>
+
+        <CompanyProfileImpactPanel
+          moduleCode="controls"
+          title="Priorización de controles por Perfil Empresa"
+          compact
+        />
 
         {focusMessage && (
           <div className="rounded-[24px] border border-indigo-200 bg-indigo-50 px-5 py-4 text-indigo-900 shadow-sm">
