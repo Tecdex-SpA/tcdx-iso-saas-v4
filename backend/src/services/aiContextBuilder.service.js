@@ -7,12 +7,47 @@ function compactRows(rows, limit = 20) {
   return Array.isArray(rows) ? rows.slice(0, limit) : [];
 }
 
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function sourceItem(reference, usedFor) {
   return {
     source: 'internal_db',
     reference,
     used_for: usedFor,
   };
+}
+
+function assertTenantScopedRows(rows, tenantId, sourceName, context = null) {
+  const input = asArray(rows);
+  const expected = String(tenantId || '');
+  const rejected = [];
+  const filtered = input.filter((row) => {
+    if (!row || typeof row !== 'object') return false;
+    if (!Object.prototype.hasOwnProperty.call(row, 'tenant_id')) {
+      rejected.push({ reason: 'missing_tenant_id' });
+      return false;
+    }
+    if (String(row.tenant_id) !== expected) {
+      rejected.push({ reason: 'tenant_mismatch', tenant_id: row.tenant_id });
+      return false;
+    }
+    return true;
+  });
+
+  if (rejected.length) {
+    console.warn('AI_CONTEXT_TENANT_SCOPE_ROWS_EXCLUDED', {
+      source: sourceName,
+      tenant_id: tenantId,
+      rejected_count: rejected.length,
+    });
+    if (context) {
+      context.limitations.push(`Se excluyeron ${rejected.length} registros de ${sourceName} por no confirmar tenant_id.`);
+    }
+  }
+
+  return filtered;
 }
 
 function buildBaseContext({ tenantId, moduleOrigin = 'ia-auditor', standardCode = null, operationId = null }) {
@@ -585,6 +620,7 @@ async function loadOptionalEntities(context, { tenantId, standardCode = null, op
         `
         SELECT
           ar.*,
+          a.tenant_id AS tenant_id,
           a.name AS asset_name,
           ${assetColumns.has('type') ? 'a.type' : 'NULL::text'} AS asset_type,
           ${assetColumns.has('criticality') ? 'a.criticality' : 'NULL::text'} AS asset_criticality,
@@ -705,6 +741,7 @@ async function loadOptionalEntities(context, { tenantId, standardCode = null, op
       'document_index.google_drive',
       `
       SELECT
+        tenant_id,
         ${idExpression} AS id,
         ${providerExpression} AS provider,
         ${fileNameExpression} AS file_name,
@@ -751,6 +788,329 @@ async function buildAiTenantContext({ tenantId }) {
   await loadRecentEntities(context, { tenantId });
   await loadOptionalEntities(context, { tenantId });
   return context;
+}
+
+function lower(value) {
+  return String(value || '').toLowerCase();
+}
+
+function latestDate(rows = []) {
+  const dates = asArray(rows)
+    .flatMap((row) => [
+      row.updated_at,
+      row.created_at,
+      row.calculated_at,
+      row.uploaded_at,
+      row.detected_at,
+      row.due_date,
+      row.period_start,
+    ])
+    .filter(Boolean)
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value));
+  if (!dates.length) return null;
+  return new Date(Math.max(...dates)).toISOString();
+}
+
+function sourceMeta(reference, rows, { standardCode = null } = {}) {
+  return {
+    count: asArray(rows).length,
+    source_table: reference,
+    filtered_by_tenant_id: true,
+    filtered_by_standard_code: Boolean(standardCode),
+    latest_record_at: latestDate(rows),
+  };
+}
+
+function countBy(rows = [], field) {
+  return asArray(rows).reduce((acc, row) => {
+    const key = row?.[field] || 'sin_clasificar';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function isHigh(value) {
+  return ['alta', 'alto', 'high', 'critical', 'critico', 'crítico', 'severa', 'severo'].includes(lower(value));
+}
+
+function isOpen(value) {
+  return !['cerrado', 'cerrada', 'closed', 'completado', 'completada', 'resolved', 'resuelta', 'cancelado', 'cancelada'].includes(lower(value));
+}
+
+function isOverdue(row) {
+  if (!row?.due_date) return false;
+  const due = new Date(row.due_date).getTime();
+  return Number.isFinite(due) && due < Date.now() && isOpen(row.status);
+}
+
+function buildDataQualityContext(context, sections = {}) {
+  const missing = [];
+  const weak = [];
+  const reliable = [];
+
+  Object.entries(sections).forEach(([name, section]) => {
+    const count = Number(section?.count || 0);
+    if (count <= 0) missing.push(name);
+    else reliable.push(name);
+  });
+
+  if (sections.evidence_context?.controls_without_evidence?.length) {
+    weak.push('controles_sin_evidencia');
+  }
+  if (sections.action_plan_context?.overdue_actions?.length) {
+    weak.push('planes_vencidos');
+  }
+  if (sections.kpi_context?.kpis_below_target?.length) {
+    weak.push('kpis_bajo_objetivo');
+  }
+
+  return {
+    missing_data: missing,
+    weak_data: weak,
+    reliable_data: reliable,
+    limitations: context.limitations || [],
+    data_freshness: Object.fromEntries(
+      Object.entries(sections).map(([name, section]) => [name, section?.latest_record_at || null])
+    ),
+    safe_conclusions: [
+      'La IA puede priorizar brechas, evidencias y acciones usando datos internos del tenant.',
+      'Las referencias externas son apoyo contextual y no evidencia de cumplimiento.',
+    ],
+    must_not_conclude: [
+      'No declarar certificación ni cumplimiento formal sin evidencia interna aprobada.',
+      'No usar referencias web como evidencia objetiva del tenant.',
+      'No mezclar datos de otros tenants.',
+    ],
+    source_table: 'derived_context',
+    filtered_by_tenant_id: true,
+    tenant_filter_enforced: true,
+  };
+}
+
+async function buildCompanyProfileAiContext({
+  tenantId,
+  standardCodes = [],
+  includeControls = true,
+  includeHealth = true,
+  includeKpis = true,
+  includeRisks = true,
+  includeEvidence = true,
+  includeAudits = true,
+  includeFindings = true,
+  includeNonconformities = true,
+  includeActionPlans = true,
+} = {}) {
+  if (!tenantId) {
+    const error = new Error('tenantId es obligatorio para construir contexto IA de Perfil Empresa');
+    error.code = 'TENANT_REQUIRED';
+    throw error;
+  }
+
+  const standardList = asArray(standardCodes).filter(Boolean);
+  const standardCode = standardList.length === 1 ? standardList[0] : null;
+  const context = buildBaseContext({ tenantId, moduleOrigin: 'company_profile', standardCode });
+  await loadTenantProfile(context, tenantId);
+  await loadCompanyProfile(context, tenantId);
+  if (includeHealth || includeControls) await loadEffectiveHealth(context, { tenantId, standardCode });
+  if (includeEvidence || includeFindings || includeNonconformities || includeActionPlans || includeAudits) {
+    await loadRecentEntities(context, { tenantId, standardCode });
+  }
+  if (includeRisks || includeKpis) await loadOptionalEntities(context, { tenantId, standardCode });
+
+  const healthRows = assertTenantScopedRows(context.effective_health_summary, tenantId, 'public.v_iso_effective_kpi_summary', context);
+  const controls = assertTenantScopedRows(context.priority_controls, tenantId, 'public.v_iso_control_effective_health', context);
+  const evidences = assertTenantScopedRows(context.recent_evidences, tenantId, 'evidences', context);
+  const findings = assertTenantScopedRows(context.recent_findings, tenantId, 'findings', context);
+  const nonconformities = assertTenantScopedRows(context.recent_nonconformities, tenantId, 'tenant_nonconformities', context);
+  const actionPlans = assertTenantScopedRows(context.recent_action_plans, tenantId, 'action_plans', context);
+  const risks = assertTenantScopedRows(context.risks, tenantId, 'risks', context);
+  const audits = assertTenantScopedRows(context.audits, tenantId, 'audits', context);
+  const documents = assertTenantScopedRows(context.documents, tenantId, 'document_index', context);
+  const kpis = assertTenantScopedRows(context.kpis, tenantId, 'kpi_snapshots', context);
+
+  const controlsWithoutEvidence = controls.filter((row) => Number(row.evidence_count || row.official_evidence_count || 0) === 0);
+  const lowHealth = controls.filter((row) => Number(row.effective_health_score || 0) < 60);
+  const deteriorated = controls.filter((row) => ['critico', 'crítico', 'critical', 'deteriorado'].includes(lower(row.effective_health_status || row.health_status)));
+  const attention = controls.filter((row) => ['atencion', 'atención', 'warning'].includes(lower(row.effective_health_status || row.health_status)));
+  const healthy = controls.filter((row) => ['saludable', 'healthy'].includes(lower(row.effective_health_status || row.health_status)));
+  const officialEvidence = evidences.filter((row) => ['approved', 'aprobada', 'oficial', 'official'].includes(lower(row.status || row.approval_status || row.evidence_status || row.category)));
+  const staleEvidences = evidences.filter((row) => row.expires_at && new Date(row.expires_at).getTime() < Date.now());
+  const kpisBelowTarget = kpis.filter((row) => {
+    const value = Number(row.value ?? row.current_value ?? row.score ?? row.compliance_percentage);
+    const target = Number(row.target ?? row.target_value ?? row.threshold);
+    return Number.isFinite(value) && Number.isFinite(target) && value < target;
+  });
+  const highRisks = risks.filter((row) => isHigh(row.residual_risk_level || row.level || row.severity || row.priority) || Number(row.residual_risk_score || row.inherent_risk_score || 0) >= 12);
+  const untreatedRisks = risks.filter((row) => !row.treatment_status || ['pendiente', 'open', 'abierto', 'untreated'].includes(lower(row.treatment_status)));
+  const overdueNcs = nonconformities.filter(isOverdue);
+  const ncsWithoutRootCause = nonconformities.filter((row) => !row.root_cause && !row.cause && !row.root_cause_analysis);
+  const ncsWithoutEffectiveness = nonconformities.filter((row) => !row.effectiveness_verified_at && !row.effectiveness_check && !row.effectiveness_status);
+  const overdueActions = actionPlans.filter(isOverdue);
+  const actionsWithoutOwner = actionPlans.filter((row) => !row.owner && !row.assignee && !row.responsible);
+  const findingsWithoutAction = findings.filter((row) => !row.action_plan_id && !row.corrective_action_id);
+
+  const tenantContext = {
+    tenant_id: tenantId,
+    tenant_name: context.tenant.name || '',
+    active_standards: context.tenant.active_standards,
+    contracted_standards: context.tenant.active_standards,
+    active_operations: context.tenant.active_operations,
+    ...sourceMeta('tenants,tenant_standards,tenant_operations', [{ tenant_id: tenantId }], { standardCode }),
+  };
+  const isoContext = {
+    count: context.tenant.active_standards.length,
+    active_standards: context.tenant.active_standards,
+    standards_scope: context.scope,
+    source_table: 'tenant_standards',
+    filtered_by_tenant_id: true,
+    filtered_by_standard_code: Boolean(standardCode),
+    latest_record_at: null,
+  };
+  const controlsContext = {
+    ...sourceMeta('public.v_iso_control_effective_health', controls, { standardCode }),
+    total_controls: controls.length,
+    active_controls: controls.filter((row) => row.is_in_active_operational_scope !== false).length,
+    controls_by_standard: countBy(controls, 'iso'),
+    deteriorated_controls: compactRows(deteriorated, 8),
+    attention_controls: compactRows(attention, 8),
+    healthy_controls: compactRows(healthy, 8),
+    controls_without_evidence: compactRows(controlsWithoutEvidence, 10),
+    top_critical_controls: compactRows([...deteriorated, ...lowHealth], 8),
+    top_controls_by_low_health: compactRows(lowHealth, 8),
+    top_controls_by_missing_evidence: compactRows(controlsWithoutEvidence, 8),
+  };
+  const healthContext = {
+    ...sourceMeta('public.v_iso_effective_kpi_summary', healthRows, { standardCode }),
+    summaries: compactRows(healthRows, 12),
+    controls_analyzed: controls.length,
+    controls_without_evidence: controlsWithoutEvidence.length,
+    deteriorated_controls: deteriorated.length,
+    attention_controls: attention.length,
+    healthy_controls: healthy.length,
+  };
+  const evidenceContext = {
+    ...sourceMeta('evidences', evidences, { standardCode }),
+    total_evidences: evidences.length,
+    official_evidences: officialEvidence.length,
+    evidences_by_control: countBy(evidences, 'tenant_control_id'),
+    stale_evidences: compactRows(staleEvidences, 6),
+    recent_evidences: compactRows(evidences, 8),
+    controls_without_evidence: compactRows(controlsWithoutEvidence, 8),
+  };
+  const kpiContext = {
+    ...sourceMeta('kpi_snapshots', kpis, { standardCode }),
+    latest_kpi_snapshots: compactRows(kpis, 10),
+    kpis_below_target: compactRows(kpisBelowTarget, 8),
+    kpis_deteriorating: compactRows(kpis.filter((row) => ['deteriorado', 'critico', 'crítico', 'critical'].includes(lower(row.status || row.health_status || row.trend))), 8),
+    kpis_by_standard_code: countBy(kpis, 'standard_code'),
+  };
+  const riskContext = {
+    ...sourceMeta('iso_risk_matrix_items/asset_risks', risks, { standardCode }),
+    total_risks: risks.length,
+    high_residual_risks: compactRows(highRisks, 8),
+    untreated_risks: compactRows(untreatedRisks, 8),
+    risks_by_domain: countBy(risks, 'domain'),
+    risks_linked_to_controls: compactRows(risks.filter((row) => row.tenant_control_id || row.control_id), 8),
+  };
+  const nonconformityContext = {
+    ...sourceMeta('tenant_nonconformities', nonconformities, { standardCode }),
+    open_nonconformities: compactRows(nonconformities.filter((row) => isOpen(row.status)), 8),
+    overdue_nonconformities: compactRows(overdueNcs, 8),
+    recurring_nonconformities: compactRows(nonconformities.filter((row) => row.is_recurring || Number(row.recurrence_count || 0) > 1), 8),
+    nonconformities_without_root_cause: compactRows(ncsWithoutRootCause, 8),
+    nonconformities_without_effectiveness_verification: compactRows(ncsWithoutEffectiveness, 8),
+    nonconformities_by_standard: countBy(nonconformities, 'iso_code'),
+  };
+  const findingContext = {
+    ...sourceMeta('findings', findings, { standardCode }),
+    open_findings: compactRows(findings.filter((row) => isOpen(row.status)), 8),
+    findings_by_severity: countBy(findings, 'severity'),
+    findings_linked_to_controls: compactRows(findings.filter((row) => row.tenant_control_id || row.control_id), 8),
+    findings_without_action_plan: compactRows(findingsWithoutAction, 8),
+  };
+  const actionPlanContext = {
+    ...sourceMeta('action_plans', actionPlans, { standardCode }),
+    open_actions: compactRows(actionPlans.filter((row) => isOpen(row.status)), 8),
+    overdue_actions: compactRows(overdueActions, 8),
+    actions_without_owner: compactRows(actionsWithoutOwner, 8),
+    actions_without_effectiveness_check: compactRows(actionPlans.filter((row) => !row.effectiveness_check && !row.effectiveness_status), 8),
+    completed_actions_pending_validation: compactRows(actionPlans.filter((row) => ['completed', 'completado', 'cerrado'].includes(lower(row.status)) && !row.validated_at), 8),
+  };
+  const auditContext = {
+    ...sourceMeta('audits', audits, { standardCode }),
+    last_audits: compactRows(audits, 5),
+    audit_findings: compactRows(findings, 8),
+    audit_readiness_signals: compactRows(healthRows, 8),
+    pending_audit_evidence: compactRows(controlsWithoutEvidence, 8),
+  };
+  const documentContext = {
+    ...sourceMeta('document_index.google_drive', documents, { standardCode }),
+    document_sources: compactRows(documents, 10),
+  };
+  const sections = {
+    controls_context: controlsContext,
+    health_context: healthContext,
+    kpi_context: kpiContext,
+    risk_context: riskContext,
+    nonconformity_context: nonconformityContext,
+    finding_context: findingContext,
+    action_plan_context: actionPlanContext,
+    evidence_context: evidenceContext,
+    audit_context: auditContext,
+    document_context: documentContext,
+  };
+  const dataQualityContext = buildDataQualityContext(context, sections);
+  const internalContextCounts = {
+    controls_analyzed: controls.length,
+    kpis_analyzed: kpis.length,
+    risks_analyzed: risks.length,
+    nonconformities_analyzed: nonconformities.length,
+    findings_analyzed: findings.length,
+    action_plans_analyzed: actionPlans.length,
+    evidences_analyzed: evidences.length,
+    audits_analyzed: audits.length,
+    documents_analyzed: documents.length,
+  };
+
+  return {
+    tenant_context: tenantContext,
+    company_profile: context.company_profile,
+    iso_context: isoContext,
+    ...sections,
+    data_quality_context: dataQualityContext,
+    maturity_signals: {
+      maturity_level: context.company_profile?.maturity_level || context.company_profile?.profile_json?.current_maturity_level || null,
+      health_signals: healthContext.summaries,
+      weak_signals: dataQualityContext.weak_data,
+      missing_signals: dataQualityContext.missing_data,
+    },
+    active_standards: context.tenant.active_standards,
+    tenant_controls: compactRows(controls, 20),
+    control_health: healthContext,
+    kpi_summary: kpiContext,
+    kpi_snapshots: compactRows(kpis, 10),
+    nonconformities: compactRows(nonconformities, 10),
+    findings: compactRows(findings, 10),
+    action_plans: compactRows(actionPlans, 10),
+    evidences: compactRows(evidences, 10),
+    risks: compactRows(risks, 10),
+    audits: compactRows(audits, 5),
+    document_sources: compactRows(documents, 10),
+    internal_context_counts: internalContextCounts,
+    source_trace: {
+      tenant_filter_enforced: true,
+      tenant_id: tenantId,
+      standard_code_filter: standardCode || null,
+      sources: context.source_trace.map((item) => ({
+        ...item,
+        filtered_by_tenant_id: true,
+        tenant_filter_enforced: true,
+      })),
+    },
+    limitations: context.limitations,
+    legacy_context: context,
+  };
 }
 
 async function buildAiStandardContext({ tenantId, standardCode, operationId = null }) {
@@ -809,6 +1169,7 @@ async function buildAiAuditContext({ tenantId, auditId }) {
 module.exports = {
   CONTEXT_VERSION,
   buildAiTenantContext,
+  buildCompanyProfileAiContext,
   buildAiStandardContext,
   buildAiControlContext,
   buildAiEvidenceContext,

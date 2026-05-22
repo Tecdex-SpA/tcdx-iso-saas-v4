@@ -193,11 +193,38 @@ function compactArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
 
+function parseJsonLikeString(value) {
+  if (typeof value !== 'string') return null;
+  let text = value.trim();
+  if (!text) return null;
+  if (text.startsWith('```')) {
+    text = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  }
+  if (!text.startsWith('{') && text.includes('{') && text.includes('}')) {
+    text = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  }
+  if (!text.startsWith('{')) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 function extractCompanyProfileAiStructured(aiResult = {}, profile = {}, context = {}) {
+  const parsedAnswer = parseJsonLikeString(aiResult.answer);
+  const answerStructured = parsedAnswer && typeof parsedAnswer === 'object'
+    ? {
+        ...safeObject(parsedAnswer),
+        ...safeObject(parsedAnswer.structured_result),
+      }
+    : {};
   const structured = safeObject(aiResult.structured_result);
   const topLevel = {
     normalized_company_profile: aiResult.normalized_company_profile,
+    tenant_applied_context_summary: aiResult.tenant_applied_context_summary,
     executive_narrative: aiResult.executive_narrative || aiResult.executive_summary || aiResult.summary,
+    company_context_diagnosis: aiResult.company_context_diagnosis || aiResult.diagnosis,
     industry_assumptions: aiResult.industry_assumptions,
     industry_references: aiResult.industry_references,
     iso_scope_recommendations: aiResult.iso_scope_recommendations,
@@ -210,6 +237,13 @@ function extractCompanyProfileAiStructured(aiResult = {}, profile = {}, context 
     audit_focus_areas: aiResult.audit_focus_areas,
     corrective_action_themes: aiResult.corrective_action_themes,
     improvement_roadmap: aiResult.improvement_roadmap,
+    risk_and_gap_analysis: aiResult.risk_and_gap_analysis,
+    nonconformity_and_finding_analysis: aiResult.nonconformity_and_finding_analysis,
+    evidence_baseline: aiResult.evidence_baseline,
+    management_focus: aiResult.management_focus,
+    external_references: aiResult.external_references || aiResult.industry_references,
+    data_quality_limitations: aiResult.data_quality_limitations,
+    what_not_to_conclude: aiResult.what_not_to_conclude,
     external_context: aiResult.external_context,
     web_research_summary: aiResult.web_research_summary,
     web_sources: aiResult.web_sources,
@@ -220,7 +254,7 @@ function extractCompanyProfileAiStructured(aiResult = {}, profile = {}, context 
   const cleanedTopLevel = Object.fromEntries(
     Object.entries(topLevel).filter(([, value]) => value !== undefined && value !== null && value !== '')
   );
-  const merged = { ...structured, ...cleanedTopLevel };
+  const merged = { ...answerStructured, ...structured, ...cleanedTopLevel };
 
   if (!Object.keys(merged).length) {
     return buildCompanyProfileStructuredFallback(profile, context);
@@ -235,9 +269,16 @@ function extractCompanyProfileAiStructured(aiResult = {}, profile = {}, context 
     suggested_controls: compactArray(merged.suggested_controls),
     typical_industry_risks: compactArray(merged.typical_industry_risks),
     suggested_evidence_baseline: compactArray(merged.suggested_evidence_baseline),
+    risk_and_gap_analysis: compactArray(merged.risk_and_gap_analysis),
+    nonconformity_and_finding_analysis: compactArray(merged.nonconformity_and_finding_analysis),
+    evidence_baseline: compactArray(merged.evidence_baseline || merged.suggested_evidence_baseline),
+    management_focus: compactArray(merged.management_focus),
     audit_focus_areas: compactArray(merged.audit_focus_areas),
     corrective_action_themes: compactArray(merged.corrective_action_themes),
     improvement_roadmap: compactArray(merged.improvement_roadmap),
+    external_references: compactArray(merged.external_references || merged.industry_references || merged.web_sources),
+    data_quality_limitations: compactArray(merged.data_quality_limitations || merged.limitations),
+    what_not_to_conclude: compactArray(merged.what_not_to_conclude),
     limitations: compactArray(merged.limitations),
   };
 }
@@ -259,18 +300,28 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     allow_document_context: profile.allow_document_context,
   });
 
-  const context = await aiContextBuilder.buildAiTenantContext({ tenantId });
+  const profileJson = profile.profile_json || {};
+  const standardCodes = compactArray(profileJson.active_standards || profileJson.target_standards);
+  const context = await aiContextBuilder.buildCompanyProfileAiContext({
+    tenantId,
+    standardCodes,
+  });
   context.company_profile = profile;
   const normalizedModelMode = modelMode === 'deep' ? 'deep' : 'balanced';
+  const internalCounts = context.internal_context_counts || {};
   const payload = {
     tenant_id: tenantId,
     user_id: userId,
     task_type: 'company_profile_context',
     module_origin: 'company_profile',
     question: [
-      'Analiza el perfil empresa como contexto de organización ISO.',
-      'Devuelve JSON estructurado con normalized_company_profile, industry_assumptions, ISO scope recommendations, proposed objectives, proposed KPIs, suggested controls, typical industry risks, suggested evidence baseline, maturity baseline, audit focus areas, corrective action themes, improvement roadmap, limitations y trace.',
-      'No inventes cumplimiento ni evidencia; usa los datos internos y el perfil como calibración.',
+      'Actúa como auditor senior ISO y consultor de mejora continua.',
+      'Usa primero datos internos reales del tenant autenticado: controles, salud, KPIs, riesgos, no conformidades, hallazgos, planes de acción, evidencias, auditorías y documentos.',
+      'No mezcles tenants, no inventes evidencia y no afirmes cumplimiento sin evidencia interna suficiente.',
+      'Usa referencias externas sólo como apoyo contextual, nunca como evidencia interna ni fuente de cumplimiento.',
+      'Cada recomendación debe conectarse a un dato interno real, ausencia de dato, riesgo, control, KPI, no conformidad, hallazgo, evidencia o brecha explícita.',
+      'Si falta el dato, declara “No hay evidencia interna suficiente” y pide la evidencia requerida.',
+      'Devuelve exclusivamente JSON estructurado aplicable a esta empresa específica.',
     ].join(' '),
     locale: 'es',
     model_mode: normalizedModelMode,
@@ -282,12 +333,72 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     allow_document_context: profile.allow_document_context === true,
     used_company_profile: true,
     company_profile: profile,
+    tenant_context: context.tenant_context,
+    iso_context: context.iso_context,
+    controls_context: context.controls_context,
+    health_context: context.health_context,
+    kpi_context: context.kpi_context,
+    risk_context: context.risk_context,
+    nonconformity_context: context.nonconformity_context,
+    finding_context: context.finding_context,
+    action_plan_context: context.action_plan_context,
+    evidence_context: context.evidence_context,
+    audit_context: context.audit_context,
+    document_context: context.document_context,
+    data_quality_context: context.data_quality_context,
+    maturity_signals: context.maturity_signals,
+    active_standards: context.active_standards,
+    tenant_controls: context.tenant_controls,
+    control_health: context.control_health,
+    kpi_summary: context.kpi_summary,
+    kpi_snapshots: context.kpi_snapshots,
+    nonconformities: context.nonconformities,
+    findings: context.findings,
+    action_plans: context.action_plans,
+    evidences: context.evidences,
+    risks: context.risks,
+    audits: context.audits,
+    document_sources: context.document_sources,
+    source_trace: context.source_trace,
     industry: profile.industry || profile.profile_json?.industry || '',
     subindustry: profile.subindustry || profile.profile_json?.subindustry || '',
     company_size: profile.company_size || profile.profile_json?.company_size || '',
     maturity_level: profile.maturity_level || profile.profile_json?.current_maturity_level || '',
     risk_appetite: profile.risk_appetite || profile.profile_json?.risk_appetite || '',
     context,
+    stats: {
+      internal_context_counts: internalCounts,
+      controls_analyzed: internalCounts.controls_analyzed || 0,
+      kpis_analyzed: internalCounts.kpis_analyzed || 0,
+      risks_analyzed: internalCounts.risks_analyzed || 0,
+      nonconformities_analyzed: internalCounts.nonconformities_analyzed || 0,
+      findings_analyzed: internalCounts.findings_analyzed || 0,
+      action_plans_analyzed: internalCounts.action_plans_analyzed || 0,
+      evidences_analyzed: internalCounts.evidences_analyzed || 0,
+      audits_analyzed: internalCounts.audits_analyzed || 0,
+    },
+    web_context_topics: [
+      profile.industry,
+      profile.subindustry,
+      ...(context.active_standards || []),
+      ...(context.controls_context?.top_controls_by_low_health || []).map((item) => item.control_description || item.category || item.clause),
+      ...(context.nonconformity_context?.open_nonconformities || []).map((item) => item.title || item.description),
+      ...(context.finding_context?.open_findings || []).map((item) => item.title || item.description),
+      ...(context.kpi_context?.kpis_below_target || []).map((item) => item.kpi_name || item.kpi_code),
+    ].filter(Boolean).slice(0, 12),
+    requested_output_schema: {
+      tenant_applied_context_summary: true,
+      company_context_diagnosis: true,
+      proposed_objectives: 'array of objects with objective, reason, linked_internal_signal, suggested_kpi, target, period, owner_role, required_evidence',
+      proposed_kpis: 'array of objects with kpi, reason, formula, source_data_needed, linked_control_or_process, target_suggestion, frequency',
+      suggested_controls: 'array of objects with control, reason, linked_standard, linked_internal_gap, priority, required_evidence, implementation_hint',
+      risk_and_gap_analysis: true,
+      nonconformity_and_finding_analysis: true,
+      evidence_baseline: true,
+      improvement_roadmap: '30/60/90 days',
+      data_quality_limitations: true,
+      what_not_to_conclude: true,
+    },
     options: {
       local_compact: true,
       fast_mode: false,
@@ -306,6 +417,7 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
       model_mode: normalizedModelMode,
       use_web: profile.allow_web_research === true,
       used_company_profile: true,
+      internal_context_counts: internalCounts,
     },
   };
 
@@ -349,6 +461,8 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     duration_ms: engine.duration_ms || aiResult?.metrics?.duration_ms || null,
     web_results_count: engine.web_results_count || aiResult?.external_context?.web_results_count || 0,
     trusted_results_count: engine.trusted_results_count || aiResult?.external_context?.trusted_results_count || 0,
+    internal_context_counts: engine.internal_context_counts || aiResult?.tenant_applied_context_summary || internalCounts,
+    tenant_id: tenantId,
     timeout_stage: engine.timeout_stage || (aiError?.name === 'AbortError' ? 'backend_to_ai_engine' : null),
     timeout_ms: engine.timeout_ms || aiError?.timeout_ms || null,
     error_type: engine.error_type || aiError?.code || aiError?.name || null,

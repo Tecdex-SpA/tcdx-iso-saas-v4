@@ -32,6 +32,18 @@ function compactJoin(items = [], limit = 6) {
   return asArray(items).map(itemText).filter(Boolean).slice(0, limit).join('; ');
 }
 
+function objectTable(items = [], columns = [], limit = 6) {
+  const rows = asArray(items).slice(0, limit);
+  if (!rows.length) return '<p class="muted">Sin información registrada.</p>';
+  return `<div class="tableLike">
+    <div class="tableHeader">${columns.map((column) => `<span>${escapeHtml(column.label)}</span>`).join('')}</div>
+    ${rows.map((item) => `<div class="tableRow">${columns.map((column) => {
+      const value = typeof column.value === 'function' ? column.value(item) : item?.[column.value];
+      return `<span>${escapeHtml(truncateText(value, column.max || 220))}</span>`;
+    }).join('')}</div>`).join('')}
+  </div>`;
+}
+
 function references(items = [], limit = 6) {
   const rows = asArray(items).slice(0, limit);
   if (!rows.length) return '<p class="muted">Sin referencias externas registradas.</p>';
@@ -71,7 +83,9 @@ function renderCompanyProfileContextTemplate(data = {}) {
   const limitationsText = hasRealAi
     ? asArray(ai.limitations || trace.limitations).join(' ')
     : 'IA no ejecutada o completada con fallback controlado. La evidencia interna y la revisión humana siguen siendo obligatorias antes de usar este documento como soporte de auditoría.';
-  const externalReferences = ai.industry_references || ai.external_context?.sources || ai.external_context?.usable_context_sources || [];
+  const externalReferences = ai.external_references || ai.industry_references || ai.external_context?.sources || ai.external_context?.usable_context_sources || [];
+  const applied = ai.tenant_applied_context_summary || trace.internal_context_counts || {};
+  const counts = trace.internal_context_counts || applied || {};
 
   const body = `
     <main class="pdfDocument">
@@ -108,14 +122,28 @@ function renderCompanyProfileContextTemplate(data = {}) {
         </div>
       </section>
 
+      <section class="section keep-together">
+        <h2>Datos internos usados</h2>
+        <div class="kpiGrid four">
+          <div class="kpiCard"><span>Controles</span><strong>${escapeHtml(counts.controls_analyzed ?? applied.controls_analyzed ?? 0)}</strong></div>
+          <div class="kpiCard"><span>KPIs</span><strong>${escapeHtml(counts.kpis_analyzed ?? applied.kpis_analyzed ?? 0)}</strong></div>
+          <div class="kpiCard"><span>Riesgos</span><strong>${escapeHtml(counts.risks_analyzed ?? applied.risks_analyzed ?? 0)}</strong></div>
+          <div class="kpiCard"><span>Evidencias</span><strong>${escapeHtml(counts.evidences_analyzed ?? applied.evidences_analyzed ?? 0)}</strong></div>
+          <div class="kpiCard"><span>NC</span><strong>${escapeHtml(counts.nonconformities_analyzed ?? applied.nonconformities_analyzed ?? 0)}</strong></div>
+          <div class="kpiCard"><span>Hallazgos</span><strong>${escapeHtml(counts.findings_analyzed ?? applied.findings_analyzed ?? 0)}</strong></div>
+          <div class="kpiCard"><span>Acciones</span><strong>${escapeHtml(counts.action_plans_analyzed ?? applied.action_plans_analyzed ?? 0)}</strong></div>
+          <div class="kpiCard"><span>Auditorías</span><strong>${escapeHtml(counts.audits_analyzed ?? applied.audits_analyzed ?? 0)}</strong></div>
+        </div>
+      </section>
+
       <section class="gridTwo section">
         <article class="card">
           <h3>Alcance ISO sugerido</h3>
-          <p>${escapeHtml(truncateText(ai.iso_scope_recommendations || profile.audit_scope || 'Definir alcance formal, exclusiones justificadas, procesos críticos y sedes incluidas.', 650))}</p>
+          ${list(ai.iso_scope_recommendations || profile.audit_scope || ['Definir alcance formal, exclusiones justificadas, procesos críticos y sedes incluidas.'], 5)}
         </article>
         <article class="card">
           <h3>Riesgos y oportunidades</h3>
-          ${list(ai.typical_industry_risks || profile.known_weaknesses || profile.pain_points, 6)}
+          ${list(ai.risk_and_gap_analysis || ai.typical_industry_risks || profile.known_weaknesses || profile.pain_points, 6)}
         </article>
       </section>
 
@@ -131,13 +159,45 @@ function renderCompanyProfileContextTemplate(data = {}) {
       </section>
 
       <section class="section keep-together">
-        <h2>Objetivos, KPIs y evidencia esperada</h2>
-        <div class="tableLike">
-          <div class="tableHeader"><span>Dimensión</span><span>Recomendación</span></div>
-          <div class="tableRow"><span>Objetivos</span><span>${escapeHtml(truncateText(compactJoin(ai.proposed_objectives || profile.quality_objectives), 360, 'No informado'))}</span></div>
-          <div class="tableRow"><span>KPIs</span><span>${escapeHtml(truncateText(compactJoin(ai.proposed_kpis), 360, 'No informado'))}</span></div>
-          <div class="tableRow"><span>Controles base</span><span>${escapeHtml(truncateText(compactJoin(ai.suggested_controls), 360, 'No informado'))}</span></div>
-          <div class="tableRow"><span>Evidencia base</span><span>${escapeHtml(truncateText(compactJoin(ai.suggested_evidence_baseline), 360, 'No informado'))}</span></div>
+        <h2>Objetivos sugeridos</h2>
+        ${objectTable(ai.proposed_objectives || profile.quality_objectives, [
+          { label: 'Objetivo', value: (item) => item.objective || item.title || itemText(item), max: 180 },
+          { label: 'Señal interna', value: (item) => item.linked_internal_signal || item.reason || 'Perfil empresa / datos internos', max: 240 },
+          { label: 'KPI / evidencia', value: (item) => `${item.suggested_kpi || ''} ${asArray(item.required_evidence).join(', ')}`, max: 240 },
+        ], 5)}
+      </section>
+
+      <section class="section keep-together">
+        <h2>KPIs y controles sugeridos</h2>
+        <div class="gridTwo">
+          <article class="card">
+            <h3>KPIs propuestos</h3>
+            ${objectTable(ai.proposed_kpis, [
+              { label: 'KPI', value: (item) => item.kpi || item.title || itemText(item), max: 140 },
+              { label: 'Fórmula / fuente', value: (item) => item.formula || item.source_data_needed || item.reason, max: 220 },
+            ], 5)}
+          </article>
+          <article class="card">
+            <h3>Controles sugeridos</h3>
+            ${objectTable(ai.suggested_controls, [
+              { label: 'Control', value: (item) => item.control || item.title || itemText(item), max: 140 },
+              { label: 'Brecha / evidencia', value: (item) => item.linked_internal_gap || asArray(item.required_evidence).join(', ') || item.reason, max: 220 },
+            ], 5)}
+          </article>
+        </div>
+      </section>
+
+      <section class="section keep-together">
+        <h2>Evidencia base y foco gerencial</h2>
+        <div class="gridTwo">
+          <article class="card">
+            <h3>Evidencia esperada</h3>
+            ${list(ai.evidence_baseline || ai.suggested_evidence_baseline, 7)}
+          </article>
+          <article class="card">
+            <h3>Foco de gestión</h3>
+            ${list(ai.management_focus || ai.audit_focus_areas, 7)}
+          </article>
         </div>
       </section>
 
@@ -151,7 +211,25 @@ function renderCompanyProfileContextTemplate(data = {}) {
 
       <section class="section keep-together">
         <h2>Hoja de ruta de mejora</h2>
-        ${list(ai.improvement_roadmap || profile.improvement_priorities, 8)}
+        ${objectTable(ai.improvement_roadmap || profile.improvement_priorities, [
+          { label: 'Horizonte', value: (item) => item.horizon || item.title || 'Mejora continua', max: 80 },
+          { label: 'Acciones', value: (item) => asArray(item.actions).join('; ') || itemText(item), max: 260 },
+          { label: 'Criterio / evidencia', value: (item) => `${asArray(item.success_criteria).join('; ')} ${asArray(item.evidence_to_collect).join('; ')}`, max: 260 },
+        ], 6)}
+      </section>
+
+      <section class="section keep-together">
+        <h2>Limitaciones y conclusiones no permitidas</h2>
+        <div class="gridTwo">
+          <article class="card">
+            <h3>Limitaciones de datos</h3>
+            ${list(ai.data_quality_limitations || ai.limitations, 6)}
+          </article>
+          <article class="card">
+            <h3>Qué no se puede concluir</h3>
+            ${list(ai.what_not_to_conclude, 6)}
+          </article>
+        </div>
       </section>
 
       <section class="section traceBox">
@@ -161,6 +239,8 @@ function renderCompanyProfileContextTemplate(data = {}) {
           ${field('Modelo', hasRealAi ? (trace.selected_model || trace.model_name || 'No disponible') : 'No disponible')}
           ${field('RAG', yesNo(trace.used_rag))}
           ${field('Web', yesNo(trace.used_web))}
+          ${field('Duración', trace.duration_ms ? `${trace.duration_ms} ms` : 'No informada')}
+          ${field('Request ID', trace.request_id || 'No informado')}
         </div>
         <p class="muted">${escapeHtml(truncateText(limitationsText, 520, 'La información externa y la IA no reemplazan evidencia interna ni auditoría formal.'))}</p>
       </section>

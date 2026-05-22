@@ -94,7 +94,7 @@ if [ "$(json_get "$SAVE_JSON" "ok")" != "true" ]; then
 fi
 
 echo "[company-profile-ai] Starting async AI analysis"
-START_JSON="${OUT_DIR}/analysis-start.json"
+START_JSON="${OUT_DIR}/job-start.json"
 curl -sk -X POST "${BASE_URL}/api/company-profile/analyze/start" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H 'Content-Type: application/json' \
@@ -110,7 +110,7 @@ fi
 echo "[company-profile-ai] job_id=${JOB_ID}"
 STATUS="queued"
 ELAPSED=0
-JOB_JSON="${OUT_DIR}/analysis-job.json"
+JOB_JSON="${OUT_DIR}/job-latest.json"
 while [ "$ELAPSED" -lt "$MAX_WAIT_SECONDS" ]; do
   sleep "$POLL_INTERVAL_SECONDS"
   ELAPSED=$((ELAPSED + POLL_INTERVAL_SECONDS))
@@ -138,6 +138,9 @@ SELECTED_MODEL="$(json_get "$PROFILE_JSON" "data.ai_research_trace_json.selected
 FALLBACK_USED="$(json_get "$PROFILE_JSON" "data.ai_research_trace_json.fallback_used")"
 USED_WEB="$(json_get "$PROFILE_JSON" "data.ai_research_trace_json.used_web")"
 DURATION_MS="$(json_get "$PROFILE_JSON" "data.ai_research_trace_json.duration_ms")"
+CONTEXT_SUMMARY="$(json_get "$PROFILE_JSON" "data.ai_profile_summary_json.tenant_applied_context_summary")"
+CONTROLS_ANALYZED="$(json_get "$PROFILE_JSON" "data.ai_profile_summary_json.tenant_applied_context_summary.controls_analyzed")"
+KPIS_ANALYZED="$(json_get "$PROFILE_JSON" "data.ai_profile_summary_json.tenant_applied_context_summary.kpis_analyzed")"
 
 if [ -z "$(json_get "$PROFILE_JSON" "data.ai_profile_summary_json")" ]; then
   echo "ERROR: ai_profile_summary_json is empty. See ${PROFILE_JSON}" >&2
@@ -155,6 +158,23 @@ if [ -z "$DURATION_MS" ]; then
   echo "ERROR: expected duration_ms in AI trace. See ${PROFILE_JSON}" >&2
   exit 1
 fi
+if [ -z "$CONTEXT_SUMMARY" ]; then
+  echo "ERROR: expected tenant_applied_context_summary in AI profile summary. See ${PROFILE_JSON}" >&2
+  exit 1
+fi
+if [ -z "$CONTROLS_ANALYZED" ]; then
+  echo "ERROR: expected controls_analyzed in tenant_applied_context_summary. See ${PROFILE_JSON}" >&2
+  exit 1
+fi
+if [ -z "$KPIS_ANALYZED" ]; then
+  echo "ERROR: expected kpis_analyzed in tenant_applied_context_summary. See ${PROFILE_JSON}" >&2
+  exit 1
+fi
+
+RESULT_JSON="${OUT_DIR}/job-result.json"
+curl -sk -H "Authorization: Bearer ${TOKEN}" \
+  "${BASE_URL}/api/company-profile/analyze/jobs/${JOB_ID}/result" \
+  -o "$RESULT_JSON"
 
 echo "[company-profile-ai] Exporting context document"
 EXPORT_JSON="${OUT_DIR}/context-export.json"
@@ -164,11 +184,17 @@ curl -sk -X POST "${BASE_URL}/api/company-profile/export-context-document" \
 
 DOWNLOAD_URL="$(json_get "$EXPORT_JSON" "data.download_url")"
 if [ -z "$DOWNLOAD_URL" ]; then
+  DOWNLOAD_URL="$(json_get "$EXPORT_JSON" "data.file_url")"
+fi
+if [ -z "$DOWNLOAD_URL" ]; then
+  DOWNLOAD_URL="$(json_get "$EXPORT_JSON" "data.result_download_url")"
+fi
+if [ -z "$DOWNLOAD_URL" ]; then
   DOWNLOAD_URL="/api/company-profile/context-document/download"
 fi
 
-PDF_PATH="${OUT_DIR}/contexto-de-la-organizacion.pdf"
-HEADERS_PATH="${OUT_DIR}/contexto-headers.txt"
+PDF_PATH="${OUT_DIR}/context-document.pdf"
+HEADERS_PATH="${OUT_DIR}/headers.txt"
 HTTP_CODE="$(curl -sk -L \
   -H "Authorization: Bearer ${TOKEN}" \
   -D "$HEADERS_PATH" \
@@ -194,6 +220,8 @@ SUMMARY="${OUT_DIR}/summary.txt"
   echo "used_web=${USED_WEB}"
   echo "fallback_used=${FALLBACK_USED}"
   echo "duration_ms=${DURATION_MS}"
+  echo "controls_analyzed=${CONTROLS_ANALYZED}"
+  echo "kpis_analyzed=${KPIS_ANALYZED}"
   echo "pdf=${PDF_PATH}"
   echo "pdf_size=${PDF_SIZE}"
 } > "$SUMMARY"
