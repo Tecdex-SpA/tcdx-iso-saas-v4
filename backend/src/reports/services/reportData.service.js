@@ -2,6 +2,9 @@ const pool = require('../../config/db');
 const { renderAiAuditorPremiumTemplate } = require('../../reports/templates/aiAuditorPremium.template');
 const { buildReportAiEnrichment } = require('../../services/reportAiEnrichment.service');
 const { buildCompanyProfileImpact } = require('../../services/companyProfileImpact.service');
+const {
+  getTenantApplicabilitySummary,
+} = require('../../services/companyProfileApplicabilityEngine.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://ai.tcdx.int:8001';
@@ -1081,9 +1084,17 @@ async function getControlStats(tenantId) {
       SUM(CASE WHEN effective_health_status IN ('deteriorado', 'critico') THEN 1 ELSE 0 END)::int AS critical_controls,
       SUM(COALESCE(overdue_action_plans_count, 0))::int AS overdue_controls,
       ROUND(AVG(COALESCE(effective_health_score, 0))::numeric, 1) AS average_score
-    FROM public.v_iso_control_effective_health
-    WHERE tenant_id = $1::uuid
-      AND COALESCE(is_in_active_operational_scope, false) = true
+    FROM public.v_iso_control_effective_health v
+    INNER JOIN tenant_applicable_controls tac
+      ON tac.tenant_id = v.tenant_id
+     AND tac.active = true
+     AND tac.visible_to_tenant = true
+     AND (
+       tac.tenant_control_id = v.tenant_control_id
+       OR tac.control_catalog_id = v.catalog_control_id
+     )
+    WHERE v.tenant_id = $1::uuid
+      AND COALESCE(v.is_in_active_operational_scope, false) = true
     `,
     [tenantId],
     []
@@ -1133,9 +1144,17 @@ async function getControlHealthStats(tenantId) {
       SUM(open_action_plans_count)::int AS open_actions_count,
       SUM(overdue_action_plans_count)::int AS overdue_actions_count,
       SUM(CASE WHEN effective_health_status IN ('deteriorado', 'critico') THEN 1 ELSE 0 END)::int AS high_risks_count
-    FROM public.v_iso_control_effective_health
-    WHERE tenant_id = $1::uuid
-      AND COALESCE(is_in_active_operational_scope, false) = true
+    FROM public.v_iso_control_effective_health v
+    INNER JOIN tenant_applicable_controls tac
+      ON tac.tenant_id = v.tenant_id
+     AND tac.active = true
+     AND tac.visible_to_tenant = true
+     AND (
+       tac.tenant_control_id = v.tenant_control_id
+       OR tac.control_catalog_id = v.catalog_control_id
+     )
+    WHERE v.tenant_id = $1::uuid
+      AND COALESCE(v.is_in_active_operational_scope, false) = true
     `,
     [tenantId],
     []
@@ -1565,6 +1584,14 @@ async function getComplianceByStandard(tenantId) {
       ON s.code = v.iso
     WHERE v.tenant_id = $1::uuid
       AND COALESCE(v.active_scope_controls, 0) > 0
+      AND EXISTS (
+        SELECT 1
+        FROM tenant_applicable_controls tac
+        WHERE tac.tenant_id = v.tenant_id
+          AND tac.active = true
+          AND tac.visible_to_tenant = true
+          AND tac.standard_code = v.iso
+      )
     GROUP BY v.iso, s.name
     ORDER BY v.iso ASC
     `,
@@ -1599,28 +1626,36 @@ async function getAuditFocusControls(tenantId) {
     `
     WITH latest_health AS (
       SELECT
-        tenant_control_id,
-        iso AS standard_code,
-        COALESCE(effective_health_score, 0) AS health_score,
-        CASE WHEN COALESCE(official_evidence_count, 0) > 0 THEN 100 ELSE 0 END AS evidence_score,
-        CASE WHEN compliance_bucket = 'cumple' THEN 100 WHEN compliance_bucket = 'parcial' THEN 60 ELSE 0 END AS compliance_score,
-        CASE WHEN COALESCE(open_findings_count, 0) = 0 THEN 100 ELSE 0 END AS findings_score,
-        COALESCE(effective_health_score, 0) AS risk_score,
-        CASE WHEN COALESCE(overdue_action_plans_count, 0) = 0 THEN 100 ELSE 0 END AS action_score,
-        COALESCE(effective_health_score, 0) AS review_score,
-        COALESCE(evidence_count, 0) AS evidence_count,
-        COALESCE(approved_evidence_count, 0) AS approved_evidence_count,
-        COALESCE(pending_evidence_count, 0) AS pending_evidence_count,
-        COALESCE(rejected_evidence_count, 0) AS rejected_evidence_count,
-        COALESCE(open_findings_count, 0) AS open_findings_count,
-        COALESCE(open_action_plans_count, 0) AS open_actions_count,
-        COALESCE(overdue_action_plans_count, 0) AS overdue_actions_count,
-        CASE WHEN effective_health_status IN ('deteriorado', 'critico') THEN 1 ELSE 0 END AS high_risks_count,
-        COALESCE(effective_health_status, 'sin_datos') AS derived_health_status,
+        v.tenant_control_id,
+        v.iso AS standard_code,
+        COALESCE(v.effective_health_score, 0) AS health_score,
+        CASE WHEN COALESCE(v.official_evidence_count, 0) > 0 THEN 100 ELSE 0 END AS evidence_score,
+        CASE WHEN v.compliance_bucket = 'cumple' THEN 100 WHEN v.compliance_bucket = 'parcial' THEN 60 ELSE 0 END AS compliance_score,
+        CASE WHEN COALESCE(v.open_findings_count, 0) = 0 THEN 100 ELSE 0 END AS findings_score,
+        COALESCE(v.effective_health_score, 0) AS risk_score,
+        CASE WHEN COALESCE(v.overdue_action_plans_count, 0) = 0 THEN 100 ELSE 0 END AS action_score,
+        COALESCE(v.effective_health_score, 0) AS review_score,
+        COALESCE(v.evidence_count, 0) AS evidence_count,
+        COALESCE(v.approved_evidence_count, 0) AS approved_evidence_count,
+        COALESCE(v.pending_evidence_count, 0) AS pending_evidence_count,
+        COALESCE(v.rejected_evidence_count, 0) AS rejected_evidence_count,
+        COALESCE(v.open_findings_count, 0) AS open_findings_count,
+        COALESCE(v.open_action_plans_count, 0) AS open_actions_count,
+        COALESCE(v.overdue_action_plans_count, 0) AS overdue_actions_count,
+        CASE WHEN v.effective_health_status IN ('deteriorado', 'critico') THEN 1 ELSE 0 END AS high_risks_count,
+        COALESCE(v.effective_health_status, 'sin_datos') AS derived_health_status,
         NULL::timestamp AS calculated_at
-      FROM public.v_iso_control_effective_health
-      WHERE tenant_id = $1::uuid
-        AND COALESCE(is_in_active_operational_scope, false) = true
+      FROM public.v_iso_control_effective_health v
+      INNER JOIN tenant_applicable_controls tac
+        ON tac.tenant_id = v.tenant_id
+       AND tac.active = true
+       AND tac.visible_to_tenant = true
+       AND (
+         tac.tenant_control_id = v.tenant_control_id
+         OR tac.control_catalog_id = v.catalog_control_id
+       )
+      WHERE v.tenant_id = $1::uuid
+        AND COALESCE(v.is_in_active_operational_scope, false) = true
     ),
     ranked AS (
       SELECT
@@ -1749,9 +1784,17 @@ async function getControlStatusRows(tenantId) {
       SUM(open_action_plans_count)::int AS open_actions_count,
       SUM(overdue_action_plans_count)::int AS overdue_actions_count,
       SUM(CASE WHEN effective_health_status IN ('deteriorado', 'critico') THEN 1 ELSE 0 END)::int AS high_risks_count
-    FROM public.v_iso_control_effective_health
-    WHERE tenant_id = $1::uuid
-      AND COALESCE(is_in_active_operational_scope, false) = true
+    FROM public.v_iso_control_effective_health v
+    INNER JOIN tenant_applicable_controls tac
+      ON tac.tenant_id = v.tenant_id
+     AND tac.active = true
+     AND tac.visible_to_tenant = true
+     AND (
+       tac.tenant_control_id = v.tenant_control_id
+       OR tac.control_catalog_id = v.catalog_control_id
+     )
+    WHERE v.tenant_id = $1::uuid
+      AND COALESCE(v.is_in_active_operational_scope, false) = true
     GROUP BY COALESCE(effective_health_status, 'sin_datos')
     ORDER BY
       CASE
@@ -2028,6 +2071,14 @@ async function getLatestKpis(tenantId) {
       FROM kpi_snapshots ks
       INNER JOIN kpi_definitions kd
         ON kd.id = ks.kpi_id
+      INNER JOIN tenant_applicable_kpis tak
+        ON tak.tenant_id = ks.tenant_id
+       AND tak.active = true
+       AND tak.visible_to_tenant = true
+       AND (
+         tak.kpi_definition_id = ks.kpi_id
+         OR tak.kpi_code = kd.code
+       )
       INNER JOIN active_standards ast
         ON ast.standard_code = ks.standard_code
       WHERE ks.tenant_id = $1::uuid
@@ -2613,6 +2664,7 @@ async function buildReportData({
   const latestKpis = await getLatestKpis(tenantId);
   const platformMonthlyStats = await getPlatformMonthlyStats(tenantId);
   const companyProfileImpact = await buildCompanyProfileImpact({ tenantId });
+  const applicabilitySummary = await getTenantApplicabilitySummary({ tenantId });
 
   const stats = {
     controls,
@@ -2624,6 +2676,7 @@ async function buildReportData({
     audits,
     action_plans: actionPlans,
     nonconformities,
+    applicability: applicabilitySummary,
   };
 
   const ai = await getAiEnhancements({

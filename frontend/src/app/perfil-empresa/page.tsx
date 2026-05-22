@@ -258,6 +258,7 @@ export default function PerfilEmpresaPage() {
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [rebuildingApplicability, setRebuildingApplicability] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
   const [aiSummary, setAiSummary] = useState<AiProfileSummary | null>(null);
   const [aiTrace, setAiTrace] = useState<AiTrace | null>(null);
@@ -486,6 +487,30 @@ export default function PerfilEmpresaPage() {
     }
   };
 
+  const rebuildApplicability = async () => {
+    if (!token) return;
+    setRebuildingApplicability(true);
+    setOperationMessage('Recalculando universo aplicable del tenant...');
+    try {
+      const res = await fetch(`${API_URL}/api/company-profile/applicability/rebuild`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ force_rebuild: true }),
+      });
+      const json = await readJsonResponse(res, 'No fue posible recalcular universo aplicable');
+      if (!res.ok || json?.ok === false) throw new Error(json?.error || 'No fue posible recalcular universo aplicable');
+      await loadProfile(token);
+      const summary = json.summary || {};
+      setOperationMessage(
+        `Universo aplicable actualizado: ${summary.applicable_controls_count ?? 0} controles, ${summary.applicable_kpis_count ?? 0} KPIs, ${summary.exclusions_count ?? 0} exclusiones.`
+      );
+    } catch (error) {
+      setOperationMessage(error instanceof Error ? error.message : 'No fue posible recalcular universo aplicable');
+    } finally {
+      setRebuildingApplicability(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 md:px-8">
@@ -629,6 +654,9 @@ export default function PerfilEmpresaPage() {
                 </button>
                 <button onClick={analyzeProfile} disabled={analyzing || saving} className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60">
                   {analyzing ? 'Analizando...' : 'Analizar con IA'}
+                </button>
+                <button onClick={rebuildApplicability} disabled={rebuildingApplicability || saving} className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60">
+                  {rebuildingApplicability ? 'Recalculando...' : 'Recalcular universo aplicable'}
                 </button>
                 {analysisJobId && analyzing && (
                   <span className="self-center text-xs font-semibold text-slate-500">Job: {analysisJobId.slice(0, 8)}...</span>

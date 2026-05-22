@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const isoCommandCenter = require('./isoCommandCenter.service');
 const { renderAiAuditorPremiumTemplate } = require('../reports/templates/aiAuditorPremium.template');
+const { getTenantApplicabilitySummary } = require('./companyProfileApplicabilityEngine.service');
 
 const PLATFORM_ROLES = new Set([
   'superadmin',
@@ -1092,7 +1093,10 @@ async function getSummary(user) {
     getTenant(tenantId, notes),
     isoCommandCenter.getUnified(user, {}),
   ]);
-  const kpis = await getKpiSummary(tenantId, notes);
+  const [kpis, applicabilitySummary] = await Promise.all([
+    getKpiSummary(tenantId, notes),
+    getTenantApplicabilitySummary({ tenantId }).catch(() => null),
+  ]);
   const standardCards = normalizeStandardCards(unified.standard_cards || []);
   const [actionsPanel, risksPanel, kpisPanel] = await Promise.all([
     getActionsPanelForTenant(tenantId, standardCards, notes),
@@ -1140,6 +1144,15 @@ async function getSummary(user) {
       open_findings: unified.summary.open_findings,
       open_nonconformities: unified.summary.open_nonconformities,
       open_action_plans: unified.summary.open_action_plans,
+      applicable_controls: applicabilitySummary?.applicable_controls_count || 0,
+      applicable_kpis: applicabilitySummary?.applicable_kpis_count || 0,
+      applicability_exclusions: applicabilitySummary?.exclusions_count || 0,
+    },
+    applicability_scope: {
+      tenant_filter_enforced: true,
+      filtered_by_tenant_id: true,
+      active_universe: applicabilitySummary?.active_universe === true,
+      summary: applicabilitySummary,
     },
     work: {
       actions: unified.workflow || {},

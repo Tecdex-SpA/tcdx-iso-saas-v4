@@ -4,6 +4,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
+const { filterApplicableControls } = require('../services/applicabilityScope.service');
 
 
 function deriveWorkbenchHealthStatus(row) {
@@ -1039,7 +1040,7 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
       [tenant_id, operation.id, iso, catalogMode]
     );
 
-    const items = result.rows.map((row) => {
+    const rawItems = result.rows.map((row) => {
       const fallbackHealth = getWorkbenchDerivedHealth(row);
 
       const effectiveHealthScore =
@@ -1088,6 +1089,10 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
       };
     });
 
+    const items = isSuperAdmin(req) && req.query.include_exclusions === 'true'
+      ? rawItems
+      : await filterApplicableControls(rawItems, tenant_id, { standardCode: iso });
+
     const summary = {
       total_controls: items.length,
       healthy_controls: items.filter(
@@ -1118,6 +1123,12 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
             )
           : 0,
       catalog_mode: catalogMode,
+      applicability_scope: {
+        tenant_filter_enforced: true,
+        filtered_by_tenant_id: true,
+        active_universe: true,
+        source: 'tenant_applicable_controls',
+      },
     };
 
     return res.json({
@@ -1726,7 +1737,9 @@ router.get('/catalog/:tenant_id/:iso', auth, async (req, res) => {
       [tenant_id, operation.id, iso, catalogMode]
     );
 
-    const allRows = controlsResult.rows;
+    const allRows = isSuperAdmin(req) && req.query.include_exclusions === 'true'
+      ? controlsResult.rows
+      : await filterApplicableControls(controlsResult.rows, tenant_id, { standardCode: iso });
     const genericControls = allRows.filter((row) => row.source_type === 'generic');
     const personalizedControls = allRows.filter(
       (row) => row.source_type === 'personalized'

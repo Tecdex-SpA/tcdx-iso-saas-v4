@@ -95,6 +95,14 @@ router.get('/:tenant_id', auth, async (req, res) => {
       INNER JOIN tenant_controls tc
         ON tc.id = lh.tenant_control_id
        AND tc.tenant_id = $1
+      INNER JOIN tenant_applicable_controls tac
+        ON tac.tenant_id = tc.tenant_id
+       AND tac.active = true
+       AND tac.visible_to_tenant = true
+       AND (
+         tac.tenant_control_id = tc.id
+         OR tac.control_catalog_id = tc.control_id
+       )
       LEFT JOIN controls_catalog cc
         ON cc.id = tc.control_id
        AND cc.is_active = TRUE

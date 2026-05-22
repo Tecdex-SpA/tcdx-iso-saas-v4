@@ -78,6 +78,7 @@ function renderCompanyProfileContextTemplate(data = {}) {
   const trace = data.ai_research_trace_json || {};
   const impact = data.company_profile_impact || {};
   const impactProfile = impact.impact_profile || {};
+  const applicability = impactProfile.applicability_universe || impact.trace?.applicability_summary || {};
   const tenantName = cleanText(profile.company_name || tenant.name, 'Cliente');
   const tcdxLogo = resolveTcdxLogoUrl();
   const tenantLogo = resolveTenantLogoUrl(tenant);
@@ -222,6 +223,17 @@ function renderCompanyProfileContextTemplate(data = {}) {
           { label: 'Acciones', value: (item) => asArray(item.actions).join('; ') || itemText(item), max: 260 },
           { label: 'Criterio / evidencia', value: (item) => `${asArray(item.success_criteria).join('; ')} ${asArray(item.evidence_to_collect).join('; ')}`, max: 260 },
         ], 6)}
+      </section>
+
+      <section class="section keep-together">
+        <h2>Universo operativo aplicable</h2>
+        <div class="kpiGrid four">
+          <div class="kpiCard"><span>Controles aplicables</span><strong>${escapeHtml(applicability.applicable_controls_count ?? 0)}</strong></div>
+          <div class="kpiCard"><span>KPIs aplicables</span><strong>${escapeHtml(applicability.applicable_kpis_count ?? 0)}</strong></div>
+          <div class="kpiCard"><span>Evidencias esperadas</span><strong>${escapeHtml(applicability.applicable_evidence_requirements_count ?? 0)}</strong></div>
+          <div class="kpiCard"><span>Excluidos por perfil</span><strong>${escapeHtml(applicability.exclusions_count ?? 0)}</strong></div>
+        </div>
+        <p class="muted">El sistema calcula salud, reportes, auditoría y recomendaciones contra este universo aplicable tenant-scoped. Los elementos excluidos no se tratan como brecha del cliente.</p>
       </section>
 
       <section class="section keep-together">

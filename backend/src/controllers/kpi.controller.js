@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { filterApplicableKpis } = require('../services/applicabilityScope.service');
 
 const KPI_CODES = {
   OBJECTIVES: 'KPI-01',
@@ -1250,7 +1251,7 @@ async function getCatalogByTenant(req, res) {
       return denyTenantAccess(res);
     }
 
-    const defs = await getKpiDefinitionsForTenant(tenantId);
+    const defs = await filterApplicableKpis(await getKpiDefinitionsForTenant(tenantId), tenantId);
 
     return res.json(defs);
   } catch (err) {
@@ -1271,7 +1272,7 @@ async function getDashboardByTenant(req, res) {
       return denyTenantAccess(res);
     }
 
-    const defs = (await getKpiDefinitionsForTenant(tenantId))
+    const defs = (await filterApplicableKpis(await getKpiDefinitionsForTenant(tenantId), tenantId))
       .filter((def) => def.is_enabled !== false);
     const latestMap = await getLatestSnapshotsMap(tenantId);
 
@@ -1373,6 +1374,14 @@ async function getEffectiveHealthSummaryByTenant(req, res) {
         kpi_trace_json
       FROM public.v_iso_effective_kpi_summary
       WHERE tenant_id = $1
+        AND EXISTS (
+          SELECT 1
+          FROM tenant_applicable_controls tac
+          WHERE tac.tenant_id = public.v_iso_effective_kpi_summary.tenant_id
+            AND tac.active = true
+            AND tac.visible_to_tenant = true
+            AND tac.standard_code = public.v_iso_effective_kpi_summary.iso
+        )
       ORDER BY
         CASE WHEN active_scope_controls > 0 THEN 0 ELSE 1 END,
         iso,
