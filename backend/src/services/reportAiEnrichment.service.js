@@ -2,6 +2,7 @@ const aiContextBuilder = require('./aiContextBuilder.service');
 const aiEngineClient = require('./aiEngineClient.service');
 const { createAiTimer, resolveAiMode } = require('./aiRuntimeMetrics.service');
 const { getCompanyProfileForTenant } = require('./companyProfile.service');
+const { buildCompanyProfileImpact } = require('./companyProfileImpact.service');
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -263,6 +264,23 @@ async function buildReportAiEnrichment({
       ];
     }
 
+    let companyProfileImpact = context.company_profile_impact || null;
+    try {
+      companyProfileImpact = await buildCompanyProfileImpact({
+        tenantId,
+        standardCodes: standardCode ? [standardCode] : [],
+      });
+      context.company_profile_impact = companyProfileImpact;
+      context.company_profile_trace = companyProfileImpact?.trace || context.company_profile_trace || null;
+    } catch (impactError) {
+      console.warn('REPORT COMPANY PROFILE IMPACT SKIPPED:', {
+        request_id: requestId || null,
+        tenant_id: tenantId,
+        report_type: reportType,
+        error: impactError?.message,
+      });
+    }
+
     const payload = {
       task_type: reportType === 'audit_report' ? 'audit_analysis' : 'standard_gap_analysis',
       tenant_id: tenantId,
@@ -289,6 +307,8 @@ async function buildReportAiEnrichment({
           ].join(' ')
         : 'Genera enriquecimiento ejecutivo de reporte con brechas, readiness y acciones prioritarias.',
       locale: 'es',
+      company_profile_impact: companyProfileImpact,
+      company_profile_trace: context.company_profile_trace || null,
       context,
       options,
       request_metadata: {

@@ -11,6 +11,9 @@ const {
   analyzeCompanyProfile,
   exportCompanyProfileContextPdf,
 } = require('../services/companyProfile.service');
+const {
+  buildCompanyProfileImpact,
+} = require('../services/companyProfileImpact.service');
 
 const router = express.Router();
 
@@ -264,6 +267,47 @@ router.get('/', auth, async (req, res) => {
     const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
     const profile = await getCompanyProfileForTenant(tenantId);
     return res.json({ ok: true, data: publicProfile(profile) });
+  } catch (error) {
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/impact', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const impact = await buildCompanyProfileImpact({ tenantId });
+    return res.json({ ok: true, data: impact, request_id: req.requestId || null });
+  } catch (error) {
+    console.error('COMPANY PROFILE IMPACT ERROR:', {
+      request_id: req.requestId || null,
+      error: error.message,
+    });
+    const safe = safeError(error);
+    return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });
+  }
+});
+
+router.get('/impact/summary', auth, async (req, res) => {
+  try {
+    const { tenantId } = await getCompanyProfileForRequest(req, req.query.tenant_id || null);
+    const impact = await buildCompanyProfileImpact({ tenantId });
+    return res.json({
+      ok: true,
+      data: {
+        tenant_id: impact.tenant_id,
+        industry: impact.industry,
+        subindustry: impact.subindustry,
+        active_standards: impact.active_standards,
+        suggested_kpis: impact.impact_profile?.suggested_kpis || [],
+        suggested_controls: impact.impact_profile?.suggested_controls || [],
+        prioritized_controls: impact.impact_profile?.prioritized_controls || [],
+        risk_focus_areas: impact.impact_profile?.risk_focus_areas || [],
+        improvement_roadmap: impact.impact_profile?.improvement_roadmap || [],
+        trace: impact.trace,
+      },
+      request_id: req.requestId || null,
+    });
   } catch (error) {
     const safe = safeError(error);
     return res.status(safe.status).json({ ok: false, ...safe, request_id: req.requestId || null });

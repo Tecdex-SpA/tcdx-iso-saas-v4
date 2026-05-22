@@ -16,18 +16,18 @@ Modo recomendado:
 
 - `AI_AUDITOR_MODEL_MODE=fast`
 - `OLLAMA_MODEL_FAST=qwen2.5:1.5b`
-- `OLLAMA_MODEL_AUDITOR=qwen2.5:7b`
-- `OLLAMA_MODEL_REPORTS=qwen2.5:7b`
-- `OLLAMA_MODEL_DEEP=qwen2.5:7b`
+- `OLLAMA_MODEL_AUDITOR=qwen2.5:3b`
+- `OLLAMA_MODEL_REPORTS=qwen2.5:3b`
+- `OLLAMA_MODEL_DEEP=qwen2.5:3b`
 - `OLLAMA_MODEL_FALLBACK=qwen2.5:1.5b`
 - `AI_AUDITOR_DEEP_ASYNC_REQUIRED=true`
 
 Uso esperado:
 
 - Fast: deterministico por defecto, sin LLM, para pantallas ejecutivas interactivas.
-- Balanced: usar `qwen2.5:7b` solo bajo flujo asincrono.
-- Reportes cliente: usar `qwen2.5:7b` como modelo balanceado por defecto.
-- Deep: usar `qwen2.5:7b` hasta disponer de GPU; reservar modelos mayores para batch controlado cuando exista capacidad dedicada.
+- Balanced: usar `qwen2.5:3b` en el ambiente actual sin GPU; subir a `qwen2.5:7b` solo cuando exista capacidad suficiente y siempre bajo flujo asincrono.
+- Reportes cliente: usar `qwen2.5:3b` como modelo balanceado por defecto en el piloto actual.
+- Deep: mantener `qwen2.5:3b` hasta disponer de GPU; reservar `qwen2.5:7b` o modelos mayores para batch controlado cuando exista capacidad dedicada.
 - Timeouts recomendados para reportes deep:
   - `AI_ENGINE_REQUEST_TIMEOUT_MS=420000`
   - `AI_REPORT_ENRICHMENT_TIMEOUT_MS=420000`
