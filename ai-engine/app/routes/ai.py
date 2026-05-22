@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from typing import Any, Dict, List, Optional
@@ -174,6 +175,43 @@ def _as_list(value: Any, limit: int = 8) -> List[Any]:
     return []
 
 
+def _parse_jsonish(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str):
+        return {}
+    text = value.strip()
+    if not text:
+        return {}
+    if text.startswith("```"):
+        text = text.strip("`").strip()
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+    if not text.startswith("{") and "{" in text and "}" in text:
+        text = text[text.find("{"): text.rfind("}") + 1]
+    if not text.startswith("{"):
+        return {}
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def _normalize_llm_data(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return {}
+    embedded = _parse_jsonish(data.get("answer"))
+    embedded_structured = embedded.get("structured_result") if isinstance(embedded.get("structured_result"), dict) else {}
+    structured = data.get("structured_result") if isinstance(data.get("structured_result"), dict) else {}
+    return {
+        **embedded,
+        **embedded_structured,
+        **data,
+        **structured,
+    }
+
+
 def _safe_text(value: Any, fallback: str = "") -> str:
     if value is None:
         return fallback
@@ -196,6 +234,51 @@ def _context_stats(payload: Dict[str, Any]) -> Dict[str, Any]:
         "kpis": payload.get("kpis") or context.get("kpis") or [],
         "stats": payload.get("stats") or context.get("stats") or {},
     }
+
+
+def _internal_context_counts(payload: Dict[str, Any]) -> Dict[str, int]:
+    stats = payload.get("stats") if isinstance(payload.get("stats"), dict) else {}
+    counts = stats.get("internal_context_counts") if isinstance(stats.get("internal_context_counts"), dict) else {}
+    if counts:
+        return {k: int(v or 0) for k, v in counts.items() if isinstance(v, (int, float)) or str(v).isdigit()}
+    return {
+        "controls_analyzed": int((payload.get("controls_context") or {}).get("count") or len(payload.get("tenant_controls") or [])),
+        "kpis_analyzed": int((payload.get("kpi_context") or {}).get("count") or len(payload.get("kpi_snapshots") or [])),
+        "risks_analyzed": int((payload.get("risk_context") or {}).get("count") or len(payload.get("risks") or [])),
+        "nonconformities_analyzed": int((payload.get("nonconformity_context") or {}).get("count") or len(payload.get("nonconformities") or [])),
+        "findings_analyzed": int((payload.get("finding_context") or {}).get("count") or len(payload.get("findings") or [])),
+        "action_plans_analyzed": int((payload.get("action_plan_context") or {}).get("count") or len(payload.get("action_plans") or [])),
+        "evidences_analyzed": int((payload.get("evidence_context") or {}).get("count") or len(payload.get("evidences") or [])),
+        "audits_analyzed": int((payload.get("audit_context") or {}).get("count") or len(payload.get("audits") or [])),
+        "documents_analyzed": int((payload.get("document_context") or {}).get("count") or len(payload.get("document_sources") or [])),
+    }
+
+
+def _company_profile_web_query(payload: Dict[str, Any]) -> str:
+    profile = payload.get("company_profile") or payload.get("profile") or {}
+    profile_json = profile.get("profile_json") if isinstance(profile, dict) and isinstance(profile.get("profile_json"), dict) else profile
+    topics = payload.get("web_context_topics") if isinstance(payload.get("web_context_topics"), list) else []
+    standards = payload.get("active_standards") or payload.get("standards") or []
+    weak_controls = [
+        _safe_text(item.get("control_description") or item.get("category") or item.get("clause"))
+        for item in _as_list((payload.get("controls_context") or {}).get("top_controls_by_low_health"), 3)
+        if isinstance(item, dict)
+    ]
+    findings = [
+        _safe_text(item.get("title") or item.get("description"))
+        for item in _as_list((payload.get("finding_context") or {}).get("open_findings"), 2)
+        if isinstance(item, dict)
+    ]
+    parts = [
+        payload.get("industry") or profile.get("industry") or profile_json.get("industry"),
+        payload.get("subindustry") or profile.get("subindustry") or profile_json.get("subindustry"),
+        " ".join([_safe_text(item) for item in standards[:3]]) if isinstance(standards, list) else _safe_text(standards),
+        " ".join([_safe_text(item) for item in topics[:4]]),
+        " ".join(weak_controls),
+        " ".join(findings),
+        "ISO evidence corrective action effectiveness KPI controls",
+    ]
+    return " ".join([_safe_text(part) for part in parts if _safe_text(part)]).strip()
 
 
 def _external_context_payload(payload: Dict[str, Any], *, query: str = "") -> Dict[str, Any]:
@@ -306,21 +389,77 @@ def _build_company_profile_fallback(payload: Dict[str, Any], external_context: D
         profile = {}
     profile_json = profile.get("profile_json") if isinstance(profile.get("profile_json"), dict) else profile
     industry = payload.get("industry") or profile.get("industry") or profile_json.get("industry") or "industria no informada"
+    counts = _internal_context_counts(payload)
+    tenant_context = payload.get("tenant_context") if isinstance(payload.get("tenant_context"), dict) else {}
+    controls_context = payload.get("controls_context") if isinstance(payload.get("controls_context"), dict) else {}
+    data_quality = payload.get("data_quality_context") if isinstance(payload.get("data_quality_context"), dict) else {}
+    controls_without_evidence = _as_list(controls_context.get("top_controls_by_missing_evidence") or controls_context.get("controls_without_evidence"), 5)
     return {
         "normalized_company_profile": profile_json,
-        "executive_narrative": f"Perfil empresa registrado para contexto ISO en {industry}. El análisis prioriza alcance, procesos críticos, riesgos y evidencia esperada.",
+        "tenant_applied_context_summary": {
+            "tenant_id": payload.get("tenant_id"),
+            "tenant_name": tenant_context.get("tenant_name") or profile_json.get("company_name") or "",
+            "active_standards": payload.get("active_standards") or tenant_context.get("active_standards") or [],
+            **counts,
+        },
+        "executive_narrative": f"Perfil empresa registrado para contexto ISO en {industry}. El análisis prioriza alcance, controles reales, riesgos, KPIs, evidencia esperada y brechas del tenant.",
+        "company_context_diagnosis": "La lectura debe basarse en los datos internos disponibles; cuando falten evidencias o señales, se solicita evidencia antes de concluir cumplimiento.",
         "industry_assumptions": [f"Contexto sectorial: {industry}"],
         "industry_references": (external_context.get("sources") or [])[:6],
         "iso_scope_recommendations": [_safe_text(profile_json.get("audit_scope"), "Definir alcance formal, exclusiones justificadas, procesos críticos y sedes incluidas.")],
-        "proposed_objectives": _as_list(profile_json.get("quality_objectives") or profile_json.get("strategic_objectives"), 6),
-        "proposed_kpis": ["Cumplimiento de evidencias críticas", "Cierre de acciones en plazo", "Eficacia de controles clave"],
-        "suggested_controls": ["Control documental", "Gestión de acciones correctivas", "Revisión gerencial", "Gestión de riesgos"],
+        "proposed_objectives": [
+            {
+                "objective": _safe_text(item, "Cerrar brechas de evidencia crítica"),
+                "reason": "Objetivo derivado del perfil empresa y señales internas disponibles.",
+                "linked_internal_signal": "Perfil empresa / controles sin evidencia" if controls_without_evidence else "Perfil empresa",
+                "suggested_kpi": "Porcentaje de evidencias oficiales aprobadas",
+                "target": ">= 90%",
+                "period": "mensual",
+                "owner_role": "Responsable de cumplimiento",
+                "required_evidence": ["Registro de evidencia oficial", "Aprobación del dueño del proceso"],
+            }
+            for item in (_as_list(profile_json.get("quality_objectives") or profile_json.get("strategic_objectives"), 4) or ["Cerrar brechas de evidencia crítica"])
+        ],
+        "proposed_kpis": [
+            {
+                "kpi": "Cobertura de evidencia oficial",
+                "reason": "No se debe concluir cumplimiento sin evidencia interna suficiente.",
+                "formula": "evidencias oficiales aprobadas / controles activos",
+                "source_data_needed": "controles activos y evidencias aprobadas del tenant",
+                "linked_control_or_process": "Controles ISO activos",
+                "target_suggestion": ">= 90%",
+                "frequency": "mensual",
+            }
+        ],
+        "suggested_controls": [
+            {
+                "control": _safe_text(item, "Control documental y evidencia objetiva"),
+                "reason": "Control sugerido o reforzado por brecha interna o ausencia de evidencia.",
+                "linked_standard": "",
+                "linked_internal_gap": "No hay evidencia interna suficiente" if controls_without_evidence else "Perfil empresa requiere formalización",
+                "priority": "alta",
+                "required_evidence": ["Procedimiento aprobado", "Registro de ejecución", "Evidencia revisada"],
+                "implementation_hint": "Asignar dueño, definir frecuencia, cargar evidencia y validar eficacia.",
+            }
+            for item in (controls_without_evidence or ["Control documental"])
+        ][:5],
         "typical_industry_risks": _as_list(profile_json.get("known_weaknesses") or profile_json.get("pain_points"), 6),
         "suggested_evidence_baseline": ["Alcance aprobado", "Matriz de riesgos", "Planes de acción", "Registros operacionales", "Revisión gerencial"],
+        "evidence_baseline": ["Alcance aprobado", "Matriz de riesgos", "Planes de acción", "Registros operacionales", "Revisión gerencial"],
+        "risk_and_gap_analysis": _as_list(data_quality.get("weak_data"), 8),
+        "nonconformity_and_finding_analysis": [],
+        "management_focus": ["Cerrar brechas internas", "Validar evidencia", "Monitorear KPIs y acciones vencidas"],
         "maturity_baseline": _safe_text(payload.get("maturity_level") or profile.get("maturity_level") or profile_json.get("current_maturity_level"), "Requiere evaluación"),
         "audit_focus_areas": ["Evidencia objetiva", "Trazabilidad de decisiones", "Cierre y eficacia de acciones"],
         "corrective_action_themes": ["Formalización documental", "Responsables y plazos", "Validación de eficacia"],
-        "improvement_roadmap": ["30 días: completar perfil y evidencias base", "60 días: cerrar brechas críticas", "90 días: revisión gerencial y KPIs"],
+        "improvement_roadmap": [
+            {"horizon": "30 días", "actions": ["Completar evidencias base", "Asignar responsables"], "success_criteria": ["Evidencia cargada"], "evidence_to_collect": ["Registros aprobados"]},
+            {"horizon": "60 días", "actions": ["Cerrar brechas críticas"], "success_criteria": ["Acciones cerradas"], "evidence_to_collect": ["Verificación de cierre"]},
+            {"horizon": "90 días", "actions": ["Revisión gerencial y KPIs"], "success_criteria": ["Eficacia revisada"], "evidence_to_collect": ["Acta de revisión"]},
+        ],
+        "external_references": (external_context.get("sources") or [])[:6],
+        "data_quality_limitations": data_quality.get("limitations") or ["La información externa apoya contexto; la evidencia interna es fuente de verdad."],
+        "what_not_to_conclude": data_quality.get("must_not_conclude") or ["No concluir cumplimiento formal sin evidencia interna aprobada."],
         "limits_and_assumptions": ["La información externa apoya contexto; la evidencia interna es fuente de verdad."],
         "external_context": external_context,
     }
@@ -333,7 +472,7 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
     if not is_llm_available():
         return {"used": False, "data": {}, "error": "llm_unavailable", "metadata": metadata}
     prompt = {
-        "instruction": "Devuelve exclusivamente JSON válido. No inventes hechos. Usa datos internos como fuente de verdad.",
+        "instruction": payload.get("question") or "Devuelve exclusivamente JSON válido. No inventes hechos. Usa datos internos como fuente de verdad.",
         "endpoint": endpoint,
         "request_id": request_id,
         "payload_summary": {
@@ -341,22 +480,64 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
             "report_type_code": payload.get("report_type_code"),
             "period": payload.get("period"),
             "company_profile": payload.get("company_profile") or payload.get("profile") or payload.get("context", {}).get("company_profile"),
+            "tenant_context": payload.get("tenant_context"),
+            "internal_context_counts": _internal_context_counts(payload),
+            "data_quality_context": payload.get("data_quality_context"),
+            "controls_context": {
+                "count": (payload.get("controls_context") or {}).get("count"),
+                "top_controls_by_low_health": _as_list((payload.get("controls_context") or {}).get("top_controls_by_low_health"), 5),
+                "top_controls_by_missing_evidence": _as_list((payload.get("controls_context") or {}).get("top_controls_by_missing_evidence"), 5),
+            },
+            "kpi_context": {
+                "count": (payload.get("kpi_context") or {}).get("count"),
+                "kpis_below_target": _as_list((payload.get("kpi_context") or {}).get("kpis_below_target"), 5),
+            },
+            "risk_context": {
+                "count": (payload.get("risk_context") or {}).get("count"),
+                "high_residual_risks": _as_list((payload.get("risk_context") or {}).get("high_residual_risks"), 5),
+            },
+            "nonconformity_context": {
+                "count": (payload.get("nonconformity_context") or {}).get("count"),
+                "open_nonconformities": _as_list((payload.get("nonconformity_context") or {}).get("open_nonconformities"), 5),
+            },
+            "finding_context": {
+                "count": (payload.get("finding_context") or {}).get("count"),
+                "open_findings": _as_list((payload.get("finding_context") or {}).get("open_findings"), 5),
+            },
+            "action_plan_context": {
+                "count": (payload.get("action_plan_context") or {}).get("count"),
+                "overdue_actions": _as_list((payload.get("action_plan_context") or {}).get("overdue_actions"), 5),
+            },
+            "evidence_context": {
+                "count": (payload.get("evidence_context") or {}).get("count"),
+                "controls_without_evidence": _as_list((payload.get("evidence_context") or {}).get("controls_without_evidence"), 5),
+            },
             "context_keys": list((payload.get("context") or {}).keys())[:30] if isinstance(payload.get("context"), dict) else [],
         },
         "base_result": base,
-        "required_shape": [
-            "executive_summary/executive_narrative",
-            "diagnosis/auditor_opinion",
-            "root_cause_analysis",
-            "corrective_actions",
-            "evidence_requests",
-            "audit_questions",
-            "management_focus",
-            "improvement_roadmap",
+        "required_shape": payload.get("requested_output_schema") or [
+            "tenant_applied_context_summary",
+            "executive_narrative",
+            "company_context_diagnosis",
+            "iso_scope_recommendations",
             "proposed_objectives",
             "proposed_kpis",
             "suggested_controls",
+            "risk_and_gap_analysis",
+            "nonconformity_and_finding_analysis",
+            "evidence_baseline",
+            "management_focus",
+            "improvement_roadmap",
+            "external_references",
+            "data_quality_limitations",
+            "what_not_to_conclude",
             "limitations",
+        ],
+        "rules": [
+            "No mezcles tenants ni uses datos globales como evidencia del cliente.",
+            "Toda recomendacion debe citar un linked_internal_signal o declarar ausencia de evidencia interna.",
+            "Las referencias web son apoyo contextual y no evidencia interna.",
+            "No afirmes cumplimiento si faltan evidencias oficiales o datos internos.",
         ],
     }
     try:
@@ -620,8 +801,9 @@ async def company_profile_analyze(
     depth = "deep" if model_mode == "deep" else "standard"
     metadata = get_llm_metadata(depth=depth, model_mode=model_mode)
     profile = payload.get("company_profile") or payload.get("profile") or {}
-    external_context = build_external_context(_external_context_payload(payload, query=f"{payload.get('industry') or ''} {payload.get('subindustry') or ''} ISO management system risks evidence benchmark"))
+    external_context = build_external_context(_external_context_payload(payload, query=_company_profile_web_query(payload)))
     base = _build_company_profile_fallback(payload, external_context)
+    internal_counts = _internal_context_counts(payload)
 
     print({
         "event": "COMPANY PROFILE ANALYZE START",
@@ -642,7 +824,7 @@ async def company_profile_analyze(
         request_id=request_id,
         endpoint="/api/ai/company-profile/analyze",
     )
-    llm_data = llm.get("data") or {}
+    llm_data = _normalize_llm_data(llm.get("data") or {})
     structured = {**base, **(llm_data.get("structured_result") if isinstance(llm_data.get("structured_result"), dict) else {}), **{k: v for k, v in llm_data.items() if k not in {"trace", "engine", "metrics"}}}
     duration_ms = int((time.perf_counter() - started_at) * 1000)
     fallback_used = not bool(llm.get("used"))
@@ -663,25 +845,36 @@ async def company_profile_analyze(
         "request_id": request_id,
         "web_results_count": int(external_context.get("raw_results_count") or len(external_context.get("sources") or [])),
         "trusted_results_count": int(external_context.get("trusted_results_count") or 0),
+        "internal_context_counts": internal_counts,
+        "tenant_id": payload.get("tenant_id"),
         "error_message": llm.get("error") or None,
     }
     result = {
         "ok": True,
         "source": "ai-engine-company-profile-analyze",
         "normalized_company_profile": structured.get("normalized_company_profile") or base["normalized_company_profile"],
+        "tenant_applied_context_summary": structured.get("tenant_applied_context_summary") or base["tenant_applied_context_summary"],
         "executive_narrative": structured.get("executive_narrative") or structured.get("summary") or base["executive_narrative"],
+        "company_context_diagnosis": structured.get("company_context_diagnosis") or structured.get("diagnosis") or base["company_context_diagnosis"],
         "industry_assumptions": _as_list(structured.get("industry_assumptions"), 8) or base["industry_assumptions"],
         "industry_references": _as_list(structured.get("industry_references"), 8) or base["industry_references"],
         "iso_scope_recommendations": _as_list(structured.get("iso_scope_recommendations"), 8) or base["iso_scope_recommendations"],
         "proposed_objectives": _as_list(structured.get("proposed_objectives"), 8) or base["proposed_objectives"],
         "proposed_kpis": _as_list(structured.get("proposed_kpis"), 8) or base["proposed_kpis"],
         "suggested_controls": _as_list(structured.get("suggested_controls"), 8) or base["suggested_controls"],
+        "risk_and_gap_analysis": _as_list(structured.get("risk_and_gap_analysis"), 8) or base["risk_and_gap_analysis"],
+        "nonconformity_and_finding_analysis": _as_list(structured.get("nonconformity_and_finding_analysis"), 8) or base["nonconformity_and_finding_analysis"],
+        "evidence_baseline": _as_list(structured.get("evidence_baseline") or structured.get("suggested_evidence_baseline"), 8) or base["evidence_baseline"],
+        "management_focus": _as_list(structured.get("management_focus"), 8) or base["management_focus"],
         "typical_industry_risks": _as_list(structured.get("typical_industry_risks"), 8) or base["typical_industry_risks"],
         "suggested_evidence_baseline": _as_list(structured.get("suggested_evidence_baseline"), 8) or base["suggested_evidence_baseline"],
         "maturity_baseline": structured.get("maturity_baseline") or base["maturity_baseline"],
         "audit_focus_areas": _as_list(structured.get("audit_focus_areas"), 8) or base["audit_focus_areas"],
         "corrective_action_themes": _as_list(structured.get("corrective_action_themes"), 8) or base["corrective_action_themes"],
         "improvement_roadmap": _as_list(structured.get("improvement_roadmap"), 8) or base["improvement_roadmap"],
+        "external_references": _as_list(structured.get("external_references") or structured.get("industry_references"), 8) or base["external_references"],
+        "data_quality_limitations": _as_list(structured.get("data_quality_limitations") or structured.get("limitations"), 8) or base["data_quality_limitations"],
+        "what_not_to_conclude": _as_list(structured.get("what_not_to_conclude"), 8) or base["what_not_to_conclude"],
         "limits_and_assumptions": _as_list(structured.get("limits_and_assumptions") or structured.get("limitations"), 8) or base["limits_and_assumptions"],
         "external_context": external_context,
         "structured_result": structured,
