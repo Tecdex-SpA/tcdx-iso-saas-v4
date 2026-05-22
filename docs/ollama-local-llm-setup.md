@@ -20,7 +20,7 @@ Modelos sugeridos:
 
 - 8 GB RAM: `qwen2.5:3b`
 - 16 GB RAM: `qwen2.5:7b`
-- 32 GB RAM o GPU: evaluar `qwen2.5:14b`
+- 32 GB RAM sin GPU: mantener `qwen2.5:7b`; evaluar modelos mayores solo cuando exista GPU o batch dedicado.
 
 ## Instalación Linux
 

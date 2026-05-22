@@ -217,6 +217,34 @@ async function listJobsScoped(scope = {}, filters = {}) {
   return result.rows.map(serializeJob);
 }
 
+async function findLatestActiveJobScoped(scope = {}, filters = {}) {
+  const { values, clauses } = buildScopeWhere(scope);
+  if (filters.job_type) {
+    values.push(filters.job_type);
+    clauses.push(`job_type = $${values.length}`);
+  }
+  if (filters.source_module) {
+    values.push(filters.source_module);
+    clauses.push(`source_module = $${values.length}`);
+  }
+
+  clauses.push(`status IN ('queued', 'running')`);
+
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM tcdx_async_jobs
+    ${where}
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    values
+  );
+
+  return serializeJob(result.rows[0]);
+}
+
 module.exports = {
   createJob,
   markRunning,
@@ -224,4 +252,5 @@ module.exports = {
   markFailed,
   getJobScoped,
   listJobsScoped,
+  findLatestActiveJobScoped,
 };

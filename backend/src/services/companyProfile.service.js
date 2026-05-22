@@ -189,6 +189,59 @@ function buildCompanyProfileStructuredFallback(profile = {}, context = {}) {
   };
 }
 
+function compactArray(value) {
+  return Array.isArray(value) ? value.filter(Boolean) : [];
+}
+
+function extractCompanyProfileAiStructured(aiResult = {}, profile = {}, context = {}) {
+  const structured = safeObject(aiResult.structured_result);
+  const topLevel = {
+    normalized_company_profile: aiResult.normalized_company_profile,
+    executive_narrative: aiResult.executive_narrative || aiResult.executive_summary || aiResult.summary,
+    industry_assumptions: aiResult.industry_assumptions,
+    industry_references: aiResult.industry_references,
+    iso_scope_recommendations: aiResult.iso_scope_recommendations,
+    proposed_objectives: aiResult.proposed_objectives,
+    proposed_kpis: aiResult.proposed_kpis,
+    suggested_controls: aiResult.suggested_controls,
+    typical_industry_risks: aiResult.typical_industry_risks,
+    suggested_evidence_baseline: aiResult.suggested_evidence_baseline,
+    maturity_baseline: aiResult.maturity_baseline,
+    audit_focus_areas: aiResult.audit_focus_areas,
+    corrective_action_themes: aiResult.corrective_action_themes,
+    improvement_roadmap: aiResult.improvement_roadmap,
+    external_context: aiResult.external_context,
+    web_research_summary: aiResult.web_research_summary,
+    web_sources: aiResult.web_sources,
+    document_context_summary: aiResult.document_context_summary,
+    limitations: aiResult.limitations,
+    confidence: aiResult.confidence,
+  };
+  const cleanedTopLevel = Object.fromEntries(
+    Object.entries(topLevel).filter(([, value]) => value !== undefined && value !== null && value !== '')
+  );
+  const merged = { ...structured, ...cleanedTopLevel };
+
+  if (!Object.keys(merged).length) {
+    return buildCompanyProfileStructuredFallback(profile, context);
+  }
+
+  return {
+    ...merged,
+    industry_assumptions: compactArray(merged.industry_assumptions),
+    industry_references: compactArray(merged.industry_references || merged.web_sources),
+    proposed_objectives: compactArray(merged.proposed_objectives),
+    proposed_kpis: compactArray(merged.proposed_kpis),
+    suggested_controls: compactArray(merged.suggested_controls),
+    typical_industry_risks: compactArray(merged.typical_industry_risks),
+    suggested_evidence_baseline: compactArray(merged.suggested_evidence_baseline),
+    audit_focus_areas: compactArray(merged.audit_focus_areas),
+    corrective_action_themes: compactArray(merged.corrective_action_themes),
+    improvement_roadmap: compactArray(merged.improvement_roadmap),
+    limitations: compactArray(merged.limitations),
+  };
+}
+
 async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null, modelMode = 'balanced' }) {
   const profile = await getCompanyProfileForTenant(tenantId);
   if (!profile) {
@@ -262,34 +315,40 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     try {
       aiResult = await aiEngineClient.analyzeCompanyProfile(payload, {
         timeoutMs: modelMode === 'deep'
-          ? Number.parseInt(process.env.REPORT_DEEP_JOB_TIMEOUT_MS || '600000', 10)
-          : Number.parseInt(process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS || process.env.AI_ENGINE_REQUEST_TIMEOUT_MS || '420000', 10),
+          ? Number.parseInt(process.env.AI_COMPANY_PROFILE_ANALYSIS_TIMEOUT_MS || process.env.REPORT_DEEP_JOB_TIMEOUT_MS || '900000', 10)
+          : Number.parseInt(process.env.AI_COMPANY_PROFILE_ANALYSIS_TIMEOUT_MS || process.env.AI_REPORT_ENRICHMENT_TIMEOUT_MS || process.env.AI_ENGINE_REQUEST_TIMEOUT_MS || '600000', 10),
       });
     } catch (error) {
       aiError = error;
     }
   }
-  const engine = aiResult?.engine || {};
-  const aiStructured = aiResult?.structured_result && typeof aiResult.structured_result === 'object'
-    ? aiResult.structured_result
-    : null;
-  const structured = aiStructured && Object.keys(aiStructured).length
-    ? aiStructured
+  const engine = safeObject(aiResult?.trace || aiResult?.engine || {});
+  const structured = aiResult && aiResult?.ok !== false
+    ? extractCompanyProfileAiStructured(aiResult, profile, context)
     : buildCompanyProfileStructuredFallback(profile, context);
-  const fallbackUsed = !aiResult || aiResult?.ok === false || String(engine.model || '').toLowerCase() === 'backend_fallback';
+  const selectedModel = engine.selected_model || engine.model_name || engine.model || null;
+  const fallbackUsed = !aiResult ||
+    aiResult?.ok === false ||
+    engine.fallback_used === true ||
+    String(selectedModel || '').toLowerCase() === 'backend_fallback';
   const trace = {
-    ai_engine_used: !fallbackUsed,
-    used_llm: engine.used_llm === true && !fallbackUsed,
+    source: aiResult?.source || (fallbackUsed ? 'backend_company_profile_fallback' : 'ai-engine-company-profile-analyze'),
+    ai_engine_used: aiResult?.ok === true || engine.ai_engine_used === true,
+    llm_used: engine.llm_used === true && !fallbackUsed,
+    used_llm: engine.llm_used === true && !fallbackUsed,
     llm_provider: engine.llm_provider || null,
-    selected_model: engine.selected_model || engine.model || null,
-    model_mode: modelMode,
+    selected_model: fallbackUsed ? 'backend_fallback' : selectedModel,
+    model_mode: normalizedModelMode,
     used_rag: engine.used_rag === true,
     used_web: engine.used_web === true,
-    used_drive: engine.used_drive === true,
+    used_drive: engine.used_drive === true || engine.used_documents === true,
+    used_documents: engine.used_documents === true || engine.used_drive === true,
     used_company_profile: true,
     fallback_used: fallbackUsed,
     ai_enrichment_failed: fallbackUsed,
     duration_ms: engine.duration_ms || aiResult?.metrics?.duration_ms || null,
+    web_results_count: engine.web_results_count || aiResult?.external_context?.web_results_count || 0,
+    trusted_results_count: engine.trusted_results_count || aiResult?.external_context?.trusted_results_count || 0,
     timeout_stage: engine.timeout_stage || (aiError?.name === 'AbortError' ? 'backend_to_ai_engine' : null),
     timeout_ms: engine.timeout_ms || aiError?.timeout_ms || null,
     error_type: engine.error_type || aiError?.code || aiError?.name || null,
