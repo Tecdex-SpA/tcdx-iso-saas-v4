@@ -265,6 +265,7 @@ router.get('/standards', async (req, res) => {
   try {
     const scope = requireTenantForNonSuper(req, res);
     if (!scope) return;
+    const standardCode = req.query.standard_code || req.query.standardCode || '';
 
     let query = `
       SELECT *
@@ -284,6 +285,11 @@ router.get('/standards', async (req, res) => {
       query,
       alias: 'v',
     });
+
+    if (standardCode) {
+      params.push(standardCode);
+      query += ` AND v.standard_code = $${params.length}`;
+    }
 
     query += ` ORDER BY v.tenant_name, v.standard_code`;
 
