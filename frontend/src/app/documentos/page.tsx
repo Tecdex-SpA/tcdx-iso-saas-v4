@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import { getStoredValidToken, getTenantIdFromToken } from '@/utils/auth';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
@@ -80,6 +81,8 @@ function tokenHeaders(token: string) {
 }
 
 export default function DocumentosPage() {
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseDocumentAi = !entitlementsLoading && canUseAiFeature('document_generation');
   const [token, setToken] = useState<string | null>(null);
   const [tenantId, setTenantId] = useState<string>('');
   const [options, setOptions] = useState<GeneratorOption[]>([]);
@@ -214,16 +217,21 @@ export default function DocumentosPage() {
   }, [token, tenantId, selectedOptionKey, documentType]);
 
   useEffect(() => {
+    if (!canUseDocumentAi && documentType === 'ai_governance_document') {
+      setDocumentType('policy');
+      return;
+    }
+
     if (selectedOption?.version_code === '2026_FDIS') {
       setDocumentType('transition_guidance');
       return;
     }
 
-    if (selectedOption?.standard_code === 'ISO42001') {
+    if (canUseDocumentAi && selectedOption?.standard_code === 'ISO42001') {
       setDocumentType('ai_governance_document');
       return;
     }
-  }, [selectedOption?.standard_code, selectedOption?.version_code]);
+  }, [canUseDocumentAi, documentType, selectedOption?.standard_code, selectedOption?.version_code]);
 
   const generateDocument = async () => {
     if (!token || !tenantId || !selectedOption) return;
@@ -367,7 +375,7 @@ export default function DocumentosPage() {
                 onChange={(e) => setDocumentType(e.target.value)}
                 className="w-full border rounded p-2"
               >
-                {DOCUMENT_TYPES.map((item) => (
+                {DOCUMENT_TYPES.filter((item) => canUseDocumentAi || item.value !== 'ai_governance_document').map((item) => (
                   <option key={item.value} value={item.value}>
                     {item.label}
                   </option>

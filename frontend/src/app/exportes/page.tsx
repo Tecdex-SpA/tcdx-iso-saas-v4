@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import { getUserRoleFromToken } from '@/utils/auth';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText } from '@/i18n/displayText';
 
 const API_URL =
@@ -356,6 +357,8 @@ const REPORT_ORDER = [
 
 export default function ExportesPage() {
   const { locale, t } = useTranslation();
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseReportAi = !entitlementsLoading && canUseAiFeature('report_enrichment');
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [generatingCode, setGeneratingCode] = useState<string | null>(null);
@@ -744,10 +747,18 @@ export default function ExportesPage() {
         report_type_code: reportTypeCode,
         locale,
         period,
+        model_mode: canUseReportAi ? 'balanced' : 'fast',
+        depth: canUseReportAi ? 'balanced' : 'standard',
+        quality: canUseReportAi ? 'premium' : 'standard',
+        use_llm: canUseReportAi,
+        use_rag: canUseReportAi,
+        use_web: false,
+        use_drive: false,
         metadata: {
           source: 'frontend_exportes',
           generated_from: '/exportes',
           locale,
+          ai_visibility_allowed: canUseReportAi,
         },
       };
 

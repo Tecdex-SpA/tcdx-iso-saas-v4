@@ -4,14 +4,24 @@ import { useEffect, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
 export default function IACompliancePage() {
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseAiCompliance = !entitlementsLoading && canUseAiFeature('suggestions');
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
+    if (entitlementsLoading) return;
+
+    if (!canUseAiCompliance) {
+      window.location.replace('/dashboard');
+      return;
+    }
+
     const user = getUserFromToken();
     const token = localStorage.getItem('token');
 
@@ -22,7 +32,7 @@ export default function IACompliancePage() {
         .then(res => res.json())
         .then(setData);
     }
-  }, []);
+  }, [canUseAiCompliance, entitlementsLoading]);
 
   if (!data) {
     return <AppLayout><div className="px-3 py-4 sm:p-6">Cargando IA...</div></AppLayout>;

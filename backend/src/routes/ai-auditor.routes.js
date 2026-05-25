@@ -11,6 +11,7 @@ const { renderIaAuditorHistoricTemplate } = require('../reports/templates/iaAudi
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
 const asyncJobs = require('../services/asyncJob.service');
+const { isTenantAiFeatureEnabled } = require('../services/tenantAiSettings.service');
 
 const aiAuditorRuntimeJobs = new Map();
 const AI_AUDITOR_JOB_TTL_MS = Number(process.env.AI_AUDITOR_JOB_TTL_MS || 1000 * 60 * 60 * 6);
@@ -1290,6 +1291,16 @@ function requiresAiAuditorAsync(body = {}) {
 }
 
 async function callAiAuditorEngine(payload, locale, requestId = null) {
+  const tenantId = payload?.tenant_id || payload?.tenantId || payload?.context?.tenant_id || null;
+  const entitlement = await isTenantAiFeatureEnabled(tenantId, 'auditor');
+  if (!entitlement.enabled) {
+    const error = new Error('IA no habilitada para este plan/empresa.');
+    error.code = 'AI_DISABLED_BY_PLAN';
+    error.ai_disabled_by_plan = true;
+    error.ai_disabled_reason = entitlement.reason;
+    throw error;
+  }
+
   const baseUrl = getAiAuditorEngineBaseUrl();
   const token = getAiAuditorEngineToken();
 

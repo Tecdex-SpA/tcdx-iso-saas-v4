@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
@@ -249,6 +250,9 @@ function Field({
 }
 
 export default function PerfilEmpresaPage() {
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canAnalyzeCompanyProfile =
+    !entitlementsLoading && canUseAiFeature('company_profile_analysis');
   const [token, setToken] = useState('');
   const [form, setForm] = useState<ProfileForm>(emptyForm);
   const [allowWebResearch, setAllowWebResearch] = useState(false);
@@ -297,7 +301,7 @@ export default function PerfilEmpresaPage() {
       risk_appetite: form.risk_appetite,
       allow_web_research: allowWebResearch,
       allow_document_context: allowDocumentContext,
-      allow_ai_recommendations: allowAiRecommendations,
+      allow_ai_recommendations: canAnalyzeCompanyProfile && allowAiRecommendations,
     };
   };
 
@@ -366,6 +370,7 @@ export default function PerfilEmpresaPage() {
   };
 
   const analyzeProfile = async () => {
+    if (!canAnalyzeCompanyProfile) return;
     if (!token) return;
     const saved = await saveProfile();
     if (!saved) return;
@@ -521,7 +526,7 @@ export default function PerfilEmpresaPage() {
               <div>
                 <h1 className="text-3xl font-black">Perfil empresa</h1>
                 <p className="mt-2 max-w-3xl text-sm text-blue-100">
-                  Contexto operativo del tenant para reportes, IA Auditor, riesgos, evidencias, KPIs y documentos ISO.
+                  Contexto operativo del tenant para reportes, riesgos, evidencias, KPIs y documentos ISO.
                 </p>
               </div>
               <div className="text-xs text-blue-100">
@@ -563,28 +568,32 @@ export default function PerfilEmpresaPage() {
                 <Field label="Dolores / debilidades conocidas" name="known_weaknesses" value={form.known_weaknesses} onChange={onChange} textarea />
               </Card>
 
-              <Card title="Gobernanza e IA">
+              <Card title="Gobernanza">
                 <Field label="Roles responsables" name="responsible_roles" value={form.responsible_roles} onChange={onChange} textarea />
                 <Field label="Cadencia revisión gerencial" name="management_review_cadence" value={form.management_review_cadence} onChange={onChange} />
                 <Field label="Cadencia auditoría interna" name="internal_audit_cadence" value={form.internal_audit_cadence} onChange={onChange} />
                 <Field label="Dueños de evidencia" name="evidence_owners" value={form.evidence_owners} onChange={onChange} textarea />
                 <div className="md:col-span-2 grid gap-3 md:grid-cols-3">
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-                    <input type="checkbox" checked={allowWebResearch} onChange={(event) => setAllowWebResearch(event.target.checked)} />
-                    Web research controlado
-                  </label>
+                  {canAnalyzeCompanyProfile && (
+                    <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                      <input type="checkbox" checked={allowWebResearch} onChange={(event) => setAllowWebResearch(event.target.checked)} />
+                      Web research controlado
+                    </label>
+                  )}
                   <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                     <input type="checkbox" checked={allowDocumentContext} onChange={(event) => setAllowDocumentContext(event.target.checked)} />
                     Contexto documental
                   </label>
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-                    <input type="checkbox" checked={allowAiRecommendations} onChange={(event) => setAllowAiRecommendations(event.target.checked)} />
-                    Recomendaciones IA
-                  </label>
+                  {canAnalyzeCompanyProfile && (
+                    <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                      <input type="checkbox" checked={allowAiRecommendations} onChange={(event) => setAllowAiRecommendations(event.target.checked)} />
+                      Recomendaciones IA
+                    </label>
+                  )}
                 </div>
               </Card>
 
-              {aiNarrative && (
+              {canAnalyzeCompanyProfile && aiNarrative && (
                 <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
                   <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-blue-700">Lectura IA del perfil</h2>
                   <p className="mt-3 text-sm leading-6 text-slate-800">{aiNarrative}</p>
@@ -634,8 +643,12 @@ export default function PerfilEmpresaPage() {
                     </article>
                   </div>
                   <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600 md:grid-cols-4">
-                    <span>Modelo: {impact.trace?.fallback_used ? 'No disponible' : (impact.trace?.selected_model || 'No informado')}</span>
-                    <span>Web: {impact.trace?.used_web ? 'Sí' : 'No'}</span>
+                    {canAnalyzeCompanyProfile && (
+                      <>
+                        <span>Modelo: {impact.trace?.fallback_used ? 'No disponible' : (impact.trace?.selected_model || 'No informado')}</span>
+                        <span>Web: {impact.trace?.used_web ? 'Sí' : 'No'}</span>
+                      </>
+                    )}
                     <span>Controles: {impact.trace?.internal_context_counts?.controls_analyzed ?? 0}</span>
                     <span>KPIs: {impact.trace?.internal_context_counts?.kpis_analyzed ?? 0}</span>
                   </div>
@@ -652,13 +665,15 @@ export default function PerfilEmpresaPage() {
                 <button onClick={saveProfile} disabled={saving} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 disabled:opacity-60">
                   {saving ? 'Guardando...' : 'Guardar perfil'}
                 </button>
-                <button onClick={analyzeProfile} disabled={analyzing || saving} className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60">
-                  {analyzing ? 'Analizando...' : 'Analizar con IA'}
-                </button>
+                {canAnalyzeCompanyProfile && (
+                  <button onClick={analyzeProfile} disabled={analyzing || saving} className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60">
+                    {analyzing ? 'Analizando...' : 'Analizar con IA'}
+                  </button>
+                )}
                 <button onClick={rebuildApplicability} disabled={rebuildingApplicability || saving} className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60">
                   {rebuildingApplicability ? 'Recalculando...' : 'Recalcular universo aplicable'}
                 </button>
-                {analysisJobId && analyzing && (
+                {canAnalyzeCompanyProfile && analysisJobId && analyzing && (
                   <span className="self-center text-xs font-semibold text-slate-500">Job: {analysisJobId.slice(0, 8)}...</span>
                 )}
                 <button onClick={exportDocument} disabled={exporting} className="rounded-xl border border-slate-200 bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60">

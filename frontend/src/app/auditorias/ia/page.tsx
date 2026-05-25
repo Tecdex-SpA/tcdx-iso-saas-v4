@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
@@ -87,6 +88,8 @@ export default function AuditoriasIaPage() {
 
 function AuditoriasIaContent() {
   const params = useSearchParams();
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseAiAuditor = !entitlementsLoading && canUseAiFeature('auditor');
   const auditId = params.get('id') || '';
 
   const [token, setToken] = useState('');
@@ -98,6 +101,11 @@ function AuditoriasIaContent() {
   const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
+    if (entitlementsLoading) return;
+    if (!canUseAiAuditor) {
+      window.location.replace('/auditorias');
+      return;
+    }
     const t = localStorage.getItem('token') || '';
     const u = getUserFromToken();
     const tid = resolveTenantId(u);
@@ -109,7 +117,7 @@ function AuditoriasIaContent() {
 
     setToken(t);
     setTenantId(tid);
-  }, []);
+  }, [canUseAiAuditor, entitlementsLoading]);
 
   const load = async () => {
     if (!token || !tenantId || !auditId) return;

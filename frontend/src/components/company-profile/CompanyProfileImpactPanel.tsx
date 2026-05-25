@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
 
@@ -84,6 +85,8 @@ export default function CompanyProfileImpactPanel({
   title?: string;
   compact?: boolean;
 }) {
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canShowAiTrace = !entitlementsLoading && canUseAiFeature('company_profile_analysis');
   const [impact, setImpact] = useState<ModuleImpact | null>(null);
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState<boolean>(false);
@@ -225,10 +228,14 @@ export default function CompanyProfileImpactPanel({
           <article className="rounded-xl border border-slate-200 p-3">
             <h3 className="text-sm font-bold text-slate-800">Trazabilidad compacta</h3>
             <div className="mt-2 grid gap-1 text-xs font-semibold text-slate-600">
-              <span>Modelo: {impact.trace?.fallback_used ? 'No disponible' : (impact.trace?.selected_model || 'No informado')}</span>
-              <span>Web: {impact.trace?.used_web ? 'Sí' : 'No'}</span>
-              <span>RAG: {impact.trace?.used_rag ? 'Sí' : 'No'}</span>
-              <span>Fallback: {impact.trace?.fallback_used ? 'Sí' : 'No'}</span>
+              {canShowAiTrace && (
+                <>
+                  <span>Modelo: {impact.trace?.fallback_used ? 'No disponible' : (impact.trace?.selected_model || 'No informado')}</span>
+                  <span>Web: {impact.trace?.used_web ? 'Sí' : 'No'}</span>
+                  <span>RAG: {impact.trace?.used_rag ? 'Sí' : 'No'}</span>
+                  <span>Fallback: {impact.trace?.fallback_used ? 'Sí' : 'No'}</span>
+                </>
+              )}
               <span>Controles: {impact.trace?.internal_context_counts?.controls_analyzed ?? 0}</span>
               <span>KPIs: {impact.trace?.internal_context_counts?.kpis_analyzed ?? 0}</span>
             </div>

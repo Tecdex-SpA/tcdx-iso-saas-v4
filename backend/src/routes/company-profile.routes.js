@@ -23,6 +23,9 @@ const {
   getTenantApplicableEvidenceRequirements,
   getTenantApplicabilityExclusions,
 } = require('../services/companyProfileApplicabilityEngine.service');
+const {
+  isTenantAiFeatureEnabled,
+} = require('../services/tenantAiSettings.service');
 
 const router = express.Router();
 
@@ -41,6 +44,15 @@ function safeError(error) {
   }
   if (error?.code === 'TENANT_REQUIRED') {
     return { status: 400, code: 'TENANT_REQUIRED', error: 'Tenant no identificado.' };
+  }
+  if (error?.code === 'AI_DISABLED_BY_PLAN') {
+    return {
+      status: 403,
+      code: 'AI_DISABLED_BY_PLAN',
+      error: 'IA no habilitada para este plan/empresa.',
+      ai_disabled_by_plan: true,
+      ai_disabled_reason: error.reason || 'ai_disabled_by_plan',
+    };
   }
   return { status: 500, code: 'COMPANY_PROFILE_ERROR', error: 'No fue posible procesar el perfil empresa.' };
 }
@@ -253,6 +265,13 @@ async function runCompanyProfileAnalysisJob({ jobId, tenantId, userId, requestId
 async function createOrReuseAnalysisJob(req) {
   const requestId = getRequestId(req);
   const { tenantId, userId } = await getCompanyProfileForRequest(req, req.body?.tenant_id || null);
+  const entitlement = await isTenantAiFeatureEnabled(tenantId, 'company_profile_analysis');
+  if (!entitlement.enabled) {
+    const error = new Error('IA no habilitada para este plan/empresa.');
+    error.code = 'AI_DISABLED_BY_PLAN';
+    error.reason = entitlement.reason;
+    throw error;
+  }
   const profile = await getCompanyProfileForTenant(tenantId);
   if (!profile) {
     const error = new Error('Perfil empresa no existe para este tenant');
