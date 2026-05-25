@@ -3,6 +3,10 @@ const aiEngineClient = require('./aiEngineClient.service');
 const { createAiTimer, resolveAiMode } = require('./aiRuntimeMetrics.service');
 const { getCompanyProfileForTenant } = require('./companyProfile.service');
 const { buildCompanyProfileImpact } = require('./companyProfileImpact.service');
+const {
+  isTenantAiFeatureEnabled,
+  buildAiDisabledTrace,
+} = require('./tenantAiSettings.service');
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -205,6 +209,65 @@ async function buildReportAiEnrichment({
       metrics: timer.finish({ report_type: reportType, request_id: requestId || null }),
       limitation: 'Enriquecimiento IA omitido: tenant_id no disponible para el reporte.',
     });
+  }
+
+  const aiAccess = await isTenantAiFeatureEnabled(tenantId, 'report_enrichment');
+  if (!aiAccess.enabled) {
+    const metrics = timer.finish({
+      mode: 'deterministic_ai_disabled',
+      report_type: reportType,
+      request_id: requestId || null,
+      used_llm: false,
+      ai_disabled_by_plan: true,
+    });
+    const trace = buildAiDisabledTrace({
+      tenantId,
+      feature: 'report_enrichment',
+      requestId,
+      modelMode: normalizedModelMode,
+      reason: aiAccess.reason,
+    });
+    console.info('REPORT AI ENRICHMENT SKIPPED BY PLAN:', {
+      request_id: requestId || null,
+      tenant_id: tenantId,
+      report_type: reportType,
+      model_mode: normalizedModelMode,
+      reason: aiAccess.reason,
+    });
+    return {
+      ok: true,
+      answer: '',
+      structured_result: {},
+      executive_summary: '',
+      executive_narrative: '',
+      auditor_opinion: '',
+      key_findings: [],
+      recommended_actions: [],
+      root_cause_analysis: [],
+      corrective_actions: [],
+      evidence_requests: [],
+      audit_questions: [],
+      management_focus: [],
+      audit_readiness: {},
+      confidence: 0,
+      limitations: ['IA no habilitada para este plan/empresa. Reporte generado con datos internos determinísticos.'],
+      source_trace: [],
+      engine: trace,
+      metrics: {
+        ...metrics,
+        ...trace,
+        model_mode_used: normalizedModelMode,
+        source: 'deterministic-ai-disabled-by-plan',
+      },
+      model_mode_used: normalizedModelMode,
+      llm_used: false,
+      source: 'deterministic-ai-disabled-by-plan',
+      duration_ms: metrics.duration_ms,
+      trace,
+      ai_enrichment_failed: false,
+      fallback_used: false,
+      ai_disabled_by_plan: true,
+    };
   }
 
   const requestedDepth = useDeepPath
@@ -418,7 +481,9 @@ async function buildReportAiEnrichment({
       duration_ms: metrics.duration_ms,
       trace: {
         ai_engine_used: !fallbackUsed,
+        llm_used: llmUsed,
         used_llm: llmUsed,
+        deterministic_mode: !llmUsed,
         model_mode: normalizedModelMode,
         selected_model: engine.selected_model || engine.model || null,
         used_rag: engine.used_rag === true,

@@ -53,13 +53,19 @@ def _payload_to_dict(payload):
 
 class HealthSummaryRequest(BaseModel):
     tenant_id: str
-    tenant_name: str
+    tenant_name: str = ""
     standards: List[str] = Field(default_factory=list)
     controls_total: int = 0
     controls_warning: int = 0
     controls_critical: int = 0
     evidences_pending: int = 0
     findings_critical: int = 0
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    request_id: Optional[str] = None
+    model_mode: Optional[str] = None
+
+    class Config:
+        extra = "allow"
 
 
 class FindingAnalysisRequest(BaseModel):
@@ -73,6 +79,9 @@ class FindingAnalysisRequest(BaseModel):
     owner: Optional[str] = None
     due_date: Optional[str] = None
 
+    class Config:
+        extra = "allow"
+
 
 class NonconformityDraftRequest(BaseModel):
     tenant_id: str
@@ -80,6 +89,9 @@ class NonconformityDraftRequest(BaseModel):
     title: str
     description: str
     severity: str = "media"
+
+    class Config:
+        extra = "allow"
 
 
 class ActionPlanSuggestionRequest(BaseModel):
@@ -90,6 +102,9 @@ class ActionPlanSuggestionRequest(BaseModel):
     description: str = ""
     severity: str = "media"
     status: str = "open"
+
+    class Config:
+        extra = "allow"
 
 
 class ExecutiveBriefRequest(BaseModel):
@@ -103,6 +118,9 @@ class ExecutiveBriefRequest(BaseModel):
     evidences_pending: int = 0
     findings_critical: int = 0
     weakest_standards: List[str] = Field(default_factory=list)
+
+    class Config:
+        extra = "allow"
 
 
 def _request_locale(payload: Optional[Dict[str, Any]] = None, header_locale: Optional[str] = None) -> str:
@@ -128,27 +146,51 @@ def _with_runtime_metrics(result: Dict[str, Any], *, started_at: float, endpoint
         result = {"ok": True, "result": result}
     duration_ms = int((time.perf_counter() - started_at) * 1000)
     engine = result.get("engine") if isinstance(result.get("engine"), dict) else {}
+    trace = result.get("trace") if isinstance(result.get("trace"), dict) else {}
     metrics = {
         "duration_ms": duration_ms,
         "endpoint": endpoint,
         "mode": mode,
         "fast_mode": engine.get("fast_mode", mode in {"fast_mode", "deterministic"}),
         "local_compact": engine.get("local_compact", True),
-        "used_llm": engine.get("used_llm", False),
-        "used_rag": engine.get("used_rag", False),
-        "used_drive": engine.get("used_drive", False),
-        "used_web": engine.get("used_web", False),
+        "llm_used": engine.get("llm_used", trace.get("llm_used", False)),
+        "used_llm": engine.get("used_llm", trace.get("used_llm", trace.get("llm_used", False))),
+        "deterministic_mode": engine.get("deterministic_mode", trace.get("deterministic_mode", mode in {"fast_mode", "deterministic"})),
+        "fallback_used": engine.get("fallback_used", trace.get("fallback_used", False)),
+        "ai_enrichment_failed": engine.get("ai_enrichment_failed", trace.get("ai_enrichment_failed", False)),
+        "selected_model": engine.get("selected_model", trace.get("selected_model", "deterministic_legacy_guided")),
+        "model_mode": engine.get("model_mode", trace.get("model_mode", mode)),
+        "llm_provider": engine.get("llm_provider", trace.get("llm_provider", None)),
+        "used_rag": engine.get("used_rag", trace.get("used_rag", False)),
+        "used_drive": engine.get("used_drive", trace.get("used_drive", False)),
+        "used_web": engine.get("used_web", trace.get("used_web", False)),
+        "used_company_profile": engine.get("used_company_profile", trace.get("used_company_profile", False)),
+        "company_profile_impact_used": engine.get("company_profile_impact_used", trace.get("company_profile_impact_used", False)),
+        "tenant_filter_enforced": engine.get("tenant_filter_enforced", trace.get("tenant_filter_enforced", True)),
+        "filtered_by_tenant_id": engine.get("filtered_by_tenant_id", trace.get("filtered_by_tenant_id", True)),
+        "applicability_universe_applied": engine.get("applicability_universe_applied", trace.get("applicability_universe_applied", False)),
+        "request_id": engine.get("request_id", trace.get("request_id", "")),
+        "error_message": engine.get("error_message", trace.get("error_message", None)),
+    }
+    merged_trace = {
+        **trace,
+        **metrics,
+        "ai_engine_used": trace.get("ai_engine_used", engine.get("ai_engine_used", True)),
     }
     return {
         **result,
+        "trace": merged_trace,
         "engine": {
             "fast_mode": metrics["fast_mode"],
+            "llm_used": metrics["llm_used"],
             "used_llm": metrics["used_llm"],
+            "deterministic_mode": metrics["deterministic_mode"],
             "local_compact": metrics["local_compact"],
             "used_rag": metrics["used_rag"],
             "used_drive": metrics["used_drive"],
             "used_web": metrics["used_web"],
             "model": engine.get("model") or "deterministic_legacy_guided",
+            **merged_trace,
             **engine,
             "duration_ms": duration_ms,
         },
@@ -594,18 +636,28 @@ def _deterministic_contract(result: Dict[str, Any], *, endpoint: str, request_id
     trace.update({
         "ai_engine_used": True,
         "llm_used": False,
+        "used_llm": False,
         "deterministic_mode": True,
         "deterministic_fallback_used": True,
         "fallback_used": False,
         "ai_enrichment_failed": False,
-        "selected_model": "",
+        "selected_model": "deterministic_health_summary" if endpoint.endswith("/health-summary") else "deterministic_legacy_guided",
         "model_mode": "deterministic",
         "llm_provider": "none",
+        "used_web": False,
+        "used_rag": False,
+        "used_drive": False,
+        "used_company_profile": False,
+        "company_profile_impact_used": False,
         "tenant_filter_enforced": True,
+        "filtered_by_tenant_id": True,
+        "applicability_universe_applied": bool(result.get("applicability_universe_used") or result.get("filtered_by_applicability_universe")),
         "applicability_universe_used": bool(result.get("applicability_universe_used")),
         "filtered_by_applicability_universe": bool(result.get("filtered_by_applicability_universe")),
         "endpoint": endpoint,
         "request_id": request_id,
+        "duration_ms": 0,
+        "error_message": None,
         "reason": reason,
     })
     result["trace"] = trace
@@ -771,6 +823,8 @@ async def report_ai_enrichment(
     trace = {
         "ai_engine_used": True,
         "llm_used": bool(llm.get("used")),
+        "used_llm": bool(llm.get("used")),
+        "deterministic_mode": not bool(llm.get("used")),
         "used_rag": _truthy(payload.get("use_rag"), _truthy((payload.get("options") or {}).get("use_rag"), True)),
         "used_web": bool(external_context.get("used")),
         "used_drive": _truthy(payload.get("use_drive"), _truthy((payload.get("options") or {}).get("use_drive"))),
@@ -778,6 +832,7 @@ async def report_ai_enrichment(
         "company_profile_used": _truthy(payload.get("used_company_profile"), bool(payload.get("company_profile") or payload.get("context", {}).get("company_profile"))),
         "company_profile_impact_used": bool(payload.get("company_profile_impact") or (payload.get("context") or {}).get("company_profile_impact")),
         "applicability_universe_used": bool(payload.get("company_applicability_universe") or (payload.get("context") or {}).get("company_applicability_universe")),
+        "applicability_universe_applied": bool(payload.get("company_applicability_universe") or (payload.get("context") or {}).get("company_applicability_universe")),
         "filtered_by_applicability_universe": bool(payload.get("company_applicability_universe") or (payload.get("context") or {}).get("company_applicability_universe")),
         "internal_context_used": bool(payload.get("context") or payload.get("tenant_context")),
         "tenant_filter_enforced": True,
@@ -882,6 +937,8 @@ async def company_profile_analyze(
     trace = {
         "ai_engine_used": True,
         "llm_used": bool(llm.get("used")),
+        "used_llm": bool(llm.get("used")),
+        "deterministic_mode": not bool(llm.get("used")),
         "used_web": bool(external_context.get("used")),
         "used_rag": _truthy(payload.get("use_rag"), True),
         "used_drive": _truthy(payload.get("use_drive"), _truthy(payload.get("allow_document_context"))),
@@ -889,6 +946,7 @@ async def company_profile_analyze(
         "company_profile_used": True,
         "company_profile_impact_used": bool(payload.get("company_profile_impact") or (payload.get("context") or {}).get("company_profile_impact")),
         "applicability_universe_used": bool(payload.get("company_applicability_universe") or (payload.get("context") or {}).get("company_applicability_universe")),
+        "applicability_universe_applied": bool(payload.get("company_applicability_universe") or (payload.get("context") or {}).get("company_applicability_universe")),
         "filtered_by_applicability_universe": bool(payload.get("company_applicability_universe") or (payload.get("context") or {}).get("company_applicability_universe")),
         "internal_context_used": bool(payload.get("tenant_context") or payload.get("context")),
         "tenant_filter_enforced": True,

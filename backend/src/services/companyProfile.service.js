@@ -7,6 +7,10 @@ const pool = require('../config/db');
 const aiContextBuilder = require('./aiContextBuilder.service');
 const aiEngineClient = require('./aiEngineClient.service');
 const { buildCompanyProfileImpact } = require('./companyProfileImpact.service');
+const {
+  isTenantAiFeatureEnabled,
+  buildAiDisabledTrace,
+} = require('./tenantAiSettings.service');
 const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
 const { renderCompanyProfileContextTemplate } = require('../reports/templates/companyProfileContext.template');
 
@@ -429,9 +433,27 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     },
   };
 
+  const aiAccess = await isTenantAiFeatureEnabled(tenantId, 'company_profile_analysis');
   let aiResult = null;
   let aiError = null;
-  if (profile.allow_ai_recommendations) {
+  if (!aiAccess.enabled) {
+    const trace = buildAiDisabledTrace({
+      tenantId,
+      feature: 'company_profile_analysis',
+      requestId,
+      modelMode: normalizedModelMode,
+      reason: aiAccess.reason,
+    });
+    aiResult = {
+      ok: true,
+      source: 'deterministic-ai-disabled-by-plan',
+      structured_result: buildCompanyProfileStructuredFallback(profile, context),
+      trace,
+      engine: trace,
+      metrics: trace,
+      limitations: ['IA no habilitada para este plan/empresa. Se conserva contexto interno determinístico.'],
+    };
+  } else if (profile.allow_ai_recommendations) {
     try {
       aiResult = await aiEngineClient.analyzeCompanyProfile(payload, {
         timeoutMs: modelMode === 'deep'
@@ -447,17 +469,21 @@ async function analyzeCompanyProfile({ tenantId, userId = null, requestId = null
     ? extractCompanyProfileAiStructured(aiResult, profile, context)
     : buildCompanyProfileStructuredFallback(profile, context);
   const selectedModel = engine.selected_model || engine.model_name || engine.model || null;
-  const fallbackUsed = !aiResult ||
+  const aiDisabledByPlan = engine.ai_disabled_by_plan === true;
+  const fallbackUsed = !aiDisabledByPlan && (!aiResult ||
     aiResult?.ok === false ||
     engine.fallback_used === true ||
-    String(selectedModel || '').toLowerCase() === 'backend_fallback';
+    String(selectedModel || '').toLowerCase() === 'backend_fallback');
   const trace = {
     source: aiResult?.source || (fallbackUsed ? 'backend_company_profile_fallback' : 'ai-engine-company-profile-analyze'),
-    ai_engine_used: aiResult?.ok === true || engine.ai_engine_used === true,
+    ai_engine_used: !aiDisabledByPlan && (aiResult?.ok === true || engine.ai_engine_used === true),
     llm_used: engine.llm_used === true && !fallbackUsed,
     used_llm: engine.llm_used === true && !fallbackUsed,
+    deterministic_mode: engine.deterministic_mode === true || aiDisabledByPlan,
+    ai_disabled_by_plan: aiDisabledByPlan,
+    ai_disabled_reason: engine.ai_disabled_reason || null,
     llm_provider: engine.llm_provider || null,
-    selected_model: fallbackUsed ? 'backend_fallback' : selectedModel,
+    selected_model: aiDisabledByPlan ? null : (fallbackUsed ? 'backend_fallback' : selectedModel),
     model_mode: normalizedModelMode,
     used_rag: engine.used_rag === true,
     used_web: engine.used_web === true,

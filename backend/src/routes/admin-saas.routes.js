@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { errorDetail } = require('../utils/errorResponse');
+const { normalizeAiSettingsPayload } = require('../services/tenantAiSettings.service');
 
 
 const logoUploadDir = path.join(__dirname, '..', '..', 'uploads', 'logos');
@@ -729,6 +730,14 @@ router.get('/tenants', auth, async (req, res) => {
         t.branches,
         t.logo,
         t.logo_url,
+        COALESCE(t.ai_enabled, TRUE) AS ai_enabled,
+        COALESCE(t.ai_plan, 'standard') AS ai_plan,
+        COALESCE(t.ai_web_enabled, TRUE) AS ai_web_enabled,
+        COALESCE(t.ai_report_enabled, TRUE) AS ai_report_enabled,
+        COALESCE(t.ai_auditor_enabled, TRUE) AS ai_auditor_enabled,
+        t.ai_monthly_quota,
+        COALESCE(t.ai_quota_used, 0)::int AS ai_quota_used,
+        COALESCE(t.ai_features_json, '{}'::jsonb) AS ai_features_json,
         t.created_at,
 
         COALESCE(std.active_standards, 0)::int AS active_standards,
@@ -1241,6 +1250,80 @@ router.put('/tenants/:tenant_id', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando empresa',
+      ...errorDetail(error),
+    });
+  }
+});
+
+// =====================================================
+// PUT /api/admin-saas/tenants/:tenant_id/ai-settings
+// Configuración comercial IA por empresa.
+// =====================================================
+router.put('/tenants/:tenant_id/ai-settings', auth, async (req, res) => {
+  try {
+    const { tenant_id } = req.params;
+
+    const ctx = await requireAdminSaasManage(req, res);
+    if (!ctx) return;
+
+    const allowed = await ensureTenantVisibility(ctx, tenant_id);
+    if (!allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No autorizado para modificar IA de esta empresa',
+      });
+    }
+
+    const settings = normalizeAiSettingsPayload(req.body || {});
+    const result = await pool.query(
+      `
+      UPDATE tenants
+      SET
+        ai_enabled = $2,
+        ai_plan = $3,
+        ai_web_enabled = $4,
+        ai_report_enabled = $5,
+        ai_auditor_enabled = $6,
+        ai_monthly_quota = $7,
+        ai_features_json = $8::jsonb
+      WHERE id = $1::uuid
+      RETURNING
+        id AS tenant_id,
+        name AS tenant_name,
+        ai_enabled,
+        ai_plan,
+        ai_web_enabled,
+        ai_report_enabled,
+        ai_auditor_enabled,
+        ai_monthly_quota,
+        ai_quota_used,
+        ai_features_json
+      `,
+      [
+        tenant_id,
+        settings.ai_enabled,
+        settings.ai_plan,
+        settings.ai_web_enabled,
+        settings.ai_report_enabled,
+        settings.ai_auditor_enabled,
+        settings.ai_monthly_quota,
+        JSON.stringify(settings.ai_features_json),
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'Empresa no encontrada' });
+    }
+
+    return res.json({
+      ok: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('ERROR UPDATE TENANT AI SETTINGS:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error actualizando configuración IA',
       ...errorDetail(error),
     });
   }
