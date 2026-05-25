@@ -200,6 +200,7 @@ const {
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
 const { createAiTimer, resolveAiMode } = require('../services/aiRuntimeMetrics.service');
+const { isTenantAiFeatureEnabled } = require('../services/tenantAiSettings.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://ai.tcdx.int:8001';
@@ -267,6 +268,45 @@ function resolveTenantId(req) {
 
   return tokenTenantId;
 }
+
+router.use(auth, async (req, res, next) => {
+  try {
+    const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
+    if (role === 'internal_ai') {
+      return next();
+    }
+
+    const tenantId = resolveTenantId(req);
+    const entitlement = await isTenantAiFeatureEnabled(tenantId, 'suggestions');
+
+    if (!entitlement.enabled) {
+      return res.status(403).json({
+        ok: false,
+        code: 'AI_DISABLED_BY_PLAN',
+        error: 'IA no habilitada para este plan/empresa.',
+        ai_disabled_by_plan: true,
+        ai_disabled_reason: entitlement.reason,
+        trace: {
+          ai_engine_used: false,
+          llm_used: false,
+          used_llm: false,
+          deterministic_mode: true,
+          fallback_used: false,
+          ai_enrichment_failed: false,
+          ai_disabled_by_plan: true,
+          selected_model: null,
+          tenant_filter_enforced: Boolean(tenantId),
+          filtered_by_tenant_id: Boolean(tenantId),
+          request_id: req.requestId || null,
+        },
+      });
+    }
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+});
 
 function normalizePriority(value) {
   const raw = String(value || '').toLowerCase().trim();

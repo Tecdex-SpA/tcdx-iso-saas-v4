@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
@@ -98,6 +99,7 @@ function resolveRole(user: any): string {
 export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { t } = useTranslation();
+  const { loading: entitlementsLoading, aiEnabled, canUseAiFeature } = useTenantEntitlements();
 
   const [role, setRole] = useState<string | null>(null);
   const [standards, setStandards] = useState<string[]>([]);
@@ -230,6 +232,8 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const soaStandards = ['ISO27001', 'ISO/IEC27701', 'ISO/IEC27017', 'ISO/IEC27018'];
   const hasActiveStandards = standards.length > 0;
   const showSoA = standards.some((code) => soaStandards.includes(code));
+  const canSeeAiCompliance =
+    !entitlementsLoading && aiEnabled && canUseAiFeature('suggestions');
   const iconClass = 'h-5 w-5';
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
@@ -465,7 +469,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {
         href: '/ia-compliance',
         label: t('sidebar.aiCompliance'),
-        show: !isAuditor && !isClientReadOnly && hasModule('ai'),
+        show: canSeeAiCompliance && !isAuditor && !isClientReadOnly && hasModule('ai'),
         icon: (
           <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <rect x="8" y="8" width="8" height="8" rx="2" />
@@ -479,7 +483,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     ];
 
     return items.filter((item) => item.show);
-    }, [hasModule, isAuditor, isClientReadOnly, showSoA, modulesLoaded, t]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [canSeeAiCompliance, hasModule, isAuditor, isClientReadOnly, showSoA, modulesLoaded, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const platformItems = [
 

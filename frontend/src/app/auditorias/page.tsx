@@ -9,6 +9,7 @@ import AuditPreparationPanel from '@/components/auditorias/AuditPreparationPanel
 import IaAuditorPanel from '@/components/auditorias/IaAuditorPanel';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText, translateStatusLabel, translatePriorityLabel, translateSeverityLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
@@ -205,10 +206,22 @@ const auditWorkspaceTabs = [
 function AuditoriasWorkspaceContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseAiAuditor = !entitlementsLoading && canUseAiFeature('auditor');
   const rawView = searchParams.get('view') || 'programa';
-  const activeView = auditWorkspaceTabs.some((tab) => tab.value === rawView)
+  const availableTabs = useMemo(
+    () => auditWorkspaceTabs.filter((tab) => tab.value !== 'ia' || canUseAiAuditor),
+    [canUseAiAuditor]
+  );
+  const activeView = availableTabs.some((tab) => tab.value === rawView)
     ? rawView
     : 'programa';
+
+  useEffect(() => {
+    if (!entitlementsLoading && rawView === 'ia' && !canUseAiAuditor) {
+      router.replace('/auditorias');
+    }
+  }, [canUseAiAuditor, entitlementsLoading, rawView, router]);
 
   const setActiveView = (view: string) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -229,12 +242,14 @@ function AuditoriasWorkspaceContent() {
           <div className="px-2">
             <h1 className="text-xl font-black text-slate-950">Auditorías</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Programa, preauditoría e IA auditora en un solo espacio operativo.
+              {canUseAiAuditor
+                ? 'Programa, preauditoría e IA auditora en un solo espacio operativo.'
+                : 'Programa, preauditoría y preparación documental en un solo espacio operativo.'}
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-4">
-            {auditWorkspaceTabs.map((tab) => {
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {availableTabs.map((tab) => {
               const active = activeView === tab.value;
 
               return (
@@ -265,7 +280,7 @@ function AuditoriasWorkspaceContent() {
           <IsoAuditorPreview />
         ) : activeView === 'preparacion' ? (
           <AuditPreparationPanel auditId={searchParams.get('id') || ''} />
-        ) : activeView === 'ia' ? (
+        ) : activeView === 'ia' && canUseAiAuditor ? (
           <IaAuditorPanel />
         ) : (
           <AuditProgramPanel />
@@ -313,6 +328,8 @@ function AiAuditorAuditCta({ t, iso }: { t: (key: string) => string; iso?: strin
 function AuditProgramPanel() {
   const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseAiAuditor = !entitlementsLoading && canUseAiFeature('auditor');
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
 
@@ -1263,7 +1280,7 @@ function AuditProgramPanel() {
           </div>
         </section>
 
-        <AiAuditorAuditCta t={t} iso={iso} />
+        {canUseAiAuditor && <AiAuditorAuditCta t={t} iso={iso} />}
 
         {errorMessage && (
           <div className="rounded-[24px] border border-red-200 bg-red-50 px-5 py-4 text-red-700 shadow-sm">
@@ -1497,13 +1514,15 @@ function AuditProgramPanel() {
                             {t('audits.openChecklist')}
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => goToAuditAi(audit)}
-                            className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-bold text-violet-700 transition hover:bg-violet-100"
-                          >
-                            {t('audits.aiAuditor')}
-                          </button>
+                          {canUseAiAuditor && (
+                            <button
+                              type="button"
+                              onClick={() => goToAuditAi(audit)}
+                              className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-bold text-violet-700 transition hover:bg-violet-100"
+                            >
+                              {t('audits.aiAuditor')}
+                            </button>
+                          )}
 
                           {!isReadOnly && normalizedStatus === 'pendiente' && (
                             <button

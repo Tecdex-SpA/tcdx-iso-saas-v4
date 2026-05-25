@@ -6,6 +6,10 @@ const { errorDetail } = require('../utils/errorResponse');
 const {
   buildGovernanceContext,
 } = require('../services/governance.service');
+const {
+  DEFAULT_FEATURES,
+  getTenantAiSettings,
+} = require('../services/tenantAiSettings.service');
 
 function normalizeRole(role) {
   return String(role || '').trim().toLowerCase();
@@ -45,6 +49,61 @@ function getHomePathByRole(role) {
   }
 
   return '/dashboard';
+}
+
+function isPlatformRole(role) {
+  const normalizedRole = normalizeRole(role);
+  return (
+    normalizedRole === 'superadmin' ||
+    normalizedRole === 'super_admin' ||
+    normalizedRole === 'platform_admin' ||
+    normalizedRole === 'admin_global' ||
+    normalizedRole === 'global_admin' ||
+    normalizedRole === 'owner'
+  );
+}
+
+function buildAiEntitlements(settings, { platform = false } = {}) {
+  if (platform) {
+    return {
+      enabled: true,
+      plan: 'enterprise',
+      web_enabled: true,
+      report_enabled: true,
+      auditor_enabled: true,
+      features: { ...DEFAULT_FEATURES },
+      quota: {
+        monthly: null,
+        used: 0,
+      },
+    };
+  }
+
+  const features = {
+    ...DEFAULT_FEATURES,
+    ...(settings?.ai_features_json || {}),
+  };
+  const enabled = settings?.ai_enabled === true && settings?.ai_plan !== 'none';
+
+  return {
+    enabled,
+    plan: enabled ? (settings?.ai_plan || 'standard') : 'none',
+    web_enabled: enabled && settings?.ai_web_enabled !== false && features.web_research !== false,
+    report_enabled: enabled && settings?.ai_report_enabled !== false && features.report_enrichment !== false,
+    auditor_enabled: enabled && settings?.ai_auditor_enabled !== false && features.auditor !== false,
+    features: {
+      auditor: enabled && settings?.ai_auditor_enabled !== false && features.auditor !== false,
+      suggestions: enabled && features.suggestions !== false,
+      web_research: enabled && settings?.ai_web_enabled !== false && features.web_research !== false,
+      report_enrichment: enabled && settings?.ai_report_enabled !== false && features.report_enrichment !== false,
+      document_generation: enabled && features.document_generation !== false,
+      company_profile_analysis: enabled && features.company_profile_analysis !== false,
+    },
+    quota: {
+      monthly: settings?.ai_monthly_quota ?? null,
+      used: Number(settings?.ai_quota_used || 0),
+    },
+  };
 }
 
 // =====================================================
@@ -191,6 +250,38 @@ router.get('/permissions', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo permisos del usuario',
+      ...errorDetail(error),
+    });
+  }
+});
+
+// =====================================================
+// GET /api/me/entitlements
+// Devuelve capacidades contratadas del tenant autenticado
+// =====================================================
+router.get('/entitlements', auth, async (req, res) => {
+  try {
+    const tenantId = getUserTenantId(req.user);
+    const role =
+      req.user?.role ||
+      req.user?.user_role ||
+      req.user?.userRole ||
+      '';
+
+    const platform = isPlatformRole(role) && !tenantId;
+    const settings = platform ? null : await getTenantAiSettings(tenantId);
+
+    return res.json({
+      ok: true,
+      tenant_id: tenantId || null,
+      ai: buildAiEntitlements(settings, { platform }),
+    });
+  } catch (error) {
+    console.error('ERROR /api/me/entitlements:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error obteniendo capacidades del tenant',
       ...errorDetail(error),
     });
   }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useLanguage } from '@/context/LanguageContext';
 import { translateStandardLabel } from '@/i18n/displayText';
+import { clearTenantEntitlementsCache } from '@/hooks/useTenantEntitlements';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
@@ -1632,6 +1633,7 @@ async function uploadSelectedTenantLogo(file: File) {
           },
         }),
       });
+      clearTenantEntitlementsCache();
       await loadTenants();
       await loadTenantDetail(selectedTenantId);
       alert('Configuración IA actualizada.');

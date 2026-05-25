@@ -7,6 +7,7 @@ import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfi
 import { getUserFromToken } from '@/utils/auth';
 import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getComplianceStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStandardLabel } from '@/i18n/displayText';
 
@@ -501,6 +502,8 @@ export default function PlanAccionPage() {
 function PlanAccionPageContent() {
   const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseAiAuditor = !entitlementsLoading && canUseAiFeature('auditor');
 
   const focusId = searchParams.get('id') || '';
   const focusISO = searchParams.get('iso') || '';
@@ -552,6 +555,7 @@ function PlanAccionPageContent() {
 
 
   useEffect(() => {
+    if (entitlementsLoading || !canUseAiAuditor) return;
     if (aiAuditorDraftSource !== 'ai-auditor' || aiAuditorDraftMode !== '1') return;
     if (!aiAuditorDraftKey) return;
 
@@ -576,7 +580,7 @@ function PlanAccionPageContent() {
     if (draftISO) {
       setSelectedISO(draftISO);
     }
-  }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey]);
+  }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey, canUseAiAuditor, entitlementsLoading]);
 
   const discardAiAuditorDraft = () => {
     clearAiAuditorDraft(aiAuditorDraftKey);
@@ -1023,7 +1027,7 @@ function PlanAccionPageContent() {
       case 'control':
         return 'Control';
       case 'ia':
-        return 'IA';
+        return canUseAiAuditor ? 'IA' : 'Manual';
       default:
         return 'Manual';
     }
@@ -1488,7 +1492,7 @@ function PlanAccionPageContent() {
 
                   {isExpanded && (
                     <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                      <ActionPlanAiTraceCard row={row} />
+                      {canUseAiAuditor && <ActionPlanAiTraceCard row={row} />}
 
                       <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-4 space-y-3">
                         <div className="text-xs uppercase tracking-[0.16em] text-slate-400 font-bold">{t('actionPlanLabels.sections.planContext')}</div>

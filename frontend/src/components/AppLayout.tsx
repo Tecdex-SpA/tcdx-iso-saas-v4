@@ -15,6 +15,7 @@ import {
 } from '@/utils/auth';
 import { getApiBaseUrl } from '@/utils/apiClient';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
 const API_URL = getApiBaseUrl();
 
@@ -47,6 +48,7 @@ type ModuleAccessResponse = {
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { t } = useTranslation();
+  const { loading: entitlementsLoading, aiEnabled, canUseAiFeature } = useTenantEntitlements();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -345,6 +347,31 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [pathname, routeRules, t]);
+
+  useEffect(() => {
+    if (entitlementsLoading) return;
+    const currentView =
+      typeof window === 'undefined'
+        ? ''
+        : new URLSearchParams(window.location.search).get('view') || '';
+
+    const aiComplianceRoute =
+      pathname === '/ia' ||
+      pathname === '/ia-compliance' ||
+      pathname.startsWith('/ia-compliance/');
+
+    const aiAuditorRoute =
+      pathname === '/ia-auditor' ||
+      pathname === '/auditorias/ia' ||
+      (pathname === '/auditorias' && currentView === 'ia');
+
+    if (
+      (aiComplianceRoute && (!aiEnabled || !canUseAiFeature('suggestions'))) ||
+      (aiAuditorRoute && (!aiEnabled || !canUseAiFeature('auditor')))
+    ) {
+      window.location.href = pathname === '/auditorias' ? '/auditorias' : '/dashboard';
+    }
+  }, [pathname, entitlementsLoading, aiEnabled, canUseAiFeature]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {

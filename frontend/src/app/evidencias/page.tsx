@@ -8,6 +8,7 @@ import GoogleDriveSourcesPanel from '@/components/evidences/GoogleDriveSourcesPa
 import IntegratedEvidenceApprovalPanel from '@/components/evidences/IntegratedEvidenceApprovalPanel';
 import { clearAiAuditorDraft, formatAiAuditorDraftEvidenceDescription, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStatusLabel, translateStandardLabel } from '@/i18n/displayText';
 
@@ -414,6 +415,8 @@ export default function EvidenciasPage() {
 function EvidenciasPageContent() {
   const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseEvidenceAi = !entitlementsLoading && (canUseAiFeature('auditor') || canUseAiFeature('suggestions'));
 
   const focusId = searchParams.get('id');
   const focusISO = searchParams.get('iso');
@@ -471,6 +474,7 @@ function EvidenciasPageContent() {
 
 
   useEffect(() => {
+    if (entitlementsLoading || !canUseEvidenceAi) return;
     if (aiAuditorDraftSource !== 'ai-auditor' || aiAuditorDraftMode !== '1') return;
     if (!aiAuditorDraftKey) return;
 
@@ -494,7 +498,7 @@ function EvidenciasPageContent() {
     if (draftISO) {
       setIso(draftISO);
     }
-  }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey]);
+  }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey, canUseEvidenceAi, entitlementsLoading]);
 
   const discardAiAuditorDraft = () => {
     clearAiAuditorDraft(aiAuditorDraftKey);
@@ -1048,7 +1052,7 @@ function EvidenciasPageContent() {
           <MetricCard title={t('statuses.evidence.aprobada')} value={metrics.aprobadas} />
           <MetricCard title={t('statuses.evidence.rechazada')} value={metrics.rechazadas} />
           <MetricCard title={t('evidence.linkedToPlan')} value={metrics.vinculadasPlan} />
-          <MetricCard title={t('evidence.aiRecommended')} value={metrics.recomendadasIa} />
+          {canUseEvidenceAi && <MetricCard title={t('evidence.aiRecommended')} value={metrics.recomendadasIa} />}
         </div>
 
         {tenantId && (
@@ -1123,7 +1127,9 @@ function EvidenciasPageContent() {
                 {t('evidence.uploadCorrectiveEvidence')}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                {t('evidence.correctiveEvidenceHelp', { threshold: AI_RECOMMENDATION_THRESHOLD })}
+                {canUseEvidenceAi
+                  ? t('evidence.correctiveEvidenceHelp', { threshold: AI_RECOMMENDATION_THRESHOLD })
+                  : t('evidence.directUploadHelp')}
               </p>
             </div>
 
@@ -1207,7 +1213,7 @@ function EvidenciasPageContent() {
         )}
 
 
-        {aiAuditorDraft && (
+        {canUseEvidenceAi && aiAuditorDraft && (
           <div className="mb-5 rounded-[26px] border border-indigo-200 bg-indigo-50 p-4 text-indigo-950">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
@@ -1299,19 +1305,21 @@ function EvidenciasPageContent() {
                       {t('common.status')}: {translateStatusLabel(normalizedStatus, locale)}
                     </div>
 
-                    <div
-                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getAcceptanceClass(
-                        acceptancePct
-                      )}`}
-                    >
-                      {t('evidence.aiAcceptance')}: {toPercent(acceptancePct)}
-                    </div>
+                    {canUseEvidenceAi && (
+                      <div
+                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getAcceptanceClass(
+                          acceptancePct
+                        )}`}
+                      >
+                        {t('evidence.aiAcceptance')}: {toPercent(acceptancePct)}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <EvidenceAiTraceCard evidence={e} />
+                {canUseEvidenceAi && <EvidenceAiTraceCard evidence={e} />}
 
-                {e.ai_headline && (
+                {canUseEvidenceAi && e.ai_headline && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-xs uppercase tracking-wide text-slate-400">
                       {t('evidence.aiSummary')}
@@ -1322,7 +1330,7 @@ function EvidenciasPageContent() {
                   </div>
                 )}
 
-                {e.auto_approved_by_ai && (
+                {canUseEvidenceAi && e.auto_approved_by_ai && (
                   <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">
                     <div className="font-semibold">{t('evidence.historicalAiApproval')}</div>
                     <div className="mt-1 text-sm">
@@ -1343,7 +1351,7 @@ function EvidenciasPageContent() {
                   </div>
                 )}
 
-                {e.ai_recommended_by_ai &&
+                {canUseEvidenceAi && e.ai_recommended_by_ai &&
                   normalizedStatus === 'pendiente' && (
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
                       <div className="font-semibold">{t('evidence.aiRecommendsHumanApproval')}</div>
@@ -1365,7 +1373,8 @@ function EvidenciasPageContent() {
                     </div>
                   )}
 
-                {!e.auto_approved_by_ai &&
+                {canUseEvidenceAi &&
+                  !e.auto_approved_by_ai &&
                   !e.ai_recommended_by_ai &&
                   normalizedStatus === 'pendiente' &&
                   e.analysis_status === 'completed' && (
@@ -1387,7 +1396,7 @@ function EvidenciasPageContent() {
                   <div className="text-sm text-gray-600">{translateDisplayText(e.description, locale, 'evidence')}</div>
                 )}
 
-                {e.ai_narrative && (
+                {canUseEvidenceAi && e.ai_narrative && (
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <div className="text-xs uppercase tracking-wide text-slate-400">
                       {t('evidence.aiNarrative')}
@@ -1421,18 +1430,22 @@ function EvidenciasPageContent() {
                     label={t('evidence.expires')}
                     value={e.expires_at ? formatDate(e.expires_at) : t('evidence.notDefined')}
                   />
-                  <InfoBox
-                    label={t('evidence.aiAcceptancePercent')}
-                    value={toPercent(acceptancePct)}
-                  />
-                  <InfoBox
-                    label={t('evidence.aiValidity')}
-                    value={e.validity_result || '-'}
-                  />
-                  <InfoBox
-                    label={t('evidence.aiContribution')}
-                    value={e.contribution_level || '-'}
-                  />
+                  {canUseEvidenceAi && (
+                    <>
+                      <InfoBox
+                        label={t('evidence.aiAcceptancePercent')}
+                        value={toPercent(acceptancePct)}
+                      />
+                      <InfoBox
+                        label={t('evidence.aiValidity')}
+                        value={e.validity_result || '-'}
+                      />
+                      <InfoBox
+                        label={t('evidence.aiContribution')}
+                        value={e.contribution_level || '-'}
+                      />
+                    </>
+                  )}
                   <InfoBox
                     label={t('evidence.pages')}
                     value={e.page_count || '-'}
@@ -1441,10 +1454,12 @@ function EvidenciasPageContent() {
                     label={t('evidence.extractedText')}
                     value={e.text_char_count ? `${e.text_char_count} ${t('evidence.characters')}` : '-'}
                   />
-                  <InfoBox
-                    label={t('evidence.aiAnalysis')}
-                    value={e.analysis_status || '-'}
-                  />
+                  {canUseEvidenceAi && (
+                    <InfoBox
+                      label={t('evidence.aiAnalysis')}
+                      value={e.analysis_status || '-'}
+                    />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -1499,7 +1514,7 @@ function EvidenciasPageContent() {
                   </div>
                 </div>
 
-                {(aiRisks.length > 0 || aiNextSteps.length > 0 || aiEntities.length > 0) && (
+                {canUseEvidenceAi && (aiRisks.length > 0 || aiNextSteps.length > 0 || aiEntities.length > 0) && (
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
                     <ListCard
                       title={t('evidence.detectedRisks')}

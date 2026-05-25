@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
@@ -326,6 +327,8 @@ function SuggestionAiTraceCard({ row }: { row: SuggestionRow }) {
 
 
 export default function AiSuggestionsPage() {
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseSuggestions = !entitlementsLoading && canUseAiFeature('suggestions');
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
 
@@ -340,6 +343,13 @@ export default function AiSuggestionsPage() {
   const [rows, setRows] = useState<SuggestionRow[]>([]);
 
   useEffect(() => {
+    if (entitlementsLoading) return;
+
+    if (!canUseSuggestions) {
+      window.location.replace('/dashboard');
+      return;
+    }
+
     const authToken = localStorage.getItem('token');
     const u = getUserFromToken();
 
@@ -353,7 +363,7 @@ export default function AiSuggestionsPage() {
     }
 
     loadSuggestions('');
-  }, []);
+  }, [canUseSuggestions, entitlementsLoading]);
 
   const getWithAuth = async (url: string) => {
     const authToken = localStorage.getItem('token');

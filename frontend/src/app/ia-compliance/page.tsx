@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText, translateStatusLabel } from '@/i18n/displayText';
 
 const API_URL =
@@ -368,6 +369,8 @@ type SuggestionRow = {
 
 export default function IaCompliancePage() {
   const { locale } = useTranslation();
+  const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
+  const canUseAiCompliance = !entitlementsLoading && canUseAiFeature('suggestions');
   const copy: IaComplianceCopy = locale === 'en' ? IA_COMPLIANCE_COPY.en : IA_COMPLIANCE_COPY.es;
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -382,6 +385,13 @@ export default function IaCompliancePage() {
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
 
   useEffect(() => {
+    if (entitlementsLoading) return;
+
+    if (!canUseAiCompliance) {
+      window.location.replace('/dashboard');
+      return;
+    }
+
     const authToken = localStorage.getItem('token');
     const u = getUserFromToken();
 
@@ -395,7 +405,7 @@ export default function IaCompliancePage() {
     }
 
     loadAll();
-  }, []);
+  }, [canUseAiCompliance, entitlementsLoading]);
 
   const getWithAuth = async (url: string) => {
     const authToken = localStorage.getItem('token');
