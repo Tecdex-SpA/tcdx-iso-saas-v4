@@ -625,6 +625,14 @@ async function safeRows(name, query, params = []) {
     const result = await pool.query(query, params);
     return result.rows || [];
   } catch (error) {
+    if (String(error?.code || '') === '42P01') {
+      console.info('AI AUDITOR SOURCE SKIPPED:', {
+        source: name,
+        reason: 'table_not_found',
+        message: String(error.message || '').slice(0, 160),
+      });
+      return [];
+    }
     console.warn(`AI AUDITOR SAFE QUERY WARN [${name}]:`, error.message);
     return [];
   }

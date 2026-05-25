@@ -39,11 +39,46 @@ python3 - "$OUT_DIR/job-latest.json" <<'PY'
 import json, sys
 d=json.load(open(sys.argv[1]))
 if d.get("status") != "completed":
+    print("JOB_ID:", d.get("job_id") or d.get("id") or "")
+    print("STATUS:", d.get("status"))
+    print("ERROR_JSON:", json.dumps(d.get("error_json") or d.get("error") or {}, ensure_ascii=False, indent=2))
     raise SystemExit(f"job no completado: {d.get('status')}")
 result = d.get("result_json") or {}
 trace = result.get("trace") or result.get("ai") or result.get("metrics") or {}
 if trace.get("fallback_used") is True and trace.get("ai_enrichment_failed") is not True:
     raise SystemExit("fallback sin ai_enrichment_failed")
 PY
+
+DOWNLOAD_URL="$(python3 - "$OUT_DIR/job-latest.json" <<'PY'
+import json, sys
+d=json.load(open(sys.argv[1]))
+r=d.get("result_json") or {}
+print(
+  d.get("result_download_url")
+  or r.get("result_download_url")
+  or (r.get("data") or {}).get("file_url")
+  or ((r.get("data") or {}).get("export") or {}).get("file_url")
+  or ""
+)
+PY
+)"
+if [ -n "$DOWNLOAD_URL" ]; then
+  case "$DOWNLOAD_URL" in
+    http*) FINAL_URL="$DOWNLOAD_URL" ;;
+    *) FINAL_URL="$BASE_URL$DOWNLOAD_URL" ;;
+  esac
+  curl -sk -I "$FINAL_URL" -H "Authorization: Bearer $TOKEN" -o "$OUT_DIR/report-headers.txt"
+  if ! grep -qi "content-type: application/pdf" "$OUT_DIR/report-headers.txt"; then
+    echo "ERROR: descarga no declara application/pdf" >&2
+    cat "$OUT_DIR/report-headers.txt" >&2
+    exit 1
+  fi
+  curl -sk -L "$FINAL_URL" -H "Authorization: Bearer $TOKEN" -o "$OUT_DIR/report.pdf"
+  size="$(wc -c < "$OUT_DIR/report.pdf" | tr -d ' ')"
+  if [ "${size:-0}" -lt 20000 ]; then
+    echo "ERROR: PDF demasiado pequeño: $size bytes" >&2
+    exit 1
+  fi
+fi
 
 echo "OK: artefactos en $OUT_DIR"

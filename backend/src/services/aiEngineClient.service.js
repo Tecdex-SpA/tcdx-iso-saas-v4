@@ -1,3 +1,8 @@
+const {
+  isTenantAiFeatureEnabled,
+  buildAiDisabledTrace,
+} = require('./tenantAiSettings.service');
+
 class AiEngineClient {
   constructor() {
     this.baseUrl = String(
@@ -170,6 +175,12 @@ class AiEngineClient {
   }
 
   async analyzeWithSeniorAuditor(payload) {
+    const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
+    const aiAccess = tenantId ? await isTenantAiFeatureEnabled(tenantId, 'auditor') : { enabled: true };
+    if (!aiAccess.enabled) {
+      return this.buildDisabledByPlan(payload, 'auditor', aiAccess.reason);
+    }
+
     if (!this.baseUrl || !this.token) {
       return this.buildFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
     }
@@ -194,6 +205,12 @@ class AiEngineClient {
   }
 
   async analyzeReport(payload, options = {}) {
+    const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
+    const aiAccess = tenantId ? await isTenantAiFeatureEnabled(tenantId, 'report_enrichment') : { enabled: true };
+    if (!aiAccess.enabled) {
+      return this.buildDisabledByPlan(payload, 'report_enrichment', aiAccess.reason);
+    }
+
     if (!this.baseUrl || !this.token) {
       return this.buildFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
     }
@@ -221,6 +238,12 @@ class AiEngineClient {
   }
 
   async analyzeCompanyProfile(payload, options = {}) {
+    const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
+    const aiAccess = tenantId ? await isTenantAiFeatureEnabled(tenantId, 'company_profile_analysis') : { enabled: true };
+    if (!aiAccess.enabled) {
+      return this.buildDisabledByPlan(payload, 'company_profile_analysis', aiAccess.reason);
+    }
+
     if (!this.baseUrl || !this.token) {
       return this.buildFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
     }
@@ -303,6 +326,39 @@ class AiEngineClient {
           },
         },
       },
+    };
+  }
+
+  buildDisabledByPlan(payload, feature, reason = 'ai_disabled_by_plan') {
+    const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
+    const requestId = payload?.request_metadata?.request_id || payload?.request_id || null;
+    const trace = buildAiDisabledTrace({
+      tenantId,
+      feature,
+      requestId,
+      modelMode: payload?.model_mode || payload?.options?.model_mode || 'deterministic',
+      reason,
+    });
+    return {
+      ok: true,
+      code: 'AI_DISABLED_BY_PLAN',
+      request_id: requestId,
+      answer: 'IA no habilitada para este plan/empresa. Se generó una salida determinística básica sin consumir ai-engine.',
+      structured_result: {
+        executive_summary: 'IA no habilitada para este plan/empresa.',
+        diagnosis: '',
+        recommended_actions: [],
+        limitations: ['IA no habilitada para este plan/empresa.'],
+      },
+      source_trace: [],
+      confidence: 0,
+      limitations: ['IA no habilitada para este plan/empresa.'],
+      trace,
+      engine: trace,
+      metrics: trace,
+      ai_disabled_by_plan: true,
+      fallback_used: false,
+      ai_enrichment_failed: false,
     };
   }
 

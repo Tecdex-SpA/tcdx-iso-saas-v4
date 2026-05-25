@@ -228,17 +228,78 @@ async function relationExists(relationName) {
   return exists;
 }
 
-async function healthSource(preferred, fallback) {
-  return (await relationExists(preferred)) ? preferred : fallback;
+function isRecoverableHealthSqlError(error) {
+  const code = String(error?.code || '');
+  return ['42P01', '42703', '42702', '42883', '42P10'].includes(code);
 }
 
-async function buildHealthScope(scope, sourceName) {
+function safeHealthFallbackReason(error, fallback = 'applicable_view_unavailable') {
+  if (!error) return fallback;
+  return {
+    reason: fallback,
+    code: error.code || error.name || 'SQL_ERROR',
+    message: String(error.message || 'Vista aplicable no disponible').slice(0, 220),
+  };
+}
+
+async function runHealthSourceQuery({ preferred, fallback, buildQuery }) {
+  const preferredExists = await relationExists(preferred);
+  const sources = preferredExists ? [preferred, fallback] : [fallback];
+  let preferredError = null;
+
+  for (const sourceName of sources) {
+    const { query, params } = buildQuery(sourceName);
+    try {
+      const result = await pool.query(query, params);
+      const fallbackUsed = sourceName === fallback && preferred !== fallback;
+      return {
+        sourceName,
+        result,
+        fallback_legacy_used: fallbackUsed,
+        legacy_fallback_used: fallbackUsed,
+        fallback_reason: fallbackUsed
+          ? safeHealthFallbackReason(preferredError, 'applicable_view_query_failed')
+          : (!preferredExists ? 'applicable_view_not_found' : null),
+      };
+    } catch (error) {
+      if (sourceName === preferred && isRecoverableHealthSqlError(error)) {
+        preferredError = error;
+        console.warn('HEALTH APPLICABLE VIEW FALLBACK:', {
+          preferred,
+          fallback,
+          code: error.code || error.name,
+          message: String(error.message || '').slice(0, 220),
+        });
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw preferredError || new Error('No fue posible consultar salud');
+}
+
+async function buildHealthScope(scope, sourceName, extra = {}) {
   const applicability = await getTenantApplicabilityScope(scope.tenantId);
+  const fallbackUsed = extra.fallback_legacy_used === true || extra.legacy_fallback_used === true;
   return {
     is_superadmin: scope.isSuperAdmin,
     tenant_id: scope.tenantId,
     source: sourceName,
-    applicability_scope: applicability,
+    tenant_filter_enforced: applicability.tenant_filter_enforced === true,
+    filtered_by_tenant_id: applicability.filtered_by_tenant_id === true,
+    active_universe: applicability.active_universe === true,
+    applicability_universe_applied: applicability.applicability_universe_applied === true && !fallbackUsed,
+    filtered_by_applicability_universe: applicability.filtered_by_applicability_universe === true && !fallbackUsed,
+    fallback_legacy_used: fallbackUsed,
+    legacy_fallback_used: fallbackUsed,
+    fallback_reason: extra.fallback_reason || null,
+    applicability_scope: {
+      ...applicability,
+      fallback_legacy_used: fallbackUsed,
+      legacy_fallback_used: fallbackUsed,
+      fallback_reason: extra.fallback_reason || null,
+    },
   };
 }
 
@@ -255,29 +316,35 @@ router.get('/dashboard', async (req, res) => {
     const scope = requireTenantForNonSuper(req, res);
     if (!scope) return;
 
-    const sourceName = await healthSource('v_health_dashboard_summary_applicable', 'v_health_dashboard_summary');
-    let query = `
-      SELECT *
-      FROM ${sourceName} v
-    `;
+    const healthQuery = await runHealthSourceQuery({
+      preferred: 'v_health_dashboard_summary_applicable',
+      fallback: 'v_health_dashboard_summary',
+      buildQuery: (sourceName) => {
+        let query = `
+          SELECT *
+          FROM ${sourceName} v
+        `;
 
-    const params = [];
+        const params = [];
 
-    query = addTenantCondition({
-      query,
-      params,
-      tenantId: scope.tenantId,
-      alias: 'v',
+        query = addTenantCondition({
+          query,
+          params,
+          tenantId: scope.tenantId,
+          alias: 'v',
+        });
+
+        query += ` ORDER BY v.avg_health_score DESC`;
+        return { query, params };
+      },
     });
 
-    query += ` ORDER BY v.avg_health_score DESC`;
-
-    const result = await pool.query(query, params);
+    const { sourceName, result } = healthQuery;
 
     const rows = sourceName.endsWith('_applicable') || (scope.isSuperAdmin && req.query.include_exclusions === 'true')
       ? result.rows
       : await filterApplicableKpis(result.rows, scope.tenantId);
-    const responseScope = await buildHealthScope(scope, sourceName);
+    const responseScope = await buildHealthScope(scope, sourceName, healthQuery);
 
     return res.json({
       ok: true,
@@ -303,39 +370,45 @@ router.get('/standards', async (req, res) => {
     if (!scope) return;
     const standardCode = req.query.standard_code || req.query.standardCode || '';
 
-    const sourceName = await healthSource('v_health_dashboard_by_standard_applicable', 'v_health_dashboard_by_standard');
-    let query = `
-      SELECT *
-      FROM ${sourceName} v
-    `;
+    const healthQuery = await runHealthSourceQuery({
+      preferred: 'v_health_dashboard_by_standard_applicable',
+      fallback: 'v_health_dashboard_by_standard',
+      buildQuery: (sourceName) => {
+        let query = `
+          SELECT *
+          FROM ${sourceName} v
+        `;
 
-    const params = [];
+        const params = [];
 
-    query = addTenantCondition({
-      query,
-      params,
-      tenantId: scope.tenantId,
-      alias: 'v',
+        query = addTenantCondition({
+          query,
+          params,
+          tenantId: scope.tenantId,
+          alias: 'v',
+        });
+
+        query = addActiveStandardCondition({
+          query,
+          alias: 'v',
+        });
+
+        if (standardCode) {
+          params.push(standardCode);
+          query += ` AND v.standard_code = $${params.length}`;
+        }
+
+        query += ` ORDER BY v.tenant_name, v.standard_code`;
+        return { query, params };
+      },
     });
 
-    query = addActiveStandardCondition({
-      query,
-      alias: 'v',
-    });
-
-    if (standardCode) {
-      params.push(standardCode);
-      query += ` AND v.standard_code = $${params.length}`;
-    }
-
-    query += ` ORDER BY v.tenant_name, v.standard_code`;
-
-    const result = await pool.query(query, params);
+    const { sourceName, result } = healthQuery;
 
     const rows = sourceName.endsWith('_applicable') || (scope.isSuperAdmin && req.query.include_exclusions === 'true')
       ? result.rows
       : await filterApplicableControls(result.rows, scope.tenantId, { standardCode });
-    const responseScope = await buildHealthScope(scope, sourceName);
+    const responseScope = await buildHealthScope(scope, sourceName, healthQuery);
 
     return res.json({
       ok: true,
@@ -360,36 +433,42 @@ router.get('/kpis', async (req, res) => {
     const scope = requireTenantForNonSuper(req, res);
     if (!scope) return;
 
-    const sourceName = await healthSource('v_latest_health_kpi_snapshots_applicable', 'v_latest_health_kpi_snapshots');
-    let query = `
-      SELECT *
-      FROM ${sourceName} v
-    `;
+    const healthQuery = await runHealthSourceQuery({
+      preferred: 'v_latest_health_kpi_snapshots_applicable',
+      fallback: 'v_latest_health_kpi_snapshots',
+      buildQuery: (sourceName) => {
+        let query = `
+          SELECT *
+          FROM ${sourceName} v
+        `;
 
-    const params = [];
+        const params = [];
 
-    query = addTenantCondition({
-      query,
-      params,
-      tenantId: scope.tenantId,
-      alias: 'v',
+        query = addTenantCondition({
+          query,
+          params,
+          tenantId: scope.tenantId,
+          alias: 'v',
+        });
+
+        query = addActiveStandardCondition({
+          query,
+          alias: 'v',
+          nullableStandard: true,
+        });
+
+        query += `
+          ORDER BY v.tenant_name, v.kpi_code, v.standard_code NULLS FIRST
+        `;
+        return { query, params };
+      },
     });
 
-    query = addActiveStandardCondition({
-      query,
-      alias: 'v',
-      nullableStandard: true,
-    });
-
-    query += `
-      ORDER BY v.tenant_name, v.kpi_code, v.standard_code NULLS FIRST
-    `;
-
-    const result = await pool.query(query, params);
+    const { sourceName, result } = healthQuery;
     const rows = sourceName.endsWith('_applicable') || (scope.isSuperAdmin && req.query.include_exclusions === 'true')
       ? result.rows
       : await filterApplicableKpis(result.rows, scope.tenantId);
-    const responseScope = await buildHealthScope(scope, sourceName);
+    const responseScope = await buildHealthScope(scope, sourceName, healthQuery);
 
     return res.json({
       ok: true,
@@ -416,76 +495,82 @@ router.get('/controls-risk', async (req, res) => {
 
     const standardCode = req.query.standard_code;
 
-    const sourceName = await healthSource('v_control_health_risks_applicable', 'v_control_health_risks');
-    let query = `
-      SELECT
-        v.tenant_id,
-        v.tenant_name,
-        v.tenant_control_id,
-        v.standard_code,
-        v.clause,
-        v.category,
-        v.control_description,
-        v.control_status,
-        v.priority,
-        v.applicability,
-        v.health_score,
-        v.health_status,
-        v.evidence_score,
-        v.compliance_score,
-        v.findings_score,
-        v.action_score,
-        v.risk_score,
-        v.review_score,
-        v.evidence_count,
-        v.approved_evidence_count,
-        v.pending_evidence_count,
-        v.rejected_evidence_count,
-        v.open_findings_count,
-        v.open_actions_count,
-        v.overdue_actions_count,
-        v.high_risks_count,
-        v.calculated_at
-      FROM ${sourceName} v
-    `;
+    const healthQuery = await runHealthSourceQuery({
+      preferred: 'v_control_health_risks_applicable',
+      fallback: 'v_control_health_risks',
+      buildQuery: (sourceName) => {
+        let query = `
+          SELECT
+            v.tenant_id,
+            v.tenant_name,
+            v.tenant_control_id,
+            v.standard_code,
+            v.clause,
+            v.category,
+            v.control_description,
+            v.control_status,
+            v.priority,
+            v.applicability,
+            v.health_score,
+            v.health_status,
+            v.evidence_score,
+            v.compliance_score,
+            v.findings_score,
+            v.action_score,
+            v.risk_score,
+            v.review_score,
+            v.evidence_count,
+            v.approved_evidence_count,
+            v.pending_evidence_count,
+            v.rejected_evidence_count,
+            v.open_findings_count,
+            v.open_actions_count,
+            v.overdue_actions_count,
+            v.high_risks_count,
+            v.calculated_at
+          FROM ${sourceName} v
+        `;
 
-    const params = [];
-    const conditions = [];
+        const params = [];
+        const conditions = [];
 
-    if (scope.tenantId) {
-      params.push(scope.tenantId);
-      conditions.push(`v.tenant_id = $${params.length}`);
-    }
+        if (scope.tenantId) {
+          params.push(scope.tenantId);
+          conditions.push(`v.tenant_id = $${params.length}`);
+        }
 
-    if (standardCode) {
-      params.push(standardCode);
-      conditions.push(`v.standard_code = $${params.length}`);
-    }
+        if (standardCode) {
+          params.push(standardCode);
+          conditions.push(`v.standard_code = $${params.length}`);
+        }
 
-    conditions.push(`
-      EXISTS (
-        SELECT 1
-        FROM tenant_standards ts_scope
-        WHERE ts_scope.tenant_id = v.tenant_id
-          AND ts_scope.standard_code = v.standard_code
-          AND ts_scope.is_active = TRUE
-      )
-    `);
+        conditions.push(`
+          EXISTS (
+            SELECT 1
+            FROM tenant_standards ts_scope
+            WHERE ts_scope.tenant_id = v.tenant_id
+              AND ts_scope.standard_code = v.standard_code
+              AND ts_scope.is_active = TRUE
+          )
+        `);
 
-    if (conditions.length > 0) {
-      query += ` WHERE ${conditions.join(' AND ')}`;
-    }
+        if (conditions.length > 0) {
+          query += ` WHERE ${conditions.join(' AND ')}`;
+        }
 
-    query += `
-      ORDER BY v.health_score ASC, v.evidence_count ASC, v.standard_code, v.clause
-      LIMIT 100
-    `;
+        query += `
+          ORDER BY v.health_score ASC, v.evidence_count ASC, v.standard_code, v.clause
+          LIMIT 100
+        `;
+        return { query, params };
+      },
+    });
 
-    const result = await pool.query(query, params);
+    const { sourceName, result } = healthQuery;
     const rows = sourceName.endsWith('_applicable') || (scope.isSuperAdmin && req.query.include_exclusions === 'true')
       ? result.rows
       : await filterApplicableControls(result.rows, scope.tenantId, { standardCode });
-    const responseScope = await buildHealthScope(scope, sourceName);
+    const responseScope = await buildHealthScope(scope, sourceName, healthQuery);
 
     return res.json({
       ok: true,
@@ -1559,18 +1644,78 @@ router.post('/refresh', async (req, res) => {
 
     await client.query('COMMIT');
 
+    let applicabilityScope = null;
+    if (finalTenantId) {
+      try {
+        applicabilityScope = await getTenantApplicabilityScope(finalTenantId);
+        if (applicabilityScope.active_universe !== true) {
+          try {
+            const rebuilt = await buildTenantApplicabilityUniverse({
+              tenantId: finalTenantId,
+              userId: getUserId(req.user),
+              forceRebuild: false,
+            });
+            applicabilityScope = {
+              ...applicabilityScope,
+              ...(rebuilt?.summary || {}),
+              active_universe: rebuilt?.summary?.active_universe !== false,
+              applicability_universe_applied: rebuilt?.summary?.active_universe !== false,
+              filtered_by_applicability_universe: rebuilt?.summary?.active_universe !== false,
+              rebuild_attempted: true,
+            };
+          } catch (rebuildError) {
+            applicabilityScope = {
+              ...applicabilityScope,
+              active_universe: false,
+              applicability_universe_applied: false,
+              filtered_by_applicability_universe: false,
+              fallback_legacy_used: true,
+              legacy_fallback_used: true,
+              fallback_reason: {
+                reason: 'applicability_rebuild_failed',
+                code: rebuildError?.code || rebuildError?.name || 'APPLICABILITY_REBUILD_ERROR',
+                message: String(rebuildError?.message || '').slice(0, 220),
+              },
+            };
+          }
+        }
+      } catch (scopeError) {
+        applicabilityScope = {
+          active_universe: false,
+          applicability_universe_applied: false,
+          filtered_by_applicability_universe: false,
+          tenant_filter_enforced: Boolean(finalTenantId),
+          filtered_by_tenant_id: Boolean(finalTenantId),
+          fallback_legacy_used: true,
+          legacy_fallback_used: true,
+          fallback_reason: {
+            reason: 'applicability_scope_unavailable',
+            code: scopeError?.code || scopeError?.name || 'APPLICABILITY_SCOPE_ERROR',
+            message: String(scopeError?.message || '').slice(0, 220),
+          },
+        };
+      }
+    }
+
     return res.json({
       ok: true,
       engine: 'control_health_v2_1',
       scope: finalTenantId ? 'tenant' : 'global',
       tenant_id: finalTenantId,
+      active_universe: applicabilityScope?.active_universe === true,
+      applicability_universe_applied: applicabilityScope?.applicability_universe_applied === true,
+      filtered_by_applicability_universe: applicabilityScope?.filtered_by_applicability_universe === true,
+      fallback_legacy_used: applicabilityScope?.fallback_legacy_used === true || applicabilityScope?.legacy_fallback_used === true,
+      legacy_fallback_used: applicabilityScope?.legacy_fallback_used === true || applicabilityScope?.fallback_legacy_used === true,
+      tenant_filter_enforced: Boolean(finalTenantId),
+      filtered_by_tenant_id: Boolean(finalTenantId),
       health: healthResult.rows[0] || null,
       kpis: kpiResult.rows[0] || null,
       cleanup: {
         after_health: cleanupAfterHealth.rows[0] || null,
         after_kpis: cleanupAfterKpis.rows[0] || null,
       },
-      applicability_scope: applicability,
+      applicability_scope: applicabilityScope,
     });
   } catch (err) {
     await client.query('ROLLBACK');

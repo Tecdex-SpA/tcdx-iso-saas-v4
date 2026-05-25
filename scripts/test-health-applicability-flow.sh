@@ -88,7 +88,7 @@ if grep -qi "standardCode is not defined" "$OUT_DIR/health-standards.json"; then
 fi
 assert_json "$OUT_DIR/health-standards.json" "d.get('ok') is True"
 
-echo "[4/6] Consultar health kpis, controls-risk y aplicabilidad"
+echo "[4/7] Consultar health kpis, controls-risk, refresh y aplicabilidad"
 curl -sk "$BASE_URL/health/kpis" \
   -H "Authorization: Bearer $TOKEN" \
   -o "$OUT_DIR/health-kpis.json"
@@ -99,6 +99,11 @@ curl -sk "$BASE_URL/health/controls-risk" \
   -o "$OUT_DIR/health-controls-risk.json"
 assert_json "$OUT_DIR/health-controls-risk.json" "d.get('ok') is True"
 
+curl -sk -X POST "$BASE_URL/health/refresh" \
+  -H "Authorization: Bearer $TOKEN" \
+  -o "$OUT_DIR/health-refresh.json"
+assert_json "$OUT_DIR/health-refresh.json" "d.get('ok') is True"
+
 curl -sk "$BASE_URL/api/company-profile/applicability/summary" \
   -H "Authorization: Bearer $TOKEN" \
   -o "$OUT_DIR/applicability-summary.json"
@@ -108,15 +113,18 @@ for f in "$OUT_DIR/health-dashboard.json" "$OUT_DIR/health-standards.json" "$OUT
     echo "ERROR: respuesta inválida en $f" >&2
     exit 1
   fi
+  assert_json "$f" "'applicability_universe_applied' in d.get('scope',{}).get('applicability_scope',{})"
+  assert_json "$f" "'active_universe' in d.get('scope',{}).get('applicability_scope',{})"
   assert_json "$f" "d.get('scope',{}).get('applicability_scope',{}).get('tenant_filter_enforced') is True"
-  assert_json "$f" "d.get('scope',{}).get('applicability_scope',{}).get('filtered_by_applicability_universe') is True"
-  assert_json "$f" "d.get('scope',{}).get('applicability_scope',{}).get('applicability_universe_applied') is True"
 done
+assert_json "$OUT_DIR/health-refresh.json" "'applicability_universe_applied' in d"
+assert_json "$OUT_DIR/health-refresh.json" "'fallback_legacy_used' in d"
 
 dashboard_rows="$(count_rows "$OUT_DIR/health-dashboard.json")"
 standards_rows="$(count_rows "$OUT_DIR/health-standards.json")"
 kpis_rows="$(count_rows "$OUT_DIR/health-kpis.json")"
 controls_risk_rows="$(count_rows "$OUT_DIR/health-controls-risk.json")"
+refresh_active_universe="$(json_get "$OUT_DIR/health-refresh.json" active_universe)"
 active_universe="$(json_get "$OUT_DIR/applicability-summary.json" data.active_universe)"
 applicable_controls_count="$(json_get "$OUT_DIR/applicability-summary.json" data.applicable_controls_count)"
 exclusions_count="$(json_get "$OUT_DIR/applicability-summary.json" data.exclusions_count)"
@@ -128,11 +136,13 @@ dashboard_rows=$dashboard_rows
 standards_rows=$standards_rows
 kpis_rows=$kpis_rows
 controls_risk_rows=$controls_risk_rows
+refresh_active_universe=$refresh_active_universe
 active_universe=$active_universe
 applicable_controls_count=$applicable_controls_count
 exclusions_count=$exclusions_count
 EOF
 
-echo "[5/6] OK metadata y errores"
-echo "[6/6] OK"
+echo "[5/7] OK metadata y errores"
+echo "[6/7] Refresh OK"
+echo "[7/7] OK"
 cat "$OUT_DIR/summary.txt"

@@ -2075,36 +2075,40 @@ async function buildAiReportAddendum(reportData, aiOptions = {}) {
   const modelMode = normalizeReportModelMode(aiOptions.model_mode);
 
   try {
+    const existingAi = reportData?.ai?.ai_enrichment;
+    const ai = existingAi && typeof existingAi === 'object'
+      ? existingAi
+      : null;
     const standards = Array.isArray(reportData?.standards)
       ? reportData.standards.map((item) => item.code || item.standard_code || item).filter(Boolean)
       : [];
-    const ai = await buildReportAiEnrichment({
-      tenantId: reportData?.tenant?.id || reportData?.tenant_id || '',
-      standardCode: standards.length === 1 ? standards[0] : null,
-      reportType: reportData?.report_type_code || reportData?.reportTypeCode || 'executive',
-      depth: aiOptions.depth || (modelMode === 'deep' ? 'deep' : 'executive'),
-      includeDeepLlm: aiOptions.include_deep_llm === true,
-      modelMode,
-      useLlm: aiOptions.use_llm === true,
-      useRag: aiOptions.use_rag !== false,
-      useWeb: aiOptions.use_web === true,
-      useDrive: aiOptions.use_drive ?? false,
-      quality: aiOptions.quality || null,
-      requestId: aiOptions.request_id || null,
-    });
-    const structured = ai.structured_result || {};
-    const actions = Array.isArray(ai.recommended_actions) ? ai.recommended_actions : [];
-    const correctiveActions = Array.isArray(ai.corrective_actions) ? ai.corrective_actions : [];
-    const rootCauseAnalysis = Array.isArray(ai.root_cause_analysis) ? ai.root_cause_analysis : [];
-    const evidenceRequests = Array.isArray(ai.evidence_requests) ? ai.evidence_requests : [];
-    const auditQuestions = Array.isArray(ai.audit_questions) ? ai.audit_questions : [];
-    const managementFocus = Array.isArray(ai.management_focus) ? ai.management_focus : [];
-    const source = ai.source || ai.metrics?.source || (ai.llm_used ? 'ai-engine-v2-report-llm' : 'ai-engine-v2-report-fast');
+    const aiResult = ai || await buildReportAiEnrichment({
+        tenantId: reportData?.tenant?.id || reportData?.tenant_id || '',
+        standardCode: standards.length === 1 ? standards[0] : null,
+        reportType: reportData?.report_type_code || reportData?.reportTypeCode || 'executive',
+        depth: aiOptions.depth || (modelMode === 'deep' ? 'deep' : 'executive'),
+        includeDeepLlm: aiOptions.include_deep_llm === true,
+        modelMode,
+        useLlm: aiOptions.use_llm === true,
+        useRag: aiOptions.use_rag !== false,
+        useWeb: aiOptions.use_web === true,
+        useDrive: aiOptions.use_drive ?? false,
+        quality: aiOptions.quality || null,
+        requestId: aiOptions.request_id || null,
+      });
+    const structured = aiResult.structured_result || {};
+    const actions = Array.isArray(aiResult.recommended_actions) ? aiResult.recommended_actions : [];
+    const correctiveActions = Array.isArray(aiResult.corrective_actions) ? aiResult.corrective_actions : [];
+    const rootCauseAnalysis = Array.isArray(aiResult.root_cause_analysis) ? aiResult.root_cause_analysis : [];
+    const evidenceRequests = Array.isArray(aiResult.evidence_requests) ? aiResult.evidence_requests : [];
+    const auditQuestions = Array.isArray(aiResult.audit_questions) ? aiResult.audit_questions : [];
+    const managementFocus = Array.isArray(aiResult.management_focus) ? aiResult.management_focus : [];
+    const source = aiResult.source || aiResult.metrics?.source || (aiResult.llm_used ? 'ai-engine-v2-report-llm' : 'ai-engine-v2-report-fast');
 
     return mergeAiReportAddendumWithSenior({
       source,
-      headline: String(ai.auditor_opinion || structured.auditor_opinion || fallback.headline || 'Resumen ejecutivo IA').trim(),
-      summary: String(ai.executive_narrative || ai.executive_summary || structured.executive_narrative || structured.executive_summary || ai.answer || fallback.summary || '').trim(),
+      headline: String(aiResult.auditor_opinion || structured.auditor_opinion || fallback.headline || 'Resumen ejecutivo IA').trim(),
+      summary: String(aiResult.executive_narrative || aiResult.executive_summary || structured.executive_narrative || structured.executive_summary || aiResult.answer || fallback.summary || '').trim(),
       priorities: normalizeReportList([
         ...managementFocus,
         ...actions.map((item) => item.title || item.description),
@@ -2128,22 +2132,22 @@ async function buildAiReportAddendum(reportData, aiOptions = {}) {
       audit_questions: auditQuestions,
       management_focus: managementFocus,
       ai_metrics: {
-        ...(ai.metrics || {}),
-        model_mode_used: ai.model_mode_used || modelMode,
-        llm_used: ai.llm_used === true,
-        llm_provider: ai.llm_provider || ai.engine?.llm_provider || null,
-        model_name: ai.model_name || ai.engine?.model || null,
+        ...(aiResult.metrics || {}),
+        model_mode_used: aiResult.model_mode_used || modelMode,
+        llm_used: aiResult.llm_used === true,
+        llm_provider: aiResult.llm_provider || aiResult.engine?.llm_provider || null,
+        model_name: aiResult.model_name || aiResult.engine?.model || null,
         source,
-        duration_ms: ai.duration_ms ?? ai.metrics?.duration_ms ?? null,
-        ai_enrichment_failed: ai.ai_enrichment_failed === true,
-        fallback_used: ai.fallback_used === true,
+        duration_ms: aiResult.duration_ms ?? aiResult.metrics?.duration_ms ?? null,
+        ai_enrichment_failed: aiResult.ai_enrichment_failed === true,
+        fallback_used: aiResult.fallback_used === true,
       },
-      model_mode_used: ai.model_mode_used || modelMode,
-      llm_used: ai.llm_used === true,
-      llm_provider: ai.llm_provider || ai.engine?.llm_provider || null,
-      model_name: ai.model_name || ai.engine?.model || null,
-      ai_enrichment_failed: ai.ai_enrichment_failed === true,
-      fallback_used: ai.fallback_used === true,
+      model_mode_used: aiResult.model_mode_used || modelMode,
+      llm_used: aiResult.llm_used === true,
+      llm_provider: aiResult.llm_provider || aiResult.engine?.llm_provider || null,
+      model_name: aiResult.model_name || aiResult.engine?.model || null,
+      ai_enrichment_failed: aiResult.ai_enrichment_failed === true,
+      fallback_used: aiResult.fallback_used === true,
     }, reportData);
   } catch (error) {
     console.error('REPORT AI ADDENDUM ERROR:', error.message);
@@ -2764,17 +2768,19 @@ router.post('/generate/start', auth, async (req, res) => {
       return res.status(401).json({ ok: false, code: 'NO_TOKEN', error: 'sin Token', request_id: requestId });
     }
     const reportAiOptions = resolveReportAiOptions(req.body || {});
-
-    const job = await asyncJobs.createJob({
-      tenant_id: targetTenantId,
-      user_id: userId,
-      job_type: 'report_generation',
-      source_module: 'exportes',
+    const normalizedPayload = {
+      ...(req.body || {}),
+      period: period || null,
+      report_type_code,
       model_mode: reportAiOptions.model_mode,
-      payload: {
-        ...(req.body || {}),
-        period: period || null,
-        report_type_code,
+      use_llm: reportAiOptions.use_llm,
+      use_rag: reportAiOptions.use_rag,
+      use_web: reportAiOptions.use_web,
+      use_drive: reportAiOptions.use_drive,
+      depth: reportAiOptions.depth,
+      quality: reportAiOptions.quality,
+      metadata: {
+        ...(metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : safeObject(metadata)),
         model_mode: reportAiOptions.model_mode,
         use_llm: reportAiOptions.use_llm,
         use_rag: reportAiOptions.use_rag,
@@ -2783,6 +2789,15 @@ router.post('/generate/start', auth, async (req, res) => {
         depth: reportAiOptions.depth,
         quality: reportAiOptions.quality,
       },
+    };
+
+    const job = await asyncJobs.createJob({
+      tenant_id: targetTenantId,
+      user_id: userId,
+      job_type: 'report_generation',
+      source_module: 'exportes',
+      model_mode: reportAiOptions.model_mode,
+      payload: normalizedPayload,
       request_id: requestId,
       expires_at: new Date(Date.now() + REPORT_JOB_TTL_MS).toISOString(),
     });
@@ -2794,7 +2809,7 @@ router.post('/generate/start', auth, async (req, res) => {
       user_id: userId,
       locale,
       authorization,
-      payload: req.body || {},
+      payload: normalizedPayload,
       status: 'queued',
       created_at: job.created_at,
       updated_at: job.updated_at,
