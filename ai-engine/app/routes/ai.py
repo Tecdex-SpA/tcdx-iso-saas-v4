@@ -587,6 +587,32 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
         })
         return {"used": False, "data": {}, "error": str(exc)[:500], "metadata": metadata}
 
+def _deterministic_contract(result: Dict[str, Any], *, endpoint: str, request_id: str = "", reason: str = "deterministic_endpoint") -> Dict[str, Any]:
+    if not isinstance(result, dict):
+        result = {"answer": str(result or "")}
+    trace = result.get("trace") if isinstance(result.get("trace"), dict) else {}
+    trace.update({
+        "ai_engine_used": True,
+        "llm_used": False,
+        "deterministic_mode": True,
+        "deterministic_fallback_used": True,
+        "fallback_used": False,
+        "ai_enrichment_failed": False,
+        "selected_model": "",
+        "model_mode": "deterministic",
+        "llm_provider": "none",
+        "tenant_filter_enforced": True,
+        "applicability_universe_used": bool(result.get("applicability_universe_used")),
+        "filtered_by_applicability_universe": bool(result.get("filtered_by_applicability_universe")),
+        "endpoint": endpoint,
+        "request_id": request_id,
+        "reason": reason,
+    })
+    result["trace"] = trace
+    result["engine"] = {**trace}
+    result["ok"] = result.get("ok", True)
+    return result
+
 
 @router.post("/suggest/health-summary")
 def suggest_health_summary(
@@ -600,7 +626,11 @@ def suggest_health_summary(
         payload_dict = _payload_to_dict(payload)
         locale = _request_locale(payload_dict, x_tcdx_locale)
         payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
-        result = localize_ai_response(generate_health_summary(payload_dict), locale)
+        result = localize_ai_response(_deterministic_contract(
+            generate_health_summary(payload_dict),
+            endpoint="/api/ai/suggest/health-summary",
+            request_id=str(payload_dict.get("request_id") or ""),
+        ), locale)
         return _with_runtime_metrics(result, started_at=started_at, endpoint="/api/ai/suggest/health-summary")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"health-summary error: {e}")
@@ -618,11 +648,11 @@ def suggest_finding_analysis(
         locale = _request_locale(payload_dict, x_tcdx_locale)
         payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
         result = generate_finding_analysis(payload_dict)
-        return localize_ai_response(enrich_ai_response_with_scenario(
+        return localize_ai_response(_deterministic_contract(enrich_ai_response_with_scenario(
             payload_dict,
             result,
             mode="finding_analysis",
-        ), locale)
+        ), endpoint="/api/ai/suggest/finding-analysis", request_id=str(payload_dict.get("request_id") or "")), locale)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"finding-analysis error: {e}")
 
@@ -638,7 +668,11 @@ def suggest_nonconformity_draft(
         payload_dict = _payload_to_dict(payload)
         locale = _request_locale(payload_dict, x_tcdx_locale)
         payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
-        return localize_ai_response(generate_nonconformity_draft(payload_dict), locale)
+        return localize_ai_response(_deterministic_contract(
+            generate_nonconformity_draft(payload_dict),
+            endpoint="/api/ai/suggest/nonconformity-draft",
+            request_id=str(payload_dict.get("request_id") or ""),
+        ), locale)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"nonconformity-draft error: {e}")
 
@@ -655,11 +689,11 @@ def suggest_action_plan(
         locale = _request_locale(payload_dict, x_tcdx_locale)
         payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
         result = generate_action_plan(payload_dict)
-        return localize_ai_response(enrich_ai_response_with_scenario(
+        return localize_ai_response(_deterministic_contract(enrich_ai_response_with_scenario(
             payload_dict,
             result,
             mode="action_plan",
-        ), locale)
+        ), endpoint="/api/ai/suggest/action-plan", request_id=str(payload_dict.get("request_id") or "")), locale)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"action-plan error: {e}")
 
@@ -676,7 +710,11 @@ def suggest_executive_brief(
         payload_dict = _payload_to_dict(payload)
         locale = _request_locale(payload_dict, x_tcdx_locale)
         payload_dict.update({'locale': locale, 'language': locale, 'response_language': locale})
-        result = localize_ai_response(generate_executive_brief(payload_dict), locale)
+        result = localize_ai_response(_deterministic_contract(
+            generate_executive_brief(payload_dict),
+            endpoint="/api/ai/suggest/executive-brief",
+            request_id=str(payload_dict.get("request_id") or ""),
+        ), locale)
         return _with_runtime_metrics(result, started_at=started_at, endpoint="/api/ai/suggest/executive-brief")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"executive-brief error: {e}")
@@ -869,7 +907,7 @@ async def company_profile_analyze(
         "error_message": llm.get("error") or None,
     }
     result = {
-        "ok": True,
+        "ok": not fallback_used,
         "source": "ai-engine-company-profile-analyze",
         "normalized_company_profile": structured.get("normalized_company_profile") or base["normalized_company_profile"],
         "tenant_applied_context_summary": structured.get("tenant_applied_context_summary") or base["tenant_applied_context_summary"],

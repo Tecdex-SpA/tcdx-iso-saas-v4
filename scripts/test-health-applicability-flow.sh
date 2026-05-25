@@ -88,7 +88,12 @@ if grep -qi "standardCode is not defined" "$OUT_DIR/health-standards.json"; then
 fi
 assert_json "$OUT_DIR/health-standards.json" "d.get('ok') is True"
 
-echo "[4/5] Consultar controls-risk y aplicabilidad"
+echo "[4/6] Consultar health kpis, controls-risk y aplicabilidad"
+curl -sk "$BASE_URL/health/kpis" \
+  -H "Authorization: Bearer $TOKEN" \
+  -o "$OUT_DIR/health-kpis.json"
+assert_json "$OUT_DIR/health-kpis.json" "d.get('ok') is True"
+
 curl -sk "$BASE_URL/health/controls-risk" \
   -H "Authorization: Bearer $TOKEN" \
   -o "$OUT_DIR/health-controls-risk.json"
@@ -98,9 +103,19 @@ curl -sk "$BASE_URL/api/company-profile/applicability/summary" \
   -H "Authorization: Bearer $TOKEN" \
   -o "$OUT_DIR/applicability-summary.json"
 assert_json "$OUT_DIR/applicability-summary.json" "d.get('ok') is True"
+for f in "$OUT_DIR/health-dashboard.json" "$OUT_DIR/health-standards.json" "$OUT_DIR/health-kpis.json" "$OUT_DIR/health-controls-risk.json"; do
+  if grep -qi "RBAC_DENIED\|ReferenceError\|standardCode is not defined" "$f"; then
+    echo "ERROR: respuesta inválida en $f" >&2
+    exit 1
+  fi
+  assert_json "$f" "d.get('scope',{}).get('applicability_scope',{}).get('tenant_filter_enforced') is True"
+  assert_json "$f" "d.get('scope',{}).get('applicability_scope',{}).get('filtered_by_applicability_universe') is True"
+  assert_json "$f" "d.get('scope',{}).get('applicability_scope',{}).get('applicability_universe_applied') is True"
+done
 
 dashboard_rows="$(count_rows "$OUT_DIR/health-dashboard.json")"
 standards_rows="$(count_rows "$OUT_DIR/health-standards.json")"
+kpis_rows="$(count_rows "$OUT_DIR/health-kpis.json")"
 controls_risk_rows="$(count_rows "$OUT_DIR/health-controls-risk.json")"
 active_universe="$(json_get "$OUT_DIR/applicability-summary.json" data.active_universe)"
 applicable_controls_count="$(json_get "$OUT_DIR/applicability-summary.json" data.applicable_controls_count)"
@@ -111,11 +126,13 @@ OK health applicability flow
 base_url=$BASE_URL
 dashboard_rows=$dashboard_rows
 standards_rows=$standards_rows
+kpis_rows=$kpis_rows
 controls_risk_rows=$controls_risk_rows
 active_universe=$active_universe
 applicable_controls_count=$applicable_controls_count
 exclusions_count=$exclusions_count
 EOF
 
-echo "[5/5] OK"
+echo "[5/6] OK metadata y errores"
+echo "[6/6] OK"
 cat "$OUT_DIR/summary.txt"

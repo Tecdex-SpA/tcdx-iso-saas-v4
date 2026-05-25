@@ -8,9 +8,13 @@ const {
   getJwtVerifyOptions,
 } = require('../config/security');
 const {
+  getTenantApplicabilityScope,
   filterApplicableControls,
   filterApplicableKpis,
 } = require('../services/applicabilityScope.service');
+const {
+  buildTenantApplicabilityUniverse,
+} = require('../services/companyProfileApplicabilityEngine.service');
 
 // =====================================================
 // Middleware local de autenticación para rutas Health
@@ -200,6 +204,44 @@ async function ensureActiveTenantStandard(client, tenantId, standardCode) {
   return result.rowCount > 0;
 }
 
+const relationExistsCache = new Map();
+
+async function relationExists(relationName) {
+  if (relationExistsCache.has(relationName)) return relationExistsCache.get(relationName);
+  const result = await pool.query(
+    `
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = $1
+    UNION ALL
+    SELECT 1
+    FROM information_schema.views
+    WHERE table_schema = 'public'
+      AND table_name = $1
+    LIMIT 1
+    `,
+    [relationName]
+  );
+  const exists = result.rowCount > 0;
+  relationExistsCache.set(relationName, exists);
+  return exists;
+}
+
+async function healthSource(preferred, fallback) {
+  return (await relationExists(preferred)) ? preferred : fallback;
+}
+
+async function buildHealthScope(scope, sourceName) {
+  const applicability = await getTenantApplicabilityScope(scope.tenantId);
+  return {
+    is_superadmin: scope.isSuperAdmin,
+    tenant_id: scope.tenantId,
+    source: sourceName,
+    applicability_scope: applicability,
+  };
+}
+
 // =====================================================
 // Aplicar autenticación a todo /health
 // =====================================================
@@ -213,9 +255,10 @@ router.get('/dashboard', async (req, res) => {
     const scope = requireTenantForNonSuper(req, res);
     if (!scope) return;
 
+    const sourceName = await healthSource('v_health_dashboard_summary_applicable', 'v_health_dashboard_summary');
     let query = `
       SELECT *
-      FROM v_health_dashboard_summary v
+      FROM ${sourceName} v
     `;
 
     const params = [];
@@ -231,22 +274,15 @@ router.get('/dashboard', async (req, res) => {
 
     const result = await pool.query(query, params);
 
-    const rows = scope.isSuperAdmin && req.query.include_exclusions === 'true'
+    const rows = sourceName.endsWith('_applicable') || (scope.isSuperAdmin && req.query.include_exclusions === 'true')
       ? result.rows
       : await filterApplicableKpis(result.rows, scope.tenantId);
+    const responseScope = await buildHealthScope(scope, sourceName);
 
     return res.json({
       ok: true,
       data: rows,
-      scope: {
-        is_superadmin: scope.isSuperAdmin,
-        tenant_id: scope.tenantId,
-        applicability_scope: {
-          tenant_filter_enforced: true,
-          filtered_by_tenant_id: true,
-          active_universe: true,
-        },
-      },
+      scope: responseScope,
     });
   } catch (error) {
     console.error('Error en /health/dashboard:', error);
@@ -267,9 +303,10 @@ router.get('/standards', async (req, res) => {
     if (!scope) return;
     const standardCode = req.query.standard_code || req.query.standardCode || '';
 
+    const sourceName = await healthSource('v_health_dashboard_by_standard_applicable', 'v_health_dashboard_by_standard');
     let query = `
       SELECT *
-      FROM v_health_dashboard_by_standard v
+      FROM ${sourceName} v
     `;
 
     const params = [];
@@ -295,22 +332,15 @@ router.get('/standards', async (req, res) => {
 
     const result = await pool.query(query, params);
 
-    const rows = scope.isSuperAdmin && req.query.include_exclusions === 'true'
+    const rows = sourceName.endsWith('_applicable') || (scope.isSuperAdmin && req.query.include_exclusions === 'true')
       ? result.rows
       : await filterApplicableControls(result.rows, scope.tenantId, { standardCode });
+    const responseScope = await buildHealthScope(scope, sourceName);
 
     return res.json({
       ok: true,
       data: rows,
-      scope: {
-        is_superadmin: scope.isSuperAdmin,
-        tenant_id: scope.tenantId,
-        applicability_scope: {
-          tenant_filter_enforced: true,
-          filtered_by_tenant_id: true,
-          active_universe: true,
-        },
-      },
+      scope: responseScope,
     });
   } catch (error) {
     console.error('Error en /health/standards:', error);
@@ -330,9 +360,10 @@ router.get('/kpis', async (req, res) => {
     const scope = requireTenantForNonSuper(req, res);
     if (!scope) return;
 
+    const sourceName = await healthSource('v_latest_health_kpi_snapshots_applicable', 'v_latest_health_kpi_snapshots');
     let query = `
       SELECT *
-      FROM v_latest_health_kpi_snapshots v
+      FROM ${sourceName} v
     `;
 
     const params = [];
@@ -355,14 +386,15 @@ router.get('/kpis', async (req, res) => {
     `;
 
     const result = await pool.query(query, params);
+    const rows = sourceName.endsWith('_applicable') || (scope.isSuperAdmin && req.query.include_exclusions === 'true')
+      ? result.rows
+      : await filterApplicableKpis(result.rows, scope.tenantId);
+    const responseScope = await buildHealthScope(scope, sourceName);
 
     return res.json({
       ok: true,
-      data: result.rows,
-      scope: {
-        is_superadmin: scope.isSuperAdmin,
-        tenant_id: scope.tenantId,
-      },
+      data: rows,
+      scope: responseScope,
     });
   } catch (error) {
     console.error('Error en /health/kpis:', error);
@@ -384,6 +416,7 @@ router.get('/controls-risk', async (req, res) => {
 
     const standardCode = req.query.standard_code;
 
+    const sourceName = await healthSource('v_control_health_risks_applicable', 'v_control_health_risks');
     let query = `
       SELECT
         v.tenant_id,
@@ -413,7 +446,7 @@ router.get('/controls-risk', async (req, res) => {
         v.overdue_actions_count,
         v.high_risks_count,
         v.calculated_at
-      FROM v_control_health_risks v
+      FROM ${sourceName} v
     `;
 
     const params = [];
@@ -449,14 +482,15 @@ router.get('/controls-risk', async (req, res) => {
     `;
 
     const result = await pool.query(query, params);
+    const rows = sourceName.endsWith('_applicable') || (scope.isSuperAdmin && req.query.include_exclusions === 'true')
+      ? result.rows
+      : await filterApplicableControls(result.rows, scope.tenantId, { standardCode });
+    const responseScope = await buildHealthScope(scope, sourceName);
 
     return res.json({
       ok: true,
-      data: result.rows,
-      scope: {
-        is_superadmin: scope.isSuperAdmin,
-        tenant_id: scope.tenantId,
-      },
+      data: rows,
+      scope: responseScope,
     });
   } catch (error) {
     console.error('Error en /health/controls-risk:', error);
@@ -1450,6 +1484,25 @@ router.post('/remediation-plan/create-action', async (req, res) => {
 
     await client.query('COMMIT');
 
+    let applicability = null;
+    if (finalTenantId) {
+      try {
+        const rebuilt = await buildTenantApplicabilityUniverse({
+          tenantId: finalTenantId,
+          userId: getUserId(req.user),
+          forceRebuild: false,
+        });
+        applicability = rebuilt?.summary || null;
+      } catch (applicabilityError) {
+        applicability = {
+          active_universe: false,
+          applicability_universe_missing: true,
+          warning: 'applicability_refresh_failed',
+          error_type: applicabilityError?.code || applicabilityError?.name || 'APPLICABILITY_REFRESH_ERROR',
+        };
+      }
+    }
+
     return res.json({
       ok: true,
       already_exists: false,
@@ -1517,6 +1570,7 @@ router.post('/refresh', async (req, res) => {
         after_health: cleanupAfterHealth.rows[0] || null,
         after_kpis: cleanupAfterKpis.rows[0] || null,
       },
+      applicability_scope: applicability,
     });
   } catch (err) {
     await client.query('ROLLBACK');
