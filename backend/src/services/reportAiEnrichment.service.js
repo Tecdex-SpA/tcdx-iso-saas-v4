@@ -235,7 +235,9 @@ async function buildReportAiEnrichment({
       reason: aiAccess.reason,
     });
     return {
-      ok: true,
+      ok: false,
+      status: 'disabled_by_plan',
+      code: 'AI_DISABLED_BY_PLAN',
       answer: '',
       structured_result: {},
       executive_summary: '',
@@ -264,6 +266,8 @@ async function buildReportAiEnrichment({
       source: 'deterministic-ai-disabled-by-plan',
       duration_ms: metrics.duration_ms,
       trace,
+      synthetic_result: true,
+      deterministic_mode: true,
       ai_enrichment_failed: false,
       fallback_used: false,
       ai_disabled_by_plan: true,

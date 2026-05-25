@@ -272,6 +272,17 @@ class AiEngineClient {
   }
 
   async generateAuditDocument(payload) {
+    const tenantId =
+      payload?.tenant_id ||
+      payload?.context?.tenant?.tenant_id ||
+      payload?.context?.tenant_id ||
+      payload?.tenant?.id ||
+      '';
+    const aiAccess = tenantId ? await isTenantAiFeatureEnabled(tenantId, 'document_generation') : { enabled: false, reason: 'tenant_id_missing' };
+    if (!aiAccess.enabled) {
+      return this.buildAuditDocumentDisabledByPlan(payload, aiAccess.reason);
+    }
+
     if (!this.baseUrl || !this.token) {
       return this.buildAuditDocumentFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
     }
@@ -289,6 +300,63 @@ class AiEngineClient {
 
       return this.buildAuditDocumentFallback(payload, error);
     }
+  }
+
+  buildAuditDocumentDisabledByPlan(payload, reason = 'ai_disabled_by_plan') {
+    const template = payload?.document_template || {};
+    const title = template.document_name || 'Documento de auditoría ISO';
+    const tenantId =
+      payload?.tenant_id ||
+      payload?.context?.tenant?.tenant_id ||
+      payload?.context?.tenant_id ||
+      payload?.tenant?.id ||
+      '';
+    const requestId = payload?.request_metadata?.request_id || payload?.request_id || null;
+    const trace = buildAiDisabledTrace({
+      tenantId,
+      feature: 'document_generation',
+      requestId,
+      modelMode: 'deterministic',
+      reason,
+    });
+
+    return {
+      ok: false,
+      code: 'AI_DISABLED_BY_PLAN',
+      status: 'disabled_by_plan',
+      disabled_by_plan: true,
+      ai_disabled_by_plan: true,
+      synthetic_result: true,
+      deterministic_mode: true,
+      feature: 'document_generation',
+      trace,
+      engine: trace,
+      metrics: trace,
+      document: {
+        title,
+        version: template.version || '1.0',
+        sections: [
+          {
+            title: 'Generación documental IA no contratada',
+            content: 'IA no habilitada para este plan/empresa. La generación documental inteligente no fue ejecutada.',
+          },
+        ],
+        content_markdown: `# ${title}\n\nIA no habilitada para este plan/empresa. La generación documental inteligente no fue ejecutada.\n`,
+        content_json: {
+          ai_disabled_by_plan: true,
+          reason,
+          feature: 'document_generation',
+        },
+        pending_items: [],
+        evidence_suggestions: [],
+        source_trace: {
+          ai_engine: {
+            available: false,
+            reason,
+          },
+        },
+      },
+    };
   }
 
   buildAuditDocumentFallback(payload, error = null) {
@@ -340,9 +408,15 @@ class AiEngineClient {
       reason,
     });
     return {
-      ok: true,
+      ok: false,
+      status: 'disabled_by_plan',
       code: 'AI_DISABLED_BY_PLAN',
       request_id: requestId,
+      disabled_by_plan: true,
+      ai_disabled_by_plan: true,
+      synthetic_result: true,
+      deterministic_mode: true,
+      feature,
       answer: 'IA no habilitada para este plan/empresa. Se generó una salida determinística básica sin consumir ai-engine.',
       structured_result: {
         executive_summary: 'IA no habilitada para este plan/empresa.',
@@ -356,7 +430,6 @@ class AiEngineClient {
       trace,
       engine: trace,
       metrics: trace,
-      ai_disabled_by_plan: true,
       fallback_used: false,
       ai_enrichment_failed: false,
     };

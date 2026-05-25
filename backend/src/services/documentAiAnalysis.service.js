@@ -1,5 +1,6 @@
 const pool = require('../config/db')
 const { extractDocumentContent } = require('./documentContentExtraction.service')
+const { isTenantAiFeatureEnabled } = require('./tenantAiSettings.service')
 
 function toText(value) {
   return String(value || '').trim()
@@ -362,6 +363,28 @@ async function tryAiEngineEndpoint({ baseUrl, path, token, payload }) {
 }
 
 async function callAiEngine(payload, document, extractedText = '', extraction = {}) {
+  const tenantId = payload?.tenant_id || ''
+  if (tenantId) {
+    const entitlement = await isTenantAiFeatureEnabled(tenantId, 'document_generation')
+    if (!entitlement.enabled) {
+      return normalizeAiResponse({
+        ...localHeuristicAnalysis(document, extractedText, extraction),
+        ai_disabled_by_plan: true,
+        ai_engine_used: false,
+        llm_used: false,
+        used_llm: false,
+        deterministic_mode: true,
+        fallback_used: false,
+        analysis_source: 'deterministic_ai_disabled_by_plan',
+        trace: {
+          ai_disabled_by_plan: true,
+          feature: 'document_generation',
+          reason: entitlement.reason
+        }
+      }, document, extractedText, extraction)
+    }
+  }
+
   const aiEngineUrl = toText(process.env.AI_ENGINE_URL || process.env.AI_ENGINE_BASE_URL)
   const token = process.env.AI_INTERNAL_TOKEN || process.env.OWN_AI_SHARED_SECRET || process.env.AI_TOKEN || ''
 
