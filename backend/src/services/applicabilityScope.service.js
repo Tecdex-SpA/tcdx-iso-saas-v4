@@ -2,8 +2,10 @@
 
 const {
   assertTenantApplicabilityReady,
+  getTenantApplicabilitySummary,
   getTenantApplicableControls,
   getTenantApplicableKpis,
+  getTenantApplicableEvidenceRequirements,
 } = require('./companyProfileApplicabilityEngine.service');
 
 function key(value) {
@@ -97,6 +99,50 @@ function annotate(row, summary) {
   };
 }
 
+function buildScopeMeta(summary = {}, extra = {}) {
+  const activeUniverse = summary.active_universe !== false && Boolean(summary.tenant_filter_enforced);
+  return {
+    tenant_filter_enforced: true,
+    filtered_by_tenant_id: true,
+    applicability_universe_applied: activeUniverse,
+    filtered_by_applicability_universe: activeUniverse,
+    active_universe: activeUniverse,
+    applicability_universe_missing: !activeUniverse,
+    calculation_mode: activeUniverse ? 'applicability_universe' : 'legacy_raw_scope',
+    effective_controls_count: Number(summary.applicable_controls_count || 0),
+    excluded_controls_count: Number(summary.exclusions_count || 0),
+    effective_kpis_count: Number(summary.applicable_kpis_count || 0),
+    excluded_kpis_count: Number(summary.excluded_kpis_count || 0),
+    effective_evidence_requirements_count: Number(summary.applicable_evidence_requirements_count || 0),
+    ...extra,
+  };
+}
+
+async function getTenantApplicabilityScope(tenantId) {
+  if (!tenantId) {
+    return buildScopeMeta({ active_universe: false, tenant_filter_enforced: false }, {
+      tenant_filter_enforced: false,
+      filtered_by_tenant_id: false,
+      warning: 'tenant_id_missing',
+    });
+  }
+  try {
+    const summary = await getTenantApplicabilitySummary({ tenantId });
+    return buildScopeMeta(summary, { tenant_id: tenantId });
+  } catch (error) {
+    return buildScopeMeta({ active_universe: false }, {
+      tenant_id: tenantId,
+      warning: 'applicability_scope_unavailable',
+      error_type: error?.code || error?.name || 'APPLICABILITY_SCOPE_ERROR',
+    });
+  }
+}
+
+async function requireActiveApplicabilityUniverse(tenantId) {
+  const summary = await assertTenantApplicabilityReady({ tenantId });
+  return buildScopeMeta(summary, { tenant_id: tenantId });
+}
+
 async function filterApplicableControls(rows = [], tenantId, options = {}) {
   if (!tenantId || !Array.isArray(rows) || rows.length === 0) return rows;
   const summary = await assertTenantApplicabilityReady({ tenantId });
@@ -152,6 +198,22 @@ async function filterApplicableKpis(rows = [], tenantId) {
     .map((row) => annotate(row, summary));
 }
 
+async function filterApplicableEvidenceRequirements(rows = [], tenantId) {
+  if (!tenantId || !Array.isArray(rows) || rows.length === 0) return rows;
+  const summary = await assertTenantApplicabilityReady({ tenantId });
+  const applicable = await getTenantApplicableEvidenceRequirements({ tenantId, filters: { limit: 1000 } });
+  if (!applicable.length) return [];
+  const names = new Set(applicable.map((row) => key(row.evidence_name).toLowerCase()).filter(Boolean));
+  const types = new Set(applicable.map((row) => key(row.evidence_type).toLowerCase()).filter(Boolean));
+  return rows
+    .filter((row) => {
+      const name = key(row.evidence_name || row.title || row.name || row.description).toLowerCase();
+      const type = key(row.evidence_type || row.type || row.category).toLowerCase();
+      return (name && names.has(name)) || (type && types.has(type)) || (!name && !type);
+    })
+    .map((row) => annotate(row, summary));
+}
+
 function buildApplicabilityJoinSql(alias, objectType) {
   const table = objectType === 'kpi' ? 'tenant_applicable_kpis' : 'tenant_applicable_controls';
   const tenantColumn = `${alias}.tenant_id`;
@@ -181,8 +243,47 @@ function buildApplicabilityJoinSql(alias, objectType) {
   `;
 }
 
+function buildApplicabilityJoinForControls(alias) {
+  return buildApplicabilityJoinSql(alias, 'control');
+}
+
+function buildApplicabilityJoinForKpis(alias) {
+  return buildApplicabilityJoinSql(alias, 'kpi');
+}
+
+function buildApplicabilityJoinForEvidence(alias) {
+  return `
+    INNER JOIN tenant_applicable_evidence_requirements tas
+      ON tas.tenant_id = ${alias}.tenant_id
+     AND tas.active = true
+     AND tas.visible_to_tenant = true
+     AND (
+       tas.related_control_id = ${alias}.tenant_control_id
+       OR lower(tas.evidence_name) = lower(${alias}.title)
+       OR lower(tas.evidence_name) = lower(${alias}.name)
+     )
+  `;
+}
+
+function assertApplicabilityApplied(responseMeta = {}) {
+  return Boolean(
+    responseMeta.tenant_filter_enforced === true &&
+      responseMeta.filtered_by_tenant_id === true &&
+      responseMeta.applicability_universe_applied === true &&
+      responseMeta.filtered_by_applicability_universe === true
+  );
+}
+
 module.exports = {
+  getTenantApplicabilityScope,
+  requireActiveApplicabilityUniverse,
   filterApplicableControls,
   filterApplicableKpis,
+  filterApplicableEvidenceRequirements,
   buildApplicabilityJoinSql,
+  buildApplicabilityJoinForControls,
+  buildApplicabilityJoinForKpis,
+  buildApplicabilityJoinForEvidence,
+  assertApplicabilityApplied,
+  buildScopeMeta,
 };
