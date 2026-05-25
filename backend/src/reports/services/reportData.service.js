@@ -5,6 +5,9 @@ const { buildCompanyProfileImpact } = require('../../services/companyProfileImpa
 const {
   getTenantApplicabilitySummary,
 } = require('../../services/companyProfileApplicabilityEngine.service');
+const {
+  isTenantAiFeatureEnabled,
+} = require('../../services/tenantAiSettings.service');
 
 const AI_ENGINE_URL =
   process.env.AI_ENGINE_URL || 'http://ai.tcdx.int:8001';
@@ -19,6 +22,17 @@ function getAiInternalToken() {
   return token;
 }
 
+function resolveAiFeatureForPath(path = '') {
+  const normalized = String(path || '').toLowerCase();
+  if (normalized.includes('/auditor/')) return 'auditor';
+  if (normalized.includes('/finding-analysis')) return 'report_enrichment';
+  if (normalized.includes('/nonconformity')) return 'report_enrichment';
+  if (normalized.includes('/action-plan')) return 'report_enrichment';
+  if (normalized.includes('/executive-brief')) return 'report_enrichment';
+  if (normalized.includes('/health-summary')) return 'report_enrichment';
+  return 'report_enrichment';
+}
+
 async function safeQuery(sql, params = [], fallback = []) {
   try {
     const result = await pool.query(sql, params);
@@ -30,6 +44,21 @@ async function safeQuery(sql, params = [], fallback = []) {
 }
 
 async function safeAiCall(path, payload = {}, fallback = null, timeoutMs = 18000) {
+  const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || payload?.context?.tenant_id || '';
+  if (tenantId) {
+    const feature = resolveAiFeatureForPath(path);
+    const entitlement = await isTenantAiFeatureEnabled(tenantId, feature);
+    if (!entitlement.enabled) {
+      console.info(`REPORT AI CALL SKIPPED BY PLAN [${path}]:`, {
+        tenant_id: tenantId,
+        feature,
+        reason: entitlement.reason,
+        request_id: payload?.request_id || null,
+      });
+      return fallback;
+    }
+  }
+
   const controller = new AbortController();
   const requestedTimeoutMs = Number.parseInt(String(timeoutMs || 0), 10) || 18000;
   const timeout = setTimeout(() => controller.abort(), requestedTimeoutMs);
