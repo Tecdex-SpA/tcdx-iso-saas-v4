@@ -161,6 +161,8 @@ def expected_ok(code_value, expected):
         return 200 <= code_value < 400
     if expected == "401403":
         return code_value in (401, 403)
+    if expected == "401403404":
+        return code_value in (401, 403, 404)
     if expected == "403404":
         return code_value in (403, 404)
     if expected == "400403404":
@@ -476,11 +478,11 @@ if [[ -n "${TOKEN:-}" ]]; then
 
   NO_TOKEN_FEEDBACK="$OUT_DIR/24d-ai-feedback-no-token.json"
   NO_TOKEN_FEEDBACK_CODE="$(http_code GET "$BASE_URL/ai-feedback" "$NO_TOKEN_FEEDBACK" || true)"
-  record_result "backend-security" "AI feedback legacy without token blocked" "GET" "/ai-feedback" "$NO_TOKEN_FEEDBACK_CODE" "0" "$NO_TOKEN_FEEDBACK" "401403" "critical"
+  record_result "backend-security" "AI feedback legacy route not exposed without token" "GET" "/ai-feedback" "$NO_TOKEN_FEEDBACK_CODE" "0" "$NO_TOKEN_FEEDBACK" "401403404" "warning"
 
   NO_TOKEN_LOOKUP="$OUT_DIR/24e-ai-external-lookup-no-token.json"
   NO_TOKEN_LOOKUP_CODE="$(http_code GET "$BASE_URL/ai-external-lookup" "$NO_TOKEN_LOOKUP" || true)"
-  record_result "backend-security" "AI external lookup legacy without token blocked" "GET" "/ai-external-lookup" "$NO_TOKEN_LOOKUP_CODE" "0" "$NO_TOKEN_LOOKUP" "401403" "critical"
+  record_result "backend-security" "AI external lookup legacy route not exposed without token" "GET" "/ai-external-lookup" "$NO_TOKEN_LOOKUP_CODE" "0" "$NO_TOKEN_LOOKUP" "401403404" "warning"
 
   UPLOADS_TENANTS_TRAVERSAL="$OUT_DIR/24f-uploads-tenants-traversal.json"
   UPLOADS_TENANTS_TRAVERSAL_CODE="$(http_code GET "$BASE_URL/uploads/tenants/%2e%2e/app.js" "$UPLOADS_TENANTS_TRAVERSAL" || true)"

@@ -20,15 +20,30 @@ function normalizeRelativePath(value) {
   return String(value || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
 }
 
+function buildInvalidMountedSharePathError() {
+  const err = new Error('folder_path debe ser relativo al root documental permitido');
+  err.statusCode = 400;
+  err.code = 'INVALID_MOUNTED_SHARE_PATH';
+  return err;
+}
+
+function isAbsoluteLikePath(value) {
+  const raw = String(value || '').trim();
+  return raw.startsWith('/') || raw.startsWith('\\') || /^[a-zA-Z]:[\\/]/.test(raw);
+}
+
 async function validateMountedSharePath(folderPath) {
   const root = getLocalDocumentRoot();
-  const relative = normalizeRelativePath(folderPath);
+  const rawPath = String(folderPath || '').trim();
+
+  if (!rawPath || rawPath.includes('\0') || isAbsoluteLikePath(rawPath)) {
+    throw buildInvalidMountedSharePathError();
+  }
+
+  const relative = normalizeRelativePath(rawPath);
 
   if (!relative || relative.includes('\0') || path.isAbsolute(relative)) {
-    const err = new Error('folder_path inválido');
-    err.statusCode = 400;
-    err.code = 'INVALID_MOUNTED_SHARE_PATH';
-    throw err;
+    throw buildInvalidMountedSharePathError();
   }
 
   const normalized = path.posix.normalize(relative);
