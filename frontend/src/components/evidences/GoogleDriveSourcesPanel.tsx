@@ -17,8 +17,12 @@ type Source = {
   id: string;
   provider: string;
   source_name: string;
+  status?: string | null;
   folder_id?: string | null;
   folder_path?: string | null;
+  folder_display_name?: string | null;
+  associated_standard_code?: string | null;
+  include_subfolders?: boolean;
   last_sync_at?: string | null;
   sync_enabled?: boolean;
   integration_status?: string | null;
@@ -158,6 +162,14 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
   const [documentSearch, setDocumentSearch] = useState('');
   const [documentSourceFilter, setDocumentSourceFilter] = useState('');
   const [documentTypeFilter, setDocumentTypeFilter] = useState('');
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState('google_drive');
+  const [mountedSharePath, setMountedSharePath] = useState('');
+  const [sourceName, setSourceName] = useState('');
+  const [associatedStandard, setAssociatedStandard] = useState('');
+  const [includeSubfolders, setIncludeSubfolders] = useState(true);
+  const [pairingCode, setPairingCode] = useState('');
+  const [pairingExpiresAt, setPairingExpiresAt] = useState('');
 
   const googleIntegration = useMemo(
     () => integrations.find((item) => item.provider === 'google_drive' && item.status === 'connected') || null,
@@ -307,6 +319,64 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
     }
   };
 
+  const connectZoho = async () => {
+    try {
+      setWorking('connect-zoho');
+      const json = await fetchJson(`${API_URL}/api/document-integrations/zoho/oauth/start`);
+      if (!json.auth_url) throw new Error('Zoho no devolvió URL de autorización.');
+      window.location.href = json.auth_url;
+    } catch (err: any) {
+      setMessage(err.message || 'No fue posible iniciar Zoho WorkDrive.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const createMountedShare = async () => {
+    try {
+      setWorking('create-mounted-share');
+      await fetchJson(`${API_URL}/api/document-integrations/sources`, {
+        method: 'POST',
+        body: JSON.stringify({
+          provider: 'mounted_share',
+          source_name: sourceName || mountedSharePath || 'Carpeta compartida',
+          folder_path: mountedSharePath,
+          include_subfolders: includeSubfolders,
+          associated_standard_code: associatedStandard || null,
+        }),
+      });
+      setMessage('Fuente mounted_share creada.');
+      setWizardOpen(false);
+      setMountedSharePath('');
+      setSourceName('');
+      await refresh();
+    } catch (err: any) {
+      setMessage(err.message || 'No fue posible crear la fuente mounted_share.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const generatePairingCode = async () => {
+    try {
+      setWorking('pairing-code');
+      const json = await fetchJson(`${API_URL}/api/document-integrations/agents/pairing-codes`, {
+        method: 'POST',
+        body: JSON.stringify({
+          source_name: sourceName || 'TCDX Sync Agent',
+        }),
+      });
+      setPairingCode(json.pairing_code || '');
+      setPairingExpiresAt(json.expires_at || '');
+      setMessage('Código de vinculación generado. Se muestra una sola vez.');
+      await refresh();
+    } catch (err: any) {
+      setMessage(err.message || 'No fue posible generar código de vinculación.');
+    } finally {
+      setWorking('');
+    }
+  };
+
   const loadFolders = async (parent: Breadcrumb) => {
     if (!googleIntegration) return;
     try {
@@ -370,9 +440,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
   const syncSource = async (source: Source) => {
     try {
       setWorking(`sync-${source.id}`);
-      await fetchJson(`${API_URL}/api/document-integrations/sources/${source.id}/sync-google`, {
+      await fetchJson(`${API_URL}/api/document-integrations/sources/${source.id}/sync`, {
         method: 'POST',
-        body: JSON.stringify({ tenant_id: tenantId }),
       });
       setMessage(`Sincronización finalizada: ${source.source_name}`);
       await refresh();
@@ -470,9 +539,9 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Fuentes documentales</p>
-          <h2 className="mt-2 text-2xl font-black text-slate-950">Google Drive conectado a evidencias</h2>
+          <h2 className="mt-2 text-2xl font-black text-slate-950">Fuentes documentales tenant-scoped</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Conecta una cuenta Google Drive, selecciona una carpeta específica de evidencias ISO y sincroniza solo metadata documental. En esta fase el análisis IA es preliminar, no aprueba ni crea evidencias automáticamente.
+            Conecta carpetas Google Drive, Zoho WorkDrive, agentes locales o rutas montadas seguras. Cada fuente, documento y sugerencia queda aislada por tenant y requiere revisión humana antes de crear evidencia formal.
           </p>
         </div>
         <button
@@ -514,6 +583,12 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       </div>
 
       <div className="mt-5 flex flex-wrap gap-3">
+        <button
+          onClick={() => setWizardOpen((value) => !value)}
+          className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-800"
+        >
+          {wizardOpen ? 'Cerrar conexión' : 'Conectar fuente externa'}
+        </button>
         {!googleIntegration ? (
           <button
             onClick={connectGoogle}
@@ -532,6 +607,99 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
           </button>
         )}
       </div>
+
+      {wizardOpen && (
+        <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
+            {[
+              ['google_drive', 'Google Drive'],
+              ['zoho_workdrive', 'Zoho WorkDrive'],
+              ['local_agent', 'TCDX Sync Agent'],
+              ['mounted_share', 'Carpeta montada'],
+              ['manual_upload', 'Carga manual'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSelectedProvider(value)}
+                className={`rounded-2xl border px-3 py-3 text-sm font-black ${
+                  selectedProvider === value
+                    ? 'border-blue-300 bg-blue-50 text-blue-800'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {selectedProvider === 'google_drive' && (
+            <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+              <p className="text-sm font-semibold text-slate-700">Autoriza Google Drive y luego selecciona una carpeta específica. No se sincroniza todo Mi unidad por defecto.</p>
+              <button onClick={connectGoogle} disabled={working === 'connect'} className="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
+                {working === 'connect' ? 'Conectando...' : 'Conectar con Google'}
+              </button>
+            </div>
+          )}
+
+          {selectedProvider === 'zoho_workdrive' && (
+            <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+              <p className="text-sm font-semibold text-slate-700">Zoho WorkDrive usa OAuth por tenant. Si el conector no está configurado, el backend responderá con error controlado.</p>
+              <button onClick={connectZoho} disabled={working === 'connect-zoho'} className="mt-3 rounded-xl bg-orange-600 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
+                {working === 'connect-zoho' ? 'Conectando...' : 'Conectar con Zoho'}
+              </button>
+            </div>
+          )}
+
+          {selectedProvider === 'local_agent' && (
+            <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+              <p className="text-sm font-semibold text-slate-700">Instale TCDX Sync Agent en el PC o servidor donde está la carpeta local y vincúlelo con un código temporal.</p>
+              <input value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="Nombre visible de la fuente" className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+              <button onClick={generatePairingCode} disabled={working === 'pairing-code'} className="mt-3 rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
+                {working === 'pairing-code' ? 'Generando...' : 'Generar código de vinculación'}
+              </button>
+              {pairingCode && (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                  <div className="font-black">Código: {pairingCode}</div>
+                  <div className="mt-1 text-xs">Expira: {fmtDate(pairingExpiresAt)}</div>
+                  <code className="mt-2 block rounded-lg bg-white p-2 text-xs text-slate-800">
+                    node agent.js register --base-url {API_URL} --pairing-code {pairingCode} --folder /ruta/local
+                  </code>
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedProvider === 'mounted_share' && (
+            <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+              <p className="text-sm font-semibold text-slate-700">Use una ruta relativa bajo LOCAL_DOCUMENT_ROOT. No se aceptan rutas absolutas ni “..”.</p>
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <input value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="Nombre visible" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                <input value={mountedSharePath} onChange={(e) => setMountedSharePath(e.target.value)} placeholder="rieltec/evidencias" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                <select value={associatedStandard} onChange={(e) => setAssociatedStandard(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                  <option value="">Sin norma asociada</option>
+                  <option value="ISO9001">ISO9001</option>
+                  <option value="ISO27001">ISO27001</option>
+                  <option value="ISO42001">ISO42001</option>
+                </select>
+                <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" checked={includeSubfolders} onChange={(e) => setIncludeSubfolders(e.target.checked)} />
+                  Incluir subcarpetas
+                </label>
+              </div>
+              <button onClick={createMountedShare} disabled={working === 'create-mounted-share'} className="mt-3 rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
+                {working === 'create-mounted-share' ? 'Creando...' : 'Guardar carpeta montada'}
+              </button>
+            </div>
+          )}
+
+          {selectedProvider === 'manual_upload' && (
+            <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
+              La carga manual existente sigue disponible en esta vista. Los archivos se guardan tenant-scoped y no se exponen por URL pública.
+            </div>
+          )}
+        </div>
+      )}
 
       {folderOpen && googleIntegration && (
         <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
@@ -587,12 +755,16 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-black text-slate-900">{source.source_name}</div>
-                    <div className="mt-1 text-xs text-slate-500">{source.folder_path || source.folder_id || 'Sin carpeta'}</div>
+                    <div className="mt-1 text-xs text-slate-500">{source.provider} · {source.status || 'active'}</div>
+                    <div className="mt-1 text-xs text-slate-500">{source.folder_display_name || source.folder_path || source.folder_id || 'Sin carpeta'}</div>
+                    {source.associated_standard_code && <div className="mt-1 text-xs font-bold text-blue-700">{source.associated_standard_code}</div>}
                     <div className="mt-1 text-xs text-slate-500">Última sync: {fmtDate(source.last_sync_at)}</div>
                   </div>
-                  <button onClick={() => syncSource(source)} disabled={working === `sync-${source.id}`} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60">
-                    {working === `sync-${source.id}` ? 'Sincronizando...' : 'Sincronizar ahora'}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => syncSource(source)} disabled={working === `sync-${source.id}`} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60">
+                      {working === `sync-${source.id}` ? 'Sincronizando...' : 'Sincronizar ahora'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
