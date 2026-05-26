@@ -901,8 +901,30 @@ router.post('/sources', auth, async (req, res) => {
 
     return res.status(201).json({ source: result.rows[0] })
   } catch (err) {
-    console.error('ERROR CREATE DOCUMENT SOURCE:', err)
-    return res.status(500).json({ error: 'Error creando fuente documental' })
+    const status = Number(err.statusCode || err.status || 500)
+    const safeStatus = status >= 400 && status < 600 ? status : 500
+    const code = err.code || 'DOCUMENT_SOURCE_CREATE_ERROR'
+
+    if (safeStatus < 500) {
+      console.warn('WARN CREATE DOCUMENT SOURCE CONTROLLED:', {
+        code,
+        provider,
+        tenant_id: tenantId,
+      })
+    } else {
+      console.error('ERROR CREATE DOCUMENT SOURCE:', {
+        code,
+        provider,
+        tenant_id: tenantId,
+        message: err.message,
+      })
+    }
+
+    return res.status(safeStatus).json({
+      ok: false,
+      code,
+      error: err.statusCode ? err.message : 'Error creando fuente documental'
+    })
   }
 })
 
