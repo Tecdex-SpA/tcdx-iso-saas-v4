@@ -12,10 +12,12 @@ DEPLOY_TS="$(date '+%Y-%m-%d %H:%M:%S %Z')"
 
 DEPLOY_USER="${TCDX_DEPLOY_USER:-tecdex}"
 
-# Antiguas VMs UTM/local
-LEGACY_BACKEND_HOST="${TCDX_LEGACY_BACKEND_HOST:-192.168.100.120}"
-LEGACY_FRONTEND_HOST="${TCDX_LEGACY_FRONTEND_HOST:-192.168.100.130}"
-LEGACY_AI_HOST="${TCDX_LEGACY_AI_HOST:-192.168.100.140}"
+# Antiguas VMs UTM/local. No se definen hosts legacy por defecto:
+# si se necesita operar un ambiente histórico, debe declararse explícitamente
+# mediante TCDX_LEGACY_BACKEND_HOST/TCDX_LEGACY_FRONTEND_HOST/TCDX_LEGACY_AI_HOST.
+LEGACY_BACKEND_HOST="${TCDX_LEGACY_BACKEND_HOST:-}"
+LEGACY_FRONTEND_HOST="${TCDX_LEGACY_FRONTEND_HOST:-}"
+LEGACY_AI_HOST="${TCDX_LEGACY_AI_HOST:-}"
 
 # Nuevas VMs ESXi/VPN
 NEW_BACKEND_HOST="${TCDX_NEW_BACKEND_HOST:-bk.tcdx.int}"
@@ -23,9 +25,18 @@ NEW_FRONTEND_HOST="${TCDX_NEW_FRONTEND_HOST:-www.tcdx.int}"
 NEW_AI_HOST="${TCDX_NEW_AI_HOST:-ai.tcdx.int}"
 
 ask_deploy_target() {
+  local legacy_available=false
+  if [[ -n "$LEGACY_BACKEND_HOST" && -n "$LEGACY_FRONTEND_HOST" && -n "$LEGACY_AI_HOST" ]]; then
+    legacy_available=true
+  fi
+
   if [[ -n "${TCDX_DEPLOY_TARGET:-}" ]]; then
     case "$TCDX_DEPLOY_TARGET" in
       legacy|new|all)
+        if [[ "$TCDX_DEPLOY_TARGET" != "new" && "$legacy_available" != "true" ]]; then
+          echo "ERROR: target legacy/all requiere hosts legacy explícitos por entorno." >&2
+          exit 1
+        fi
         echo "$TCDX_DEPLOY_TARGET"
         return 0
         ;;
@@ -42,11 +53,16 @@ ask_deploy_target() {
   echo " SELECCIONAR AMBIENTE DE DEPLOY" >&2
   echo "======================================" >&2
   echo "" >&2
-  echo "1) Solo VMs antiguas UTM/local" >&2
-  echo "   Backend:   ${LEGACY_BACKEND_HOST}" >&2
-  echo "   AI Engine: ${LEGACY_AI_HOST}" >&2
-  echo "   Frontend:  ${LEGACY_FRONTEND_HOST}" >&2
-  echo "" >&2
+  if [[ "$legacy_available" == "true" ]]; then
+    echo "1) Solo VMs antiguas UTM/local" >&2
+    echo "   Backend:   ${LEGACY_BACKEND_HOST}" >&2
+    echo "   AI Engine: ${LEGACY_AI_HOST}" >&2
+    echo "   Frontend:  ${LEGACY_FRONTEND_HOST}" >&2
+    echo "" >&2
+  else
+    echo "1) VMs antiguas UTM/local no configuradas en este entorno" >&2
+    echo "" >&2
+  fi
   echo "2) Solo nuevas VMs ESXi/VPN" >&2
   echo "   Backend:   ${NEW_BACKEND_HOST}" >&2
   echo "   AI Engine: ${NEW_AI_HOST}" >&2
@@ -63,6 +79,10 @@ ask_deploy_target() {
 
     case "$choice" in
       1)
+        if [[ "$legacy_available" != "true" ]]; then
+          echo "Ambiente legacy no configurado. Define hosts legacy explícitos si realmente lo necesitas." >&2
+          continue
+        fi
         read -r -p "Confirmar deploy SOLO en VMs antiguas UTM/local? [s/N]: " confirm
         case "$confirm" in
           s|S|si|SI|sí|SÍ)
@@ -89,6 +109,10 @@ ask_deploy_target() {
         esac
         ;;
       3)
+        if [[ "$legacy_available" != "true" ]]; then
+          echo "Deploy combinado no disponible sin hosts legacy explícitos." >&2
+          continue
+        fi
         read -r -p "Confirmar deploy en AMBOS ambientes? [s/N]: " confirm
         case "$confirm" in
           s|S|si|SI|sí|SÍ)

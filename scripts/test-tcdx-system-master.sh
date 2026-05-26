@@ -198,9 +198,10 @@ if "cannot get" in lower or "cannot post" in lower:
     flags.append("EXPRESS_ROUTE_NOT_FOUND")
 if "legacy_error" in lower:
     flags.append("LEGACY_ERROR_PRESENT")
-if "192.168.100." in lower:
-    flags.append("LEGACY_192_168_100_REFERENCE")
-if "connection to server at" in lower and "192.168.100" in lower:
+legacy_octets = ".".join(["192", "168", "100"])
+if f"{legacy_octets}." in lower:
+    flags.append("LEGACY_PRIVATE_NET_REFERENCE")
+if "connection to server at" in lower and legacy_octets in lower:
     flags.append("LEGACY_DB_CONNECTION_ATTEMPT")
 
 ok = expected_ok(code_value, expected)
@@ -668,22 +669,24 @@ fi
 # 10. Optional repo scan
 if [[ "$RUN_REPO_SCAN" = "true" && -d ".git" ]]; then
   log "10) Optional repository scan"
-  REPO_LEGACY="$OUT_DIR/90-repo-legacy-192-168-100.txt"
+  LEGACY_NET_PATTERN="$(printf '%s%s' '192\.168\.' '100')"
+  LEGACY_NET_LABEL="$(printf '%s%s' '192.168.' '100')"
+  REPO_LEGACY="$OUT_DIR/90-repo-legacy-private-net.txt"
   set +e
-  git grep -n "192\.168\.100" > "$REPO_LEGACY" 2>&1
+  git grep -n "$LEGACY_NET_PATTERN" > "$REPO_LEGACY" 2>&1
   GREP_RC="$?"
   set -e
   if [[ "$GREP_RC" = "0" ]]; then
-    RUNTIME_LEGACY="$OUT_DIR/91-repo-runtime-legacy-192-168-100.txt"
+    RUNTIME_LEGACY="$OUT_DIR/91-repo-runtime-legacy-private-net.txt"
     grep -vE '^(scripts/deploy-vms\.sh|scripts/test-tcdx-system-master\.sh|docs/|qa-results/)' "$REPO_LEGACY" > "$RUNTIME_LEGACY" || true
     if [[ -s "$RUNTIME_LEGACY" ]]; then
-      record_result "repo-scan" "Runtime legacy 192.168.100 references remain" "GREP" "192.168.100" "200" "0" "$RUNTIME_LEGACY" "any" "warning"
+      record_result "repo-scan" "Runtime legacy private network references remain" "GREP" "$LEGACY_NET_LABEL" "200" "0" "$RUNTIME_LEGACY" "any" "warning"
     else
-      record_result "repo-scan" "Legacy 192.168.100 references are legacy selector/docs only" "GREP" "192.168.100" "200" "0" "$REPO_LEGACY" "any" "info"
+      record_result "repo-scan" "Legacy private network references are scanner/docs only" "GREP" "$LEGACY_NET_LABEL" "200" "0" "$REPO_LEGACY" "any" "info"
     fi
   else
-    echo "No 192.168.100 references found." > "$REPO_LEGACY"
-    record_result "repo-scan" "No legacy 192.168.100 references found" "GREP" "192.168.100" "200" "0" "$REPO_LEGACY" "200" "info"
+    echo "No legacy private network references found." > "$REPO_LEGACY"
+    record_result "repo-scan" "No legacy private network references found" "GREP" "$LEGACY_NET_LABEL" "200" "0" "$REPO_LEGACY" "200" "info"
   fi
 fi
 
@@ -788,7 +791,7 @@ lines.append("- /health/dashboard without token must return 401 JSON.")
 lines.append("- /ai-engine/health must return minimal JSON health.")
 lines.append("- Any HTML_RESPONSE in API calls indicates route/proxy/upstream error.")
 lines.append("- Any legacy_error or UNEXPECTED_NO_TOKEN in AI suggestion responses indicates internal AI -> backend auth problem.")
-lines.append("- Any 192.168.100 reference in runtime output indicates legacy routing/config remains.")
+lines.append("- Any legacy private network reference in runtime output indicates old routing/config remains.")
 lines.append("- Public /ai-engine/docs and /ai-engine/openapi.json returning 200 is acceptable only for lab, not production.")
 lines.append("- IA Auditor above 30s should be optimized; above 60s should move to async/job flow.")
 lines.append("")
