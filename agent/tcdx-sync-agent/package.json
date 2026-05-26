@@ -1,0 +1,15 @@
+{
+  "name": "tcdx-sync-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal TCDX tenant-scoped document sync agent",
+  "bin": {
+    "tcdx-sync-agent": "./agent.js"
+  },
+  "scripts": {
+    "check": "node -c agent.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

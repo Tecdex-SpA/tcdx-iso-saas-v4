@@ -39,7 +39,10 @@ function ensureTenantAccess(req, tenantId) {
 }
 
 function resolveTenantId(req) {
-  return req.query.tenant_id || req.body?.tenant_id || getUserTenantId(req.user);
+  if (isSuperAdmin(req.user)) {
+    return req.query.tenant_id || req.body?.tenant_id || getUserTenantId(req.user);
+  }
+  return getUserTenantId(req.user);
 }
 
 router.get('/google/folders', auth, async (req, res) => {

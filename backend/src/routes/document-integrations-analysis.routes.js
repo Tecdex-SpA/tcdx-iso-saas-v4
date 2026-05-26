@@ -49,7 +49,10 @@ function ensureTenantAccess(req, tenantId) {
 }
 
 function resolveTenantId(req) {
-  return req.query.tenant_id || req.body?.tenant_id || getUserTenantId(req.user)
+  if (isSuperAdmin(req.user)) {
+    return req.query.tenant_id || req.body?.tenant_id || getUserTenantId(req.user)
+  }
+  return getUserTenantId(req.user)
 }
 
 function assertTenant(req, res) {

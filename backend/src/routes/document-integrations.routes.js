@@ -2,6 +2,13 @@ const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
 const auth = require('../middleware/auth')
+const path = require('path')
+const fs = require('fs')
+const crypto = require('crypto')
+const { validateMountedSharePath, indexMountedShareSource } = require('../services/mountedShareDocumentSource.service')
+const { syncGoogleDriveSource } = require('../services/documentGoogleSync.service')
+const zohoWorkdrive = require('../services/zohoWorkdriveClient.service')
+const { hashSecret, randomSecret } = require('../utils/cryptoSecret.util')
 
 function getUserTenantId(user) {
   return (
@@ -40,13 +47,21 @@ function canManageDocumentIntegrations(user) {
   return isSuperAdmin(user) || ['tenant_admin', 'admin', 'compliance_manager'].includes(role)
 }
 
+function canOperateDocumentIntegrations(user) {
+  const role = normalizeRole(user)
+  return isSuperAdmin(user) || ['tenant_admin', 'admin', 'compliance_manager', 'auditor', 'operativo'].includes(role)
+}
+
 function ensureTenantAccess(req, tenantId) {
   if (isSuperAdmin(req.user)) return true
   return String(getUserTenantId(req.user)) === String(tenantId)
 }
 
 function resolveTenantId(req) {
-  return req.query.tenant_id || req.body?.tenant_id || getUserTenantId(req.user)
+  if (isSuperAdmin(req.user)) {
+    return req.query.tenant_id || req.body?.tenant_id || getUserTenantId(req.user)
+  }
+  return getUserTenantId(req.user)
 }
 
 function assertTenant(req, res) {
@@ -65,15 +80,94 @@ function assertTenant(req, res) {
   return tenantId
 }
 
+const DOCUMENT_SOURCE_PROVIDERS = new Set([
+  'google_drive',
+  'zoho_workdrive',
+  'microsoft_graph',
+  'onedrive',
+  'sharepoint',
+  'local_agent',
+  'mounted_share',
+  'manual_upload'
+])
+
+function normalizeStandardCode(value) {
+  const raw = String(value || '').trim().toUpperCase()
+  if (!raw || raw === 'SIN ASOCIAR' || raw === 'NONE') return null
+  if (raw.includes('9001')) return 'ISO9001'
+  if (raw.includes('27001')) return 'ISO27001'
+  if (raw.includes('42001')) return 'ISO42001'
+  return raw.replace(/[^A-Z0-9]/g, '').slice(0, 40) || null
+}
+
+function safeStatus(value, fallback = 'active') {
+  const status = String(value || '').trim().toLowerCase()
+  return ['active', 'paused', 'disconnected', 'pending_agent', 'error'].includes(status) ? status : fallback
+}
+
+function safeDownloadName(value) {
+  return path.basename(String(value || 'documento').replace(/[\r\n"]/g, '_'))
+}
+
+async function getTenantSource({ sourceId, tenantId }) {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM tenant_document_sources
+    WHERE id = $1::uuid
+      AND tenant_id = $2::uuid
+    LIMIT 1
+    `,
+    [sourceId, tenantId]
+  )
+  return result.rows[0] || null
+}
+
 const providerCards = [
   {
     provider: 'google_drive',
     label: 'Google Drive',
-    status: 'prepared',
-    phase: 'Etapa 1',
+    status: 'available',
+    phase: 'Conector operativo',
+    read_only: true,
+    oauth_ready: true,
+    description: 'OAuth Google Drive tenant-scoped e indexación de carpetas seleccionadas.'
+  },
+  {
+    provider: 'zoho_workdrive',
+    label: 'Zoho WorkDrive',
+    status: zohoWorkdrive.isZohoConfigured() ? 'available' : 'not_configured',
+    phase: 'Conector preparado',
+    read_only: true,
+    oauth_ready: zohoWorkdrive.isZohoConfigured(),
+    description: 'OAuth Zoho WorkDrive tenant-scoped. Requiere variables Zoho por data center.'
+  },
+  {
+    provider: 'local_agent',
+    label: 'TCDX Sync Agent',
+    status: 'available',
+    phase: 'Agente local mínimo',
+    read_only: false,
+    oauth_ready: false,
+    description: 'Vincula una carpeta local del cliente mediante código temporal y agente con token propio.'
+  },
+  {
+    provider: 'mounted_share',
+    label: 'Carpeta compartida montada',
+    status: process.env.LOCAL_DOCUMENT_ROOT ? 'available' : 'not_configured',
+    phase: 'Operación técnica',
     read_only: true,
     oauth_ready: false,
-    description: 'Proveedor preparado para conexión OAuth2 e indexación documental en Etapa 2.'
+    description: 'Indexa una ruta relativa bajo LOCAL_DOCUMENT_ROOT sin aceptar rutas absolutas ni traversal.'
+  },
+  {
+    provider: 'manual_upload',
+    label: 'Carga manual',
+    status: 'available',
+    phase: 'Base existente',
+    read_only: false,
+    oauth_ready: false,
+    description: 'Fuente tenant-scoped para documentos cargados manualmente.'
   },
   {
     provider: 'onedrive',
@@ -613,10 +707,10 @@ router.post('/integrations/prepared', auth, async (req, res) => {
     return res.status(403).json({ error: 'No autorizado para configurar integraciones documentales' })
   }
 
-  const provider = String(req.body?.provider || '').trim()
+  const provider = String(req.body?.provider || '').trim().toLowerCase()
   const displayName = String(req.body?.display_name || '').trim() || null
 
-  if (!['google_drive', 'microsoft_graph', 'onedrive', 'sharepoint'].includes(provider)) {
+  if (!DOCUMENT_SOURCE_PROVIDERS.has(provider)) {
     return res.status(400).json({ error: 'Proveedor documental no soportado' })
   }
 
@@ -733,22 +827,40 @@ router.post('/sources', auth, async (req, res) => {
 
   const {
     integration_id,
-    provider,
     source_name,
     folder_id,
     folder_path,
+    folder_display_name,
+    include_subfolders,
+    associated_standard_code,
     scan_frequency
   } = req.body || {}
+  const provider = String(req.body?.provider || '').trim().toLowerCase()
 
   if (!provider || !source_name) {
     return res.status(400).json({ error: 'provider y source_name son obligatorios' })
   }
 
-  if (!['google_drive', 'microsoft_graph', 'onedrive', 'sharepoint'].includes(provider)) {
+  if (!DOCUMENT_SOURCE_PROVIDERS.has(provider)) {
     return res.status(400).json({ error: 'Proveedor documental no soportado' })
   }
 
   try {
+    let safeFolderPath = folder_path || null
+    let initialStatus = 'active'
+    let metadata = { stage: 'tenant_scoped_source_registration' }
+
+    if (provider === 'mounted_share') {
+      const safe = await validateMountedSharePath(folder_path)
+      safeFolderPath = safe.relative_path
+      metadata = { ...metadata, mounted_share_validated: true }
+    }
+
+    if (provider === 'local_agent') {
+      initialStatus = 'pending_agent'
+      metadata = { ...metadata, requires_agent_pairing: true }
+    }
+
     const result = await pool.query(
       `
       INSERT INTO tenant_document_sources (
@@ -756,13 +868,18 @@ router.post('/sources', auth, async (req, res) => {
         integration_id,
         provider,
         source_name,
+        status,
         folder_id,
         folder_path,
+        folder_display_name,
+        include_subfolders,
+        associated_standard_code,
         scan_frequency,
         created_by_user_id,
+        created_by,
         metadata_json
       )
-      VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7, 'manual'),$8,$9::jsonb)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11, 'manual'),$12,$12,$13::jsonb)
       RETURNING *
       `,
       [
@@ -770,11 +887,15 @@ router.post('/sources', auth, async (req, res) => {
         integration_id || null,
         provider,
         source_name,
+        initialStatus,
         folder_id || null,
-        folder_path || null,
+        safeFolderPath,
+        folder_display_name || folder_path || folder_id || null,
+        include_subfolders !== false,
+        normalizeStandardCode(associated_standard_code),
         scan_frequency || 'manual',
         getUserId(req.user),
-        JSON.stringify({ stage: 'etapa_1_manual_source_registration' })
+        JSON.stringify(metadata)
       ]
     )
 
@@ -782,6 +903,241 @@ router.post('/sources', auth, async (req, res) => {
   } catch (err) {
     console.error('ERROR CREATE DOCUMENT SOURCE:', err)
     return res.status(500).json({ error: 'Error creando fuente documental' })
+  }
+})
+
+router.get('/sources/:sourceId', auth, async (req, res) => {
+  const tenantId = assertTenant(req, res)
+  if (!tenantId) return
+
+  try {
+    const source = await getTenantSource({ sourceId: req.params.sourceId, tenantId })
+    if (!source) return res.status(404).json({ error: 'Fuente documental no encontrada' })
+    return res.json({ source })
+  } catch (err) {
+    console.error('ERROR GET DOCUMENT SOURCE:', err.message)
+    return res.status(500).json({ error: 'Error obteniendo fuente documental' })
+  }
+})
+
+router.patch('/sources/:sourceId', auth, async (req, res) => {
+  const tenantId = assertTenant(req, res)
+  if (!tenantId) return
+  if (!canManageDocumentIntegrations(req.user)) {
+    return res.status(403).json({ error: 'No autorizado para editar fuentes documentales' })
+  }
+
+  try {
+    const existing = await getTenantSource({ sourceId: req.params.sourceId, tenantId })
+    if (!existing) return res.status(404).json({ error: 'Fuente documental no encontrada' })
+
+    let safeFolderPath = req.body?.folder_path !== undefined ? req.body.folder_path : existing.folder_path
+    if (existing.provider === 'mounted_share' && req.body?.folder_path !== undefined) {
+      const safe = await validateMountedSharePath(req.body.folder_path)
+      safeFolderPath = safe.relative_path
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE tenant_document_sources
+      SET source_name = COALESCE(NULLIF($3, ''), source_name),
+          status = $4,
+          include_subfolders = $5,
+          associated_standard_code = $6,
+          sync_enabled = $7,
+          folder_path = $8,
+          folder_display_name = COALESCE($9, folder_display_name),
+          updated_at = NOW()
+      WHERE id = $1::uuid
+        AND tenant_id = $2::uuid
+      RETURNING *
+      `,
+      [
+        req.params.sourceId,
+        tenantId,
+        req.body?.source_name || null,
+        req.body?.status ? safeStatus(req.body.status, existing.status) : existing.status,
+        req.body?.include_subfolders !== undefined ? req.body.include_subfolders === true : existing.include_subfolders,
+        req.body?.associated_standard_code !== undefined ? normalizeStandardCode(req.body.associated_standard_code) : existing.associated_standard_code,
+        req.body?.sync_enabled !== undefined ? req.body.sync_enabled === true : existing.sync_enabled,
+        safeFolderPath,
+        req.body?.folder_display_name || null,
+      ]
+    )
+
+    return res.json({ source: result.rows[0] })
+  } catch (err) {
+    console.error('ERROR PATCH DOCUMENT SOURCE:', err.message)
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      code: err.code || 'DOCUMENT_SOURCE_UPDATE_ERROR',
+      error: err.statusCode ? err.message : 'Error editando fuente documental'
+    })
+  }
+})
+
+router.delete('/sources/:sourceId', auth, async (req, res) => {
+  const tenantId = assertTenant(req, res)
+  if (!tenantId) return
+  if (!canManageDocumentIntegrations(req.user)) {
+    return res.status(403).json({ error: 'No autorizado para desconectar fuentes documentales' })
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE tenant_document_sources
+      SET status = 'disconnected',
+          sync_enabled = false,
+          updated_at = NOW()
+      WHERE id = $1::uuid
+        AND tenant_id = $2::uuid
+      RETURNING *
+      `,
+      [req.params.sourceId, tenantId]
+    )
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Fuente documental no encontrada' })
+    return res.json({ ok: true, source: result.rows[0] })
+  } catch (err) {
+    console.error('ERROR DELETE DOCUMENT SOURCE:', err.message)
+    return res.status(500).json({ error: 'Error desconectando fuente documental' })
+  }
+})
+
+router.get('/sources/:sourceId/documents', auth, async (req, res) => {
+  const tenantId = assertTenant(req, res)
+  if (!tenantId) return
+  const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)))
+
+  try {
+    const source = await getTenantSource({ sourceId: req.params.sourceId, tenantId })
+    if (!source) return res.status(404).json({ error: 'Fuente documental no encontrada' })
+
+    const result = await pool.query(
+      `
+      SELECT
+        d.id,
+        d.tenant_id,
+        d.source_id,
+        d.integration_id,
+        d.provider,
+        d.provider_file_id,
+        d.provider_version_id,
+        d.file_name,
+        d.mime_type,
+        d.file_extension,
+        d.file_url,
+        d.web_view_url,
+        d.size_bytes,
+        d.checksum,
+        d.content_hash,
+        d.file_hash,
+        d.relative_path,
+        d.modified_at,
+        d.indexed_at,
+        d.last_seen_at,
+        d.status,
+        d.metadata_json,
+        s.source_name
+      FROM document_index d
+      JOIN tenant_document_sources s
+        ON s.id = d.source_id
+       AND s.tenant_id = d.tenant_id
+      WHERE d.tenant_id = $1::uuid
+        AND d.source_id = $2::uuid
+      ORDER BY d.indexed_at DESC NULLS LAST, d.modified_at DESC NULLS LAST
+      LIMIT $3
+      `,
+      [tenantId, req.params.sourceId, limit]
+    )
+
+    return res.json({ documents: result.rows })
+  } catch (err) {
+    console.error('ERROR LIST SOURCE DOCUMENTS:', err.message)
+    return res.status(500).json({ error: 'Error listando documentos de la fuente' })
+  }
+})
+
+router.post('/agents/pairing-codes', auth, async (req, res) => {
+  const tenantId = assertTenant(req, res)
+  if (!tenantId) return
+  if (!canManageDocumentIntegrations(req.user)) {
+    return res.status(403).json({ error: 'No autorizado para vincular agentes locales' })
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    let sourceId = req.body?.source_id || null
+    const sourceName = String(req.body?.source_name || 'TCDX Sync Agent').trim()
+
+    if (sourceId) {
+      const source = await client.query(
+        `
+        SELECT id
+        FROM tenant_document_sources
+        WHERE id = $1::uuid
+          AND tenant_id = $2::uuid
+          AND provider = 'local_agent'
+          AND status <> 'disconnected'
+        LIMIT 1
+        `,
+        [sourceId, tenantId]
+      )
+      if (source.rowCount === 0) {
+        await client.query('ROLLBACK')
+        return res.status(404).json({ error: 'Fuente local_agent no encontrada' })
+      }
+    } else {
+      const inserted = await client.query(
+        `
+        INSERT INTO tenant_document_sources (
+          tenant_id, provider, source_name, status, sync_enabled,
+          include_subfolders, created_by_user_id, created_by, metadata_json
+        )
+        VALUES ($1,'local_agent',$2,'pending_agent',true,true,$3,$3,$4::jsonb)
+        RETURNING id
+        `,
+        [
+          tenantId,
+          sourceName,
+          getUserId(req.user),
+          JSON.stringify({ created_from: 'pairing_code' }),
+        ]
+      )
+      sourceId = inserted.rows[0].id
+    }
+
+    const code = randomSecret(18).replace(/[^A-Z0-9]/gi, '').slice(0, 24).toUpperCase()
+    const expiresMinutes = Math.max(5, Math.min(60, Number(req.body?.expires_minutes || 15)))
+    const expiresAt = new Date(Date.now() + expiresMinutes * 60 * 1000)
+
+    const pairing = await client.query(
+      `
+      INSERT INTO tenant_sync_agent_pairing_codes (
+        tenant_id, source_id, code_hash, expires_at, created_by
+      )
+      VALUES ($1,$2,$3,$4,$5)
+      RETURNING id, tenant_id, source_id, expires_at, created_at
+      `,
+      [tenantId, sourceId, hashSecret(code), expiresAt, getUserId(req.user)]
+    )
+
+    await client.query('COMMIT')
+    return res.status(201).json({
+      ok: true,
+      pairing_code: code,
+      visible_once: true,
+      source_id: sourceId,
+      expires_at: pairing.rows[0].expires_at,
+      tenant_id: tenantId,
+    })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error('ERROR CREATE AGENT PAIRING CODE:', err.message)
+    return res.status(500).json({ error: 'Error generando código de vinculación' })
+  } finally {
+    client.release()
   }
 })
 
@@ -837,7 +1193,28 @@ router.get('/documents', auth, async (req, res) => {
     const result = await pool.query(
       `
       SELECT
-        d.*,
+        d.id,
+        d.tenant_id,
+        d.source_id,
+        d.integration_id,
+        d.provider,
+        d.provider_file_id,
+        d.provider_version_id,
+        d.file_name,
+        d.mime_type,
+        d.file_extension,
+        d.file_url,
+        d.web_view_url,
+        d.size_bytes,
+        d.checksum,
+        d.content_hash,
+        d.file_hash,
+        d.relative_path,
+        d.modified_at,
+        d.indexed_at,
+        d.last_seen_at,
+        d.status,
+        d.metadata_json,
         s.source_name,
         i.display_name AS integration_display_name,
         d.metadata_json->'google'->>'folder_path' AS folder_path
@@ -859,6 +1236,63 @@ router.get('/documents', auth, async (req, res) => {
   } catch (err) {
     console.error('ERROR LIST DOCUMENT INDEX:', err)
     return res.status(500).json({ error: 'Error listando documentos indexados' })
+  }
+})
+
+router.get('/documents/:documentId/download', auth, async (req, res) => {
+  const tenantId = assertTenant(req, res)
+  if (!tenantId) return
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT d.*, s.provider AS source_provider, s.folder_path AS source_folder_path, s.integration_id
+      FROM document_index d
+      LEFT JOIN tenant_document_sources s
+        ON s.id = d.source_id
+       AND s.tenant_id = d.tenant_id
+      WHERE d.id = $1::uuid
+        AND d.tenant_id = $2::uuid
+      LIMIT 1
+      `,
+      [req.params.documentId, tenantId]
+    )
+
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Documento no encontrado' })
+    const doc = result.rows[0]
+
+    if (['mounted_share', 'local_agent', 'manual_upload'].includes(doc.provider)) {
+      const localPath = doc.local_storage_path || doc.metadata_json?.local_storage_path || null
+      if (!localPath) {
+        return res.status(409).json({ ok: false, code: 'DOCUMENT_BINARY_NOT_STORED', error: 'Archivo binario no almacenado localmente' })
+      }
+      const stat = await fs.promises.stat(localPath).catch(() => null)
+      if (!stat || !stat.isFile()) return res.status(404).json({ error: 'Archivo no encontrado' })
+      res.setHeader('X-Content-Type-Options', 'nosniff')
+      return res.download(localPath, safeDownloadName(doc.file_name))
+    }
+
+    if (doc.provider === 'zoho_workdrive') {
+      return res.status(409).json({
+        ok: false,
+        code: 'ZOHO_DOWNLOAD_REQUIRES_PROVIDER_FETCH',
+        error: 'Descarga Zoho vía API preparada, pero requiere credencial activa de la fuente.',
+      })
+    }
+
+    if (doc.web_view_url || doc.file_url) {
+      return res.json({
+        ok: true,
+        provider: doc.provider,
+        download_url: doc.web_view_url || doc.file_url,
+        external_download: true,
+      })
+    }
+
+    return res.status(409).json({ ok: false, code: 'DOCUMENT_DOWNLOAD_NOT_AVAILABLE', error: 'Descarga no disponible para este documento' })
+  } catch (err) {
+    console.error('ERROR DOCUMENT DOWNLOAD:', err.message)
+    return res.status(500).json({ error: 'Error descargando documento' })
   }
 })
 
@@ -1041,66 +1475,68 @@ router.post('/sources/:sourceId/sync', auth, async (req, res) => {
   const tenantId = assertTenant(req, res)
   if (!tenantId) return
 
-  if (!canManageDocumentIntegrations(req.user)) {
+  if (!canOperateDocumentIntegrations(req.user)) {
     return res.status(403).json({ error: 'No autorizado para sincronizar fuentes documentales' })
   }
 
   try {
-    const source = await pool.query(
-      `
-      SELECT *
-      FROM tenant_document_sources
-      WHERE id = $1
-        AND tenant_id = $2
-      LIMIT 1
-      `,
-      [req.params.sourceId, tenantId]
-    )
+    const source = await getTenantSource({ sourceId: req.params.sourceId, tenantId })
 
-    if (source.rowCount === 0) {
-      return res.status(404).json({ error: 'Fuente documental no encontrada' })
+    if (!source) return res.status(404).json({ error: 'Fuente documental no encontrada' })
+    if (source.status === 'disconnected') {
+      return res.status(409).json({ ok: false, code: 'DOCUMENT_SOURCE_DISCONNECTED', error: 'Fuente desconectada' })
+    }
+    if (source.sync_enabled === false || source.status === 'paused') {
+      return res.status(409).json({ ok: false, code: 'DOCUMENT_SOURCE_SYNC_DISABLED', error: 'Sincronización deshabilitada para esta fuente' })
     }
 
-    const log = await pool.query(
-      `
-      INSERT INTO document_sync_logs (
-        tenant_id,
-        source_id,
-        integration_id,
-        provider,
-        status,
-        started_at,
-        finished_at,
-        files_seen,
-        files_indexed,
-        files_updated,
-        files_skipped,
-        details_json
-      )
-      VALUES ($1,$2,$3,$4,'completed_with_warnings',NOW(),NOW(),0,0,0,0,$5::jsonb)
-      RETURNING *
-      `,
-      [
+    if (source.provider === 'google_drive') {
+      const result = await syncGoogleDriveSource({
         tenantId,
-        source.rows[0].id,
-        source.rows[0].integration_id,
-        source.rows[0].provider,
-        JSON.stringify({
-          stage: 'etapa_1_stub',
-          message: 'Sincronización real se implementa en Etapa 2 con OAuth Google Drive.'
-        })
-      ]
-    )
+        sourceId: req.params.sourceId,
+        maxDepth: req.body?.max_depth,
+        maxFiles: req.body?.max_files,
+        allowRoot: req.body?.allow_root === true,
+      })
+      return res.json(result)
+    }
+
+    if (source.provider === 'mounted_share') {
+      const result = await indexMountedShareSource({ tenantId, sourceId: req.params.sourceId })
+      return res.json(result)
+    }
+
+    if (source.provider === 'local_agent') {
+      return res.json({
+        ok: true,
+        provider: 'local_agent',
+        status: source.status,
+        message: 'La sincronización de esta fuente la ejecuta TCDX Sync Agent desde el equipo vinculado.',
+      })
+    }
+
+    if (source.provider === 'zoho_workdrive') {
+      return res.status(202).json({
+        ok: true,
+        provider: 'zoho_workdrive',
+        status: 'accepted',
+        message: 'Zoho WorkDrive está preparado. Use el endpoint /api/document-integrations/zoho/sync para sincronización Zoho.',
+      })
+    }
 
     return res.json({
       ok: true,
-      stage: 'etapa_1_stub',
-      message: 'Fuente válida. La sincronización real queda para Etapa 2.',
-      sync_log: log.rows[0]
+      provider: source.provider,
+      status: 'no_op',
+      message: 'Fuente válida. Este proveedor no requiere sincronización automática en esta versión.'
     })
   } catch (err) {
-    console.error('ERROR STUB DOCUMENT SYNC:', err)
-    return res.status(500).json({ error: 'Error registrando sincronización documental' })
+    console.error('ERROR DOCUMENT SOURCE SYNC:', err.message)
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      code: err.code || 'DOCUMENT_SOURCE_SYNC_ERROR',
+      error: err.statusCode ? err.message : 'Error sincronizando fuente documental'
+    })
   }
 })
 
@@ -1168,7 +1604,9 @@ function tcdxIntegratedHasTenantAccess(req, tenantId) {
 
 router.get('/integrated-evidences', auth, async (req, res) => {
   try {
-    const tenantId = req.query.tenant_id
+    const tenantId = tcdxIntegratedIsSuperAdmin(req.user)
+      ? (req.query.tenant_id || tcdxIntegratedGetUserTenantId(req.user))
+      : tcdxIntegratedGetUserTenantId(req.user)
     const status = String(req.query.status || '').trim().toLowerCase()
     const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)))
 

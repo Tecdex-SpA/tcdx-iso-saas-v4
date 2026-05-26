@@ -20,6 +20,7 @@ const dashboardControls = require('./routes/dashboard-controls.routes');
 const evidencesRoutes = require('./routes/evidences.routes');
 const documentIntegrationsRoutes = require('./routes/document-integrations.routes');
 const documentIntegrationsGoogleRoutes = require('./routes/document-integrations-google.routes');
+const documentIntegrationsZohoRoutes = require('./routes/document-integrations-zoho.routes');
 const documentIntegrationsSyncRoutes = require('./routes/document-integrations-sync.routes');
 const documentIntegrationsFoldersRoutes = require('./routes/document-integrations-folders.routes');
 const documentIntegrationsAnalysisRoutes = require('./routes/document-integrations-analysis.routes');
@@ -63,6 +64,7 @@ const quotesRoutes = require('./routes/quotes.routes');
 const objectivesRoutes = require('./routes/objectives.routes');
 const companyProfileRoutes = require('./routes/company-profile.routes');
 const tenantFilesRoutes = require('./routes/tenant-files.routes');
+const syncAgentRoutes = require('./routes/sync-agent.routes');
 const { aiLocaleResponseGuard } = require('./middleware/aiLocaleResponseGuard');
 
 const app = express();
@@ -261,6 +263,8 @@ app.use('/api/auth', express.json({ limit: jsonBodyLimit }), authRoutes);
 // El endpoint /oauth/start mantiene auth propio dentro de la ruta.
 
 app.use('/api/document-integrations/google', express.json({ limit: jsonBodyLimit }), documentIntegrationsGoogleRoutes);
+app.use('/api/document-integrations/zoho', express.json({ limit: jsonBodyLimit }), documentIntegrationsZohoRoutes);
+app.use('/api/agent', express.json({ limit: jsonBodyLimit }), syncAgentRoutes);
 
 app.use('/api', auth, enforceApiAccess);
 app.use(express.json({ limit: jsonBodyLimit }));
