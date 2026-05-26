@@ -107,6 +107,35 @@ if (String(JSON.stringify(json)).includes('<html')) throw new Error('report-star
 NODE
 pass "reportes responden JSON sin IA habilitada"
 
+REPORT_JOB_ID="$(json_get "$OUT_DIR/report-start-disabled.json" job_id || json_get "$OUT_DIR/report-start-disabled.json" data.job_id || true)"
+if [ -n "$REPORT_JOB_ID" ]; then
+  for _ in $(seq 1 24); do
+    call_json GET "/api/reports/jobs/$REPORT_JOB_ID" "$TOKEN" "" "$OUT_DIR/report-job-disabled.json"
+    REPORT_STATUS="$(json_get "$OUT_DIR/report-job-disabled.json" status || true)"
+    [ "$REPORT_STATUS" = "completed" ] && break
+    [ "$REPORT_STATUS" = "failed" ] && break
+    sleep 5
+  done
+  node - "$OUT_DIR/report-job-disabled.json" <<'NODE'
+const fs = require('fs');
+const json = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (json.status !== 'completed') {
+  throw new Error(`reporte sin IA no completó: ${json.status}`);
+}
+const blob = JSON.stringify(json.result_json || {}).toLowerCase();
+if (blob.includes('"ai_engine_used":true') || blob.includes('"ai_engine_used": true')) {
+  throw new Error('reporte sin IA declara ai_engine_used=true');
+}
+if (blob.includes('qwen')) {
+  throw new Error('reporte sin IA expone modelo qwen');
+}
+if (!blob.includes('ai_disabled_by_plan')) {
+  throw new Error('reporte sin IA no declara ai_disabled_by_plan');
+}
+NODE
+  pass "reporte sin IA completa con metadata coherente"
+fi
+
 if [ -n "$AI_EMAIL" ] && [ -n "$AI_PASSWORD" ]; then
   AI_TOKEN="$(login_as "$AI_EMAIL" "$AI_PASSWORD" "$OUT_DIR/login-ai-enabled.json")"
   call_json GET "/api/me/entitlements" "$AI_TOKEN" "" "$OUT_DIR/entitlements-enabled.json"

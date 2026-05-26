@@ -116,14 +116,57 @@ function normalizeSuggestionStatus(value) {
   return String(value || '').toLowerCase().trim()
 }
 
+function normalizeControlRefForMatch(value) {
+  return String(value || '')
+    .toUpperCase()
+    .replace(/^ISO\s*\/?\s*\d+\s*[:/-]?\s*\d*\s*/i, '')
+    .replace(/^ISO\d+\s*/i, '')
+    .replace(/[^A-Z0-9.]/g, '')
+    .trim()
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''))
+}
+
+function buildControlMappingRequiredError({
+  tenantId,
+  standardCode,
+  controlRef,
+  operationId = null,
+  candidates = [],
+  reason = 'control_not_applicable_or_not_found'
+}) {
+  const err = new Error(
+    `No se encontró un control aplicable y activo para ${standardCode || 'norma no informada'} / ${controlRef || 'referencia no informada'}. Debe mapearse manualmente antes de crear evidencia formal.`
+  )
+  err.statusCode = 422
+  err.code = 'CONTROL_MAPPING_REQUIRED'
+  err.details = {
+    mapping_required: true,
+    reason,
+    tenant_id: tenantId,
+    operation_id: operationId,
+    standard_code: standardCode || null,
+    control_ref: controlRef || null,
+    candidate_controls: candidates,
+    tenant_filter_enforced: true,
+    filtered_by_tenant_id: true,
+    applicability_universe_applied: true
+  }
+  return err
+}
+
 async function resolveTenantControlForDocumentSuggestion(client, {
   tenantId,
   suggestedStandardCode,
   suggestedControlRef,
-  preferredOperationId = null
+  preferredOperationId = null,
+  explicitTenantControlId = null,
+  suggestionText = ''
 }) {
   const baseStandard = baseStandardCodeFromSuggestion(suggestedStandardCode)
-  const controlRef = String(suggestedControlRef || '').trim()
+  const controlRef = normalizeControlRefForMatch(suggestedControlRef)
 
   if (!baseStandard || !controlRef) return null
 
@@ -157,89 +200,158 @@ async function resolveTenantControlForDocumentSuggestion(client, {
   )
 
   if (activeOperations.rowCount === 0) {
-    const err = new Error(
-      `No existe operación activa para la norma ${baseStandard} en este tenant`
-    )
-    err.statusCode = 422
-    throw err
+    throw buildControlMappingRequiredError({
+      tenantId,
+      standardCode: baseStandard,
+      controlRef,
+      reason: 'active_operation_not_found'
+    })
   }
 
   if (!preferredOperationId && activeOperations.rowCount > 1) {
-    const err = new Error(
-      `La norma ${baseStandard} está activa en más de una operación. Debe seleccionarse operation_id antes de crear evidencia formal.`
-    )
-    err.statusCode = 409
-    err.details = {
-      active_operations: activeOperations.rows
-    }
-    throw err
+    throw buildControlMappingRequiredError({
+      tenantId,
+      standardCode: baseStandard,
+      controlRef,
+      candidates: activeOperations.rows.map((item) => ({
+        operation_id: item.operation_id,
+        operation_name: item.operation_name,
+        operation_code: item.operation_code,
+        operation_type: item.operation_type
+      })),
+      reason: 'operation_selection_required'
+    })
   }
 
   const operationId = activeOperations.rows[0].operation_id
 
-  const result = await client.query(
-    `
-    SELECT
-      tc.id AS tenant_control_id,
-      tc.control_id AS catalog_control_id,
-      tc.operation_id,
-      cc.iso,
-      COALESCE(ccs.standard_code, cc.iso) AS standard_code,
-      COALESCE(ccs.clause, cc.clause) AS clause,
-      cc.description AS control_description,
-      cc.category,
-      op.name AS operation_name,
-      op.code AS operation_code,
-      op.operation_type
-    FROM tenant_controls tc
-    JOIN controls_catalog cc
-      ON cc.id = tc.control_id
-     AND cc.is_active = TRUE
-    LEFT JOIN controls_catalog_standards ccs
-      ON ccs.control_id = cc.id
-    JOIN tenant_operations op
-      ON op.id = tc.operation_id
-     AND op.tenant_id = tc.tenant_id
-     AND op.is_active = TRUE
-    JOIN tenant_standard_operations tso
-      ON tso.tenant_id = tc.tenant_id
-     AND tso.operation_id = tc.operation_id
-     AND tso.is_active = TRUE
-     AND UPPER(REPLACE(REPLACE(COALESCE(tso.standard_code, ''), '/', ''), ' ', '')) = $2
-    WHERE tc.tenant_id = $1::uuid
-      AND tc.operation_id = $4::uuid
-      AND (
-        UPPER(REPLACE(REPLACE(COALESCE(ccs.standard_code, cc.iso, ''), '/', ''), ' ', '')) = $2
-        OR UPPER(REPLACE(REPLACE(COALESCE(cc.iso, ''), '/', ''), ' ', '')) = $2
-      )
-      AND (
-        COALESCE(ccs.clause, cc.clause, '') = $3
-        OR cc.clause = $3
-        OR cc.description ILIKE '%' || $3 || '%'
-      )
-    ORDER BY
-      CASE WHEN COALESCE(ccs.clause, cc.clause, '') = $3 THEN 0 ELSE 1 END,
-      CASE WHEN cc.clause = $3 THEN 0 ELSE 1 END,
-      tc.created_at ASC
-    LIMIT 1
-    `,
-    [tenantId, baseStandard, controlRef, operationId]
-  )
-
-  if (result.rowCount === 0) {
-    const err = new Error(
-      `No fue posible resolver un control activo para ${baseStandard} / ${controlRef} en la operación activa`
+  const explicitResult = explicitTenantControlId && isUuid(explicitTenantControlId)
+    ? await client.query(
+      `
+      SELECT
+        tc.id AS tenant_control_id,
+        tc.control_id AS catalog_control_id,
+        tc.operation_id,
+        cc.iso,
+        COALESCE(tac.standard_code, ccs.standard_code, cc.iso) AS standard_code,
+        COALESCE(tac.control_code, ccs.clause, cc.clause) AS clause,
+        COALESCE(tac.control_name, cc.description) AS control_description,
+        cc.category,
+        op.name AS operation_name,
+        op.code AS operation_code,
+        op.operation_type
+      FROM tenant_controls tc
+      JOIN tenant_applicable_controls tac
+        ON tac.tenant_id = tc.tenant_id
+       AND tac.tenant_control_id = tc.id
+       AND tac.active = true
+       AND tac.visible_to_tenant = true
+      JOIN controls_catalog cc
+        ON cc.id = tc.control_id
+       AND cc.is_active = TRUE
+      LEFT JOIN controls_catalog_standards ccs
+        ON ccs.control_id = cc.id
+      JOIN tenant_operations op
+        ON op.id = tc.operation_id
+       AND op.tenant_id = tc.tenant_id
+       AND op.is_active = TRUE
+      WHERE tc.tenant_id = $1::uuid
+        AND tc.id = $2::uuid
+        AND tc.operation_id = $3::uuid
+        AND (
+          UPPER(REPLACE(REPLACE(COALESCE(tac.standard_code, ccs.standard_code, cc.iso, ''), '/', ''), ' ', '')) = $4
+          OR UPPER(REPLACE(REPLACE(COALESCE(cc.iso, ''), '/', ''), ' ', '')) = $4
+        )
+      LIMIT 1
+      `,
+      [tenantId, explicitTenantControlId, operationId, baseStandard]
     )
-    err.statusCode = 422
-    err.details = {
-      operation_id: operationId,
-      standard_code: baseStandard,
-      control_ref: controlRef
-    }
-    throw err
+    : { rowCount: 0, rows: [] }
+
+  if (explicitResult.rowCount > 0) {
+    return explicitResult.rows[0] || null
   }
 
-  return result.rows[0] || null
+  const result = await client.query(
+    `
+    WITH candidates AS (
+      SELECT
+        tc.id AS tenant_control_id,
+        tc.control_id AS catalog_control_id,
+        tc.operation_id,
+        cc.iso,
+        COALESCE(tac.standard_code, ccs.standard_code, cc.iso) AS standard_code,
+        COALESCE(tac.control_code, ccs.clause, cc.clause) AS clause,
+        COALESCE(tac.control_name, cc.description) AS control_description,
+        cc.category,
+        op.name AS operation_name,
+        op.code AS operation_code,
+        op.operation_type,
+        CASE
+          WHEN regexp_replace(upper(COALESCE(tac.control_code, ccs.clause, cc.clause, '')), '[^A-Z0-9.]', '', 'g') = regexp_replace(upper($3), '[^A-Z0-9.]', '', 'g') THEN 1
+          WHEN regexp_replace(upper(COALESCE(ccs.clause, cc.clause, '')), '[^A-Z0-9.]', '', 'g') = regexp_replace(upper($3), '[^A-Z0-9.]', '', 'g') THEN 2
+          WHEN length($3) >= 3 AND regexp_replace(upper(COALESCE(tac.control_code, ccs.clause, cc.clause, '')), '[^A-Z0-9.]', '', 'g') LIKE regexp_replace(upper($3), '[^A-Z0-9.]', '', 'g') || '%' THEN 8
+          WHEN length($5) >= 8 AND lower(COALESCE(tac.control_name, cc.description, '')) LIKE '%' || lower($5) || '%' THEN 9
+          ELSE 99
+        END AS match_priority
+      FROM tenant_applicable_controls tac
+      LEFT JOIN tenant_controls tc
+        ON tc.id = tac.tenant_control_id
+       AND tc.tenant_id = tac.tenant_id
+      LEFT JOIN controls_catalog cc
+        ON cc.id = COALESCE(tac.control_catalog_id, tc.control_id)
+       AND cc.is_active = TRUE
+      LEFT JOIN controls_catalog_standards ccs
+        ON ccs.control_id = cc.id
+      LEFT JOIN tenant_operations op
+        ON op.id = tc.operation_id
+       AND op.tenant_id = tac.tenant_id
+       AND op.is_active = TRUE
+      WHERE tac.tenant_id = $1::uuid
+        AND tac.active = true
+        AND tac.visible_to_tenant = true
+        AND ($4::uuid IS NULL OR tc.operation_id = $4::uuid OR tac.tenant_control_id IS NULL)
+        AND (
+          UPPER(REPLACE(REPLACE(COALESCE(tac.standard_code, ccs.standard_code, cc.iso, ''), '/', ''), ' ', '')) = $2
+          OR UPPER(REPLACE(REPLACE(COALESCE(cc.iso, ''), '/', ''), ' ', '')) = $2
+        )
+    ),
+    ranked AS (
+      SELECT *
+      FROM candidates
+      WHERE match_priority < 99
+      ORDER BY match_priority ASC, control_description ASC NULLS LAST
+      LIMIT 10
+    )
+    SELECT *
+    FROM ranked
+    ORDER BY match_priority ASC
+    `,
+    [tenantId, baseStandard, controlRef, operationId, String(suggestionText || '').slice(0, 120)]
+  )
+
+  const safeMatches = result.rows.filter((row) => row.tenant_control_id && Number(row.match_priority || 99) <= 2)
+  if (safeMatches.length === 1) {
+    return safeMatches[0]
+  }
+
+  throw buildControlMappingRequiredError({
+    tenantId,
+    standardCode: baseStandard,
+    controlRef,
+    operationId,
+    candidates: result.rows.map((row) => ({
+      tenant_control_id: row.tenant_control_id,
+      catalog_control_id: row.catalog_control_id,
+      standard_code: row.standard_code,
+      clause: row.clause,
+      control_description: row.control_description,
+      operation_id: row.operation_id,
+      operation_name: row.operation_name,
+      match_priority: row.match_priority
+    })),
+    reason: result.rowCount > 0 ? 'ambiguous_or_broad_control_reference' : 'control_not_applicable_or_not_found'
+  })
 }
 
 async function createEvidenceFromApprovedDocumentSuggestion(client, {
@@ -301,13 +413,23 @@ async function createEvidenceFromApprovedDocumentSuggestion(client, {
     tenantId,
     suggestedStandardCode: suggestion.suggested_standard_code,
     suggestedControlRef: suggestion.suggested_control_ref,
-    preferredOperationId: preferredOperationId || null
+    preferredOperationId: preferredOperationId || null,
+    explicitTenantControlId: suggestion.target_id || suggestion.tenant_control_id || null,
+    suggestionText: [
+      suggestion.suggested_reason,
+      suggestion.file_name,
+      suggestion.document_metadata_json?.title
+    ].filter(Boolean).join(' ')
   })
 
   if (!resolvedControl) {
-    const err = new Error('No fue posible resolver un control activo del tenant para esta sugerencia')
-    err.statusCode = 422
-    throw err
+    throw buildControlMappingRequiredError({
+      tenantId,
+      standardCode: suggestion.suggested_standard_code,
+      controlRef: suggestion.suggested_control_ref,
+      operationId: preferredOperationId || null,
+      reason: 'control_mapping_required'
+    })
   }
 
   const existing = await client.query(
@@ -846,9 +968,33 @@ router.post('/suggestions/:suggestionId/create-evidence', auth, async (req, res)
     })
   } catch (err) {
     await client.query('ROLLBACK')
+    if (err.code === 'CONTROL_MAPPING_REQUIRED') {
+      console.warn('CONTROL_MAPPING_REQUIRED CREATE EVIDENCE FROM DOCUMENT SUGGESTION:', {
+        tenant_id: tenantId,
+        suggestion_id: req.params.suggestionId,
+        reason: err.details?.reason || null,
+        standard_code: err.details?.standard_code || null,
+        control_ref: err.details?.control_ref || null,
+      })
+      return res.status(422).json({
+        ok: false,
+        code: 'CONTROL_MAPPING_REQUIRED',
+        message: err.message,
+        error: err.message,
+        mapping_required: true,
+        candidate_controls: err.details?.candidate_controls || [],
+        tenant_filter_enforced: true,
+        filtered_by_tenant_id: true,
+        applicability_universe_applied: true,
+        details: err.details || {},
+      })
+    }
+
     console.error('ERROR CREATE EVIDENCE FROM DOCUMENT SUGGESTION:', err)
 
     return res.status(err.statusCode || 500).json({
+      ok: false,
+      code: err.code || 'DOCUMENT_SUGGESTION_EVIDENCE_ERROR',
       error: err.message || 'Error creando evidencia desde sugerencia documental'
     })
   } finally {

@@ -243,6 +243,7 @@ async function renderHtmlToPdf({
       render_engine: 'puppeteer',
       ai_engine_used: metadata.ai_engine_used ?? null,
       used_llm: metadata.used_llm ?? null,
+      ai_disabled_by_plan: metadata.ai_disabled_by_plan ?? null,
       model_mode: metadata.model_mode ?? null,
       selected_model: metadata.selected_model ?? null,
       fallback_used: metadata.fallback_used ?? null,

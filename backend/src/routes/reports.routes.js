@@ -3080,15 +3080,29 @@ router.post('/generate', auth, async (req, res) => {
       output_path: outputPath,
     });
 
+    const aiMetrics = safeObject(reportData.ai_report_addendum?.ai_metrics);
+    const aiTrace = safeObject(reportData.ai_report_addendum?.trace);
+    const aiDisabledByPlan =
+      reportData.ai_report_addendum?.ai_disabled_by_plan === true ||
+      aiMetrics.ai_disabled_by_plan === true ||
+      aiTrace.ai_disabled_by_plan === true;
+    const pdfAiEngineUsed = aiDisabledByPlan
+      ? false
+      : (aiMetrics.ai_engine_used === true || aiTrace.ai_engine_used === true);
+
     await generatePdfFromHtml(html, outputPath, {
       requestId: req.requestId || null,
       templateName: resolvedReportTypeCode || report_type_code,
       metadata: {
-        ai_engine_used: reportData.ai_report_addendum?.ai_metrics ? true : null,
-        used_llm: reportData.ai_report_addendum?.ai_metrics?.llm_used ?? reportData.ai_report_addendum?.llm_used ?? null,
+        ai_engine_used: pdfAiEngineUsed,
+        used_llm: aiDisabledByPlan ? false : (aiMetrics.llm_used ?? reportData.ai_report_addendum?.llm_used ?? null),
+        ai_disabled_by_plan: aiDisabledByPlan,
+        ai_disabled_reason: aiMetrics.ai_disabled_reason || aiTrace.ai_disabled_reason || (aiDisabledByPlan ? 'ai_disabled_by_plan' : null),
+        deterministic_mode: aiDisabledByPlan ? true : (aiMetrics.deterministic_mode ?? aiTrace.deterministic_mode ?? null),
+        synthetic_result: aiDisabledByPlan ? true : (reportData.ai_report_addendum?.synthetic_result ?? null),
         model_mode: reportData.ai_report_addendum?.model_mode_used || reportAiOptions.model_mode || null,
-        selected_model: reportData.ai_report_addendum?.model_name || reportData.ai_report_addendum?.ai_metrics?.model_name || null,
-        fallback_used: reportData.ai_report_addendum?.fallback_used ?? reportData.ai_report_addendum?.ai_metrics?.fallback_used ?? null,
+        selected_model: aiDisabledByPlan ? null : (reportData.ai_report_addendum?.model_name || aiMetrics.model_name || null),
+        fallback_used: aiDisabledByPlan ? false : (reportData.ai_report_addendum?.fallback_used ?? aiMetrics.fallback_used ?? null),
       },
     });
 
