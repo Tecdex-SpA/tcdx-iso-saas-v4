@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
 const auth = require('./middleware/auth');
 const { enforceApiAccess } = require('./middleware/rbac.middleware');
@@ -61,6 +62,7 @@ const aiTracesRoutes = require('./routes/ai-traces.routes');
 const quotesRoutes = require('./routes/quotes.routes');
 const objectivesRoutes = require('./routes/objectives.routes');
 const companyProfileRoutes = require('./routes/company-profile.routes');
+const tenantFilesRoutes = require('./routes/tenant-files.routes');
 const { aiLocaleResponseGuard } = require('./middleware/aiLocaleResponseGuard');
 
 const app = express();
@@ -183,6 +185,7 @@ app.use((req, res, next) => {
 
   if (
     req.path.startsWith('/api/ai') ||
+    req.path.startsWith('/ai-feedback') ||
     req.path.startsWith('/ai-external-lookup') ||
     req.path.startsWith('/api/search') ||
     req.path.includes('/report')
@@ -209,7 +212,47 @@ app.use(cors({
 }));
 app.use('/uploads/logos', express.static(path.join(__dirname, '..', 'uploads', 'logos')));
 app.use('/uploads/profiles', express.static(path.join(__dirname, '..', 'uploads', 'profiles')));
-app.use('/uploads/tenants', express.static(path.join(__dirname, '..', 'uploads', 'tenants')));
+app.get('/uploads/tenants/:fileName', (req, res) => {
+  const fileName = path.basename(String(req.params.fileName || ''));
+  const ext = path.extname(fileName).toLowerCase();
+  const allowedLogoExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
+
+  if (!fileName || fileName !== String(req.params.fileName || '') || !allowedLogoExtensions.has(ext)) {
+    return res.status(404).json({ ok: false, code: 'PUBLIC_TENANT_ASSET_NOT_FOUND', error: 'Archivo no encontrado' });
+  }
+
+  const filePath = path.resolve(__dirname, '..', 'uploads', 'tenants', fileName);
+  const publicRoot = path.resolve(__dirname, '..', 'uploads', 'tenants');
+  if (!filePath.startsWith(`${publicRoot}${path.sep}`) || !fs.existsSync(filePath)) {
+    return res.status(404).json({ ok: false, code: 'PUBLIC_TENANT_ASSET_NOT_FOUND', error: 'Archivo no encontrado' });
+  }
+
+  try {
+    const fileStat = fs.lstatSync(filePath);
+    const realFilePath = fs.realpathSync(filePath);
+    const realPublicRoot = fs.realpathSync(publicRoot);
+    if (
+      !fileStat.isFile() ||
+      fileStat.isSymbolicLink() ||
+      (realFilePath !== realPublicRoot && !realFilePath.startsWith(`${realPublicRoot}${path.sep}`))
+    ) {
+      return res.status(404).json({ ok: false, code: 'PUBLIC_TENANT_ASSET_NOT_FOUND', error: 'Archivo no encontrado' });
+    }
+  } catch (_error) {
+    return res.status(404).json({ ok: false, code: 'PUBLIC_TENANT_ASSET_NOT_FOUND', error: 'Archivo no encontrado' });
+  }
+
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
+  return res.sendFile(filePath);
+});
+app.use('/uploads/tenants', (_req, res) => {
+  return res.status(404).json({
+    ok: false,
+    code: 'PUBLIC_TENANT_ASSET_NOT_FOUND',
+    error: 'Archivo no encontrado',
+  });
+});
 app.use('/uploads/tenant-logos', express.static(path.join(__dirname, '..', 'uploads', 'tenant-logos')));
 app.use('/api/auth', express.json({ limit: jsonBodyLimit }), authRoutes);
 
@@ -253,8 +296,11 @@ app.use('/api/findings', findingsRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/health', auth, enforceApiAccess, healthRoutes);
-app.use('/ai-feedback', aiFeedbackRoutes);
-app.use('/ai-external-lookup', aiExternalLookupRoutes);
+app.use('/api/files/tenant', tenantFilesRoutes);
+app.use('/api/ai-feedback', aiFeedbackRoutes);
+app.use('/api/ai-external-lookup', aiExternalLookupRoutes);
+app.use('/ai-feedback', auth, enforceApiAccess, aiFeedbackRoutes);
+app.use('/ai-external-lookup', auth, enforceApiAccess, aiExternalLookupRoutes);
 app.use('/api/ai-traces', aiTracesRoutes);
 app.use('/api/quotes', quotesRoutes);
 app.use('/api/me', meRoutes);

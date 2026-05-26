@@ -163,6 +163,8 @@ def expected_ok(code_value, expected):
         return code_value in (401, 403)
     if expected == "403404":
         return code_value in (403, 404)
+    if expected == "400403404":
+        return code_value in (400, 403, 404)
     if expected == "401":
         return code_value == 401
     if expected == "403":
@@ -469,6 +471,27 @@ if [[ -n "${TOKEN:-}" ]]; then
   timed_call_user_jwt "backend" "ISO Health standards API" "GET" "/health/standards" "$OUT_DIR/22-health-standards.json" "" "2xx" "warning"
   timed_call_user_jwt "backend" "ISO Health root causes API" "GET" "/health/root-causes" "$OUT_DIR/23-health-root-causes.json" "" "2xx" "warning"
   timed_call_user_jwt "backend" "IA Compliance suggestions backend" "GET" "/api/ai-compliance/suggestions" "$OUT_DIR/24-ai-compliance-suggestions.json" "" "$AI_EXPECTED" "critical"
+  timed_call_user_jwt "backend-security" "AI feedback API protected" "GET" "/api/ai-feedback" "$OUT_DIR/24b-ai-feedback-api.json" "" "2xx" "critical"
+  timed_call_user_jwt "backend-security" "AI external lookup API entitlement" "GET" "/api/ai-external-lookup" "$OUT_DIR/24c-ai-external-lookup-api.json" "" "$AI_EXPECTED" "critical"
+
+  NO_TOKEN_FEEDBACK="$OUT_DIR/24d-ai-feedback-no-token.json"
+  NO_TOKEN_FEEDBACK_CODE="$(http_code GET "$BASE_URL/ai-feedback" "$NO_TOKEN_FEEDBACK" || true)"
+  record_result "backend-security" "AI feedback legacy without token blocked" "GET" "/ai-feedback" "$NO_TOKEN_FEEDBACK_CODE" "0" "$NO_TOKEN_FEEDBACK" "401403" "critical"
+
+  NO_TOKEN_LOOKUP="$OUT_DIR/24e-ai-external-lookup-no-token.json"
+  NO_TOKEN_LOOKUP_CODE="$(http_code GET "$BASE_URL/ai-external-lookup" "$NO_TOKEN_LOOKUP" || true)"
+  record_result "backend-security" "AI external lookup legacy without token blocked" "GET" "/ai-external-lookup" "$NO_TOKEN_LOOKUP_CODE" "0" "$NO_TOKEN_LOOKUP" "401403" "critical"
+
+  UPLOADS_TENANTS_TRAVERSAL="$OUT_DIR/24f-uploads-tenants-traversal.json"
+  UPLOADS_TENANTS_TRAVERSAL_CODE="$(http_code GET "$BASE_URL/uploads/tenants/%2e%2e/app.js" "$UPLOADS_TENANTS_TRAVERSAL" || true)"
+  record_result "backend-security" "Uploads tenants traversal not exposed" "GET" "/uploads/tenants/%2e%2e/app.js" "$UPLOADS_TENANTS_TRAVERSAL_CODE" "0" "$UPLOADS_TENANTS_TRAVERSAL" "400403404" "critical"
+
+  if [[ -n "${TENANT_ID:-}" ]]; then
+    TENANT_FILE_TRAVERSAL="$OUT_DIR/24g-tenant-file-traversal.json"
+    TENANT_FILE_TRAVERSAL_CODE="$(http_code GET "$BASE_URL/api/files/tenant/$TENANT_ID/%2e%2e/app.js" "$TENANT_FILE_TRAVERSAL" \
+      -H "Authorization: Bearer $TOKEN" || true)"
+    record_result "backend-security" "Authenticated tenant file traversal blocked" "GET" "/api/files/tenant/<tenant>/../app.js" "$TENANT_FILE_TRAVERSAL_CODE" "0" "$TENANT_FILE_TRAVERSAL" "400403404" "critical"
+  fi
 
   CANDIDATES=(
     "/api/tenant/${TENANT_ID:-}"
