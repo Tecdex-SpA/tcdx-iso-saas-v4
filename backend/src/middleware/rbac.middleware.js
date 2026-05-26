@@ -192,6 +192,11 @@ const API_RULES = [
     read: [...TENANT_READ_ROLES, 'dealer'],
     write: ['admin', 'tenant_admin', 'auditor', 'dealer'],
   },
+  {
+    prefix: '/api/files/tenant',
+    read: TENANT_READ_ROLES,
+    write: [],
+  },
 
   // Usuarios / SaaS / plataforma
   {
@@ -298,6 +303,26 @@ const API_RULES = [
     prefix: '/api/ai-compliance',
     read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
     write: ['admin', 'tenant_admin', 'operativo'],
+  },
+  {
+    prefix: '/api/ai-feedback',
+    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+  },
+  {
+    prefix: '/api/ai-external-lookup',
+    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+  },
+  {
+    prefix: '/ai-feedback',
+    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+  },
+  {
+    prefix: '/ai-external-lookup',
+    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
   },
   {
     prefix: '/api/ai',

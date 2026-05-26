@@ -145,6 +145,14 @@ router.use(authenticateFeedback);
 // POST /ai-feedback
 // Guarda feedback supervisado de una respuesta IA
 // =====================================================
+router.get('/', async (_req, res) => {
+  return res.json({
+    ok: true,
+    service: 'ai-feedback',
+    data: [],
+  });
+});
+
 router.post('/', async (req, res) => {
   try {
     const body = req.body || {};

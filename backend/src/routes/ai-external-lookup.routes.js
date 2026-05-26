@@ -9,6 +9,7 @@ const {
 
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { isTenantAiFeatureEnabled } = require('../services/tenantAiSettings.service');
 
 const router = express.Router();
 
@@ -173,10 +174,9 @@ function getExternalLookupUserId(req) {
 
 function getExternalLookupTenantId(req) {
   return (
+    req.externalLookupTenantId ||
     req.user?.tenant_id ||
     req.user?.tenantId ||
-    req.body?.tenant_id ||
-    req.body?.tenantId ||
     null
   );
 }
@@ -185,6 +185,77 @@ function getBillingMonth() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
+
+async function requireExternalLookupEntitlement(req, res, next) {
+  try {
+    const user = req.user || {};
+    const superAdmin = isSuperAdmin(user);
+    const tokenTenantId = getTenantId(user);
+    const requestedTenantId =
+      req.body?.tenant_id ||
+      req.body?.tenantId ||
+      req.query?.tenant_id ||
+      req.query?.tenantId ||
+      null;
+    const tenantId = superAdmin ? (requestedTenantId || tokenTenantId) : tokenTenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        code: 'TENANT_REQUIRED',
+        error: 'tenant_id requerido para búsqueda externa',
+      });
+    }
+
+    if (!superAdmin && requestedTenantId && String(requestedTenantId) !== String(tokenTenantId)) {
+      return res.status(403).json({
+        ok: false,
+        code: 'RBAC_DENIED',
+        error: 'No autorizado para consultar búsqueda externa de otro tenant',
+      });
+    }
+
+    const entitlement = await isTenantAiFeatureEnabled(tenantId, 'web_research');
+    if (!entitlement.enabled) {
+      return res.status(403).json({
+        ok: false,
+        code: 'AI_DISABLED_BY_PLAN',
+        error: 'IA no habilitada para este plan/empresa.',
+        ai_disabled_by_plan: true,
+        feature: 'web_research',
+        ai_engine_used: false,
+        llm_used: false,
+        used_llm: false,
+        used_web: false,
+        deterministic_mode: true,
+        fallback_used: false,
+        reason: entitlement.reason || 'ai_disabled_by_plan',
+      });
+    }
+
+    req.externalLookupTenantId = tenantId;
+    return next();
+  } catch (error) {
+    console.error('ERROR EXTERNAL LOOKUP ENTITLEMENT CHECK:', error);
+
+    return res.status(500).json({
+      ok: false,
+      code: 'EXTERNAL_LOOKUP_ENTITLEMENT_ERROR',
+      error: 'Error validando habilitación de búsqueda externa',
+      ...errorDetail(error),
+    });
+  }
+}
+
+router.use(requireExternalLookupEntitlement);
+
+router.get('/', async (_req, res) => {
+  return res.json({
+    ok: true,
+    service: 'ai-external-lookup',
+    data: [],
+  });
+});
 
 router.post('/search', auth, async (req, res, next) => {
   try {
@@ -497,9 +568,9 @@ router.post('/search', async (req, res) => {
     const body = req.body || {};
     const requestedTenantId = body.tenant_id || null;
 
-    const finalTenantId = superAdmin
+    const finalTenantId = req.externalLookupTenantId || (superAdmin
       ? requestedTenantId || tokenTenantId
-      : tokenTenantId;
+      : tokenTenantId);
 
     if (!finalTenantId) {
       return res.status(400).json({
@@ -556,9 +627,9 @@ router.post('/cache', async (req, res) => {
     const body = req.body || {};
     const requestedTenantId = body.tenant_id || null;
 
-    const finalTenantId = superAdmin
+    const finalTenantId = req.externalLookupTenantId || (superAdmin
       ? requestedTenantId || tokenTenantId
-      : tokenTenantId;
+      : tokenTenantId);
 
     if (!finalTenantId) {
       return res.status(400).json({
