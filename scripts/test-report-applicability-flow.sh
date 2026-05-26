@@ -17,6 +17,16 @@ curl -sk -X POST "$BASE_URL/api/auth/login" -H 'Content-Type: application/json' 
 TOKEN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("token",""))' "$OUT_DIR/login.json")"
 [ -n "$TOKEN" ] || { echo "ERROR: login sin token" >&2; exit 1; }
 
+curl -sk "$BASE_URL/api/me/entitlements" -H "Authorization: Bearer $TOKEN" -o "$OUT_DIR/entitlements.json"
+AI_ENABLED="$(python3 - "$OUT_DIR/entitlements.json" <<'PY'
+import json, sys
+try:
+    print(str(json.load(open(sys.argv[1])).get("ai",{}).get("enabled", False)).lower())
+except Exception:
+    print("false")
+PY
+)"
+
 curl -sk -X POST "$BASE_URL/api/reports/generate/start" \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
@@ -48,6 +58,20 @@ trace = result.get("trace") or result.get("ai") or result.get("metrics") or {}
 if trace.get("fallback_used") is True and trace.get("ai_enrichment_failed") is not True:
     raise SystemExit("fallback sin ai_enrichment_failed")
 PY
+
+if [ "$AI_ENABLED" != "true" ]; then
+  python3 - "$OUT_DIR/job-latest.json" <<'PY'
+import json, sys
+d=json.load(open(sys.argv[1]))
+blob=json.dumps(d.get("result_json") or {}, ensure_ascii=False).lower()
+if '"ai_engine_used": true' in blob or '"ai_engine_used":true' in blob:
+    raise SystemExit("tenant sin IA: result_json declara ai_engine_used=true")
+if "qwen" in blob:
+    raise SystemExit("tenant sin IA: result_json expone modelo qwen")
+if "ai_disabled_by_plan" not in blob:
+    raise SystemExit("tenant sin IA: result_json no declara ai_disabled_by_plan")
+PY
+fi
 
 DOWNLOAD_URL="$(python3 - "$OUT_DIR/job-latest.json" <<'PY'
 import json, sys

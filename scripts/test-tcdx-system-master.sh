@@ -148,6 +148,15 @@ def expected_ok(code_value, expected):
         return False
     if expected == "2xx":
         return 200 <= code_value < 300
+    if expected == "2xx_ai_disabled":
+        if 200 <= code_value < 300:
+            return True
+        return code_value == 403 and (
+            '"code":"AI_DISABLED_BY_PLAN"' in text
+            or '"code": "AI_DISABLED_BY_PLAN"' in text
+            or '"ai_disabled_by_plan":true' in text
+            or '"ai_disabled_by_plan": true' in text
+        )
     if expected == "2xx3xx":
         return 200 <= code_value < 400
     if expected == "401403":
@@ -437,6 +446,20 @@ else
   log "Token obtained. tenant_id=${TENANT_ID:-not_detected} user_id=${USER_ID:-not_detected} role=${USER_ROLE:-not_detected}"
 fi
 
+AI_EXPECTED="2xx"
+if [[ -n "${TOKEN:-}" ]]; then
+  ENTITLEMENTS_JSON="$OUT_DIR/02-me-entitlements.json"
+  ENTITLEMENTS_CODE="$(http_code GET "$BASE_URL/api/me/entitlements" "$ENTITLEMENTS_JSON" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "x-tcdx-locale: es" || true)"
+  record_result "auth" "Tenant entitlements" "GET" "/api/me/entitlements" "$ENTITLEMENTS_CODE" "0" "$ENTITLEMENTS_JSON" "2xx" "warning"
+  AI_ENABLED="$(json_get "$ENTITLEMENTS_JSON" "ai.enabled")"
+  if [[ "$AI_ENABLED" != "true" ]]; then
+    AI_EXPECTED="2xx_ai_disabled"
+    log "Tenant sin IA habilitada; pruebas IA backend aceptarán AI_DISABLED_BY_PLAN controlado."
+  fi
+fi
+
 # 3. Protected backend checks
 if [[ -n "${TOKEN:-}" ]]; then
   log "3) Protected backend checks"
@@ -444,7 +467,7 @@ if [[ -n "${TOKEN:-}" ]]; then
   timed_call_user_jwt "backend" "ISO Health dashboard API" "GET" "/health/dashboard" "$OUT_DIR/21-health-dashboard.json" "" "2xx" "critical"
   timed_call_user_jwt "backend" "ISO Health standards API" "GET" "/health/standards" "$OUT_DIR/22-health-standards.json" "" "2xx" "warning"
   timed_call_user_jwt "backend" "ISO Health root causes API" "GET" "/health/root-causes" "$OUT_DIR/23-health-root-causes.json" "" "2xx" "warning"
-  timed_call_user_jwt "backend" "IA Compliance suggestions backend" "GET" "/api/ai-compliance/suggestions" "$OUT_DIR/24-ai-compliance-suggestions.json" "" "2xx" "critical"
+  timed_call_user_jwt "backend" "IA Compliance suggestions backend" "GET" "/api/ai-compliance/suggestions" "$OUT_DIR/24-ai-compliance-suggestions.json" "" "$AI_EXPECTED" "critical"
 
   CANDIDATES=(
     "/api/tenant/${TENANT_ID:-}"
@@ -580,7 +603,7 @@ if [[ -n "${TOKEN:-}" && "$RUN_DEEP_AI" = "true" ]]; then
 }
 JSON
 )"
-  timed_call_user_jwt "ia-auditor" "IA Auditor analyze executive" "POST" "/api/ai-auditor/analyze" "$OUT_DIR/50-ai-auditor-analyze.json" "$AUDITOR_BODY" "2xx" "critical"
+  timed_call_user_jwt "ia-auditor" "IA Auditor analyze executive" "POST" "/api/ai-auditor/analyze" "$OUT_DIR/50-ai-auditor-analyze.json" "$AUDITOR_BODY" "$AI_EXPECTED" "critical"
 
   AUDITOR_ASYNC_BODY="$(cat <<JSON
 {
@@ -598,10 +621,13 @@ JSON
 }
 JSON
 )"
-  timed_call_user_jwt "ia-auditor" "IA Auditor async start" "POST" "/api/ai-auditor/analyze/start" "$OUT_DIR/51-ai-auditor-async-start.json" "$AUDITOR_ASYNC_BODY" "2xx" "critical"
-  IA_JOB_ID="$(json_get "$OUT_DIR/51-ai-auditor-async-start.json" "job_id")"
+  timed_call_user_jwt "ia-auditor" "IA Auditor async start" "POST" "/api/ai-auditor/analyze/start" "$OUT_DIR/51-ai-auditor-async-start.json" "$AUDITOR_ASYNC_BODY" "$AI_EXPECTED" "critical"
+  IA_JOB_ID="$(json_get "$OUT_DIR/51-ai-auditor-async-start.json" "job_id" || true)"
   if [[ -n "$IA_JOB_ID" ]]; then
     timed_call_user_jwt "ia-auditor" "IA Auditor async job status" "GET" "/api/ai-auditor/analyze/jobs/$IA_JOB_ID" "$OUT_DIR/52-ai-auditor-async-status.json" "" "2xx" "critical"
+  elif [[ "$AI_EXPECTED" = "2xx_ai_disabled" ]] && grep -q "AI_DISABLED_BY_PLAN\\|ai_disabled_by_plan" "$OUT_DIR/51-ai-auditor-async-start.json"; then
+    echo "IA Auditor async bloqueado por plan IA deshabilitado; resultado controlado esperado." > "$OUT_DIR/52-ai-auditor-async-status.json"
+    record_result "ia-auditor" "IA Auditor async job status skipped by plan" "GET" "/api/ai-auditor/analyze/jobs/<job_id>" "403" "0" "$OUT_DIR/51-ai-auditor-async-start.json" "2xx_ai_disabled" "critical"
   else
     echo "No job_id returned by async start." > "$OUT_DIR/52-ai-auditor-async-status.json"
     record_result "ia-auditor" "IA Auditor async job status" "GET" "/api/ai-auditor/analyze/jobs/<job_id>" "500" "0" "$OUT_DIR/52-ai-auditor-async-status.json" "2xx" "critical"
