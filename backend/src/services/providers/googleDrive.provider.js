@@ -1,13 +1,41 @@
 const { google } = require('googleapis');
 
+const GOOGLE_DRIVE_READ_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+const GOOGLE_USERINFO_EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email';
+
 function getScopes() {
-  return String(
+  const configured = String(
     process.env.GOOGLE_DRIVE_SCOPES ||
-      'https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/userinfo.email'
+      `${GOOGLE_DRIVE_READ_SCOPE} ${GOOGLE_USERINFO_EMAIL_SCOPE}`
   )
     .split(/[\s,]+/)
     .map((scope) => scope.trim())
     .filter(Boolean);
+
+  const scopes = new Set(configured);
+  scopes.add(GOOGLE_DRIVE_READ_SCOPE);
+  scopes.add(GOOGLE_USERINFO_EMAIL_SCOPE);
+  return Array.from(scopes);
+}
+
+function parseScopes(value) {
+  if (Array.isArray(value)) return value.map((scope) => String(scope || '').trim()).filter(Boolean);
+  return String(value || '')
+    .split(/[\s,]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+}
+
+function hasGoogleDriveReadScope(value) {
+  const scopes = new Set(parseScopes(value));
+  return scopes.has(GOOGLE_DRIVE_READ_SCOPE) || scopes.has('https://www.googleapis.com/auth/drive');
+}
+
+function buildGoogleReconnectRequiredError() {
+  const err = new Error('Debe reconectar Google Drive para conceder permisos de lectura/exportación de la carpeta seleccionada.');
+  err.statusCode = 409;
+  err.code = 'GOOGLE_RECONNECT_REQUIRED';
+  return err;
 }
 
 function getGoogleOAuthClient() {
@@ -71,7 +99,7 @@ async function listDriveFiles({ oauthClient, folderId, pageToken = null }) {
     pageToken: pageToken || undefined,
     pageSize: 100,
     fields:
-      'nextPageToken, files(id, name, mimeType, webViewLink, size, md5Checksum, modifiedTime, version, parents, iconLink, owners(emailAddress,displayName))',
+      'nextPageToken, files(id, name, mimeType, webViewLink, size, md5Checksum, modifiedTime, version, headRevisionId, parents, iconLink, owners(emailAddress,displayName))',
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
   });
@@ -111,7 +139,10 @@ async function listDriveFolders({ oauthClient, parentId = 'root', pageToken = nu
 }
 
 module.exports = {
+  GOOGLE_DRIVE_READ_SCOPE,
   getScopes,
+  hasGoogleDriveReadScope,
+  buildGoogleReconnectRequiredError,
   getGoogleOAuthClient,
   buildGoogleOAuthUrl,
   exchangeCodeForTokens,

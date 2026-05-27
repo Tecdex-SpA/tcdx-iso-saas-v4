@@ -1,6 +1,10 @@
 const { google } = require('googleapis')
 const { decryptToken } = require('../utils/cryptoTokens')
-const { buildOAuthClientFromTokens } = require('./providers/googleDrive.provider')
+const {
+  buildOAuthClientFromTokens,
+  hasGoogleDriveReadScope,
+  buildGoogleReconnectRequiredError
+} = require('./providers/googleDrive.provider')
 
 const MAX_DOWNLOAD_BYTES = Number(process.env.DOCUMENT_ANALYSIS_MAX_DOWNLOAD_BYTES || 15 * 1024 * 1024)
 const MAX_TEXT_CHARS = Number(process.env.DOCUMENT_ANALYSIS_MAX_TEXT_CHARS || 60000)
@@ -50,6 +54,18 @@ function bufferFromArrayBuffer(arrayBuffer) {
 }
 
 async function downloadGoogleFile({ document, integration }) {
+  if (!hasGoogleDriveReadScope(integration.scopes)) {
+    const reconnectError = buildGoogleReconnectRequiredError()
+    return {
+      ok: false,
+      code: reconnectError.code,
+      warning: reconnectError.message,
+      buffer: null,
+      contentType: document.mime_type,
+      exportMimeType: null
+    }
+  }
+
   const oauthClient = buildOAuthClientFromTokens(buildTokensFromIntegration(integration))
   const drive = google.drive({ version: 'v3', auth: oauthClient })
   const ext = getExtension(document.file_name, document.mime_type)
@@ -99,9 +115,16 @@ async function downloadGoogleFile({ document, integration }) {
       exportMimeType
     }
   } catch (err) {
+    const status = err?.response?.status || err?.code || null
+    const message = String(err?.message || '')
+    const isAccessDenied = status === 403 || /not granted|insufficient|permission|forbidden|access/i.test(message)
+    const code = isAccessDenied ? 'GOOGLE_FILE_ACCESS_DENIED' : 'GOOGLE_FILE_DOWNLOAD_ERROR'
     return {
       ok: false,
-      warning: `No fue posible descargar/exportar desde Google Drive: ${err.message}`,
+      code,
+      warning: isAccessDenied
+        ? 'La cuenta conectada no tiene permiso de lectura/exportación sobre este archivo.'
+        : `No fue posible descargar/exportar desde Google Drive: ${message}`,
       buffer: null,
       contentType: document.mime_type,
       exportMimeType: null
@@ -214,6 +237,7 @@ async function extractDocumentContent({ document, integration }) {
       text: '',
       extraction: {
         method: 'google_drive_download',
+        code: downloaded.code || null,
         warning: downloaded.warning,
         content_type: downloaded.contentType,
         export_mime_type: downloaded.exportMimeType

@@ -24,6 +24,8 @@ type Source = {
   associated_standard_code?: string | null;
   include_subfolders?: boolean;
   last_sync_at?: string | null;
+  last_sync_status?: string | null;
+  last_sync_error?: string | null;
   sync_enabled?: boolean;
   integration_status?: string | null;
   provider_account_email?: string | null;
@@ -253,7 +255,11 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
     const json = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      throw new Error(json?.error || 'Error en la operación');
+      const code = json?.code || '';
+      const message = code === 'GOOGLE_RECONNECT_REQUIRED'
+        ? 'Debe reconectar Google Drive para permitir lectura/exportación de documentos existentes en la carpeta seleccionada.'
+        : (json?.error || 'Error en la operación');
+      throw new Error(message);
     }
 
     return json;
@@ -425,6 +431,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
           source_name: folder.name,
           folder_id: folder.id,
           folder_path: path,
+          include_subfolders: includeSubfolders,
         }),
       });
       setMessage(`Fuente documental creada: ${folder.name}`);
@@ -447,6 +454,22 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       await refresh();
     } catch (err: any) {
       setMessage(err.message || 'No fue posible sincronizar la fuente.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const disconnectSource = async (source: Source) => {
+    if (!window.confirm('Esto detendrá la sincronización de esta carpeta. No se eliminarán evidencias históricas.')) return;
+    try {
+      setWorking(`disconnect-${source.id}`);
+      await fetchJson(`${API_URL}/api/document-integrations/sources/${source.id}`, {
+        method: 'DELETE',
+      });
+      setMessage(`Fuente desconectada: ${source.source_name}. Las evidencias históricas se conservan.`);
+      await refresh();
+    } catch (err: any) {
+      setMessage(err.message || 'No fue posible desconectar la fuente.');
     } finally {
       setWorking('');
     }
@@ -636,8 +659,12 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
           {selectedProvider === 'google_drive' && (
             <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
               <p className="text-sm font-semibold text-slate-700">Autoriza Google Drive y luego selecciona una carpeta específica. No se sincroniza todo Mi unidad por defecto.</p>
+              <label className="mt-3 flex w-fit items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={includeSubfolders} onChange={(e) => setIncludeSubfolders(e.target.checked)} />
+                Incluir subcarpetas al sincronizar
+              </label>
               <button onClick={connectGoogle} disabled={working === 'connect'} className="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
-                {working === 'connect' ? 'Conectando...' : 'Conectar con Google'}
+                {working === 'connect' ? 'Conectando...' : googleIntegration ? 'Reconectar Google Drive' : 'Conectar con Google'}
               </button>
             </div>
           )}
@@ -757,13 +784,27 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
                     <div className="font-black text-slate-900">{source.source_name}</div>
                     <div className="mt-1 text-xs text-slate-500">{source.provider} · {source.status || 'active'}</div>
                     <div className="mt-1 text-xs text-slate-500">{source.folder_display_name || source.folder_path || source.folder_id || 'Sin carpeta'}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Subcarpetas: {source.include_subfolders === false ? 'no' : 'sí'} · Último estado: {source.last_sync_status || '—'}
+                    </div>
+                    {source.last_sync_error && <div className="mt-1 text-xs font-semibold text-red-700">{source.last_sync_error}</div>}
                     {source.associated_standard_code && <div className="mt-1 text-xs font-bold text-blue-700">{source.associated_standard_code}</div>}
                     <div className="mt-1 text-xs text-slate-500">Última sync: {fmtDate(source.last_sync_at)}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={() => syncSource(source)} disabled={working === `sync-${source.id}`} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60">
+                    <button onClick={() => syncSource(source)} disabled={working === `sync-${source.id}` || source.status === 'disconnected'} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60">
                       {working === `sync-${source.id}` ? 'Sincronizando...' : 'Sincronizar ahora'}
                     </button>
+                    {source.provider === 'google_drive' && (
+                      <button onClick={connectGoogle} disabled={working === 'connect'} className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 disabled:opacity-60">
+                        Reconectar
+                      </button>
+                    )}
+                    {source.status !== 'disconnected' && (
+                      <button onClick={() => disconnectSource(source)} disabled={working === `disconnect-${source.id}`} className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-100 disabled:opacity-60">
+                        {working === `disconnect-${source.id}` ? 'Desconectando...' : 'Desconectar'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1132,7 +1173,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
                           Abrir
                         </a>
                       )}
-                      <button onClick={() => analyzeDocument(doc)} disabled={working === `analyze-${doc.id}`} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60">
+                      <button onClick={() => analyzeDocument(doc)} disabled={working === `analyze-${doc.id}` || ['missing', 'ignored', 'error'].includes(String(doc.status || '').toLowerCase())} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60">
                         {working === `analyze-${doc.id}` ? 'Analizando...' : 'Analizar'}
                       </button>
                       <button onClick={() => viewAnalysis(doc)} disabled={working === `analysis-${doc.id}`} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60">

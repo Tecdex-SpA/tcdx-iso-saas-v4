@@ -50,7 +50,11 @@ router.post('/sources/:sourceId/sync-google', auth, async (req, res) => {
     return res.json(result)
   } catch (err) {
     console.error('ERROR SYNC GOOGLE ROUTE:', err.message)
-    return res.status(500).json({ error: 'Error sincronizando Google Drive' })
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      code: err.code || 'GOOGLE_DRIVE_SYNC_ERROR',
+      error: err.statusCode ? err.message : 'Error sincronizando Google Drive'
+    })
   }
 })
 

@@ -486,8 +486,8 @@ async function getAvailableControls(tenantId, standards) {
 async function analyzeDocument({ tenantId, documentId, userId = null }) {
   const docResult = await pool.query(
     `
-    SELECT d.*, s.source_name, i.provider_account_email,
-           i.encrypted_access_token, i.encrypted_refresh_token, i.token_expires_at
+    SELECT d.*, s.source_name, s.status AS source_status, i.provider_account_email,
+           i.encrypted_access_token, i.encrypted_refresh_token, i.token_expires_at, i.scopes
     FROM document_index d
     LEFT JOIN tenant_document_sources s
       ON s.id = d.source_id
@@ -509,6 +509,18 @@ async function analyzeDocument({ tenantId, documentId, userId = null }) {
   }
 
   const document = docResult.rows[0]
+  if (document.source_status === 'disconnected') {
+    const err = new Error('La fuente documental está desconectada')
+    err.statusCode = 409
+    err.code = 'DOCUMENT_SOURCE_DISCONNECTED'
+    throw err
+  }
+  if (document.status === 'missing') {
+    const err = new Error('El documento ya no está disponible en la fuente documental')
+    err.statusCode = 409
+    err.code = 'DOCUMENT_NOT_AVAILABLE_IN_SOURCE'
+    throw err
+  }
   const safeDocument = sanitizeDocumentForResponse(document)
   const metadataText = buildMetadataText(document)
   const activeStandards = await getActiveStandards(tenantId)
@@ -525,6 +537,35 @@ async function analyzeDocument({ tenantId, documentId, userId = null }) {
       warning: err.message
     }
   }))
+
+  const extractionCode = extractionResult.extraction?.code || null
+  if (['GOOGLE_FILE_ACCESS_DENIED', 'GOOGLE_RECONNECT_REQUIRED'].includes(extractionCode)) {
+    await pool.query(
+      `
+      UPDATE document_index
+      SET status = 'error',
+          metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $3::jsonb,
+          last_seen_at = COALESCE(last_seen_at, NOW())
+      WHERE id = $1::uuid
+        AND tenant_id = $2::uuid
+      `,
+      [
+        document.id,
+        tenantId,
+        JSON.stringify({
+          google_error: {
+            code: extractionCode,
+            message: extractionResult.extraction?.warning || null,
+            detected_at: new Date().toISOString()
+          }
+        })
+      ]
+    )
+    const err = new Error(extractionResult.extraction?.warning || 'No fue posible leer el documento desde Google Drive')
+    err.statusCode = extractionCode === 'GOOGLE_RECONNECT_REQUIRED' ? 409 : 403
+    err.code = extractionCode
+    throw err
+  }
 
   const extractedText = toText(extractionResult.text)
   const analysisText = extractedText || metadataText

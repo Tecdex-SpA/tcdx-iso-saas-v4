@@ -90,7 +90,9 @@ router.post('/documents/:documentId/analyze', auth, async (req, res) => {
   } catch (err) {
     console.error('ERROR ANALYZE DOCUMENT:', err.message)
     return res.status(err.statusCode || 500).json({
-      error: err.statusCode === 404 ? err.message : 'Error analizando documento'
+      ok: false,
+      code: err.code || 'DOCUMENT_ANALYSIS_ERROR',
+      error: err.statusCode ? err.message : 'Error analizando documento'
     })
   }
 })

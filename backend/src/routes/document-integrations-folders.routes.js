@@ -77,9 +77,9 @@ router.get('/google/folders', auth, async (req, res) => {
     console.error('ERROR LIST GOOGLE DRIVE FOLDERS:', err.message);
 
     return res.status(err.statusCode || 500).json({
-      error: err.statusCode === 404
-        ? err.message
-        : 'Error listando carpetas de Google Drive',
+      ok: false,
+      code: err.code || 'GOOGLE_FOLDERS_LIST_ERROR',
+      error: err.statusCode ? err.message : 'Error listando carpetas de Google Drive',
     });
   }
 });
