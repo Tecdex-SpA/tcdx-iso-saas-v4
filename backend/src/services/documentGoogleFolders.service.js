@@ -3,6 +3,8 @@ const { decryptToken } = require('../utils/cryptoTokens');
 const {
   buildOAuthClientFromTokens,
   listDriveFolders,
+  hasGoogleDriveReadScope,
+  buildGoogleReconnectRequiredError,
 } = require('./providers/googleDrive.provider');
 
 function buildTokensFromIntegration(integration) {
@@ -44,6 +46,10 @@ async function browseGoogleDriveFolders({
     const err = new Error('Integración Google Drive conectada no encontrada');
     err.statusCode = 404;
     throw err;
+  }
+
+  if (!hasGoogleDriveReadScope(integrationResult.rows[0].scopes)) {
+    throw buildGoogleReconnectRequiredError();
   }
 
   const oauthClient = buildOAuthClientFromTokens(

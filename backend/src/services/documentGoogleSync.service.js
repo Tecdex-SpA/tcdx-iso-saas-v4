@@ -2,7 +2,9 @@ const pool = require('../config/db')
 const { decryptToken, encryptToken } = require('../utils/cryptoTokens')
 const {
   buildOAuthClientFromTokens,
-  listDriveFiles
+  listDriveFiles,
+  hasGoogleDriveReadScope,
+  buildGoogleReconnectRequiredError
 } = require('./providers/googleDrive.provider')
 
 const GOOGLE_FOLDER_MIME = 'application/vnd.google-apps.folder'
@@ -44,6 +46,31 @@ function normalizeFolderPath(...parts) {
     .join(' / ')
 }
 
+function normalizeRelativePath(...parts) {
+  return parts
+    .map((part) => String(part || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''))
+    .filter(Boolean)
+    .join('/')
+}
+
+function googleVersionId(file) {
+  return file?.headRevisionId ? String(file.headRevisionId) : (file?.version ? String(file.version) : (file?.modifiedTime || null))
+}
+
+function sameNullable(left, right) {
+  if (left === null || left === undefined || left === '') return right === null || right === undefined || right === ''
+  if (right === null || right === undefined || right === '') return false
+  return String(left) === String(right)
+}
+
+function sameTimestamp(left, right) {
+  if (!left && !right) return true
+  if (!left || !right) return false
+  const leftTime = new Date(left).getTime()
+  const rightTime = new Date(right).getTime()
+  return Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime === rightTime
+}
+
 async function persistRefreshedCredentials({ integrationId, tenantId, oauthClient }) {
   const credentials = oauthClient.credentials || {}
   const encryptedAccess = credentials.access_token ? encryptToken(credentials.access_token) : null
@@ -68,80 +95,169 @@ async function persistRefreshedCredentials({ integrationId, tenantId, oauthClien
   )
 }
 
+async function markDuplicateDocuments({ tenantId, sourceId }) {
+  const result = await pool.query(
+    `
+    WITH ranked AS (
+      SELECT
+        id,
+        FIRST_VALUE(id) OVER (
+          PARTITION BY tenant_id, provider, provider_file_id
+          ORDER BY last_seen_at DESC NULLS LAST, indexed_at DESC NULLS LAST, modified_at DESC NULLS LAST, id DESC
+        ) AS canonical_id,
+        ROW_NUMBER() OVER (
+          PARTITION BY tenant_id, provider, provider_file_id
+          ORDER BY last_seen_at DESC NULLS LAST, indexed_at DESC NULLS LAST, modified_at DESC NULLS LAST, id DESC
+        ) AS rn
+      FROM document_index
+      WHERE tenant_id = $1::uuid
+        AND source_id = $2::uuid
+        AND provider = 'google_drive'
+        AND provider_file_id IS NOT NULL
+    )
+    UPDATE document_index d
+    SET status = 'ignored',
+        metadata_json = COALESCE(d.metadata_json, '{}'::jsonb) || jsonb_build_object(
+          'duplicate_of', ranked.canonical_id,
+          'duplicate_detected_at', NOW(),
+          'duplicate_preserved_due_to_relations', true
+        )
+    FROM ranked
+    WHERE d.id = ranked.id
+      AND ranked.rn > 1
+    RETURNING d.id
+    `,
+    [tenantId, sourceId]
+  )
+  return result.rowCount || 0
+}
+
 async function upsertDocument({ tenantId, sourceRow, integrationRow, file, folderPath, parentFolderId }) {
+  const relativePath = normalizeRelativePath(folderPath, file.name)
+  const providerVersionId = googleVersionId(file)
+  const modifiedAt = file.modifiedTime ? new Date(file.modifiedTime) : null
+  const sizeBytes = file.size ? Number(file.size) : null
   const metadata = {
     google: {
       parents: file.parents || [],
       parent_folder_id: parentFolderId || null,
       folder_path: folderPath || sourceRow.folder_path || sourceRow.source_name || null,
+      relative_path: relativePath,
       is_folder: false,
       icon_link: file.iconLink || null,
       owners: file.owners || []
     },
     folder_path: folderPath || sourceRow.folder_path || sourceRow.source_name || null,
+    relative_path: relativePath,
     synced_at: new Date().toISOString()
   }
 
-  const upsert = await pool.query(
+  const existing = await pool.query(
     `
-    INSERT INTO document_index (
-      tenant_id,
-      source_id,
-      integration_id,
-      provider,
-      provider_file_id,
-      provider_version_id,
-      file_name,
-      mime_type,
-      file_extension,
-      file_url,
-      web_view_url,
-      size_bytes,
-      checksum,
-      modified_at,
-      indexed_at,
-      last_seen_at,
-      status,
-      metadata_json
+    SELECT id, provider_version_id, file_name, mime_type, file_extension, size_bytes, checksum, modified_at, relative_path, status
+    FROM document_index
+    WHERE tenant_id = $1::uuid
+      AND provider = 'google_drive'
+      AND provider_file_id = $2::varchar
+    ORDER BY last_seen_at DESC NULLS LAST, indexed_at DESC NULLS LAST
+    LIMIT 1
+    `,
+    [tenantId, file.id]
+  )
+
+  if (existing.rowCount === 0) {
+    await pool.query(
+      `
+      INSERT INTO document_index (
+        tenant_id, source_id, integration_id, provider, provider_file_id, provider_version_id,
+        file_name, mime_type, file_extension, file_url, web_view_url, size_bytes, checksum,
+        modified_at, indexed_at, last_seen_at, status, relative_path, metadata_json
+      )
+      VALUES (
+        $1::uuid, $2::uuid, $3::uuid, 'google_drive', $4::varchar, $5::varchar,
+        $6::varchar, $7::varchar, $8::varchar, $9::text, $10::text, $11::bigint, $12::varchar,
+        $13::timestamp, NOW(), NOW(), 'indexed', $14::text, $15::jsonb
+      )
+      `,
+      [
+        tenantId,
+        sourceRow.id,
+        integrationRow.id,
+        file.id,
+        providerVersionId,
+        file.name,
+        file.mimeType || null,
+        extractExtension(file.name),
+        file.webViewLink || null,
+        file.webViewLink || null,
+        sizeBytes,
+        file.md5Checksum || null,
+        modifiedAt,
+        relativePath,
+        JSON.stringify(metadata)
+      ]
     )
-    VALUES ($1,$2,$3,'google_drive',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW(),'indexed',$14::jsonb)
-    ON CONFLICT (tenant_id, provider, provider_file_id)
-    DO UPDATE SET
-      source_id = EXCLUDED.source_id,
-      integration_id = EXCLUDED.integration_id,
-      provider_version_id = EXCLUDED.provider_version_id,
-      file_name = EXCLUDED.file_name,
-      mime_type = EXCLUDED.mime_type,
-      file_extension = EXCLUDED.file_extension,
-      file_url = EXCLUDED.file_url,
-      web_view_url = EXCLUDED.web_view_url,
-      size_bytes = EXCLUDED.size_bytes,
-      checksum = EXCLUDED.checksum,
-      modified_at = EXCLUDED.modified_at,
-      last_seen_at = NOW(),
-      status = 'updated',
-      metadata_json = EXCLUDED.metadata_json
-    RETURNING (xmax = 0) AS inserted
+    return 'created'
+  }
+
+  const current = existing.rows[0]
+  const changed = (
+    !sameNullable(current.provider_version_id, providerVersionId) ||
+    !sameNullable(current.file_name, file.name) ||
+    !sameNullable(current.mime_type, file.mimeType || null) ||
+    !sameNullable(current.file_extension, extractExtension(file.name)) ||
+    !sameNullable(current.size_bytes, sizeBytes) ||
+    !sameNullable(current.checksum, file.md5Checksum || null) ||
+    !sameTimestamp(current.modified_at, modifiedAt) ||
+    !sameNullable(current.relative_path, relativePath) ||
+    ['missing', 'ignored', 'error'].includes(String(current.status || '').toLowerCase())
+  )
+
+  await pool.query(
+    `
+    UPDATE document_index
+    SET source_id = $2::uuid,
+        integration_id = $3::uuid,
+        provider_version_id = $4::varchar,
+        file_name = $5::varchar,
+        mime_type = $6::varchar,
+        file_extension = $7::varchar,
+        file_url = $8::text,
+        web_view_url = $9::text,
+        size_bytes = $10::bigint,
+        checksum = $11::varchar,
+        modified_at = $12::timestamp,
+        relative_path = $13::text,
+        last_seen_at = NOW(),
+        status = $14::varchar,
+        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $15::jsonb
+    WHERE id = $1::uuid
+      AND tenant_id = $16::uuid
     `,
     [
-      tenantId,
+      current.id,
       sourceRow.id,
       integrationRow.id,
-      file.id,
-      file.version ? String(file.version) : null,
+      providerVersionId,
       file.name,
       file.mimeType || null,
       extractExtension(file.name),
       file.webViewLink || null,
       file.webViewLink || null,
-      file.size ? Number(file.size) : null,
+      sizeBytes,
       file.md5Checksum || null,
-      file.modifiedTime ? new Date(file.modifiedTime) : null,
-      JSON.stringify(metadata)
+      modifiedAt,
+      relativePath,
+      changed ? 'updated' : (current.status || 'indexed'),
+      JSON.stringify({
+        ...metadata,
+        previous_version_id: sameNullable(current.provider_version_id, providerVersionId) ? null : current.provider_version_id || null
+      }),
+      tenantId
     ]
   )
 
-  return Boolean(upsert.rows[0]?.inserted)
+  return changed ? 'updated' : 'unchanged'
 }
 
 async function listAllPages({ oauthClient, folderId, warnings }) {
@@ -240,6 +356,24 @@ async function syncGoogleDriveSource({
       throw new Error('Integración Google Drive no conectada')
     }
 
+    if (sourceRow.status === 'disconnected') {
+      const err = new Error('Fuente documental desconectada')
+      err.statusCode = 409
+      err.code = 'DOCUMENT_SOURCE_DISCONNECTED'
+      throw err
+    }
+
+    if (sourceRow.sync_enabled === false || sourceRow.status === 'paused') {
+      const err = new Error('Sincronización deshabilitada para esta fuente')
+      err.statusCode = 409
+      err.code = 'DOCUMENT_SOURCE_SYNC_DISABLED'
+      throw err
+    }
+
+    if (!hasGoogleDriveReadScope(integrationRow.scopes)) {
+      throw buildGoogleReconnectRequiredError()
+    }
+
     const log = await setupClient.query(
       `
       INSERT INTO document_sync_logs (
@@ -255,7 +389,7 @@ async function syncGoogleDriveSource({
         JSON.stringify({
           folder_id: sourceRow.folder_id,
           folder_path: sourceRow.folder_path || sourceRow.source_name,
-          recursive: true,
+          recursive: sourceRow.include_subfolders !== false,
           max_depth: safeMaxDepth,
           max_files: safeMaxFiles
         })
@@ -272,18 +406,26 @@ async function syncGoogleDriveSource({
   }
 
   let filesSeen = 0
-  let filesIndexed = 0
+  let filesCreated = 0
   let filesUpdated = 0
+  let filesUnchanged = 0
   let filesSkipped = 0
+  let filesMissing = 0
+  let filesErrors = 0
+  let duplicatesIgnored = 0
   let foldersSeen = 0
   let maxDepthReached = false
   const warnings = []
   const visitedFolderIds = new Set()
+  const seenProviderFileIds = new Set()
 
   try {
     const oauthClient = buildOAuthClientFromTokens(buildTokens(integrationRow))
     const rootFolderId = String(sourceRow.folder_id)
     const rootPath = sourceRow.folder_path || sourceRow.source_name || 'Google Drive'
+    const includeSubfolders = sourceRow.include_subfolders !== false
+
+    duplicatesIgnored = await markDuplicateDocuments({ tenantId, sourceId: sourceRow.id })
 
     const walkFolder = async ({ folderId, folderPath, depth }) => {
       if (visitedFolderIds.has(folderId)) {
@@ -323,6 +465,10 @@ async function syncGoogleDriveSource({
         }
 
         if (isFolder(file)) {
+          if (!includeSubfolders) {
+            filesSkipped += 1
+            continue
+          }
           const childPath = normalizeFolderPath(folderPath, file.name)
           await walkFolder({
             folderId: file.id,
@@ -344,9 +490,10 @@ async function syncGoogleDriveSource({
         }
 
         filesSeen += 1
+        seenProviderFileIds.add(file.id)
 
         try {
-          const inserted = await upsertDocument({
+          const changeType = await upsertDocument({
             tenantId,
             sourceRow,
             integrationRow,
@@ -355,10 +502,11 @@ async function syncGoogleDriveSource({
             parentFolderId: folderId
           })
 
-          if (inserted) filesIndexed += 1
-          else filesUpdated += 1
+          if (changeType === 'created') filesCreated += 1
+          else if (changeType === 'updated') filesUpdated += 1
+          else filesUnchanged += 1
         } catch (err) {
-          filesSkipped += 1
+          filesErrors += 1
           warnings.push({
             type: 'file_upsert_failed',
             file_id: file.id,
@@ -375,6 +523,26 @@ async function syncGoogleDriveSource({
       folderPath: rootPath,
       depth: 0
     })
+
+    const seenIds = Array.from(seenProviderFileIds)
+    const missingResult = await pool.query(
+      `
+      UPDATE document_index
+      SET status = 'missing',
+          metadata_json = COALESCE(metadata_json, '{}'::jsonb) || jsonb_build_object('last_missing_detected_at', NOW())
+      WHERE tenant_id = $1::uuid
+        AND source_id = $2::uuid
+        AND provider = 'google_drive'
+        AND status NOT IN ('missing', 'ignored')
+        AND (
+          cardinality($3::text[]) = 0
+          OR NOT (provider_file_id = ANY($3::text[]))
+        )
+      RETURNING id
+      `,
+      [tenantId, sourceRow.id, seenIds]
+    )
+    filesMissing = missingResult.rowCount || 0
 
     const finalStatus = warnings.length > 0 ? 'completed_with_warnings' : 'completed'
 
@@ -395,16 +563,22 @@ async function syncGoogleDriveSource({
         syncLogId,
         finalStatus,
         filesSeen,
-        filesIndexed,
+        filesCreated,
         filesUpdated,
-        filesSkipped,
+        filesSkipped + filesErrors,
         JSON.stringify({
           folder_id: rootFolderId,
           folder_path: rootPath,
-          recursive: true,
+          recursive: includeSubfolders,
           max_depth: safeMaxDepth,
           max_files: safeMaxFiles,
           folders_seen: foldersSeen,
+          files_created: filesCreated,
+          files_updated: filesUpdated,
+          files_unchanged: filesUnchanged,
+          files_missing: filesMissing,
+          files_ignored: duplicatesIgnored,
+          files_errors: filesErrors,
           warnings_count: warnings.length,
           max_depth_reached: maxDepthReached,
           warnings: warnings.slice(0, 50)
@@ -413,8 +587,16 @@ async function syncGoogleDriveSource({
     )
 
     await pool.query(
-      `UPDATE tenant_document_sources SET last_sync_at = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
-      [sourceRow.id, tenantId]
+      `
+      UPDATE tenant_document_sources
+      SET last_sync_at = NOW(),
+          last_sync_status = $3,
+          last_sync_error = NULL,
+          updated_at = NOW()
+      WHERE id = $1
+        AND tenant_id = $2
+      `,
+      [sourceRow.id, tenantId, finalStatus]
     )
 
     await pool.query(
@@ -429,14 +611,19 @@ async function syncGoogleDriveSource({
       provider: 'google_drive',
       sync_log_id: syncLogId,
       status: finalStatus,
-      recursive: true,
+      recursive: includeSubfolders,
       max_depth: safeMaxDepth,
       max_files: safeMaxFiles,
       folders_seen: foldersSeen,
       files_seen: filesSeen,
-      files_indexed: filesIndexed,
+      files_indexed: filesCreated,
+      files_created: filesCreated,
       files_updated: filesUpdated,
-      files_skipped: filesSkipped,
+      files_unchanged: filesUnchanged,
+      files_missing: filesMissing,
+      files_ignored: duplicatesIgnored,
+      files_errors: filesErrors,
+      files_skipped: filesSkipped + filesErrors,
       warnings_count: warnings.length,
       max_depth_reached: maxDepthReached
     }
@@ -458,15 +645,21 @@ async function syncGoogleDriveSource({
       [
         syncLogId,
         filesSeen,
-        filesIndexed,
+        filesCreated,
         filesUpdated,
-        filesSkipped,
+        filesSkipped + filesErrors,
         'Error sincronizando Google Drive',
         JSON.stringify({
           safe_error: err.message,
           token_logged: false,
-          recursive: true,
+          recursive: sourceRow?.include_subfolders !== false,
           folders_seen: foldersSeen,
+          files_created: filesCreated,
+          files_updated: filesUpdated,
+          files_unchanged: filesUnchanged,
+          files_missing: filesMissing,
+          files_ignored: duplicatesIgnored,
+          files_errors: filesErrors,
           warnings_count: warnings.length,
           warnings: warnings.slice(0, 50)
         })
@@ -477,6 +670,20 @@ async function syncGoogleDriveSource({
       await pool.query(
         `UPDATE tenant_integrations SET status = 'error', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
         [integrationRow.id, tenantId]
+      )
+    }
+
+    if (sourceRow?.id) {
+      await pool.query(
+        `
+        UPDATE tenant_document_sources
+        SET last_sync_status = 'failed',
+            last_sync_error = $3,
+            updated_at = NOW()
+        WHERE id = $1
+          AND tenant_id = $2
+        `,
+        [sourceRow.id, tenantId, String(err.message || 'Error sincronizando Google Drive').slice(0, 500)]
       )
     }
 

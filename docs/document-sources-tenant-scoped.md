@@ -24,6 +24,7 @@ Configuración global de plataforma:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REDIRECT_URI`
+- `GOOGLE_DRIVE_SCOPES`
 - `ZOHO_CLIENT_ID`
 - `ZOHO_CLIENT_SECRET`
 - `ZOHO_REDIRECT_URI`
@@ -58,6 +59,32 @@ Los tokens OAuth nunca se devuelven al frontend ni se escriben en logs.
 6. Sincronizar.
 
 La integración existente se mantiene. OAuth usa `state` firmado con `tenant_id`, `user_id`, provider, nonce e intención.
+
+Scopes recomendados:
+
+```text
+https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email
+```
+
+`drive.readonly` es necesario para listar, descargar archivos binarios y exportar Google Docs/Sheets/Slides que la cuenta conectada puede leer. Si una credencial antigua sólo tiene `drive.metadata.readonly` o un scope parcial, el backend responde:
+
+```json
+{
+  "ok": false,
+  "code": "GOOGLE_RECONNECT_REQUIRED",
+  "error": "Debe reconectar Google Drive para conceder permisos de lectura/exportación de la carpeta seleccionada."
+}
+```
+
+En ese caso el usuario debe reconectar Google Drive con una cuenta que tenga permisos de lectura sobre la carpeta seleccionada y sus subcarpetas. Si un archivo puntual no fue compartido con esa cuenta, el análisis responde `GOOGLE_FILE_ACCESS_DENIED` y el documento queda marcado como `error` sin romper toda la sincronización.
+
+La sincronización:
+
+- Usa paginación completa de Google Drive.
+- Ignora `trashed=true`.
+- Usa `supportsAllDrives=true` e `includeItemsFromAllDrives=true` para soportar Shared Drives cuando la cuenta tiene acceso.
+- Si `include_subfolders=true`, recorre subcarpetas y guarda `relative_path`.
+- Si `include_subfolders=false`, indexa sólo archivos directos de la carpeta raíz.
 
 ## Zoho WorkDrive
 
@@ -137,6 +164,43 @@ El agente:
 7. Sincronizar.
 8. Revisar sugerencias.
 9. Aprobar evidencia formal.
+
+## Sincronización Incremental
+
+Cada fuente mantiene documentos en `document_index` con clave lógica:
+
+```text
+tenant_id + provider + provider_file_id
+```
+
+Para Google Drive, `provider_file_id` es el ID real del archivo. Por eso una segunda sincronización de la misma carpeta no duplica documentos, aunque cambie el nombre, ruta o versión.
+
+Estados principales:
+
+- `indexed`: archivo nuevo indexado.
+- `updated`: archivo existente con checksum, versión, metadata o ruta actualizada.
+- `missing`: archivo que pertenecía a la fuente y ya no apareció en la sincronización actual.
+- `ignored`: duplicado histórico preservado para trazabilidad.
+- `error`: archivo con problema controlado, por ejemplo falta de permiso de lectura.
+
+Los documentos `missing`, `ignored` o `error` no se borran automáticamente y no eliminan evidencias históricas.
+
+## Desconectar Fuente
+
+La acción “Desconectar” realiza soft delete:
+
+- `status='disconnected'`
+- `sync_enabled=false`
+
+No borra `document_index`, evidencias, sugerencias ni tokens OAuth por defecto. La fuente desconectada no se sincroniza ni permite análisis nuevo. Para volver a operar Google Drive, el usuario debe reconectar OAuth o crear una fuente nueva según el caso.
+
+## Seguridad Google Drive
+
+- Tokens cifrados en BD.
+- Tokens nunca retornan al frontend.
+- No se registran headers `Authorization`.
+- Toda query usa `tenant_id`.
+- No existen fuentes globales compartidas entre tenants.
 
 No se crea evidencia automáticamente. Toda evidencia promovida queda pendiente, con revisión humana obligatoria.
 

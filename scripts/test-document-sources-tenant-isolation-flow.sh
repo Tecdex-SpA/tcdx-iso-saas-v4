@@ -159,12 +159,33 @@ if [[ "$code" != 2* ]]; then
 fi
 log "PASS agent index ignores body tenant_id"
 
+code="$(request POST "/api/agent/documents/index" "$OUT_DIR/agent-index-repeat.json" "$AGENT_TOKEN" "$manifest")"
+if [[ "$code" != 2* ]]; then
+  log "FAIL repeated agent document index HTTP $code"
+  exit 1
+fi
+log "PASS repeated agent index is idempotent"
+
 code="$(request POST "/api/agent/heartbeat" "$OUT_DIR/agent-heartbeat-invalid.json" "invalid-token" '{"version":"qa"}')"
 if [[ "$code" == 2* ]]; then
   log "FAIL invalid agent token accepted"
   exit 1
 fi
 log "PASS invalid agent token blocked HTTP $code"
+
+code="$(request DELETE "/api/document-integrations/sources/$SOURCE_A" "$OUT_DIR/source-a-disconnect.json" "$TOKEN_A")"
+if [[ "$code" != 2* ]]; then
+  log "FAIL disconnect source HTTP $code"
+  exit 1
+fi
+log "PASS source disconnected without deleting history"
+
+code="$(request POST "/api/document-integrations/sources/$SOURCE_A/sync" "$OUT_DIR/source-a-sync-after-disconnect.json" "$TOKEN_A" '{}')"
+if [[ "$code" == 2* ]]; then
+  log "FAIL disconnected source accepted sync"
+  exit 1
+fi
+log "PASS disconnected source cannot sync HTTP $code"
 
 if [[ -n "$EMAIL_B" && -n "$PASSWORD_B" ]]; then
   TOKEN_B="$(login "$EMAIL_B" "$PASSWORD_B" "$OUT_DIR/login-b.json")"
