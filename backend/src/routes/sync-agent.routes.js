@@ -33,6 +33,31 @@ function extensionOf(fileName) {
   return path.extname(String(fileName || '')).replace('.', '').toLowerCase();
 }
 
+function truncate(value, maxLength) {
+  const text = String(value || '').trim();
+  return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
+function normalizeSizeBytes(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.trunc(number) : null;
+}
+
+function normalizeTimestamp(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function buildAgentProviderFileId(sourceId, relativePath) {
+  const raw = `${sourceId}:${relativePath}`;
+  if (raw.length <= 500) return raw;
+  const digest = crypto.createHash('sha256').update(raw).digest('hex');
+  const prefixLength = Math.max(0, 500 - String(sourceId).length - digest.length - 2);
+  return `${sourceId}:${relativePath.slice(0, prefixLength)}:${digest}`;
+}
+
 async function authenticateAgent(req, res, next) {
   try {
     const token = getBearerToken(req);
@@ -186,69 +211,140 @@ router.get('/config', authenticateAgent, async (req, res) => {
 });
 
 router.post('/documents/index', authenticateAgent, async (req, res) => {
-  const manifest = Array.isArray(req.body?.files) ? req.body.files : [];
-  const tenantId = req.agent.tenant_id;
-  const sourceId = req.agent.source_id;
-  let indexed = 0;
-  let skipped = 0;
-
-  for (const item of manifest.slice(0, 2000)) {
-    const relativePath = safeRelativePath(item.relative_path || item.path || item.file_name);
-    const fileName = path.basename(relativePath || String(item.file_name || ''));
-    const ext = extensionOf(fileName);
-    if (!relativePath || !fileName || !ALLOWED_EXTENSIONS.has(ext)) {
-      skipped += 1;
-      continue;
+  try {
+    if (!Array.isArray(req.body?.files)) {
+      return res.status(400).json({
+        ok: false,
+        code: 'INVALID_AGENT_MANIFEST',
+        error: 'Manifest de archivos inválido',
+      });
     }
 
-    const hash = String(item.hash || item.file_hash || item.content_hash || '').trim() || null;
-    const providerFileId = `${sourceId}:${relativePath}`;
+    const manifest = req.body.files;
+    const tenantId = req.agent.tenant_id;
+    const sourceId = req.agent.source_id;
+    let indexed = 0;
+    let skipped = 0;
+
+    for (const item of manifest.slice(0, 2000)) {
+      const relativePath = safeRelativePath(item?.relative_path || item?.path || item?.file_name);
+      const fileName = truncate(path.basename(relativePath || String(item?.file_name || '')), 500);
+      const ext = truncate(extensionOf(fileName), 40);
+      if (!relativePath || !fileName || !ALLOWED_EXTENSIONS.has(ext)) {
+        skipped += 1;
+        continue;
+      }
+
+      const hash = truncate(item?.hash || item?.file_hash || item?.content_hash || '', 255) || null;
+      const providerFileId = buildAgentProviderFileId(sourceId, relativePath);
+      const mimeType = truncate(item?.mime_type || '', 255) || null;
+      const sizeBytes = normalizeSizeBytes(item?.size_bytes);
+      const modifiedAt = normalizeTimestamp(item?.modified_at);
+      const metadataJson = JSON.stringify({ local_agent: true, device_name: req.agent.device_name || null });
+
+      const existing = await pool.query(
+        `
+        SELECT id
+        FROM document_index
+        WHERE tenant_id = $1::uuid
+          AND provider = 'local_agent'
+          AND provider_file_id = $2::varchar
+        LIMIT 1
+        `,
+        [tenantId, providerFileId]
+      );
+
+      if (existing.rowCount > 0) {
+        await pool.query(
+          `
+          UPDATE document_index
+          SET source_id = $2::uuid,
+              file_name = $3::varchar,
+              mime_type = $4::varchar,
+              file_extension = $5::varchar,
+              size_bytes = $6::bigint,
+              checksum = $7::varchar,
+              content_hash = $8::text,
+              file_hash = $9::text,
+              relative_path = $10::text,
+              modified_at = $11::timestamp,
+              last_seen_at = NOW(),
+              status = 'updated',
+              metadata_json = $12::jsonb
+          WHERE id = $1::uuid
+            AND tenant_id = $13::uuid
+          `,
+          [
+            existing.rows[0].id,
+            sourceId,
+            fileName,
+            mimeType,
+            ext,
+            sizeBytes,
+            hash,
+            hash,
+            hash,
+            relativePath,
+            modifiedAt,
+            metadataJson,
+            tenantId,
+          ]
+        );
+      } else {
+        await pool.query(
+          `
+          INSERT INTO document_index (
+            tenant_id, source_id, provider, provider_file_id, file_name, mime_type,
+            file_extension, size_bytes, checksum, content_hash, file_hash,
+            relative_path, modified_at, indexed_at, last_seen_at, status, metadata_json
+          )
+          VALUES (
+            $1::uuid, $2::uuid, 'local_agent', $3::varchar, $4::varchar, $5::varchar,
+            $6::varchar, $7::bigint, $8::varchar, $9::text, $10::text,
+            $11::text, $12::timestamp, NOW(), NOW(), 'indexed', $13::jsonb
+          )
+          `,
+          [
+            tenantId,
+            sourceId,
+            providerFileId,
+            fileName,
+            mimeType,
+            ext,
+            sizeBytes,
+            hash,
+            hash,
+            hash,
+            relativePath,
+            modifiedAt,
+            metadataJson,
+          ]
+        );
+      }
+      indexed += 1;
+    }
+
     await pool.query(
-      `
-      INSERT INTO document_index (
-        tenant_id, source_id, provider, provider_file_id, file_name, mime_type,
-        file_extension, size_bytes, checksum, content_hash, file_hash,
-        relative_path, modified_at, indexed_at, last_seen_at, status, metadata_json
-      )
-      VALUES ($1,$2,'local_agent',$3,$4,$5,$6,$7,$8,$8,$8,$9,$10,NOW(),NOW(),'indexed',$11::jsonb)
-      ON CONFLICT (tenant_id, provider, provider_file_id)
-      DO UPDATE SET
-        file_name = EXCLUDED.file_name,
-        mime_type = EXCLUDED.mime_type,
-        file_extension = EXCLUDED.file_extension,
-        size_bytes = EXCLUDED.size_bytes,
-        checksum = EXCLUDED.checksum,
-        content_hash = EXCLUDED.content_hash,
-        file_hash = EXCLUDED.file_hash,
-        relative_path = EXCLUDED.relative_path,
-        modified_at = EXCLUDED.modified_at,
-        last_seen_at = NOW(),
-        status = 'updated',
-        metadata_json = EXCLUDED.metadata_json
-      `,
-      [
-        tenantId,
-        sourceId,
-        providerFileId,
-        fileName,
-        item.mime_type || null,
-        ext,
-        Number(item.size_bytes || 0) || null,
-        hash,
-        relativePath,
-        item.modified_at ? new Date(item.modified_at) : null,
-        JSON.stringify({ local_agent: true, device_name: req.agent.device_name || null }),
-      ]
+      `UPDATE tenant_sync_agents SET last_seen_at = NOW(), updated_at = NOW() WHERE id = $1::uuid`,
+      [req.agent.id]
     );
-    indexed += 1;
+
+    return res.json({ ok: true, tenant_filter_enforced: true, indexed, skipped });
+  } catch (error) {
+    console.error('ERROR AGENT DOCUMENT INDEX:', {
+      code: error.code || null,
+      message: error.message,
+      detail: error.detail || null,
+      constraint: error.constraint || null,
+      column: error.column || null,
+      table: error.table || null,
+    });
+    return res.status(500).json({
+      ok: false,
+      code: 'AGENT_DOCUMENT_INDEX_ERROR',
+      error: 'Error indexando documentos del agente',
+    });
   }
-
-  await pool.query(
-    `UPDATE tenant_sync_agents SET last_seen_at = NOW(), updated_at = NOW() WHERE id = $1`,
-    [req.agent.id]
-  );
-
-  return res.json({ ok: true, tenant_filter_enforced: true, indexed, skipped });
 });
 
 router.post('/documents/upload', authenticateAgent, upload.single('file'), async (req, res) => {
