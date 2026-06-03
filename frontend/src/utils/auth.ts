@@ -1,3 +1,5 @@
+import { getMvpHomePathByRole } from './mvpPermissions';
+
 export function decodeJwtPayload(token: string) {
   try {
     const base64Url = token.split('.')[1];
@@ -78,24 +80,7 @@ export function getUserIdFromToken() {
 }
 
 export function getHomePathByRole(role?: string | null) {
-  const normalizedRole = normalizeRole(role);
-
-  if (
-    normalizedRole === 'superadmin' ||
-    normalizedRole === 'super_admin' ||
-    normalizedRole === 'platform_admin' ||
-    normalizedRole === 'admin_global' ||
-    normalizedRole === 'global_admin' ||
-    normalizedRole === 'owner'
-  ) {
-    return '/admin-saas';
-  }
-
-  if (normalizedRole === 'dealer') {
-    return '/dealer';
-  }
-
-  return '/dashboard';
+  return getMvpHomePathByRole(normalizeRole(role));
 }
 
 export function getHomePathFromToken() {

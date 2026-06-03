@@ -16,6 +16,14 @@ import {
 import { getApiBaseUrl } from '@/utils/apiClient';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
+import {
+  DEALER_ROUTES,
+  INTERNAL_CLIENT_HIDDEN_ROUTES,
+  PLATFORM_ROUTES,
+  canAccessMvpFeature,
+  getMvpRouteRule,
+  isPathInRoutes,
+} from '@/utils/mvpPermissions';
 
 const API_URL = getApiBaseUrl();
 
@@ -68,9 +76,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const routeRules = useMemo(() => {
     return {
-      platformOnly: ['/admin-saas', '/empresas'],
-      dealerOnly: ['/dealer', '/cotizador', '/prefacturacion'],
-      adminOrPlatform: ['/usuarios', '/perfil-empresa'],
+      platformOnly: [...PLATFORM_ROUTES, ...INTERNAL_CLIENT_HIDDEN_ROUTES],
+      dealerOnly: DEALER_ROUTES,
+      adminOrPlatform: [],
       moduleProtected: [
         {
           module_key: 'ai',
@@ -80,13 +88,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         },
         {
           module_key: 'risks',
-          routes: ['/matriz-riesgo', '/activos'],
+          routes: ['/riesgos', '/matriz-riesgo', '/activos'],
           fallback: '/dashboard',
           label: t('sidebar.riskMatrix'),
         },
         {
           module_key: 'audits',
-          routes: ['/auditorias', '/ia-auditor', '/auditor-iso'],
+          routes: ['/auditorias'],
           fallback: '/dashboard',
           label: t('sidebar.audits'),
         },
@@ -191,14 +199,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         const isDealer = role === 'dealer';
 
-        const isAdmin =
-          role === 'admin' ||
-          role === 'tenant_admin';
-
-        const isAuditor = role === 'auditor';
-        const isOperativo = role === 'operativo';
-
-        const isViewer =
+        const homePath = getHomePathByRole(role);
+        const isExecutiveClient =
           role === 'viewer' ||
           role === 'cliente' ||
           role === 'client' ||
@@ -206,8 +208,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           role === 'read_only' ||
           role === 'readonly' ||
           role === 'ejecutivo';
-
-        const homePath = getHomePathByRole(role);
 
         if (isDealer && !isRoute(routeRules.dealerOnly)) {
           window.location.href = '/dealer';
@@ -224,61 +224,42 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (!isPlatform && !isAdmin && isRoute(routeRules.adminOrPlatform)) {
+        if (!isPlatform && isRoute(routeRules.platformOnly)) {
           window.location.href = homePath;
           return;
         }
 
-        const viewerAllowedRoutes = [
-          '/dashboard',
-          '/dashboard-v2',
-          '/command-center-iso',
-          '/centro-control-iso',
-          '/ciclo-vida',
-          '/health',
-          '/exportes',
-          '/auditorias',
-          '/auditor-iso',
-          '/acciones-recomendadas',
-          '/perfil',
-        ];
-
-        const operativeBlockedRoutes = [
-          '/usuarios',
-          '/perfil-empresa',
-          '/administrar-kpis',
-          '/prefacturacion',
-          '/admin-saas',
-          '/empresas',
-          '/dealer',
-          '/cotizador',
-        ];
-
-        const auditorBlockedRoutes = [
-          '/usuarios',
-          '/perfil-empresa',
-          '/administrar-kpis',
-          '/prefacturacion',
-          '/admin-saas',
-          '/empresas',
-          '/dealer',
-          '/cotizador',
-          '/ia-compliance',
-          '/ia',
-        ];
-
-        if (isViewer && !isRoute(viewerAllowedRoutes)) {
-          window.location.href = '/dashboard';
+        if (!isPlatform && !isDealer && isPathInRoutes(pathname, INTERNAL_CLIENT_HIDDEN_ROUTES)) {
+          window.location.href = homePath;
           return;
         }
 
-        if (isOperativo && isRoute(operativeBlockedRoutes)) {
-          window.location.href = '/dashboard';
+        const mvpRouteRule = getMvpRouteRule(pathname);
+
+        if (
+          isExecutiveClient &&
+          isPathInRoutes(pathname, [
+            '/diagnostico',
+            '/controles',
+            '/soa',
+            '/ciclo-vida',
+            '/auditorias',
+            '/auditorias/ejecucion',
+            '/hallazgos',
+            '/no-conformidades',
+          ])
+        ) {
+          window.location.href = '/cumplimiento-auditoria';
           return;
         }
 
-        if (isAuditor && isRoute(auditorBlockedRoutes)) {
-          window.location.href = '/dashboard';
+        if (
+          !isPlatform &&
+          !isDealer &&
+          mvpRouteRule &&
+          !canAccessMvpFeature(role, mvpRouteRule.feature)
+        ) {
+          window.location.href = homePath;
           return;
         }
 

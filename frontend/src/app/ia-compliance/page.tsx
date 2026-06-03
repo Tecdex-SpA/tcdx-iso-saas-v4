@@ -14,7 +14,7 @@ const API_URL =
 const IA_COMPLIANCE_COPY = {
   es: {
     title: 'IA Compliance',
-    subtitle: 'Centro inteligente para cumplimiento, remediación y seguimiento ejecutivo.',
+    subtitle: 'Asistente de análisis para cumplimiento, remediación y seguimiento ejecutivo. No certifica cumplimiento ni reemplaza revisión humana.',
     refresh: 'Actualizar',
     executiveBrief: 'Resumen ejecutivo IA',
     generating: 'Generando...',
@@ -85,7 +85,7 @@ const IA_COMPLIANCE_COPY = {
   },
   en: {
     title: 'AI Compliance',
-    subtitle: 'Intelligent support center for compliance, remediation, and executive follow-up.',
+    subtitle: 'Analysis assistant for compliance, remediation, and executive follow-up. It does not certify compliance or replace human review.',
     refresh: 'Refresh',
     executiveBrief: 'AI executive brief',
     generating: 'Generating...',
@@ -643,6 +643,11 @@ export default function IaCompliancePage() {
                 {copy.company}: <span className="font-semibold">{healthContext.tenant_name}</span>
               </p>
             )}
+            <p className="mt-3 max-w-3xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+              {locale === 'en'
+                ? 'AI suggestions require human review before evidence approval, findings closure, lifecycle progress or executive reporting.'
+                : 'Las sugerencias IA requieren revisión humana antes de aprobar evidencias, cerrar hallazgos, avanzar ciclo de vida o emitir reportes ejecutivos.'}
+            </p>
           </div>
 
           <div className="flex flex-nowrap gap-2 overflow-x-auto">

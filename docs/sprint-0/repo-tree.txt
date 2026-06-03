@@ -1,0 +1,3041 @@
+.
+├── agent
+│   └── tcdx-sync-agent
+│       ├── agent.js
+│       ├── package-lock.json
+│       └── package.json
+├── ai-engine
+│   ├── app
+│   │   ├── core
+│   │   │   ├── __init__.py
+│   │   │   ├── config.py
+│   │   │   └── db.py
+│   │   ├── knowledge
+│   │   │   └── iso_baseline_knowledge.json
+│   │   ├── routes
+│   │   │   ├── __init__.py
+│   │   │   ├── ai.py
+│   │   │   ├── audit_documents.py
+│   │   │   └── senior_auditor_v2.py
+│   │   ├── schemas
+│   │   │   └── senior_auditor_schema.py
+│   │   ├── scripts
+│   │   │   ├── qa
+│   │   │   │   ├── check_ai_core_coverage.py
+│   │   │   │   ├── run_ai_final_check.sh
+│   │   │   │   └── test_ai_regression_multinorma.py
+│   │   │   ├── test_ai_core_read.py
+│   │   │   ├── test_domain_engine.py
+│   │   │   └── test_guided_solution.py
+│   │   ├── services
+│   │   │   ├── __init__.py
+│   │   │   ├── ai_core_db.py
+│   │   │   ├── ai_diagnostics.py
+│   │   │   ├── bootstrap_knowledge_service.py
+│   │   │   ├── compliance_service.py
+│   │   │   ├── context_builder.py
+│   │   │   ├── domain_knowledge.py
+│   │   │   ├── drive_context_service.py
+│   │   │   ├── explicit_intent.py
+│   │   │   ├── external_lookup_service.py
+│   │   │   ├── finding_scenario_detector.py
+│   │   │   ├── guardrails_service.py
+│   │   │   ├── guided_endpoint_adapter.py
+│   │   │   ├── knowledge_loader.py
+│   │   │   ├── language_service.py
+│   │   │   ├── llm_client.py
+│   │   │   ├── problem_classifier.py
+│   │   │   ├── rag_context_service.py
+│   │   │   ├── response_adapter.py
+│   │   │   ├── scenario_response_enricher.py
+│   │   │   ├── senior_auditor_orchestrator.py
+│   │   │   ├── senior_auditor_service.py
+│   │   │   ├── solution_engine.py
+│   │   │   ├── source_trace_service.py
+│   │   │   ├── structured_result_service.py
+│   │   │   ├── supervised_feedback_cases.py
+│   │   │   └── web_context_service.py
+│   │   └── __init__.py
+│   ├── docs
+│   │   ├── AI_ENGINE_MAINTENANCE_GUIDE.md
+│   │   └── AI_ENGINE_MULTINORMA_STATUS.md
+│   ├── knowledge
+│   │   ├── bootstrap
+│   │   │   ├── approved
+│   │   │   │   └── .gitkeep
+│   │   │   ├── generated
+│   │   │   │   └── .gitkeep
+│   │   │   ├── logs
+│   │   │   │   └── .gitkeep
+│   │   │   ├── pending_review
+│   │   │   │   └── .gitkeep
+│   │   │   ├── rejected
+│   │   │   │   └── .gitkeep
+│   │   │   ├── seeds
+│   │   │   │   ├── bootstrap_audit_findings.json
+│   │   │   │   ├── bootstrap_business_continuity.json
+│   │   │   │   ├── bootstrap_corrective_actions.json
+│   │   │   │   ├── bootstrap_cybersecurity_guidance.json
+│   │   │   │   ├── bootstrap_evidence_best_practices.json
+│   │   │   │   ├── bootstrap_iso27001_guidance.json
+│   │   │   │   ├── bootstrap_iso9001_guidance.json
+│   │   │   │   ├── bootstrap_kpi_interpretation.json
+│   │   │   │   ├── bootstrap_report_writing.json
+│   │   │   │   └── bootstrap_risk_management.json
+│   │   │   ├── sources
+│   │   │   │   └── .gitkeep
+│   │   │   └── topics
+│   │   │       └── bootstrap_topics.json
+│   │   ├── ai_output_schemas.json
+│   │   ├── audit_intelligence_rules.json
+│   │   ├── evidence_quality_rules.json
+│   │   ├── iso_baseline_knowledge.json
+│   │   ├── kpi_interpretation_rules.json
+│   │   ├── report_generation_rules.json
+│   │   ├── risk_analysis_rules.json
+│   │   ├── senior_auditor_reasoning_rules.json
+│   │   ├── task_generation_rules.json
+│   │   ├── tcdx_ai_knowledge_seed.json
+│   │   └── web_context_rules.json
+│   ├── prompts
+│   │   ├── iso_senior_auditor_compact.md
+│   │   ├── iso_senior_auditor.md
+│   │   ├── iso27001_audit_document_generator_v1.md
+│   │   └── iso9001_audit_document_generator_v1.md
+│   ├── reports
+│   │   ├── ai_regression_multinorma_20260426_214754.json
+│   │   ├── ai_regression_multinorma_20260426_214806.json
+│   │   ├── ai_regression_multinorma_20260426_215034.json
+│   │   ├── ai_regression_multinorma_20260426_215241.json
+│   │   ├── ai_regression_multinorma_20260426_220628.json
+│   │   ├── ai_regression_multinorma_20260426_222010.json
+│   │   ├── ai_regression_multinorma_20260426_230659.json
+│   │   ├── ai_regression_multinorma_20260426_230916.json
+│   │   ├── ai_regression_multinorma_20260426_231125.json
+│   │   ├── ai_regression_multinorma_20260426_231342.json
+│   │   ├── ai_regression_multinorma_20260426_231557.json
+│   │   ├── ai_regression_multinorma_20260426_231756.json
+│   │   ├── ai_regression_multinorma_20260426_232010.json
+│   │   ├── ai_regression_multinorma_20260426_232140.json
+│   │   ├── ai_regression_multinorma_20260426_232325.json
+│   │   ├── ai_regression_multinorma_20260427_001757.json
+│   │   ├── ai_regression_multinorma_20260427_130930.json
+│   │   └── ai_regression_multinorma_20260427_134323.json
+│   ├── scripts
+│   │   ├── bootstrap-general-knowledge.sh
+│   │   ├── reindex-bootstrap-knowledge.sh
+│   │   └── validate-bootstrap-knowledge.sh
+│   ├── .env.example
+│   ├── knowledge_client.py
+│   └── main.py
+├── backend
+│   ├── data
+│   │   └── knowledge
+│   │       └── base_tecnica_iso_operable_llm_2026-04-20.json
+│   ├── src
+│   │   ├── config
+│   │   │   ├── db.js
+│   │   │   └── security.js
+│   │   ├── controllers
+│   │   │   ├── auditPreparation.controller.js
+│   │   │   ├── kpi.controller.js
+│   │   │   ├── notifications.controller.js
+│   │   │   └── search.controller.js
+│   │   ├── middleware
+│   │   │   ├── aiLocaleResponseGuard.js
+│   │   │   ├── auth.js
+│   │   │   ├── rbac.middleware.js
+│   │   │   └── roleAuth.js
+│   │   ├── reports
+│   │   │   ├── charts
+│   │   │   │   └── reportCharts.helpers.js
+│   │   │   ├── config
+│   │   │   │   └── standardReportProfiles.js
+│   │   │   ├── helpers
+│   │   │   │   ├── aiAuditorPdfKitPremium.helpers.js
+│   │   │   │   ├── reportBranding.helpers.js
+│   │   │   │   ├── reportDataScope.helpers.js
+│   │   │   │   └── reportTextSanitizer.helpers.js
+│   │   │   ├── i18n
+│   │   │   │   └── reportLocale.js
+│   │   │   ├── services
+│   │   │   │   ├── htmlPdfRenderer.service.js
+│   │   │   │   ├── reportCoverage.service.js
+│   │   │   │   └── reportData.service.js
+│   │   │   └── templates
+│   │   │       ├── common
+│   │   │       │   ├── baseTemplate.js
+│   │   │       │   ├── formatters.js
+│   │   │       │   ├── sanitize.js
+│   │   │       │   └── styles.js
+│   │   │       ├── actionPlanPremium.template.js
+│   │   │       ├── aiAuditorPremium.template.js
+│   │   │       ├── companyProfileContext.template.js
+│   │   │       ├── controlHealthPremium.template.js
+│   │   │       ├── executivePremium.template.js
+│   │   │       ├── iaAuditorHistoric.template.js
+│   │   │       ├── internalAuditPremium.template.js
+│   │   │       ├── isoRiskPremium.template.js
+│   │   │       └── maturityGapDiagnosticPremium.template.js
+│   │   ├── routes
+│   │   │   ├── 2evidences.routes.js
+│   │   │   ├── action-plans.routes.js
+│   │   │   ├── admin-saas.routes.js
+│   │   │   ├── ai-answer.routes.js
+│   │   │   ├── ai-auditor.routes.js
+│   │   │   ├── ai-benchmark.routes.js
+│   │   │   ├── ai-compliance.routes.js
+│   │   │   ├── ai-external-lookup.routes.js
+│   │   │   ├── ai-feedback.routes.js
+│   │   │   ├── ai-knowledge.routes.js
+│   │   │   ├── ai-tenant-search.routes.js
+│   │   │   ├── ai-traces.routes.js
+│   │   │   ├── ai.routes.js
+│   │   │   ├── assets.routes.js
+│   │   │   ├── audit-execution.routes.js
+│   │   │   ├── auditPreparation.routes.js
+│   │   │   ├── audits.routes.js
+│   │   │   ├── auth.routes.js
+│   │   │   ├── billing.routes.js
+│   │   │   ├── company-profile.routes.js
+│   │   │   ├── controls.routes.js
+│   │   │   ├── dashboard-controls.routes.js
+│   │   │   ├── dashboard-v2.routes.js
+│   │   │   ├── dashboard.routes.js
+│   │   │   ├── diagnostic.routes.js
+│   │   │   ├── document-integrations-analysis.routes.js
+│   │   │   ├── document-integrations-folders.routes.js
+│   │   │   ├── document-integrations-google.routes.js
+│   │   │   ├── document-integrations-sync.routes.js
+│   │   │   ├── document-integrations-zoho.routes.js
+│   │   │   ├── document-integrations.routes.js
+│   │   │   ├── evidences.routes.js
+│   │   │   ├── findings.routes.js
+│   │   │   ├── health.js
+│   │   │   ├── iso-auditor.routes.js
+│   │   │   ├── iso-command-center.routes.js
+│   │   │   ├── iso-control-mapping.routes.js
+│   │   │   ├── iso-document-generator.routes.js
+│   │   │   ├── iso-express-diagnostic.routes.js
+│   │   │   ├── iso-knowledge.routes.js
+│   │   │   ├── iso-operational-execution.routes.js
+│   │   │   ├── iso-recommended-actions.routes.js
+│   │   │   ├── iso-risk-matrix.routes.js
+│   │   │   ├── kpi.routes.js
+│   │   │   ├── lifecycle.routes.js
+│   │   │   ├── me-modules.routes.js
+│   │   │   ├── me.routes.js
+│   │   │   ├── nonconformities.routes.js
+│   │   │   ├── notifications.routes.js
+│   │   │   ├── objectives.routes.js
+│   │   │   ├── policy.routes.js
+│   │   │   ├── quotes.routes.js
+│   │   │   ├── report.routes.js
+│   │   │   ├── reports.routes.js
+│   │   │   ├── search.routes.js
+│   │   │   ├── soa.routes.js
+│   │   │   ├── sync-agent.routes.js
+│   │   │   ├── tenant-files.routes.js
+│   │   │   ├── tenant-standards.routes.js
+│   │   │   ├── tenants.routes.js
+│   │   │   ├── user.routes.js
+│   │   │   └── users.routes.js
+│   │   ├── scripts
+│   │   │   ├── import-global-knowledge.js
+│   │   │   ├── import-kpi-staging.js
+│   │   │   └── KPI_ISO_ADVANCED.xlsx
+│   │   ├── services
+│   │   │   ├── providers
+│   │   │   │   └── googleDrive.provider.js
+│   │   │   ├── aiContextBuilder.service.js
+│   │   │   ├── aiEngineClient.service.js
+│   │   │   ├── aiOperationalReview.service.js
+│   │   │   ├── aiRuntimeMetrics.service.js
+│   │   │   ├── applicabilityScope.service.js
+│   │   │   ├── asyncJob.service.js
+│   │   │   ├── auditDocumentConversion.service.js
+│   │   │   ├── auditDocumentRenderer.service.js
+│   │   │   ├── auditOcr.service.js
+│   │   │   ├── auditPreparation.service.js
+│   │   │   ├── auditPreparationContext.service.js
+│   │   │   ├── auditZipExtraction.service.js
+│   │   │   ├── auth.service.js
+│   │   │   ├── companyProfile.service.js
+│   │   │   ├── companyProfileApplicabilityEngine.service.js
+│   │   │   ├── companyProfileImpact.service.js
+│   │   │   ├── dashboardV2.service.js
+│   │   │   ├── documentAiAnalysis.service.js
+│   │   │   ├── documentContentExtraction.service.js
+│   │   │   ├── documentGoogleFolders.service.js
+│   │   │   ├── documentGoogleSync.service.js
+│   │   │   ├── evidence-ai.service.js
+│   │   │   ├── governance.service.js
+│   │   │   ├── isoAuditor.service.js
+│   │   │   ├── isoCommandCenter.service.js
+│   │   │   ├── isoControlMapping.service.js
+│   │   │   ├── isoDocumentGenerator.service.js
+│   │   │   ├── isoExpressDiagnostic.service.js
+│   │   │   ├── isoKnowledge.service.js
+│   │   │   ├── isoOperationalExecution.service.js
+│   │   │   ├── isoRecommendedActions.service.js
+│   │   │   ├── isoRiskMatrix.service.js
+│   │   │   ├── kpi.engine.js
+│   │   │   ├── mountedShareDocumentSource.service.js
+│   │   │   ├── reportAiEnrichment.service.js
+│   │   │   ├── seniorAuditorSuggestions.service.js
+│   │   │   ├── tenantAiSettings.service.js
+│   │   │   └── zohoWorkdriveClient.service.js
+│   │   ├── utils
+│   │   │   ├── aiAnswerLocale.js
+│   │   │   ├── aiLocaleText.js
+│   │   │   ├── cryptoSecret.util.js
+│   │   │   ├── cryptoTokens.js
+│   │   │   ├── errorCodes.js
+│   │   │   ├── errorResponse.js
+│   │   │   ├── locale.js
+│   │   │   └── passwordPolicy.js
+│   │   ├── workers
+│   │   │   └── evidence-ai.worker.js
+│   │   └── app.js
+│   ├── uploads
+│   │   ├── audit-preparation-zips
+│   │   ├── audit-reports
+│   │   ├── evidences
+│   │   └── logos
+│   ├── .env.example
+│   ├── package-lock.json
+│   └── package.json
+├── database
+│   ├── migrations
+│   │   ├── .gitkeep
+│   │   ├── 20260430_audits_summary_support.sql
+│   │   ├── 20260430_final7_audits_ai_billing.sql
+│   │   ├── 20260430_fix_audit_review_friendly_labels.sql
+│   │   ├── 20260430_reportes_rbac_access.sql
+│   │   ├── 20260502_ai_bootstrap_knowledge.sql
+│   │   ├── 20260504_3k_ai_auditor_runs.sql
+│   │   ├── 20260504_3m_ai_auditor_human_review.sql
+│   │   ├── 20260506_iso_control_catalog_mapping.sql
+│   │   ├── 20260506_iso_control_mapping_apply_log.sql
+│   │   ├── 20260506_iso_document_generator.sql
+│   │   ├── 20260506_iso_express_diagnostic.sql
+│   │   ├── 20260506_iso_knowledge_base.sql
+│   │   ├── 20260506_iso_operational_execution.sql
+│   │   ├── 20260506_iso_risk_matrix.sql
+│   │   ├── 20260507_dashboard_v2_user_preferences.sql
+│   │   ├── 20260507_iso_recommended_action_conversions.sql
+│   │   ├── 20260507_iso_recommended_action_workflow.sql
+│   │   ├── 20260512_001_centro_inteligente_evidencias_base.sql
+│   │   ├── 20260512_02_document_suggestions_pending_control_unique.sql
+│   │   ├── 20260515_ai_knowledge_tables_minimal.sql
+│   │   ├── 20260515_audit_preparation_documentary_sources.sql
+│   │   ├── 20260515_audit_preparation_formats_versioning.sql
+│   │   ├── 20260515_audit_preparation_iso9001.sql
+│   │   ├── 20260519_tcdx_async_jobs.sql
+│   │   ├── 20260520_ai_auditor_pdf_cache.sql
+│   │   ├── 20260520_tenant_company_profiles.sql
+│   │   ├── 20260522_tenant_applicability_universe.sql
+│   │   ├── 20260525_ai_entitlements_applicability_consistency.sql
+│   │   ├── 20260525_harden_applicability_calculations_and_rbac.sql
+│   │   ├── 20260525_tenant_ai_entitlements.sql
+│   │   └── 20260526_tenant_scoped_document_sources_connectors.sql
+│   ├── qa-fixes
+│   │   ├── 20260513_create_iso_effective_health_view.sql
+│   │   ├── 20260513_create_iso_effective_kpi_summary_view.sql
+│   │   ├── 20260513_fix_iso_operational_links_v2.sql
+│   │   ├── 20260513_fix_iso_operational_links_v3.sql
+│   │   ├── 20260513_fix_iso_operational_links_v4.sql
+│   │   ├── 20260513_fix_iso_operational_links.sql
+│   │   ├── 20260513_fix_iso_remaining_integrity.sql
+│   │   ├── 20260513_qa_iso_integrity_audit_v2.sql
+│   │   ├── 20260513_qa_iso_integrity_audit.sql
+│   │   ├── 20260513_qa_pending_detail.sql
+│   │   ├── 20260513_refresh_health_kpis.sql
+│   │   └── 20260513_rollback_iso_operational_links.sql
+│   └── seeds
+│       ├── .gitkeep
+│       ├── 001_extend_iso9001_coverage.sql
+│       ├── 002_extend_iso27001_coverage.sql
+│       ├── 003_create_iso42001_operational_controls.sql
+│       ├── 004_refresh_iso_catalog_sync_status.sql
+│       ├── 20260506_seed_iso_catalog_sync_status.sql
+│       ├── 20260506_seed_iso_control_catalog_links_initial.sql
+│       ├── 20260506_seed_iso_crosswalks.sql
+│       ├── 20260506_seed_iso_knowledge_base.sql
+│       ├── 20260506_seed_iso27001_2022.sql
+│       ├── 20260506_seed_iso42001_2023.sql
+│       ├── 20260506_seed_iso9001_2015.sql
+│       ├── 20260506_seed_iso9001_2026_fdis.sql
+│       ├── 20260515_seed_ai_knowledge_iso9001_audit_documents.sql
+│       ├── 20260515_seed_audit_document_templates_iso27001.sql
+│       └── 20260515_seed_audit_document_templates_iso9001.sql
+├── deploy
+│   └── templates
+│       ├── nginx
+│       │   ├── tcdx-backend-api.conf
+│       │   ├── tcdx-frontend-http.conf
+│       │   └── tcdx-frontend-https.conf
+│       └── systemd
+│           ├── ai-engine.service
+│           ├── tecdex-backend.service
+│           └── tecdex-frontend.service
+├── docs
+│   ├── sprint-0
+│   │   ├── ai-engine-review.md
+│   │   ├── backend-controllers-services.md
+│   │   ├── backend-routes.md
+│   │   ├── cleanup-candidates.md
+│   │   ├── current-architecture.md
+│   │   ├── database-risks.md
+│   │   ├── database-schema.md
+│   │   ├── frontend-navigation.md
+│   │   ├── frontend-pages.md
+│   │   ├── kpi-health-review.md
+│   │   ├── module-classification.md
+│   │   ├── multi-tenant-review.md
+│   │   ├── mvp-scope.md
+│   │   ├── process-operations-fit.md
+│   │   ├── rbac-matrix.md
+│   │   ├── repo-inventory.md
+│   │   ├── repo-tree.txt
+│   │   ├── roadmap-v1.md
+│   │   ├── security-review.md
+│   │   ├── SPRINT-0-SUMMARY.md
+│   │   └── validation-checklist.md
+│   ├── .gitkeep
+│   ├── ai-auditor-demo-script.md
+│   ├── ai-auditor-esxi-troubleshooting.md
+│   ├── ai-auditor-history.md
+│   ├── ai-auditor-human-review.md
+│   ├── ai-auditor-operations-runbook.md
+│   ├── ai-auditor-pdf-report.md
+│   ├── ai-auditor-phase-3-final-summary.md
+│   ├── ai-auditor-production-checklist.md
+│   ├── ai-auditor-senior.md
+│   ├── ai-context-real-schema-map.md
+│   ├── ai-engine-bootstrap-knowledge.md
+│   ├── ai-engine-knowledge-base.md
+│   ├── ai-engine-quality-map.md
+│   ├── ai-engine-senior-auditor-architecture.md
+│   ├── ai-fast-mode-deterministic-rag.md
+│   ├── ai-final-value-layer-map.md
+│   ├── ai-legacy-suggest-endpoints.md
+│   ├── ai-local-compact-performance.md
+│   ├── ai-operational-endpoints.md
+│   ├── ai-rag-baseline-knowledge.md
+│   ├── ai-report-fallback-migration.md
+│   ├── ai-v2-remaining-gaps-map.md
+│   ├── audit-views-consolidation.md
+│   ├── auditoria-documental-iso9001-analisis-inicial.md
+│   ├── backup-restore-runbook.md
+│   ├── BASE_CONOCIMIENTO_ISO.md
+│   ├── centro-inteligente-evidencias.md
+│   ├── CHECKLIST_QA_PRIMERA_VENTA.md
+│   ├── CIERRE_FUNCIONAL_FINAL_7.md
+│   ├── commercial-pilot-scope.md
+│   ├── continuity-operations-runbook.md
+│   ├── DIAGNOSTICO_ISO_EXPRESS.md
+│   ├── document-sources-tenant-scoped.md
+│   ├── EJECUCION_OPERATIVA_ISO.md
+│   ├── environment-configuration.md
+│   ├── FASE_1_10_COMMAND_CENTER_ISO.md
+│   ├── FASE_1_11_1_13_CONSOLIDACION_OPERATIVA_ISO.md
+│   ├── FASE_1_14_DASHBOARD_CONSOLIDADO_PARIDAD_FUNCIONAL.md
+│   ├── FASE_1_14A_DASHBOARD_V2_BASE.md
+│   ├── FASE_1_14B_DASHBOARD_V2_SALUD_CICLO.md
+│   ├── FASE_1_14C_DASHBOARD_V2_OPERACION.md
+│   ├── FASE_1_14D_DASHBOARD_V2_PERSONALIZACION.md
+│   ├── FASE_1_14E1_DASHBOARD_VISUAL_KPI_SALUD.md
+│   ├── FASE_1_14E2_DASHBOARD_OPERATIVO_PERSONALIZABLE.md
+│   ├── FASE_1_8_FRONTEND_ACCIONES_RECOMENDADAS_ISO.md
+│   ├── FASE_1_9_CONVERSION_ACCIONES_RECOMENDADAS_ISO.md
+│   ├── frontend-lint-debt.md
+│   ├── frontend-nginx-proxy.md
+│   ├── frontend-port-8080.md
+│   ├── GENERADOR_DOCUMENTAL_ISO.md
+│   ├── go-live-checklist.md
+│   ├── i18n-db-display-layer.md
+│   ├── i18n-english-remediation.md
+│   ├── i18n-guidelines.md
+│   ├── IA_AUDITOR_V1.md
+│   ├── known-limitations.md
+│   ├── MAPEO_ISO_CONTROLS_CATALOGO.md
+│   ├── market-readiness-checklist.md
+│   ├── MATRIZ_RIESGOS_AUTOMATIZADA.md
+│   ├── modulo-preparacion-auditoria-iso9001-cierre-funcional.md
+│   ├── modulo-preparacion-auditoria-iso9001-fase-2.md
+│   ├── modulo-preparacion-documental-cierre-final.md
+│   ├── modulo-preparacion-documental-formatos-y-versionado.md
+│   ├── modulo-preparacion-documental-iso27001-base.md
+│   ├── modulo-preparacion-documental-zip-extraction.md
+│   ├── observability-runbook.md
+│   ├── ollama-local-llm-setup.md
+│   ├── OPERACION_SECRETOS.md
+│   ├── oracle-cloud-backup-restore.md
+│   ├── oracle-cloud-cutover-checklist.md
+│   ├── oracle-cloud-env.md
+│   ├── oracle-cloud-production-runbook.md
+│   ├── oracle-cloud-vm-setup.md
+│   ├── pdf-rendering-html-puppeteer.md
+│   ├── phase-4-final-summary.md
+│   ├── phase-4-qa-matrix.md
+│   ├── phase-4-risk-register.md
+│   ├── pilot-demo-checklist.md
+│   ├── pilot-deployment-runbook.md
+│   ├── PLAN_PRIMERA_VENTA_1_A_5_CLIENTES.md
+│   ├── plantillas-docx-marcadores-tcdx.md
+│   ├── PRODUCCION_PRIMERA_VENTA.md
+│   ├── production-readiness-checklist-esxi.md
+│   ├── qa-ai-auditor-full.md
+│   ├── qa-effective-health-sources.md
+│   ├── RBAC_FINAL.md
+│   ├── rbac-matrix.md
+│   ├── rbac-phase-4c.md
+│   ├── recomendaciones_hardening_tcdx_iso_saas_codex.txt
+│   ├── runbooks-index.md
+│   ├── security-and-code-quality-audit.md
+│   ├── security-hardening-phase-4b.md
+│   ├── security-hardening.md
+│   └── vmware-esxi-deployment-runbook.md
+├── frontend
+│   ├── public
+│   │   ├── logos
+│   │   │   └── tecdex.png
+│   │   ├── file.svg
+│   │   ├── globe.svg
+│   │   ├── logo.png
+│   │   ├── next.svg
+│   │   ├── tecdex.png
+│   │   ├── vercel.svg
+│   │   └── window.svg
+│   ├── src
+│   │   ├── app
+│   │   │   ├── acciones-recomendadas
+│   │   │   │   └── page.tsx
+│   │   │   ├── activos
+│   │   │   │   └── page.tsx
+│   │   │   ├── admin-saas
+│   │   │   │   └── page.tsx
+│   │   │   ├── administrar-kpis
+│   │   │   │   └── page.tsx
+│   │   │   ├── auditor-iso
+│   │   │   │   └── page.tsx
+│   │   │   ├── auditorias
+│   │   │   │   ├── ejecucion
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── ia
+│   │   │   │   │   └── page.tsx
+│   │   │   │   └── page.tsx
+│   │   │   ├── centro-control-iso
+│   │   │   │   └── page.tsx
+│   │   │   ├── ciclo-vida
+│   │   │   │   └── page.tsx
+│   │   │   ├── command-center-iso
+│   │   │   │   └── page.tsx
+│   │   │   ├── controles
+│   │   │   │   └── page.tsx
+│   │   │   ├── cotizador
+│   │   │   │   └── page.tsx
+│   │   │   ├── dashboard
+│   │   │   │   └── page.tsx
+│   │   │   ├── dashboard-kpi
+│   │   │   │   └── page.tsx
+│   │   │   ├── dashboard-v2
+│   │   │   │   └── page.tsx
+│   │   │   ├── dealer
+│   │   │   │   └── page.tsx
+│   │   │   ├── diagnostico
+│   │   │   │   └── page.tsx
+│   │   │   ├── documentos
+│   │   │   │   └── page.tsx
+│   │   │   ├── ejecucion-iso
+│   │   │   │   └── page.tsx
+│   │   │   ├── empresas
+│   │   │   │   └── page.tsx
+│   │   │   ├── evidencias
+│   │   │   │   └── page.tsx
+│   │   │   ├── exportes
+│   │   │   │   └── page.tsx
+│   │   │   ├── hallazgos
+│   │   │   │   └── page.tsx
+│   │   │   ├── health
+│   │   │   │   └── page.tsx
+│   │   │   ├── ia
+│   │   │   │   └── page.tsx
+│   │   │   ├── ia-auditor
+│   │   │   │   └── page.tsx
+│   │   │   ├── ia-compliance
+│   │   │   │   ├── sugerencias
+│   │   │   │   │   └── page.tsx
+│   │   │   │   └── page.tsx
+│   │   │   ├── login
+│   │   │   │   └── page.tsx
+│   │   │   ├── matriz-riesgo
+│   │   │   │   └── page.tsx
+│   │   │   ├── no-conformidades
+│   │   │   │   └── page.tsx
+│   │   │   ├── perfil
+│   │   │   │   └── page.tsx
+│   │   │   ├── perfil-empresa
+│   │   │   │   └── page.tsx
+│   │   │   ├── plan-accion
+│   │   │   │   └── page.tsx
+│   │   │   ├── prefacturacion
+│   │   │   │   └── page.tsx
+│   │   │   ├── soa
+│   │   │   │   └── page.tsx
+│   │   │   ├── usuarios
+│   │   │   │   └── page.tsx
+│   │   │   ├── favicon.ico
+│   │   │   ├── globals.css
+│   │   │   ├── layout.tsx
+│   │   │   └── page.tsx
+│   │   ├── components
+│   │   │   ├── acciones-recomendadas
+│   │   │   │   ├── RecommendedActionCard.tsx
+│   │   │   │   ├── RecommendedActionDetailModal.tsx
+│   │   │   │   ├── RecommendedActionFilters.tsx
+│   │   │   │   ├── RecommendedActionsDashboard.tsx
+│   │   │   │   ├── RecommendedActionStats.tsx
+│   │   │   │   ├── types.ts
+│   │   │   │   └── utils.ts
+│   │   │   ├── auditor-iso
+│   │   │   │   └── IsoAuditorPreview.tsx
+│   │   │   ├── auditorias
+│   │   │   │   ├── AuditPreparationPanel.tsx
+│   │   │   │   └── IaAuditorPanel.tsx
+│   │   │   ├── centro-control-iso
+│   │   │   │   ├── CombinedIsoCommandCenter.tsx
+│   │   │   │   ├── IsoNormCard.tsx
+│   │   │   │   ├── IsoPriorityPanel.tsx
+│   │   │   │   ├── IsoQuickLinks.tsx
+│   │   │   │   ├── IsoWorkflowSummary.tsx
+│   │   │   │   ├── types.ts
+│   │   │   │   ├── UnifiedIsoCommandCenter.tsx
+│   │   │   │   └── utils.ts
+│   │   │   ├── command-center-iso
+│   │   │   │   ├── IsoActivityTimeline.tsx
+│   │   │   │   ├── IsoCommandCenterDashboard.tsx
+│   │   │   │   ├── IsoExecutiveSummary.tsx
+│   │   │   │   ├── IsoPriorityList.tsx
+│   │   │   │   ├── IsoRiskActionOverview.tsx
+│   │   │   │   ├── IsoStandardReadinessCard.tsx
+│   │   │   │   ├── types.ts
+│   │   │   │   └── utils.ts
+│   │   │   ├── company-profile
+│   │   │   │   └── CompanyProfileImpactPanel.tsx
+│   │   │   ├── dashboard-v2
+│   │   │   │   ├── DashboardV2.tsx
+│   │   │   │   ├── DashboardV2Header.tsx
+│   │   │   │   ├── DashboardV2HealthSection.tsx
+│   │   │   │   ├── DashboardV2LifecycleSection.tsx
+│   │   │   │   ├── DashboardV2Panel.tsx
+│   │   │   │   ├── DashboardV2PersonalizedLayout.tsx
+│   │   │   │   ├── DashboardV2StandardCard.tsx
+│   │   │   │   ├── DashboardV2Tabs.tsx
+│   │   │   │   ├── types.ts
+│   │   │   │   └── utils.ts
+│   │   │   ├── evidences
+│   │   │   │   ├── GoogleDriveSourcesPanel.tsx
+│   │   │   │   ├── IntegratedEvidenceApprovalPanel.tsx
+│   │   │   │   └── page.tsx
+│   │   │   ├── icons
+│   │   │   │   └── TcdxIcon.tsx
+│   │   │   ├── language
+│   │   │   │   └── LanguageSelector.tsx
+│   │   │   ├── objectives
+│   │   │   │   └── ObjectivesPanel.tsx
+│   │   │   ├── AppLayout.tsx
+│   │   │   ├── EnglishAdminSaasTextGuard.tsx
+│   │   │   ├── EnglishDbDisplayTextGuard.tsx
+│   │   │   ├── EnglishFindingsTextGuard.tsx
+│   │   │   ├── EnglishVisualTextGuard.tsx
+│   │   │   ├── Header.tsx
+│   │   │   └── Sidebar.tsx
+│   │   ├── context
+│   │   │   └── LanguageContext.tsx
+│   │   ├── hooks
+│   │   │   ├── useTenantEntitlements.ts
+│   │   │   └── useTranslation.ts
+│   │   ├── i18n
+│   │   │   ├── dictionaries
+│   │   │   │   ├── en.json
+│   │   │   │   └── es.json
+│   │   │   ├── displayText.ts
+│   │   │   ├── locales.ts
+│   │   │   └── statusLabels.ts
+│   │   └── utils
+│   │       ├── aiAuditorDraft.ts
+│   │       ├── apiClient.ts
+│   │       ├── auth.ts
+│   │       └── errorMessages.ts
+│   ├── .env.example
+│   ├── .gitignore
+│   ├── .nvmrc
+│   ├── AGENTS.md
+│   ├── CLAUDE.md
+│   ├── eslint.config.mjs
+│   ├── next-env.d.ts
+│   ├── next.config.ts
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.mjs
+│   ├── README.md
+│   ├── tsconfig.json
+│   └── tsconfig.tsbuildinfo
+├── qa-results
+│   ├── ai-engine-contracts
+│   │   └── 20260520-185046
+│   │       ├── company_profile.headers.txt
+│   │       ├── company_profile.json
+│   │       ├── external_lookup.headers.txt
+│   │       ├── external_lookup.json
+│   │       ├── health.json
+│   │       ├── report_ai_enrichment.headers.txt
+│   │       └── report_ai_enrichment.json
+│   ├── ai-engine-process-map
+│   │   └── 20260525-103042
+│   │       ├── company-profile-analyze.json
+│   │       ├── health-summary.json
+│   │       ├── health.json
+│   │       └── report-ai-enrichment.json
+│   ├── ai-entitlements-hardening
+│   │   └── 20260525-184133
+│   │       ├── ai-compliance-disabled.json
+│   │       ├── ai-compliance-disabled.json.status
+│   │       ├── ai-enabled-skip.txt
+│   │       ├── company-profile-analyze-disabled.json
+│   │       ├── company-profile-analyze-disabled.json.status
+│   │       ├── entitlements-disabled.json
+│   │       ├── entitlements-disabled.json.status
+│   │       ├── login-disabled.json
+│   │       ├── report-start-disabled.json
+│   │       ├── report-start-disabled.json.status
+│   │       └── summary.txt
+│   ├── ai-ui-entitlements
+│   │   └── 20260525-184144
+│   │       ├── administrar-kpis.html
+│   │       ├── administrar-kpis.status
+│   │       ├── auditorias_view=ia.html
+│   │       ├── auditorias_view=ia.status
+│   │       ├── auditorias.html
+│   │       ├── auditorias.status
+│   │       ├── company-profile-analyze-start.json
+│   │       ├── controles.html
+│   │       ├── controles.status
+│   │       ├── dashboard.html
+│   │       ├── dashboard.status
+│   │       ├── entitlements.json
+│   │       ├── health.html
+│   │       ├── health.status
+│   │       ├── ia-compliance_sugerencias.html
+│   │       ├── ia-compliance_sugerencias.status
+│   │       ├── ia-compliance.html
+│   │       ├── ia-compliance.status
+│   │       ├── login.json
+│   │       ├── perfil-empresa.html
+│   │       ├── perfil-empresa.status
+│   │       ├── report-generate-start.json
+│   │       └── summary.txt
+│   ├── company-profile-ai
+│   │   ├── 20260522-104847
+│   │   │   ├── analysis-job.json
+│   │   │   ├── analysis-start.json
+│   │   │   ├── context-export.json
+│   │   │   ├── contexto-de-la-organizacion.pdf
+│   │   │   ├── contexto-headers.txt
+│   │   │   ├── login.json
+│   │   │   ├── profile-after-analysis.json
+│   │   │   ├── profile-payload.json
+│   │   │   └── profile-save.json
+│   │   └── 20260522-113452
+│   │       ├── context-document.pdf
+│   │       ├── context-export.json
+│   │       ├── headers.txt
+│   │       ├── job-latest.json
+│   │       ├── job-result.json
+│   │       ├── job-start.json
+│   │       ├── login.json
+│   │       ├── profile-after-analysis.json
+│   │       ├── profile-payload.json
+│   │       └── profile-save.json
+│   ├── company-profile-flow
+│   │   └── 20260520-185047
+│   │       ├── analyze-profile.json
+│   │       ├── context-document.headers.txt
+│   │       ├── contexto-de-la-organizacion.pdf
+│   │       ├── export-context.json
+│   │       └── save-profile.json
+│   ├── company-profile-impact
+│   │   └── 20260522-115754
+│   │       ├── context-document.pdf
+│   │       ├── context-export.json
+│   │       ├── headers.txt
+│   │       ├── impact.json
+│   │       ├── job-latest.json
+│   │       ├── job-result.json
+│   │       ├── job-start.json
+│   │       ├── login.json
+│   │       ├── profile-after-analysis.json
+│   │       ├── profile-payload.json
+│   │       └── profile-save.json
+│   ├── company-profile-impact-full
+│   │   └── 20260522-152836
+│   │       ├── modules
+│   │       │   ├── action-plans.json
+│   │       │   ├── audits.json
+│   │       │   ├── controls.json
+│   │       │   ├── dashboard.json
+│   │       │   ├── health.json
+│   │       │   ├── kpis.json
+│   │       │   └── reports.json
+│   │       ├── context-document.pdf
+│   │       ├── context-export.json
+│   │       ├── headers.txt
+│   │       ├── impact.json
+│   │       ├── job-latest.json
+│   │       ├── job-start.json
+│   │       ├── login.json
+│   │       ├── profile-after-analysis.json
+│   │       ├── profile-payload.json
+│   │       └── profile-save.json
+│   ├── controls-applicability
+│   │   └── 20260525-102808
+│   │       ├── applicable-controls.json
+│   │       ├── exclusions.json
+│   │       ├── health-controls-risk.json
+│   │       └── login.json
+│   ├── db-applicability-consistency
+│   │   ├── 20260525-183809
+│   │   │   ├── applicability-summary.json
+│   │   │   ├── applicability-summary.json.status
+│   │   │   ├── health-dashboard.json
+│   │   │   ├── health-dashboard.json.status
+│   │   │   ├── health-standards.json
+│   │   │   ├── health-standards.json.status
+│   │   │   ├── login.json
+│   │   │   └── sql-skip.txt
+│   │   └── 20260525-183819
+│   │       ├── db-consistency.sql
+│   │       ├── db-consistency.txt
+│   │       └── login.json
+│   ├── document-sources-tenant-isolation
+│   │   ├── 20260526-162120
+│   │   │   ├── login-a.json
+│   │   │   ├── mounted-bad-traversal.json
+│   │   │   ├── source-a-create.json
+│   │   │   ├── sources-no-token.json
+│   │   │   └── summary.txt
+│   │   ├── 20260526-163027
+│   │   │   ├── login-a.json
+│   │   │   ├── mounted-bad-absolute.json
+│   │   │   ├── mounted-bad-traversal.json
+│   │   │   ├── source-a-create.json
+│   │   │   ├── sources-no-token.json
+│   │   │   └── summary.txt
+│   │   ├── 20260526-173035
+│   │   │   ├── agent-heartbeat.json
+│   │   │   ├── agent-index.json
+│   │   │   ├── agent-register-reuse.json
+│   │   │   ├── agent-register.json
+│   │   │   ├── login-a.json
+│   │   │   ├── mounted-bad-absolute.json
+│   │   │   ├── mounted-bad-traversal.json
+│   │   │   ├── pairing-code.json
+│   │   │   ├── source-a-create.json
+│   │   │   ├── sources-no-token.json
+│   │   │   ├── summary.txt
+│   │   │   └── zoho-start.json
+│   │   ├── 20260527-105449
+│   │   │   ├── agent-heartbeat-invalid.json
+│   │   │   ├── agent-heartbeat.json
+│   │   │   ├── agent-index.json
+│   │   │   ├── agent-register-reuse.json
+│   │   │   ├── agent-register.json
+│   │   │   ├── login-a.json
+│   │   │   ├── mounted-bad-absolute.json
+│   │   │   ├── mounted-bad-traversal.json
+│   │   │   ├── pairing-code.json
+│   │   │   ├── source-a-create.json
+│   │   │   ├── sources-no-token.json
+│   │   │   ├── sql-validation-notes.sql
+│   │   │   ├── summary.txt
+│   │   │   └── zoho-start.json
+│   │   └── 20260527-111709
+│   │       ├── agent-heartbeat-invalid.json
+│   │       ├── agent-heartbeat.json
+│   │       ├── agent-index-repeat.json
+│   │       ├── agent-index.json
+│   │       ├── agent-register-reuse.json
+│   │       ├── agent-register.json
+│   │       ├── login-a.json
+│   │       ├── mounted-bad-absolute.json
+│   │       ├── mounted-bad-traversal.json
+│   │       ├── pairing-code.json
+│   │       ├── source-a-create.json
+│   │       ├── source-a-disconnect.json
+│   │       ├── source-a-sync-after-disconnect.json
+│   │       ├── sources-no-token.json
+│   │       ├── sql-validation-notes.sql
+│   │       ├── summary.txt
+│   │       └── zoho-start.json
+│   ├── document-suggestion-evidence-mapping
+│   │   └── 20260526-163142
+│   │       ├── create-evidence.json
+│   │       ├── create-evidence.status
+│   │       ├── login.json
+│   │       ├── suggestions.json
+│   │       └── summary.txt
+│   ├── generated-reports
+│   │   ├── contexto-organizacion.pdf
+│   │   ├── deep-report-manual-bff50f00.pdf
+│   │   ├── job-84a5336e-4dc4-4fce-a463-22065d055435-latest.json
+│   │   ├── job-cc80f89f-bff8-4f60-a075-167eb34dc87f-latest.json
+│   │   ├── job-e97616d3-c067-4473-b9c0-646d08709b89-latest.json
+│   │   ├── login-response-20260519_204100.json
+│   │   ├── report-create-payload-20260519_204100.json
+│   │   ├── report-create-response-20260519_204100.json
+│   │   ├── report-create-response.json
+│   │   ├── report-download-headers-298e110c-40fb-4e73-92b2-db490a94582e.txt
+│   │   ├── report-download-headers-c2e2f7b1-4298-4f89-94ff-dcb250579719.txt
+│   │   ├── report-job-result-298e110c-40fb-4e73-92b2-db490a94582e.json
+│   │   ├── report-job-result-c2e2f7b1-4298-4f89-94ff-dcb250579719.json
+│   │   ├── report-job-status-298e110c-40fb-4e73-92b2-db490a94582e.json
+│   │   ├── report-job-status-c2e2f7b1-4298-4f89-94ff-dcb250579719.json
+│   │   ├── report-summary-298e110c-40fb-4e73-92b2-db490a94582e.txt
+│   │   ├── report-summary-c2e2f7b1-4298-4f89-94ff-dcb250579719.txt
+│   │   ├── result-cc80f89f-bff8-4f60-a075-167eb34dc87f.json
+│   │   ├── tcdx-report-executive_iso_status-c2e2f7b1-4298-4f89-94ff-dcb250579719.pdf
+│   │   └── tcdx-report-executive_iso_status-deep-298e110c-40fb-4e73-92b2-db490a94582e.pdf
+│   ├── google-drive-document-source-lifecycle
+│   │   ├── 20260527-110924
+│   │   │   ├── mock-lifecycle.json
+│   │   │   └── summary.txt
+│   │   └── 20260527-111711
+│   │       ├── mock-lifecycle.json
+│   │       └── summary.txt
+│   ├── health-applicability
+│   │   ├── 20260522-215212
+│   │   │   └── login.json
+│   │   ├── 20260522-215221
+│   │   │   └── login.json
+│   │   ├── 20260525-102741
+│   │   │   ├── applicability-summary.json
+│   │   │   ├── health-controls-risk.json
+│   │   │   ├── health-dashboard.json
+│   │   │   ├── health-kpis.json
+│   │   │   ├── health-standards.json
+│   │   │   ├── login.json
+│   │   │   └── summary.txt
+│   │   ├── 20260525-135719
+│   │   │   ├── applicability-summary.json
+│   │   │   ├── health-controls-risk.json
+│   │   │   ├── health-dashboard.json
+│   │   │   ├── health-kpis.json
+│   │   │   ├── health-refresh.json
+│   │   │   ├── health-standards.json
+│   │   │   ├── login.json
+│   │   │   └── summary.txt
+│   │   ├── 20260525-184153
+│   │   │   ├── applicability-summary.json
+│   │   │   ├── health-controls-risk.json
+│   │   │   ├── health-dashboard.json
+│   │   │   ├── health-kpis.json
+│   │   │   ├── health-refresh.json
+│   │   │   ├── health-standards.json
+│   │   │   ├── login.json
+│   │   │   └── summary.txt
+│   │   └── 20260526-093653
+│   │       ├── applicability-summary.json
+│   │       ├── health-controls-risk.json
+│   │       ├── health-dashboard.json
+│   │       ├── health-kpis.json
+│   │       ├── health-refresh.json
+│   │       ├── health-standards.json
+│   │       ├── login.json
+│   │       └── summary.txt
+│   ├── ia-remote-deep-20260518_171742
+│   │   ├── 00-auditorias-ia-page.headers.txt
+│   │   ├── 00-health-page.headers.txt
+│   │   ├── 00-ia-compliance-page.headers.txt
+│   │   ├── 00-root.headers.txt
+│   │   ├── 01-api-root.json
+│   │   ├── 01-login.json
+│   │   ├── 02-health-dashboard.json
+│   │   ├── 03-ai-engine-health.json
+│   │   ├── 10-ai-compliance-health-summary.json
+│   │   ├── 11-ai-compliance-suggestions.json
+│   │   ├── 12-ai-knowledge-status.json
+│   │   ├── 13-ai-bootstrap-status.json
+│   │   ├── 20-suggest-health-summary.json
+│   │   ├── 21-suggest-finding-analysis.json
+│   │   ├── 22-suggest-action-plan.json
+│   │   ├── 23-suggest-executive-brief.json
+│   │   ├── 24-ai-compliance-analyze-document.json
+│   │   ├── 30-ai-auditor-analyze.json
+│   │   ├── 40-negative-no-token-ai-compliance.json
+│   │   ├── 41-negative-bad-token-ai-compliance.json
+│   │   ├── 42-ai-engine-docs.headers.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   └── token.txt
+│   ├── ia-remote-deep-fixed-20260518_173216
+│   │   ├── 00-auditorias-ia-page.headers.txt
+│   │   ├── 00-health-page.headers.txt
+│   │   ├── 00-ia-compliance-page.headers.txt
+│   │   ├── 00-root.headers.txt
+│   │   ├── 01-api-root.json
+│   │   ├── 01-login.json
+│   │   ├── 02-health-dashboard.json
+│   │   ├── 03-ai-compliance-suggestions.json
+│   │   ├── 10-ai-engine-health.json
+│   │   ├── 11-ai-engine-health-deep.json
+│   │   ├── 12-ai-knowledge-status.json
+│   │   ├── 13-ai-bootstrap-status.json
+│   │   ├── 20-suggest-health-summary.json
+│   │   ├── 21-suggest-finding-analysis.json
+│   │   ├── 22-suggest-action-plan.json
+│   │   ├── 23-suggest-executive-brief.json
+│   │   ├── 24-ai-compliance-analyze-document.json
+│   │   ├── 30-ai-auditor-analyze.json
+│   │   ├── 40-negative-no-token-ai-compliance.json
+│   │   ├── 41-negative-bad-token-ai-compliance.json
+│   │   ├── 42-ai-engine-docs.headers.txt
+│   │   ├── 43-ai-engine-openapi.headers.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   └── token.txt
+│   ├── ia-remote-deep-fixed-20260518_180022
+│   │   ├── 00-auditorias-ia-page.headers.txt
+│   │   ├── 00-health-page.headers.txt
+│   │   ├── 00-ia-compliance-page.headers.txt
+│   │   ├── 00-root.headers.txt
+│   │   ├── 01-api-root.json
+│   │   ├── 01-login.json
+│   │   ├── 02-health-dashboard.json
+│   │   ├── 03-ai-compliance-suggestions.json
+│   │   ├── 10-ai-engine-health.json
+│   │   ├── 11-ai-engine-health-deep.json
+│   │   ├── 12-ai-knowledge-status.json
+│   │   ├── 13-ai-bootstrap-status.json
+│   │   ├── 20-suggest-health-summary.json
+│   │   ├── 21-suggest-finding-analysis.json
+│   │   ├── 22-suggest-action-plan.json
+│   │   ├── 23-suggest-executive-brief.json
+│   │   ├── 24-ai-compliance-analyze-document.json
+│   │   ├── 30-ai-auditor-analyze.json
+│   │   ├── 40-negative-no-token-ai-compliance.json
+│   │   ├── 41-negative-bad-token-ai-compliance.json
+│   │   ├── 42-ai-engine-docs.headers.txt
+│   │   ├── 43-ai-engine-openapi.headers.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   └── token.txt
+│   ├── ia-remote-deep-fixed-20260518_191019
+│   │   ├── 00-auditorias-ia-page.headers.txt
+│   │   ├── 00-health-page.headers.txt
+│   │   ├── 00-ia-compliance-page.headers.txt
+│   │   ├── 00-root.headers.txt
+│   │   ├── 01-api-root.json
+│   │   ├── 01-login.json
+│   │   ├── 02-health-dashboard.json
+│   │   ├── 03-ai-compliance-suggestions.json
+│   │   ├── 10-ai-engine-health.json
+│   │   ├── 11-ai-engine-health-deep.json
+│   │   ├── 12-ai-knowledge-status.json
+│   │   ├── 13-ai-bootstrap-status.json
+│   │   ├── 20-suggest-health-summary.json
+│   │   ├── 21-suggest-finding-analysis.json
+│   │   ├── 22-suggest-action-plan.json
+│   │   ├── 23-suggest-executive-brief.json
+│   │   ├── 24-ai-compliance-analyze-document.json
+│   │   ├── 30-ai-auditor-analyze.json
+│   │   ├── 40-negative-no-token-ai-compliance.json
+│   │   ├── 41-negative-bad-token-ai-compliance.json
+│   │   ├── 42-ai-engine-docs.headers.txt
+│   │   ├── 43-ai-engine-openapi.headers.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   └── token.txt
+│   ├── kpi-applicability
+│   │   └── 20260525-102757
+│   │       ├── applicable-kpis.json
+│   │       ├── health-kpis.json
+│   │       ├── kpi-dashboard.json
+│   │       └── login.json
+│   ├── market-readiness
+│   │   ├── 20260526-091649
+│   │   │   ├── results.jsonl
+│   │   │   ├── security-summary.txt
+│   │   │   ├── summary.json
+│   │   │   └── summary.txt
+│   │   ├── 20260526-093446
+│   │   │   ├── ai_entitlements_hardening
+│   │   │   │   ├── login-disabled.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── ai_ui_entitlements
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── controls_applicability
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── db_applicability_consistency
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── document_suggestion_evidence_mapping
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── health_applicability
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── kpi_applicability
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── rbac_health
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── report_applicability
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── results.jsonl
+│   │   │   ├── security-summary.txt
+│   │   │   └── summary.txt
+│   │   ├── 20260526-093511
+│   │   │   ├── ai_entitlements_hardening
+│   │   │   │   ├── login-disabled.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── ai_ui_entitlements
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── controls_applicability
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── db_applicability_consistency
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── document_suggestion_evidence_mapping
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── health_applicability
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── kpi_applicability
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── rbac_health
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── report_applicability
+│   │   │   │   ├── login.json
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── tcdx_master
+│   │   │   │   ├── stderr.log
+│   │   │   │   └── stdout.log
+│   │   │   ├── results.jsonl
+│   │   │   ├── security-summary.txt
+│   │   │   └── summary.txt
+│   │   └── 20260526-093558
+│   │       ├── ai_entitlements_hardening
+│   │       │   ├── ai-compliance-disabled.json
+│   │       │   ├── ai-compliance-disabled.json.status
+│   │       │   ├── company-profile-analyze-disabled.json
+│   │       │   ├── company-profile-analyze-disabled.json.status
+│   │       │   ├── entitlements-disabled.json
+│   │       │   ├── entitlements-disabled.json.status
+│   │       │   ├── login-disabled.json
+│   │       │   ├── report-job-disabled.json
+│   │       │   ├── report-job-disabled.json.status
+│   │       │   ├── report-start-disabled.json
+│   │       │   ├── report-start-disabled.json.status
+│   │       │   ├── stderr.log
+│   │       │   └── stdout.log
+│   │       ├── ai_ui_entitlements
+│   │       │   ├── administrar-kpis.html
+│   │       │   ├── administrar-kpis.status
+│   │       │   ├── auditorias_view=ia.html
+│   │       │   ├── auditorias_view=ia.status
+│   │       │   ├── auditorias.html
+│   │       │   ├── auditorias.status
+│   │       │   ├── company-profile-analyze-start.json
+│   │       │   ├── controles.html
+│   │       │   ├── controles.status
+│   │       │   ├── dashboard.html
+│   │       │   ├── dashboard.status
+│   │       │   ├── entitlements.json
+│   │       │   ├── health.html
+│   │       │   ├── health.status
+│   │       │   ├── ia-compliance_sugerencias.html
+│   │       │   ├── ia-compliance_sugerencias.status
+│   │       │   ├── ia-compliance.html
+│   │       │   ├── ia-compliance.status
+│   │       │   ├── login.json
+│   │       │   ├── perfil-empresa.html
+│   │       │   ├── perfil-empresa.status
+│   │       │   ├── report-generate-start.json
+│   │       │   ├── stderr.log
+│   │       │   ├── stdout.log
+│   │       │   └── summary.txt
+│   │       ├── controls_applicability
+│   │       │   ├── applicable-controls.json
+│   │       │   ├── exclusions.json
+│   │       │   ├── health-controls-risk.json
+│   │       │   ├── login.json
+│   │       │   ├── stderr.log
+│   │       │   └── stdout.log
+│   │       ├── db_applicability_consistency
+│   │       │   ├── applicability-summary.json
+│   │       │   ├── applicability-summary.json.status
+│   │       │   ├── health-dashboard.json
+│   │       │   ├── health-dashboard.json.status
+│   │       │   ├── health-standards.json
+│   │       │   ├── health-standards.json.status
+│   │       │   ├── login.json
+│   │       │   ├── sql-skip.txt
+│   │       │   ├── stderr.log
+│   │       │   └── stdout.log
+│   │       ├── document_suggestion_evidence_mapping
+│   │       │   ├── create-evidence.json
+│   │       │   ├── create-evidence.status
+│   │       │   ├── login.json
+│   │       │   ├── stderr.log
+│   │       │   ├── stdout.log
+│   │       │   ├── suggestions.json
+│   │       │   └── summary.txt
+│   │       ├── health_applicability
+│   │       │   ├── applicability-summary.json
+│   │       │   ├── health-controls-risk.json
+│   │       │   ├── health-dashboard.json
+│   │       │   ├── health-kpis.json
+│   │       │   ├── health-refresh.json
+│   │       │   ├── health-standards.json
+│   │       │   ├── login.json
+│   │       │   ├── stderr.log
+│   │       │   ├── stdout.log
+│   │       │   └── summary.txt
+│   │       ├── kpi_applicability
+│   │       │   ├── applicable-kpis.json
+│   │       │   ├── health-kpis.json
+│   │       │   ├── kpi-dashboard.json
+│   │       │   ├── login.json
+│   │       │   ├── stderr.log
+│   │       │   └── stdout.log
+│   │       ├── rbac_health
+│   │       │   ├── health_audit-log_action-plans.json
+│   │       │   ├── health_audit-log_control-recovery.json
+│   │       │   ├── health_audit-log_evidences.json
+│   │       │   ├── health_audit-log.json
+│   │       │   ├── health_controls-recovered.json
+│   │       │   ├── health_controls-risk.json
+│   │       │   ├── health_dashboard.json
+│   │       │   ├── health_evidence-approval-queue.json
+│   │       │   ├── health_kpis.json
+│   │       │   ├── health_remediation-executive_standards.json
+│   │       │   ├── health_remediation-executive.json
+│   │       │   ├── health_remediation-plan.json
+│   │       │   ├── health_remediation-summary_standards.json
+│   │       │   ├── health_remediation-summary.json
+│   │       │   ├── health_root-causes_standards.json
+│   │       │   ├── health_root-causes.json
+│   │       │   ├── health_standards.json
+│   │       │   ├── login.json
+│   │       │   ├── stderr.log
+│   │       │   └── stdout.log
+│   │       ├── report_applicability
+│   │       │   ├── entitlements.json
+│   │       │   ├── job-latest.json
+│   │       │   ├── job-start.json
+│   │       │   ├── login.json
+│   │       │   ├── stderr.log
+│   │       │   └── stdout.log
+│   │       ├── security-smoke
+│   │       │   ├── invalid-token-entitlements.json
+│   │       │   ├── invalid-token-entitlements.status
+│   │       │   ├── login.json
+│   │       │   ├── missing-company-profile-job.json
+│   │       │   ├── missing-company-profile-job.status
+│   │       │   ├── no-token-health-dashboard.json
+│   │       │   └── no-token-health-dashboard.status
+│   │       ├── tcdx_master
+│   │       │   ├── stderr.log
+│   │       │   └── stdout.log
+│   │       ├── results.jsonl
+│   │       ├── security-summary.txt
+│   │       ├── summary.json
+│   │       └── summary.txt
+│   ├── rbac-health
+│   │   ├── 20260525-102815
+│   │   │   ├── health_audit-log_action-plans.json
+│   │   │   ├── health_audit-log_control-recovery.json
+│   │   │   ├── health_audit-log_evidences.json
+│   │   │   ├── health_audit-log.json
+│   │   │   ├── health_controls-recovered.json
+│   │   │   ├── health_controls-risk.json
+│   │   │   ├── health_dashboard.json
+│   │   │   ├── health_evidence-approval-queue.json
+│   │   │   ├── health_kpis.json
+│   │   │   ├── health_remediation-executive_standards.json
+│   │   │   ├── health_remediation-executive.json
+│   │   │   ├── health_remediation-plan.json
+│   │   │   ├── health_remediation-summary_standards.json
+│   │   │   ├── health_remediation-summary.json
+│   │   │   ├── health_root-causes_standards.json
+│   │   │   ├── health_root-causes.json
+│   │   │   ├── health_standards.json
+│   │   │   └── login.json
+│   │   └── 20260525-140540
+│   │       ├── health_audit-log_action-plans.json
+│   │       ├── health_audit-log_control-recovery.json
+│   │       ├── health_audit-log_evidences.json
+│   │       ├── health_audit-log.json
+│   │       ├── health_controls-recovered.json
+│   │       ├── health_controls-risk.json
+│   │       ├── health_dashboard.json
+│   │       ├── health_evidence-approval-queue.json
+│   │       ├── health_kpis.json
+│   │       ├── health_remediation-executive_standards.json
+│   │       ├── health_remediation-executive.json
+│   │       ├── health_remediation-plan.json
+│   │       ├── health_remediation-summary_standards.json
+│   │       ├── health_remediation-summary.json
+│   │       ├── health_root-causes_standards.json
+│   │       ├── health_root-causes.json
+│   │       ├── health_standards.json
+│   │       └── login.json
+│   ├── report-applicability
+│   │   ├── 20260525-102825
+│   │   │   ├── job-latest.json
+│   │   │   ├── job-start.json
+│   │   │   └── login.json
+│   │   ├── 20260525-135728
+│   │   │   ├── job-latest.json
+│   │   │   ├── job-start.json
+│   │   │   ├── login.json
+│   │   │   ├── report-headers.txt
+│   │   │   └── report.pdf
+│   │   ├── 20260525-184202
+│   │   │   ├── job-latest.json
+│   │   │   ├── job-start.json
+│   │   │   ├── login.json
+│   │   │   ├── report-headers.txt
+│   │   │   └── report.pdf
+│   │   └── 20260526-093656
+│   │       ├── entitlements.json
+│   │       ├── job-latest.json
+│   │       ├── job-start.json
+│   │       └── login.json
+│   ├── tcdx-master-20260518_195847
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260519_121449
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   └── test-env.txt
+│   ├── tcdx-master-20260519_121515
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260519_122603
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260519_134805
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260519_140811
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   └── test-env.txt
+│   ├── tcdx-master-20260519_141431
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260519_142603
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260519_183508
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   └── test-env.txt
+│   ├── tcdx-master-20260519_203131
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260519_203854
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260519_215440
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   └── test-env.txt
+│   ├── tcdx-master-20260519_215928
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260520_090123
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260520_142448
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260520_170420
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260520_185034
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260522_115734
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260522_152824
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260525_102718
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260525_140558
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260525_184216
+│   │   ├── 01-login.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-192-168-100.txt
+│   │   ├── 91-repo-runtime-legacy-192-168-100.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260526_093515
+│   │   ├── 01-login.json
+│   │   ├── 02-me-entitlements.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260526_093632
+│   │   ├── 01-login.json
+│   │   ├── 02-me-entitlements.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-private-net.txt
+│   │   ├── 91-repo-runtime-legacy-private-net.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260526_093643
+│   │   ├── 01-login.json
+│   │   ├── 02-me-entitlements.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-private-net.txt
+│   │   ├── 91-repo-runtime-legacy-private-net.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260526_103230
+│   │   ├── 01-login.json
+│   │   ├── 02-me-entitlements.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 24b-ai-feedback-api.json
+│   │   ├── 24c-ai-external-lookup-api.json
+│   │   ├── 24d-ai-feedback-no-token.json
+│   │   ├── 24e-ai-external-lookup-no-token.json
+│   │   ├── 24f-uploads-tenants-traversal.json
+│   │   ├── 24g-tenant-file-traversal.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-private-net.txt
+│   │   ├── 91-repo-runtime-legacy-private-net.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260526_163123
+│   │   ├── 01-login.json
+│   │   ├── 02-me-entitlements.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 24b-ai-feedback-api.json
+│   │   ├── 24c-ai-external-lookup-api.json
+│   │   ├── 24d-ai-feedback-no-token.json
+│   │   ├── 24e-ai-external-lookup-no-token.json
+│   │   ├── 24f-uploads-tenants-traversal.json
+│   │   ├── 24g-tenant-file-traversal.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-private-net.txt
+│   │   ├── 91-repo-runtime-legacy-private-net.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260526_173105
+│   │   ├── 01-login.json
+│   │   ├── 02-me-entitlements.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 24b-ai-feedback-api.json
+│   │   ├── 24c-ai-external-lookup-api.json
+│   │   ├── 24d-ai-feedback-no-token.json
+│   │   ├── 24e-ai-external-lookup-no-token.json
+│   │   ├── 24f-uploads-tenants-traversal.json
+│   │   ├── 24g-tenant-file-traversal.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-private-net.txt
+│   │   ├── 91-repo-runtime-legacy-private-net.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260527_105518
+│   │   ├── 01-login.json
+│   │   ├── 02-me-entitlements.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 24b-ai-feedback-api.json
+│   │   ├── 24c-ai-external-lookup-api.json
+│   │   ├── 24d-ai-feedback-no-token.json
+│   │   ├── 24e-ai-external-lookup-no-token.json
+│   │   ├── 24f-uploads-tenants-traversal.json
+│   │   ├── 24g-tenant-file-traversal.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-private-net.txt
+│   │   ├── 91-repo-runtime-legacy-private-net.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   ├── tcdx-master-20260527_111711
+│   │   ├── 01-login.json
+│   │   ├── 02-me-entitlements.json
+│   │   ├── 10-front-1-.headers.txt
+│   │   ├── 10-front-10-documentos.headers.txt
+│   │   ├── 10-front-11-exportes.headers.txt
+│   │   ├── 10-front-12-controles.headers.txt
+│   │   ├── 10-front-13-plan-accion.headers.txt
+│   │   ├── 10-front-14-matriz-riesgo.headers.txt
+│   │   ├── 10-front-2-login.headers.txt
+│   │   ├── 10-front-3-health.headers.txt
+│   │   ├── 10-front-4-dashboard.headers.txt
+│   │   ├── 10-front-5-ia-compliance.headers.txt
+│   │   ├── 10-front-6-ia-compliance_sugerencias.headers.txt
+│   │   ├── 10-front-7-auditorias.headers.txt
+│   │   ├── 10-front-8-auditorias_view_ia.headers.txt
+│   │   ├── 10-front-9-evidencias.headers.txt
+│   │   ├── 20-api-root.json
+│   │   ├── 21-health-dashboard.json
+│   │   ├── 22-health-standards.json
+│   │   ├── 23-health-root-causes.json
+│   │   ├── 24-ai-compliance-suggestions.json
+│   │   ├── 24b-ai-feedback-api.json
+│   │   ├── 24c-ai-external-lookup-api.json
+│   │   ├── 24d-ai-feedback-no-token.json
+│   │   ├── 24e-ai-external-lookup-no-token.json
+│   │   ├── 24f-uploads-tenants-traversal.json
+│   │   ├── 24g-tenant-file-traversal.json
+│   │   ├── 25-candidate-1-api_tenant_697eefa4-3b56-4c8a-a7d4-6d512c40233e.json
+│   │   ├── 25-candidate-10-api_nonconformities.json
+│   │   ├── 25-candidate-2-api_user_3118d316-f038-4512-91a4-7d4866ca0f57.json
+│   │   ├── 25-candidate-3-api_notifications.json
+│   │   ├── 25-candidate-4-api_evidences.json
+│   │   ├── 25-candidate-5-api_controls.json
+│   │   ├── 25-candidate-6-api_reports.json
+│   │   ├── 25-candidate-7-api_audits.json
+│   │   ├── 25-candidate-8-api_findings.json
+│   │   ├── 25-candidate-9-api_action-plans.json
+│   │   ├── 30-ai-health.json
+│   │   ├── 31-ai-health-deep.json
+│   │   ├── 32-ai-knowledge-status.json
+│   │   ├── 33-ai-bootstrap-status.json
+│   │   ├── 34-ai-docs.headers.txt
+│   │   ├── 35-ai-openapi.headers.txt
+│   │   ├── 40-suggest-health-summary.json
+│   │   ├── 41-suggest-finding-analysis.json
+│   │   ├── 42-suggest-action-plan.json
+│   │   ├── 43-suggest-executive-brief.json
+│   │   ├── 44-ai-compliance-analyze-document.json
+│   │   ├── 50-ai-auditor-analyze.json
+│   │   ├── 51-ai-auditor-async-start.json
+│   │   ├── 52-ai-auditor-async-status.json
+│   │   ├── 53-report-job-status-missing.json
+│   │   ├── 60-logo.headers.txt
+│   │   ├── 70-negative-health-dashboard-no-token.json
+│   │   ├── 71-negative-bad-token-health-dashboard.json
+│   │   ├── 72-negative-ai-compliance-no-token.json
+│   │   ├── 90-repo-legacy-private-net.txt
+│   │   ├── 91-repo-runtime-legacy-private-net.txt
+│   │   ├── results.jsonl
+│   │   ├── run.log
+│   │   ├── summary.txt
+│   │   ├── test-env.txt
+│   │   └── token.txt
+│   └── tenant-ai-entitlements
+│       └── 20260525-140549
+│           ├── login.json
+│           └── tenants.json
+├── scripts
+│   ├── qa
+│   │   ├── test-ai-engine-contracts.sh
+│   │   ├── test-company-profile-flow.sh
+│   │   ├── test-html-pdf-renderer.js
+│   │   └── test-ia-auditor-pdf-layout.js
+│   ├── .gitkeep
+│   ├── apply-ai-bootstrap-knowledge-db.sh
+│   ├── backup-runtime.sh
+│   ├── check-ai-engine.sh
+│   ├── check-backend.sh
+│   ├── check-db-objects.sh
+│   ├── check-demo-readiness.sh
+│   ├── check-frontend.sh
+│   ├── check-rbac.sh
+│   ├── check-secrets-runtime.sh
+│   ├── collect-ops-logs.sh
+│   ├── collect-runtime-inventory.sh
+│   ├── deploy-vms.sh
+│   ├── env-check.sh
+│   ├── generate-deep-report-cli.sh
+│   ├── monitor-runtime.sh
+│   ├── patch_action_plans_direct_evidence.py
+│   ├── patch_controls_workbench_effective_health_view.py
+│   ├── patch_controls_workbench_map_effective_health.py
+│   ├── patch_controls_workbench_operational_scope.py
+│   ├── preventa-check.sh
+│   ├── push-deploy.sh
+│   ├── qa-ai-auditor-full.sh
+│   ├── qa-ai-locale-consistency.sh
+│   ├── qa-backup-readiness.sh
+│   ├── qa-bilingual-full.sh
+│   ├── qa-cloud-readiness.sh
+│   ├── qa-i18n-db-display.sh
+│   ├── qa-i18n-english-full.sh
+│   ├── qa-observability.sh
+│   ├── qa-phase4-final.sh
+│   ├── qa-rbac-basic.sh
+│   ├── qa-security-basic.sh
+│   ├── restore-test.sh
+│   ├── test-ai-engine-process-map.sh
+│   ├── test-ai-entitlements-hardening-flow.sh
+│   ├── test-ai-ui-entitlements-flow.sh
+│   ├── test-company-profile-ai-flow.sh
+│   ├── test-company-profile-applicability-universe.sh
+│   ├── test-company-profile-impact-flow.sh
+│   ├── test-company-profile-operational-impact-full-flow.sh
+│   ├── test-controls-applicability-flow.sh
+│   ├── test-db-applicability-consistency.sh
+│   ├── test-document-sources-tenant-isolation-flow.sh
+│   ├── test-document-suggestion-evidence-mapping-flow.sh
+│   ├── test-google-drive-document-source-lifecycle.sh
+│   ├── test-health-applicability-flow.sh
+│   ├── test-kpi-applicability-flow.sh
+│   ├── test-market-readiness-flow.sh
+│   ├── test-rbac-health-flow.sh
+│   ├── test-report-applicability-flow.sh
+│   ├── test-tcdx-system-master.sh
+│   ├── test-tenant-ai-entitlements-flow.sh
+│   ├── validate-ai-knowledge.sh
+│   ├── validate-dashboard-consolidated-functional-parity.sh
+│   ├── validate-dashboard-operational-replacement.sh
+│   ├── validate-dashboard-v2-base.sh
+│   ├── validate-dashboard-v2-health-lifecycle.sh
+│   ├── validate-dashboard-v2-operational-panels.sh
+│   ├── validate-dashboard-v2-preferences.sh
+│   ├── validate-dashboard-visual-kpi-salud.sh
+│   ├── validate-iso-action-workflow.sh
+│   ├── validate-iso-auditor.sh
+│   ├── validate-iso-command-center.sh
+│   ├── validate-iso-control-mapping.sh
+│   ├── validate-iso-coverage-extension.sh
+│   ├── validate-iso-document-generator.sh
+│   ├── validate-iso-express-diagnostic.sh
+│   ├── validate-iso-knowledge.sh
+│   ├── validate-iso-operational-execution.sh
+│   ├── validate-iso-phase-1-11-1-13.sh
+│   ├── validate-iso-recommended-action-conversions.sh
+│   ├── validate-iso-recommended-actions.sh
+│   ├── validate-iso-risk-matrix.sh
+│   └── validate-iso-unified-command-center.sh
+├── .env.example
+├── .gitignore
+├── phase5b_atomic_apply.py
+├── README.md
+├── REPO_FILE_SIZES.txt
+└── REPO_INDEX_COMPLETO.txt

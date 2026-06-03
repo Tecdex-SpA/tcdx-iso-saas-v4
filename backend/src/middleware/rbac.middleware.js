@@ -24,9 +24,15 @@ const PLATFORM_ROLES = [
   'owner',
 ];
 
-const TENANT_READ_ROLES = ['admin', 'tenant_admin', 'auditor', 'operativo', 'viewer'];
-const TENANT_OPERATE_ROLES = ['admin', 'tenant_admin', 'auditor', 'operativo'];
+const EXECUTIVE_ROLES = ['viewer', 'cliente', 'client', 'read_only', 'readonly', 'solo_lectura', 'ejecutivo'];
+const AREA_OWNER_ROLES = ['operativo', 'responsable_area', 'area_owner'];
+const TENANT_READ_ROLES = ['admin', 'tenant_admin', 'auditor', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
+const TENANT_OPERATE_ROLES = ['admin', 'tenant_admin', 'auditor', ...AREA_OWNER_ROLES];
 const TENANT_ADMIN_ROLES = ['admin', 'tenant_admin'];
+const TENANT_AREA_WRITE_ROLES = ['admin', 'tenant_admin', ...AREA_OWNER_ROLES];
+const TENANT_AUDIT_WRITE_ROLES = ['admin', 'tenant_admin', 'auditor'];
+const TENANT_REPORT_ROLES = ['admin', 'tenant_admin', 'auditor', ...EXECUTIVE_ROLES];
+const TENANT_DASHBOARD_ROLES = ['admin', 'tenant_admin', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
 
 function roleIsPlatform(role) {
   return PLATFORM_ROLES.includes(role);
@@ -83,7 +89,7 @@ const API_RULES = [
   {
     prefix: '/api/iso-express-diagnostic',
     read: TENANT_READ_ROLES,
-    write: TENANT_OPERATE_ROLES,
+    write: TENANT_ADMIN_ROLES,
   },
   {
     prefix: '/api/iso-document-generator',
@@ -93,7 +99,7 @@ const API_RULES = [
   {
     prefix: '/api/iso-risk-matrix',
     read: TENANT_READ_ROLES,
-    write: TENANT_OPERATE_ROLES,
+    write: TENANT_AREA_WRITE_ROLES,
   },
   {
     prefix: '/api/iso-operational-execution',
@@ -103,7 +109,7 @@ const API_RULES = [
   {
     prefix: '/api/iso-recommended-actions',
     read: TENANT_READ_ROLES,
-    write: TENANT_OPERATE_ROLES,
+    write: TENANT_AREA_WRITE_ROLES,
   },
   {
     prefix: '/api/iso-command-center',
@@ -119,22 +125,22 @@ const API_RULES = [
   // Dashboard y lectura ejecutiva
   {
     prefix: '/api/dashboard',
-    read: TENANT_READ_ROLES,
+    read: TENANT_DASHBOARD_ROLES,
     write: TENANT_ADMIN_ROLES,
   },
   {
     prefix: '/api/dashboard-v2/preferences',
-    read: TENANT_READ_ROLES,
-    write: TENANT_READ_ROLES,
+    read: TENANT_DASHBOARD_ROLES,
+    write: TENANT_DASHBOARD_ROLES,
   },
   {
     prefix: '/api/dashboard-v2',
-    read: TENANT_READ_ROLES,
+    read: TENANT_DASHBOARD_ROLES,
     write: [],
   },
   {
     prefix: '/api/dashboard-controls',
-    read: TENANT_READ_ROLES,
+    read: TENANT_DASHBOARD_ROLES,
     write: TENANT_ADMIN_ROLES,
   },
   {
@@ -164,12 +170,12 @@ const API_RULES = [
   {
     prefix: '/api/lifecycle/board',
     read: TENANT_READ_ROLES,
-    write: TENANT_OPERATE_ROLES,
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
   {
     prefix: '/api/lifecycle',
     read: TENANT_READ_ROLES,
-    write: TENANT_OPERATE_ROLES,
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
 
   // Objetivos: viewer no entra
@@ -189,8 +195,8 @@ const API_RULES = [
   // Reportes: viewer puede ver/descargar lo disponible, no administrar/generar si es POST
   {
     prefix: '/api/reports',
-    read: [...TENANT_READ_ROLES, 'dealer'],
-    write: ['admin', 'tenant_admin', 'auditor', 'dealer'],
+    read: [...TENANT_REPORT_ROLES, 'dealer'],
+    write: [...TENANT_REPORT_ROLES, 'dealer'],
   },
   {
     prefix: '/api/files/tenant',
@@ -224,7 +230,7 @@ const API_RULES = [
   {
     prefix: '/api/diagnostic',
     read: TENANT_OPERATE_ROLES,
-    write: ['admin', 'tenant_admin', 'operativo'],
+    write: TENANT_ADMIN_ROLES,
   },
   {
     prefix: '/api/policy',
@@ -234,7 +240,7 @@ const API_RULES = [
   {
     prefix: '/api/assets',
     read: TENANT_READ_ROLES,
-    write: ['admin', 'tenant_admin', 'operativo'],
+    write: TENANT_AREA_WRITE_ROLES,
   },
   {
     prefix: '/api/soa',
@@ -244,27 +250,27 @@ const API_RULES = [
   {
     prefix: '/api/action-plans',
     read: TENANT_READ_ROLES,
-    write: ['admin', 'tenant_admin', 'operativo'],
+    write: TENANT_AREA_WRITE_ROLES,
   },
   {
     prefix: '/api/evidences',
     read: TENANT_OPERATE_ROLES,
-    write: ['admin', 'tenant_admin', 'operativo'],
+    write: TENANT_AREA_WRITE_ROLES,
   },
   {
     prefix: '/api/document-integrations',
     read: TENANT_OPERATE_ROLES,
-    write: ['admin', 'tenant_admin', 'operativo'],
+    write: TENANT_AREA_WRITE_ROLES,
   },
   {
     prefix: '/api/findings',
     read: TENANT_READ_ROLES,
-    write: TENANT_OPERATE_ROLES,
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
   {
     prefix: '/api/nonconformities',
     read: TENANT_OPERATE_ROLES,
-    write: TENANT_OPERATE_ROLES,
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
 
   // Auditoría operativa / checklist / IA Auditor
@@ -287,8 +293,8 @@ const API_RULES = [
   // Prefacturación SaaS
   {
     prefix: '/api/billing',
-    read: ['admin', 'tenant_admin', 'dealer'],
-    write: ['admin', 'tenant_admin', 'dealer'],
+    read: ['dealer'],
+    write: ['dealer'],
   },
 
   // Auditorías
@@ -300,9 +306,24 @@ const API_RULES = [
 
   // IA
   {
+    prefix: '/api/ai-compliance/knowledge',
+    read: [],
+    write: [],
+  },
+  {
+    prefix: '/api/ai-compliance/benchmark',
+    read: [],
+    write: [],
+  },
+  {
+    prefix: '/api/ai-compliance/tenant-search',
+    read: ['admin', 'tenant_admin', 'auditor'],
+    write: ['admin', 'tenant_admin', 'auditor'],
+  },
+  {
     prefix: '/api/ai-compliance',
-    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
-    write: ['admin', 'tenant_admin', 'operativo'],
+    read: ['admin', 'tenant_admin', 'auditor'],
+    write: ['admin', 'tenant_admin', 'auditor'],
   },
   {
     prefix: '/api/ai-feedback',
@@ -311,8 +332,8 @@ const API_RULES = [
   },
   {
     prefix: '/api/ai-external-lookup',
-    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
-    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+    read: [],
+    write: [],
   },
   {
     prefix: '/ai-feedback',
@@ -321,8 +342,8 @@ const API_RULES = [
   },
   {
     prefix: '/ai-external-lookup',
-    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
-    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+    read: [],
+    write: [],
   },
   {
     prefix: '/api/ai',
@@ -331,8 +352,8 @@ const API_RULES = [
   },
   {
     prefix: '/api/ai-traces',
-    read: ['admin', 'tenant_admin', 'auditor'],
-    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+    read: [],
+    write: [],
   },
 
   // Búsqueda / notificaciones

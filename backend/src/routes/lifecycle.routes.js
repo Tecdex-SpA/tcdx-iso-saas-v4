@@ -62,12 +62,11 @@ function canAccessTenant(req, tenantId) {
 
 function canRequestLifecycleChange(req, tenantId) {
   if (!canAccessTenant(req, tenantId)) return false;
-  if (isAuditor(req)) return false;
-  return true;
+  const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
+  return role === 'admin' || role === 'tenant_admin';
 }
 
 function canReviewLifecycleChange(req, tenantId) {
-  if (isSuperAdmin(req)) return true;
   return canAccessTenant(req, tenantId) && isAuditor(req);
 }
 
@@ -1704,9 +1703,9 @@ router.post('/requests/:request_id/review', auth, async (req, res) => {
     const { request_id } = req.params;
     const { review_action, review_comment } = req.body;
 
-    if (!['confirmar', 'rechazar'].includes(String(review_action || ''))) {
+    if (!['confirmar', 'rechazar', 'devolver'].includes(String(review_action || ''))) {
       return res.status(400).json({
-        error: 'review_action debe ser confirmar o rechazar'
+        error: 'review_action debe ser confirmar, rechazar o devolver'
       });
     }
 
@@ -1768,7 +1767,12 @@ router.post('/requests/:request_id/review', auth, async (req, res) => {
       [requestRow.tenant_id, requestRow.standard_code, requestRow.operation_id]
     );
 
-    const nextRequestStatus = review_action === 'confirmar' ? 'confirmado' : 'rechazado';
+    const nextRequestStatus =
+      review_action === 'confirmar'
+        ? 'confirmado'
+        : review_action === 'devolver'
+        ? 'devuelto'
+        : 'rechazado';
 
     const reviewed = await client.query(
       `
@@ -1858,6 +1862,8 @@ router.post('/requests/:request_id/review', auth, async (req, res) => {
       'lifecycle_stage_review',
       review_action === 'confirmar'
         ? `El auditor confirmó el cambio de etapa hacia ${stageNameFromCode(requestRow.to_stage_code)}.`
+        : review_action === 'devolver'
+        ? `El auditor devolvió el cambio de etapa hacia ${stageNameFromCode(requestRow.to_stage_code)} con observaciones.`
         : `El auditor rechazó el cambio de etapa hacia ${stageNameFromCode(requestRow.to_stage_code)}.`,
       {
         source: 'lifecycle_stage_review',
@@ -2113,6 +2119,8 @@ router.get('/history/:tenant_id', auth, async (req, res) => {
           ? 'Confirmado'
           : String(row.request_status || '').toLowerCase() === 'rechazar'
           ? 'Rechazado'
+          : String(row.request_status || '').toLowerCase() === 'devuelto'
+          ? 'Devuelto'
           : String(row.request_status || '').toLowerCase() === 'aprobado'
           ? 'Aprobado'
           : String(row.request_status || '').toLowerCase() === 'rechazado'

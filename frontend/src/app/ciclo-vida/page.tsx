@@ -297,6 +297,7 @@ export default function CicloVidaPage() {
   const [selectedCard, setSelectedCard] = useState<LifecycleCard | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [requestReason, setRequestReason] = useState<string>('');
+  const [reviewComment, setReviewComment] = useState<string>('');
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [topPanelCollapsed, setTopPanelCollapsed] = useState(true);
   const [activeView, setActiveView] = useState<'lifecycle' | 'objectives' | 'history'>('lifecycle');
@@ -315,13 +316,9 @@ export default function CicloVidaPage() {
     userRole === 'ejecutivo';
 
   const canUseObjectives = !isViewer;
-  const canRequestLifecycleMove = !isViewer;
+  const canRequestLifecycleMove = userRole === 'admin' || userRole === 'tenant_admin';
 
-  const canReviewLifecycleMove =
-    isAuditor ||
-    userRole === 'admin' ||
-    userRole === 'tenant_admin' ||
-    userRole === 'superadmin';
+  const canReviewLifecycleMove = isAuditor;
 
   useEffect(() => {
     if (!canUseObjectives && activeView === 'objectives') {
@@ -760,7 +757,7 @@ export default function CicloVidaPage() {
     }
   }
 
-  async function handleReviewRequest(action: 'confirmar' | 'rechazar') {
+  async function handleReviewRequest(action: 'confirmar' | 'rechazar' | 'devolver') {
     if (!selectedPendingCard?.pending_request_row_id) return;
 
     if (!canReviewLifecycleMove) {
@@ -785,9 +782,12 @@ export default function CicloVidaPage() {
           body: JSON.stringify({
             review_action: action,
             review_comment:
-              action === 'confirmar'
+              reviewComment.trim() ||
+              (action === 'confirmar'
                 ? t('lifecycle.confirmComment')
-                : t('lifecycle.rejectComment'),
+                : action === 'devolver'
+                ? 'Devuelto por auditor con observaciones.'
+                : t('lifecycle.rejectComment')),
           }),
         }
       );
@@ -802,9 +802,12 @@ export default function CicloVidaPage() {
       setSuccessMessage(
         action === 'confirmar'
           ? t('lifecycle.confirmedByAuditor')
+          : action === 'devolver'
+          ? 'Solicitud devuelta por el auditor.'
           : t('lifecycle.rejectedByAuditor')
       );
       setSelectedPendingCard(null);
+      setReviewComment('');
     } catch (err: any) {
       setError(err?.message || t('lifecycle.errors.reviewRequest'));
     } finally {
@@ -1594,23 +1597,39 @@ export default function CicloVidaPage() {
                       </div>
 
                       {isAuditor ? (
-                        <div className="mt-5 flex gap-3">
-                          <button
-                            type="button"
-                            disabled={actionLoading}
-                            onClick={() => handleReviewRequest('confirmar')}
-                            className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {t('lifecycle.confirmProgress')}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={actionLoading}
-                            onClick={() => handleReviewRequest('rechazar')}
-                            className="flex-1 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {t('lifecycle.reject')}
-                          </button>
+                        <div className="mt-5 space-y-3">
+                          <textarea
+                            value={reviewComment}
+                            onChange={(e) => setReviewComment(e.target.value)}
+                            placeholder="Observación del auditor"
+                            className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
+                          />
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={() => handleReviewRequest('confirmar')}
+                              className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {t('lifecycle.confirmProgress')}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={() => handleReviewRequest('devolver')}
+                              className="rounded-2xl bg-amber-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Devolver
+                            </button>
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={() => handleReviewRequest('rechazar')}
+                              className="rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {t('lifecycle.reject')}
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-700">

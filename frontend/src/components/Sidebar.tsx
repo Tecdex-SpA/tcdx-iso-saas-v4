@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
+import {
+  CLIENT_MVP_NAV_ITEMS,
+  canAccessMvpFeature,
+  isPathInRoutes,
+} from '@/utils/mvpPermissions';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
@@ -37,24 +42,6 @@ type ModuleMap = Record<
   }
 >;
 
-type ScopeStandard = {
-  code: string;
-  name?: string;
-  is_active: boolean;
-  active_operations_count?: number;
-  active_operation_ids?: string[];
-};
-
-type ScopeResponse = {
-  scope_rule?: {
-    standard_must_be_active: boolean;
-    mapping_must_be_active: boolean;
-    operation_must_be_active: boolean;
-  };
-  operations?: any[];
-  standards?: ScopeStandard[];
-};
-
 function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
   return (
     <a
@@ -81,19 +68,84 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
   );
 }
 
-function resolveTenantId(user: any): string {
-  return (
-    user?.tenant_id ||
-    user?.tenantId ||
-    user?.tenant ||
-    user?.company_id ||
-    user?.companyId ||
-    ''
-  );
-}
-
 function resolveRole(user: any): string {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
+}
+
+function MvpIcon({ href, className }: { href: string; className: string }) {
+  if (href === '/dashboard') {
+    return (
+      <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M3 12l9-9 9 9" />
+        <path d="M9 21V9h6v12" />
+      </svg>
+    );
+  }
+
+  if (href === '/cumplimiento-auditoria') {
+    return (
+      <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" />
+        <path d="M9 12l2 2 4-5" />
+      </svg>
+    );
+  }
+
+  if (href === '/evidencias') {
+    return (
+      <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M3 7h5l2 3h11v10H3z" />
+      </svg>
+    );
+  }
+
+  if (href === '/riesgos') {
+    return (
+      <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M10.29 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.71-3.14l-8-14a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+      </svg>
+    );
+  }
+
+  if (href === '/planes-accion') {
+    return (
+      <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <rect x="8" y="2" width="8" height="4" rx="1" />
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      </svg>
+    );
+  }
+
+  if (href === '/exportes') {
+    return (
+      <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+        <path d="M14 3v6h6" />
+        <path d="M8 13h8" />
+        <path d="M8 17h8" />
+      </svg>
+    );
+  }
+
+  if (href === '/ia-compliance') {
+    return (
+      <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <rect x="8" y="8" width="8" height="8" rx="2" />
+        <path d="M12 8V5" />
+        <path d="M12 19v-3" />
+        <path d="M8 12H5" />
+        <path d="M19 12h-3" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15z" />
+    </svg>
+  );
 }
 
 export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
@@ -102,59 +154,14 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const { loading: entitlementsLoading, aiEnabled, canUseAiFeature } = useTenantEntitlements();
 
   const [role, setRole] = useState<string | null>(null);
-  const [standards, setStandards] = useState<string[]>([]);
   const [moduleMap, setModuleMap] = useState<ModuleMap | null>(null);
   const [modulesLoaded, setModulesLoaded] = useState(false);
-  const [scopeLoaded, setScopeLoaded] = useState(false);
 
   useEffect(() => {
     const user = getUserFromToken();
-    const tenantId = resolveTenantId(user);
     const resolvedRole = resolveRole(user) || null;
 
     setRole(resolvedRole);
-
-    const loadStandards = async () => {
-      const token = localStorage.getItem('token');
-
-      if (!tenantId || !token) {
-        setStandards([]);
-        setScopeLoaded(true);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API_URL}/api/tenant-standards/scope/${tenantId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const json: ScopeResponse = await res.json();
-
-        if (!res.ok) {
-          console.error('ERROR LOAD SIDEBAR SCOPE:', json);
-          setStandards([]);
-          return;
-        }
-
-        const operationalCodes = (json?.standards || [])
-          .filter(
-            (s) =>
-              s?.is_active === true &&
-              Number(s?.active_operations_count || 0) > 0 &&
-              Array.isArray(s?.active_operation_ids) &&
-              s.active_operation_ids.length > 0
-          )
-          .map((s) => s.code)
-          .filter(Boolean);
-
-        setStandards(operationalCodes);
-      } catch (err) {
-        console.error('ERROR LOAD SIDEBAR SCOPE:', err);
-        setStandards([]);
-      } finally {
-        setScopeLoaded(true);
-      }
-    };
 
     const loadModules = async () => {
       const token = localStorage.getItem('token');
@@ -201,7 +208,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       }
     };
 
-    loadStandards();
     loadModules();
   }, []);
 
@@ -215,30 +221,40 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     normalizedRole === 'admin_global' ||
     normalizedRole === 'global_admin';
 
-   const isAdmin = normalizedRole === 'admin' || normalizedRole === 'tenant_admin';
-  const isAuditor = normalizedRole === 'auditor';
-
-  const isClientReadOnly =
-    normalizedRole === 'cliente' ||
-    normalizedRole === 'client' ||
-    normalizedRole === 'viewer' ||
-    normalizedRole === 'read_only' ||
-    normalizedRole === 'readonly' ||
-    normalizedRole === 'solo_lectura' ||
-    normalizedRole === 'ejecutivo';
-
-  const canManageTenant = isAdmin || isAuditor || isPlatformAdmin;
-
-  const soaStandards = ['ISO27001', 'ISO/IEC27701', 'ISO/IEC27017', 'ISO/IEC27018'];
-  const hasActiveStandards = standards.length > 0;
-  const showSoA = standards.some((code) => soaStandards.includes(code));
   const canSeeAiCompliance =
     !entitlementsLoading && aiEnabled && canUseAiFeature('suggestions');
   const iconClass = 'h-5 w-5';
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => {
+    if (href === '/cumplimiento-auditoria') {
+      return isPathInRoutes(pathname, [
+        '/cumplimiento-auditoria',
+        '/diagnostico',
+        '/controles',
+        '/soa',
+        '/ciclo-vida',
+        '/auditorias',
+        '/hallazgos',
+        '/no-conformidades',
+      ]);
+    }
 
-  function hasModule(moduleKey: string) {
+    if (href === '/riesgos') {
+      return isPathInRoutes(pathname, ['/riesgos', '/matriz-riesgo', '/activos']);
+    }
+
+    if (href === '/planes-accion') {
+      return isPathInRoutes(pathname, ['/planes-accion', '/plan-accion', '/acciones-recomendadas']);
+    }
+
+    if (href === '/configuracion') {
+      return isPathInRoutes(pathname, ['/configuracion', '/usuarios', '/perfil', '/perfil-empresa']);
+    }
+
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
+  const hasModule = useCallback((moduleKey: string) => {
     // Plataforma y dealer no se bloquean aquí por módulos tenant.
     if (isPlatformAdmin || isDealer) return true;
 
@@ -254,236 +270,21 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     }
 
     return moduleMap[moduleKey]?.is_enabled === true;
-  }
+  }, [isDealer, isPlatformAdmin, moduleMap, modulesLoaded]);
 
   const generalItems = useMemo(() => {
-    const items = [
-      {
-        href: '/dashboard',
-        label: t('sidebar.dashboard'),
-        show: true,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M3 12l9-9 9 9" />
-            <path d="M9 21V9h6v12" />
-          </svg>
-        ),
-      },
-      {
-        href: '/ciclo-vida',
-        label: t('sidebar.lifecycle'),
-        show: true,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M4 7h5" />
-            <path d="M15 7h5" />
-            <path d="M9 7l2.5 2.5L14 7" />
-            <path d="M20 12v5" />
-            <path d="M20 17l-2.5-2.5L15 17" />
-            <path d="M9 17H4" />
-            <path d="M15 17H9" />
-            <path d="M4 12V7" />
-          </svg>
-        ),
-      },
-      {
-        href: '/health',
-        label: t('sidebar.controlHealth'),
-        show: true,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
-            <path d="M3.5 12h4l1.5-3 3 6 2-4h6.5" />
-          </svg>
-        ),
-      },
-      {
-        href: '/exportes',
-        label: t('sidebar.exports'),
-        show: true,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-            <path d="M14 3v6h6" />
-            <path d="M8 13h8" />
-            <path d="M8 17h8" />
-            <path d="M8 9h3" />
-          </svg>
-        ),
-      },
-      {
-        href: '/administrar-kpis',
-        label: t('sidebar.kpis'),
-        show: canManageTenant && hasModule('kpis'),
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M3 3v18h18" />
-            <path d="M7 14l3-3 3 2 4-5" />
-          </svg>
-        ),
-      },
-      {
-        href: '/prefacturacion',
-        label: t('sidebar.prebilling'),
-        show: false,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M4 4h16v16H4z" />
-            <path d="M8 8h8" />
-            <path d="M8 12h8" />
-            <path d="M8 16h5" />
-          </svg>
-        ),
-      },
-    ];
-
-    return items.filter((item) => item.show);
-  }, [hasModule, modulesLoaded, canManageTenant, t]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const operationItems = useMemo(() => {
-    const items = [
-      {
-        href: '/diagnostico',
-        label: t('sidebar.diagnosis'),
-        show: !isClientReadOnly,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        ),
-      },
-      {
-        href: '/controles',
-        label: t('sidebar.controls'),
-        show: !isAuditor && !isClientReadOnly,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M9 3H5a2 2 0 0 0-2 2v4" />
-            <path d="M15 3h4a2 2 0 0 1 2 2v4" />
-            <rect x="8" y="8" width="8" height="8" rx="1" />
-          </svg>
-        ),
-      },
-      {
-        href: '/matriz-riesgo',
-        label: t('sidebar.riskMatrix'),
-        show: !isClientReadOnly && hasModule('risks'),
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M10.29 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.71-3.14l-8-14a2 2 0 0 0-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-          </svg>
-        ),
-      },
-      {
-        href: '/activos',
-        label: t('sidebar.assets'),
-        show: !isClientReadOnly && hasModule('risks'),
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <ellipse cx="12" cy="5" rx="9" ry="3" />
-            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-          </svg>
-        ),
-      },
-      {
-        href: '/soa',
-        label: 'SoA',
-        show: !isClientReadOnly && showSoA,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" />
-          </svg>
-        ),
-      },
-      {
-        href: '/plan-accion',
-        label: t('sidebar.actionPlan'),
-        show: !isClientReadOnly,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <rect x="8" y="2" width="8" height="4" rx="1" />
-            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-          </svg>
-        ),
-      },
-      {
-        href: '/acciones-recomendadas',
-        label: 'Acciones ISO',
-        show: !isDealer,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M4 6h16" />
-            <path d="M4 12h10" />
-            <path d="M4 18h7" />
-            <path d="M16 14l2 2 4-5" />
-          </svg>
-        ),
-      },
-      {
-        href: '/no-conformidades',
-        label: t('sidebar.nonconformities'),
-        show: !isClientReadOnly,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="15" y1="9" x2="9" y2="15" />
-            <line x1="9" y1="9" x2="15" y2="15" />
-          </svg>
-        ),
-      },
-      {
-        href: '/auditorias',
-        label: t('sidebar.audits'),
-        show: hasModule('audits'),
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16" />
-            <path d="M14 2v6h6" />
-            <circle cx="11" cy="13" r="3" />
-          </svg>
-        ),
-      },
-      {
-        href: '/evidencias',
-        label: t('sidebar.evidence'),
-        show: !isClientReadOnly && hasModule('evidences'),
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M3 7h5l2 3h11v10H3z" />
-          </svg>
-        ),
-      },
-      {
-        href: '/hallazgos',
-        label: t('sidebar.findings'),
-        show: !isClientReadOnly,
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M4 22V4" />
-            <path d="M4 4h12l-2 3 2 3H4" />
-          </svg>
-        ),
-      },
-      {
-        href: '/ia-compliance',
-        label: t('sidebar.aiCompliance'),
-        show: canSeeAiCompliance && !isAuditor && !isClientReadOnly && hasModule('ai'),
-        icon: (
-          <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <rect x="8" y="8" width="8" height="8" rx="2" />
-            <path d="M12 8V5" />
-            <path d="M12 19v-3" />
-            <path d="M8 12H5" />
-            <path d="M19 12h-3" />
-          </svg>
-        ),
-      },
-    ];
-
-    return items.filter((item) => item.show);
-    }, [canSeeAiCompliance, hasModule, isAuditor, isClientReadOnly, showSoA, modulesLoaded, t]); // eslint-disable-line react-hooks/exhaustive-deps
+    return CLIENT_MVP_NAV_ITEMS
+      .filter((item) => {
+        if (!canAccessMvpFeature(normalizedRole, item.feature)) return false;
+        if (item.href === '/ia-compliance' && !canSeeAiCompliance) return false;
+        if (item.moduleKey && !hasModule(item.moduleKey)) return false;
+        return true;
+      })
+      .map((item) => ({
+        ...item,
+        icon: <MvpIcon href={item.href} className={iconClass} />,
+      }));
+  }, [canSeeAiCompliance, hasModule, iconClass, normalizedRole]);
 
   const platformItems = [
 
@@ -723,57 +524,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               ))}
             </div>
 
-            {scopeLoaded && hasActiveStandards && operationItems.length > 0 && (
-              <>
-                {sectionLabel(t('sidebar.operation'))}
-                <div className="space-y-2">
-                  {operationItems.map((item) => (
-                    <NavItem
-                      key={item.href}
-                      href={item.href}
-                      label={item.label}
-                      collapsed={collapsed}
-                      active={isActive(item.href)}
-                      icon={item.icon}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-
-            {isAdmin && (
-              <>
-                {sectionLabel(t('sidebar.administration'))}
-                <div className="space-y-2">
-                  <NavItem
-                    href="/usuarios"
-                    label={t('sidebar.users')}
-                    collapsed={collapsed}
-                    active={isActive('/usuarios')}
-                    icon={
-                      <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <circle cx="12" cy="7" r="4" />
-                        <path d="M5.5 21a6.5 6.5 0 0 1 13 0" />
-                      </svg>
-                    }
-                  />
-                  <NavItem
-                    href="/perfil-empresa"
-                    label="Perfil empresa"
-                    collapsed={collapsed}
-                    active={isActive('/perfil-empresa')}
-                    icon={
-                      <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path d="M3 21h18" />
-                        <path d="M5 21V7l7-4 7 4v14" />
-                        <path d="M9 21v-6h6v6" />
-                        <path d="M9 9h.01M12 9h.01M15 9h.01" />
-                      </svg>
-                    }
-                  />
-                </div>
-              </>
-            )}
           </>
         )}
       </nav>
