@@ -83,6 +83,11 @@ type LinkCandidate = {
   target_type: TargetType;
   label: string;
   subtitle?: string | null;
+  filename?: string | null;
+  title?: string | null;
+  source_table?: string | null;
+  source_type?: string | null;
+  evidence_date?: string | null;
 };
 
 type LinkForm = {
@@ -142,6 +147,22 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString('es-CL');
 }
 
+function formatCandidateSubtitle(candidate: LinkCandidate) {
+  const rawSource = candidate.source_type || candidate.source_table || candidate.subtitle || targetLabels[candidate.target_type];
+  const sourceLabels: Record<string, string> = {
+    formal_evidence: 'Evidencia registrada',
+    evidences: 'Evidencia registrada',
+    document_index: 'Documento indexado',
+    google_drive: 'Google Drive',
+    zoho: 'Zoho',
+    mounted_share: 'Repositorio documental',
+    manual: 'Carga manual',
+  };
+  const source = sourceLabels[rawSource] || rawSource;
+  const date = formatDate(candidate.evidence_date);
+  return date === '-' ? source : `${source} · ${date}`;
+}
+
 function statusBadge(active: boolean) {
   return active
     ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
@@ -189,6 +210,10 @@ export default function ProcessesOperationsPanel() {
   const selectedProcess = useMemo(
     () => processes.find((item) => item.id === selectedProcessId) || null,
     [processes, selectedProcessId]
+  );
+  const selectedLinkOperation = useMemo(
+    () => operations.find((item) => item.id === linkForm.operation_id) || null,
+    [linkForm.operation_id, operations]
   );
   const canManageProcesses = useMemo(() => {
     const user = getUserFromToken();
@@ -515,6 +540,15 @@ export default function ProcessesOperationsPanel() {
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               Base administrativa tenant-scoped para registrar procesos, operaciones y sus asociaciones operacionales. KPIs, salud por proceso y reportes por proceso quedan fuera de Sprint 3.
             </p>
+            <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              <span className="font-semibold">Proceso seleccionado:</span> {selectedProcess?.name || 'Sin proceso seleccionado'}
+              {selectedLinkOperation && (
+                <>
+                  <span className="mx-2 text-blue-300">|</span>
+                  <span className="font-semibold">Operación seleccionada:</span> {selectedLinkOperation.name}
+                </>
+              )}
+            </div>
           </div>
           <button
             type="button"
@@ -644,6 +678,15 @@ export default function ProcessesOperationsPanel() {
             <p className="mt-1 text-xs text-slate-500">
               {selectedProcess ? `Proceso: ${selectedProcess.name}` : 'Selecciona un proceso para asociar elementos.'}
             </p>
+            <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              <span className="font-semibold">Proceso seleccionado:</span> {selectedProcess?.name || 'Sin proceso seleccionado'}
+              {selectedLinkOperation && (
+                <>
+                  <span className="mx-2 text-blue-300">|</span>
+                  <span className="font-semibold">Operación seleccionada:</span> {selectedLinkOperation.name}
+                </>
+              )}
+            </div>
             <div className="mt-4 space-y-3">
               <label className="block text-sm">
                 <span className="font-semibold text-slate-700">Tipo</span>
@@ -678,7 +721,11 @@ export default function ProcessesOperationsPanel() {
                 {candidatesLoading ? (
                   <div className="p-3 text-sm text-slate-500">Buscando elementos...</div>
                 ) : candidates.length === 0 ? (
-                  <div className="p-3 text-sm text-slate-500">No hay candidatos disponibles para este tipo.</div>
+                  <div className="p-3 text-sm text-slate-500">
+                    {linkForm.target_type === 'evidence'
+                      ? 'No hay evidencias/documentos disponibles para asociar.'
+                      : 'No hay candidatos disponibles para este tipo.'}
+                  </div>
                 ) : (
                   candidates.map((candidate) => (
                     <button
@@ -690,8 +737,8 @@ export default function ProcessesOperationsPanel() {
                         linkForm.target_id === candidate.id ? 'bg-blue-50 text-blue-800' : 'bg-white text-slate-700 hover:bg-slate-50',
                       ].join(' ')}
                     >
-                      <span className="font-semibold">{candidate.label}</span>
-                      <span className="mt-0.5 block text-xs text-slate-500">{candidate.subtitle || targetLabels[candidate.target_type]}</span>
+                      <span className="font-semibold">{candidate.filename || candidate.title || candidate.label}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{formatCandidateSubtitle(candidate)}</span>
                     </button>
                   ))
                 )}
@@ -736,7 +783,7 @@ export default function ProcessesOperationsPanel() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {processes.map((row) => (
-                      <tr key={row.id} className={selectedProcessId === row.id ? 'bg-blue-50/60' : ''}>
+                      <tr key={row.id} className={selectedProcessId === row.id ? 'bg-blue-100 ring-2 ring-inset ring-blue-300' : ''}>
                         <td className="px-3 py-3">
                           <button type="button" onClick={() => setSelectedProcessId(row.id)} className="text-left">
                             <div className="font-semibold text-slate-900">{row.name}</div>

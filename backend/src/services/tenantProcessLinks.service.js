@@ -186,17 +186,33 @@ async function validateTarget(tenantId, targetType, targetId) {
   }
 
   if (targetType === 'evidence') {
-    const result = await pool.query(
+    const evidenceResult = await pool.query(
       `
       SELECT id, tenant_id, COALESCE(file_name, description, evidence_type, 'Evidencia') AS label
       FROM evidences
       WHERE tenant_id = $1::uuid
         AND id = $2::uuid
+        AND COALESCE(status, '') <> 'deleted'
       LIMIT 1
       `,
       [tenantId, targetId]
     );
-    if (result.rowCount > 0) return { ...result.rows[0], target_table: 'evidences' };
+    if (evidenceResult.rowCount > 0) return { ...evidenceResult.rows[0], target_table: 'evidences' };
+
+    if (await tableExists('document_index')) {
+      const documentResult = await pool.query(
+        `
+        SELECT id, tenant_id, COALESCE(file_name, relative_path, provider_file_id, 'Documento indexado') AS label
+        FROM document_index
+        WHERE tenant_id = $1::uuid
+          AND id = $2::uuid
+          AND COALESCE(status, 'indexed') NOT IN ('deleted', 'error', 'ignored', 'missing')
+        LIMIT 1
+        `,
+        [tenantId, targetId]
+      );
+      if (documentResult.rowCount > 0) return { ...documentResult.rows[0], target_table: 'document_index' };
+    }
   }
 
   if (targetType === 'action') {
@@ -339,6 +355,19 @@ async function attachTargetSummaries(tenantId, rows) {
       AND id = ANY($2::uuid[])
   `, byType.evidence);
 
+  if (byType.evidence?.length && await tableExists('document_index')) {
+    await addRows('evidence', `
+      SELECT
+        id,
+        'document_index' AS target_table,
+        COALESCE(file_name, relative_path, provider_file_id, 'Documento indexado') AS target_label
+      FROM document_index
+      WHERE tenant_id = $1::uuid
+        AND id = ANY($2::uuid[])
+        AND COALESCE(status, 'indexed') NOT IN ('deleted', 'error', 'ignored', 'missing')
+    `, byType.evidence);
+  }
+
   await addRows('action', `
     SELECT id, 'action_plans' AS target_table, COALESCE(title, description, 'Plan de acción') AS target_label
     FROM action_plans
@@ -471,22 +500,64 @@ async function listCandidates({ user, targetType, search = '' }) {
     }
 
     if (normalizedType === 'evidence') {
-      const result = await pool.query(
+      const evidenceResult = await pool.query(
         `
         SELECT
           id,
           'evidence' AS target_type,
           COALESCE(file_name, description, evidence_type, 'Evidencia') AS label,
-          COALESCE(status, evidence_type, 'Sin estado') AS subtitle
+          file_name AS filename,
+          COALESCE(description, evidence_type, '') AS title,
+          'evidences' AS source_table,
+          'formal_evidence' AS source_type,
+          COALESCE(created_at, reviewed_at, expires_at) AS evidence_date,
+          COALESCE(status, evidence_type, 'Sin estado') AS subtitle,
+          metadata
         FROM evidences
         WHERE tenant_id = $1::uuid
+          AND COALESCE(status, '') <> 'deleted'
           AND ($2 = '%%' OR file_name ILIKE $2 OR description ILIKE $2 OR evidence_type ILIKE $2)
-        ORDER BY created_at DESC NULLS LAST, uploaded_at DESC NULLS LAST
+        ORDER BY created_at DESC NULLS LAST, reviewed_at DESC NULLS LAST
         LIMIT 50
         `,
         [tenantId, term]
       );
-      return result.rows;
+
+      const rows = [...evidenceResult.rows];
+
+      if (rows.length < 50 && await tableExists('document_index')) {
+        const documentResult = await pool.query(
+          `
+          SELECT
+            id,
+            'evidence' AS target_type,
+            COALESCE(file_name, relative_path, provider_file_id, 'Documento indexado') AS label,
+            file_name AS filename,
+            COALESCE(file_name, relative_path, provider_file_id, 'Documento indexado') AS title,
+            'document_index' AS source_table,
+            COALESCE(provider, 'document_index') AS source_type,
+            COALESCE(indexed_at, modified_at, last_seen_at) AS evidence_date,
+            COALESCE(provider, status, 'Documento indexado') AS subtitle,
+            metadata_json AS metadata
+          FROM document_index
+          WHERE tenant_id = $1::uuid
+            AND COALESCE(status, 'indexed') NOT IN ('deleted', 'error', 'ignored', 'missing')
+            AND (
+              $2 = '%%'
+              OR file_name ILIKE $2
+              OR relative_path ILIKE $2
+              OR provider_file_id ILIKE $2
+              OR COALESCE(metadata_json::text, '') ILIKE $2
+            )
+          ORDER BY indexed_at DESC NULLS LAST, modified_at DESC NULLS LAST, last_seen_at DESC NULLS LAST
+          LIMIT $3
+          `,
+          [tenantId, term, Math.max(1, 50 - rows.length)]
+        );
+        rows.push(...documentResult.rows);
+      }
+
+      return rows;
     }
 
     if (normalizedType === 'action') {
