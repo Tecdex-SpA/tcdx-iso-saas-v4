@@ -16,6 +16,16 @@ export type MvpFeatureKey =
   | 'compliance.lifecycle.approve'
   | 'evidences.read'
   | 'evidences.upload'
+  | 'evidence_library.read'
+  | 'evidence_library.manage_sources'
+  | 'evidence_library.upload'
+  | 'evidence_library.index'
+  | 'evidence_library.discard_index'
+  | 'evidence_library.associate'
+  | 'semantic_evidence.process'
+  | 'semantic_evidence.review_suggestion'
+  | 'semantic_evidence.accept_suggestion'
+  | 'semantic_evidence.reject_suggestion'
   | 'risks.read'
   | 'risks.write'
   | 'action_plans.read'
@@ -60,7 +70,7 @@ export const PLATFORM_ROLES = [
   'owner',
 ];
 
-export const ADMIN_ROLES = ['admin', 'tenant_admin'];
+export const ADMIN_ROLES = ['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin'];
 export const AUDITOR_ROLES = ['auditor'];
 export const AREA_OWNER_ROLES = ['operativo', 'responsable_area', 'area_owner'];
 export const EXECUTIVE_ROLES = [
@@ -99,6 +109,16 @@ const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'compliance.lifecycle.approve': ['auditor'],
   'evidences.read': ['admin', 'auditor', 'area_owner'],
   'evidences.upload': ['admin', 'area_owner'],
+  'evidence_library.read': ['admin', 'auditor', 'area_owner'],
+  'evidence_library.manage_sources': ['admin'],
+  'evidence_library.upload': ['admin'],
+  'evidence_library.index': ['admin'],
+  'evidence_library.discard_index': ['admin'],
+  'evidence_library.associate': ['admin'],
+  'semantic_evidence.process': ['admin'],
+  'semantic_evidence.review_suggestion': ['admin', 'auditor'],
+  'semantic_evidence.accept_suggestion': ['admin'],
+  'semantic_evidence.reject_suggestion': ['admin'],
   'risks.read': ['admin', 'auditor', 'area_owner', 'executive'],
   'risks.write': ['admin', 'area_owner'],
   'action_plans.read': ['admin', 'auditor', 'area_owner', 'executive'],

@@ -12,6 +12,11 @@ type SourceCard = {
   last_sync_at?: string | null;
 };
 
+type ApiError = Error & {
+  code?: string;
+  status?: number;
+};
+
 type LibraryDocument = {
   id: string;
   source_type: 'document_index' | 'evidence';
@@ -101,6 +106,14 @@ const usageOptions = [
   ['reference', 'Referencia'],
 ];
 
+const fallbackSources: SourceCard[] = [
+  { source_type: 'google_drive', source_name: 'Google Drive', status: 'available', documents_count: 0 },
+  { source_type: 'zoho_drive', source_name: 'Zoho Drive', status: 'available', documents_count: 0 },
+  { source_type: 'sync_agent', source_name: 'Sync Agent', status: 'available', documents_count: 0 },
+  { source_type: 'mounted_folder', source_name: 'Carpeta montada', status: 'available', documents_count: 0 },
+  { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0 },
+];
+
 function formatDate(value?: string | null) {
   if (!value) return '-';
   const date = new Date(value);
@@ -156,6 +169,15 @@ function statusClass(value?: string | null) {
   return 'border-slate-200 bg-slate-50 text-slate-600';
 }
 
+function sourceActionLabel(sourceType?: string | null, status?: string | null) {
+  const source = String(sourceType || '').toLowerCase();
+  const currentStatus = String(status || '').toLowerCase();
+  if (source.includes('manual')) return 'Subir archivo';
+  if (source.includes('sync')) return currentStatus === 'active' ? 'Validar' : 'Configurar';
+  if (source.includes('mounted')) return currentStatus === 'active' ? 'Sincronizar' : 'Configurar';
+  return currentStatus === 'active' ? 'Sincronizar' : 'Conectar';
+}
+
 async function fetchJson(url: string, token: string, init: RequestInit = {}) {
   const res = await fetch(url, {
     ...init,
@@ -167,7 +189,10 @@ async function fetchJson(url: string, token: string, init: RequestInit = {}) {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(json.error || json.message || 'Solicitud no procesada');
+    const error = new Error(json.error || json.message || 'Solicitud no procesada') as ApiError;
+    error.code = json.code;
+    error.status = res.status;
+    throw error;
   }
   return json;
 }
@@ -183,6 +208,8 @@ export default function UnifiedEvidenceLibrary({
   const [documents, setDocuments] = useState<LibraryDocument[]>([]);
   const [selected, setSelected] = useState<LibraryDocument | null>(null);
   const [detail, setDetail] = useState<DetailPayload | null>(null);
+  const [sourcesError, setSourcesError] = useState<ApiError | null>(null);
+  const [libraryError, setLibraryError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState('');
   const [tab, setTab] = useState<'summary' | 'associations' | 'suggestions' | 'chunks' | 'versions' | 'history'>('summary');
@@ -206,15 +233,44 @@ export default function UnifiedEvidenceLibrary({
 
   const selectedSourceType = selected?.source_type || '';
   const selectedSourceId = selected?.source_id || '';
+  const visibleSources = sources.length ? sources : fallbackSources;
+  const hasActiveFilters = Boolean(
+    filters.search ||
+      filters.origin ||
+      filters.document_type ||
+      filters.status ||
+      filters.association ||
+      filters.semantic_status ||
+      filters.version === 'all'
+  );
+
+  const clearFilters = () => {
+    setFilters({
+      search: '',
+      origin: '',
+      document_type: '',
+      status: '',
+      association: '',
+      semantic_status: '',
+      version: 'active',
+    });
+  };
 
   const loadSources = async () => {
-    const json = await fetchJson(`${API_URL}/api/evidence-library/sources`, token);
-    setSources(Array.isArray(json.data) ? json.data : []);
+    try {
+      setSourcesError(null);
+      const json = await fetchJson(`${API_URL}/api/evidence-library/sources`, token);
+      setSources(Array.isArray(json.data) ? json.data : []);
+    } catch (error: any) {
+      setSourcesError(error);
+      setSources([]);
+    }
   };
 
   const loadDocuments = async () => {
     setLoading(true);
     try {
+      setLibraryError(null);
       const params = new URLSearchParams();
       Object.entries(filters).forEach(([key, value]) => {
         if (value) params.set(key, value);
@@ -226,6 +282,10 @@ export default function UnifiedEvidenceLibrary({
         if (prev && rows.some((row: LibraryDocument) => row.id === prev.id)) return prev;
         return rows[0] || null;
       });
+    } catch (error: any) {
+      setLibraryError(error);
+      setDocuments([]);
+      setSelected(null);
     } finally {
       setLoading(false);
     }
@@ -251,12 +311,12 @@ export default function UnifiedEvidenceLibrary({
   };
 
   useEffect(() => {
-    loadSources().catch((error) => console.error('ERROR LOAD EVIDENCE SOURCES:', error));
+    loadSources();
   }, [token]);
 
   useEffect(() => {
-    loadDocuments().catch((error) => console.error('ERROR LOAD EVIDENCE LIBRARY:', error));
-  }, [token, filters.origin, filters.document_type, filters.status, filters.association, filters.semantic_status, filters.version]);
+    loadDocuments();
+  }, [token, filters.search, filters.origin, filters.document_type, filters.status, filters.association, filters.semantic_status, filters.version]);
 
   useEffect(() => {
     loadDetail().catch((error) => console.error('ERROR LOAD EVIDENCE DETAIL:', error));
@@ -383,7 +443,7 @@ export default function UnifiedEvidenceLibrary({
           </button>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {sources.map((source) => (
+          {visibleSources.map((source) => (
             <div key={source.source_type} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -396,9 +456,20 @@ export default function UnifiedEvidenceLibrary({
               </div>
               <div className="mt-4 text-xs text-slate-500">Ultima sincronizacion</div>
               <div className="mt-1 text-xs font-semibold text-slate-700">{formatDate(source.last_sync_at)}</div>
+              <button
+                disabled={!canManage}
+                className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sourceActionLabel(source.source_type, source.status)}
+              </button>
             </div>
           ))}
         </div>
+        {sourcesError && (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            No fue posible cargar fuentes documentales. {sourcesError.code === 'RBAC_DENIED' ? 'El rol actual no tiene permiso para esta biblioteca.' : sourcesError.message}
+          </div>
+        )}
       </section>
 
       <div className="mb-5 rounded-2xl border border-violet-200 bg-white p-4 shadow-sm">
@@ -455,6 +526,9 @@ export default function UnifiedEvidenceLibrary({
             <button onClick={() => loadDocuments().catch(() => null)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold">
               Buscar
             </button>
+            <button onClick={clearFilters} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold">
+              Limpiar
+            </button>
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3 text-xs text-slate-500">
@@ -492,8 +566,35 @@ export default function UnifiedEvidenceLibrary({
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">Cargando biblioteca...</td></tr>
+                ) : libraryError ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8">
+                      <div className="mx-auto max-w-xl rounded-xl border border-red-200 bg-red-50 p-4 text-center text-sm text-red-700">
+                        <div className="font-bold">
+                          {libraryError.code === 'RBAC_DENIED' ? 'Sin permiso para consultar la biblioteca documental' : 'No fue posible cargar la biblioteca documental'}
+                        </div>
+                        <div className="mt-1">{libraryError.message}</div>
+                      </div>
+                    </td>
+                  </tr>
                 ) : documents.length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">No hay documentos disponibles con los filtros actuales.</td></tr>
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                      {hasActiveFilters ? (
+                        <div>
+                          <div className="font-semibold text-slate-700">No hay documentos que coincidan con los filtros actuales.</div>
+                          <button onClick={clearFilters} className="mt-3 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
+                            Limpiar filtros
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="font-semibold text-slate-700">No hay documentos indexados visibles todavía.</div>
+                          <div className="mt-1 text-sm">Conecta o sincroniza una fuente documental, o sube un archivo manualmente.</div>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
                 ) : (
                   documents.map((doc) => (
                     <tr

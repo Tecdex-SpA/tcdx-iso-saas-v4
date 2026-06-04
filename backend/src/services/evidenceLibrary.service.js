@@ -2,11 +2,12 @@
 
 const crypto = require('crypto');
 const pool = require('../config/db');
+const aiEngineClient = require('./aiEngineClient.service');
 const { analyzeDocument } = require('./documentAiAnalysis.service');
 const { extractDocumentContent } = require('./documentContentExtraction.service');
 
-const READ_ROLES = new Set(['admin', 'tenant_admin', 'auditor', 'responsable_area', 'area_owner', 'operativo']);
-const MANAGE_ROLES = new Set(['admin', 'tenant_admin']);
+const READ_ROLES = new Set(['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin', 'auditor', 'responsable_area', 'area_owner', 'operativo']);
+const MANAGE_ROLES = new Set(['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin']);
 const SOURCE_TYPES = new Set(['document_index', 'evidence']);
 const TARGET_TYPES = new Set(['control', 'nonconformity', 'finding', 'process', 'operation', 'risk', 'action']);
 const EVIDENCE_USAGES = new Set([
@@ -338,8 +339,11 @@ async function listDocuments({ user, filters = {} }) {
   const docs = [];
 
   if (await tableExists('document_index')) {
+    const hasAiAnalysis = await tableExists('document_ai_analysis');
+    const hasSemanticProfiles = await tableExists('tenant_evidence_semantic_profiles');
     const result = await pool.query(
       `
+      ${hasAiAnalysis ? `
       WITH latest_analysis AS (
         SELECT DISTINCT ON (document_id)
           document_id,
@@ -351,6 +355,7 @@ async function listDocuments({ user, filters = {} }) {
         WHERE tenant_id = $1::uuid
         ORDER BY document_id, created_at DESC
       )
+      ` : ''}
       SELECT
         d.tenant_id,
         'document_index' AS source_type,
@@ -367,18 +372,20 @@ async function listDocuments({ user, filters = {} }) {
         d.checksum,
         d.status,
         d.indexed_at AS last_indexed_at,
-        COALESCE(la.detected_document_type, p.document_type, 'unknown') AS detected_document_type,
-        COALESCE(p.semantic_status, CASE WHEN la.document_id IS NOT NULL THEN 'processed' ELSE 'not_processed' END) AS semantic_status,
-        COALESCE(p.usefulness_score, la.confidence_score * 100) AS usefulness_score,
-        p.document_type AS profile_document_type,
+        COALESCE(${hasAiAnalysis ? 'la.detected_document_type,' : ''} ${hasSemanticProfiles ? 'p.document_type,' : ''} 'unknown') AS detected_document_type,
+        COALESCE(${hasSemanticProfiles ? 'p.semantic_status,' : ''} ${hasAiAnalysis ? "CASE WHEN la.document_id IS NOT NULL THEN 'processed' ELSE 'not_processed' END" : "'not_processed'"}) AS semantic_status,
+        COALESCE(${hasSemanticProfiles ? 'p.usefulness_score,' : ''} ${hasAiAnalysis ? 'la.confidence_score * 100,' : ''} NULL) AS usefulness_score,
+        ${hasSemanticProfiles ? 'p.document_type' : 'NULL'} AS profile_document_type,
         d.metadata_json AS metadata
       FROM document_index d
-      LEFT JOIN latest_analysis la
+      ${hasAiAnalysis ? `LEFT JOIN latest_analysis la
         ON la.document_id = d.id
-      LEFT JOIN tenant_evidence_semantic_profiles p
+      ` : ''}
+      ${hasSemanticProfiles ? `LEFT JOIN tenant_evidence_semantic_profiles p
         ON p.tenant_id = d.tenant_id
        AND p.source_type = 'document_index'
        AND p.source_id = d.id
+      ` : ''}
       WHERE d.tenant_id = $1::uuid
         AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
         AND ($2 = '%%' OR d.file_name ILIKE $2 OR COALESCE(d.file_url, '') ILIKE $2 OR COALESCE(d.metadata_json::text, '') ILIKE $2)
@@ -902,6 +909,46 @@ function scoreTarget(text, target) {
   return { score, matches };
 }
 
+async function loadCandidateTargets(user) {
+  const targetTypes = ['control', 'process', 'operation', 'risk', 'action', 'finding', 'nonconformity'];
+  const grouped = {};
+
+  for (const targetType of targetTypes) {
+    grouped[targetType] = await listTargetCandidates({ user, targetType }).catch(() => []);
+  }
+
+  return grouped;
+}
+
+async function callSemanticEvidenceEngine({ tenantId, sourceType, sourceId, source, text, candidateTargets }) {
+  const aiEngineUrl = String(process.env.AI_ENGINE_URL || process.env.AI_ENGINE_BASE_URL || '').trim();
+  const token = process.env.AI_INTERNAL_TOKEN || process.env.AI_ENGINE_TOKEN || process.env.OWN_AI_SHARED_SECRET || process.env.AI_TOKEN || '';
+
+  if (!aiEngineUrl || !token) {
+    return null;
+  }
+
+  const payload = {
+    tenant_id: tenantId,
+    source_type: sourceType,
+    source_id: sourceId,
+    document_key: null,
+    filename: source.file_name || source.description || 'Documento',
+    title: source.description || source.file_name || 'Documento',
+    text,
+    metadata: {
+      mime_type: source.mime_type || null,
+      provider: source.provider || null,
+      status: source.status || null,
+    },
+    candidate_targets: candidateTargets,
+  };
+
+  return aiEngineClient.postJson('/semantic-evidence/analyze', payload, {
+    timeoutMs: Number(process.env.AI_ENGINE_SEMANTIC_EVIDENCE_TIMEOUT_MS || process.env.AI_ENGINE_ANALYZE_TIMEOUT_MS || 60000),
+  }).catch(() => null);
+}
+
 async function analyzeSemanticEvidence({ user, sourceType, sourceId }) {
   const { tenantId, userId } = assertAccess(user, 'manage');
   const source = await getSourceDocument(tenantId, sourceType, sourceId);
@@ -918,18 +965,43 @@ async function analyzeSemanticEvidence({ user, sourceType, sourceId }) {
   }
 
   const { text, extraction } = await getSourceText(tenantId, source);
-  const classification = classifyDocument({
+  const candidateTargets = await loadCandidateTargets(user);
+  const engineResult = await callSemanticEvidenceEngine({
+    tenantId,
+    sourceType,
+    sourceId,
+    source,
+    text,
+    candidateTargets,
+  });
+  const engineClassification = engineResult?.classification || null;
+  const classification = engineClassification ? {
+    document_type: engineClassification.type || 'unknown',
+    confidence: scoreToPercent(engineClassification.confidence) || 50,
+    method: engineClassification.method || 'ai_engine_assisted',
+    reason: engineClassification.reason || 'Clasificación asistida por AI Engine.',
+  } : classifyDocument({
     filename: source.file_name,
     title: source.description || source.file_name,
     mimeType: source.mime_type,
     text,
   });
-  const chunks = buildChunks(text);
+  const engineChunks = Array.isArray(engineResult?.chunks)
+    ? engineResult.chunks.map((chunk, index) => ({
+        chunk_index: Number.isFinite(Number(chunk.chunk_index)) ? Number(chunk.chunk_index) : index,
+        chunk_text: cleanText(chunk.chunk_text || chunk.text || chunk.snippet || ''),
+        page_number: chunk.page_number || null,
+        section_label: asString(chunk.section_label, 180),
+        chunk_hash: chunk.hash || crypto.createHash('sha256').update(String(chunk.chunk_text || chunk.text || chunk.snippet || '')).digest('hex'),
+      })).filter((chunk) => chunk.chunk_text)
+    : [];
+  const chunks = engineChunks.length ? engineChunks : buildChunks(text);
   const usefulnessScore = Math.min(
     95,
     Math.max(
       20,
-      classification.confidence + (text.length > 1000 ? 10 : 0) + (aiResult?.suggestions?.length ? 8 : 0)
+      scoreToPercent(engineResult?.scoring?.relevance_to_object) ||
+        (classification.confidence + (text.length > 1000 ? 10 : 0) + (aiResult?.suggestions?.length ? 8 : 0))
     )
   );
   const docKey = documentKey(mapDocumentRow({
@@ -981,12 +1053,12 @@ async function analyzeSemanticEvidence({ user, sourceType, sourceId }) {
       classification.reason,
       JSON.stringify({
         relevance_to_object: usefulnessScore,
-        document_quality: classification.confidence,
-        traceability: chunks.length ? 80 : 45,
+        document_quality: scoreToPercent(engineResult?.scoring?.document_quality) || classification.confidence,
+        traceability: scoreToPercent(engineResult?.scoring?.traceability) || (chunks.length ? 80 : 45),
         freshness: source.modified_at || source.created_at ? 70 : 45,
         human_review_required: true,
       }),
-      JSON.stringify({ extraction, ai_engine_result: aiResult?.ok === true, text_char_count: text.length }),
+      JSON.stringify({ extraction, ai_engine_result: Boolean(engineResult), legacy_document_ai_result: aiResult?.ok === true, text_char_count: text.length }),
       userId,
     ]
   );
@@ -1011,59 +1083,78 @@ async function analyzeSemanticEvidence({ user, sourceType, sourceId }) {
         chunk.chunk_index,
         chunk.chunk_text,
         chunk.chunk_hash,
-        JSON.stringify({ extraction_method: extraction.method || null }),
+        JSON.stringify({ extraction_method: extraction.method || null, page_number: chunk.page_number || null, section_label: chunk.section_label || null }),
       ]
     );
     insertedChunks.push(result.rows[0]);
   }
 
-  const targetTypes = ['control', 'process', 'operation', 'risk', 'action', 'finding', 'nonconformity'];
   const createdSuggestions = [];
   const bestChunk = insertedChunks[0] || null;
-  for (const targetType of targetTypes) {
-    const candidates = await listTargetCandidates({ user, targetType }).catch(() => []);
-    for (const target of candidates.slice(0, 120)) {
-      const scored = scoreTarget(text, target);
-      if (scored.score < 28) continue;
-      const result = await pool.query(
-        `
-        INSERT INTO tenant_evidence_applicability_suggestions (
-          tenant_id, source_type, source_id, document_key, target_type, target_id,
-          target_label, score, confidence, reason, chunk_id, snippet, status, metadata, updated_at
-        )
-        VALUES ($1::uuid,$2,$3::uuid,$4,$5,$6::uuid,$7,$8,$9,$10,$11::uuid,$12,'suggested',$13::jsonb,now())
-        RETURNING *
-        `,
-        [
-          tenantId,
-          sourceType,
-          sourceId,
-          docKey,
-          targetType,
-          target.id,
-          target.label,
-          scored.score,
-          Math.min(95, scored.score + 5),
-          `Coincidencias detectadas: ${scored.matches.slice(0, 5).join(', ') || 'contexto documental relevante'}. Requiere revisión humana.`,
-          bestChunk?.id || null,
-          bestChunk?.chunk_text?.slice(0, 600) || text.slice(0, 600),
-          JSON.stringify({ method: 'rule_based_keyword_overlap', matches: scored.matches.slice(0, 12) }),
-        ]
-      ).catch((error) => {
-        if (['42P01', '42703'].includes(error.code)) return { rows: [] };
-        throw error;
-      });
-      if (result.rows[0]) createdSuggestions.push(result.rows[0]);
-      if (createdSuggestions.length >= 30) break;
-    }
-    if (createdSuggestions.length >= 30) break;
+  const engineSuggestions = Array.isArray(engineResult?.suggestions) ? engineResult.suggestions : [];
+  const suggestionsToPersist = engineSuggestions.length
+    ? engineSuggestions
+    : Object.entries(candidateTargets).flatMap(([targetType, candidates]) =>
+        candidates.slice(0, 120).map((target) => {
+          const scored = scoreTarget(text, target);
+          return {
+            target_type: targetType,
+            target_id: target.id,
+            target_label: target.label,
+            score: scored.score,
+            confidence: Math.min(95, scored.score + 5),
+            reason: `Coincidencias detectadas: ${scored.matches.slice(0, 5).join(', ') || 'contexto documental relevante'}. Requiere revisión humana.`,
+            snippet: bestChunk?.chunk_text?.slice(0, 600) || text.slice(0, 600),
+            metadata: { method: 'rule_based_keyword_overlap', matches: scored.matches.slice(0, 12) },
+          };
+        }).filter((item) => item.score >= 28)
+      );
+
+  for (const suggestion of suggestionsToPersist.slice(0, 30)) {
+    const targetType = asString(suggestion.target_type, 40);
+    const targetId = asString(suggestion.target_id, 80);
+    if (!TARGET_TYPES.has(targetType) || !isUuid(targetId)) continue;
+    const matchedChunk = Number.isFinite(Number(suggestion.chunk_index))
+      ? insertedChunks.find((chunk) => Number(chunk.chunk_index) === Number(suggestion.chunk_index))
+      : bestChunk;
+    const target = (candidateTargets[targetType] || []).find((candidate) => String(candidate.id) === String(targetId));
+    if (!target && !engineSuggestions.length) continue;
+    const result = await pool.query(
+      `
+      INSERT INTO tenant_evidence_applicability_suggestions (
+        tenant_id, source_type, source_id, document_key, target_type, target_id,
+        target_label, score, confidence, reason, chunk_id, snippet, status, metadata, updated_at
+      )
+      VALUES ($1::uuid,$2,$3::uuid,$4,$5,$6::uuid,$7,$8,$9,$10,$11::uuid,$12,'suggested',$13::jsonb,now())
+      RETURNING *
+      `,
+      [
+        tenantId,
+        sourceType,
+        sourceId,
+        docKey,
+        targetType,
+        targetId,
+        suggestion.target_label || target?.label || 'Objeto sugerido',
+        scoreToPercent(suggestion.score) || 0,
+        scoreToPercent(suggestion.confidence) || scoreToPercent(suggestion.score) || 0,
+        asString(suggestion.reason, 1000) || 'Sugerencia generada por análisis documental. Requiere revisión humana.',
+        matchedChunk?.id || null,
+        asString(suggestion.snippet, 1000) || matchedChunk?.chunk_text?.slice(0, 600) || text.slice(0, 600),
+        JSON.stringify(suggestion.metadata || { method: engineSuggestions.length ? 'ai_engine_semantic_evidence' : 'rule_based_keyword_overlap' }),
+      ]
+    ).catch((error) => {
+      if (['42P01', '42703'].includes(error.code)) return { rows: [] };
+      throw error;
+    });
+    if (result.rows[0]) createdSuggestions.push(result.rows[0]);
   }
 
   return {
     profile: profile.rows[0],
     chunks: insertedChunks.slice(0, 20),
     suggestions: createdSuggestions,
-    ai_engine_used: aiResult?.ok === true,
+    ai_engine_used: Boolean(engineResult),
     human_review_required: true,
   };
 }
