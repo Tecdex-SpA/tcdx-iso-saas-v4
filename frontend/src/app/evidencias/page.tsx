@@ -6,6 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import GoogleDriveSourcesPanel from '@/components/evidences/GoogleDriveSourcesPanel';
 import IntegratedEvidenceApprovalPanel from '@/components/evidences/IntegratedEvidenceApprovalPanel';
+import UnifiedEvidenceLibrary from '@/components/evidences/UnifiedEvidenceLibrary';
 import { clearAiAuditorDraft, formatAiAuditorDraftEvidenceDescription, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
@@ -1196,41 +1197,19 @@ function EvidenciasPageContent() {
     );
   }, [data, statusFilter]);
 
-  if (loadingStandards) {
-    return (
-      <AppLayout>
-        <div className="p-6">{t('evidence.loadingStandards')}</div>
-      </AppLayout>
-    );
-  }
-
-  if (!loadingStandards && standards.length === 0) {
-    return (
-      <AppLayout>
-        <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">{t('evidence.title')}</h1>
-
-          <div className="bg-yellow-50 border border-yellow-200 p-6 rounded shadow">
-            <h2 className="text-lg font-semibold mb-2">
-              {t('evidence.noOperationalStandards')}
-            </h2>
-
-            <p className="text-sm text-gray-700">
-              {t('evidence.noOperationalStandardsHelp')}
-            </p>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  if (loading) {
+  if (!token) {
     return (
       <AppLayout>
         <div className="p-6">{t('evidence.loading')}</div>
       </AppLayout>
     );
   }
+
+  return (
+    <AppLayout>
+      <UnifiedEvidenceLibrary token={token} canManage={canManageEvidenceAssociations} />
+    </AppLayout>
+  );
 
   return (
     <AppLayout>
@@ -1478,7 +1457,7 @@ function EvidenciasPageContent() {
                 </p>
                 {selectedLibraryProcess && (
                   <div className="mt-2 text-xs font-semibold text-blue-900">
-                    Proceso seleccionado: {selectedLibraryProcess.name}
+                    Proceso seleccionado: {selectedLibraryProcess?.name}
                     {libraryAssociationForm.operation_id && (
                       <>
                         {' '}
@@ -1541,9 +1520,9 @@ function EvidenciasPageContent() {
 
                 {selectedEvidenceCandidate && (
                   <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    {selectedEvidenceCandidate.filename || selectedEvidenceCandidate.title || selectedEvidenceCandidate.label}
+                    {selectedEvidenceCandidate?.filename || selectedEvidenceCandidate?.title || selectedEvidenceCandidate?.label}
                     <span className="ml-2 text-slate-400">
-                      {formatEvidenceCandidateSource(selectedEvidenceCandidate)}
+                      {selectedEvidenceCandidate ? formatEvidenceCandidateSource(selectedEvidenceCandidate!) : ''}
                     </span>
                   </div>
                 )}

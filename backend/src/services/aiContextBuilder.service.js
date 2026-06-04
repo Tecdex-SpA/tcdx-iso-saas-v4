@@ -909,6 +909,51 @@ async function loadOptionalEntities(context, { tenantId, standardCode = null, op
       'documentos Google Drive indexados para contraste documental'
     );
     context.documents = context.documents.map((row) => documentRelation(row, searchTerms));
+    if (context.documents.length && await tableExists('tenant_evidence_chunks')) {
+      const documentIds = context.documents.map((row) => row.id).filter(Boolean);
+      if (documentIds.length) {
+        const fragments = await safeQuery(
+          context,
+          'tenant_evidence_chunks',
+          `
+          SELECT
+            tenant_id,
+            source_id,
+            id AS chunk_id,
+            chunk_index,
+            page_number,
+            section_label,
+            LEFT(chunk_text, 700) AS quoted_fragment,
+            chunk_hash
+          FROM tenant_evidence_chunks
+          WHERE tenant_id = $1::uuid
+            AND source_type = 'document_index'
+            AND source_id = ANY($2::uuid[])
+          ORDER BY created_at DESC, chunk_index ASC
+          LIMIT 30
+          `,
+          [tenantId, documentIds],
+          'fragmentos citables de evidencia documental para trazabilidad'
+        );
+        const byDocument = fragments.reduce((acc, row) => {
+          const key = String(row.source_id);
+          if (!acc[key]) acc[key] = [];
+          acc[key].push({
+            chunk_id: row.chunk_id,
+            chunk_index: row.chunk_index,
+            page_number: row.page_number,
+            section_label: row.section_label,
+            quoted_fragment: row.quoted_fragment,
+            chunk_hash: row.chunk_hash,
+          });
+          return acc;
+        }, {});
+        context.documents = context.documents.map((row) => ({
+          ...row,
+          citeable_fragments: byDocument[String(row.id)] || [],
+        }));
+      }
+    }
   } else {
     context.limitations.push(cleanLimitation('document_index', 'missing'));
   }

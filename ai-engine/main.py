@@ -1160,6 +1160,18 @@ class DocumentAnalysisRequest(BaseModel):
     instructions: Dict[str, Any] = Field(default_factory=dict)
 
 
+class SemanticEvidenceAnalyzeRequest(BaseModel):
+    tenant_id: str
+    source_type: str
+    source_id: str
+    document_key: Optional[str] = None
+    filename: Optional[str] = None
+    title: Optional[str] = None
+    text: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    candidate_targets: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
+
+
 def _doc_norm(value: Any) -> str:
     return str(value or "").strip()
 
@@ -1495,5 +1507,89 @@ def analyze_document_for_compliance(
                 "modified_at": metadata.get("modified_at"),
                 "extraction_stage": metadata.get("extraction_stage"),
             },
+        },
+    }
+
+
+@app.post("/semantic-evidence/analyze")
+def analyze_semantic_evidence(
+    payload: SemanticEvidenceAnalyzeRequest,
+    x_ai_token: Optional[str] = Header(default=None),
+    x_internal_token: Optional[str] = Header(default=None),
+):
+    """
+    Sprint 3.5 semantic evidence endpoint.
+
+    Rules:
+    - Does not certify compliance.
+    - Does not approve evidence.
+    - Returns citeable fragments and reviewable suggestions only.
+    """
+    configured = get_configured_ai_token()
+    if configured:
+        require_ai_token(
+            x_ai_token=x_ai_token,
+            x_internal_token=x_internal_token,
+        )
+
+    text = _doc_norm(payload.text)
+    filename = _doc_norm(payload.filename or payload.title)
+    metadata = payload.metadata or {}
+    document_type = _infer_document_type(filename, _doc_norm(metadata.get("mime_type")), text)
+    standards = _infer_standards(filename, text, safe_list(metadata.get("active_standards")))
+    missing_elements = _assess_missing_elements(document_type, text, metadata)
+    probable_errors = _detect_probable_errors(filename, text, metadata, standards)
+    evidence_quality = _evidence_quality(text, document_type, missing_elements, probable_errors)
+    confidence = _confidence_score(text, standards, document_type, [], missing_elements)
+
+    chunks: List[Dict[str, Any]] = []
+    cleaned = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    for index in range(0, min(len(cleaned), 1200 * 12), 1200):
+        chunk_text = cleaned[index:index + 1200].strip()
+        if chunk_text:
+            chunks.append({
+                "chunk_index": len(chunks),
+                "chunk_text": chunk_text,
+                "page_number": None,
+                "section_label": None,
+                "hash": str(abs(hash(chunk_text))),
+            })
+
+    suggestions: List[Dict[str, Any]] = []
+    haystack = _doc_lower(text)
+    for group_name, targets in (payload.candidate_targets or {}).items():
+        for target in targets[:80]:
+            label = _doc_norm(target.get("label") or target.get("title") or target.get("name"))
+            words = [word for word in _doc_lower(label).replace("-", " ").split() if len(word) >= 5]
+            matches = [word for word in words if word in haystack]
+            if not matches:
+                continue
+            score = min(0.94, 0.42 + len(matches) * 0.08)
+            suggestions.append({
+                "target_type": target.get("target_type") or group_name.rstrip("s"),
+                "target_id": target.get("id") or target.get("target_id"),
+                "target_label": label,
+                "score": round(score, 2),
+                "confidence": round(score, 2),
+                "reason": f"Coincidencias detectadas: {', '.join(matches[:5])}. Requiere revision humana.",
+                "chunk_index": 0 if chunks else None,
+                "snippet": chunks[0]["chunk_text"][:500] if chunks else "",
+            })
+
+    return {
+        "status": "processed" if text else "text_not_extractable",
+        "classification": {
+            "type": document_type,
+            "confidence": confidence,
+            "method": "rule_based",
+            "reason": f"Calidad preliminar: {evidence_quality}. Revision humana obligatoria.",
+        },
+        "chunks": chunks,
+        "suggestions": suggestions[:30],
+        "scoring": {
+            "relevance_to_object": round(confidence * 100, 2),
+            "document_quality": evidence_quality,
+            "traceability": 80 if chunks else 30,
+            "human_review_required": True,
         },
     }
