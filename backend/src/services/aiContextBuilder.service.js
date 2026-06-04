@@ -50,7 +50,7 @@ function assertTenantScopedRows(rows, tenantId, sourceName, context = null) {
   return filtered;
 }
 
-function buildBaseContext({ tenantId, moduleOrigin = 'ia-auditor', standardCode = null, operationId = null }) {
+function buildBaseContext({ tenantId, moduleOrigin = 'ia-auditor', standardCode = null, operationId = null, processId = null }) {
   return {
     tenant: {
       tenant_id: tenantId,
@@ -60,10 +60,22 @@ function buildBaseContext({ tenantId, moduleOrigin = 'ia-auditor', standardCode 
     },
     scope: {
       standard_code: standardCode || '',
+      process_id: processId || '',
+      process_name: '',
       operation_id: operationId || '',
       operation_name: '',
       module_origin: moduleOrigin,
       context_version: CONTEXT_VERSION,
+    },
+    operational_context: {
+      process_id: processId || '',
+      process_name: '',
+      operation_id: operationId || '',
+      operation_name: '',
+      linked_controls: [],
+      linked_evidence: [],
+      linked_risks: [],
+      linked_actions: [],
     },
     effective_health_summary: [],
     priority_controls: [],
@@ -902,6 +914,73 @@ async function loadOptionalEntities(context, { tenantId, standardCode = null, op
   }
 }
 
+async function loadProcessOperationalLinks(context, { tenantId, processId = null, operationId = null }) {
+  if (!(await tableExists('tenant_process_entity_links'))) {
+    context.limitations.push(cleanLimitation('tenant_process_entity_links', 'missing'));
+    return;
+  }
+
+  const params = [tenantId];
+  const filters = ['l.tenant_id = $1::uuid', 'l.is_active = TRUE'];
+
+  if (processId) {
+    params.push(processId);
+    filters.push(`l.process_id = $${params.length}::uuid`);
+  }
+
+  if (operationId) {
+    params.push(operationId);
+    filters.push(`l.operation_id = $${params.length}::uuid`);
+  }
+
+  const rows = await safeQuery(
+    context,
+    'tenant_process_entity_links',
+    `
+    SELECT
+      l.tenant_id,
+      l.process_id,
+      p.name AS process_name,
+      l.operation_id,
+      op.name AS operation_name,
+      l.target_type,
+      l.target_id,
+      l.relation_type,
+      l.source,
+      l.notes,
+      l.created_at,
+      l.updated_at
+    FROM tenant_process_entity_links l
+    JOIN tenant_processes p
+      ON p.id = l.process_id
+     AND p.tenant_id = l.tenant_id
+    LEFT JOIN tenant_operations op
+      ON op.id = l.operation_id
+     AND op.tenant_id = l.tenant_id
+    WHERE ${filters.join(' AND ')}
+    ORDER BY l.updated_at DESC NULLS LAST, l.created_at DESC NULLS LAST
+    LIMIT 80
+    `,
+    params,
+    'asociaciones proceso/operación con controles, evidencias, riesgos y acciones'
+  );
+
+  const scopedRows = assertTenantScopedRows(rows, tenantId, 'tenant_process_entity_links', context);
+  const byType = (type) => compactRows(scopedRows.filter((row) => row.target_type === type), 30);
+  const first = scopedRows[0] || null;
+
+  context.operational_context = {
+    process_id: processId || first?.process_id || '',
+    process_name: first?.process_name || '',
+    operation_id: operationId || first?.operation_id || '',
+    operation_name: first?.operation_name || '',
+    linked_controls: byType('control'),
+    linked_evidence: byType('evidence'),
+    linked_risks: byType('risk'),
+    linked_actions: byType('action'),
+  };
+}
+
 async function buildAiTenantContext({ tenantId }) {
   const context = buildBaseContext({ tenantId });
   await loadTenantProfile(context, tenantId);
@@ -910,6 +989,7 @@ async function buildAiTenantContext({ tenantId }) {
   await loadEffectiveHealth(context, { tenantId });
   await loadRecentEntities(context, { tenantId });
   await loadOptionalEntities(context, { tenantId });
+  await loadProcessOperationalLinks(context, { tenantId });
   return context;
 }
 
@@ -1023,6 +1103,8 @@ async function buildCompanyProfileAiContext({
   includeFindings = true,
   includeNonconformities = true,
   includeActionPlans = true,
+  processId = null,
+  operationId = null,
 } = {}) {
   if (!tenantId) {
     const error = new Error('tenantId es obligatorio para construir contexto IA de Perfil Empresa');
@@ -1032,7 +1114,7 @@ async function buildCompanyProfileAiContext({
 
   const standardList = asArray(standardCodes).filter(Boolean);
   const standardCode = standardList.length === 1 ? standardList[0] : null;
-  const context = buildBaseContext({ tenantId, moduleOrigin: 'company_profile', standardCode });
+  const context = buildBaseContext({ tenantId, moduleOrigin: 'company_profile', standardCode, processId, operationId });
   await loadTenantProfile(context, tenantId);
   await loadCompanyProfile(context, tenantId);
   await loadApplicabilityUniverse(context, tenantId);
@@ -1041,6 +1123,7 @@ async function buildCompanyProfileAiContext({
     await loadRecentEntities(context, { tenantId, standardCode });
   }
   if (includeRisks || includeKpis) await loadOptionalEntities(context, { tenantId, standardCode });
+  await loadProcessOperationalLinks(context, { tenantId, processId, operationId });
 
   const healthRows = assertTenantScopedRows(context.effective_health_summary, tenantId, 'public.v_iso_effective_kpi_summary', context);
   let controls = assertTenantScopedRows(context.priority_controls, tenantId, 'public.v_iso_control_effective_health', context);
@@ -1242,6 +1325,7 @@ async function buildCompanyProfileAiContext({
     risks: compactRows(risks, 10),
     audits: compactRows(audits, 5),
     document_sources: compactRows(documents, 10),
+    operational_context: context.operational_context,
     internal_context_counts: internalContextCounts,
     source_trace: {
       tenant_filter_enforced: true,
@@ -1260,19 +1344,20 @@ async function buildCompanyProfileAiContext({
   };
 }
 
-async function buildAiStandardContext({ tenantId, standardCode, operationId = null }) {
-  const context = buildBaseContext({ tenantId, standardCode, operationId });
+async function buildAiStandardContext({ tenantId, standardCode, operationId = null, processId = null }) {
+  const context = buildBaseContext({ tenantId, standardCode, operationId, processId });
   await loadTenantProfile(context, tenantId);
   await loadCompanyProfile(context, tenantId);
   await loadApplicabilityUniverse(context, tenantId);
   await loadEffectiveHealth(context, { tenantId, standardCode, operationId });
   await loadRecentEntities(context, { tenantId, standardCode });
   await loadOptionalEntities(context, { tenantId, standardCode, operationId });
+  await loadProcessOperationalLinks(context, { tenantId, processId, operationId });
   return context;
 }
 
-async function buildAiControlContext({ tenantId, tenantControlId, standardCode = null, operationId = null }) {
-  const context = buildBaseContext({ tenantId, standardCode, operationId });
+async function buildAiControlContext({ tenantId, tenantControlId, standardCode = null, operationId = null, processId = null }) {
+  const context = buildBaseContext({ tenantId, standardCode, operationId, processId });
   context.scope.tenant_control_id = tenantControlId || '';
   await loadTenantProfile(context, tenantId);
   await loadCompanyProfile(context, tenantId);
@@ -1280,6 +1365,7 @@ async function buildAiControlContext({ tenantId, tenantControlId, standardCode =
   await loadEffectiveHealth(context, { tenantId, standardCode, operationId, tenantControlId });
   await loadRecentEntities(context, { tenantId, standardCode });
   await loadOptionalEntities(context, { tenantId, standardCode, operationId });
+  await loadProcessOperationalLinks(context, { tenantId, processId, operationId });
   return context;
 }
 

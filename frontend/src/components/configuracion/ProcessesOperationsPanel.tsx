@@ -62,6 +62,38 @@ type OperationForm = {
   is_active: boolean;
 };
 
+type TargetType = 'control' | 'evidence' | 'risk' | 'action';
+
+type ProcessLinkRow = {
+  id: string;
+  process_id: string;
+  operation_id?: string | null;
+  operation_name?: string | null;
+  target_type: TargetType;
+  target_label?: string | null;
+  target_table?: string | null;
+  relation_type: string;
+  source: string;
+  notes?: string | null;
+  is_active: boolean;
+};
+
+type LinkCandidate = {
+  id: string;
+  target_type: TargetType;
+  label: string;
+  subtitle?: string | null;
+};
+
+type LinkForm = {
+  target_type: TargetType;
+  operation_id: string;
+  target_id: string;
+  relation_type: string;
+  notes: string;
+  search: string;
+};
+
 const emptyProcess: ProcessForm = {
   code: '',
   name: '',
@@ -80,6 +112,22 @@ const emptyOperation: OperationForm = {
   frequency: '',
   owner_user_id: '',
   is_active: true,
+};
+
+const emptyLinkForm: LinkForm = {
+  target_type: 'control',
+  operation_id: '',
+  target_id: '',
+  relation_type: 'associated',
+  notes: '',
+  search: '',
+};
+
+const targetLabels: Record<TargetType, string> = {
+  control: 'Controles',
+  evidence: 'Evidencias',
+  risk: 'Riesgos',
+  action: 'Acciones',
 };
 
 function getToken() {
@@ -125,10 +173,15 @@ export default function ProcessesOperationsPanel() {
   const [selectedProcessId, setSelectedProcessId] = useState('');
   const [processForm, setProcessForm] = useState<ProcessForm>(emptyProcess);
   const [operationForm, setOperationForm] = useState<OperationForm>(emptyOperation);
+  const [linkForm, setLinkForm] = useState<LinkForm>(emptyLinkForm);
+  const [links, setLinks] = useState<ProcessLinkRow[]>([]);
+  const [candidates, setCandidates] = useState<LinkCandidate[]>([]);
   const [editingProcessId, setEditingProcessId] = useState('');
   const [editingOperationId, setEditingOperationId] = useState('');
   const [loading, setLoading] = useState(true);
   const [operationsLoading, setOperationsLoading] = useState(false);
+  const [linksLoading, setLinksLoading] = useState(false);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -146,6 +199,26 @@ export default function ProcessesOperationsPanel() {
       canAccessMvpFeature(role, 'config.operations.view')
     );
   }, []);
+  const canManageLinks = useMemo(() => {
+    const user = getUserFromToken();
+    const role = user?.role || user?.user_role || user?.userRole || '';
+
+    return (
+      canAccessMvpFeature(role, 'tenant_process_links.create') &&
+      canAccessMvpFeature(role, 'tenant_process_links.deactivate') &&
+      canAccessMvpFeature(role, 'tenant_process_links.reactivate')
+    );
+  }, []);
+  const groupedLinks = useMemo(() => {
+    return (['control', 'evidence', 'risk', 'action'] as TargetType[]).reduce((acc, type) => {
+      const items = links.filter((item) => item.target_type === type);
+      acc[type] = {
+        items,
+        activeCount: items.filter((item) => item.is_active).length,
+      };
+      return acc;
+    }, {} as Record<TargetType, { items: ProcessLinkRow[]; activeCount: number }>);
+  }, [links]);
 
   const loadProcesses = useCallback(async () => {
     const res = await fetch(`${API_URL}/api/tenant-processes`, {
@@ -175,6 +248,41 @@ export default function ProcessesOperationsPanel() {
     }
   }, []);
 
+  const loadLinks = useCallback(async (processId: string) => {
+    if (!processId) {
+      setLinks([]);
+      return;
+    }
+
+    setLinksLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/tenant-process-links/by-process/${processId}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const json = await parseApiResponse(res);
+      setLinks(Array.isArray(json?.data) ? json.data : []);
+    } finally {
+      setLinksLoading(false);
+    }
+  }, []);
+
+  const loadCandidates = useCallback(async (form: LinkForm) => {
+    setCandidatesLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (form.search.trim()) params.set('search', form.search.trim());
+      const res = await fetch(`${API_URL}/api/tenant-process-links/candidates/${form.target_type}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const json = await parseApiResponse(res);
+      setCandidates(Array.isArray(json?.data) ? json.data : []);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'No fue posible cargar candidatos.'));
+    } finally {
+      setCandidatesLoading(false);
+    }
+  }, []);
+
   const refreshAll = useCallback(async () => {
     try {
       setLoading(true);
@@ -197,7 +305,19 @@ export default function ProcessesOperationsPanel() {
     void loadOperations(selectedProcessId).catch((err: unknown) => {
       setError(getErrorMessage(err, 'No fue posible cargar operaciones.'));
     });
-  }, [canManageProcesses, loadOperations, selectedProcessId]);
+    void loadLinks(selectedProcessId).catch((err: unknown) => {
+      setError(getErrorMessage(err, 'No fue posible cargar asociaciones.'));
+    });
+  }, [canManageProcesses, loadLinks, loadOperations, selectedProcessId]);
+
+  useEffect(() => {
+    if (!canManageProcesses || !selectedProcessId) return;
+    const timeout = window.setTimeout(() => {
+      void loadCandidates(linkForm);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [canManageProcesses, linkForm, loadCandidates, selectedProcessId]);
 
   function editProcess(row: ProcessRow) {
     setEditingProcessId(row.id);
@@ -309,6 +429,61 @@ export default function ProcessesOperationsPanel() {
     }
   }
 
+  async function saveLink() {
+    if (!selectedProcessId || !linkForm.target_id) {
+      setError('Selecciona un proceso y un elemento para asociar.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      setSuccess('');
+
+      await parseApiResponse(
+        await fetch(`${API_URL}/api/tenant-process-links`, {
+          method: 'POST',
+          headers: buildHeaders(),
+          body: JSON.stringify({
+            process_id: selectedProcessId,
+            operation_id: linkForm.operation_id || null,
+            target_type: linkForm.target_type,
+            target_id: linkForm.target_id,
+            relation_type: linkForm.relation_type,
+            source: 'manual',
+            notes: linkForm.notes,
+          }),
+        })
+      );
+
+      setLinkForm({ ...linkForm, target_id: '', notes: '' });
+      setSuccess('Elemento asociado correctamente.');
+      await loadLinks(selectedProcessId);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'No fue posible crear la asociación.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleLink(row: ProcessLinkRow) {
+    try {
+      setError('');
+      setSuccess('');
+      const action = row.is_active ? 'deactivate' : 'reactivate';
+      await parseApiResponse(
+        await fetch(`${API_URL}/api/tenant-process-links/${row.id}/${action}`, {
+          method: 'PATCH',
+          headers: buildHeaders(),
+        })
+      );
+      setSuccess(row.is_active ? 'Asociación desactivada.' : 'Asociación reactivada.');
+      await loadLinks(selectedProcessId);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'No fue posible cambiar el estado de la asociación.'));
+    }
+  }
+
   async function toggleOperation(row: OperationRow) {
     try {
       setError('');
@@ -337,8 +512,8 @@ export default function ProcessesOperationsPanel() {
               Perfil empresa
             </p>
             <h2 className="mt-2 text-2xl font-bold text-slate-950">Procesos y operaciones</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Base administrativa tenant-scoped para registrar procesos de negocio y sus operaciones. No vincula controles, evidencias, riesgos, KPIs, reportes ni IA en Sprint 2.
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              Base administrativa tenant-scoped para registrar procesos, operaciones y sus asociaciones operacionales. KPIs, salud por proceso y reportes por proceso quedan fuera de Sprint 3.
             </p>
           </div>
           <button
@@ -461,6 +636,75 @@ export default function ProcessesOperationsPanel() {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="text-lg font-semibold text-slate-950">Asociar elemento</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              {selectedProcess ? `Proceso: ${selectedProcess.name}` : 'Selecciona un proceso para asociar elementos.'}
+            </p>
+            <div className="mt-4 space-y-3">
+              <label className="block text-sm">
+                <span className="font-semibold text-slate-700">Tipo</span>
+                <select
+                  value={linkForm.target_type}
+                  onChange={(e) => setLinkForm({ ...linkForm, target_type: e.target.value as TargetType, target_id: '' })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none"
+                >
+                  <option value="control">Control</option>
+                  <option value="evidence">Evidencia</option>
+                  <option value="risk">Riesgo</option>
+                  <option value="action">Acción</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="font-semibold text-slate-700">Operación opcional</span>
+                <select
+                  value={linkForm.operation_id}
+                  onChange={(e) => setLinkForm({ ...linkForm, operation_id: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none"
+                >
+                  <option value="">Proceso completo</option>
+                  {operations.map((operation) => (
+                    <option key={operation.id} value={operation.id}>
+                      {operation.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Input label="Buscar elemento" value={linkForm.search} onChange={(value) => setLinkForm({ ...linkForm, search: value, target_id: '' })} />
+              <div className="max-h-52 overflow-auto rounded-lg border border-slate-200">
+                {candidatesLoading ? (
+                  <div className="p-3 text-sm text-slate-500">Buscando elementos...</div>
+                ) : candidates.length === 0 ? (
+                  <div className="p-3 text-sm text-slate-500">No hay candidatos disponibles para este tipo.</div>
+                ) : (
+                  candidates.map((candidate) => (
+                    <button
+                      key={`${candidate.target_type}-${candidate.id}`}
+                      type="button"
+                      onClick={() => setLinkForm({ ...linkForm, target_id: candidate.id })}
+                      className={[
+                        'block w-full border-b border-slate-100 px-3 py-2 text-left text-sm transition last:border-b-0',
+                        linkForm.target_id === candidate.id ? 'bg-blue-50 text-blue-800' : 'bg-white text-slate-700 hover:bg-slate-50',
+                      ].join(' ')}
+                    >
+                      <span className="font-semibold">{candidate.label}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{candidate.subtitle || targetLabels[candidate.target_type]}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <Textarea label="Notas" value={linkForm.notes} onChange={(value) => setLinkForm({ ...linkForm, notes: value })} />
+              <button
+                type="button"
+                disabled={saving || !selectedProcessId || !linkForm.target_id || !canManageLinks}
+                onClick={saveLink}
+                className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Asociar elemento
+              </button>
             </div>
           </div>
         </div>
@@ -590,6 +834,70 @@ export default function ProcessesOperationsPanel() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-950">Elementos asociados</h3>
+                <p className="text-sm text-slate-500">{selectedProcess?.name || 'Sin proceso seleccionado'}</p>
+              </div>
+              <span className="text-sm text-slate-500">{links.length}</span>
+            </div>
+            {linksLoading ? (
+              <div className="mt-4 text-sm text-slate-500">Cargando asociaciones...</div>
+            ) : !selectedProcessId ? (
+              <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+                Selecciona un proceso para ver sus elementos asociados.
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {(['control', 'evidence', 'risk', 'action'] as TargetType[]).map((type) => {
+                  const group = groupedLinks[type];
+                  return (
+                    <div key={type} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold text-slate-900">{targetLabels[type]}</h4>
+                        <span className="text-xs font-semibold text-slate-500">
+                          {group.activeCount}/{group.items.length}
+                        </span>
+                      </div>
+                      {group.items.length === 0 ? (
+                        <p className="mt-3 text-sm text-slate-500">Sin asociaciones.</p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {group.items.map((link) => (
+                            <div key={link.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-semibold text-slate-900">{link.target_label || targetLabels[type]}</div>
+                                  <div className="mt-1 text-xs text-slate-500">
+                                    {link.operation_name ? `Operación: ${link.operation_name}` : 'Proceso completo'} · {link.relation_type}
+                                  </div>
+                                  {link.notes && <div className="mt-1 text-xs text-slate-500">{link.notes}</div>}
+                                </div>
+                                <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusBadge(link.is_active)}`}>
+                                  {link.is_active ? 'Activa' : 'Inactiva'}
+                                </span>
+                              </div>
+                              {canManageLinks && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleLink(link)}
+                                  className="mt-3 rounded border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
+                                >
+                                  {link.is_active ? 'Desactivar' : 'Reactivar'}
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
