@@ -8,13 +8,26 @@ type SourceCard = {
   source_type: string;
   source_name: string;
   status: string;
+  source_id?: string | null;
   documents_count?: number;
   last_sync_at?: string | null;
+  actions?: SourceAction[];
 };
 
 type ApiError = Error & {
   code?: string;
   status?: number;
+};
+
+type SourceAction = {
+  key: string;
+  label: string;
+  method?: string;
+  path?: string | null;
+  kind?: 'api' | 'oauth' | 'link' | 'info';
+  enabled?: boolean;
+  reason?: string | null;
+  body?: Record<string, any> | null;
 };
 
 type LibraryDocument = {
@@ -23,6 +36,13 @@ type LibraryDocument = {
   source_id: string;
   source_table?: string;
   document_key?: string;
+  document_source_id?: string | null;
+  item_type?: 'file' | 'folder' | 'source';
+  can_analyze?: boolean;
+  can_associate?: boolean;
+  can_open?: boolean;
+  can_sync?: boolean;
+  disabled_reason?: string | null;
   title: string;
   filename: string;
   normalized_path?: string | null;
@@ -107,11 +127,11 @@ const usageOptions = [
 ];
 
 const fallbackSources: SourceCard[] = [
-  { source_type: 'google_drive', source_name: 'Google Drive', status: 'available', documents_count: 0 },
-  { source_type: 'zoho_drive', source_name: 'Zoho Drive', status: 'available', documents_count: 0 },
-  { source_type: 'sync_agent', source_name: 'Sync Agent', status: 'available', documents_count: 0 },
-  { source_type: 'mounted_folder', source_name: 'Carpeta montada', status: 'available', documents_count: 0 },
-  { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0 },
+  { source_type: 'google_drive', source_name: 'Google Drive', status: 'available', documents_count: 0, actions: [{ key: 'connect', label: 'Conectar Google Drive', method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth', enabled: true }] },
+  { source_type: 'zoho_drive', source_name: 'Zoho Drive', status: 'available', documents_count: 0, actions: [{ key: 'connect', label: 'Conectar Zoho Drive', method: 'GET', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth', enabled: true }] },
+  { source_type: 'sync_agent', source_name: 'Sync Agent', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar agente', method: 'POST', path: '/api/document-integrations/agents/pairing-codes', kind: 'api', enabled: true }] },
+  { source_type: 'mounted_folder', source_name: 'Carpeta montada', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar carpeta', kind: 'info', enabled: false, reason: 'Configuración pendiente: requiere registrar una ruta montada autorizada.' }] },
+  { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0, actions: [{ key: 'upload', label: 'Subir archivo', path: '/evidencias?legacy_upload=1', kind: 'link', enabled: true }] },
 ];
 
 function formatDate(value?: string | null) {
@@ -150,6 +170,7 @@ function typeLabel(type?: string | null) {
     control_evidence: 'Control',
     contract: 'Contrato',
     meeting_minutes: 'Acta',
+    folder: 'Carpeta',
     unknown: 'Sin clasificar',
   };
   return labels[String(type || 'unknown')] || String(type || 'Sin clasificar');
@@ -176,6 +197,13 @@ function sourceActionLabel(sourceType?: string | null, status?: string | null) {
   if (source.includes('sync')) return currentStatus === 'active' ? 'Validar' : 'Configurar';
   if (source.includes('mounted')) return currentStatus === 'active' ? 'Sincronizar' : 'Configurar';
   return currentStatus === 'active' ? 'Sincronizar' : 'Conectar';
+}
+
+function itemTypeLabel(itemType?: string | null) {
+  if (itemType === 'folder') return 'Carpeta';
+  if (itemType === 'source') return 'Fuente';
+  if (itemType === 'file') return 'Archivo';
+  return 'Documento';
 }
 
 async function fetchJson(url: string, token: string, init: RequestInit = {}) {
@@ -210,6 +238,10 @@ export default function UnifiedEvidenceLibrary({
   const [detail, setDetail] = useState<DetailPayload | null>(null);
   const [sourcesError, setSourcesError] = useState<ApiError | null>(null);
   const [libraryError, setLibraryError] = useState<ApiError | null>(null);
+  const [folderChildren, setFolderChildren] = useState<LibraryDocument[]>([]);
+  const [folderChildrenFor, setFolderChildrenFor] = useState('');
+  const [folderChildrenLoading, setFolderChildrenLoading] = useState(false);
+  const [folderChildrenMessage, setFolderChildrenMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState('');
   const [tab, setTab] = useState<'summary' | 'associations' | 'suggestions' | 'chunks' | 'versions' | 'history'>('summary');
@@ -233,6 +265,9 @@ export default function UnifiedEvidenceLibrary({
 
   const selectedSourceType = selected?.source_type || '';
   const selectedSourceId = selected?.source_id || '';
+  const selectedCanAnalyze = Boolean(selected && selected.can_analyze !== false && selected.item_type !== 'folder');
+  const selectedCanAssociate = Boolean(selected && selected.can_associate !== false && selected.item_type !== 'folder');
+  const selectedCanOpen = Boolean(selected && selected.can_open === true);
   const visibleSources = sources.length ? sources : fallbackSources;
   const hasActiveFilters = Boolean(
     filters.search ||
@@ -254,6 +289,14 @@ export default function UnifiedEvidenceLibrary({
       semantic_status: '',
       version: 'active',
     });
+  };
+
+  const selectDocument = (doc: LibraryDocument) => {
+    setSelected(doc);
+    setTab('summary');
+    setFolderChildren([]);
+    setFolderChildrenFor('');
+    setFolderChildrenMessage('');
   };
 
   const loadSources = async () => {
@@ -303,6 +346,30 @@ export default function UnifiedEvidenceLibrary({
     setDetail(json.data || null);
   };
 
+  const openFolder = async (doc = selected) => {
+    if (!doc || doc.item_type !== 'folder' || !doc.can_open) return;
+    setFolderChildrenLoading(true);
+    setFolderChildrenMessage('');
+    try {
+      const json = await fetchJson(
+        `${API_URL}/api/evidence-library/documents/${doc.source_type}/${doc.source_id}/children`,
+        token
+      );
+      const rows = Array.isArray(json.data) ? json.data : [];
+      setFolderChildren(rows);
+      setFolderChildrenFor(doc.id);
+      if (rows.length === 0) {
+        setFolderChildrenMessage('Esta carpeta no tiene contenido indexado. Sincronice la fuente o carpeta.');
+      }
+    } catch (error: any) {
+      setFolderChildren([]);
+      setFolderChildrenFor(doc.id);
+      setFolderChildrenMessage(error.message || 'No fue posible abrir la carpeta.');
+    } finally {
+      setFolderChildrenLoading(false);
+    }
+  };
+
   const loadTargets = async () => {
     const params = new URLSearchParams();
     if (targetSearch.trim()) params.set('search', targetSearch.trim());
@@ -338,11 +405,15 @@ export default function UnifiedEvidenceLibrary({
 
   const analyzeSelected = async () => {
     if (!selected || !canManage) return;
+    if (!selectedCanAnalyze) {
+      alert('Seleccione un archivo/documento, no una carpeta.');
+      return;
+    }
     setWorking('analyze');
     try {
       await fetchJson(`${API_URL}/api/evidence-library/semantic/analyze`, token, {
         method: 'POST',
-        body: JSON.stringify({ source_type: selected.source_type, source_id: selected.source_id }),
+        body: JSON.stringify({ source_type: selected.source_type, source_id: selected.source_id, item_type: selected.item_type }),
       });
       await loadDocuments();
       await loadDetail(selected);
@@ -355,6 +426,10 @@ export default function UnifiedEvidenceLibrary({
 
   const saveAssociation = async () => {
     if (!selected || !associationForm.target_id || !canManage) return;
+    if (!selectedCanAssociate) {
+      alert('Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.');
+      return;
+    }
     setWorking('associate');
     try {
       await fetchJson(`${API_URL}/api/evidence-library/associations`, token, {
@@ -362,6 +437,7 @@ export default function UnifiedEvidenceLibrary({
         body: JSON.stringify({
           source_type: selected.source_type,
           source_id: selected.source_id,
+          item_type: selected.item_type,
           target_type: targetType,
           target_id: associationForm.target_id,
           evidence_usage: associationForm.evidence_usage,
@@ -373,6 +449,51 @@ export default function UnifiedEvidenceLibrary({
       await loadDetail(selected);
     } catch (error: any) {
       alert(error.message || 'No fue posible guardar la asociacion.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const runSourceAction = async (source: SourceCard, actionItem?: SourceAction) => {
+    const resolvedAction = actionItem || source.actions?.[0] || {
+      key: 'fallback',
+      label: sourceActionLabel(source.source_type, source.status),
+      enabled: false,
+      kind: 'info' as const,
+      reason: 'Conector no implementado para esta fuente.',
+    };
+
+    if (!canManage) {
+      alert('El rol actual no puede modificar fuentes documentales.');
+      return;
+    }
+    if (resolvedAction.enabled === false || !resolvedAction.path) {
+      alert(resolvedAction.reason || 'Configuración pendiente.');
+      return;
+    }
+    if (resolvedAction.kind === 'link') {
+      window.location.href = resolvedAction.path;
+      return;
+    }
+
+    setWorking(`source-${source.source_type}-${resolvedAction.key}`);
+    try {
+      const json = await fetchJson(`${API_URL}${resolvedAction.path}`, token, {
+        method: resolvedAction.method || 'GET',
+        body: ['POST', 'PUT', 'PATCH'].includes(String(resolvedAction.method || 'GET').toUpperCase())
+          ? JSON.stringify(resolvedAction.body || {})
+          : undefined,
+      });
+      const authUrl = json.auth_url || json.url || json.data?.auth_url;
+      if (resolvedAction.kind === 'oauth' && authUrl) {
+        window.location.href = authUrl;
+        return;
+      }
+      await loadSources();
+      await loadDocuments();
+      alert(json.message || 'Acción de fuente ejecutada.');
+    } catch (error: any) {
+      alert(error.message || 'No fue posible ejecutar la acción de fuente.');
     } finally {
       setWorking('');
     }
@@ -456,12 +577,19 @@ export default function UnifiedEvidenceLibrary({
               </div>
               <div className="mt-4 text-xs text-slate-500">Ultima sincronizacion</div>
               <div className="mt-1 text-xs font-semibold text-slate-700">{formatDate(source.last_sync_at)}</div>
-              <button
-                disabled={!canManage}
-                className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {sourceActionLabel(source.source_type, source.status)}
-              </button>
+              <div className="mt-3 flex flex-col gap-2">
+                {(source.actions?.length ? source.actions : [{ key: 'fallback', label: sourceActionLabel(source.source_type, source.status), enabled: false, kind: 'info' as const, reason: 'Conector no implementado.' }]).slice(0, 2).map((sourceAction) => (
+                  <button
+                    key={sourceAction.key}
+                    onClick={() => runSourceAction(source, sourceAction)}
+                    disabled={!canManage || sourceAction.enabled === false || working === `source-${source.source_type}-${sourceAction.key}`}
+                    title={sourceAction.enabled === false ? sourceAction.reason || 'Configuración pendiente' : sourceAction.label}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {working === `source-${source.source_type}-${sourceAction.key}` ? 'Ejecutando...' : sourceAction.label}
+                  </button>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -599,16 +727,14 @@ export default function UnifiedEvidenceLibrary({
                   documents.map((doc) => (
                     <tr
                       key={doc.id}
-                      onClick={() => {
-                        setSelected(doc);
-                        setTab('summary');
-                      }}
+                      onClick={() => selectDocument(doc)}
                       className={`cursor-pointer hover:bg-blue-50 ${selected?.id === doc.id ? 'bg-blue-50 ring-2 ring-inset ring-blue-200' : ''}`}
                     >
                       <td className="px-4 py-3">
                         <div className="font-semibold text-slate-900">{doc.filename || doc.title}</div>
                         <div className="text-xs text-slate-500">
-                          {doc.active_version || 'v1'} {doc.is_active_version !== false ? '(Activa)' : '(Version anterior)'}
+                          {itemTypeLabel(doc.item_type)} · {doc.active_version || 'v1'} {doc.is_active_version !== false ? '(Activa)' : '(Version anterior)'}
+                          {doc.item_type === 'folder' ? ' · Abrir para ver contenido' : ''}
                         </div>
                       </td>
                       <td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold">{typeLabel(doc.document_type)}</span></td>
@@ -651,10 +777,11 @@ export default function UnifiedEvidenceLibrary({
                   {canManage && (
                     <button
                       onClick={analyzeSelected}
-                      disabled={working === 'analyze'}
+                      disabled={working === 'analyze' || !selectedCanAnalyze}
+                      title={!selectedCanAnalyze ? 'Seleccione un archivo/documento, no una carpeta.' : 'Analizar utilidad como evidencia'}
                       className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                     >
-                      {working === 'analyze' ? 'Analizando...' : 'Analizar utilidad'}
+                      {selectedCanOpen ? 'No analizable' : working === 'analyze' ? 'Analizando...' : 'Analizar utilidad'}
                     </button>
                   )}
                 </div>
@@ -674,10 +801,44 @@ export default function UnifiedEvidenceLibrary({
               <div className="max-h-[740px] overflow-y-auto p-4">
                 {tab === 'summary' && (
                   <div className="space-y-3 text-sm">
+                    <Info label="Tipo de elemento" value={itemTypeLabel(selected.item_type)} />
                     <Info label="Tipo sugerido" value={typeLabel(detail?.document?.profile?.document_type || selected.document_type)} />
                     <Info label="Estado semantico" value={detail?.document?.profile?.semantic_status || selected.semantic_status || 'not_processed'} />
                     <Info label="Score de utilidad" value={detail?.document?.profile?.usefulness_score ? `${detail.document.profile.usefulness_score}%` : selected.usefulness_score ? `${selected.usefulness_score}%` : '-'} />
                     <Info label="Ultima indexacion" value={formatDate(selected.last_indexed_at)} />
+                    {selectedCanOpen && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                        <div className="font-bold">Carpeta indexada</div>
+                        <div className="mt-1">Las carpetas no se pueden analizar ni asociar como evidencia. Abra la carpeta y seleccione un archivo.</div>
+                        <button
+                          onClick={() => openFolder(selected)}
+                          disabled={folderChildrenLoading}
+                          className="mt-3 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                        >
+                          {folderChildrenLoading ? 'Abriendo...' : 'Abrir carpeta / Ver contenido'}
+                        </button>
+                        {folderChildrenFor === selected.id && (
+                          <div className="mt-3 space-y-2">
+                            {folderChildren.length === 0 ? (
+                              <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-amber-800">
+                                {folderChildrenMessage || 'Esta carpeta no tiene contenido indexado. Sincronice la fuente o carpeta.'}
+                              </div>
+                            ) : (
+                              folderChildren.map((child) => (
+                                <button
+                                  key={child.id}
+                                  onClick={() => selectDocument(child)}
+                                  className="block w-full rounded-lg border border-amber-100 bg-white px-3 py-2 text-left text-xs text-slate-700 hover:bg-amber-100"
+                                >
+                                  <span className="font-semibold">{child.filename || child.title}</span>
+                                  <span className="ml-2 text-slate-500">{itemTypeLabel(child.item_type)}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
                       AI sugiere, analiza y apoya. La revision humana sigue siendo obligatoria.
                     </div>
@@ -712,7 +873,13 @@ export default function UnifiedEvidenceLibrary({
                       )}
                     </div>
 
-                    {canManage && (
+                    {canManage && !selectedCanAssociate && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                        Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.
+                      </div>
+                    )}
+
+                    {canManage && selectedCanAssociate && (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                         <div className="mb-2 text-sm font-bold">Nueva asociacion</div>
                         <div className="space-y-2">
@@ -818,10 +985,16 @@ export default function UnifiedEvidenceLibrary({
         <div className="text-sm font-bold text-slate-900">Acciones rapidas</div>
         <div className="mt-3 flex flex-wrap gap-2">
           <button disabled={!selected} onClick={() => selected && setTab('summary')} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Ver detalle</button>
-          <button disabled={!selected || !canManage} onClick={analyzeSelected} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Actualizar analisis documental</button>
-          <button disabled={!selected} onClick={() => setTab('associations')} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Asociar a...</button>
+          <button disabled={!selected || !canManage || !selectedCanAnalyze} title={!selectedCanAnalyze ? 'Seleccione un archivo/documento, no una carpeta.' : 'Actualizar análisis documental'} onClick={analyzeSelected} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Actualizar analisis documental</button>
+          {selectedCanOpen && (
+            <button disabled={!selected} onClick={() => openFolder(selected)} className="rounded-xl border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-700 disabled:opacity-50">Abrir carpeta</button>
+          )}
+          <button disabled={!selected || !selectedCanAssociate} title={!selectedCanAssociate ? 'Las carpetas no se pueden asociar como evidencia.' : 'Asociar documento'} onClick={() => setTab('associations')} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Asociar a...</button>
           <button disabled className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 opacity-50">Descartar del indice</button>
         </div>
+        {selected?.disabled_reason && (
+          <div className="mt-2 text-xs text-amber-700">{selected.disabled_reason}</div>
+        )}
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ const READ_ROLES = new Set(['admin', 'tenant_admin', 'admin_cumplimiento', 'comp
 const MANAGE_ROLES = new Set(['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin']);
 const SOURCE_TYPES = new Set(['document_index', 'evidence']);
 const TARGET_TYPES = new Set(['control', 'nonconformity', 'finding', 'process', 'operation', 'risk', 'action']);
+const GOOGLE_FOLDER_MIME = 'application/vnd.google-apps.folder';
 const EVIDENCE_USAGES = new Set([
   'primary_evidence',
   'supporting_evidence',
@@ -66,6 +67,25 @@ function asString(value, max = 500) {
 
 function isUuid(value) {
   return UUID_RE.test(String(value || '').trim());
+}
+
+function normalizeSourceInput(sourceType, sourceId) {
+  let type = asString(sourceType, 40);
+  let id = asString(sourceId, 120);
+
+  if (id && id.includes(':')) {
+    const [prefix, ...rest] = id.split(':');
+    const normalizedPrefix = asString(prefix, 40);
+    const normalizedId = rest.join(':');
+    if (SOURCE_TYPES.has(normalizedPrefix)) {
+      if (!type || type === normalizedPrefix) {
+        type = normalizedPrefix;
+        id = normalizedId;
+      }
+    }
+  }
+
+  return { sourceType: type, sourceId: id };
 }
 
 function normalizeText(value) {
@@ -136,6 +156,31 @@ function sourceLabel(sourceType, row = {}) {
   if (provider.includes('mounted')) return 'Carpeta montada';
   if (sourceType === 'evidence') return 'Carga manual';
   return row.source_name || 'Repositorio documental';
+}
+
+function isFolderDocument(row = {}) {
+  const mime = String(row.mime_type || '').toLowerCase();
+  const extension = String(row.file_extension || '').toLowerCase();
+  const documentType = String(row.document_type || row.detected_document_type || row.profile_document_type || '').toLowerCase();
+  const metadata = row.metadata || row.metadata_json || {};
+  const google = metadata.google || {};
+  const zoho = metadata.zoho || {};
+
+  return (
+    mime === GOOGLE_FOLDER_MIME ||
+    extension === 'folder' ||
+    documentType === 'folder' ||
+    google.is_folder === true ||
+    String(google.is_folder || '').toLowerCase() === 'true' ||
+    zoho.is_folder === true ||
+    String(zoho.is_folder || '').toLowerCase() === 'true'
+  );
+}
+
+function itemTypeForRow(row = {}) {
+  if (row.item_type) return row.item_type;
+  if (row.source_type === 'evidence') return 'file';
+  return isFolderDocument(row) ? 'folder' : 'file';
 }
 
 function documentKey(row) {
@@ -218,21 +263,32 @@ function buildChunks(text, maxSize = 1200) {
 }
 
 function mapDocumentRow(row) {
+  const itemType = itemTypeForRow(row);
   const doc = {
     id: `${row.source_type}:${row.source_id}`,
     source_type: row.source_type,
     source_table: row.source_table,
     source_id: row.source_id,
+    document_source_id: row.document_source_id || row.index_source_id || null,
     tenant_id: row.tenant_id,
     title: row.title || row.filename || 'Documento',
     filename: row.filename || row.title || 'Documento',
     normalized_path: row.normalized_path || null,
+    relative_path: row.relative_path || null,
+    web_view_url: row.web_view_url || null,
     origin: row.origin || row.source_type,
     source_label: row.source_label || sourceLabel(row.source_type, row),
     provider_file_id: row.provider_file_id || null,
     checksum: row.checksum || null,
     mime_type: row.mime_type || null,
-    document_type: row.profile_document_type || row.detected_document_type || row.document_type || 'unknown',
+    file_extension: row.file_extension || null,
+    item_type: itemType,
+    can_analyze: itemType === 'file',
+    can_associate: itemType === 'file',
+    can_open: itemType === 'folder',
+    can_sync: itemType === 'folder',
+    disabled_reason: itemType === 'folder' ? 'Las carpetas no se pueden analizar ni asociar como evidencia. Abra la carpeta y seleccione un archivo.' : null,
+    document_type: itemType === 'folder' ? 'folder' : (row.profile_document_type || row.detected_document_type || row.document_type || 'unknown'),
     status: row.status || 'indexed',
     semantic_status: row.semantic_status || (row.detected_document_type ? 'processed' : 'not_processed'),
     usefulness_score: scoreToPercent(row.usefulness_score ?? row.confidence_score ?? row.ai_acceptance_pct),
@@ -243,6 +299,45 @@ function mapDocumentRow(row) {
   };
   doc.document_key = row.document_key || documentKey(doc);
   return doc;
+}
+
+function action(key, label, options = {}) {
+  return {
+    key,
+    label,
+    method: options.method || 'GET',
+    path: options.path || null,
+    kind: options.kind || 'api',
+    enabled: options.enabled !== false,
+    reason: options.reason || null,
+    body: options.body || null,
+  };
+}
+
+function defaultSourceActions(sourceType, sourceId = null, status = 'available') {
+  const active = String(status || '').toLowerCase() === 'active';
+  if (sourceType === 'google_drive') {
+    return sourceId
+      ? [action('sync', 'Sincronizar', { method: 'POST', path: `/api/document-integrations/sources/${sourceId}/sync` }), action('connect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' })]
+      : [action('connect', 'Conectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' })];
+  }
+  if (sourceType === 'zoho_drive' || sourceType === 'zoho_workdrive') {
+    return sourceId
+      ? [action('sync', 'Sincronizar', { method: 'POST', path: '/api/document-integrations/zoho/sync', body: { source_id: sourceId } }), action('connect', 'Reconectar', { method: 'GET', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' })]
+      : [action('connect', 'Conectar Zoho Drive', { method: 'GET', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' })];
+  }
+  if (sourceType === 'sync_agent') {
+    return [action('configure', active ? 'Validar agente' : 'Configurar agente', { method: 'POST', path: '/api/document-integrations/agents/pairing-codes' })];
+  }
+  if (sourceType === 'mounted_folder') {
+    return sourceId
+      ? [action('sync', 'Sincronizar carpeta', { method: 'POST', path: `/api/document-integrations/sources/${sourceId}/sync` })]
+      : [action('configure', 'Configurar carpeta', { enabled: false, kind: 'info', reason: 'Configuración pendiente: requiere registrar ruta montada autorizada.' })];
+  }
+  if (sourceType === 'manual_upload') {
+    return [action('upload', 'Subir archivo', { kind: 'link', path: '/evidencias?legacy_upload=1' })];
+  }
+  return [action('info', 'Configuración pendiente', { enabled: false, kind: 'info', reason: 'Conector no implementado para esta fuente.' })];
 }
 
 async function listSources({ user }) {
@@ -283,6 +378,40 @@ async function listSources({ user }) {
     }
   }
 
+  if (await tableExists('tenant_document_sources')) {
+    const result = await pool.query(
+      `
+      SELECT id, provider, source_name, status, last_sync_at, updated_at
+      FROM tenant_document_sources
+      WHERE tenant_id = $1::uuid
+        AND COALESCE(status, '') <> 'disconnected'
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+      `,
+      [tenantId]
+    ).catch((error) => {
+      if (['42P01', '42703'].includes(error.code)) return { rows: [] };
+      throw error;
+    });
+
+    for (const row of result.rows) {
+      const provider = String(row.provider || '').toLowerCase();
+      const cardType =
+        provider.includes('google') ? 'google_drive' :
+        provider.includes('zoho') ? 'zoho_drive' :
+        provider.includes('local') || provider.includes('agent') ? 'sync_agent' :
+        provider.includes('mounted') ? 'mounted_folder' :
+        provider.includes('manual') ? 'manual_upload' :
+        null;
+      const match = cards.find((card) => card.source_type === cardType);
+      if (match) {
+        match.status = row.status || match.status || 'active';
+        match.source_id = row.id;
+        match.source_name = match.source_name || row.source_name;
+        match.last_sync_at = match.last_sync_at || row.last_sync_at || row.updated_at || null;
+      }
+    }
+  }
+
   if (await tableExists('evidences')) {
     const result = await pool.query(
       `
@@ -299,7 +428,12 @@ async function listSources({ user }) {
     manual.last_sync_at = result.rows[0]?.last_sync_at || null;
   }
 
-  return cards;
+  return cards.map((card) => ({
+    ...card,
+    item_type: 'source',
+    can_sync: true,
+    actions: defaultSourceActions(card.source_type, card.source_id, card.status),
+  }));
 }
 
 async function loadAssociationCounts(tenantId, documents) {
@@ -361,14 +495,18 @@ async function listDocuments({ user, filters = {} }) {
         'document_index' AS source_type,
         'document_index' AS source_table,
         d.id AS source_id,
+        d.source_id AS document_source_id,
         d.file_name AS filename,
         d.file_name AS title,
         d.file_url AS normalized_path,
+        d.relative_path,
+        d.web_view_url,
         d.provider AS origin,
         d.provider,
         d.provider_file_id,
         d.provider_version_id,
         d.mime_type,
+        d.file_extension,
         d.checksum,
         d.status,
         d.indexed_at AS last_indexed_at,
@@ -408,10 +546,19 @@ async function listDocuments({ user, filters = {} }) {
         'evidence' AS source_type,
         'evidences' AS source_table,
         id AS source_id,
+        NULL::uuid AS document_source_id,
         file_name AS filename,
         COALESCE(file_name, description, evidence_type, 'Evidencia') AS title,
         file_path AS normalized_path,
+        file_path AS relative_path,
+        NULL::text AS web_view_url,
         'manual_upload' AS origin,
+        NULL::text AS provider,
+        NULL::text AS provider_file_id,
+        NULL::text AS provider_version_id,
+        file_mime_type AS mime_type,
+        NULL::text AS file_extension,
+        NULL::text AS checksum,
         evidence_type AS document_type,
         status,
         COALESCE(created_at, reviewed_at) AS last_indexed_at,
@@ -479,9 +626,19 @@ async function listDocuments({ user, filters = {} }) {
   return { data: rows.slice(0, 500), total: rows.length };
 }
 
-async function getSourceDocument(tenantId, sourceType, sourceId) {
-  if (!SOURCE_TYPES.has(sourceType) || !isUuid(sourceId)) {
-    throw publicError(400, 'INVALID_SOURCE', 'Documento/evidencia inválido.');
+function assertDocumentIsFile(source, message) {
+  if (isFolderDocument(source)) {
+    throw publicError(400, 'FOLDER_NOT_EVIDENCE_DOCUMENT', message);
+  }
+}
+
+async function getSourceDocument(tenantId, rawSourceType, rawSourceId) {
+  const { sourceType, sourceId } = normalizeSourceInput(rawSourceType, rawSourceId);
+  if (!SOURCE_TYPES.has(sourceType)) {
+    throw publicError(400, 'INVALID_SOURCE_TYPE', 'Seleccione un archivo/documento válido de la biblioteca.');
+  }
+  if (!isUuid(sourceId)) {
+    throw publicError(400, 'INVALID_SOURCE_ID', 'Identificador de documento/evidencia inválido. Seleccione un archivo de la biblioteca.');
   }
 
   if (sourceType === 'document_index') {
@@ -527,7 +684,8 @@ async function listAssociations({ user, filters = {} }) {
   const where = ['tenant_id = $1::uuid'];
 
   if (filters.source_type && filters.source_id) {
-    params.push(filters.source_type, filters.source_id);
+    const normalizedSource = normalizeSourceInput(filters.source_type, filters.source_id);
+    params.push(normalizedSource.sourceType, normalizedSource.sourceId);
     where.push(`source_type = $${params.length - 1}`, `source_id = $${params.length}::uuid`);
   }
 
@@ -593,8 +751,12 @@ async function validateTarget(tenantId, targetType, targetId) {
 
 async function createAssociation({ user, payload = {} }) {
   const { tenantId, userId } = assertAccess(user, 'manage');
-  const sourceType = asString(payload.source_type, 40);
-  const sourceId = asString(payload.source_id, 80);
+  if (String(payload.item_type || '').toLowerCase() === 'folder') {
+    throw publicError(400, 'FOLDER_NOT_ASSOCIABLE', 'Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.');
+  }
+  const normalizedSource = normalizeSourceInput(payload.source_type, payload.source_id);
+  const sourceType = normalizedSource.sourceType;
+  const sourceId = normalizedSource.sourceId;
   const targetType = asString(payload.target_type, 40);
   const targetId = asString(payload.target_id, 80);
   const evidenceUsage = asString(payload.evidence_usage, 80) || 'supporting_evidence';
@@ -604,6 +766,7 @@ async function createAssociation({ user, payload = {} }) {
   }
 
   const source = await getSourceDocument(tenantId, sourceType, sourceId);
+  assertDocumentIsFile(source, 'Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.');
   const target = await validateTarget(tenantId, targetType, targetId);
   const doc = mapDocumentRow({
     tenant_id: tenantId,
@@ -780,6 +943,9 @@ async function listTargetCandidates({ user, targetType, search = '' }) {
 
 async function getDocumentDetail({ user, sourceType, sourceId }) {
   const { tenantId } = assertAccess(user, 'read');
+  const normalizedSource = normalizeSourceInput(sourceType, sourceId);
+  sourceType = normalizedSource.sourceType;
+  sourceId = normalizedSource.sourceId;
   const source = await getSourceDocument(tenantId, sourceType, sourceId);
   const docs = await listDocuments({ user, filters: { version: 'all' } });
   const current = docs.data.find((doc) => doc.source_type === sourceType && String(doc.source_id) === String(sourceId));
@@ -788,10 +954,16 @@ async function getDocumentDetail({ user, sourceType, sourceId }) {
     source_type: sourceType,
     source_table: sourceType === 'evidence' ? 'evidences' : 'document_index',
     source_id: sourceId,
+    document_source_id: source.source_id || null,
     filename: source.file_name,
     title: source.file_name || source.description,
     normalized_path: source.file_url || source.file_path,
+    relative_path: source.relative_path || source.file_path,
+    web_view_url: source.web_view_url || null,
     origin: source.provider || 'manual_upload',
+    provider_file_id: source.provider_file_id || null,
+    mime_type: source.mime_type || source.file_mime_type || null,
+    file_extension: source.file_extension || null,
     status: source.status,
     metadata: source.metadata_json || source.metadata || {},
   });
@@ -845,6 +1017,90 @@ async function getDocumentDetail({ user, sourceType, sourceId }) {
       ...associations.data.map((row) => ({ event: 'associated', at: row.created_at, label: `Asociado a ${row.target_type}` })),
     ].filter((item) => item.at),
   };
+}
+
+async function listDocumentChildren({ user, sourceType, sourceId }) {
+  const { tenantId } = assertAccess(user, 'read');
+  const normalizedSource = normalizeSourceInput(sourceType, sourceId);
+  const source = await getSourceDocument(tenantId, normalizedSource.sourceType, normalizedSource.sourceId);
+
+  if (normalizedSource.sourceType !== 'document_index') {
+    throw publicError(400, 'CHILDREN_NOT_AVAILABLE', 'Solo las carpetas indexadas pueden listar contenido.');
+  }
+
+  if (!isFolderDocument(source)) {
+    throw publicError(400, 'NOT_A_FOLDER', 'El elemento seleccionado no es una carpeta.');
+  }
+
+  const folderProviderId = asString(source.provider_file_id, 200);
+  const folderRelativePath = asString(
+    source.relative_path ||
+      source.metadata_json?.relative_path ||
+      source.metadata_json?.google?.relative_path ||
+      source.metadata_json?.zoho?.relative_path ||
+      source.file_name,
+    800
+  );
+  const folderPathLike = folderRelativePath ? `${folderRelativePath.replace(/\/+$/, '')}/%` : null;
+
+  const result = await pool.query(
+    `
+    SELECT
+      d.tenant_id,
+      'document_index' AS source_type,
+      'document_index' AS source_table,
+      d.id AS source_id,
+      d.source_id AS document_source_id,
+      d.file_name AS filename,
+      d.file_name AS title,
+      d.file_url AS normalized_path,
+      d.relative_path,
+      d.web_view_url,
+      d.provider AS origin,
+      d.provider,
+      d.provider_file_id,
+      d.provider_version_id,
+      d.mime_type,
+      d.file_extension,
+      d.checksum,
+      d.status,
+      d.indexed_at AS last_indexed_at,
+      CASE
+        WHEN COALESCE(d.mime_type, '') = 'application/vnd.google-apps.folder'
+          OR COALESCE(d.metadata_json->'google'->>'is_folder', 'false') = 'true'
+          OR COALESCE(d.metadata_json->'zoho'->>'is_folder', 'false') = 'true'
+        THEN 'folder'
+        ELSE 'unknown'
+      END AS detected_document_type,
+      'not_processed' AS semantic_status,
+      NULL::numeric AS usefulness_score,
+      NULL::text AS profile_document_type,
+      d.metadata_json AS metadata
+    FROM document_index d
+    WHERE d.tenant_id = $1::uuid
+      AND d.id <> $2::uuid
+      AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
+      AND (
+        ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = $3::text)
+        OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = $3::text)
+        OR ($4::text IS NOT NULL AND d.relative_path ILIKE $4::text)
+        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'relative_path', '') ILIKE $4::text)
+        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'relative_path', '') ILIKE $4::text)
+        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'relative_path', '') ILIKE $4::text)
+      )
+    ORDER BY
+      CASE WHEN COALESCE(d.mime_type, '') = 'application/vnd.google-apps.folder' THEN 0 ELSE 1 END,
+      d.file_name ASC
+    LIMIT 250
+    `,
+    [tenantId, normalizedSource.sourceId, folderProviderId, folderPathLike]
+  ).catch((error) => {
+    if (['42P01', '42703'].includes(error.code)) return { rows: [] };
+    throw error;
+  });
+
+  const rows = result.rows.map(mapDocumentRow);
+  return { data: rows, total: rows.length };
 }
 
 async function getSourceText(tenantId, source) {
@@ -951,7 +1207,11 @@ async function callSemanticEvidenceEngine({ tenantId, sourceType, sourceId, sour
 
 async function analyzeSemanticEvidence({ user, sourceType, sourceId }) {
   const { tenantId, userId } = assertAccess(user, 'manage');
+  const normalizedSource = normalizeSourceInput(sourceType, sourceId);
+  sourceType = normalizedSource.sourceType;
+  sourceId = normalizedSource.sourceId;
   const source = await getSourceDocument(tenantId, sourceType, sourceId);
+  assertDocumentIsFile(source, 'Seleccione un archivo/documento, no una carpeta.');
   source.id = sourceId;
 
   let aiResult = null;
@@ -1199,6 +1459,7 @@ module.exports = {
   listSources,
   listDocuments,
   getDocumentDetail,
+  listDocumentChildren,
   listAssociations,
   createAssociation,
   setAssociationStatus,

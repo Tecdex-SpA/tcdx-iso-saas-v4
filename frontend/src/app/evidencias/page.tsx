@@ -459,6 +459,7 @@ function EvidenciasPageContent() {
   const aiAuditorDraftKey = searchParams.get('draft_key');
   const aiAuditorDraftSource = searchParams.get('source');
   const aiAuditorDraftMode = searchParams.get('draft');
+  const showLegacyUpload = searchParams.get('legacy_upload') === '1';
 
   const [data, setData] = useState<EvidenceRow[]>([]);
   const [standards, setStandards] = useState<ScopeStandard[]>([]);
@@ -1209,11 +1210,13 @@ function EvidenciasPageContent() {
     );
   }
 
-  return (
-    <AppLayout>
-      <UnifiedEvidenceLibrary token={token} canManage={canManageEvidenceAssociations} />
-    </AppLayout>
-  );
+  if (!showLegacyUpload) {
+    return (
+      <AppLayout>
+        <UnifiedEvidenceLibrary token={token} canManage={canManageEvidenceAssociations} />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
