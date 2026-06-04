@@ -36,6 +36,11 @@ export type MvpFeatureKey =
   | 'config.operations.create'
   | 'config.operations.update'
   | 'config.operations.toggleStatus'
+  | 'tenant_process_links.read'
+  | 'tenant_process_links.create'
+  | 'tenant_process_links.update'
+  | 'tenant_process_links.deactivate'
+  | 'tenant_process_links.reactivate'
   | 'admin_saas.internal'
   | 'dealer.console';
 
@@ -114,6 +119,11 @@ const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'config.operations.create': ['admin'],
   'config.operations.update': ['admin'],
   'config.operations.toggleStatus': ['admin'],
+  'tenant_process_links.read': ['admin', 'auditor', 'area_owner', 'executive'],
+  'tenant_process_links.create': ['admin'],
+  'tenant_process_links.update': ['admin'],
+  'tenant_process_links.deactivate': ['admin'],
+  'tenant_process_links.reactivate': ['admin'],
   'admin_saas.internal': ['platform'],
   'dealer.console': ['dealer'],
 };
