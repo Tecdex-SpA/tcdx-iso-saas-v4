@@ -31,7 +31,12 @@ class AiEngineClient {
         String(this.timeout),
       10
     ) || this.timeout;
-    this.token = process.env.AI_INTERNAL_TOKEN || process.env.AI_ENGINE_TOKEN || process.env.AI_TOKEN || '';
+    this.token =
+      process.env.AI_INTERNAL_TOKEN ||
+      process.env.AI_ENGINE_TOKEN ||
+      process.env.OWN_AI_SHARED_SECRET ||
+      process.env.AI_TOKEN ||
+      '';
   }
 
   resolveReportTimeoutMs(modelMode = '', options = {}) {

@@ -32,6 +32,7 @@ type SourceAction = {
 
 type LibraryDocument = {
   id: string;
+  library_item_id?: string | null;
   source_type: 'document_index' | 'evidence';
   source_id: string;
   source_table?: string;
@@ -131,7 +132,7 @@ const fallbackSources: SourceCard[] = [
   { source_type: 'zoho_drive', source_name: 'Zoho Drive', status: 'available', documents_count: 0, actions: [{ key: 'connect', label: 'Conectar Zoho Drive', method: 'GET', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth', enabled: true }] },
   { source_type: 'sync_agent', source_name: 'Sync Agent', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar agente', method: 'POST', path: '/api/document-integrations/agents/pairing-codes', kind: 'api', enabled: true }] },
   { source_type: 'mounted_folder', source_name: 'Carpeta montada', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar carpeta', kind: 'info', enabled: false, reason: 'Configuración pendiente: requiere registrar una ruta montada autorizada.' }] },
-  { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0, actions: [{ key: 'upload', label: 'Subir archivo', path: '/evidencias?legacy_upload=1', kind: 'link', enabled: true }] },
+  { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0, actions: [{ key: 'upload', label: 'Subir archivo', kind: 'info', enabled: true, reason: 'La carga manual general requiere asociar el archivo a un control o plan de acción.' }] },
 ];
 
 function formatDate(value?: string | null) {
@@ -225,6 +226,47 @@ async function fetchJson(url: string, token: string, init: RequestInit = {}) {
   return json;
 }
 
+function parseLibraryItemId(value?: string | null) {
+  const raw = String(value || '').trim();
+  if (!raw.includes(':')) return null;
+  const [sourceType, ...rest] = raw.split(':');
+  const sourceId = rest.join(':');
+  if ((sourceType === 'document_index' || sourceType === 'evidence') && sourceId) {
+    return { source_type: sourceType as 'document_index' | 'evidence', source_id: sourceId };
+  }
+  return null;
+}
+
+function isUuidLike(value?: string | null) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(String(value || '').trim());
+}
+
+function resolveLibraryActionSource(doc: LibraryDocument | null) {
+  if (!doc) return null;
+  const rawSourceId = String(doc.source_id || '').trim();
+  const fromFields = doc.source_type && isUuidLike(rawSourceId)
+    ? { source_type: doc.source_type, source_id: rawSourceId }
+    : parseLibraryItemId(rawSourceId);
+  const fromLibraryId = parseLibraryItemId(doc.library_item_id || doc.id || doc.document_key || '');
+  const source = fromFields || fromLibraryId;
+  if (!source || !source.source_id) return null;
+  return source;
+}
+
+function traceLibraryAction(action: string, doc: LibraryDocument | null, source: ReturnType<typeof resolveLibraryActionSource>) {
+  if (process.env.NODE_ENV === 'production') return;
+  console.debug('Evidence library action contract', {
+    action,
+    library_item_id: doc?.library_item_id || doc?.id || null,
+    source_type: source?.source_type || doc?.source_type || null,
+    source_id: source?.source_id || doc?.source_id || null,
+    item_type: doc?.item_type || null,
+    can_analyze: doc?.can_analyze,
+    can_associate: doc?.can_associate,
+    can_open: doc?.can_open,
+  });
+}
+
 export default function UnifiedEvidenceLibrary({
   token,
   canManage,
@@ -242,6 +284,7 @@ export default function UnifiedEvidenceLibrary({
   const [folderChildrenFor, setFolderChildrenFor] = useState('');
   const [folderChildrenLoading, setFolderChildrenLoading] = useState(false);
   const [folderChildrenMessage, setFolderChildrenMessage] = useState('');
+  const [manualUploadMessage, setManualUploadMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState('');
   const [tab, setTab] = useState<'summary' | 'associations' | 'suggestions' | 'chunks' | 'versions' | 'history'>('summary');
@@ -339,8 +382,14 @@ export default function UnifiedEvidenceLibrary({
       setDetail(null);
       return;
     }
+    const source = resolveLibraryActionSource(doc);
+    traceLibraryAction('detail', doc, source);
+    if (!source) {
+      setDetail(null);
+      return;
+    }
     const json = await fetchJson(
-      `${API_URL}/api/evidence-library/documents/${doc.source_type}/${doc.source_id}`,
+      `${API_URL}/api/evidence-library/documents/${source.source_type}/${source.source_id}`,
       token
     );
     setDetail(json.data || null);
@@ -348,11 +397,19 @@ export default function UnifiedEvidenceLibrary({
 
   const openFolder = async (doc = selected) => {
     if (!doc || doc.item_type !== 'folder' || !doc.can_open) return;
+    const source = resolveLibraryActionSource(doc);
+    traceLibraryAction('open_folder', doc, source);
+    if (!source) {
+      setFolderChildren([]);
+      setFolderChildrenFor(doc.id);
+      setFolderChildrenMessage('Identificador de carpeta inválido. Seleccione una carpeta indexada de la biblioteca.');
+      return;
+    }
     setFolderChildrenLoading(true);
     setFolderChildrenMessage('');
     try {
       const json = await fetchJson(
-        `${API_URL}/api/evidence-library/documents/${doc.source_type}/${doc.source_id}/children`,
+        `${API_URL}/api/evidence-library/documents/${source.source_type}/${source.source_id}/children`,
         token
       );
       const rows = Array.isArray(json.data) ? json.data : [];
@@ -405,15 +462,26 @@ export default function UnifiedEvidenceLibrary({
 
   const analyzeSelected = async () => {
     if (!selected || !canManage) return;
+    const source = resolveLibraryActionSource(selected);
+    traceLibraryAction('analyze', selected, source);
     if (!selectedCanAnalyze) {
       alert('Seleccione un archivo/documento, no una carpeta.');
+      return;
+    }
+    if (!source) {
+      alert('Identificador de documento/evidencia inválido. Seleccione un archivo de la biblioteca.');
       return;
     }
     setWorking('analyze');
     try {
       await fetchJson(`${API_URL}/api/evidence-library/semantic/analyze`, token, {
         method: 'POST',
-        body: JSON.stringify({ source_type: selected.source_type, source_id: selected.source_id, item_type: selected.item_type }),
+        body: JSON.stringify({
+          source_type: source.source_type,
+          source_id: source.source_id,
+          library_item_id: selected.library_item_id || selected.id,
+          item_type: selected.item_type,
+        }),
       });
       await loadDocuments();
       await loadDetail(selected);
@@ -426,8 +494,14 @@ export default function UnifiedEvidenceLibrary({
 
   const saveAssociation = async () => {
     if (!selected || !associationForm.target_id || !canManage) return;
+    const source = resolveLibraryActionSource(selected);
+    traceLibraryAction('associate', selected, source);
     if (!selectedCanAssociate) {
       alert('Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.');
+      return;
+    }
+    if (!source) {
+      alert('Identificador de documento/evidencia inválido. Seleccione un archivo de la biblioteca.');
       return;
     }
     setWorking('associate');
@@ -435,8 +509,9 @@ export default function UnifiedEvidenceLibrary({
       await fetchJson(`${API_URL}/api/evidence-library/associations`, token, {
         method: 'POST',
         body: JSON.stringify({
-          source_type: selected.source_type,
-          source_id: selected.source_id,
+          source_type: source.source_type,
+          source_id: source.source_id,
+          library_item_id: selected.library_item_id || selected.id,
           item_type: selected.item_type,
           target_type: targetType,
           target_id: associationForm.target_id,
@@ -467,6 +542,13 @@ export default function UnifiedEvidenceLibrary({
       alert('El rol actual no puede modificar fuentes documentales.');
       return;
     }
+    if (source.source_type === 'manual_upload' && resolvedAction.key === 'upload') {
+      setManualUploadMessage(
+        resolvedAction.reason ||
+          'Carga manual general pendiente: la ruta actual de subida requiere abrir la evidencia desde un control o plan de acción.'
+      );
+      return;
+    }
     if (resolvedAction.enabled === false || !resolvedAction.path) {
       alert(resolvedAction.reason || 'Configuración pendiente.');
       return;
@@ -475,7 +557,6 @@ export default function UnifiedEvidenceLibrary({
       window.location.href = resolvedAction.path;
       return;
     }
-
     setWorking(`source-${source.source_type}-${resolvedAction.key}`);
     try {
       const json = await fetchJson(`${API_URL}${resolvedAction.path}`, token, {
@@ -559,7 +640,10 @@ export default function UnifiedEvidenceLibrary({
             <h2 className="text-lg font-bold text-slate-900">Fuentes documentales</h2>
             <p className="text-sm text-slate-500">Conecta, sincroniza y gestiona fuentes de informacion.</p>
           </div>
-          <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
+          <button
+            onClick={() => setManualUploadMessage('Nueva fuente: usa las acciones de cada tarjeta disponible. Los conectores sin ruta configurada se muestran como configuración pendiente.')}
+            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
+          >
             Nueva fuente
           </button>
         </div>
@@ -596,6 +680,12 @@ export default function UnifiedEvidenceLibrary({
         {sourcesError && (
           <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             No fue posible cargar fuentes documentales. {sourcesError.code === 'RBAC_DENIED' ? 'El rol actual no tiene permiso para esta biblioteca.' : sourcesError.message}
+          </div>
+        )}
+        {manualUploadMessage && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <div className="font-semibold">Acción de fuente</div>
+            <div className="mt-1">{manualUploadMessage}</div>
           </div>
         )}
       </section>
