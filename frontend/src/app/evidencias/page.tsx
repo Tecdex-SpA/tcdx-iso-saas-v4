@@ -131,6 +131,38 @@ type ScopeResponse = {
   standards?: ScopeStandard[];
 };
 
+type ProcessOption = {
+  id: string;
+  name: string;
+  code?: string | null;
+  is_active?: boolean;
+};
+
+type OperationOption = {
+  id: string;
+  process_id?: string | null;
+  name: string;
+  code?: string | null;
+  is_active?: boolean;
+};
+
+type EvidenceAssociationForm = {
+  process_id: string;
+  operation_id: string;
+  notes: string;
+};
+
+type EvidenceCandidate = {
+  id: string;
+  label: string;
+  filename?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  source_table?: string | null;
+  source_type?: string | null;
+  evidence_date?: string | null;
+};
+
 
 function aiTraceText(value: any, fallback = '') {
   return String(value ?? fallback ?? '').trim();
@@ -444,6 +476,21 @@ function EvidenciasPageContent() {
   const [aiAuditorDraft, setAiAuditorDraft] = useState<AiAuditorDraftPayload | null>(null);
   const [aiAuditorDraftMessage, setAiAuditorDraftMessage] = useState('');
   const [focusMessage, setFocusMessage] = useState('');
+  const [processOptions, setProcessOptions] = useState<ProcessOption[]>([]);
+  const [operationOptionsByProcess, setOperationOptionsByProcess] = useState<Record<string, OperationOption[]>>({});
+  const [evidenceAssociationForms, setEvidenceAssociationForms] = useState<Record<string, EvidenceAssociationForm>>({});
+  const [associatingEvidenceId, setAssociatingEvidenceId] = useState('');
+  const [associationMessage, setAssociationMessage] = useState('');
+  const [evidenceCandidates, setEvidenceCandidates] = useState<EvidenceCandidate[]>([]);
+  const [evidenceCandidateSearch, setEvidenceCandidateSearch] = useState('');
+  const [evidenceCandidatesLoading, setEvidenceCandidatesLoading] = useState(false);
+  const [libraryAssociationForm, setLibraryAssociationForm] = useState<EvidenceAssociationForm & { target_id: string }>({
+    process_id: '',
+    operation_id: '',
+    notes: '',
+    target_id: '',
+  });
+  const [libraryAssociating, setLibraryAssociating] = useState(false);
 
   const [uploadForm, setUploadForm] = useState({
     description: '',
@@ -461,6 +508,7 @@ function EvidenciasPageContent() {
 
   const role = String(user?.role || '').toLowerCase().trim();
   const isAuditor = role === 'auditor';
+  const canManageEvidenceAssociations = role === 'admin' || role === 'tenant_admin';
   const canReviewEvidence =
     isAuditor ||
     role === 'admin' ||
@@ -471,6 +519,200 @@ function EvidenciasPageContent() {
 
   const isRemediationMode = Boolean(tenantControlIdFromUrl || actionPlanIdFromUrl);
   const tenantId = resolveTenantId(user);
+  const libraryOperationOptions = libraryAssociationForm.process_id
+    ? operationOptionsByProcess[libraryAssociationForm.process_id] || []
+    : [];
+  const selectedLibraryProcess = processOptions.find((item) => item.id === libraryAssociationForm.process_id);
+  const selectedEvidenceCandidate = evidenceCandidates.find((item) => item.id === libraryAssociationForm.target_id);
+
+  const updateEvidenceAssociationForm = (
+    evidenceId: string,
+    patch: Partial<EvidenceAssociationForm>
+  ) => {
+    setEvidenceAssociationForms((prev) => ({
+      ...prev,
+      [evidenceId]: {
+        process_id: prev[evidenceId]?.process_id || '',
+        operation_id: prev[evidenceId]?.operation_id || '',
+        notes: prev[evidenceId]?.notes || '',
+        ...patch,
+      },
+    }));
+  };
+
+  const loadProcessOptions = async (authToken: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/tenant-processes?is_active=true`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        setProcessOptions([]);
+        return;
+      }
+
+      setProcessOptions(Array.isArray(json?.data) ? json.data : []);
+    } catch (err) {
+      console.error('ERROR LOAD PROCESS OPTIONS:', err);
+      setProcessOptions([]);
+    }
+  };
+
+  const loadOperationOptions = async (processId: string, authToken: string) => {
+    if (!processId || operationOptionsByProcess[processId]) return;
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/tenant-processes/${processId}/operations?is_active=true`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      const json = await res.json();
+
+      setOperationOptionsByProcess((prev) => ({
+        ...prev,
+        [processId]: res.ok && Array.isArray(json?.data) ? json.data : [],
+      }));
+    } catch (err) {
+      console.error('ERROR LOAD OPERATION OPTIONS:', err);
+      setOperationOptionsByProcess((prev) => ({ ...prev, [processId]: [] }));
+    }
+  };
+
+  const associateEvidenceToProcess = async (evidence: EvidenceRow) => {
+    if (!token || !canManageEvidenceAssociations) return;
+
+    const form = evidenceAssociationForms[evidence.id];
+    if (!form?.process_id) {
+      alert('Selecciona un proceso antes de asociar la evidencia.');
+      return;
+    }
+
+    try {
+      setAssociatingEvidenceId(evidence.id);
+      const res = await fetch(`${API_URL}/api/tenant-process-links`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          process_id: form.process_id,
+          operation_id: form.operation_id || null,
+          target_type: 'evidence',
+          target_id: evidence.id,
+          relation_type: 'associated',
+          source: 'manual',
+          notes: form.notes || null,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        alert(json.error || 'No fue posible asociar la evidencia.');
+        return;
+      }
+
+      setAssociationMessage('Evidencia asociada al proceso/operación correctamente.');
+      setEvidenceAssociationForms((prev) => ({
+        ...prev,
+        [evidence.id]: {
+          process_id: form.process_id,
+          operation_id: form.operation_id || '',
+          notes: '',
+        },
+      }));
+    } catch (err) {
+      console.error('ERROR ASSOCIATE EVIDENCE:', err);
+      alert('No fue posible asociar la evidencia.');
+    } finally {
+      setAssociatingEvidenceId('');
+    }
+  };
+
+  const formatEvidenceCandidateSource = (candidate: EvidenceCandidate) => {
+    const rawSource = candidate.source_type || candidate.source_table || candidate.subtitle || 'Documento';
+    const sourceLabels: Record<string, string> = {
+      formal_evidence: 'Evidencia registrada',
+      evidences: 'Evidencia registrada',
+      document_index: 'Documento indexado',
+      google_drive: 'Google Drive',
+      zoho: 'Zoho',
+      mounted_share: 'Repositorio documental',
+      manual: 'Carga manual',
+    };
+    const source = sourceLabels[rawSource] || rawSource;
+    const date = formatDate(candidate.evidence_date);
+    return date === '-' ? source : `${source} · ${date}`;
+  };
+
+  const loadEvidenceCandidates = async (authToken: string, search = '') => {
+    try {
+      setEvidenceCandidatesLoading(true);
+      const params = new URLSearchParams();
+      if (search.trim()) params.set('search', search.trim());
+      const res = await fetch(
+        `${API_URL}/api/tenant-process-links/candidates/evidence?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      const json = await res.json();
+
+      if (!res.ok) {
+        setEvidenceCandidates([]);
+        return;
+      }
+
+      setEvidenceCandidates(Array.isArray(json?.data) ? json.data : []);
+    } catch (err) {
+      console.error('ERROR LOAD EVIDENCE CANDIDATES:', err);
+      setEvidenceCandidates([]);
+    } finally {
+      setEvidenceCandidatesLoading(false);
+    }
+  };
+
+  const associateLibraryEvidence = async () => {
+    if (!token || !canManageEvidenceAssociations) return;
+
+    if (!libraryAssociationForm.target_id || !libraryAssociationForm.process_id) {
+      alert('Selecciona un documento/evidencia y un proceso antes de asociar.');
+      return;
+    }
+
+    try {
+      setLibraryAssociating(true);
+      const res = await fetch(`${API_URL}/api/tenant-process-links`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          process_id: libraryAssociationForm.process_id,
+          operation_id: libraryAssociationForm.operation_id || null,
+          target_type: 'evidence',
+          target_id: libraryAssociationForm.target_id,
+          relation_type: 'associated',
+          source: 'manual',
+          notes: libraryAssociationForm.notes || null,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        alert(json.error || 'No fue posible asociar el documento/evidencia.');
+        return;
+      }
+
+      setAssociationMessage('Documento/evidencia asociado al proceso/operación correctamente.');
+      setLibraryAssociationForm((prev) => ({ ...prev, notes: '' }));
+    } catch (err) {
+      console.error('ERROR ASSOCIATE LIBRARY EVIDENCE:', err);
+      alert('No fue posible asociar el documento/evidencia.');
+    } finally {
+      setLibraryAssociating(false);
+    }
+  };
 
 
   useEffect(() => {
@@ -535,6 +777,12 @@ function EvidenciasPageContent() {
 
     loadStandards(resolvedTenantId, authToken);
   }, [tenantControlIdFromUrl, actionPlanIdFromUrl, t]);
+
+  useEffect(() => {
+    if (!token || !canManageEvidenceAssociations) return;
+    loadProcessOptions(token);
+    loadEvidenceCandidates(token);
+  }, [token, canManageEvidenceAssociations]);
 
   useEffect(() => {
     focusAppliedRef.current = false;
@@ -1212,6 +1460,168 @@ function EvidenciasPageContent() {
           </div>
         )}
 
+        {associationMessage && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800 shadow-sm">
+            {associationMessage}
+          </div>
+        )}
+
+        {canManageEvidenceAssociations && (
+          <div className="rounded-2xl border border-blue-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="text-lg font-bold text-slate-900">
+                  Asociar biblioteca documental a proceso u operación
+                </div>
+                <p className="mt-1 text-sm text-slate-500">
+                  Selecciona una evidencia registrada o documento indexado del tenant autenticado. No se envía tenant_id desde el navegador.
+                </p>
+                {selectedLibraryProcess && (
+                  <div className="mt-2 text-xs font-semibold text-blue-900">
+                    Proceso seleccionado: {selectedLibraryProcess.name}
+                    {libraryAssociationForm.operation_id && (
+                      <>
+                        {' '}
+                        · Operación seleccionada:{' '}
+                        {libraryOperationOptions.find((item) => item.id === libraryAssociationForm.operation_id)?.name || 'Operación'}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-5">
+              <div className="lg:col-span-2">
+                <div className="flex gap-2">
+                  <input
+                    type="search"
+                    value={evidenceCandidateSearch}
+                    onChange={(event) => setEvidenceCandidateSearch(event.target.value)}
+                    placeholder="Buscar evidencia o documento"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => token && loadEvidenceCandidates(token, evidenceCandidateSearch)}
+                    disabled={evidenceCandidatesLoading}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    Buscar
+                  </button>
+                </div>
+
+                <select
+                  value={libraryAssociationForm.target_id}
+                  onChange={(event) =>
+                    setLibraryAssociationForm((prev) => ({
+                      ...prev,
+                      target_id: event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">
+                    {evidenceCandidatesLoading
+                      ? 'Cargando evidencias/documentos...'
+                      : 'Seleccionar evidencia/documento'}
+                  </option>
+                  {evidenceCandidates.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.filename || candidate.title || candidate.label} - {formatEvidenceCandidateSource(candidate)}
+                    </option>
+                  ))}
+                </select>
+
+                {!evidenceCandidatesLoading && evidenceCandidates.length === 0 && (
+                  <div className="mt-2 text-xs text-slate-500">
+                    No hay evidencias/documentos disponibles para asociar.
+                  </div>
+                )}
+
+                {selectedEvidenceCandidate && (
+                  <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    {selectedEvidenceCandidate.filename || selectedEvidenceCandidate.title || selectedEvidenceCandidate.label}
+                    <span className="ml-2 text-slate-400">
+                      {formatEvidenceCandidateSource(selectedEvidenceCandidate)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <select
+                value={libraryAssociationForm.process_id}
+                onChange={(event) => {
+                  const processId = event.target.value;
+                  setLibraryAssociationForm((prev) => ({
+                    ...prev,
+                    process_id: processId,
+                    operation_id: '',
+                  }));
+                  if (processId && token) {
+                    loadOperationOptions(processId, token);
+                  }
+                }}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Seleccionar proceso</option>
+                {processOptions.map((processItem) => (
+                  <option key={processItem.id} value={processItem.id}>
+                    {processItem.code ? `${processItem.code} - ${processItem.name}` : processItem.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={libraryAssociationForm.operation_id}
+                onChange={(event) =>
+                  setLibraryAssociationForm((prev) => ({
+                    ...prev,
+                    operation_id: event.target.value,
+                  }))
+                }
+                disabled={!libraryAssociationForm.process_id}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
+              >
+                <option value="">Operación opcional</option>
+                {libraryOperationOptions.map((operation) => (
+                  <option key={operation.id} value={operation.id}>
+                    {operation.code ? `${operation.code} - ${operation.name}` : operation.name}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="text"
+                value={libraryAssociationForm.notes}
+                onChange={(event) =>
+                  setLibraryAssociationForm((prev) => ({
+                    ...prev,
+                    notes: event.target.value,
+                  }))
+                }
+                placeholder="Nota opcional"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={associateLibraryEvidence}
+                disabled={
+                  !libraryAssociationForm.target_id ||
+                  !libraryAssociationForm.process_id ||
+                  libraryAssociating
+                }
+                className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 disabled:opacity-60"
+              >
+                {libraryAssociating ? 'Asociando...' : 'Asociar documento/evidencia'}
+              </button>
+            </div>
+          </div>
+        )}
+
 
         {canUseEvidenceAi && aiAuditorDraft && (
           <div className="mb-5 rounded-[26px] border border-indigo-200 bg-indigo-50 p-4 text-indigo-950">
@@ -1264,6 +1674,15 @@ function EvidenciasPageContent() {
 
             const canApproveManually = canReviewEvidence && normalizedStatus !== 'aprobada';
             const canRejectManually = canReviewEvidence && normalizedStatus !== 'rechazada';
+            const associationForm = evidenceAssociationForms[e.id] || {
+              process_id: '',
+              operation_id: '',
+              notes: '',
+            };
+            const selectedProcess = processOptions.find((item) => item.id === associationForm.process_id);
+            const operationOptions = associationForm.process_id
+              ? operationOptionsByProcess[associationForm.process_id] || []
+              : [];
 
             return (
               <div
@@ -1561,6 +1980,95 @@ function EvidenciasPageContent() {
                     </button>
                   )}
                 </div>
+
+                {canManageEvidenceAssociations && (
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="text-sm font-bold text-blue-950">
+                          Asociar evidencia a proceso u operación
+                        </div>
+                        <div className="mt-1 text-xs text-blue-800">
+                          La asociación usa el tenant autenticado y no envía tenant_id desde el navegador.
+                        </div>
+                        {selectedProcess && (
+                          <div className="mt-2 text-xs font-semibold text-blue-900">
+                            Proceso seleccionado: {selectedProcess.name}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-4">
+                      <select
+                        value={associationForm.process_id}
+                        onChange={(event) => {
+                          const processId = event.target.value;
+                          updateEvidenceAssociationForm(e.id, {
+                            process_id: processId,
+                            operation_id: '',
+                          });
+                          if (processId && token) {
+                            loadOperationOptions(processId, token);
+                          }
+                        }}
+                        className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="">Seleccionar proceso</option>
+                        {processOptions.map((process) => (
+                          <option key={process.id} value={process.id}>
+                            {process.code ? `${process.code} - ${process.name}` : process.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={associationForm.operation_id}
+                        onChange={(event) =>
+                          updateEvidenceAssociationForm(e.id, {
+                            operation_id: event.target.value,
+                          })
+                        }
+                        disabled={!associationForm.process_id}
+                        className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
+                      >
+                        <option value="">Operación opcional</option>
+                        {operationOptions.map((operation) => (
+                          <option key={operation.id} value={operation.id}>
+                            {operation.code ? `${operation.code} - ${operation.name}` : operation.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="text"
+                        value={associationForm.notes}
+                        onChange={(event) =>
+                          updateEvidenceAssociationForm(e.id, {
+                            notes: event.target.value,
+                          })
+                        }
+                        placeholder="Nota opcional"
+                        className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => associateEvidenceToProcess(e)}
+                        disabled={!associationForm.process_id || associatingEvidenceId === e.id}
+                        className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 disabled:opacity-60"
+                      >
+                        {associatingEvidenceId === e.id ? 'Asociando...' : 'Asociar'}
+                      </button>
+                    </div>
+
+                    {associationForm.process_id && operationOptions.length === 0 && (
+                      <div className="mt-2 text-xs text-blue-700">
+                        El proceso seleccionado no tiene operaciones activas disponibles o la operación es opcional.
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {canReviewEvidence && (
                   <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
