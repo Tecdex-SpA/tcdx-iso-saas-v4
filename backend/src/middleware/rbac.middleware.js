@@ -28,7 +28,7 @@ const EXECUTIVE_ROLES = ['viewer', 'cliente', 'client', 'read_only', 'readonly',
 const AREA_OWNER_ROLES = ['operativo', 'responsable_area', 'area_owner'];
 const TENANT_READ_ROLES = ['admin', 'tenant_admin', 'auditor', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
 const TENANT_OPERATE_ROLES = ['admin', 'tenant_admin', 'auditor', ...AREA_OWNER_ROLES];
-const TENANT_ADMIN_ROLES = ['admin', 'tenant_admin'];
+const TENANT_ADMIN_ROLES = ['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin'];
 const TENANT_AREA_WRITE_ROLES = ['admin', 'tenant_admin', ...AREA_OWNER_ROLES];
 const TENANT_AUDIT_WRITE_ROLES = ['admin', 'tenant_admin', 'auditor'];
 const TENANT_REPORT_ROLES = ['admin', 'tenant_admin', 'auditor', ...EXECUTIVE_ROLES];
@@ -271,6 +271,11 @@ const API_RULES = [
     prefix: '/api/evidences',
     read: TENANT_OPERATE_ROLES,
     write: TENANT_AREA_WRITE_ROLES,
+  },
+  {
+    prefix: '/api/evidence-library',
+    read: ['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin', 'auditor', ...AREA_OWNER_ROLES],
+    write: ['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin'],
   },
   {
     prefix: '/api/document-integrations',

@@ -509,7 +509,11 @@ function EvidenciasPageContent() {
 
   const role = String(user?.role || '').toLowerCase().trim();
   const isAuditor = role === 'auditor';
-  const canManageEvidenceAssociations = role === 'admin' || role === 'tenant_admin';
+  const canManageEvidenceAssociations =
+    role === 'admin' ||
+    role === 'tenant_admin' ||
+    role === 'admin_cumplimiento' ||
+    role === 'compliance_admin';
   const canReviewEvidence =
     isAuditor ||
     role === 'admin' ||
