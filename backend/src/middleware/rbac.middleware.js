@@ -77,6 +77,16 @@ const API_RULES = [
     write: TENANT_ADMIN_ROLES,
   },
   {
+    prefix: '/api/tenant-processes',
+    read: TENANT_ADMIN_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
+    prefix: '/api/tenant-operations',
+    read: TENANT_ADMIN_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
     prefix: '/api/iso-knowledge',
     read: TENANT_READ_ROLES,
     write: [],

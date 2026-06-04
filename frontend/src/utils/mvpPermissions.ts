@@ -26,6 +26,16 @@ export type MvpFeatureKey =
   | 'ai_compliance.suggest'
   | 'configuration.users.manage'
   | 'configuration.company_profile.manage'
+  | 'config.companyProfile.view'
+  | 'config.companyProfile.update'
+  | 'config.processes.view'
+  | 'config.processes.create'
+  | 'config.processes.update'
+  | 'config.processes.toggleStatus'
+  | 'config.operations.view'
+  | 'config.operations.create'
+  | 'config.operations.update'
+  | 'config.operations.toggleStatus'
   | 'admin_saas.internal'
   | 'dealer.console';
 
@@ -94,6 +104,16 @@ const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'ai_compliance.suggest': ['admin', 'auditor'],
   'configuration.users.manage': ['admin'],
   'configuration.company_profile.manage': ['admin'],
+  'config.companyProfile.view': ['admin'],
+  'config.companyProfile.update': ['admin'],
+  'config.processes.view': ['admin'],
+  'config.processes.create': ['admin'],
+  'config.processes.update': ['admin'],
+  'config.processes.toggleStatus': ['admin'],
+  'config.operations.view': ['admin'],
+  'config.operations.create': ['admin'],
+  'config.operations.update': ['admin'],
+  'config.operations.toggleStatus': ['admin'],
   'admin_saas.internal': ['platform'],
   'dealer.console': ['dealer'],
 };
