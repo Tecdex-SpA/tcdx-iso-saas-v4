@@ -124,6 +124,8 @@ router.post('/semantic/analyze', async (req, res) => {
       user: req.user,
       sourceType: req.body?.source_type,
       sourceId: req.body?.source_id,
+      libraryItemId: req.body?.library_item_id,
+      itemType: req.body?.item_type,
     });
     return res.json({ ok: true, data });
   } catch (error) {

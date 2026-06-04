@@ -71,7 +71,7 @@ function isUuid(value) {
 
 function normalizeSourceInput(sourceType, sourceId) {
   let type = asString(sourceType, 40);
-  let id = asString(sourceId, 120);
+  let id = asString(sourceId, 160);
 
   if (id && id.includes(':')) {
     const [prefix, ...rest] = id.split(':');
@@ -86,6 +86,37 @@ function normalizeSourceInput(sourceType, sourceId) {
   }
 
   return { sourceType: type, sourceId: id };
+}
+
+function normalizeSourcePayload(input = {}) {
+  const type = input.source_type || input.sourceType;
+  const candidates = [
+    input.source_id,
+    input.sourceId,
+    input.library_item_id,
+    input.libraryItemId,
+    input.id,
+    input.document_key,
+    input.documentKey,
+  ].filter((value) => value !== undefined && value !== null && String(value).trim());
+
+  for (const candidate of candidates) {
+    const normalized = normalizeSourceInput(type, candidate);
+    if (SOURCE_TYPES.has(normalized.sourceType) && isUuid(normalized.sourceId)) {
+      return normalized;
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.includes(':')) {
+      const normalized = normalizeSourceInput(null, candidate);
+      if (SOURCE_TYPES.has(normalized.sourceType) && isUuid(normalized.sourceId)) {
+        return normalized;
+      }
+    }
+  }
+
+  return normalizeSourceInput(type, candidates[0] || '');
 }
 
 function normalizeText(value) {
@@ -264,11 +295,15 @@ function buildChunks(text, maxSize = 1200) {
 
 function mapDocumentRow(row) {
   const itemType = itemTypeForRow(row);
+  const sourceType = row.source_type;
+  const sourceId = row.source_id ? String(row.source_id) : null;
+  const libraryItemId = sourceType && sourceId ? `${sourceType}:${sourceId}` : null;
   const doc = {
-    id: `${row.source_type}:${row.source_id}`,
-    source_type: row.source_type,
+    id: libraryItemId,
+    library_item_id: libraryItemId,
+    source_type: sourceType,
     source_table: row.source_table,
-    source_id: row.source_id,
+    source_id: sourceId,
     document_source_id: row.document_source_id || row.index_source_id || null,
     tenant_id: row.tenant_id,
     title: row.title || row.filename || 'Documento',
@@ -279,6 +314,9 @@ function mapDocumentRow(row) {
     origin: row.origin || row.source_type,
     source_label: row.source_label || sourceLabel(row.source_type, row),
     provider_file_id: row.provider_file_id || null,
+    document_key: row.document_key || null,
+    parent_key: row.parent_key || null,
+    parent_source_id: row.parent_source_id || row.parent_id || null,
     checksum: row.checksum || null,
     mime_type: row.mime_type || null,
     file_extension: row.file_extension || null,
@@ -335,7 +373,7 @@ function defaultSourceActions(sourceType, sourceId = null, status = 'available')
       : [action('configure', 'Configurar carpeta', { enabled: false, kind: 'info', reason: 'Configuración pendiente: requiere registrar ruta montada autorizada.' })];
   }
   if (sourceType === 'manual_upload') {
-    return [action('upload', 'Subir archivo', { kind: 'link', path: '/evidencias?legacy_upload=1' })];
+    return [action('upload', 'Subir archivo', { kind: 'info', enabled: true, reason: 'Carga manual general pendiente: la ruta actual de subida requiere asociar el archivo a un control o plan de acción.' })];
   }
   return [action('info', 'Configuración pendiente', { enabled: false, kind: 'info', reason: 'Conector no implementado para esta fuente.' })];
 }
@@ -632,8 +670,9 @@ function assertDocumentIsFile(source, message) {
   }
 }
 
-async function getSourceDocument(tenantId, rawSourceType, rawSourceId) {
-  const { sourceType, sourceId } = normalizeSourceInput(rawSourceType, rawSourceId);
+async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) {
+  const mode = options.mode || 'read';
+  const { sourceType, sourceId } = normalizeSourcePayload(input);
   if (!SOURCE_TYPES.has(sourceType)) {
     throw publicError(400, 'INVALID_SOURCE_TYPE', 'Seleccione un archivo/documento válido de la biblioteca.');
   }
@@ -641,6 +680,7 @@ async function getSourceDocument(tenantId, rawSourceType, rawSourceId) {
     throw publicError(400, 'INVALID_SOURCE_ID', 'Identificador de documento/evidencia inválido. Seleccione un archivo de la biblioteca.');
   }
 
+  let source = null;
   if (sourceType === 'document_index') {
     const result = await pool.query(
       `
@@ -656,10 +696,10 @@ async function getSourceDocument(tenantId, rawSourceType, rawSourceId) {
       `,
       [tenantId, sourceId]
     );
-    if (result.rowCount > 0) return { source_type: sourceType, ...result.rows[0] };
+    if (result.rowCount > 0) source = { source_type: sourceType, ...result.rows[0] };
   }
 
-  if (sourceType === 'evidence') {
+  if (!source && sourceType === 'evidence') {
     const result = await pool.query(
       `
       SELECT *
@@ -671,10 +711,30 @@ async function getSourceDocument(tenantId, rawSourceType, rawSourceId) {
       `,
       [tenantId, sourceId]
     );
-    if (result.rowCount > 0) return { source_type: sourceType, ...result.rows[0] };
+    if (result.rowCount > 0) source = { source_type: sourceType, ...result.rows[0] };
   }
 
-  throw publicError(404, 'SOURCE_DOCUMENT_NOT_FOUND', 'Documento/evidencia no encontrado para el tenant autenticado.');
+  if (!source) {
+    throw publicError(404, 'SOURCE_DOCUMENT_NOT_FOUND', 'Documento/evidencia no encontrado para el tenant autenticado.');
+  }
+
+  const isFolder = sourceType === 'document_index' && isFolderDocument(source);
+  if (isFolder && mode === 'associate') {
+    throw publicError(400, 'FOLDER_NOT_ASSOCIABLE', 'Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.');
+  }
+  if (isFolder && mode === 'analyze') {
+    throw publicError(400, 'FOLDER_NOT_EVIDENCE_DOCUMENT', 'Seleccione un archivo/documento, no una carpeta.');
+  }
+  if (isFolder && mode !== 'children' && mode !== 'read') {
+    throw publicError(400, 'NON_ACTIONABLE_LIBRARY_ITEM', 'El elemento seleccionado no es un archivo analizable/asociable.');
+  }
+
+  return { sourceType, sourceId, source };
+}
+
+async function getSourceDocument(tenantId, rawSourceType, rawSourceId, options = {}) {
+  const resolved = await resolveEvidenceLibrarySource({ source_type: rawSourceType, source_id: rawSourceId }, tenantId, options);
+  return resolved.source;
 }
 
 async function listAssociations({ user, filters = {} }) {
@@ -684,7 +744,7 @@ async function listAssociations({ user, filters = {} }) {
   const where = ['tenant_id = $1::uuid'];
 
   if (filters.source_type && filters.source_id) {
-    const normalizedSource = normalizeSourceInput(filters.source_type, filters.source_id);
+    const normalizedSource = normalizeSourcePayload(filters);
     params.push(normalizedSource.sourceType, normalizedSource.sourceId);
     where.push(`source_type = $${params.length - 1}`, `source_id = $${params.length}::uuid`);
   }
@@ -754,9 +814,9 @@ async function createAssociation({ user, payload = {} }) {
   if (String(payload.item_type || '').toLowerCase() === 'folder') {
     throw publicError(400, 'FOLDER_NOT_ASSOCIABLE', 'Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.');
   }
-  const normalizedSource = normalizeSourceInput(payload.source_type, payload.source_id);
-  const sourceType = normalizedSource.sourceType;
-  const sourceId = normalizedSource.sourceId;
+  const resolvedSource = await resolveEvidenceLibrarySource(payload, tenantId, { mode: 'associate' });
+  const sourceType = resolvedSource.sourceType;
+  const sourceId = resolvedSource.sourceId;
   const targetType = asString(payload.target_type, 40);
   const targetId = asString(payload.target_id, 80);
   const evidenceUsage = asString(payload.evidence_usage, 80) || 'supporting_evidence';
@@ -765,7 +825,7 @@ async function createAssociation({ user, payload = {} }) {
     throw publicError(400, 'INVALID_EVIDENCE_USAGE', 'Uso de evidencia inválido.');
   }
 
-  const source = await getSourceDocument(tenantId, sourceType, sourceId);
+  const source = resolvedSource.source;
   assertDocumentIsFile(source, 'Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.');
   const target = await validateTarget(tenantId, targetType, targetId);
   const doc = mapDocumentRow({
@@ -943,7 +1003,7 @@ async function listTargetCandidates({ user, targetType, search = '' }) {
 
 async function getDocumentDetail({ user, sourceType, sourceId }) {
   const { tenantId } = assertAccess(user, 'read');
-  const normalizedSource = normalizeSourceInput(sourceType, sourceId);
+  const normalizedSource = normalizeSourcePayload({ source_type: sourceType, source_id: sourceId });
   sourceType = normalizedSource.sourceType;
   sourceId = normalizedSource.sourceId;
   const source = await getSourceDocument(tenantId, sourceType, sourceId);
@@ -1021,8 +1081,12 @@ async function getDocumentDetail({ user, sourceType, sourceId }) {
 
 async function listDocumentChildren({ user, sourceType, sourceId }) {
   const { tenantId } = assertAccess(user, 'read');
-  const normalizedSource = normalizeSourceInput(sourceType, sourceId);
-  const source = await getSourceDocument(tenantId, normalizedSource.sourceType, normalizedSource.sourceId);
+  const normalizedSource = normalizeSourcePayload({ source_type: sourceType, source_id: sourceId });
+  const { source } = await resolveEvidenceLibrarySource(
+    { source_type: normalizedSource.sourceType, source_id: normalizedSource.sourceId },
+    tenantId,
+    { mode: 'children' }
+  );
 
   if (normalizedSource.sourceType !== 'document_index') {
     throw publicError(400, 'CHILDREN_NOT_AVAILABLE', 'Solo las carpetas indexadas pueden listar contenido.');
@@ -1032,12 +1096,24 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
     throw publicError(400, 'NOT_A_FOLDER', 'El elemento seleccionado no es una carpeta.');
   }
 
-  const folderProviderId = asString(source.provider_file_id, 200);
+  const sourceMetadata = source.metadata_json || source.metadata || {};
+  const folderProviderId = asString(
+    source.provider_file_id ||
+      sourceMetadata.provider_file_id ||
+      sourceMetadata.google?.id ||
+      sourceMetadata.google?.folder_id ||
+      sourceMetadata.zoho?.id ||
+      sourceMetadata.zoho?.folder_id,
+    200
+  );
   const folderRelativePath = asString(
     source.relative_path ||
       source.metadata_json?.relative_path ||
       source.metadata_json?.google?.relative_path ||
       source.metadata_json?.zoho?.relative_path ||
+      source.metadata_json?.path ||
+      source.metadata_json?.folder_path ||
+      source.metadata_json?.parent_path ||
       source.file_name,
     800
   );
@@ -1083,8 +1159,14 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
       AND (
         ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = $3::text)
         OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = $3::text)
+        OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->>'parent_id', '') = $3::text)
+        OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->>'source_folder_id', '') = $3::text)
         OR ($4::text IS NOT NULL AND d.relative_path ILIKE $4::text)
+        OR ($4::text IS NOT NULL AND d.file_url ILIKE $4::text)
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'relative_path', '') ILIKE $4::text)
+        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'path', '') ILIKE $4::text)
+        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'folder_path', '') ILIKE $4::text)
+        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'parent_path', '') ILIKE $4::text)
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'relative_path', '') ILIKE $4::text)
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'relative_path', '') ILIKE $4::text)
       )
@@ -1205,12 +1287,19 @@ async function callSemanticEvidenceEngine({ tenantId, sourceType, sourceId, sour
   }).catch(() => null);
 }
 
-async function analyzeSemanticEvidence({ user, sourceType, sourceId }) {
+async function analyzeSemanticEvidence({ user, sourceType, sourceId, libraryItemId, itemType }) {
   const { tenantId, userId } = assertAccess(user, 'manage');
-  const normalizedSource = normalizeSourceInput(sourceType, sourceId);
-  sourceType = normalizedSource.sourceType;
-  sourceId = normalizedSource.sourceId;
-  const source = await getSourceDocument(tenantId, sourceType, sourceId);
+  if (String(itemType || '').toLowerCase() === 'folder') {
+    throw publicError(400, 'FOLDER_NOT_EVIDENCE_DOCUMENT', 'Seleccione un archivo/documento, no una carpeta.');
+  }
+  const resolvedSource = await resolveEvidenceLibrarySource(
+    { source_type: sourceType, source_id: sourceId, library_item_id: libraryItemId },
+    tenantId,
+    { mode: 'analyze' }
+  );
+  sourceType = resolvedSource.sourceType;
+  sourceId = resolvedSource.sourceId;
+  const source = resolvedSource.source;
   assertDocumentIsFile(source, 'Seleccione un archivo/documento, no una carpeta.');
   source.id = sourceId;
 
