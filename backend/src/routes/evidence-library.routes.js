@@ -5,6 +5,7 @@ const {
   listSources,
   listDocuments,
   getDocumentDetail,
+  listDocumentChildren,
   listAssociations,
   createAssociation,
   setAssociationStatus,
@@ -36,6 +37,19 @@ router.get('/sources', async (req, res) => {
 router.get('/documents', async (req, res) => {
   try {
     const result = await listDocuments({ user: req.user, filters: req.query || {} });
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.get('/documents/:sourceType/:sourceId/children', async (req, res) => {
+  try {
+    const result = await listDocumentChildren({
+      user: req.user,
+      sourceType: req.params.sourceType,
+      sourceId: req.params.sourceId,
+    });
     return res.json({ ok: true, ...result });
   } catch (error) {
     return sendError(res, error);
