@@ -222,7 +222,7 @@ function statusClass(value?: string | null) {
   if (status === 'folder_required') {
     return 'border-amber-200 bg-amber-50 text-amber-700';
   }
-  if (['failed', 'rejected', 'rechazada', 'error'].includes(status)) {
+  if (['failed', 'rejected', 'rechazada', 'error', 'zoho_oauth_unauthorized'].includes(status)) {
     return 'border-red-200 bg-red-50 text-red-700';
   }
   return 'border-slate-200 bg-slate-50 text-slate-600';
@@ -860,6 +860,12 @@ export default function UnifiedEvidenceLibrary({
               {source.source_type === 'zoho_drive' && source.status === 'folder_required' && (
                 <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
                   Zoho WorkDrive conectado. Seleccione una carpeta para sincronizar.
+                </div>
+              )}
+              {source.source_type === 'zoho_drive' && source.status === 'zoho_oauth_unauthorized' && (
+                <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+                  Zoho conectado, pero sin permisos WorkDrive suficientes. Reconecte aceptando los permisos requeridos.
+                  {source.last_sync_error ? ` ${source.last_sync_error}` : ''}
                 </div>
               )}
               {source.source_type === 'zoho_drive' && source.status === 'configuration_required' && (
