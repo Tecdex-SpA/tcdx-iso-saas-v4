@@ -126,6 +126,7 @@ router.post('/semantic/analyze', async (req, res) => {
   try {
     const data = await analyzeSemanticEvidence({
       user: req.user,
+      operationRef: req.body?.operation_ref,
       sourceType: req.body?.source_type,
       sourceId: req.body?.source_id,
     });
