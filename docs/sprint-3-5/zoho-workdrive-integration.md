@@ -80,6 +80,56 @@ The Evidence Library API derives UI status `folder_required`.
 
 All non-callback endpoints require auth and tenant-scoped RBAC.
 
+### Folder browsing
+
+The folder browser treats these values as logical WorkDrive root aliases:
+
+- empty `parentId`
+- `root`
+- `my_drive`
+- `mi_unidad`
+
+The backend must not call Zoho with `fileId=root`. For root browsing it resolves tenant credentials and tries the WorkDrive root/team-folder listing endpoints, then normalizes the response to:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "source_id": "tenant_document_sources.id",
+    "current": {
+      "id": "root",
+      "name": "Mi unidad",
+      "path": "Mi unidad",
+      "parent_id": null,
+      "type": "root"
+    },
+    "folders": [],
+    "breadcrumbs": [{ "id": "root", "name": "Mi unidad" }]
+  }
+}
+```
+
+If Zoho returns no folders, the endpoint returns `ok: true` with `folders: []`.
+
+Zoho API failures return safe diagnostics only:
+
+```json
+{
+  "ok": false,
+  "code": "ZOHO_API_ERROR",
+  "error": "Error consultando Zoho WorkDrive",
+  "details": {
+    "stage": "list_root",
+    "provider_status": 403,
+    "provider_code": "scope_error",
+    "provider_message": "safe provider message",
+    "hint": "Permisos insuficientes de Zoho WorkDrive. Reconecte Zoho autorizando los scopes requeridos."
+  }
+}
+```
+
+Tokens, auth headers, tenant secrets and OAuth codes must never be logged or returned.
+
 ## Multi-DC
 
 Zoho token responses may include `api_domain`, `accounts_server`, or `location`. These values are stored in credential/source metadata when available. WorkDrive API calls use the tenant-stored `api_domain` first and `ZOHO_API_BASE_URL` as fallback.
@@ -89,6 +139,7 @@ Zoho token responses may include `api_domain`, `accounts_server`, or `location`.
 - BYO tenant OAuth app is future enterprise scope, not Sprint 3.5 default.
 - Folder recursion is MVP-limited and bounded.
 - If Zoho does not provide extractable binary content through the indexed metadata, semantic analysis falls back to metadata-based context or controlled unsupported extraction behavior.
+- Zoho WorkDrive root/team-folder API shape may vary by data center and account type; the backend keeps fallback endpoints and structured diagnostics for production tuning.
 
 ## Browser Validation
 
