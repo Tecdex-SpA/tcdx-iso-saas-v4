@@ -9,8 +9,10 @@ type SourceCard = {
   source_name: string;
   status: string;
   source_id?: string | null;
+  connected?: boolean;
   root_folder_id?: string | null;
   root_folder_name?: string | null;
+  account_email?: string | null;
   provider_account_email?: string | null;
   last_sync_status?: string | null;
   last_sync_error?: string | null;
@@ -29,10 +31,17 @@ type SourceAction = {
   label: string;
   method?: string;
   path?: string | null;
-  kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip';
+  kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip' | 'google_folder_selector';
   enabled?: boolean;
   reason?: string | null;
   body?: Record<string, any> | null;
+};
+
+type GoogleFolder = {
+  id: string;
+  name: string;
+  mime_type?: string | null;
+  web_view_url?: string | null;
 };
 
 type LibraryDocument = {
@@ -313,6 +322,12 @@ export default function UnifiedEvidenceLibrary({
   const [manualUploadMode, setManualUploadMode] = useState<'files' | 'zip'>('files');
   const [manualUploadFiles, setManualUploadFiles] = useState<File[]>([]);
   const [manualUploadType, setManualUploadType] = useState('unknown');
+  const [googleFolderSelectorOpen, setGoogleFolderSelectorOpen] = useState(false);
+  const [googleFolderSource, setGoogleFolderSource] = useState<SourceCard | null>(null);
+  const [googleFolders, setGoogleFolders] = useState<GoogleFolder[]>([]);
+  const [googleFolderParentId, setGoogleFolderParentId] = useState('root');
+  const [googleFolderTrail, setGoogleFolderTrail] = useState<Array<{ id: string; name: string }>>([{ id: 'root', name: 'Mi unidad' }]);
+  const [googleFolderMessage, setGoogleFolderMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState('');
   const [tab, setTab] = useState<'summary' | 'associations' | 'suggestions' | 'chunks' | 'versions' | 'history'>('summary');
@@ -462,6 +477,69 @@ export default function UnifiedEvidenceLibrary({
     setTargetOptions(Array.isArray(json.data) ? json.data : []);
   };
 
+  const loadGoogleFolders = async (source: SourceCard, parentId = 'root', trail = [{ id: 'root', name: 'Mi unidad' }]) => {
+    if (!source.source_id) {
+      setGoogleFolders([]);
+      setGoogleFolderMessage('Google Drive está conectado sin fuente operativa. Reconecte la cuenta.');
+      return;
+    }
+    setWorking('google-folders');
+    setGoogleFolderMessage('');
+    try {
+      const params = new URLSearchParams({ source_id: source.source_id, parentId });
+      const json = await fetchJson(`${API_URL}/api/document-integrations/google/folders?${params.toString()}`, token);
+      const rows = Array.isArray(json.folders) ? json.folders : [];
+      setGoogleFolders(rows);
+      setGoogleFolderParentId(parentId);
+      setGoogleFolderTrail(trail);
+      if (rows.length === 0) {
+        setGoogleFolderMessage('Esta carpeta no contiene subcarpetas visibles.');
+      }
+    } catch (error: any) {
+      setGoogleFolders([]);
+      setGoogleFolderMessage(error.message || 'No fue posible listar carpetas de Google Drive.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const openGoogleFolderSelector = async (source: SourceCard) => {
+    setGoogleFolderSource(source);
+    setGoogleFolderSelectorOpen(true);
+    await loadGoogleFolders(source, 'root', [{ id: 'root', name: 'Mi unidad' }]);
+  };
+
+  const enterGoogleFolder = async (folder: GoogleFolder) => {
+    if (!googleFolderSource) return;
+    await loadGoogleFolders(
+      googleFolderSource,
+      folder.id,
+      [...googleFolderTrail, { id: folder.id, name: folder.name }]
+    );
+  };
+
+  const selectGoogleFolder = async (folder: GoogleFolder) => {
+    if (!googleFolderSource?.source_id) return;
+    setWorking(`google-select-${folder.id}`);
+    try {
+      await fetchJson(`${API_URL}/api/document-integrations/google/select-folder`, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          source_id: googleFolderSource.source_id,
+          folder_id: folder.id,
+          folder_name: folder.name,
+        }),
+      });
+      setGoogleFolderSelectorOpen(false);
+      setGoogleFolderMessage('');
+      await loadSources();
+    } catch (error: any) {
+      setGoogleFolderMessage(error.message || 'No fue posible seleccionar la carpeta.');
+    } finally {
+      setWorking('');
+    }
+  };
+
   useEffect(() => {
     loadSources();
   }, [token]);
@@ -575,6 +653,10 @@ export default function UnifiedEvidenceLibrary({
       setManualUploadOpen(true);
       return;
     }
+    if (resolvedAction.kind === 'google_folder_selector') {
+      await openGoogleFolderSelector(source);
+      return;
+    }
     if (resolvedAction.enabled === false || !resolvedAction.path) {
       alert(resolvedAction.reason || 'Configuración pendiente.');
       return;
@@ -598,7 +680,10 @@ export default function UnifiedEvidenceLibrary({
       }
       await loadSources();
       await loadDocuments();
-      alert(json.message || 'Acción de fuente ejecutada.');
+      const summary = json.files_seen !== undefined
+        ? `Sincronización completada. Archivos vistos: ${json.files_seen || 0}. Indexados: ${json.files_indexed || 0}. Carpetas: ${json.folders_seen || 0}. Errores: ${json.files_errors || 0}.`
+        : null;
+      alert(json.message || summary || 'Acción de fuente ejecutada.');
     } catch (error: any) {
       alert(error.message || 'No fue posible ejecutar la acción de fuente.');
     } finally {
@@ -728,14 +813,19 @@ export default function UnifiedEvidenceLibrary({
               </div>
               <div className="mt-4 text-xs text-slate-500">Ultima sincronizacion</div>
               <div className="mt-1 text-xs font-semibold text-slate-700">{formatDate(source.last_sync_at)}</div>
-              {source.provider_account_email && (
-                <div className="mt-2 truncate text-xs text-slate-500">Cuenta: {source.provider_account_email}</div>
+              {(source.provider_account_email || source.account_email) && (
+                <div className="mt-2 truncate text-xs text-slate-500">Cuenta: {source.provider_account_email || source.account_email}</div>
               )}
               {source.root_folder_name && (
                 <div className="mt-1 truncate text-xs text-slate-500">Carpeta: {source.root_folder_name}</div>
               )}
+              {source.last_sync_error && (
+                <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+                  {source.last_sync_error}
+                </div>
+              )}
               <div className="mt-3 flex flex-col gap-2">
-                {(source.actions?.length ? source.actions : [{ key: 'fallback', label: sourceActionLabel(source.source_type, source.status), enabled: false, kind: 'info' as const, reason: 'Conector no implementado.' }]).slice(0, 2).map((sourceAction) => (
+                {(source.actions?.length ? source.actions : [{ key: 'fallback', label: sourceActionLabel(source.source_type, source.status), enabled: false, kind: 'info' as const, reason: 'Conector no implementado.' }]).map((sourceAction) => (
                   <button
                     key={sourceAction.key}
                     onClick={() => runSourceAction(source, sourceAction)}
@@ -820,6 +910,74 @@ export default function UnifiedEvidenceLibrary({
               {manualUploadMode === 'zip'
                 ? 'El ZIP se extrae con controles anti traversal; se preservan rutas relativas permitidas.'
                 : 'No se crea asociación automática. Seleccione el documento cargado y use Asociaciones.'}
+            </div>
+          </div>
+        )}
+        {googleFolderSelectorOpen && googleFolderSource && (
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="font-bold text-slate-900">Seleccionar carpeta raíz de Google Drive</div>
+                <div className="mt-1 text-sm text-slate-600">
+                  Cuenta: {googleFolderSource.provider_account_email || googleFolderSource.account_email || 'Google Drive conectado'}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1 text-xs text-slate-500">
+                  {googleFolderTrail.map((item, index) => (
+                    <button
+                      key={`${item.id}-${index}`}
+                      onClick={() => loadGoogleFolders(googleFolderSource, item.id, googleFolderTrail.slice(0, index + 1))}
+                      className="rounded-full border border-emerald-200 bg-white px-2 py-1 font-semibold text-emerald-700"
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => setGoogleFolderSelectorOpen(false)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
+              >
+                Cerrar
+              </button>
+            </div>
+            {googleFolderMessage && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {googleFolderMessage}
+              </div>
+            )}
+            <div className="mt-3 max-h-72 overflow-auto rounded-xl border border-emerald-100 bg-white">
+              {working === 'google-folders' ? (
+                <div className="px-3 py-4 text-sm text-slate-500">Cargando carpetas...</div>
+              ) : googleFolders.length === 0 ? (
+                <div className="px-3 py-4 text-sm text-slate-500">No hay subcarpetas visibles en esta ubicación.</div>
+              ) : (
+                googleFolders.map((folder) => (
+                  <div key={folder.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-900">{folder.name}</div>
+                      <div className="text-xs text-slate-500">Carpeta Google Drive</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => enterGoogleFolder(folder)}
+                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
+                      >
+                        Entrar
+                      </button>
+                      <button
+                        onClick={() => selectGoogleFolder(folder)}
+                        disabled={working === `google-select-${folder.id}`}
+                        className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        {working === `google-select-${folder.id}` ? 'Guardando...' : 'Usar esta carpeta'}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              Carpeta actual: {googleFolderTrail[googleFolderTrail.length - 1]?.name || googleFolderParentId}
             </div>
           </div>
         )}

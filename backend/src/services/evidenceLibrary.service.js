@@ -988,11 +988,26 @@ async function manualUploadZip({ user, file, fields = {} }) {
 }
 
 function defaultSourceActions(sourceType, sourceId = null, status = 'available') {
-  const active = String(status || '').toLowerCase() === 'active';
+  const currentStatus = String(status || '').toLowerCase();
+  const active = ['active', 'connected'].includes(currentStatus);
   if (sourceType === 'google_drive') {
-    return sourceId
-      ? [action('sync', 'Sincronizar', { method: 'POST', path: `/api/document-integrations/sources/${sourceId}/sync` }), action('connect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' })]
-      : [action('connect', 'Conectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' })];
+    if (!sourceId || currentStatus === 'not_connected' || currentStatus === 'available') {
+      return [action('connect', 'Conectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' })];
+    }
+    if (currentStatus === 'connected_needs_folder') {
+      return [
+        action('select_folder', 'Seleccionar carpeta raíz', { kind: 'google_folder_selector', body: { source_id: sourceId } }),
+        action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' }),
+      ];
+    }
+    if (currentStatus === 'needs_reconnection') {
+      return [action('reconnect', 'Reconectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' })];
+    }
+    return [
+      action('sync', currentStatus === 'sync_error' ? 'Sincronizar nuevamente' : 'Sincronizar carpeta', { method: 'POST', path: '/api/document-integrations/google/sync', body: { source_id: sourceId } }),
+      action('change_folder', 'Cambiar carpeta', { kind: 'google_folder_selector', body: { source_id: sourceId } }),
+      action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' }),
+    ];
   }
   if (sourceType === 'zoho_drive' || sourceType === 'zoho_workdrive') {
     return sourceId
@@ -1058,11 +1073,35 @@ async function listSources({ user }) {
   if (await tableExists('tenant_document_sources')) {
     const result = await pool.query(
       `
-      SELECT id, provider, source_name, status, last_sync_at, updated_at, folder_id, folder_path, folder_display_name, provider_account_email, last_sync_status, last_sync_error
-      FROM tenant_document_sources
-      WHERE tenant_id = $1::uuid
-        AND COALESCE(status, '') <> 'disconnected'
-      ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+      SELECT
+        s.id,
+        s.provider,
+        s.source_name,
+        s.status,
+        s.last_sync_at,
+        s.updated_at,
+        s.folder_id,
+        s.folder_path,
+        s.folder_display_name,
+        s.provider_account_email,
+        s.last_sync_status,
+        s.last_sync_error,
+        i.status AS integration_status,
+        COALESCE(dc.documents_count, 0)::int AS source_documents_count
+      FROM tenant_document_sources s
+      LEFT JOIN tenant_integrations i
+        ON i.id = s.integration_id
+       AND i.tenant_id = s.tenant_id
+      LEFT JOIN (
+        SELECT source_id, COUNT(*)::int AS documents_count
+        FROM document_index
+        WHERE tenant_id = $1::uuid
+          AND COALESCE(status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
+        GROUP BY source_id
+      ) dc ON dc.source_id = s.id
+      WHERE s.tenant_id = $1::uuid
+        AND COALESCE(s.status, '') <> 'disconnected'
+      ORDER BY s.updated_at DESC NULLS LAST, s.created_at DESC NULLS LAST
       `,
       [tenantId]
     ).catch((error) => {
@@ -1081,15 +1120,31 @@ async function listSources({ user }) {
         null;
       const match = cards.find((card) => card.source_type === cardType);
       if (match) {
-        match.status = row.status || match.status || 'active';
+        let status = row.status || match.status || 'active';
+        if (cardType === 'google_drive') {
+          if (!row.integration_status || row.integration_status !== 'connected') {
+            status = 'needs_reconnection';
+          } else if (!row.folder_id) {
+            status = 'connected_needs_folder';
+          } else if (row.last_sync_status === 'failed' || row.last_sync_error) {
+            status = 'sync_error';
+          } else {
+            status = 'connected';
+          }
+        }
+        match.status = status;
         match.source_id = row.id;
         match.source_name = match.source_name || row.source_name;
         match.root_folder_id = row.folder_id || null;
         match.root_folder_name = row.folder_display_name || row.folder_path || null;
         match.provider_account_email = row.provider_account_email || null;
+        match.account_email = row.provider_account_email || null;
         match.last_sync_status = row.last_sync_status || null;
         match.last_sync_error = row.last_sync_error || null;
         match.last_sync_at = match.last_sync_at || row.last_sync_at || row.updated_at || null;
+        if (Number(row.source_documents_count || 0) > 0) {
+          match.documents_count = Number(row.source_documents_count || 0);
+        }
       }
     }
   }
@@ -1110,12 +1165,23 @@ async function listSources({ user }) {
     manual.last_sync_at = manual.last_sync_at || result.rows[0]?.last_sync_at || null;
   }
 
-  return cards.map((card) => ({
-    ...card,
-    item_type: 'source',
-    can_sync: true,
-    actions: defaultSourceActions(card.source_type, card.source_id, card.status),
-  }));
+  return cards.map((card) => {
+    const normalizedCard = { ...card };
+    if (normalizedCard.source_type === 'google_drive' && !normalizedCard.source_id) {
+      normalizedCard.status = 'not_connected';
+      normalizedCard.root_folder_id = null;
+      normalizedCard.root_folder_name = null;
+      normalizedCard.provider_account_email = null;
+      normalizedCard.account_email = null;
+    }
+    return {
+      ...normalizedCard,
+      connected: Boolean(normalizedCard.source_id && ['connected', 'connected_needs_folder', 'sync_error'].includes(String(normalizedCard.status || '').toLowerCase())),
+      item_type: 'source',
+      can_sync: true,
+      actions: defaultSourceActions(normalizedCard.source_type, normalizedCard.source_id, normalizedCard.status),
+    };
+  });
 }
 
 async function loadAssociationCounts(tenantId, documents) {

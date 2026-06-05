@@ -138,6 +138,16 @@ async function listDriveFolders({ oauthClient, parentId = 'root', pageToken = nu
   };
 }
 
+async function getDriveFileMetadata({ oauthClient, fileId }) {
+  const drive = google.drive({ version: 'v3', auth: oauthClient });
+  const result = await drive.files.get({
+    fileId,
+    fields: 'id, name, mimeType, webViewLink, modifiedTime, parents, owners(emailAddress,displayName)',
+    supportsAllDrives: true,
+  });
+  return result?.data || null;
+}
+
 module.exports = {
   GOOGLE_DRIVE_READ_SCOPE,
   getScopes,
@@ -150,4 +160,5 @@ module.exports = {
   buildOAuthClientFromTokens,
   listDriveFiles,
   listDriveFolders,
+  getDriveFileMetadata,
 };
