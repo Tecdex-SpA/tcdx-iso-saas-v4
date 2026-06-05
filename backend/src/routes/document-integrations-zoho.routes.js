@@ -9,6 +9,7 @@ const zoho = require('../services/zohoWorkdriveClient.service');
 
 const router = express.Router();
 const ZOHO_PROVIDER = 'zoho_workdrive';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function getUserTenantId(user) {
   return user?.tenant_id || user?.tenantId || user?.tenant || user?.company_id || user?.companyId || null;
@@ -106,6 +107,10 @@ function tokenMetadata(tokens = {}) {
 function metadataValue(row, key) {
   const metadata = row?.metadata_json || {};
   return metadata?.[key] || metadata?.zoho?.[key] || null;
+}
+
+function isUuid(value) {
+  return UUID_RE.test(String(value || '').trim());
 }
 
 function resolveApiBaseUrl(source, credential) {
@@ -255,18 +260,41 @@ function normalizeFolder(item) {
   const attributes = item?.attributes || {};
   const id = item?.id || attributes.id || attributes.resource_id;
   const name = attributes.name || attributes.display_attr_name || attributes.display_html_name || attributes.title || id;
+  const parentId = attributes.parent_id || attributes.parentId || null;
+  const path = attributes.path || attributes.display_path || attributes.displayPath || name;
   return {
     id,
     provider_folder_id: id,
     name,
-    parent_id: attributes.parent_id || null,
-    path: attributes.path || name,
-    display_path: attributes.path || name,
+    parent_id: parentId,
+    path,
+    display_path: path,
+    type: 'folder',
     item_type: 'folder',
+    provider: ZOHO_PROVIDER,
     can_select: true,
+    can_open: true,
     web_view_url: attributes.permalink || null,
     modified_at: attributes.modified_time || null,
     provider_team_id: attributes.library_id || attributes.team_id || null,
+  };
+}
+
+function zohoErrorDetails(error, fallbackStage = null) {
+  const providerStatus = error.provider_status || error.statusCode || null;
+  const providerCode = error.provider_code || error.details?.error || error.details?.code || null;
+  const providerMessage = error.provider_message || error.details?.message || error.message || null;
+  let hint = 'Revise conexión y permisos de Zoho WorkDrive.';
+  if (providerStatus === 401) hint = 'Token Zoho expirado o inválido. Reconecte Zoho WorkDrive.';
+  if (providerStatus === 403) hint = 'Permisos insuficientes de Zoho WorkDrive. Reconecte Zoho autorizando los scopes requeridos.';
+  if (providerStatus === 404) hint = 'La carpeta o endpoint Zoho no existe para esta cuenta. Seleccione otra ubicación o reconecte.';
+  return {
+    stage: error.stage || fallbackStage,
+    provider_status: providerStatus,
+    provider_code: providerCode,
+    provider_message: providerMessage,
+    endpoint: error.endpoint || null,
+    hint,
   };
 }
 
@@ -522,9 +550,18 @@ router.get('/folders', auth, async (req, res) => {
   if (!zoho.isZohoConfigured()) return notConfigured(res);
   const tenantId = assertManageZoho(req, res);
   if (!tenantId) return;
+  const sourceId = String(req.query.source_id || '').trim();
+  if (sourceId && !isUuid(sourceId)) {
+    return res.status(400).json({
+      ok: false,
+      code: 'INVALID_SOURCE_ID',
+      error: 'source_id debe ser UUID de tenant_document_sources.',
+    });
+  }
 
   try {
-    const source = await getTenantZohoSource({ tenantId, sourceId: req.query.source_id || null });
+    const parentId = String(req.query.parentId || req.query.parent_id || 'root').trim() || 'root';
+    const source = await getTenantZohoSource({ tenantId, sourceId: sourceId || null });
     if (!source) return res.status(409).json({ ok: false, code: 'ZOHO_NOT_CONNECTED', error: 'Zoho WorkDrive no está conectado para este tenant.' });
     const credential = await getCredential({ tenantId, sourceId: source.id });
     if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
@@ -533,28 +570,65 @@ router.get('/folders', auth, async (req, res) => {
     const folders = await zoho.listFolders({
       accessToken: fresh.tokens.access_token,
       apiBaseUrl,
-      parentId: req.query.parentId || req.query.parent_id || 'root',
+      parentId,
       pageToken: req.query.page_token || null,
     });
+    const current = folders.current || {
+      id: parentId,
+      name: parentId === 'root' ? 'Mi unidad' : parentId,
+      path: parentId === 'root' ? 'Mi unidad' : parentId,
+      parent_id: parentId === 'root' ? null : null,
+      type: parentId === 'root' ? 'root' : 'folder',
+    };
+    const normalizedFolders = folders.folders.map((folder) => {
+      const normalized = normalizeFolder(folder);
+      const path = normalized.path && normalized.path !== normalized.name
+        ? normalized.path
+        : normalizeRelativePath(current.path, normalized.name);
+      return {
+        ...normalized,
+        parent_id: normalized.parent_id || current.id,
+        path,
+        display_path: path,
+      };
+    });
+    const breadcrumbs = parentId === 'root'
+      ? [{ id: 'root', name: 'Mi unidad' }]
+      : [
+          { id: 'root', name: 'Mi unidad' },
+          { id: current.id, name: current.name || current.id },
+        ];
 
     return res.json({
       ok: true,
       provider: ZOHO_PROVIDER,
       source_id: source.id,
-      parent_id: req.query.parentId || req.query.parent_id || 'root',
-      folders: folders.folders.map(normalizeFolder),
+      parent_id: parentId,
+      current,
+      folders: normalizedFolders,
       next_page_token: folders.next_page_token,
+      breadcrumbs,
+      data: {
+        source_id: source.id,
+        current,
+        folders: normalizedFolders,
+        breadcrumbs,
+        next_page_token: folders.next_page_token,
+      },
     });
   } catch (error) {
+    const details = zohoErrorDetails(error, error.stage || 'list_folder');
     console.error('ERROR LIST ZOHO FOLDERS:', {
       request_id: req.requestId || null,
       code: error.code || 'ZOHO_FOLDER_LIST_FAILED',
       message: error.message,
+      details,
     });
     return res.status(error.statusCode || 500).json({
       ok: false,
       code: error.code || 'ZOHO_FOLDER_LIST_FAILED',
-      error: error.statusCode ? error.message : 'Error listando carpetas Zoho WorkDrive',
+      error: 'Error consultando Zoho WorkDrive',
+      details,
     });
   }
 });
@@ -567,6 +641,14 @@ router.post('/select-folder', auth, async (req, res) => {
   const sourceId = req.body?.source_id || null;
   const folderId = String(req.body?.folder_id || '').trim();
   const folderName = String(req.body?.folder_name || req.body?.folder_display_name || '').trim();
+  const folderPath = String(req.body?.folder_path || '').trim();
+  if (sourceId && !isUuid(sourceId)) {
+    return res.status(400).json({
+      ok: false,
+      code: 'INVALID_SOURCE_ID',
+      error: 'source_id debe ser UUID de tenant_document_sources.',
+    });
+  }
   if (!folderId) return res.status(400).json({ ok: false, code: 'ZOHO_FOLDER_REQUIRED', error: 'folder_id es obligatorio' });
 
   try {
@@ -577,7 +659,10 @@ router.post('/select-folder', auth, async (req, res) => {
     const fresh = await ensureFreshCredential(credential);
     const apiBaseUrl = resolveApiBaseUrl(source, fresh.credential);
     const metadata = await zoho.getFileMetadata({ accessToken: fresh.tokens.access_token, apiBaseUrl, fileId: folderId }).catch(() => null);
-    const normalized = metadata ? normalizeFolder(metadata) : { id: folderId, name: folderName || 'Zoho WorkDrive', path: folderName || 'Zoho WorkDrive', provider_team_id: null };
+    const normalized = metadata
+      ? normalizeFolder(metadata)
+      : { id: folderId, name: folderName || 'Zoho WorkDrive', path: folderPath || folderName || 'Zoho WorkDrive', display_path: folderPath || folderName || 'Zoho WorkDrive', provider_team_id: null };
+    const selectedPath = folderPath || normalized.display_path || normalized.path || normalized.name;
     const result = await pool.query(
       `
       UPDATE tenant_document_sources
@@ -588,7 +673,7 @@ router.post('/select-folder', auth, async (req, res) => {
           include_subfolders = $7::boolean,
           status = 'active',
           sync_enabled = true,
-          last_sync_status = 'folder_selected',
+          last_sync_status = 'selected',
           last_sync_error = NULL,
           metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $8::jsonb,
           updated_at = NOW()
@@ -602,24 +687,34 @@ router.post('/select-folder', auth, async (req, res) => {
         tenantId,
         folderId,
         normalized.name,
-        normalized.display_path || normalized.path || normalized.name,
+        selectedPath,
         normalized.provider_team_id || null,
         req.body?.include_subfolders !== false,
-        JSON.stringify({ folder_required: false, root_folder_id: folderId, root_folder_name: normalized.name, provider: ZOHO_PROVIDER }),
+        JSON.stringify({
+          folder_required: false,
+          root_folder_id: folderId,
+          root_folder_name: normalized.name,
+          root_folder_path: selectedPath,
+          provider: ZOHO_PROVIDER,
+          selected_at: new Date().toISOString(),
+        }),
         ZOHO_PROVIDER,
       ]
     );
     return res.json({ ok: true, source: result.rows[0] });
   } catch (error) {
+    const details = zohoErrorDetails(error, error.stage || 'select_folder');
     console.error('ERROR SELECT ZOHO FOLDER:', {
       request_id: req.requestId || null,
       code: error.code || 'ZOHO_SELECT_FOLDER_FAILED',
       message: error.message,
+      details,
     });
     return res.status(error.statusCode || 500).json({
       ok: false,
       code: error.code || 'ZOHO_SELECT_FOLDER_FAILED',
       error: error.statusCode ? error.message : 'No fue posible seleccionar la carpeta Zoho WorkDrive.',
+      details,
     });
   }
 });
@@ -638,6 +733,13 @@ router.post('/sync', auth, async (req, res) => {
   if (!tenantId) return;
   const sourceId = req.body?.source_id || req.query.source_id;
   if (!sourceId) return res.status(400).json({ ok: false, code: 'SOURCE_REQUIRED', error: 'source_id es obligatorio' });
+  if (!isUuid(sourceId)) {
+    return res.status(400).json({
+      ok: false,
+      code: 'INVALID_SOURCE_ID',
+      error: 'source_id debe ser UUID de tenant_document_sources.',
+    });
+  }
 
   try {
     const source = await getTenantZohoSource({ tenantId, sourceId });

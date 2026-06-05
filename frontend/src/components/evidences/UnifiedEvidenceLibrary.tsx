@@ -24,6 +24,7 @@ type SourceCard = {
 type ApiError = Error & {
   code?: string;
   status?: number;
+  details?: Record<string, any>;
 };
 
 type SourceAction = {
@@ -40,6 +41,10 @@ type SourceAction = {
 type GoogleFolder = {
   id: string;
   name: string;
+  path?: string | null;
+  display_path?: string | null;
+  parent_id?: string | null;
+  type?: string | null;
   mime_type?: string | null;
   web_view_url?: string | null;
 };
@@ -248,6 +253,7 @@ async function fetchJson(url: string, token: string, init: RequestInit = {}) {
     const error = new Error(json.error || json.message || 'Solicitud no procesada') as ApiError;
     error.code = json.code;
     error.status = res.status;
+    error.details = json.details;
     throw error;
   }
   return json;
@@ -334,6 +340,7 @@ export default function UnifiedEvidenceLibrary({
   const [googleFolderParentId, setGoogleFolderParentId] = useState('root');
   const [googleFolderTrail, setGoogleFolderTrail] = useState<Array<{ id: string; name: string }>>([{ id: 'root', name: 'Mi unidad' }]);
   const [googleFolderMessage, setGoogleFolderMessage] = useState('');
+  const [googleFolderHadError, setGoogleFolderHadError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState('');
   const [tab, setTab] = useState<'summary' | 'associations' | 'suggestions' | 'chunks' | 'versions' | 'history'>('summary');
@@ -490,24 +497,32 @@ export default function UnifiedEvidenceLibrary({
     if (!source.source_id) {
       setGoogleFolders([]);
       setGoogleFolderMessage(`${folderProviderLabel(source)} está conectado sin fuente operativa. Reconecte la cuenta.`);
+      setGoogleFolderHadError(true);
       return;
     }
     setWorking('google-folders');
     setGoogleFolderMessage('');
+    setGoogleFolderHadError(false);
     try {
       const params = new URLSearchParams({ source_id: source.source_id, parentId });
       const providerPath = folderProviderPath(source);
       const json = await fetchJson(`${API_URL}/api/document-integrations/${providerPath}/folders?${params.toString()}`, token);
-      const rows = Array.isArray(json.folders) ? json.folders : [];
+      const rows = Array.isArray(json.data?.folders) ? json.data.folders : (Array.isArray(json.folders) ? json.folders : []);
+      const breadcrumbs = Array.isArray(json.data?.breadcrumbs) ? json.data.breadcrumbs : null;
+      const current = json.data?.current || json.current || null;
       setGoogleFolders(rows);
-      setGoogleFolderParentId(parentId);
-      setGoogleFolderTrail(trail);
+      setGoogleFolderParentId(current?.id || parentId);
+      setGoogleFolderTrail(breadcrumbs || trail);
       if (rows.length === 0) {
         setGoogleFolderMessage('Esta carpeta no contiene subcarpetas visibles.');
       }
     } catch (error: any) {
       setGoogleFolders([]);
-      setGoogleFolderMessage(error.message || 'No fue posible listar carpetas de Google Drive.');
+      setGoogleFolderHadError(true);
+      const details = error?.details;
+      const hint = details?.hint ? ` ${details.hint}` : '';
+      const provider = details?.provider_status ? ` Estado proveedor: ${details.provider_status}.` : '';
+      setGoogleFolderMessage(`${error.message || `No fue posible listar carpetas de ${folderProviderLabel(source)}.`}${provider}${hint}`);
     } finally {
       setWorking('');
     }
@@ -539,6 +554,7 @@ export default function UnifiedEvidenceLibrary({
           source_id: googleFolderSource.source_id,
           folder_id: folder.id,
           folder_name: folder.name,
+          folder_path: folder.display_path || folder.path || folder.name,
         }),
       });
       setGoogleFolderSelectorOpen(false);
@@ -974,8 +990,10 @@ export default function UnifiedEvidenceLibrary({
             <div className="mt-3 max-h-72 overflow-auto rounded-xl border border-emerald-100 bg-white">
               {working === 'google-folders' ? (
                 <div className="px-3 py-4 text-sm text-slate-500">Cargando carpetas...</div>
-              ) : googleFolders.length === 0 ? (
+              ) : googleFolders.length === 0 && !googleFolderHadError ? (
                 <div className="px-3 py-4 text-sm text-slate-500">No hay subcarpetas visibles en esta ubicación.</div>
+              ) : googleFolders.length === 0 ? (
+                <div className="px-3 py-4 text-sm text-slate-500">No se cargaron carpetas por el error anterior.</div>
               ) : (
                 googleFolders.map((folder) => (
                   <div key={folder.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">

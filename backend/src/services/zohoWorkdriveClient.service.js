@@ -75,7 +75,38 @@ function buildAuthorizationUrl({ state }) {
   return url.toString();
 }
 
-async function readJsonResponse(response, fallbackMessage) {
+function safeEndpoint(url) {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return String(url || '').split('?')[0];
+  }
+}
+
+function providerErrorCode(json = {}) {
+  return (
+    json?.errors?.[0]?.id ||
+    json?.errors?.[0]?.code ||
+    json?.error_code ||
+    json?.code ||
+    json?.error ||
+    null
+  );
+}
+
+function providerErrorMessage(json = {}) {
+  return (
+    json?.errors?.[0]?.title ||
+    json?.errors?.[0]?.detail ||
+    json?.message ||
+    json?.error_description ||
+    json?.error ||
+    null
+  );
+}
+
+async function readJsonResponse(response, fallbackMessage, context = {}) {
   const text = await response.text();
   let json = null;
   try {
@@ -85,14 +116,30 @@ async function readJsonResponse(response, fallbackMessage) {
   }
 
   if (!response.ok) {
-    const err = new Error(json?.error_description || json?.error || fallbackMessage);
+    const err = new Error(providerErrorMessage(json) || fallbackMessage);
     err.statusCode = response.status;
-    err.code = json?.error || 'ZOHO_API_ERROR';
+    err.code = 'ZOHO_API_ERROR';
+    err.provider_status = response.status;
+    err.provider_status_text = response.statusText;
+    err.provider_code = providerErrorCode(json);
+    err.provider_message = providerErrorMessage(json);
+    err.endpoint = context.endpoint || safeEndpoint(response.url);
+    err.stage = context.stage || null;
     err.details = json;
     throw err;
   }
 
   return json;
+}
+
+function buildZohoUrl({ path, searchParams = {}, apiBaseUrl = null }) {
+  const url = new URL(`${resolveApiBaseUrl(apiBaseUrl)}${path}`);
+  Object.entries(searchParams || {}).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      url.searchParams.set(key, String(value));
+    }
+  });
+  return url;
 }
 
 function extractTokenMetadata(tokens = {}) {
@@ -120,7 +167,7 @@ async function exchangeCodeForTokens(code) {
     body,
   });
 
-  return readJsonResponse(response, 'Error intercambiando código Zoho');
+  return readJsonResponse(response, 'Error intercambiando código Zoho', { stage: 'exchange_code' });
 }
 
 async function refreshAccessToken(refreshToken) {
@@ -138,33 +185,80 @@ async function refreshAccessToken(refreshToken) {
     body,
   });
 
-  return readJsonResponse(response, 'Error refrescando token Zoho');
+  return readJsonResponse(response, 'Error refrescando token Zoho', { stage: 'refresh_token' });
 }
 
-async function zohoGetJson({ accessToken, path, searchParams = {}, apiBaseUrl = null }) {
-  const url = new URL(`${resolveApiBaseUrl(apiBaseUrl)}${path}`);
-  Object.entries(searchParams || {}).forEach(([key, value]) => {
-    if (value !== null && value !== undefined && value !== '') {
-      url.searchParams.set(key, String(value));
-    }
-  });
-
+async function zohoGetJson({ accessToken, path, searchParams = {}, apiBaseUrl = null, stage = null }) {
+  const url = buildZohoUrl({ path, searchParams, apiBaseUrl });
   const response = await fetch(url, {
     headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
   });
 
-  return readJsonResponse(response, 'Error consultando Zoho WorkDrive');
+  return readJsonResponse(response, 'Error consultando Zoho WorkDrive', {
+    endpoint: safeEndpoint(url.toString()),
+    stage,
+  });
+}
+
+async function zohoGetJsonAny({ accessToken, candidates = [], searchParams = {}, apiBaseUrl = null, stage = null }) {
+  let lastError = null;
+  for (const path of candidates) {
+    try {
+      return await zohoGetJson({ accessToken, path, searchParams, apiBaseUrl, stage });
+    } catch (error) {
+      lastError = error;
+      const status = Number(error.provider_status || error.statusCode || 0);
+      if (![400, 403, 404, 405, 409].includes(status)) {
+        throw error;
+      }
+    }
+  }
+  throw lastError || Object.assign(new Error('Error consultando Zoho WorkDrive'), {
+    code: 'ZOHO_API_ERROR',
+    stage,
+  });
+}
+
+function isFolderItem(item) {
+  const attributes = item?.attributes || {};
+  const type = String(item?.type || attributes?.type || attributes?.resource_type || '').toLowerCase();
+  const mimeType = String(attributes?.mime_type || attributes?.mimetype || '').toLowerCase();
+  return (
+    attributes?.is_folder === true ||
+    attributes?.isFolder === true ||
+    type.includes('folder') ||
+    type.includes('team') ||
+    mimeType.includes('folder')
+  );
+}
+
+function rootFolderCandidates() {
+  return [
+    '/workdrive/api/v1/teamfolders',
+    '/workdrive/api/v1/files',
+    '/workdrive/teamfolders',
+    '/workdrive/files',
+  ];
+}
+
+function childFolderCandidates(parentId) {
+  const encoded = encodeURIComponent(parentId);
+  return [
+    `/workdrive/api/v1/files/${encoded}/files`,
+    `/workdrive/files/${encoded}/files`,
+  ];
 }
 
 async function listFolders({ accessToken, parentId = 'root', pageToken = null, apiBaseUrl = null }) {
-  const path = parentId && parentId !== 'root'
-    ? `/workdrive/files/${encodeURIComponent(parentId)}/files`
-    : '/workdrive/files';
+  const normalizedParent = String(parentId || '').trim();
+  const isRoot = !normalizedParent || ['root', 'my_drive', 'mi_unidad'].includes(normalizedParent.toLowerCase());
+  const candidates = isRoot ? rootFolderCandidates() : childFolderCandidates(normalizedParent);
 
-  const json = await zohoGetJson({
+  const json = await zohoGetJsonAny({
     accessToken,
-    path,
+    candidates,
     apiBaseUrl,
+    stage: isRoot ? 'list_root' : 'list_folder',
     searchParams: {
       'page[limit]': 100,
       'page[token]': pageToken || undefined,
@@ -173,21 +267,25 @@ async function listFolders({ accessToken, parentId = 'root', pageToken = null, a
 
   const rows = Array.isArray(json?.data) ? json.data : [];
   return {
-    folders: rows.filter((item) => item?.attributes?.is_folder === true || item?.attributes?.type === 'folder'),
+    folders: rows.filter(isFolderItem),
     next_page_token: json?.links?.cursor?.next || null,
+    current: {
+      id: isRoot ? 'root' : normalizedParent,
+      name: isRoot ? 'Mi unidad' : normalizedParent,
+      path: isRoot ? 'Mi unidad' : normalizedParent,
+      parent_id: isRoot ? null : null,
+      type: isRoot ? 'root' : 'folder',
+    },
     raw: json,
   };
 }
 
 async function listFiles({ accessToken, folderId, includeSubfolders = true, apiBaseUrl = null }) {
-  const path = folderId
-    ? `/workdrive/files/${encodeURIComponent(folderId)}/files`
-    : '/workdrive/files';
-
-  const json = await zohoGetJson({
+  const json = await zohoGetJsonAny({
     accessToken,
-    path,
+    candidates: folderId ? childFolderCandidates(folderId) : rootFolderCandidates(),
     apiBaseUrl,
+    stage: 'sync_list_files',
     searchParams: { 'page[limit]': 100 },
   });
 
@@ -200,10 +298,15 @@ async function listFiles({ accessToken, folderId, includeSubfolders = true, apiB
 }
 
 async function getFileMetadata({ accessToken, fileId, apiBaseUrl = null }) {
-  const json = await zohoGetJson({
+  const encoded = encodeURIComponent(fileId);
+  const json = await zohoGetJsonAny({
     accessToken,
-    path: `/workdrive/files/${encodeURIComponent(fileId)}`,
+    candidates: [
+      `/workdrive/api/v1/files/${encoded}`,
+      `/workdrive/files/${encoded}`,
+    ],
     apiBaseUrl,
+    stage: 'file_metadata',
   });
   return json?.data || json;
 }
