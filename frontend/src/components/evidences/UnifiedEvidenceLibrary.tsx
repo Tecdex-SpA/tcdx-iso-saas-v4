@@ -132,7 +132,7 @@ const fallbackSources: SourceCard[] = [
   { source_type: 'zoho_drive', source_name: 'Zoho Drive', status: 'available', documents_count: 0, actions: [{ key: 'connect', label: 'Conectar Zoho Drive', method: 'GET', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth', enabled: true }] },
   { source_type: 'sync_agent', source_name: 'Sync Agent', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar agente', method: 'POST', path: '/api/document-integrations/agents/pairing-codes', kind: 'api', enabled: true }] },
   { source_type: 'mounted_folder', source_name: 'Carpeta montada', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar carpeta', kind: 'info', enabled: false, reason: 'Configuración pendiente: requiere registrar una ruta montada autorizada.' }] },
-  { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0, actions: [{ key: 'upload', label: 'Subir archivo', kind: 'info', enabled: true, reason: 'La carga manual general requiere asociar el archivo a un control o plan de acción.' }] },
+  { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0, actions: [{ key: 'upload', label: 'Subir archivo', kind: 'info', enabled: false, reason: 'Carga manual general no implementada aún. Use carga asociada a control/plan de acción.' }] },
 ];
 
 function formatDate(value?: string | null) {
@@ -479,8 +479,6 @@ export default function UnifiedEvidenceLibrary({
         body: JSON.stringify({
           source_type: source.source_type,
           source_id: source.source_id,
-          library_item_id: selected.library_item_id || selected.id,
-          item_type: selected.item_type,
         }),
       });
       await loadDocuments();
@@ -511,8 +509,6 @@ export default function UnifiedEvidenceLibrary({
         body: JSON.stringify({
           source_type: source.source_type,
           source_id: source.source_id,
-          library_item_id: selected.library_item_id || selected.id,
-          item_type: selected.item_type,
           target_type: targetType,
           target_id: associationForm.target_id,
           evidence_usage: associationForm.evidence_usage,
@@ -540,13 +536,6 @@ export default function UnifiedEvidenceLibrary({
 
     if (!canManage) {
       alert('El rol actual no puede modificar fuentes documentales.');
-      return;
-    }
-    if (source.source_type === 'manual_upload' && resolvedAction.key === 'upload') {
-      setManualUploadMessage(
-        resolvedAction.reason ||
-          'Carga manual general pendiente: la ruta actual de subida requiere abrir la evidencia desde un control o plan de acción.'
-      );
       return;
     }
     if (resolvedAction.enabled === false || !resolvedAction.path) {
@@ -673,6 +662,11 @@ export default function UnifiedEvidenceLibrary({
                     {working === `source-${source.source_type}-${sourceAction.key}` ? 'Ejecutando...' : sourceAction.label}
                   </button>
                 ))}
+                {source.actions?.some((sourceAction) => sourceAction.enabled === false && sourceAction.reason) && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+                    {source.actions.find((sourceAction) => sourceAction.enabled === false && sourceAction.reason)?.reason}
+                  </div>
+                )}
               </div>
             </div>
           ))}
