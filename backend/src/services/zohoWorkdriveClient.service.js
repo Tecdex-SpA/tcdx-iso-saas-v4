@@ -118,6 +118,53 @@ function cloneZohoError(error, stage = null) {
   };
 }
 
+function isZohoUnauthorized(error) {
+  return Number(error?.provider_status || error?.statusCode || 0) === 401 ||
+    String(error?.provider_code || '').toUpperCase() === 'R008';
+}
+
+function normalizeZohoProbeError(error, stage = null) {
+  const unauthorized = isZohoUnauthorized(error);
+  const forbidden = Number(error?.provider_status || error?.statusCode || 0) === 403;
+  if (unauthorized) {
+    return {
+      ok: false,
+      code: 'ZOHO_UNAUTHORIZED',
+      provider_status: 401,
+      provider_code: error?.provider_code || 'R008',
+      provider_message: error?.provider_message || error?.message || 'Unauthorized access',
+      message: 'Zoho OAuth conectado, pero el token no tiene acceso efectivo a WorkDrive API.',
+      hint: 'Reconecte aceptando permisos WorkDrive o revise scopes/API Console/WorkDrive habilitado para la cuenta.',
+      endpoint: error?.endpoint || null,
+      stage: error?.stage || stage || null,
+    };
+  }
+  if (forbidden) {
+    return {
+      ok: false,
+      code: 'ZOHO_SCOPE_OR_PERMISSION_DENIED',
+      provider_status: 403,
+      provider_code: error?.provider_code || null,
+      provider_message: error?.provider_message || error?.message || null,
+      message: 'Zoho OAuth conectado, pero los permisos WorkDrive no son suficientes.',
+      hint: 'Reconecte Zoho WorkDrive aceptando los scopes requeridos.',
+      endpoint: error?.endpoint || null,
+      stage: error?.stage || stage || null,
+    };
+  }
+  return {
+    ok: false,
+    code: error?.code || 'ZOHO_WORKDRIVE_PROBE_FAILED',
+    provider_status: error?.provider_status || error?.statusCode || null,
+    provider_code: error?.provider_code || null,
+    provider_message: error?.provider_message || error?.message || null,
+    message: error?.message || 'No fue posible validar acceso a Zoho WorkDrive.',
+    hint: 'Revise configuración de Zoho WorkDrive, scopes y dominio API del tenant.',
+    endpoint: error?.endpoint || null,
+    stage: error?.stage || stage || null,
+  };
+}
+
 async function readJsonResponse(response, fallbackMessage, context = {}) {
   const text = await response.text();
   let json = null;
@@ -160,6 +207,7 @@ function extractTokenMetadata(tokens = {}) {
     accounts_server: tokens.accounts_server || tokens.accountsServer || null,
     location: tokens.location || null,
     token_type: tokens.token_type || null,
+    granted_scopes: tokens.scope ? String(tokens.scope).split(/[\s,]+/).filter(Boolean) : null,
   };
 }
 
@@ -336,6 +384,31 @@ function nextPageToken(json = {}) {
   return json?.links?.cursor?.next || json?.links?.next || json?.next_page_token || null;
 }
 
+function extractIdentity(json = {}) {
+  const data = Array.isArray(json?.data) ? json.data[0] : (json?.data || json);
+  const attributes = data?.attributes || data || {};
+  return {
+    account_email: attributes.email || attributes.email_id || attributes.primary_email || attributes.login_id || null,
+    account_name: attributes.name || attributes.display_name || attributes.full_name || null,
+    raw_type: data?.type || attributes.type || null,
+  };
+}
+
+async function getZohoAccountIdentity({ accessToken, apiBaseUrl = null }) {
+  const result = await zohoGetJsonAny({
+    accessToken,
+    apiBaseUrl,
+    stage: 'account_identity',
+    candidates: [
+      '/workdrive/api/v1/user',
+      '/workdrive/api/v1/users/me',
+      '/workdrive/api/v1/profile',
+      '/workdrive/user',
+    ],
+  });
+  return extractIdentity(result);
+}
+
 function rootAlias(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized || ['root', 'my_drive', 'mi_unidad'].includes(normalized)) return 'root';
@@ -361,105 +434,129 @@ function emptyDetails({ reason, stage, message, apiBaseUrl, error = null }) {
   };
 }
 
+async function discoverZohoRootContainers({ accessToken, apiBaseUrl = null, pageToken = null }) {
+  const resolvedApiBaseUrl = resolveApiBaseUrl(apiBaseUrl);
+  const privateResult = await tryZohoGetJsonAny({
+    accessToken,
+    candidates: privateSpaceCandidates(),
+    apiBaseUrl,
+    stage: 'discover_private_space',
+    searchParams: {
+      'page[limit]': 100,
+      'page[token]': pageToken || undefined,
+    },
+  });
+  const teamResult = await tryZohoGetJsonAny({
+    accessToken,
+    candidates: teamFolderRootCandidates(),
+    apiBaseUrl,
+    stage: 'discover_team_folders',
+    searchParams: {
+      'page[limit]': 100,
+      'page[token]': pageToken || undefined,
+    },
+  });
+  const sharedResult = await tryZohoGetJsonAny({
+    accessToken,
+    candidates: sharedFolderCandidates(),
+    apiBaseUrl,
+    stage: 'discover_shared_folders',
+    searchParams: {
+      'page[limit]': 100,
+      'page[token]': pageToken || undefined,
+    },
+  });
+
+  const privateFolders = privateResult.ok ? folderRowsFromJson(privateResult.json) : [];
+  const teamFolders = teamResult.ok ? folderRowsFromJson(teamResult.json) : [];
+  const sharedFolders = sharedResult.ok ? folderRowsFromJson(sharedResult.json) : [];
+  const allErrors = [privateResult, teamResult, sharedResult].filter((result) => !result.ok).map((result) => result.error);
+  const forbidden = allErrors.find((error) => Number(error.provider_status || error.statusCode || 0) === 403);
+  const unauthorized = allErrors.find(isZohoUnauthorized);
+  if (!privateResult.ok && !teamResult.ok && !sharedResult.ok && (unauthorized || forbidden)) {
+    throw unauthorized || forbidden;
+  }
+
+  const folders = [];
+  folders.push(syntheticRootNode({
+    id: 'zoho:privatespace:root',
+    name: 'Mis carpetas',
+    type: 'private_space',
+    canSelect: true,
+    count: privateFolders.length,
+  }));
+  folders.push(syntheticRootNode({
+    id: 'zoho:teamfolders:root',
+    name: 'Carpetas del equipo',
+    type: 'team_folder_root',
+    canSelect: false,
+    count: teamFolders.length,
+  }));
+  if (sharedResult.ok && sharedFolders.length > 0) {
+    folders.push(syntheticRootNode({
+      id: 'zoho:shared:root',
+      name: 'Compartido conmigo',
+      type: 'shared_root',
+      canSelect: false,
+      count: sharedFolders.length,
+    }));
+  }
+
+  return {
+    folders,
+    next_page_token: null,
+    current: {
+      id: 'root',
+      name: 'Zoho WorkDrive',
+      path: 'Zoho WorkDrive',
+      parent_id: null,
+      type: 'root',
+    },
+    details: {
+      reason: null,
+      stage: 'root_discovery_completed',
+      message: null,
+      api_domain: resolvedApiBaseUrl,
+      private_folders_count: privateFolders.length,
+      team_folders_count: teamFolders.length,
+      shared_folders_count: sharedFolders.length,
+      warnings: allErrors.map((error) => cloneZohoError(error)).slice(0, 3),
+    },
+    raw: {
+      private_space: privateResult.ok ? privateResult.json : null,
+      team_folders: teamResult.ok ? teamResult.json : null,
+      shared_folders: sharedResult.ok ? sharedResult.json : null,
+    },
+  };
+}
+
+async function probeZohoWorkdriveAccess({ accessToken, apiBaseUrl = null }) {
+  try {
+    const discovered = await discoverZohoRootContainers({ accessToken, apiBaseUrl });
+    return {
+      ok: true,
+      code: 'ZOHO_WORKDRIVE_ACCESS_OK',
+      message: 'Zoho WorkDrive API accesible.',
+      api_domain: discovered.details?.api_domain || resolveApiBaseUrl(apiBaseUrl),
+      stage: discovered.details?.stage || 'root_discovery_completed',
+      root_nodes_count: discovered.folders.length,
+      private_folders_count: discovered.details?.private_folders_count || 0,
+      team_folders_count: discovered.details?.team_folders_count || 0,
+      shared_folders_count: discovered.details?.shared_folders_count || 0,
+      details: discovered.details,
+    };
+  } catch (error) {
+    return normalizeZohoProbeError(error, error.stage || 'probe_workdrive_access');
+  }
+}
+
 async function listFolders({ accessToken, parentId = 'root', pageToken = null, apiBaseUrl = null }) {
   const normalizedParent = String(parentId || '').trim();
   const alias = rootAlias(normalizedParent);
-  const resolvedApiBaseUrl = resolveApiBaseUrl(apiBaseUrl);
-
   if (alias === 'root') {
-    const privateResult = await tryZohoGetJsonAny({
-      accessToken,
-      candidates: privateSpaceCandidates(),
-      apiBaseUrl,
-      stage: 'discover_private_space',
-      searchParams: {
-        'page[limit]': 100,
-        'page[token]': pageToken || undefined,
-      },
-    });
-    const teamResult = await tryZohoGetJsonAny({
-      accessToken,
-      candidates: teamFolderRootCandidates(),
-      apiBaseUrl,
-      stage: 'discover_team_folders',
-      searchParams: {
-        'page[limit]': 100,
-        'page[token]': pageToken || undefined,
-      },
-    });
-    const sharedResult = await tryZohoGetJsonAny({
-      accessToken,
-      candidates: sharedFolderCandidates(),
-      apiBaseUrl,
-      stage: 'discover_shared_folders',
-      searchParams: {
-        'page[limit]': 100,
-        'page[token]': pageToken || undefined,
-      },
-    });
-
-    const privateFolders = privateResult.ok ? folderRowsFromJson(privateResult.json) : [];
-    const teamFolders = teamResult.ok ? folderRowsFromJson(teamResult.json) : [];
-    const sharedFolders = sharedResult.ok ? folderRowsFromJson(sharedResult.json) : [];
-    const allErrors = [privateResult, teamResult, sharedResult].filter((result) => !result.ok).map((result) => result.error);
-    const forbidden = allErrors.find((error) => Number(error.provider_status || error.statusCode || 0) === 403);
-    const unauthorized = allErrors.find((error) => Number(error.provider_status || error.statusCode || 0) === 401);
-    if (!privateResult.ok && !teamResult.ok && !sharedResult.ok && (unauthorized || forbidden)) {
-      throw unauthorized || forbidden;
-    }
-
-    const folders = [];
-    folders.push(syntheticRootNode({
-      id: 'zoho:privatespace:root',
-      name: 'Mis carpetas',
-      type: 'private_space',
-      canSelect: true,
-      count: privateFolders.length,
-    }));
-    folders.push(syntheticRootNode({
-      id: 'zoho:teamfolders:root',
-      name: 'Carpetas del equipo',
-      type: 'team_folder_root',
-      canSelect: false,
-      count: teamFolders.length,
-    }));
-    if (sharedResult.ok && sharedFolders.length > 0) {
-      folders.push(syntheticRootNode({
-        id: 'zoho:shared:root',
-        name: 'Compartido conmigo',
-        type: 'shared_root',
-        canSelect: false,
-        count: sharedFolders.length,
-      }));
-    }
-
-    return {
-      folders,
-      next_page_token: null,
-      current: {
-        id: 'root',
-        name: 'Zoho WorkDrive',
-        path: 'Zoho WorkDrive',
-        parent_id: null,
-        type: 'root',
-      },
-      details: {
-        reason: null,
-        stage: 'root_discovery_completed',
-        message: null,
-        api_domain: resolvedApiBaseUrl,
-        private_folders_count: privateFolders.length,
-        team_folders_count: teamFolders.length,
-        shared_folders_count: sharedFolders.length,
-        warnings: allErrors.map((error) => cloneZohoError(error)).slice(0, 3),
-      },
-      raw: {
-        private_space: privateResult.ok ? privateResult.json : null,
-        team_folders: teamResult.ok ? teamResult.json : null,
-        shared_folders: sharedResult.ok ? sharedResult.json : null,
-      },
-    };
+    return discoverZohoRootContainers({ accessToken, apiBaseUrl, pageToken });
   }
+  const resolvedApiBaseUrl = resolveApiBaseUrl(apiBaseUrl);
 
   let candidates = childFolderCandidates(normalizedParent);
   let current = {
@@ -665,6 +762,9 @@ module.exports = {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
   refreshAccessToken,
+  getZohoAccountIdentity,
+  probeZohoWorkdriveAccess,
+  discoverZohoRootContainers,
   listFolders,
   listFiles,
   getFileMetadata,

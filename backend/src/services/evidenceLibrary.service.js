@@ -1023,7 +1023,7 @@ function defaultSourceActions(sourceType, sourceId = null, status = 'available')
         action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' }),
       ];
     }
-    if (currentStatus === 'needs_reconnection') {
+    if (currentStatus === 'needs_reconnection' || currentStatus === 'zoho_oauth_unauthorized') {
       return [action('reconnect', 'Reconectar Zoho WorkDrive', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' })];
     }
     return [
@@ -1152,6 +1152,8 @@ async function listSources({ user }) {
         } else if (cardType === 'zoho_drive') {
           if (!zohoWorkdrive.isZohoConfigured()) {
             status = 'configuration_required';
+          } else if (row.status === 'error' && row.last_sync_status === 'zoho_oauth_unauthorized') {
+            status = 'zoho_oauth_unauthorized';
           } else if (!row.folder_id) {
             status = 'folder_required';
           } else if (row.last_sync_status === 'failed' || row.last_sync_error) {
@@ -1216,7 +1218,7 @@ async function listSources({ user }) {
     }
     return {
       ...normalizedCard,
-      connected: Boolean(normalizedCard.source_id && ['active', 'connected', 'folder_required', 'sync_error'].includes(String(normalizedCard.status || '').toLowerCase())),
+      connected: Boolean(normalizedCard.source_id && ['active', 'connected', 'folder_required', 'sync_error', 'zoho_oauth_unauthorized'].includes(String(normalizedCard.status || '').toLowerCase())),
       item_type: 'source',
       can_sync: true,
       actions: defaultSourceActions(normalizedCard.source_type, normalizedCard.source_id, normalizedCard.status),

@@ -104,6 +104,25 @@ function tokenMetadata(tokens = {}) {
   };
 }
 
+function safeProbeForStorage(probe = {}) {
+  return {
+    ok: Boolean(probe.ok),
+    code: probe.code || null,
+    provider_status: probe.provider_status || null,
+    provider_code: probe.provider_code || null,
+    provider_message: probe.provider_message || null,
+    message: probe.message || null,
+    hint: probe.hint || null,
+    endpoint: probe.endpoint || null,
+    stage: probe.stage || probe.details?.stage || null,
+    api_domain: probe.api_domain || probe.details?.api_domain || null,
+    private_folders_count: probe.private_folders_count || probe.details?.private_folders_count || 0,
+    team_folders_count: probe.team_folders_count || probe.details?.team_folders_count || 0,
+    shared_folders_count: probe.shared_folders_count || probe.details?.shared_folders_count || 0,
+    checked_at: new Date().toISOString(),
+  };
+}
+
 function metadataValue(row, key) {
   const metadata = row?.metadata_json || {};
   return metadata?.[key] || metadata?.zoho?.[key] || null;
@@ -316,6 +335,22 @@ function zohoErrorDetails(error, fallbackStage = null) {
   };
 }
 
+function zohoUnauthorizedDetails(probe = null) {
+  return {
+    stage: probe?.stage || probe?.details?.stage || 'probe_workdrive_access',
+    provider_status: probe?.provider_status || 401,
+    provider_code: probe?.provider_code || 'R008',
+    provider_message: probe?.provider_message || 'Unauthorized access',
+    endpoint: probe?.endpoint || null,
+    hint: probe?.hint || 'Reconecte Zoho WorkDrive aceptando permisos o revise API Console/scopes.',
+  };
+}
+
+function isUnauthorizedSource(source) {
+  return String(source?.status || '').toLowerCase() === 'error' &&
+    String(source?.last_sync_status || '').toLowerCase() === 'zoho_oauth_unauthorized';
+}
+
 function successDetails(folders, foldersResult, fallbackStage) {
   const details = foldersResult.details || {};
   if (folders.length > 0) {
@@ -465,6 +500,12 @@ router.get('/oauth/callback', async (req, res) => {
   const client = await pool.connect();
   const frontendUrl = getFrontendUrl();
   try {
+    console.info('ZOHO_OAUTH_CALLBACK_REACHED:', {
+      request_id: req.requestId || null,
+      stage: 'callback_reached',
+      code_present: Boolean(req.query.code),
+      state_present: Boolean(req.query.state),
+    });
     if (req.query.error) {
       return res.redirect(`${frontendUrl}/evidencias?zoho=error&drive_status=error&reason=${encodeURIComponent(String(req.query.error))}`);
     }
@@ -479,6 +520,51 @@ router.get('/oauth/callback', async (req, res) => {
     if (payload.provider !== ZOHO_PROVIDER) throw new Error('Proveedor OAuth inválido');
     const tokens = await zoho.exchangeCodeForTokens(String(req.query.code));
     const tokenMeta = tokenMetadata(tokens);
+    const tokenApiBaseUrl = tokenMeta.api_domain || null;
+    console.info('ZOHO_OAUTH_TOKEN_EXCHANGED:', {
+      request_id: req.requestId || null,
+      tenant: shortId(payload.tenant_id),
+      stage: 'token_exchanged',
+      access_token_present: Boolean(tokens.access_token),
+      refresh_token_present: Boolean(tokens.refresh_token),
+      api_domain: tokenMeta.api_domain || null,
+      token_logged: false,
+    });
+    console.info('ZOHO_WORKDRIVE_PROBE_START:', {
+      request_id: req.requestId || null,
+      tenant: shortId(payload.tenant_id),
+      stage: 'probe_workdrive_access',
+      api_domain: tokenMeta.api_domain || null,
+    });
+    const identity = await zoho.getZohoAccountIdentity({
+      accessToken: tokens.access_token,
+      apiBaseUrl: tokenApiBaseUrl,
+    }).catch(() => null);
+    const probe = await zoho.probeZohoWorkdriveAccess({
+      accessToken: tokens.access_token,
+      apiBaseUrl: tokenApiBaseUrl,
+    });
+    console.info('ZOHO_WORKDRIVE_PROBE_RESULT:', {
+      request_id: req.requestId || null,
+      tenant: shortId(payload.tenant_id),
+      stage: probe.stage || probe.details?.stage || 'probe_workdrive_access',
+      ok: probe.ok,
+      code: probe.code,
+      provider_status: probe.provider_status || null,
+      provider_code: probe.provider_code || null,
+      endpoint: probe.endpoint || null,
+      root_nodes_count: probe.root_nodes_count || 0,
+    });
+    if (!probe.ok && probe.code === 'ZOHO_UNAUTHORIZED') {
+      console.warn('ZOHO_WORKDRIVE_UNAUTHORIZED:', {
+        request_id: req.requestId || null,
+        tenant: shortId(payload.tenant_id),
+        stage: probe.stage || 'probe_workdrive_access',
+        provider_status: probe.provider_status,
+        provider_code: probe.provider_code,
+        endpoint: probe.endpoint || null,
+      });
+    }
 
     await client.query('BEGIN');
 
@@ -511,10 +597,18 @@ router.get('/oauth/callback', async (req, res) => {
       sourceId,
     });
 
+    const sourceStatus = probe.ok ? 'active' : 'error';
+    const sourceLastSyncStatus = probe.ok
+      ? (sourceFolderId ? 'connected' : 'folder_required')
+      : (probe.code === 'ZOHO_UNAUTHORIZED' ? 'zoho_oauth_unauthorized' : 'zoho_probe_failed');
+    const sourceLastSyncError = probe.ok ? null : (probe.message || 'No fue posible validar acceso a Zoho WorkDrive.');
     const metadata = JSON.stringify({
       oauth_connected_at: new Date().toISOString(),
-      folder_required: !sourceFolderId,
+      folder_required: probe.ok && !sourceFolderId,
       provider: ZOHO_PROVIDER,
+      zoho_probe: safeProbeForStorage(probe),
+      account_email: identity?.account_email || null,
+      account_name: identity?.account_name || null,
       ...tokenMeta,
     });
 
@@ -522,14 +616,15 @@ router.get('/oauth/callback', async (req, res) => {
       const updated = await client.query(
         `
         UPDATE tenant_document_sources
-        SET status = 'active',
-            sync_enabled = true,
-            provider_account_email = COALESCE(provider_account_email, NULL),
+        SET status = $5,
+            sync_enabled = $6::boolean,
+            provider_account_email = COALESCE($9, provider_account_email),
             last_sync_status = CASE
+              WHEN $5 = 'error' THEN $7
               WHEN COALESCE(folder_id, '') = '' THEN 'folder_required'
               ELSE last_sync_status
             END,
-            last_sync_error = NULL,
+            last_sync_error = $8,
             metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $3::jsonb,
             updated_at = NOW()
         WHERE id = $1::uuid
@@ -537,7 +632,17 @@ router.get('/oauth/callback', async (req, res) => {
           AND provider = $4
         RETURNING id, folder_id
         `,
-        [sourceId, payload.tenant_id, metadata, ZOHO_PROVIDER]
+        [
+          sourceId,
+          payload.tenant_id,
+          metadata,
+          ZOHO_PROVIDER,
+          sourceStatus,
+          probe.ok,
+          sourceLastSyncStatus,
+          sourceLastSyncError,
+          identity?.account_email || null,
+        ]
       );
       sourceId = updated.rows[0]?.id || sourceId;
       sourceFolderId = updated.rows[0]?.folder_id || null;
@@ -546,12 +651,22 @@ router.get('/oauth/callback', async (req, res) => {
         `
         INSERT INTO tenant_document_sources (
           tenant_id, provider, source_name, status, sync_enabled, scan_frequency,
-          last_sync_status, metadata_json, created_by_user_id, created_by, updated_at
+          last_sync_status, last_sync_error, provider_account_email, metadata_json, created_by_user_id, created_by, updated_at
         )
-        VALUES ($1::uuid,$2,'Zoho WorkDrive','active',true,'manual','folder_required',$3::jsonb,$4::uuid,$4::uuid,NOW())
+        VALUES ($1::uuid,$2,'Zoho WorkDrive',$5,$6::boolean,'manual',$7,$8,$9,$3::jsonb,$4::uuid,$4::uuid,NOW())
         RETURNING id, folder_id
         `,
-        [payload.tenant_id, ZOHO_PROVIDER, metadata, payload.user_id]
+        [
+          payload.tenant_id,
+          ZOHO_PROVIDER,
+          metadata,
+          payload.user_id,
+          sourceStatus,
+          probe.ok,
+          sourceLastSyncStatus,
+          sourceLastSyncError,
+          identity?.account_email || null,
+        ]
       );
       sourceId = inserted.rows[0]?.id || null;
       sourceFolderId = inserted.rows[0]?.folder_id || null;
@@ -570,6 +685,11 @@ router.get('/oauth/callback', async (req, res) => {
     );
 
     await client.query('COMMIT');
+    if (!probe.ok) {
+      const reason = probe.code === 'ZOHO_UNAUTHORIZED' ? 'unauthorized_workdrive' : 'probe_failed';
+      const driveStatus = probe.code === 'ZOHO_UNAUTHORIZED' ? 'zoho_oauth_unauthorized' : 'zoho_probe_failed';
+      return res.redirect(`${frontendUrl}/evidencias?zoho=error&drive_status=${driveStatus}&reason=${reason}&source_id=${sourceId || ''}`);
+    }
     const driveStatus = sourceFolderId ? 'connected' : 'folder_required';
     return res.redirect(`${frontendUrl}/evidencias?zoho=connected&drive_status=${driveStatus}&source_id=${sourceId || ''}&credential_id=${credential.rows[0]?.id || ''}`);
   } catch (error) {
@@ -606,6 +726,14 @@ router.get('/folders', auth, async (req, res) => {
     const parentId = String(req.query.parentId || req.query.parent_id || 'root').trim() || 'root';
     const source = await getTenantZohoSource({ tenantId, sourceId: sourceId || null });
     if (!source) return res.status(409).json({ ok: false, code: 'ZOHO_NOT_CONNECTED', error: 'Zoho WorkDrive no está conectado para este tenant.' });
+    if (isUnauthorizedSource(source)) {
+      return res.status(409).json({
+        ok: false,
+        code: 'ZOHO_UNAUTHORIZED',
+        error: 'Zoho conectado, pero sin permisos efectivos para WorkDrive.',
+        details: zohoUnauthorizedDetails(source.metadata_json?.zoho_probe || null),
+      });
+    }
     const credential = await getCredential({ tenantId, sourceId: source.id });
     if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
     const fresh = await ensureFreshCredential(credential);
@@ -717,6 +845,7 @@ router.get('/folders', auth, async (req, res) => {
     });
   } catch (error) {
     const details = zohoErrorDetails(error, error.stage || 'list_folder');
+    const unauthorized = Number(details.provider_status || 0) === 401 || String(details.provider_code || '').toUpperCase() === 'R008';
     console.error('ZOHO_API_ERROR:', {
       request_id: req.requestId || null,
       tenant: shortId(tenantId),
@@ -727,9 +856,9 @@ router.get('/folders', auth, async (req, res) => {
     });
     return res.status(error.statusCode || 500).json({
       ok: false,
-      code: error.code || 'ZOHO_FOLDER_LIST_FAILED',
-      error: 'Error consultando Zoho WorkDrive',
-      details,
+      code: unauthorized ? 'ZOHO_UNAUTHORIZED' : (error.code || 'ZOHO_FOLDER_LIST_FAILED'),
+      error: unauthorized ? 'Zoho conectado, pero sin permisos efectivos para WorkDrive.' : 'Error consultando Zoho WorkDrive',
+      details: unauthorized ? zohoUnauthorizedDetails(details) : details,
     });
   }
 });
@@ -755,6 +884,14 @@ router.post('/select-folder', auth, async (req, res) => {
   try {
     const source = await getTenantZohoSource({ tenantId, sourceId });
     if (!source) return res.status(409).json({ ok: false, code: 'ZOHO_NOT_CONNECTED', error: 'Zoho WorkDrive no está conectado para este tenant.' });
+    if (isUnauthorizedSource(source)) {
+      return res.status(409).json({
+        ok: false,
+        code: 'ZOHO_UNAUTHORIZED',
+        error: 'Zoho conectado, pero sin permisos efectivos para WorkDrive.',
+        details: zohoUnauthorizedDetails(source.metadata_json?.zoho_probe || null),
+      });
+    }
     const credential = await getCredential({ tenantId, sourceId: source.id });
     if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
     const fresh = await ensureFreshCredential(credential);
@@ -845,6 +982,14 @@ router.post('/sync', auth, async (req, res) => {
   try {
     const source = await getTenantZohoSource({ tenantId, sourceId });
     if (!source) return res.status(404).json({ ok: false, code: 'ZOHO_SOURCE_NOT_FOUND', error: 'Fuente Zoho no encontrada' });
+    if (isUnauthorizedSource(source)) {
+      return res.status(409).json({
+        ok: false,
+        code: 'ZOHO_UNAUTHORIZED',
+        error: 'Zoho conectado, pero sin permisos efectivos para WorkDrive.',
+        details: zohoUnauthorizedDetails(source.metadata_json?.zoho_probe || null),
+      });
+    }
     if (!source.folder_id) {
       return res.status(409).json({ ok: false, code: 'ZOHO_ROOT_FOLDER_REQUIRED', error: 'Seleccione una carpeta de Zoho WorkDrive antes de sincronizar.' });
     }

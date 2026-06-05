@@ -70,6 +70,15 @@ OAuth connected but folder pending is represented as:
 
 The Evidence Library API derives UI status `folder_required`.
 
+OAuth success alone is not treated as a functional WorkDrive connection. After code exchange, backend runs a real WorkDrive API probe. If the probe fails with Zoho `401` / `R008 Unauthorized access`, the source is stored as:
+
+- `status = error`
+- `last_sync_status = zoho_oauth_unauthorized`
+- `last_sync_error = Zoho OAuth conectado, pero el token no tiene acceso efectivo a WorkDrive API.`
+- `metadata_json.zoho_probe` with safe provider diagnostics
+
+The UI shows only reconnect actions and must not open the folder selector for this state.
+
 ## Endpoints
 
 - `GET|POST /api/document-integrations/zoho/oauth/start`
@@ -150,14 +159,14 @@ Zoho API failures return safe diagnostics only:
 ```json
 {
   "ok": false,
-  "code": "ZOHO_API_ERROR",
-  "error": "Error consultando Zoho WorkDrive",
+  "code": "ZOHO_UNAUTHORIZED",
+  "error": "Zoho conectado, pero sin permisos efectivos para WorkDrive.",
   "details": {
-    "stage": "list_root",
-    "provider_status": 403,
-    "provider_code": "scope_error",
-    "provider_message": "safe provider message",
-    "hint": "Permisos insuficientes de Zoho WorkDrive. Reconecte Zoho autorizando los scopes requeridos."
+    "stage": "probe_workdrive_access",
+    "provider_status": 401,
+    "provider_code": "R008",
+    "provider_message": "Unauthorized access",
+    "hint": "Reconecte Zoho WorkDrive aceptando permisos o revise API Console/scopes."
   }
 }
 ```
