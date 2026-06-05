@@ -31,7 +31,7 @@ type SourceAction = {
   label: string;
   method?: string;
   path?: string | null;
-  kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip' | 'google_folder_selector';
+  kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip' | 'google_folder_selector' | 'zoho_folder_selector';
   enabled?: boolean;
   reason?: string | null;
   body?: Record<string, any> | null;
@@ -200,6 +200,9 @@ function typeLabel(type?: string | null) {
 
 function statusClass(value?: string | null) {
   const status = String(value || '').toLowerCase();
+  if (status === 'configuration_required') {
+    return 'border-slate-200 bg-slate-50 text-slate-600';
+  }
   if (['processed', 'indexed', 'evidence', 'active', 'aprobada'].includes(status)) {
     return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   }
@@ -480,17 +483,21 @@ export default function UnifiedEvidenceLibrary({
     setTargetOptions(Array.isArray(json.data) ? json.data : []);
   };
 
-  const loadGoogleFolders = async (source: SourceCard, parentId = 'root', trail = [{ id: 'root', name: 'Mi unidad' }]) => {
+  const folderProviderPath = (source: SourceCard) => source.source_type === 'zoho_drive' ? 'zoho' : 'google';
+  const folderProviderLabel = (source: SourceCard) => source.source_type === 'zoho_drive' ? 'Zoho WorkDrive' : 'Google Drive';
+
+  const loadGoogleFolders = async (source: SourceCard, parentId = 'root', trail = [{ id: 'root', name: 'Raíz' }]) => {
     if (!source.source_id) {
       setGoogleFolders([]);
-      setGoogleFolderMessage('Google Drive está conectado sin fuente operativa. Reconecte la cuenta.');
+      setGoogleFolderMessage(`${folderProviderLabel(source)} está conectado sin fuente operativa. Reconecte la cuenta.`);
       return;
     }
     setWorking('google-folders');
     setGoogleFolderMessage('');
     try {
       const params = new URLSearchParams({ source_id: source.source_id, parentId });
-      const json = await fetchJson(`${API_URL}/api/document-integrations/google/folders?${params.toString()}`, token);
+      const providerPath = folderProviderPath(source);
+      const json = await fetchJson(`${API_URL}/api/document-integrations/${providerPath}/folders?${params.toString()}`, token);
       const rows = Array.isArray(json.folders) ? json.folders : [];
       setGoogleFolders(rows);
       setGoogleFolderParentId(parentId);
@@ -509,7 +516,7 @@ export default function UnifiedEvidenceLibrary({
   const openGoogleFolderSelector = async (source: SourceCard) => {
     setGoogleFolderSource(source);
     setGoogleFolderSelectorOpen(true);
-    await loadGoogleFolders(source, 'root', [{ id: 'root', name: 'Mi unidad' }]);
+    await loadGoogleFolders(source, 'root', [{ id: 'root', name: source.source_type === 'zoho_drive' ? 'Zoho WorkDrive' : 'Mi unidad' }]);
   };
 
   const enterGoogleFolder = async (folder: GoogleFolder) => {
@@ -525,7 +532,8 @@ export default function UnifiedEvidenceLibrary({
     if (!googleFolderSource?.source_id) return;
     setWorking(`google-select-${folder.id}`);
     try {
-      await fetchJson(`${API_URL}/api/document-integrations/google/select-folder`, token, {
+      const providerPath = folderProviderPath(googleFolderSource);
+      await fetchJson(`${API_URL}/api/document-integrations/${providerPath}/select-folder`, token, {
         method: 'POST',
         body: JSON.stringify({
           source_id: googleFolderSource.source_id,
@@ -656,7 +664,7 @@ export default function UnifiedEvidenceLibrary({
       setManualUploadOpen(true);
       return;
     }
-    if (resolvedAction.kind === 'google_folder_selector') {
+    if (resolvedAction.kind === 'google_folder_selector' || resolvedAction.kind === 'zoho_folder_selector') {
       await openGoogleFolderSelector(source);
       return;
     }
@@ -827,6 +835,16 @@ export default function UnifiedEvidenceLibrary({
                   Google Drive conectado. Seleccione una carpeta para sincronizar.
                 </div>
               )}
+              {source.source_type === 'zoho_drive' && source.status === 'folder_required' && (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                  Zoho WorkDrive conectado. Seleccione una carpeta para sincronizar.
+                </div>
+              )}
+              {source.source_type === 'zoho_drive' && source.status === 'configuration_required' && (
+                <div className="mt-2 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
+                  Zoho WorkDrive no está configurado por la plataforma.
+                </div>
+              )}
               {source.last_sync_error && (
                 <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
                   {source.last_sync_error}
@@ -925,9 +943,9 @@ export default function UnifiedEvidenceLibrary({
           <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="font-bold text-slate-900">Seleccionar carpeta raíz de Google Drive</div>
+                <div className="font-bold text-slate-900">Seleccionar carpeta raíz de {folderProviderLabel(googleFolderSource)}</div>
                 <div className="mt-1 text-sm text-slate-600">
-                  Cuenta: {googleFolderSource.provider_account_email || googleFolderSource.account_email || 'Google Drive conectado'}
+                  Cuenta: {googleFolderSource.provider_account_email || googleFolderSource.account_email || `${folderProviderLabel(googleFolderSource)} conectado`}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1 text-xs text-slate-500">
                   {googleFolderTrail.map((item, index) => (
@@ -963,7 +981,7 @@ export default function UnifiedEvidenceLibrary({
                   <div key={folder.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-slate-900">{folder.name}</div>
-                      <div className="text-xs text-slate-500">Carpeta Google Drive</div>
+                      <div className="text-xs text-slate-500">Carpeta {folderProviderLabel(googleFolderSource)}</div>
                     </div>
                     <div className="flex gap-2">
                       <button
