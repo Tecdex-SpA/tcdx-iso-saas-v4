@@ -79,6 +79,12 @@ function sourceIdShape(value) {
   return 'unknown';
 }
 
+function providerIdShape(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  return sourceIdShape(raw);
+}
+
 function normalizeSourceInput(sourceType, sourceId) {
   let type = asString(sourceType, 40);
   let id = asString(sourceId, 160);
@@ -99,6 +105,14 @@ function normalizeSourceInput(sourceType, sourceId) {
 }
 
 function normalizeSourcePayload(input = {}) {
+  const operationRef = input.operation_ref || input.operationRef;
+  if (operationRef) {
+    const normalizedOperationRef = normalizeSourceInput(null, operationRef);
+    if (SOURCE_TYPES.has(normalizedOperationRef.sourceType)) {
+      return normalizedOperationRef;
+    }
+  }
+
   const type = input.source_type || input.sourceType;
   const candidates = [
     input.source_id,
@@ -307,13 +321,14 @@ function mapDocumentRow(row) {
   const itemType = itemTypeForRow(row);
   const sourceType = row.source_type;
   const sourceIdCandidate = sourceType === 'document_index'
-    ? (row.document_index_id || row.id || row.source_id)
-    : row.source_id;
+    ? (row.db_source_id || row.document_index_id || (isUuid(row.source_id) ? row.source_id : null) || (isUuid(row.id) ? row.id : null))
+    : (row.evidence_id || (isUuid(row.source_id) ? row.source_id : null) || (isUuid(row.id) ? row.id : null));
   const sourceId = sourceIdCandidate ? String(sourceIdCandidate) : null;
-  const libraryItemId = sourceType && sourceId ? `${sourceType}:${sourceId}` : null;
+  const operationRef = sourceType && sourceId ? `${sourceType}:${sourceId}` : null;
   const doc = {
-    id: libraryItemId,
-    library_item_id: libraryItemId,
+    id: operationRef,
+    library_item_id: operationRef,
+    operation_ref: operationRef,
     source_type: sourceType,
     source_table: row.source_table,
     source_id: sourceId,
@@ -328,6 +343,7 @@ function mapDocumentRow(row) {
     origin: row.origin || row.source_type,
     source_label: row.source_label || sourceLabel(row.source_type, row),
     provider_file_id: row.provider_file_id || null,
+    provider_file_id_shape: providerIdShape(row.provider_file_id),
     document_key: row.document_key || null,
     parent_key: row.parent_key || null,
     parent_source_id: row.parent_source_id || row.parent_id || null,
@@ -546,6 +562,7 @@ async function listDocuments({ user, filters = {} }) {
         d.tenant_id,
         'document_index' AS source_type,
         'document_index' AS source_table,
+        d.id AS db_source_id,
         d.id AS document_index_id,
         d.id AS source_id,
         d.source_id AS document_source_id,
@@ -598,6 +615,7 @@ async function listDocuments({ user, filters = {} }) {
         tenant_id,
         'evidence' AS source_type,
         'evidences' AS source_table,
+        id AS evidence_id,
         id AS source_id,
         NULL::uuid AS document_source_id,
         file_name AS filename,
@@ -698,13 +716,22 @@ async function resolveDocumentIndexIdFromProviderLike(tenantId, providerLikeId) 
         provider_file_id = $2
         OR provider_version_id = $2
         OR COALESCE(metadata_json->>'provider_file_id', '') = $2
+        OR COALESCE(metadata_json->>'provider_id', '') = $2
         OR COALESCE(metadata_json->>'external_file_id', '') = $2
+        OR COALESCE(metadata_json->>'external_id', '') = $2
         OR COALESCE(metadata_json->>'file_id', '') = $2
+        OR COALESCE(metadata_json->>'fileId', '') = $2
+        OR COALESCE(metadata_json->>'id', '') = $2
+        OR COALESCE(metadata_json->>'google_file_id', '') = $2
+        OR COALESCE(metadata_json->>'source_file_id', '') = $2
         OR COALESCE(metadata_json->'google'->>'id', '') = $2
         OR COALESCE(metadata_json->'google'->>'file_id', '') = $2
+        OR COALESCE(metadata_json->'google'->>'fileId', '') = $2
+        OR COALESCE(metadata_json->'google'->>'google_file_id', '') = $2
         OR COALESCE(metadata_json->'google'->>'provider_file_id', '') = $2
         OR COALESCE(metadata_json->'zoho'->>'id', '') = $2
         OR COALESCE(metadata_json->'zoho'->>'file_id', '') = $2
+        OR COALESCE(metadata_json->'zoho'->>'fileId', '') = $2
         OR COALESCE(metadata_json->'zoho'->>'provider_file_id', '') = $2
       )
     ORDER BY last_seen_at DESC NULLS LAST, indexed_at DESC NULLS LAST
@@ -722,6 +749,7 @@ async function resolveDocumentIndexIdFromProviderLike(tenantId, providerLikeId) 
       received_source_type: 'document_index',
       received_source_id_shape: sourceIdShape(providerLikeId),
       matched_rows: result.rows.length,
+      expected: 'document_index.id UUID or operation_ref document_index:<uuid>',
     });
   }
   return null;
@@ -737,6 +765,7 @@ async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) 
       received_source_type: sourceType || null,
       received_source_id_shape: sourceIdShape(sourceId),
       item_type: input.item_type || input.itemType || null,
+      expected: 'document_index.id UUID or operation_ref document_index:<uuid>',
     });
   }
   if (!isUuid(sourceId)) {
@@ -752,6 +781,7 @@ async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) 
       received_source_type: sourceType,
       received_source_id_shape: sourceIdShape(sourceId),
       item_type: input.item_type || input.itemType || null,
+      expected: 'document_index.id UUID or operation_ref document_index:<uuid>',
     });
   }
 
@@ -1200,6 +1230,7 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
       d.tenant_id,
       'document_index' AS source_type,
       'document_index' AS source_table,
+      d.id AS db_source_id,
       d.id AS document_index_id,
       d.id AS source_id,
       d.source_id AS document_source_id,
@@ -1363,10 +1394,10 @@ async function callSemanticEvidenceEngine({ tenantId, sourceType, sourceId, sour
   }).catch(() => null);
 }
 
-async function analyzeSemanticEvidence({ user, sourceType, sourceId }) {
+async function analyzeSemanticEvidence({ user, operationRef, sourceType, sourceId }) {
   const { tenantId, userId } = assertAccess(user, 'manage');
   const resolvedSource = await resolveEvidenceLibrarySource(
-    { source_type: sourceType, source_id: sourceId },
+    { operation_ref: operationRef, source_type: sourceType, source_id: sourceId },
     tenantId,
     { mode: 'analyze' }
   );

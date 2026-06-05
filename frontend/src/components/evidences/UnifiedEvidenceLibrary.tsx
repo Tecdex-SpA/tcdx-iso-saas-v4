@@ -33,6 +33,7 @@ type SourceAction = {
 type LibraryDocument = {
   id: string;
   library_item_id?: string | null;
+  operation_ref?: string | null;
   source_type: 'document_index' | 'evidence';
   source_id: string;
   source_id_shape?: string | null;
@@ -40,6 +41,7 @@ type LibraryDocument = {
   document_key?: string;
   document_source_id?: string | null;
   provider_file_id?: string | null;
+  provider_file_id_shape?: string | null;
   item_type?: 'file' | 'folder' | 'source';
   can_analyze?: boolean;
   can_associate?: boolean;
@@ -232,11 +234,16 @@ function isUuidLike(value?: string | null) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(String(value || '').trim());
 }
 
+function isOperationRef(value?: string | null) {
+  return /^(document_index|evidence):[0-9a-fA-F-]{36}$/.test(String(value || '').trim());
+}
+
 function resolveLibraryActionSource(doc: LibraryDocument | null) {
   if (!doc) return null;
   const rawSourceId = String(doc.source_id || '').trim();
-  if (doc.source_type && isUuidLike(rawSourceId)) {
-    return { source_type: doc.source_type, source_id: rawSourceId };
+  const operationRef = String(doc.operation_ref || '').trim();
+  if (doc.source_type && isUuidLike(rawSourceId) && isOperationRef(operationRef)) {
+    return { operation_ref: operationRef, source_type: doc.source_type, source_id: rawSourceId };
   }
   return null;
 }
@@ -245,9 +252,12 @@ function traceLibraryAction(action: string, doc: LibraryDocument | null, source:
   if (process.env.NODE_ENV === 'production') return;
   console.debug('Evidence library action contract', {
     action,
+    operation_ref: source?.operation_ref || doc?.operation_ref || null,
     library_item_id: doc?.library_item_id || doc?.id || null,
     source_type: source?.source_type || doc?.source_type || null,
     source_id: source?.source_id || doc?.source_id || null,
+    source_id_shape: doc?.source_id_shape || null,
+    provider_file_id_shape: doc?.provider_file_id_shape || null,
     item_type: doc?.item_type || null,
     can_analyze: doc?.can_analyze,
     can_associate: doc?.can_associate,
@@ -457,7 +467,7 @@ export default function UnifiedEvidenceLibrary({
       return;
     }
     if (!source) {
-      alert('Identificador de documento/evidencia inválido. Seleccione un archivo de la biblioteca.');
+      alert('El elemento seleccionado no tiene un identificador operativo válido. Actualice la biblioteca o sincronice la fuente.');
       return;
     }
     setWorking('analyze');
@@ -465,6 +475,7 @@ export default function UnifiedEvidenceLibrary({
       await fetchJson(`${API_URL}/api/evidence-library/semantic/analyze`, token, {
         method: 'POST',
         body: JSON.stringify({
+          operation_ref: source.operation_ref,
           source_type: source.source_type,
           source_id: source.source_id,
         }),
@@ -487,7 +498,7 @@ export default function UnifiedEvidenceLibrary({
       return;
     }
     if (!source) {
-      alert('Identificador de documento/evidencia inválido. Seleccione un archivo de la biblioteca.');
+      alert('El elemento seleccionado no tiene un identificador operativo válido. Actualice la biblioteca o sincronice la fuente.');
       return;
     }
     setWorking('associate');
@@ -495,6 +506,7 @@ export default function UnifiedEvidenceLibrary({
       await fetchJson(`${API_URL}/api/evidence-library/associations`, token, {
         method: 'POST',
         body: JSON.stringify({
+          operation_ref: source.operation_ref,
           source_type: source.source_type,
           source_id: source.source_id,
           target_type: targetType,
