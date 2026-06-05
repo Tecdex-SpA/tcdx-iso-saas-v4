@@ -260,6 +260,113 @@ async function upsertDocument({ tenantId, sourceRow, integrationRow, file, folde
   return changed ? 'updated' : 'unchanged'
 }
 
+async function upsertFolder({ tenantId, sourceRow, integrationRow, folder, folderPath, parentFolderId }) {
+  const relativePath = normalizeRelativePath(folderPath)
+  const metadata = {
+    google: {
+      parents: folder.parents || [],
+      parent_folder_id: parentFolderId || null,
+      folder_path: folderPath || sourceRow.folder_path || sourceRow.source_name || null,
+      relative_path: relativePath,
+      is_folder: true,
+      icon_link: folder.iconLink || null,
+      owners: folder.owners || []
+    },
+    folder_path: folderPath || sourceRow.folder_path || sourceRow.source_name || null,
+    relative_path: relativePath,
+    is_folder: true,
+    synced_at: new Date().toISOString()
+  }
+
+  const existing = await pool.query(
+    `
+    SELECT id, file_name, relative_path, status
+    FROM document_index
+    WHERE tenant_id = $1::uuid
+      AND provider = 'google_drive'
+      AND provider_file_id = $2::varchar
+    ORDER BY last_seen_at DESC NULLS LAST, indexed_at DESC NULLS LAST
+    LIMIT 1
+    `,
+    [tenantId, folder.id]
+  )
+
+  if (existing.rowCount === 0) {
+    await pool.query(
+      `
+      INSERT INTO document_index (
+        tenant_id, source_id, integration_id, provider, provider_file_id, provider_version_id,
+        file_name, mime_type, file_extension, file_url, web_view_url, size_bytes, checksum,
+        modified_at, indexed_at, last_seen_at, status, relative_path, metadata_json
+      )
+      VALUES (
+        $1::uuid, $2::uuid, $3::uuid, 'google_drive', $4::varchar, $5::varchar,
+        $6::varchar, $7::varchar, 'folder', $8::text, $8::text, NULL::bigint, NULL::varchar,
+        $9::timestamp, NOW(), NOW(), 'indexed', $10::text, $11::jsonb
+      )
+      `,
+      [
+        tenantId,
+        sourceRow.id,
+        integrationRow.id,
+        folder.id,
+        googleVersionId(folder),
+        folder.name,
+        GOOGLE_FOLDER_MIME,
+        folder.webViewLink || null,
+        folder.modifiedTime ? new Date(folder.modifiedTime) : null,
+        relativePath,
+        JSON.stringify(metadata)
+      ]
+    )
+    return 'created'
+  }
+
+  const current = existing.rows[0]
+  const changed = (
+    !sameNullable(current.file_name, folder.name) ||
+    !sameNullable(current.relative_path, relativePath) ||
+    ['missing', 'ignored', 'error'].includes(String(current.status || '').toLowerCase())
+  )
+
+  await pool.query(
+    `
+    UPDATE document_index
+    SET source_id = $2::uuid,
+        integration_id = $3::uuid,
+        provider_version_id = $4::varchar,
+        file_name = $5::varchar,
+        mime_type = $6::varchar,
+        file_extension = 'folder',
+        file_url = $7::text,
+        web_view_url = $7::text,
+        modified_at = $8::timestamp,
+        relative_path = $9::text,
+        last_seen_at = NOW(),
+        status = $10::varchar,
+        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $11::jsonb
+    WHERE id = $1::uuid
+      AND tenant_id = $12::uuid
+    `,
+    [
+      current.id,
+      sourceRow.id,
+      integrationRow.id,
+      googleVersionId(folder),
+      folder.name,
+      GOOGLE_FOLDER_MIME,
+      folder.webViewLink || null,
+      folder.modifiedTime ? new Date(folder.modifiedTime) : null,
+      relativePath,
+      changed ? 'updated' : (current.status || 'indexed'),
+      JSON.stringify(metadata),
+      tenantId
+    ]
+  )
+
+  return changed ? 'updated' : 'unchanged'
+}
+
 async function listAllPages({ oauthClient, folderId, warnings }) {
   const files = []
   let nextPageToken = null
@@ -414,6 +521,7 @@ async function syncGoogleDriveSource({
   let filesErrors = 0
   let duplicatesIgnored = 0
   let foldersSeen = 0
+  let foldersIndexed = 0
   let maxDepthReached = false
   const warnings = []
   const visitedFolderIds = new Set()
@@ -470,6 +578,27 @@ async function syncGoogleDriveSource({
             continue
           }
           const childPath = normalizeFolderPath(folderPath, file.name)
+          seenProviderFileIds.add(file.id)
+          try {
+            await upsertFolder({
+              tenantId,
+              sourceRow,
+              integrationRow,
+              folder: file,
+              folderPath: childPath,
+              parentFolderId: folderId
+            })
+            foldersIndexed += 1
+          } catch (err) {
+            filesErrors += 1
+            warnings.push({
+              type: 'folder_upsert_failed',
+              folder_id: file.id,
+              folder_name: file.name,
+              folder_path: childPath,
+              message: err.message
+            })
+          }
           await walkFolder({
             folderId: file.id,
             folderPath: childPath,
@@ -573,6 +702,7 @@ async function syncGoogleDriveSource({
           max_depth: safeMaxDepth,
           max_files: safeMaxFiles,
           folders_seen: foldersSeen,
+          folders_indexed: foldersIndexed,
           files_created: filesCreated,
           files_updated: filesUpdated,
           files_unchanged: filesUnchanged,
@@ -590,6 +720,7 @@ async function syncGoogleDriveSource({
       `
       UPDATE tenant_document_sources
       SET last_sync_at = NOW(),
+          status = 'connected',
           last_sync_status = $3,
           last_sync_error = NULL,
           updated_at = NOW()
@@ -615,6 +746,7 @@ async function syncGoogleDriveSource({
       max_depth: safeMaxDepth,
       max_files: safeMaxFiles,
       folders_seen: foldersSeen,
+      folders_indexed: foldersIndexed,
       files_seen: filesSeen,
       files_indexed: filesCreated,
       files_created: filesCreated,
@@ -654,6 +786,7 @@ async function syncGoogleDriveSource({
           token_logged: false,
           recursive: sourceRow?.include_subfolders !== false,
           folders_seen: foldersSeen,
+          folders_indexed: foldersIndexed,
           files_created: filesCreated,
           files_updated: filesUpdated,
           files_unchanged: filesUnchanged,

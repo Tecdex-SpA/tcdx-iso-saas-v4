@@ -13,6 +13,11 @@ const {
   exchangeCodeForTokens,
   getAccountEmail
 } = require('../services/providers/googleDrive.provider')
+const {
+  browseGoogleDriveFolders,
+  getGoogleDriveFolder,
+} = require('../services/documentGoogleFolders.service')
+const { syncGoogleDriveSource } = require('../services/documentGoogleSync.service')
 
 function getUserTenantId(user) {
   return user?.tenant_id || user?.tenantId || user?.tenant || user?.company_id || user?.companyId || null
@@ -31,7 +36,7 @@ function isSuperAdmin(user) {
 }
 
 function canManage(user) {
-  return isSuperAdmin(user) || ['tenant_admin', 'admin', 'compliance_manager'].includes(normalizeRole(user))
+  return isSuperAdmin(user) || ['tenant_admin', 'admin', 'admin_cumplimiento', 'compliance_admin', 'compliance_manager'].includes(normalizeRole(user))
 }
 
 function ensureTenantAccess(req, tenantId) {
@@ -44,6 +49,53 @@ function resolveTenantId(req) {
     return req.query.tenant_id || req.body?.tenant_id || getUserTenantId(req.user)
   }
   return getUserTenantId(req.user)
+}
+
+async function getTenantGoogleSource({ tenantId, sourceId = null }) {
+  const params = [tenantId]
+  let sourceFilter = ''
+  if (sourceId) {
+    params.push(sourceId)
+    sourceFilter = `AND s.id = $2::uuid`
+  }
+
+  const result = await pool.query(
+    `
+    SELECT s.*, i.status AS integration_status
+    FROM tenant_document_sources s
+    LEFT JOIN tenant_integrations i
+      ON i.id = s.integration_id
+     AND i.tenant_id = s.tenant_id
+    WHERE s.tenant_id = $1::uuid
+      AND s.provider = 'google_drive'
+      AND COALESCE(s.status, '') <> 'disconnected'
+      ${sourceFilter}
+    ORDER BY
+      CASE WHEN s.integration_id IS NOT NULL THEN 0 ELSE 1 END,
+      s.updated_at DESC NULLS LAST,
+      s.created_at DESC NULLS LAST
+    LIMIT 1
+    `,
+    params
+  )
+  return result.rows[0] || null
+}
+
+function assertManageGoogle(req, res) {
+  const tenantId = resolveTenantId(req)
+  if (!tenantId) {
+    res.status(400).json({ ok: false, code: 'TENANT_REQUIRED', error: 'tenant_id es obligatorio' })
+    return null
+  }
+  if (!ensureTenantAccess(req, tenantId)) {
+    res.status(403).json({ ok: false, code: 'TENANT_DENIED', error: 'No autorizado para este tenant' })
+    return null
+  }
+  if (!canManage(req.user)) {
+    res.status(403).json({ ok: false, code: 'RBAC_DENIED', error: 'No autorizado para administrar Google Drive' })
+    return null
+  }
+  return tenantId
 }
 
 function getFrontendUrl() {
@@ -312,6 +364,158 @@ router.get('/oauth/callback', async (req, res) => {
     return res.redirect(`${frontendUrl}/evidencias?google=error&drive_status=error&reason=${invalidState ? 'invalid_state' : 'callback_failed'}`)
   } finally {
     client.release()
+  }
+})
+
+router.get('/folders', auth, async (req, res) => {
+  const tenantId = assertManageGoogle(req, res)
+  if (!tenantId) return
+
+  try {
+    const source = await getTenantGoogleSource({ tenantId, sourceId: req.query.source_id || null })
+    if (!source || !source.integration_id) {
+      return res.status(409).json({
+        ok: false,
+        code: 'GOOGLE_NOT_CONNECTED',
+        error: 'Google Drive no está conectado para este tenant.',
+      })
+    }
+
+    const result = await browseGoogleDriveFolders({
+      tenantId,
+      sourceId: source.id,
+      parentId: req.query.parentId || req.query.parent_id || 'root',
+      pageToken: req.query.page_token || null,
+    })
+
+    return res.json(result)
+  } catch (err) {
+    console.error('ERROR LIST GOOGLE DRIVE FOLDERS:', {
+      request_id: req.requestId || null,
+      code: err.code || 'GOOGLE_FOLDER_LIST_FAILED',
+      message: err.message,
+    })
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      code: err.code || 'GOOGLE_FOLDER_LIST_FAILED',
+      error: err.statusCode ? err.message : 'Error listando carpetas de Google Drive',
+    })
+  }
+})
+
+router.post('/select-folder', auth, async (req, res) => {
+  const tenantId = assertManageGoogle(req, res)
+  if (!tenantId) return
+
+  const folderId = String(req.body?.folder_id || '').trim()
+  const requestedFolderName = String(req.body?.folder_name || '').trim()
+  if (!folderId) {
+    return res.status(400).json({ ok: false, code: 'GOOGLE_FOLDER_REQUIRED', error: 'folder_id es obligatorio' })
+  }
+
+  try {
+    const source = await getTenantGoogleSource({ tenantId, sourceId: req.body?.source_id || null })
+    if (!source || !source.integration_id) {
+      return res.status(409).json({
+        ok: false,
+        code: 'GOOGLE_NOT_CONNECTED',
+        error: 'Google Drive no está conectado para este tenant.',
+      })
+    }
+
+    const folder = await getGoogleDriveFolder({
+      tenantId,
+      sourceId: source.id,
+      folderId,
+    })
+    const folderName = folder.name || requestedFolderName || 'Carpeta Google Drive'
+
+    const result = await pool.query(
+      `
+      UPDATE tenant_document_sources
+      SET
+        folder_id = $3::text,
+        folder_path = $4::text,
+        folder_display_name = $4::text,
+        status = 'connected',
+        sync_enabled = true,
+        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $5::jsonb,
+        last_sync_error = NULL,
+        updated_at = NOW()
+      WHERE id = $1::uuid
+        AND tenant_id = $2::uuid
+        AND provider = 'google_drive'
+      RETURNING id, provider, source_name, status, folder_id, folder_display_name, provider_account_email, last_sync_at
+      `,
+      [
+        source.id,
+        tenantId,
+        folder.id,
+        folderName,
+        JSON.stringify({
+          root_folder_selected_at: new Date().toISOString(),
+          root_folder_id: folder.id,
+          root_folder_name: folderName,
+          root_folder_parents: folder.parents || [],
+        }),
+      ]
+    )
+
+    return res.json({ ok: true, source: result.rows[0] })
+  } catch (err) {
+    console.error('ERROR SELECT GOOGLE DRIVE FOLDER:', {
+      request_id: req.requestId || null,
+      code: err.code || 'GOOGLE_SELECT_FOLDER_FAILED',
+      message: err.message,
+    })
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      code: err.code || 'GOOGLE_SELECT_FOLDER_FAILED',
+      error: err.statusCode ? err.message : 'No fue posible seleccionar la carpeta de Google Drive.',
+    })
+  }
+})
+
+router.post('/sync', auth, async (req, res) => {
+  const tenantId = assertManageGoogle(req, res)
+  if (!tenantId) return
+
+  try {
+    const source = await getTenantGoogleSource({ tenantId, sourceId: req.body?.source_id || null })
+    if (!source || !source.integration_id) {
+      return res.status(409).json({
+        ok: false,
+        code: 'GOOGLE_NOT_CONNECTED',
+        error: 'Google Drive no está conectado para este tenant.',
+      })
+    }
+    if (!source.folder_id) {
+      return res.status(409).json({
+        ok: false,
+        code: 'GOOGLE_ROOT_FOLDER_REQUIRED',
+        error: 'Seleccione una carpeta raíz de Google Drive antes de sincronizar.',
+      })
+    }
+
+    const result = await syncGoogleDriveSource({
+      tenantId,
+      sourceId: source.id,
+      maxDepth: req.body?.max_depth,
+      maxFiles: req.body?.max_files,
+      allowRoot: req.body?.allow_root === true,
+    })
+    return res.json(result)
+  } catch (err) {
+    console.error('ERROR SYNC GOOGLE DRIVE SOURCE:', {
+      request_id: req.requestId || null,
+      code: err.code || 'GOOGLE_SYNC_FAILED',
+      message: err.message,
+    })
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      code: err.code || 'GOOGLE_SYNC_FAILED',
+      error: err.statusCode ? err.message : 'No fue posible sincronizar Google Drive.',
+    })
   }
 })
 
