@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const multer = require('multer');
 const {
   listSources,
   listDocuments,
@@ -10,11 +11,20 @@ const {
   createAssociation,
   setAssociationStatus,
   listTargetCandidates,
+  manualUploadFiles,
+  manualUploadZip,
   analyzeSemanticEvidence,
   reviewSuggestion,
 } = require('../services/evidenceLibrary.service');
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILE_BYTES || 50 * 1024 * 1024),
+    files: Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILES || 50),
+  },
+});
 
 function sendError(res, error) {
   const status = Number(error?.status || error?.statusCode || 500);
@@ -33,6 +43,32 @@ router.get('/sources', async (req, res) => {
   try {
     const data = await listSources({ user: req.user });
     return res.json({ ok: true, data });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.post('/manual-upload/files', upload.array('files', Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILES || 50)), async (req, res) => {
+  try {
+    const data = await manualUploadFiles({
+      user: req.user,
+      files: req.files || [],
+      fields: req.body || {},
+    });
+    return res.status(201).json({ ok: true, data });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.post('/manual-upload/zip', upload.single('zip'), async (req, res) => {
+  try {
+    const data = await manualUploadZip({
+      user: req.user,
+      file: req.file,
+      fields: req.body || {},
+    });
+    return res.status(201).json({ ok: true, data });
   } catch (error) {
     return sendError(res, error);
   }

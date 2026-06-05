@@ -9,6 +9,11 @@ type SourceCard = {
   source_name: string;
   status: string;
   source_id?: string | null;
+  root_folder_id?: string | null;
+  root_folder_name?: string | null;
+  provider_account_email?: string | null;
+  last_sync_status?: string | null;
+  last_sync_error?: string | null;
   documents_count?: number;
   last_sync_at?: string | null;
   actions?: SourceAction[];
@@ -24,7 +29,7 @@ type SourceAction = {
   label: string;
   method?: string;
   path?: string | null;
-  kind?: 'api' | 'oauth' | 'link' | 'info';
+  kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip';
   enabled?: boolean;
   reason?: string | null;
   body?: Record<string, any> | null;
@@ -136,7 +141,10 @@ const fallbackSources: SourceCard[] = [
   { source_type: 'zoho_drive', source_name: 'Zoho Drive', status: 'available', documents_count: 0, actions: [{ key: 'connect', label: 'Conectar Zoho Drive', method: 'GET', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth', enabled: true }] },
   { source_type: 'sync_agent', source_name: 'Sync Agent', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar agente', method: 'POST', path: '/api/document-integrations/agents/pairing-codes', kind: 'api', enabled: true }] },
   { source_type: 'mounted_folder', source_name: 'Carpeta montada', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar carpeta', kind: 'info', enabled: false, reason: 'Configuración pendiente: requiere registrar una ruta montada autorizada.' }] },
-  { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0, actions: [{ key: 'upload', label: 'Subir archivo', kind: 'info', enabled: false, reason: 'Carga manual general no implementada aún. Use carga asociada a control/plan de acción.' }] },
+  { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0, actions: [
+    { key: 'upload_files', label: 'Subir archivos', kind: 'upload_files', enabled: true, path: '/api/evidence-library/manual-upload/files', method: 'POST' },
+    { key: 'upload_zip', label: 'Subir ZIP', kind: 'upload_zip', enabled: true, path: '/api/evidence-library/manual-upload/zip', method: 'POST' },
+  ] },
 ];
 
 function formatDate(value?: string | null) {
@@ -230,6 +238,24 @@ async function fetchJson(url: string, token: string, init: RequestInit = {}) {
   return json;
 }
 
+async function fetchMultipart(url: string, token: string, formData: FormData) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(json.error || json.message || 'Carga no procesada') as ApiError;
+    error.code = json.code;
+    error.status = res.status;
+    throw error;
+  }
+  return json;
+}
+
 function isUuidLike(value?: string | null) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 }
@@ -283,6 +309,10 @@ export default function UnifiedEvidenceLibrary({
   const [folderChildrenLoading, setFolderChildrenLoading] = useState(false);
   const [folderChildrenMessage, setFolderChildrenMessage] = useState('');
   const [manualUploadMessage, setManualUploadMessage] = useState('');
+  const [manualUploadOpen, setManualUploadOpen] = useState(false);
+  const [manualUploadMode, setManualUploadMode] = useState<'files' | 'zip'>('files');
+  const [manualUploadFiles, setManualUploadFiles] = useState<File[]>([]);
+  const [manualUploadType, setManualUploadType] = useState('unknown');
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState('');
   const [tab, setTab] = useState<'summary' | 'associations' | 'suggestions' | 'chunks' | 'versions' | 'history'>('summary');
@@ -538,6 +568,13 @@ export default function UnifiedEvidenceLibrary({
       alert('El rol actual no puede modificar fuentes documentales.');
       return;
     }
+    if (source.source_type === 'manual_upload' && ['upload_files', 'upload_zip'].includes(resolvedAction.kind || resolvedAction.key)) {
+      setManualUploadMode((resolvedAction.kind || resolvedAction.key) === 'upload_zip' ? 'zip' : 'files');
+      setManualUploadFiles([]);
+      setManualUploadMessage('');
+      setManualUploadOpen(true);
+      return;
+    }
     if (resolvedAction.enabled === false || !resolvedAction.path) {
       alert(resolvedAction.reason || 'Configuración pendiente.');
       return;
@@ -564,6 +601,47 @@ export default function UnifiedEvidenceLibrary({
       alert(json.message || 'Acción de fuente ejecutada.');
     } catch (error: any) {
       alert(error.message || 'No fue posible ejecutar la acción de fuente.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const submitManualUpload = async () => {
+    if (!canManage) return;
+    if (!manualUploadFiles.length) {
+      setManualUploadMessage('Seleccione archivo(s) para cargar.');
+      return;
+    }
+    if (manualUploadMode === 'zip' && manualUploadFiles.length !== 1) {
+      setManualUploadMessage('Seleccione un único archivo ZIP.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('document_type', manualUploadType || 'unknown');
+    if (manualUploadMode === 'zip') {
+      formData.append('zip', manualUploadFiles[0]);
+    } else {
+      manualUploadFiles.forEach((file) => formData.append('files', file));
+    }
+
+    setWorking(`manual-upload-${manualUploadMode}`);
+    try {
+      const endpoint = manualUploadMode === 'zip'
+        ? '/api/evidence-library/manual-upload/zip'
+        : '/api/evidence-library/manual-upload/files';
+      const json = await fetchMultipart(`${API_URL}${endpoint}`, token, formData);
+      const summary = json.data?.summary || {};
+      const errors = Array.isArray(summary.errors) && summary.errors.length
+        ? ` Omitidos: ${summary.errors.map((item: any) => `${item.filename}: ${item.reason}`).join('; ')}`
+        : '';
+      setManualUploadMessage(`${summary.indexed || 0} archivos indexados. ${summary.folders_indexed || 0} carpetas indexadas. ${summary.skipped || 0} omitidos.${errors}`);
+      setManualUploadFiles([]);
+      setManualUploadOpen(false);
+      await loadSources();
+      await loadDocuments();
+    } catch (error: any) {
+      setManualUploadMessage(error.message || 'No fue posible cargar documentos.');
     } finally {
       setWorking('');
     }
@@ -650,6 +728,12 @@ export default function UnifiedEvidenceLibrary({
               </div>
               <div className="mt-4 text-xs text-slate-500">Ultima sincronizacion</div>
               <div className="mt-1 text-xs font-semibold text-slate-700">{formatDate(source.last_sync_at)}</div>
+              {source.provider_account_email && (
+                <div className="mt-2 truncate text-xs text-slate-500">Cuenta: {source.provider_account_email}</div>
+              )}
+              {source.root_folder_name && (
+                <div className="mt-1 truncate text-xs text-slate-500">Carpeta: {source.root_folder_name}</div>
+              )}
               <div className="mt-3 flex flex-col gap-2">
                 {(source.actions?.length ? source.actions : [{ key: 'fallback', label: sourceActionLabel(source.source_type, source.status), enabled: false, kind: 'info' as const, reason: 'Conector no implementado.' }]).slice(0, 2).map((sourceAction) => (
                   <button
@@ -680,6 +764,63 @@ export default function UnifiedEvidenceLibrary({
           <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             <div className="font-semibold">Acción de fuente</div>
             <div className="mt-1">{manualUploadMessage}</div>
+          </div>
+        )}
+        {manualUploadOpen && (
+          <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-bold text-slate-900">
+                  {manualUploadMode === 'zip' ? 'Subir ZIP a biblioteca documental' : 'Subir archivos a biblioteca documental'}
+                </div>
+                <div className="mt-1 text-sm text-slate-600">
+                  Los archivos se indexan para este tenant y luego pueden asociarse desde el panel de detalle.
+                </div>
+              </div>
+              <button
+                onClick={() => setManualUploadOpen(false)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_220px_auto]">
+              <input
+                type="file"
+                multiple={manualUploadMode === 'files'}
+                accept={manualUploadMode === 'zip' ? '.zip,application/zip,application/x-zip-compressed' : '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.json,.png,.jpg,.jpeg'}
+                onChange={(event) => setManualUploadFiles(Array.from(event.target.files || []))}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              />
+              <select
+                value={manualUploadType}
+                onChange={(event) => setManualUploadType(event.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <option value="unknown">Tipo desconocido</option>
+                <option value="policy">Política</option>
+                <option value="procedure">Procedimiento</option>
+                <option value="record">Registro</option>
+                <option value="form">Formulario</option>
+                <option value="report">Reporte</option>
+                <option value="certificate">Certificado</option>
+                <option value="audit_evidence">Evidencia auditoría</option>
+                <option value="risk_document">Documento de riesgo</option>
+                <option value="control_evidence">Evidencia de control</option>
+              </select>
+              <button
+                onClick={submitManualUpload}
+                disabled={!manualUploadFiles.length || working === `manual-upload-${manualUploadMode}`}
+                className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {working === `manual-upload-${manualUploadMode}` ? 'Subiendo...' : 'Subir e indexar'}
+              </button>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              {manualUploadMode === 'zip'
+                ? 'El ZIP se extrae con controles anti traversal; se preservan rutas relativas permitidas.'
+                : 'No se crea asociación automática. Seleccione el documento cargado y use Asociaciones.'}
+            </div>
           </div>
         )}
       </section>

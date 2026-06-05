@@ -1,6 +1,9 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const zlib = require('zlib');
 const pool = require('../config/db');
 const aiEngineClient = require('./aiEngineClient.service');
 const { analyzeDocument } = require('./documentAiAnalysis.service');
@@ -24,6 +27,25 @@ const EVIDENCE_USAGES = new Set([
 ]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OPERATION_REF_RE = /^(document_index|evidence):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MANUAL_UPLOAD_PROVIDER = 'manual_upload';
+const MANUAL_UPLOAD_ROOT = path.resolve(__dirname, '..', '..', 'uploads', 'evidence-library');
+const MANUAL_UPLOAD_MAX_FILES = Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILES || 50);
+const MANUAL_UPLOAD_MAX_FILE_BYTES = Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILE_BYTES || 25 * 1024 * 1024);
+const MANUAL_UPLOAD_ZIP_MAX_BYTES = Number(process.env.EVIDENCE_LIBRARY_ZIP_MAX_BYTES || 50 * 1024 * 1024);
+const MANUAL_UPLOAD_ZIP_MAX_EXTRACTED_BYTES = Number(process.env.EVIDENCE_LIBRARY_ZIP_MAX_EXTRACTED_BYTES || 250 * 1024 * 1024);
+const MANUAL_UPLOAD_ALLOWED_EXTENSIONS = new Set([
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.csv',
+  '.txt',
+  '.json',
+  '.png',
+  '.jpg',
+  '.jpeg',
+]);
 const schemaCache = new Map();
 
 function normalizeRole(user = {}) {
@@ -85,6 +107,175 @@ function providerIdShape(value) {
   const raw = String(value || '').trim();
   if (!raw) return null;
   return sourceIdShape(raw);
+}
+
+function safeUploadFileName(value, fallback = 'documento') {
+  const base = path.basename(String(value || fallback)).replace(/[\r\n"]/g, '_');
+  const clean = base.replace(/[^\w.\- ()\[\]áéíóúÁÉÍÓÚñÑ]/g, '_').replace(/_+/g, '_').slice(0, 180);
+  return clean || fallback;
+}
+
+function normalizeRelativePath(value, fallbackName = 'documento') {
+  const raw = String(value || fallbackName).replace(/\\/g, '/').trim();
+  if (!raw || raw.startsWith('/') || /^[A-Za-z]:\//.test(raw)) {
+    throw publicError(400, 'INVALID_UPLOAD_PATH', 'Ruta de archivo inválida en carga manual.');
+  }
+
+  const normalized = path.posix.normalize(raw);
+  if (
+    normalized === '.' ||
+    normalized.startsWith('../') ||
+    normalized.includes('/../') ||
+    normalized.includes('\0')
+  ) {
+    throw publicError(400, 'INVALID_UPLOAD_PATH', 'Ruta de archivo inválida en carga manual.');
+  }
+
+  return normalized;
+}
+
+function fileExtension(fileName = '') {
+  return path.extname(String(fileName || '')).toLowerCase();
+}
+
+function mimeTypeForFile(fileName = '', provided = '') {
+  const mime = String(provided || '').trim();
+  if (mime && mime !== 'application/octet-stream') return mime;
+  const ext = fileExtension(fileName);
+  const map = {
+    '.pdf': 'application/pdf',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.csv': 'text/csv',
+    '.txt': 'text/plain',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
+function assertAllowedManualFile(fileName, size = 0) {
+  const ext = fileExtension(fileName);
+  if (!MANUAL_UPLOAD_ALLOWED_EXTENSIONS.has(ext)) {
+    throw publicError(400, 'MANUAL_UPLOAD_FILE_TYPE_NOT_ALLOWED', `Tipo de archivo no permitido para biblioteca documental: ${ext || 'sin extensión'}`);
+  }
+  if (Number(size || 0) > MANUAL_UPLOAD_MAX_FILE_BYTES) {
+    throw publicError(400, 'MANUAL_UPLOAD_FILE_TOO_LARGE', 'El archivo excede el tamaño máximo permitido para carga manual.');
+  }
+}
+
+function sha256(buffer) {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+function tenantUploadRoot(tenantId) {
+  const tenantPart = String(tenantId || '').replace(/[^0-9a-fA-F-]/g, '');
+  return path.join(MANUAL_UPLOAD_ROOT, tenantPart, 'manual');
+}
+
+async function writeManualUploadFile({ tenantId, buffer, originalName, relativePath = null }) {
+  const safeName = safeUploadFileName(originalName);
+  const dateFolder = new Date().toISOString().slice(0, 10);
+  const storageDir = path.join(tenantUploadRoot(tenantId), dateFolder);
+  await fs.promises.mkdir(storageDir, { recursive: true });
+  const storedName = `${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+  const absolutePath = path.join(storageDir, storedName);
+  const root = tenantUploadRoot(tenantId);
+  const resolved = path.resolve(absolutePath);
+  if (!resolved.startsWith(path.resolve(root))) {
+    throw publicError(400, 'INVALID_UPLOAD_PATH', 'Ruta de almacenamiento inválida.');
+  }
+  await fs.promises.writeFile(resolved, buffer);
+  const storageRelativePath = path.relative(path.resolve(__dirname, '..', '..'), resolved).replace(/\\/g, '/');
+  return {
+    absolutePath: resolved,
+    storageRelativePath,
+    relativePath: normalizeRelativePath(relativePath || safeName, safeName),
+  };
+}
+
+function readZipEntries(buffer) {
+  if (!buffer || buffer.length > MANUAL_UPLOAD_ZIP_MAX_BYTES) {
+    throw publicError(400, 'ZIP_TOO_LARGE', 'El ZIP excede el tamaño máximo permitido.');
+  }
+
+  const eocdSignature = 0x06054b50;
+  let eocdOffset = -1;
+  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65557); i -= 1) {
+    if (buffer.readUInt32LE(i) === eocdSignature) {
+      eocdOffset = i;
+      break;
+    }
+  }
+  if (eocdOffset < 0) throw publicError(400, 'INVALID_ZIP', 'ZIP inválido o incompleto.');
+
+  const totalEntries = buffer.readUInt16LE(eocdOffset + 10);
+  const centralDirOffset = buffer.readUInt32LE(eocdOffset + 16);
+  const entries = [];
+  let offset = centralDirOffset;
+  let extractedBytes = 0;
+
+  for (let index = 0; index < totalEntries; index += 1) {
+    if (buffer.readUInt32LE(offset) !== 0x02014b50) break;
+    const flags = buffer.readUInt16LE(offset + 8);
+    const method = buffer.readUInt16LE(offset + 10);
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const uncompressedSize = buffer.readUInt32LE(offset + 24);
+    const fileNameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const localHeaderOffset = buffer.readUInt32LE(offset + 42);
+    const rawName = buffer.slice(offset + 46, offset + 46 + fileNameLength).toString('utf8');
+    offset += 46 + fileNameLength + extraLength + commentLength;
+
+    if (!rawName || rawName.endsWith('/')) continue;
+    if ((flags & 0x1) === 0x1) {
+      entries.push({ skipped: true, relativePath: rawName, reason: 'Archivo ZIP cifrado omitido.' });
+      continue;
+    }
+    if (![0, 8].includes(method)) {
+      entries.push({ skipped: true, relativePath: rawName, reason: 'Método de compresión no soportado.' });
+      continue;
+    }
+    if (uncompressedSize > MANUAL_UPLOAD_MAX_FILE_BYTES) {
+      entries.push({ skipped: true, relativePath: rawName, reason: 'Archivo extraído excede límite por archivo.' });
+      continue;
+    }
+    extractedBytes += uncompressedSize;
+    if (extractedBytes > MANUAL_UPLOAD_ZIP_MAX_EXTRACTED_BYTES) {
+      throw publicError(400, 'ZIP_EXTRACTED_TOO_LARGE', 'El contenido extraído del ZIP excede el límite permitido.');
+    }
+
+    let relativePath;
+    try {
+      relativePath = normalizeRelativePath(rawName, rawName);
+      assertAllowedManualFile(relativePath, uncompressedSize);
+    } catch (error) {
+      entries.push({ skipped: true, relativePath: rawName, reason: error.message });
+      continue;
+    }
+
+    if (buffer.readUInt32LE(localHeaderOffset) !== 0x04034b50) {
+      entries.push({ skipped: true, relativePath, reason: 'Entrada ZIP inválida.' });
+      continue;
+    }
+    const localNameLength = buffer.readUInt16LE(localHeaderOffset + 26);
+    const localExtraLength = buffer.readUInt16LE(localHeaderOffset + 28);
+    const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+    const compressed = buffer.slice(dataStart, dataStart + compressedSize);
+    const content = method === 0 ? compressed : zlib.inflateRawSync(compressed);
+    if (content.length !== uncompressedSize) {
+      entries.push({ skipped: true, relativePath, reason: 'Tamaño extraído inesperado.' });
+      continue;
+    }
+    entries.push({ relativePath, buffer: content });
+  }
+
+  return entries;
 }
 
 function normalizeSourceInput(sourceType, sourceId) {
@@ -211,6 +402,7 @@ function sourceLabel(sourceType, row = {}) {
   if (provider.includes('zoho')) return 'Zoho Drive';
   if (provider.includes('sync')) return 'Sync Agent';
   if (provider.includes('mounted')) return 'Carpeta montada';
+  if (provider.includes('manual')) return 'Carga manual';
   if (sourceType === 'evidence') return 'Carga manual';
   return row.source_name || 'Repositorio documental';
 }
@@ -384,6 +576,392 @@ function action(key, label, options = {}) {
   };
 }
 
+async function ensureManualUploadSource(tenantId, userId) {
+  if (!(await tableExists('tenant_document_sources'))) {
+    throw publicError(500, 'DOCUMENT_SOURCES_TABLE_MISSING', 'No existe tabla de fuentes documentales.');
+  }
+
+  const existing = await pool.query(
+    `
+    SELECT *
+    FROM tenant_document_sources
+    WHERE tenant_id = $1::uuid
+      AND provider = $2
+      AND COALESCE(status, 'active') <> 'disconnected'
+    ORDER BY created_at ASC
+    LIMIT 1
+    `,
+    [tenantId, MANUAL_UPLOAD_PROVIDER]
+  );
+  if (existing.rowCount > 0) return existing.rows[0];
+
+  const result = await pool.query(
+    `
+    INSERT INTO tenant_document_sources (
+      tenant_id,
+      provider,
+      source_name,
+      status,
+      sync_enabled,
+      scan_frequency,
+      metadata_json,
+      created_by_user_id,
+      created_by,
+      last_sync_at,
+      updated_at
+    )
+    VALUES ($1::uuid,$2,'Carga manual','active',false,'manual',$3::jsonb,$4::uuid,$4::uuid,NOW(),NOW())
+    RETURNING *
+    `,
+    [
+      tenantId,
+      MANUAL_UPLOAD_PROVIDER,
+      JSON.stringify({
+        source_type: MANUAL_UPLOAD_PROVIDER,
+        created_from: 'evidence_library_manual_upload',
+      }),
+      userId || null,
+    ]
+  );
+  return result.rows[0];
+}
+
+async function touchDocumentSourceSync(sourceId, tenantId) {
+  if (!sourceId || !(await tableExists('tenant_document_sources'))) return;
+  await pool.query(
+    `
+    UPDATE tenant_document_sources
+    SET last_sync_at = NOW(),
+        status = 'active',
+        updated_at = NOW()
+    WHERE id = $1::uuid
+      AND tenant_id = $2::uuid
+    `,
+    [sourceId, tenantId]
+  ).catch((error) => {
+    if (!['42P01', '42703'].includes(error.code)) throw error;
+  });
+}
+
+async function upsertManualDocumentIndex({
+  tenantId,
+  sourceId,
+  userId,
+  fileName,
+  mimeType,
+  sizeBytes,
+  checksum,
+  relativePath,
+  localStoragePath,
+  storageRelativePath,
+  documentType = null,
+  isFolder = false,
+}) {
+  if (!(await tableExists('document_index'))) {
+    throw publicError(500, 'DOCUMENT_INDEX_TABLE_MISSING', 'No existe tabla de índice documental.');
+  }
+
+  const normalizedRelativePath = normalizeRelativePath(relativePath || fileName, fileName);
+  const providerFileId = isFolder
+    ? `manual_folder:${normalizedRelativePath}`
+    : `manual:${checksum}:${normalizedRelativePath}`;
+  const folderPath = normalizedRelativePath.includes('/')
+    ? normalizedRelativePath.split('/').slice(0, -1).join('/')
+    : null;
+  const extension = isFolder ? 'folder' : fileExtension(fileName).replace(/^\./, '');
+  const metadata = {
+    manual_upload: true,
+    is_folder: Boolean(isFolder),
+    relative_path: normalizedRelativePath,
+    folder_path: folderPath,
+    uploaded_by_user_id: userId || null,
+    uploaded_at: new Date().toISOString(),
+    storage_relative_path: storageRelativePath || null,
+  };
+
+  const result = await pool.query(
+    `
+    INSERT INTO document_index (
+      tenant_id,
+      source_id,
+      provider,
+      provider_file_id,
+      provider_version_id,
+      file_name,
+      mime_type,
+      file_extension,
+      file_url,
+      size_bytes,
+      checksum,
+      content_hash,
+      file_hash,
+      relative_path,
+      local_storage_path,
+      modified_at,
+      indexed_at,
+      last_seen_at,
+      status,
+      metadata_json
+    )
+    VALUES (
+      $1::uuid,
+      $2::uuid,
+      $3,
+      $4,
+      $5,
+      $6,
+      $7,
+      $8,
+      $9,
+      $10,
+      $11,
+      $11,
+      $11,
+      $12,
+      $13,
+      NOW(),
+      NOW(),
+      NOW(),
+      'indexed',
+      $14::jsonb
+    )
+    ON CONFLICT (tenant_id, provider, provider_file_id)
+    DO UPDATE SET
+      source_id = EXCLUDED.source_id,
+      provider_version_id = EXCLUDED.provider_version_id,
+      file_name = EXCLUDED.file_name,
+      mime_type = EXCLUDED.mime_type,
+      file_extension = EXCLUDED.file_extension,
+      file_url = EXCLUDED.file_url,
+      size_bytes = EXCLUDED.size_bytes,
+      checksum = EXCLUDED.checksum,
+      content_hash = EXCLUDED.content_hash,
+      file_hash = EXCLUDED.file_hash,
+      relative_path = EXCLUDED.relative_path,
+      local_storage_path = EXCLUDED.local_storage_path,
+      modified_at = NOW(),
+      last_seen_at = NOW(),
+      status = 'indexed',
+      metadata_json = EXCLUDED.metadata_json
+    RETURNING
+      tenant_id,
+      'document_index' AS source_type,
+      'document_index' AS source_table,
+      id AS db_source_id,
+      id AS document_index_id,
+      id AS source_id,
+      source_id AS document_source_id,
+      file_name AS filename,
+      file_name AS title,
+      file_url AS normalized_path,
+      relative_path,
+      web_view_url,
+      provider AS origin,
+      provider,
+      provider_file_id,
+      provider_version_id,
+      mime_type,
+      file_extension,
+      checksum,
+      status,
+      indexed_at AS last_indexed_at,
+      $15::text AS detected_document_type,
+      'not_processed' AS semantic_status,
+      NULL::numeric AS usefulness_score,
+      NULL::text AS profile_document_type,
+      metadata_json AS metadata
+    `,
+    [
+      tenantId,
+      sourceId,
+      MANUAL_UPLOAD_PROVIDER,
+      providerFileId,
+      checksum || providerFileId,
+      fileName,
+      mimeType,
+      extension,
+      storageRelativePath || null,
+      Number(sizeBytes || 0),
+      checksum || providerFileId,
+      normalizedRelativePath,
+      localStoragePath || null,
+      JSON.stringify(metadata),
+      isFolder ? 'folder' : (documentType || 'unknown'),
+    ]
+  );
+
+  return mapDocumentRow(result.rows[0]);
+}
+
+async function indexZipFolders({ tenantId, sourceId, userId, relativePaths }) {
+  const folders = new Set();
+  for (const rel of relativePaths) {
+    const parts = String(rel || '').split('/').filter(Boolean);
+    for (let i = 1; i < parts.length; i += 1) {
+      folders.add(parts.slice(0, i).join('/'));
+    }
+  }
+
+  const indexed = [];
+  for (const folderPath of folders) {
+    const folderName = folderPath.split('/').pop() || folderPath;
+    const checksum = crypto.createHash('sha256').update(`folder:${folderPath}`).digest('hex');
+    const row = await upsertManualDocumentIndex({
+      tenantId,
+      sourceId,
+      userId,
+      fileName: folderName,
+      mimeType: 'application/vnd.tcdx.folder',
+      sizeBytes: 0,
+      checksum,
+      relativePath: folderPath,
+      localStoragePath: null,
+      storageRelativePath: null,
+      documentType: 'folder',
+      isFolder: true,
+    });
+    indexed.push(row);
+  }
+  return indexed;
+}
+
+async function manualUploadFiles({ user, files = [], fields = {} }) {
+  const { tenantId, userId } = assertAccess(user, 'manage');
+  if (!Array.isArray(files) || files.length === 0) {
+    throw publicError(400, 'MANUAL_UPLOAD_FILES_REQUIRED', 'Seleccione uno o más archivos para cargar.');
+  }
+  if (files.length > MANUAL_UPLOAD_MAX_FILES) {
+    throw publicError(400, 'MANUAL_UPLOAD_TOO_MANY_FILES', 'La carga excede el máximo de archivos permitido.');
+  }
+
+  const source = await ensureManualUploadSource(tenantId, userId);
+  const documents = [];
+  const skipped = [];
+
+  for (const file of files) {
+    try {
+      const originalName = safeUploadFileName(file.originalname || 'documento');
+      assertAllowedManualFile(originalName, file.size || file.buffer?.length || 0);
+      const checksum = sha256(file.buffer);
+      const written = await writeManualUploadFile({
+        tenantId,
+        buffer: file.buffer,
+        originalName,
+        relativePath: fields.relative_path || originalName,
+      });
+      const row = await upsertManualDocumentIndex({
+        tenantId,
+        sourceId: source.id,
+        userId,
+        fileName: originalName,
+        mimeType: mimeTypeForFile(originalName, file.mimetype),
+        sizeBytes: file.size || file.buffer.length,
+        checksum,
+        relativePath: written.relativePath,
+        localStoragePath: written.absolutePath,
+        storageRelativePath: written.storageRelativePath,
+        documentType: fields.document_type || null,
+      });
+      documents.push(row);
+    } catch (error) {
+      skipped.push({ filename: file.originalname || 'documento', reason: error.message });
+    }
+  }
+
+  await touchDocumentSourceSync(source.id, tenantId);
+  return {
+    summary: {
+      uploaded: files.length,
+      indexed: documents.length,
+      skipped: skipped.length,
+      errors: skipped,
+    },
+    source: {
+      source_type: 'manual_upload',
+      source_id: source.id,
+      source_name: source.source_name || 'Carga manual',
+      status: source.status || 'active',
+    },
+    documents,
+  };
+}
+
+async function manualUploadZip({ user, file, fields = {} }) {
+  const { tenantId, userId } = assertAccess(user, 'manage');
+  if (!file?.buffer) {
+    throw publicError(400, 'MANUAL_UPLOAD_ZIP_REQUIRED', 'Seleccione un archivo ZIP para cargar.');
+  }
+  if (!String(file.originalname || '').toLowerCase().endsWith('.zip')) {
+    throw publicError(400, 'MANUAL_UPLOAD_ZIP_REQUIRED', 'El archivo debe ser ZIP.');
+  }
+
+  const source = await ensureManualUploadSource(tenantId, userId);
+  const entries = readZipEntries(file.buffer);
+  const files = entries.filter((entry) => !entry.skipped);
+  const skipped = entries.filter((entry) => entry.skipped).map((entry) => ({
+    filename: entry.relativePath || 'entrada_zip',
+    reason: entry.reason || 'Entrada omitida.',
+  }));
+  if (files.length > MANUAL_UPLOAD_MAX_FILES) {
+    throw publicError(400, 'MANUAL_UPLOAD_TOO_MANY_FILES', 'El ZIP excede el máximo de archivos permitido.');
+  }
+
+  const folderRows = await indexZipFolders({
+    tenantId,
+    sourceId: source.id,
+    userId,
+    relativePaths: files.map((entry) => entry.relativePath),
+  });
+  const documents = [...folderRows];
+
+  for (const entry of files) {
+    try {
+      const originalName = safeUploadFileName(path.posix.basename(entry.relativePath));
+      const checksum = sha256(entry.buffer);
+      const written = await writeManualUploadFile({
+        tenantId,
+        buffer: entry.buffer,
+        originalName,
+        relativePath: entry.relativePath,
+      });
+      const row = await upsertManualDocumentIndex({
+        tenantId,
+        sourceId: source.id,
+        userId,
+        fileName: originalName,
+        mimeType: mimeTypeForFile(originalName),
+        sizeBytes: entry.buffer.length,
+        checksum,
+        relativePath: written.relativePath,
+        localStoragePath: written.absolutePath,
+        storageRelativePath: written.storageRelativePath,
+        documentType: fields.document_type || null,
+      });
+      documents.push(row);
+    } catch (error) {
+      skipped.push({ filename: entry.relativePath || 'entrada_zip', reason: error.message });
+    }
+  }
+
+  await touchDocumentSourceSync(source.id, tenantId);
+  return {
+    summary: {
+      uploaded: 1,
+      indexed: documents.filter((doc) => doc.item_type !== 'folder').length,
+      folders_indexed: documents.filter((doc) => doc.item_type === 'folder').length,
+      skipped: skipped.length,
+      errors: skipped,
+    },
+    source: {
+      source_type: 'manual_upload',
+      source_id: source.id,
+      source_name: source.source_name || 'Carga manual',
+      status: source.status || 'active',
+    },
+    documents,
+  };
+}
+
 function defaultSourceActions(sourceType, sourceId = null, status = 'available') {
   const active = String(status || '').toLowerCase() === 'active';
   if (sourceType === 'google_drive') {
@@ -405,7 +983,10 @@ function defaultSourceActions(sourceType, sourceId = null, status = 'available')
       : [action('configure', 'Configurar carpeta', { enabled: false, kind: 'info', reason: 'Configuración pendiente: requiere registrar ruta montada autorizada.' })];
   }
   if (sourceType === 'manual_upload') {
-    return [action('upload', 'Subir archivo', { kind: 'info', enabled: false, reason: 'Carga manual general no implementada aún. Use carga asociada a control/plan de acción.' })];
+    return [
+      action('upload_files', 'Subir archivos', { kind: 'upload_files', path: '/api/evidence-library/manual-upload/files', method: 'POST' }),
+      action('upload_zip', 'Subir ZIP', { kind: 'upload_zip', path: '/api/evidence-library/manual-upload/zip', method: 'POST' }),
+    ];
   }
   return [action('info', 'Configuración pendiente', { enabled: false, kind: 'info', reason: 'Conector no implementado para esta fuente.' })];
 }
@@ -438,6 +1019,7 @@ async function listSources({ user }) {
         provider.includes('zoho') ? card.source_type === 'zoho_drive' :
         provider.includes('sync') ? card.source_type === 'sync_agent' :
         provider.includes('mounted') ? card.source_type === 'mounted_folder' :
+        provider.includes('manual') ? card.source_type === 'manual_upload' :
         false
       );
       if (match) {
@@ -451,7 +1033,7 @@ async function listSources({ user }) {
   if (await tableExists('tenant_document_sources')) {
     const result = await pool.query(
       `
-      SELECT id, provider, source_name, status, last_sync_at, updated_at
+      SELECT id, provider, source_name, status, last_sync_at, updated_at, folder_id, folder_path, folder_display_name, provider_account_email, last_sync_status, last_sync_error
       FROM tenant_document_sources
       WHERE tenant_id = $1::uuid
         AND COALESCE(status, '') <> 'disconnected'
@@ -477,6 +1059,11 @@ async function listSources({ user }) {
         match.status = row.status || match.status || 'active';
         match.source_id = row.id;
         match.source_name = match.source_name || row.source_name;
+        match.root_folder_id = row.folder_id || null;
+        match.root_folder_name = row.folder_display_name || row.folder_path || null;
+        match.provider_account_email = row.provider_account_email || null;
+        match.last_sync_status = row.last_sync_status || null;
+        match.last_sync_error = row.last_sync_error || null;
         match.last_sync_at = match.last_sync_at || row.last_sync_at || row.updated_at || null;
       }
     }
@@ -493,9 +1080,9 @@ async function listSources({ user }) {
       [tenantId]
     );
     const manual = cards.find((card) => card.source_type === 'manual_upload');
-    manual.status = 'active';
-    manual.documents_count = Number(result.rows[0]?.documents_count || 0);
-    manual.last_sync_at = result.rows[0]?.last_sync_at || null;
+    manual.status = manual.status || 'active';
+    manual.documents_count = Number(manual.documents_count || 0) + Number(result.rows[0]?.documents_count || 0);
+    manual.last_sync_at = manual.last_sync_at || result.rows[0]?.last_sync_at || null;
   }
 
   return cards.map((card) => ({
@@ -1254,6 +1841,9 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
         WHEN COALESCE(d.mime_type, '') = 'application/vnd.google-apps.folder'
           OR COALESCE(d.metadata_json->'google'->>'is_folder', 'false') = 'true'
           OR COALESCE(d.metadata_json->'zoho'->>'is_folder', 'false') = 'true'
+          OR COALESCE(d.metadata_json->>'is_folder', 'false') = 'true'
+          OR COALESCE(d.metadata_json->>'manual_upload', 'false') = 'true' AND COALESCE(d.file_extension, '') = 'folder'
+          OR COALESCE(d.file_extension, '') = 'folder'
         THEN 'folder'
         ELSE 'unknown'
       END AS detected_document_type,
@@ -1276,6 +1866,7 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'path', '') ILIKE $4::text)
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'folder_path', '') ILIKE $4::text)
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'parent_path', '') ILIKE $4::text)
+        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'relative_path', '') ILIKE $4::text)
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'relative_path', '') ILIKE $4::text)
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'relative_path', '') ILIKE $4::text)
       )
@@ -1659,6 +2250,8 @@ module.exports = {
   createAssociation,
   setAssociationStatus,
   listTargetCandidates,
+  manualUploadFiles,
+  manualUploadZip,
   analyzeSemanticEvidence,
   reviewSuggestion,
 };

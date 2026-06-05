@@ -1,4 +1,6 @@
 const { google } = require('googleapis')
+const fs = require('fs')
+const path = require('path')
 const { decryptToken } = require('../utils/cryptoTokens')
 const {
   buildOAuthClientFromTokens,
@@ -219,6 +221,79 @@ async function extractTextFromBuffer({ buffer, fileName, mimeType, contentType }
 }
 
 async function extractDocumentContent({ document, integration }) {
+  const provider = safeText(document?.provider).toLowerCase()
+  if (document?.local_storage_path && ['manual_upload', 'mounted_share', 'local_agent'].includes(provider)) {
+    const resolved = path.resolve(String(document.local_storage_path))
+    const uploadsRoot = path.resolve(__dirname, '..', '..', 'uploads')
+    const localRoot = process.env.LOCAL_DOCUMENT_ROOT ? path.resolve(process.env.LOCAL_DOCUMENT_ROOT) : null
+    const allowedRoot = resolved.startsWith(uploadsRoot) || (localRoot && resolved.startsWith(localRoot))
+
+    if (!allowedRoot) {
+      return {
+        ok: false,
+        text: '',
+        extraction: {
+          method: 'local_storage_extract',
+          warning: 'Ruta local no autorizada para extracción documental'
+        }
+      }
+    }
+
+    try {
+      const stat = await fs.promises.stat(resolved)
+      if (!stat.isFile()) {
+        return {
+          ok: false,
+          text: '',
+          extraction: {
+            method: 'local_storage_extract',
+            warning: 'El documento local no es un archivo regular'
+          }
+        }
+      }
+      if (stat.size > MAX_DOWNLOAD_BYTES) {
+        return {
+          ok: false,
+          text: '',
+          extraction: {
+            method: 'local_storage_extract',
+            warning: `Archivo local excede límite de análisis (${stat.size} bytes > ${MAX_DOWNLOAD_BYTES})`
+          }
+        }
+      }
+      const buffer = await fs.promises.readFile(resolved)
+      const extracted = await extractTextFromBuffer({
+        buffer,
+        fileName: document.file_name,
+        mimeType: document.mime_type,
+        contentType: document.mime_type
+      })
+      return {
+        ok: extracted.ok,
+        text: extracted.text,
+        extraction: {
+          method: 'local_storage_extract',
+          parser: extracted.parser,
+          extraction_type: extracted.extraction_type,
+          truncated: extracted.truncated,
+          original_bytes: extracted.original_bytes,
+          warning: extracted.warning,
+          details: extracted.details,
+          content_type: document.mime_type
+        }
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        text: '',
+        extraction: {
+          method: 'local_storage_extract',
+          warning: `Documento local no extraído: ${err.message}`
+        }
+      }
+    }
+  }
+
   if (!document || document.provider !== 'google_drive') {
     return {
       ok: false,
