@@ -37,10 +37,11 @@ function getUserId(user = {}) {
   return user.id || user.user_id || user.userId || user.sub || null;
 }
 
-function publicError(status, code, message) {
+function publicError(status, code, message, details = null) {
   const error = new Error(message);
   error.status = status;
   error.code = code;
+  if (details) error.details = details;
   return error;
 }
 
@@ -67,6 +68,15 @@ function asString(value, max = 500) {
 
 function isUuid(value) {
   return UUID_RE.test(String(value || '').trim());
+}
+
+function sourceIdShape(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'missing';
+  if (isUuid(raw)) return 'uuid';
+  if (raw.includes(':')) return 'prefixed';
+  if (/^[A-Za-z0-9_-]{12,}$/.test(raw)) return 'provider_like';
+  return 'unknown';
 }
 
 function normalizeSourceInput(sourceType, sourceId) {
@@ -373,7 +383,7 @@ function defaultSourceActions(sourceType, sourceId = null, status = 'available')
       : [action('configure', 'Configurar carpeta', { enabled: false, kind: 'info', reason: 'Configuración pendiente: requiere registrar ruta montada autorizada.' })];
   }
   if (sourceType === 'manual_upload') {
-    return [action('upload', 'Subir archivo', { kind: 'info', enabled: true, reason: 'Carga manual general pendiente: la ruta actual de subida requiere asociar el archivo a un control o plan de acción.' })];
+    return [action('upload', 'Subir archivo', { kind: 'info', enabled: false, reason: 'Carga manual general no implementada aún. Use carga asociada a control/plan de acción.' })];
   }
   return [action('info', 'Configuración pendiente', { enabled: false, kind: 'info', reason: 'Conector no implementado para esta fuente.' })];
 }
@@ -674,10 +684,18 @@ async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) 
   const mode = options.mode || 'read';
   const { sourceType, sourceId } = normalizeSourcePayload(input);
   if (!SOURCE_TYPES.has(sourceType)) {
-    throw publicError(400, 'INVALID_SOURCE_TYPE', 'Seleccione un archivo/documento válido de la biblioteca.');
+    throw publicError(400, 'INVALID_SOURCE_TYPE', 'Seleccione un archivo/documento válido de la biblioteca.', {
+      received_source_type: sourceType || null,
+      received_source_id_shape: sourceIdShape(sourceId),
+      item_type: input.item_type || input.itemType || null,
+    });
   }
   if (!isUuid(sourceId)) {
-    throw publicError(400, 'INVALID_SOURCE_ID', 'Identificador de documento/evidencia inválido. Seleccione un archivo de la biblioteca.');
+    throw publicError(400, 'INVALID_SOURCE_ID', 'Identificador de documento/evidencia inválido. Seleccione un archivo de la biblioteca.', {
+      received_source_type: sourceType,
+      received_source_id_shape: sourceIdShape(sourceId),
+      item_type: input.item_type || input.itemType || null,
+    });
   }
 
   let source = null;
@@ -1287,13 +1305,10 @@ async function callSemanticEvidenceEngine({ tenantId, sourceType, sourceId, sour
   }).catch(() => null);
 }
 
-async function analyzeSemanticEvidence({ user, sourceType, sourceId, libraryItemId, itemType }) {
+async function analyzeSemanticEvidence({ user, sourceType, sourceId }) {
   const { tenantId, userId } = assertAccess(user, 'manage');
-  if (String(itemType || '').toLowerCase() === 'folder') {
-    throw publicError(400, 'FOLDER_NOT_EVIDENCE_DOCUMENT', 'Seleccione un archivo/documento, no una carpeta.');
-  }
   const resolvedSource = await resolveEvidenceLibrarySource(
-    { source_type: sourceType, source_id: sourceId, library_item_id: libraryItemId },
+    { source_type: sourceType, source_id: sourceId },
     tenantId,
     { mode: 'analyze' }
   );

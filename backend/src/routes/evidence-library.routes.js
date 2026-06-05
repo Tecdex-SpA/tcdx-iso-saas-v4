@@ -18,11 +18,15 @@ const router = express.Router();
 
 function sendError(res, error) {
   const status = Number(error?.status || error?.statusCode || 500);
-  return res.status(status >= 400 && status < 600 ? status : 500).json({
+  const payload = {
     ok: false,
     code: error?.code || 'EVIDENCE_LIBRARY_ERROR',
     error: status >= 500 ? 'No fue posible procesar la solicitud.' : error.message,
-  });
+  };
+  if (error?.details && status < 500) {
+    payload.details = error.details;
+  }
+  return res.status(status >= 400 && status < 600 ? status : 500).json(payload);
 }
 
 router.get('/sources', async (req, res) => {
@@ -124,8 +128,6 @@ router.post('/semantic/analyze', async (req, res) => {
       user: req.user,
       sourceType: req.body?.source_type,
       sourceId: req.body?.source_id,
-      libraryItemId: req.body?.library_item_id,
-      itemType: req.body?.item_type,
     });
     return res.json({ ok: true, data });
   } catch (error) {
