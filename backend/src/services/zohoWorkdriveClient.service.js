@@ -137,6 +137,7 @@ function normalizeZohoProbeError(error, stage = null) {
       hint: 'Reconecte aceptando permisos WorkDrive o revise scopes/API Console/WorkDrive habilitado para la cuenta.',
       endpoint: error?.endpoint || null,
       stage: error?.stage || stage || null,
+      diagnostics: Array.isArray(error?.diagnostics) ? error.diagnostics : undefined,
     };
   }
   if (forbidden) {
@@ -150,6 +151,7 @@ function normalizeZohoProbeError(error, stage = null) {
       hint: 'Reconecte Zoho WorkDrive aceptando los scopes requeridos.',
       endpoint: error?.endpoint || null,
       stage: error?.stage || stage || null,
+      diagnostics: Array.isArray(error?.diagnostics) ? error.diagnostics : undefined,
     };
   }
   return {
@@ -189,6 +191,90 @@ async function readJsonResponse(response, fallbackMessage, context = {}) {
   }
 
   return json;
+}
+
+function diagnosticEndpointCandidates() {
+  return [
+    '/workdrive/api/v1/teams',
+    '/workdrive/api/v1/teamfolders',
+    '/workdrive/api/v1/privatespace/folders/files',
+    '/workdrive/api/v1/files',
+  ];
+}
+
+function responseKeys(json = {}) {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return [];
+  return Object.keys(json).slice(0, 20);
+}
+
+async function readDiagnosticResponse(response) {
+  const text = await response.text();
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    json = text ? { raw: text.slice(0, 300) } : {};
+  }
+  return {
+    json,
+    provider_code: providerErrorCode(json),
+    provider_message: providerErrorMessage(json),
+  };
+}
+
+async function diagnosticZohoWorkdriveEndpoints({ accessToken, apiBaseUrl = null }) {
+  const resolvedApiBaseUrl = resolveApiBaseUrl(apiBaseUrl);
+  const diagnostics = [];
+
+  for (const path of diagnosticEndpointCandidates()) {
+    const url = buildZohoUrl({
+      path,
+      apiBaseUrl: resolvedApiBaseUrl,
+      searchParams: { 'page[limit]': 100 },
+    });
+    try {
+      const response = await fetch(url, {
+        headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+      });
+      const parsed = await readDiagnosticResponse(response);
+      diagnostics.push({
+        endpoint: safeEndpoint(url.toString()),
+        path,
+        status: response.status,
+        provider_code: parsed.provider_code,
+        provider_message: parsed.provider_message,
+        ok: response.ok,
+        response_keys: responseKeys(parsed.json),
+      });
+    } catch (error) {
+      diagnostics.push({
+        endpoint: safeEndpoint(url.toString()),
+        path,
+        status: null,
+        provider_code: error?.code || 'REQUEST_FAILED',
+        provider_message: error?.message || 'No fue posible consultar endpoint Zoho.',
+        ok: false,
+        response_keys: [],
+      });
+    }
+  }
+
+  const okEndpoints = diagnostics.filter((item) => item.ok);
+  const failedEndpoints = diagnostics.filter((item) => !item.ok);
+  const allUnauthorized = diagnostics.length > 0 && diagnostics.every((item) => (
+    Number(item.status || 0) === 401 ||
+    String(item.provider_code || '').toUpperCase() === 'R008'
+  ));
+
+  return {
+    ok: okEndpoints.length > 0,
+    api_domain: resolvedApiBaseUrl,
+    diagnostics,
+    ok_endpoints: okEndpoints.map((item) => item.path),
+    failed_count: failedEndpoints.length,
+    all_unauthorized: allUnauthorized,
+    all_failed: diagnostics.length > 0 && okEndpoints.length === 0,
+  };
 }
 
 function buildZohoUrl({ path, searchParams = {}, apiBaseUrl = null }) {
@@ -268,7 +354,7 @@ async function zohoGetJsonAny({ accessToken, candidates = [], searchParams = {},
     } catch (error) {
       lastError = error;
       const status = Number(error.provider_status || error.statusCode || 0);
-      if (![400, 403, 404, 405, 409].includes(status)) {
+      if (![400, 401, 403, 404, 405, 409].includes(status)) {
         throw error;
       }
     }
@@ -317,6 +403,7 @@ function privateSpaceCandidates() {
 
 function teamFolderRootCandidates() {
   return [
+    '/workdrive/api/v1/teams',
     '/workdrive/api/v1/teamfolders',
     '/workdrive/api/v1/workspaces',
     '/workdrive/teamfolders',
@@ -374,6 +461,7 @@ function syntheticRootNode({ id, name, type, canSelect = false, count = null }) 
 function extractRows(json = {}) {
   if (Array.isArray(json?.data)) return json.data;
   if (Array.isArray(json?.folders)) return json.folders;
+  if (Array.isArray(json?.teams)) return json.teams;
   if (Array.isArray(json?.teamfolders)) return json.teamfolders;
   if (Array.isArray(json?.files)) return json.files;
   if (Array.isArray(json?.items)) return json.items;
@@ -436,6 +524,21 @@ function emptyDetails({ reason, stage, message, apiBaseUrl, error = null }) {
 
 async function discoverZohoRootContainers({ accessToken, apiBaseUrl = null, pageToken = null }) {
   const resolvedApiBaseUrl = resolveApiBaseUrl(apiBaseUrl);
+  const endpointProbe = await diagnosticZohoWorkdriveEndpoints({ accessToken, apiBaseUrl: resolvedApiBaseUrl });
+  if (endpointProbe.all_unauthorized) {
+    const firstUnauthorized = endpointProbe.diagnostics.find((item) => Number(item.status || 0) === 401) || endpointProbe.diagnostics[0];
+    const err = new Error('Zoho OAuth conectado, pero el token no tiene acceso efectivo a WorkDrive API.');
+    err.statusCode = 401;
+    err.code = 'ZOHO_UNAUTHORIZED';
+    err.provider_status = firstUnauthorized?.status || 401;
+    err.provider_code = firstUnauthorized?.provider_code || 'R008';
+    err.provider_message = firstUnauthorized?.provider_message || 'Unauthorized access';
+    err.endpoint = firstUnauthorized?.endpoint || null;
+    err.stage = 'root_endpoint_probe';
+    err.diagnostics = endpointProbe.diagnostics;
+    throw err;
+  }
+
   const privateResult = await tryZohoGetJsonAny({
     accessToken,
     candidates: privateSpaceCandidates(),
@@ -517,6 +620,8 @@ async function discoverZohoRootContainers({ accessToken, apiBaseUrl = null, page
       stage: 'root_discovery_completed',
       message: null,
       api_domain: resolvedApiBaseUrl,
+      diagnostics: endpointProbe.diagnostics,
+      ok_endpoints: endpointProbe.ok_endpoints,
       private_folders_count: privateFolders.length,
       team_folders_count: teamFolders.length,
       shared_folders_count: sharedFolders.length,
@@ -763,6 +868,7 @@ module.exports = {
   exchangeCodeForTokens,
   refreshAccessToken,
   getZohoAccountIdentity,
+  diagnosticZohoWorkdriveEndpoints,
   probeZohoWorkdriveAccess,
   discoverZohoRootContainers,
   listFolders,

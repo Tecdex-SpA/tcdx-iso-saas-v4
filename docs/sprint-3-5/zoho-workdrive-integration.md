@@ -79,6 +79,21 @@ OAuth success alone is not treated as a functional WorkDrive connection. After c
 
 The UI shows only reconnect actions and must not open the folder selector for this state.
 
+## WorkDrive Endpoint Diagnostics
+
+Zoho OAuth can complete successfully while the resulting token still cannot access the WorkDrive API. The platform must validate real WorkDrive access instead of treating OAuth as sufficient.
+
+For root folder browsing, the backend probes these WorkDrive endpoints without stopping at the first `401`, `404`, or `400`:
+
+- `GET /workdrive/api/v1/teams`
+- `GET /workdrive/api/v1/teamfolders`
+- `GET /workdrive/api/v1/privatespace/folders/files`
+- `GET /workdrive/api/v1/files`
+
+Each probe result is logged safely as `ZOHO_WORKDRIVE_ENDPOINT_PROBE` with endpoint, HTTP status, provider code and provider message. Tokens, Authorization headers, OAuth codes and refresh tokens are never logged or returned.
+
+If any endpoint returns a usable `200`, the folder browser uses the authorized result path to build navigable WorkDrive nodes. If all endpoints return Zoho `401` with `R008 Unauthorized access`, `/api/document-integrations/zoho/folders?parentId=root` returns `ZOHO_UNAUTHORIZED` with safe diagnostics. This tells the operator that OAuth is connected but the token has no effective WorkDrive API access, usually because scopes, Zoho API Console configuration, account permissions, or WorkDrive availability need correction.
+
 ## Endpoints
 
 - `GET|POST /api/document-integrations/zoho/oauth/start`

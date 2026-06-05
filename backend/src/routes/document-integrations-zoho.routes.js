@@ -119,6 +119,9 @@ function safeProbeForStorage(probe = {}) {
     private_folders_count: probe.private_folders_count || probe.details?.private_folders_count || 0,
     team_folders_count: probe.team_folders_count || probe.details?.team_folders_count || 0,
     shared_folders_count: probe.shared_folders_count || probe.details?.shared_folders_count || 0,
+    diagnostics: Array.isArray(probe.diagnostics || probe.details?.diagnostics)
+      ? (probe.diagnostics || probe.details.diagnostics).slice(0, 10)
+      : undefined,
     checked_at: new Date().toISOString(),
   };
 }
@@ -332,6 +335,7 @@ function zohoErrorDetails(error, fallbackStage = null) {
     provider_message: providerMessage,
     endpoint: error.endpoint || null,
     hint,
+    diagnostics: Array.isArray(error.diagnostics) ? error.diagnostics.slice(0, 10) : undefined,
   };
 }
 
@@ -343,6 +347,7 @@ function zohoUnauthorizedDetails(probe = null) {
     provider_message: probe?.provider_message || 'Unauthorized access',
     endpoint: probe?.endpoint || null,
     hint: probe?.hint || 'Reconecte Zoho WorkDrive aceptando permisos o revise API Console/scopes.',
+    diagnostics: Array.isArray(probe?.diagnostics) ? probe.diagnostics.slice(0, 10) : undefined,
   };
 }
 
@@ -364,6 +369,8 @@ function successDetails(folders, foldersResult, fallbackStage) {
       private_folders_count: details.private_folders_count,
       team_folders_count: details.team_folders_count,
       shared_folders_count: details.shared_folders_count,
+      diagnostics: Array.isArray(details.diagnostics) ? details.diagnostics.slice(0, 10) : undefined,
+      ok_endpoints: details.ok_endpoints || undefined,
     };
   }
   return {
@@ -373,7 +380,25 @@ function successDetails(folders, foldersResult, fallbackStage) {
     api_domain: details.api_domain || null,
     provider_status: details.provider_status || null,
     provider_message: details.provider_message || null,
+    diagnostics: Array.isArray(details.diagnostics) ? details.diagnostics.slice(0, 10) : undefined,
+    ok_endpoints: details.ok_endpoints || undefined,
   };
+}
+
+function logZohoEndpointProbe({ req, tenantId, sourceId, diagnostics = [] }) {
+  diagnostics.forEach((item) => {
+    console.info('ZOHO_WORKDRIVE_ENDPOINT_PROBE:', {
+      request_id: req.requestId || null,
+      tenant: shortId(tenantId),
+      source_id: sourceId || null,
+      endpoint: item.endpoint,
+      status: item.status,
+      provider_code: item.provider_code || null,
+      provider_message: item.provider_message || null,
+      ok: Boolean(item.ok),
+      stage: 'root_endpoint_probe',
+    });
+  });
 }
 
 function normalizeRelativePath(...parts) {
@@ -724,9 +749,52 @@ router.get('/folders', auth, async (req, res) => {
 
   try {
     const parentId = String(req.query.parentId || req.query.parent_id || 'root').trim() || 'root';
+    const isRootRequest = !parentId || ['root', 'my_drive', 'mi_unidad'].includes(parentId.toLowerCase());
     const source = await getTenantZohoSource({ tenantId, sourceId: sourceId || null });
     if (!source) return res.status(409).json({ ok: false, code: 'ZOHO_NOT_CONNECTED', error: 'Zoho WorkDrive no está conectado para este tenant.' });
-    if (isUnauthorizedSource(source)) {
+    const credential = await getCredential({ tenantId, sourceId: source.id });
+    if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
+    const fresh = await ensureFreshCredential(credential);
+    const apiBaseUrl = resolveApiBaseUrl(source, fresh.credential);
+
+    if (isRootRequest) {
+      const endpointProbe = await zoho.diagnosticZohoWorkdriveEndpoints({
+        accessToken: fresh.tokens.access_token,
+        apiBaseUrl,
+      });
+      logZohoEndpointProbe({
+        req,
+        tenantId,
+        sourceId: source.id,
+        diagnostics: endpointProbe.diagnostics,
+      });
+      if (endpointProbe.all_unauthorized) {
+        return res.status(409).json({
+          ok: false,
+          code: 'ZOHO_UNAUTHORIZED',
+          error: 'Zoho conectado, pero sin permisos efectivos para WorkDrive.',
+          details: {
+            stage: 'root_endpoint_probe',
+            provider_status: 401,
+            provider_code: 'R008',
+            provider_message: 'Unauthorized access',
+            hint: 'Reconecte Zoho WorkDrive aceptando permisos o revise API Console/scopes.',
+            diagnostics: endpointProbe.diagnostics,
+          },
+        });
+      }
+      if (isUnauthorizedSource(source) && !endpointProbe.ok) {
+        return res.status(409).json({
+          ok: false,
+          code: 'ZOHO_UNAUTHORIZED',
+          error: 'Zoho conectado, pero sin permisos efectivos para WorkDrive.',
+          details: zohoUnauthorizedDetails({
+            ...(source.metadata_json?.zoho_probe || {}),
+            diagnostics: endpointProbe.diagnostics,
+          }),
+        });
+      }
+    } else if (isUnauthorizedSource(source)) {
       return res.status(409).json({
         ok: false,
         code: 'ZOHO_UNAUTHORIZED',
@@ -734,10 +802,7 @@ router.get('/folders', auth, async (req, res) => {
         details: zohoUnauthorizedDetails(source.metadata_json?.zoho_probe || null),
       });
     }
-    const credential = await getCredential({ tenantId, sourceId: source.id });
-    if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
-    const fresh = await ensureFreshCredential(credential);
-    const apiBaseUrl = resolveApiBaseUrl(source, fresh.credential);
+
     console.info('ZOHO_FOLDERS_DISCOVERY_START:', {
       request_id: req.requestId || null,
       tenant: shortId(tenantId),
@@ -750,6 +815,12 @@ router.get('/folders', auth, async (req, res) => {
       apiBaseUrl,
       parentId,
       pageToken: req.query.page_token || null,
+    });
+    logZohoEndpointProbe({
+      req,
+      tenantId,
+      sourceId: source.id,
+      diagnostics: folders.details?.diagnostics || [],
     });
     const current = folders.current || {
       id: parentId,
