@@ -106,6 +106,18 @@ function providerErrorMessage(json = {}) {
   );
 }
 
+function cloneZohoError(error, stage = null) {
+  return {
+    code: error?.code || 'ZOHO_API_ERROR',
+    message: error?.message || 'Error consultando Zoho WorkDrive',
+    provider_status: error?.provider_status || error?.statusCode || null,
+    provider_code: error?.provider_code || null,
+    provider_message: error?.provider_message || null,
+    endpoint: error?.endpoint || null,
+    stage: error?.stage || stage || null,
+  };
+}
+
 async function readJsonResponse(response, fallbackMessage, context = {}) {
   const text = await response.text();
   let json = null;
@@ -219,71 +231,329 @@ async function zohoGetJsonAny({ accessToken, candidates = [], searchParams = {},
   });
 }
 
+async function tryZohoGetJsonAny(options) {
+  try {
+    return { ok: true, json: await zohoGetJsonAny(options) };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
 function isFolderItem(item) {
   const attributes = item?.attributes || {};
-  const type = String(item?.type || attributes?.type || attributes?.resource_type || '').toLowerCase();
+  const type = String(item?.type || attributes?.type || attributes?.kind || attributes?.resource_type || '').toLowerCase();
   const mimeType = String(attributes?.mime_type || attributes?.mimetype || '').toLowerCase();
   return (
+    item?.can_open === true ||
     attributes?.is_folder === true ||
     attributes?.isFolder === true ||
     type.includes('folder') ||
+    type.includes('files') ||
     type.includes('team') ||
+    type.includes('workspace') ||
     mimeType.includes('folder')
   );
 }
 
-function rootFolderCandidates() {
+function privateSpaceCandidates() {
+  return [
+    '/workdrive/api/v1/privatespace/folders/files',
+    '/workdrive/privatespace/folders/files',
+    '/workdrive/api/v1/privatefolders',
+    '/workdrive/api/v1/files',
+    '/workdrive/privatespace/folders',
+    '/workdrive/privatefolders',
+    '/workdrive/files',
+  ];
+}
+
+function teamFolderRootCandidates() {
   return [
     '/workdrive/api/v1/teamfolders',
-    '/workdrive/api/v1/files',
+    '/workdrive/api/v1/workspaces',
     '/workdrive/teamfolders',
-    '/workdrive/files',
+    '/workdrive/workspaces',
+  ];
+}
+
+function sharedFolderCandidates() {
+  return [
+    '/workdrive/api/v1/sharedwithme',
+    '/workdrive/api/v1/shared/files',
+    '/workdrive/sharedwithme',
+    '/workdrive/shared/files',
   ];
 }
 
 function childFolderCandidates(parentId) {
   const encoded = encodeURIComponent(parentId);
   return [
+    `/workdrive/api/v1/teamfolders/${encoded}/files`,
+    `/workdrive/api/v1/teamfolders/${encoded}/folders`,
     `/workdrive/api/v1/files/${encoded}/files`,
+    `/workdrive/teamfolders/${encoded}/files`,
+    `/workdrive/teamfolders/${encoded}/folders`,
     `/workdrive/files/${encoded}/files`,
   ];
 }
 
+function syntheticRootNode({ id, name, type, canSelect = false, count = null }) {
+  return {
+    id,
+    provider_folder_id: id,
+    name,
+    parent_id: 'root',
+    path: name,
+    display_path: name,
+    type,
+    item_type: 'folder',
+    provider: 'zoho_workdrive',
+    can_select: canSelect,
+    can_open: true,
+    is_synthetic_root: true,
+    children_count: count,
+    attributes: {
+      id,
+      name,
+      display_name: name,
+      type,
+      is_folder: true,
+      parent_id: 'root',
+    },
+  };
+}
+
+function extractRows(json = {}) {
+  if (Array.isArray(json?.data)) return json.data;
+  if (Array.isArray(json?.folders)) return json.folders;
+  if (Array.isArray(json?.teamfolders)) return json.teamfolders;
+  if (Array.isArray(json?.files)) return json.files;
+  if (Array.isArray(json?.items)) return json.items;
+  return [];
+}
+
+function nextPageToken(json = {}) {
+  return json?.links?.cursor?.next || json?.links?.next || json?.next_page_token || null;
+}
+
+function rootAlias(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || ['root', 'my_drive', 'mi_unidad'].includes(normalized)) return 'root';
+  if (normalized === 'zoho:privatespace:root') return 'private_space';
+  if (normalized === 'zoho:teamfolders:root') return 'team_folder_root';
+  if (normalized === 'zoho:shared:root') return 'shared_root';
+  return null;
+}
+
+function folderRowsFromJson(json = {}) {
+  return extractRows(json).filter(isFolderItem);
+}
+
+function emptyDetails({ reason, stage, message, apiBaseUrl, error = null }) {
+  return {
+    reason,
+    stage,
+    message,
+    api_domain: apiBaseUrl || null,
+    provider_status: error?.provider_status || error?.statusCode || null,
+    provider_code: error?.provider_code || null,
+    provider_message: error?.provider_message || null,
+  };
+}
+
 async function listFolders({ accessToken, parentId = 'root', pageToken = null, apiBaseUrl = null }) {
   const normalizedParent = String(parentId || '').trim();
-  const isRoot = !normalizedParent || ['root', 'my_drive', 'mi_unidad'].includes(normalizedParent.toLowerCase());
-  const candidates = isRoot ? rootFolderCandidates() : childFolderCandidates(normalizedParent);
+  const alias = rootAlias(normalizedParent);
+  const resolvedApiBaseUrl = resolveApiBaseUrl(apiBaseUrl);
+
+  if (alias === 'root') {
+    const privateResult = await tryZohoGetJsonAny({
+      accessToken,
+      candidates: privateSpaceCandidates(),
+      apiBaseUrl,
+      stage: 'discover_private_space',
+      searchParams: {
+        'page[limit]': 100,
+        'page[token]': pageToken || undefined,
+      },
+    });
+    const teamResult = await tryZohoGetJsonAny({
+      accessToken,
+      candidates: teamFolderRootCandidates(),
+      apiBaseUrl,
+      stage: 'discover_team_folders',
+      searchParams: {
+        'page[limit]': 100,
+        'page[token]': pageToken || undefined,
+      },
+    });
+    const sharedResult = await tryZohoGetJsonAny({
+      accessToken,
+      candidates: sharedFolderCandidates(),
+      apiBaseUrl,
+      stage: 'discover_shared_folders',
+      searchParams: {
+        'page[limit]': 100,
+        'page[token]': pageToken || undefined,
+      },
+    });
+
+    const privateFolders = privateResult.ok ? folderRowsFromJson(privateResult.json) : [];
+    const teamFolders = teamResult.ok ? folderRowsFromJson(teamResult.json) : [];
+    const sharedFolders = sharedResult.ok ? folderRowsFromJson(sharedResult.json) : [];
+    const allErrors = [privateResult, teamResult, sharedResult].filter((result) => !result.ok).map((result) => result.error);
+    const forbidden = allErrors.find((error) => Number(error.provider_status || error.statusCode || 0) === 403);
+    const unauthorized = allErrors.find((error) => Number(error.provider_status || error.statusCode || 0) === 401);
+    if (!privateResult.ok && !teamResult.ok && !sharedResult.ok && (unauthorized || forbidden)) {
+      throw unauthorized || forbidden;
+    }
+
+    const folders = [];
+    folders.push(syntheticRootNode({
+      id: 'zoho:privatespace:root',
+      name: 'Mis carpetas',
+      type: 'private_space',
+      canSelect: true,
+      count: privateFolders.length,
+    }));
+    folders.push(syntheticRootNode({
+      id: 'zoho:teamfolders:root',
+      name: 'Carpetas del equipo',
+      type: 'team_folder_root',
+      canSelect: false,
+      count: teamFolders.length,
+    }));
+    if (sharedResult.ok && sharedFolders.length > 0) {
+      folders.push(syntheticRootNode({
+        id: 'zoho:shared:root',
+        name: 'Compartido conmigo',
+        type: 'shared_root',
+        canSelect: false,
+        count: sharedFolders.length,
+      }));
+    }
+
+    return {
+      folders,
+      next_page_token: null,
+      current: {
+        id: 'root',
+        name: 'Zoho WorkDrive',
+        path: 'Zoho WorkDrive',
+        parent_id: null,
+        type: 'root',
+      },
+      details: {
+        reason: null,
+        stage: 'root_discovery_completed',
+        message: null,
+        api_domain: resolvedApiBaseUrl,
+        private_folders_count: privateFolders.length,
+        team_folders_count: teamFolders.length,
+        shared_folders_count: sharedFolders.length,
+        warnings: allErrors.map((error) => cloneZohoError(error)).slice(0, 3),
+      },
+      raw: {
+        private_space: privateResult.ok ? privateResult.json : null,
+        team_folders: teamResult.ok ? teamResult.json : null,
+        shared_folders: sharedResult.ok ? sharedResult.json : null,
+      },
+    };
+  }
+
+  let candidates = childFolderCandidates(normalizedParent);
+  let current = {
+    id: normalizedParent,
+    name: normalizedParent,
+    path: normalizedParent,
+    parent_id: null,
+    type: 'folder',
+  };
+  let stage = 'list_folder';
+  let fallbackReason = 'no_visible_folders';
+  let emptyMessage = 'No se encontraron carpetas visibles en Zoho WorkDrive para esta cuenta.';
+
+  if (alias === 'private_space') {
+    candidates = privateSpaceCandidates();
+    current = {
+      id: 'zoho:privatespace:root',
+      name: 'Mis carpetas',
+      path: 'Mis carpetas',
+      parent_id: 'root',
+      type: 'private_space',
+    };
+    stage = 'list_private_space';
+    fallbackReason = 'empty_private_space';
+    emptyMessage = 'No se encontraron carpetas visibles en Mis carpetas de Zoho WorkDrive.';
+  } else if (alias === 'team_folder_root') {
+    candidates = teamFolderRootCandidates();
+    current = {
+      id: 'zoho:teamfolders:root',
+      name: 'Carpetas del equipo',
+      path: 'Carpetas del equipo',
+      parent_id: 'root',
+      type: 'team_folder_root',
+    };
+    stage = 'list_team_folders';
+    fallbackReason = 'no_workdrive_team';
+    emptyMessage = 'No se encontraron carpetas de equipo visibles en Zoho WorkDrive para esta cuenta.';
+  } else if (alias === 'shared_root') {
+    candidates = sharedFolderCandidates();
+    current = {
+      id: 'zoho:shared:root',
+      name: 'Compartido conmigo',
+      path: 'Compartido conmigo',
+      parent_id: 'root',
+      type: 'shared_root',
+    };
+    stage = 'list_shared_folders';
+    fallbackReason = 'no_visible_folders';
+    emptyMessage = 'No se encontraron carpetas compartidas visibles en Zoho WorkDrive.';
+  }
 
   const json = await zohoGetJsonAny({
     accessToken,
     candidates,
     apiBaseUrl,
-    stage: isRoot ? 'list_root' : 'list_folder',
+    stage,
     searchParams: {
       'page[limit]': 100,
       'page[token]': pageToken || undefined,
     },
   });
 
-  const rows = Array.isArray(json?.data) ? json.data : [];
+  const rows = extractRows(json);
+  const folders = rows.filter(isFolderItem);
   return {
-    folders: rows.filter(isFolderItem),
-    next_page_token: json?.links?.cursor?.next || null,
-    current: {
-      id: isRoot ? 'root' : normalizedParent,
-      name: isRoot ? 'Mi unidad' : normalizedParent,
-      path: isRoot ? 'Mi unidad' : normalizedParent,
-      parent_id: isRoot ? null : null,
-      type: isRoot ? 'root' : 'folder',
-    },
+    folders,
+    next_page_token: nextPageToken(json),
+    current,
+    details: folders.length > 0 ? {
+      reason: null,
+      stage,
+      message: null,
+      api_domain: resolvedApiBaseUrl,
+      folders_count: folders.length,
+    } : emptyDetails({
+      reason: fallbackReason,
+      stage,
+      message: emptyMessage,
+      apiBaseUrl: resolvedApiBaseUrl,
+    }),
     raw: json,
   };
 }
 
 async function listFiles({ accessToken, folderId, includeSubfolders = true, apiBaseUrl = null }) {
+  const alias = rootAlias(folderId);
+  const candidates = alias === 'private_space'
+    ? privateSpaceCandidates()
+    : alias === 'team_folder_root'
+      ? teamFolderRootCandidates()
+      : folderId ? childFolderCandidates(folderId) : privateSpaceCandidates();
   const json = await zohoGetJsonAny({
     accessToken,
-    candidates: folderId ? childFolderCandidates(folderId) : rootFolderCandidates(),
+    candidates,
     apiBaseUrl,
     stage: 'sync_list_files',
     searchParams: { 'page[limit]': 100 },
