@@ -47,7 +47,7 @@ function resolveTenantId(req) {
 }
 
 function getFrontendUrl() {
-  return String(process.env.FRONTEND_URL || 'https://181.212.166.187:8443').replace(/\/$/, '')
+  return String(process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || 'https://181.212.166.187:8443').replace(/\/$/, '')
 }
 
 function getStateSecret() {
@@ -76,8 +76,9 @@ function verifyOAuthState(state) {
 
   const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'))
   const ageMs = Date.now() - Number(parsed.iat || 0)
+  const expiresAt = Number(parsed.expires_at || 0)
 
-  if (!parsed.tenant_id || !parsed.user_id || ageMs < 0 || ageMs > 10 * 60 * 1000) {
+  if (!parsed.tenant_id || !parsed.user_id || ageMs < 0 || ageMs > 10 * 60 * 1000 || (expiresAt && Date.now() > expiresAt)) {
     throw new Error('State OAuth expirado o incompleto')
   }
 
@@ -97,6 +98,8 @@ router.post('/oauth/start', auth, async (req, res) => {
       tenant_id: tenantId,
       user_id: getUserId(req.user),
       nonce: crypto.randomBytes(16).toString('hex'),
+      return_to: '/evidencias',
+      expires_at: Date.now() + 10 * 60 * 1000,
       iat: Date.now()
     })
 
@@ -115,6 +118,13 @@ router.get('/oauth/callback', async (req, res) => {
   const frontendUrl = getFrontendUrl()
 
   try {
+    console.info('GOOGLE_OAUTH_CALLBACK_REACHED:', {
+      request_id: req.requestId || null,
+      has_code: Boolean(req.query.code),
+      has_state: Boolean(req.query.state),
+      has_error: Boolean(req.query.error)
+    })
+
     if (req.query.error) {
       return res.redirect(`${frontendUrl}/evidencias?drive_status=error&reason=${encodeURIComponent(String(req.query.error))}`)
     }
@@ -125,6 +135,12 @@ router.get('/oauth/callback', async (req, res) => {
 
     const payload = verifyOAuthState(req.query.state)
     if (payload.provider !== 'google_drive') throw new Error('Proveedor OAuth inválido')
+    console.info('GOOGLE_OAUTH_STATE_VALID:', {
+      request_id: req.requestId || null,
+      provider: payload.provider,
+      has_tenant: Boolean(payload.tenant_id),
+      has_user: Boolean(payload.user_id)
+    })
 
     const { oauthClient, tokens } = await exchangeCodeForTokens({ code: req.query.code })
     const accountEmail = await getAccountEmail({ oauthClient })
@@ -217,12 +233,83 @@ router.get('/oauth/callback', async (req, res) => {
       integrationId = inserted.rows[0].id
     }
 
+    const sourceStatus = 'connected_needs_folder'
+    const updatedSource = await client.query(
+      `
+      UPDATE tenant_document_sources
+      SET
+        integration_id = $2::uuid,
+        status = CASE
+          WHEN COALESCE(folder_id, '') = '' THEN $4::text
+          ELSE 'connected'
+        END,
+        sync_enabled = true,
+        provider_account_email = $3::text,
+        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $5::jsonb,
+        updated_at = NOW()
+      WHERE tenant_id = $1::uuid
+        AND provider = 'google_drive'
+        AND COALESCE(status, '') <> 'disconnected'
+        AND (
+          integration_id = $2::uuid
+          OR COALESCE(provider_account_email, '') = COALESCE($3::text, '')
+          OR (integration_id IS NULL AND COALESCE(provider_account_email, '') = '')
+        )
+      RETURNING id
+      `,
+      [
+        payload.tenant_id,
+        integrationId,
+        accountEmail || '',
+        sourceStatus,
+        JSON.stringify({ oauth_connected_at: new Date().toISOString(), provider_account_email: accountEmail || null })
+      ]
+    )
+
+    let sourceId = updatedSource.rows[0]?.id || null
+    if (!sourceId) {
+      const insertedSource = await client.query(
+        `
+        INSERT INTO tenant_document_sources (
+          tenant_id,
+          integration_id,
+          provider,
+          source_name,
+          status,
+          sync_enabled,
+          scan_frequency,
+          provider_account_email,
+          metadata_json,
+          created_by_user_id,
+          created_by,
+          updated_at
+        )
+        VALUES ($1::uuid,$2::uuid,'google_drive','Google Drive',$3::text,true,'manual',$4::text,$5::jsonb,$6::uuid,$6::uuid,NOW())
+        RETURNING id
+        `,
+        [
+          payload.tenant_id,
+          integrationId,
+          sourceStatus,
+          accountEmail || '',
+          JSON.stringify({ oauth_connected_at: new Date().toISOString(), provider_account_email: accountEmail || null }),
+          payload.user_id
+        ]
+      )
+      sourceId = insertedSource.rows[0]?.id || null
+    }
+
     await client.query('COMMIT')
-    return res.redirect(`${frontendUrl}/evidencias?drive_status=connected&integration_id=${integrationId}`)
+    return res.redirect(`${frontendUrl}/evidencias?google=connected&drive_status=connected&integration_id=${integrationId}&source_id=${sourceId || ''}`)
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('ERROR GOOGLE OAUTH CALLBACK:', err.message)
-    return res.redirect(`${frontendUrl}/evidencias?drive_status=error&reason=callback_failed`)
+    const invalidState = /state|firma|expirado|incompleto|proveedor/i.test(String(err.message || ''))
+    console.error('ERROR GOOGLE OAUTH CALLBACK:', {
+      request_id: req.requestId || null,
+      code: invalidState ? 'INVALID_STATE' : 'CALLBACK_FAILED',
+      message: err.message
+    })
+    return res.redirect(`${frontendUrl}/evidencias?google=error&drive_status=error&reason=${invalidState ? 'invalid_state' : 'callback_failed'}`)
   } finally {
     client.release()
   }

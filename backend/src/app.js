@@ -88,11 +88,15 @@ const allowedCorsOrigins = Array.from(new Set([
   process.env.CORS_ORIGIN,
   process.env.FRONTEND_URL,
   process.env.FRONTEND_INTERNAL_URL,
+  process.env.PUBLIC_APP_URL,
+  process.env.BACKEND_PUBLIC_URL,
   defaultFrontendUrl,
   defaultFrontendInternalUrl,
   esxiFrontendUrl,
   esxiFrontendInternalUrl,
   esxiFrontendDnsUrl,
+  'https://tcdx.dedyn.io',
+  'https://www.tcdx.dedyn.io',
 ].filter(Boolean)));
 // =============================
 // FASE 4B SECURITY HARDENING

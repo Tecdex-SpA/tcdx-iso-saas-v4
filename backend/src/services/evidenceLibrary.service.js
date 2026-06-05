@@ -172,6 +172,20 @@ function sha256(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
+function safeManualUploadError(error) {
+  const message = String(error?.message || '').trim();
+  const sqlLike = Boolean(error?.code) || /sql|postgres|parameter|\$\d+|inconsistent types|column|constraint|syntax/i.test(message);
+  if (sqlLike) {
+    console.warn('WARN MANUAL_UPLOAD_INDEX_CONTROLLED_ERROR:', {
+      code: error?.code || null,
+      detail: error?.detail ? 'present' : null,
+      hint: error?.hint ? 'present' : null,
+    });
+    return 'No fue posible indexar el archivo. Revise logs del servidor.';
+  }
+  return message || 'No fue posible procesar el archivo.';
+}
+
 function tenantUploadRoot(tenantId) {
   const tenantPart = String(tenantId || '').replace(/[^0-9a-fA-F-]/g, '');
   return path.join(MANUAL_UPLOAD_ROOT, tenantPart, 'manual');
@@ -610,7 +624,7 @@ async function ensureManualUploadSource(tenantId, userId) {
       last_sync_at,
       updated_at
     )
-    VALUES ($1::uuid,$2,'Carga manual','active',false,'manual',$3::jsonb,$4::uuid,$4::uuid,NOW(),NOW())
+    VALUES ($1::uuid,$2::text,'Carga manual','active',false,'manual',$3::jsonb,$4::uuid,$4::uuid,NOW(),NOW())
     RETURNING *
     `,
     [
@@ -706,19 +720,19 @@ async function upsertManualDocumentIndex({
     VALUES (
       $1::uuid,
       $2::uuid,
-      $3,
-      $4,
-      $5,
-      $6,
-      $7,
-      $8,
-      $9,
-      $10,
-      $11,
-      $11,
-      $11,
-      $12,
-      $13,
+      $3::text,
+      $4::text,
+      $5::text,
+      $6::text,
+      $7::text,
+      $8::text,
+      $9::text,
+      $10::bigint,
+      $11::text,
+      $11::text,
+      $11::text,
+      $12::text,
+      $13::text,
       NOW(),
       NOW(),
       NOW(),
@@ -864,7 +878,7 @@ async function manualUploadFiles({ user, files = [], fields = {} }) {
       });
       documents.push(row);
     } catch (error) {
-      skipped.push({ filename: file.originalname || 'documento', reason: error.message });
+      skipped.push({ filename: file.originalname || 'documento', reason: safeManualUploadError(error) });
     }
   }
 
@@ -874,6 +888,12 @@ async function manualUploadFiles({ user, files = [], fields = {} }) {
       uploaded: files.length,
       indexed: documents.length,
       skipped: skipped.length,
+      files_seen: files.length,
+      files_indexed: documents.length,
+      files_skipped: skipped.length,
+      files_errors: skipped.length,
+      folders_seen: 0,
+      folders_indexed: 0,
       errors: skipped,
     },
     source: {
@@ -939,7 +959,7 @@ async function manualUploadZip({ user, file, fields = {} }) {
       });
       documents.push(row);
     } catch (error) {
-      skipped.push({ filename: entry.relativePath || 'entrada_zip', reason: error.message });
+      skipped.push({ filename: entry.relativePath || 'entrada_zip', reason: safeManualUploadError(error) });
     }
   }
 
@@ -948,8 +968,13 @@ async function manualUploadZip({ user, file, fields = {} }) {
     summary: {
       uploaded: 1,
       indexed: documents.filter((doc) => doc.item_type !== 'folder').length,
-      folders_indexed: documents.filter((doc) => doc.item_type === 'folder').length,
       skipped: skipped.length,
+      files_seen: files.length,
+      files_indexed: documents.filter((doc) => doc.item_type !== 'folder').length,
+      files_skipped: skipped.length,
+      files_errors: skipped.length,
+      folders_seen: folderRows.length,
+      folders_indexed: documents.filter((doc) => doc.item_type === 'folder').length,
       errors: skipped,
     },
     source: {
