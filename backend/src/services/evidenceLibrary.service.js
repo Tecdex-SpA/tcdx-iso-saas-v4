@@ -306,7 +306,10 @@ function buildChunks(text, maxSize = 1200) {
 function mapDocumentRow(row) {
   const itemType = itemTypeForRow(row);
   const sourceType = row.source_type;
-  const sourceId = row.source_id ? String(row.source_id) : null;
+  const sourceIdCandidate = sourceType === 'document_index'
+    ? (row.document_index_id || row.id || row.source_id)
+    : row.source_id;
+  const sourceId = sourceIdCandidate ? String(sourceIdCandidate) : null;
   const libraryItemId = sourceType && sourceId ? `${sourceType}:${sourceId}` : null;
   const doc = {
     id: libraryItemId,
@@ -314,6 +317,7 @@ function mapDocumentRow(row) {
     source_type: sourceType,
     source_table: row.source_table,
     source_id: sourceId,
+    source_id_shape: sourceIdShape(sourceId),
     document_source_id: row.document_source_id || row.index_source_id || null,
     tenant_id: row.tenant_id,
     title: row.title || row.filename || 'Documento',
@@ -542,6 +546,7 @@ async function listDocuments({ user, filters = {} }) {
         d.tenant_id,
         'document_index' AS source_type,
         'document_index' AS source_table,
+        d.id AS document_index_id,
         d.id AS source_id,
         d.source_id AS document_source_id,
         d.file_name AS filename,
@@ -680,15 +685,67 @@ function assertDocumentIsFile(source, message) {
   }
 }
 
+async function resolveDocumentIndexIdFromProviderLike(tenantId, providerLikeId) {
+  const raw = asString(providerLikeId, 220);
+  if (!raw) return null;
+  const result = await pool.query(
+    `
+    SELECT id
+    FROM document_index
+    WHERE tenant_id = $1::uuid
+      AND COALESCE(status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
+      AND (
+        provider_file_id = $2
+        OR provider_version_id = $2
+        OR COALESCE(metadata_json->>'provider_file_id', '') = $2
+        OR COALESCE(metadata_json->>'external_file_id', '') = $2
+        OR COALESCE(metadata_json->>'file_id', '') = $2
+        OR COALESCE(metadata_json->'google'->>'id', '') = $2
+        OR COALESCE(metadata_json->'google'->>'file_id', '') = $2
+        OR COALESCE(metadata_json->'google'->>'provider_file_id', '') = $2
+        OR COALESCE(metadata_json->'zoho'->>'id', '') = $2
+        OR COALESCE(metadata_json->'zoho'->>'file_id', '') = $2
+        OR COALESCE(metadata_json->'zoho'->>'provider_file_id', '') = $2
+      )
+    ORDER BY last_seen_at DESC NULLS LAST, indexed_at DESC NULLS LAST
+    LIMIT 2
+    `,
+    [tenantId, raw]
+  ).catch((error) => {
+    if (['42P01', '42703'].includes(error.code)) return { rows: [] };
+    throw error;
+  });
+
+  if (result.rows.length === 1) return String(result.rows[0].id);
+  if (result.rows.length > 1) {
+    throw publicError(400, 'AMBIGUOUS_PROVIDER_SOURCE_ID', 'El identificador externo coincide con más de un documento indexado. Seleccione el archivo desde la biblioteca actualizada.', {
+      received_source_type: 'document_index',
+      received_source_id_shape: sourceIdShape(providerLikeId),
+      matched_rows: result.rows.length,
+    });
+  }
+  return null;
+}
+
 async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) {
   const mode = options.mode || 'read';
-  const { sourceType, sourceId } = normalizeSourcePayload(input);
+  const normalizedPayload = normalizeSourcePayload(input);
+  const sourceType = normalizedPayload.sourceType;
+  let sourceId = normalizedPayload.sourceId;
   if (!SOURCE_TYPES.has(sourceType)) {
     throw publicError(400, 'INVALID_SOURCE_TYPE', 'Seleccione un archivo/documento válido de la biblioteca.', {
       received_source_type: sourceType || null,
       received_source_id_shape: sourceIdShape(sourceId),
       item_type: input.item_type || input.itemType || null,
     });
+  }
+  if (!isUuid(sourceId)) {
+    if (sourceType === 'document_index' && sourceIdShape(sourceId) === 'provider_like') {
+      const resolvedId = await resolveDocumentIndexIdFromProviderLike(tenantId, sourceId);
+      if (resolvedId) {
+        sourceId = resolvedId;
+      }
+    }
   }
   if (!isUuid(sourceId)) {
     throw publicError(400, 'INVALID_SOURCE_ID', 'Identificador de documento/evidencia inválido. Seleccione un archivo de la biblioteca.', {
@@ -1143,6 +1200,7 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
       d.tenant_id,
       'document_index' AS source_type,
       'document_index' AS source_table,
+      d.id AS document_index_id,
       d.id AS source_id,
       d.source_id AS document_source_id,
       d.file_name AS filename,

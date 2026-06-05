@@ -35,9 +35,11 @@ type LibraryDocument = {
   library_item_id?: string | null;
   source_type: 'document_index' | 'evidence';
   source_id: string;
+  source_id_shape?: string | null;
   source_table?: string;
   document_key?: string;
   document_source_id?: string | null;
+  provider_file_id?: string | null;
   item_type?: 'file' | 'folder' | 'source';
   can_analyze?: boolean;
   can_associate?: boolean;
@@ -226,17 +228,6 @@ async function fetchJson(url: string, token: string, init: RequestInit = {}) {
   return json;
 }
 
-function parseLibraryItemId(value?: string | null) {
-  const raw = String(value || '').trim();
-  if (!raw.includes(':')) return null;
-  const [sourceType, ...rest] = raw.split(':');
-  const sourceId = rest.join(':');
-  if ((sourceType === 'document_index' || sourceType === 'evidence') && sourceId) {
-    return { source_type: sourceType as 'document_index' | 'evidence', source_id: sourceId };
-  }
-  return null;
-}
-
 function isUuidLike(value?: string | null) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(String(value || '').trim());
 }
@@ -244,13 +235,10 @@ function isUuidLike(value?: string | null) {
 function resolveLibraryActionSource(doc: LibraryDocument | null) {
   if (!doc) return null;
   const rawSourceId = String(doc.source_id || '').trim();
-  const fromFields = doc.source_type && isUuidLike(rawSourceId)
-    ? { source_type: doc.source_type, source_id: rawSourceId }
-    : parseLibraryItemId(rawSourceId);
-  const fromLibraryId = parseLibraryItemId(doc.library_item_id || doc.id || doc.document_key || '');
-  const source = fromFields || fromLibraryId;
-  if (!source || !source.source_id) return null;
-  return source;
+  if (doc.source_type && isUuidLike(rawSourceId)) {
+    return { source_type: doc.source_type, source_id: rawSourceId };
+  }
+  return null;
 }
 
 function traceLibraryAction(action: string, doc: LibraryDocument | null, source: ReturnType<typeof resolveLibraryActionSource>) {
