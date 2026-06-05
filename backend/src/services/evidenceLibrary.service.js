@@ -994,9 +994,9 @@ function defaultSourceActions(sourceType, sourceId = null, status = 'available')
     if (!sourceId || currentStatus === 'not_connected' || currentStatus === 'available') {
       return [action('connect', 'Conectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' })];
     }
-    if (currentStatus === 'connected_needs_folder') {
+    if (currentStatus === 'folder_required') {
       return [
-        action('select_folder', 'Seleccionar carpeta raíz', { kind: 'google_folder_selector', body: { source_id: sourceId } }),
+        action('select_folder', 'Seleccionar carpeta', { kind: 'google_folder_selector', body: { source_id: sourceId } }),
         action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' }),
       ];
     }
@@ -1125,7 +1125,7 @@ async function listSources({ user }) {
           if (!row.integration_status || row.integration_status !== 'connected') {
             status = 'needs_reconnection';
           } else if (!row.folder_id) {
-            status = 'connected_needs_folder';
+            status = 'folder_required';
           } else if (row.last_sync_status === 'failed' || row.last_sync_error) {
             status = 'sync_error';
           } else {
@@ -1176,7 +1176,7 @@ async function listSources({ user }) {
     }
     return {
       ...normalizedCard,
-      connected: Boolean(normalizedCard.source_id && ['connected', 'connected_needs_folder', 'sync_error'].includes(String(normalizedCard.status || '').toLowerCase())),
+      connected: Boolean(normalizedCard.source_id && ['connected', 'folder_required', 'sync_error'].includes(String(normalizedCard.status || '').toLowerCase())),
       item_type: 'source',
       can_sync: true,
       actions: defaultSourceActions(normalizedCard.source_type, normalizedCard.source_id, normalizedCard.status),

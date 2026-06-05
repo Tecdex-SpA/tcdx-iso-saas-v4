@@ -206,6 +206,9 @@ function statusClass(value?: string | null) {
   if (['pending_review', 'pending', 'not_processed', 'pendiente'].includes(status)) {
     return 'border-amber-200 bg-amber-50 text-amber-700';
   }
+  if (status === 'folder_required') {
+    return 'border-amber-200 bg-amber-50 text-amber-700';
+  }
   if (['failed', 'rejected', 'rechazada', 'error'].includes(status)) {
     return 'border-red-200 bg-red-50 text-red-700';
   }
@@ -818,6 +821,11 @@ export default function UnifiedEvidenceLibrary({
               )}
               {source.root_folder_name && (
                 <div className="mt-1 truncate text-xs text-slate-500">Carpeta: {source.root_folder_name}</div>
+              )}
+              {source.source_type === 'google_drive' && source.status === 'folder_required' && (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                  Google Drive conectado. Seleccione una carpeta para sincronizar.
+                </div>
               )}
               {source.last_sync_error && (
                 <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
