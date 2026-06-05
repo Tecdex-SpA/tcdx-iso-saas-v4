@@ -285,40 +285,70 @@ router.get('/oauth/callback', async (req, res) => {
       integrationId = inserted.rows[0].id
     }
 
-    const sourceStatus = 'connected_needs_folder'
-    const updatedSource = await client.query(
+    const sourceStatus = 'active'
+    const sourceMetadata = JSON.stringify({
+      oauth_connected_at: new Date().toISOString(),
+      provider_account_email: accountEmail || null,
+    })
+    const existingSources = await client.query(
       `
-      UPDATE tenant_document_sources
-      SET
-        integration_id = $2::uuid,
-        status = CASE
-          WHEN COALESCE(folder_id, '') = '' THEN $4::text
-          ELSE 'connected'
-        END,
-        sync_enabled = true,
-        provider_account_email = $3::text,
-        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $5::jsonb,
-        updated_at = NOW()
+      SELECT id, folder_id
+      FROM tenant_document_sources
       WHERE tenant_id = $1::uuid
         AND provider = 'google_drive'
         AND COALESCE(status, '') <> 'disconnected'
-        AND (
-          integration_id = $2::uuid
-          OR COALESCE(provider_account_email, '') = COALESCE($3::text, '')
-          OR (integration_id IS NULL AND COALESCE(provider_account_email, '') = '')
-        )
-      RETURNING id
+      ORDER BY
+        CASE WHEN integration_id = $2::uuid THEN 0 ELSE 1 END,
+        updated_at DESC NULLS LAST,
+        created_at DESC NULLS LAST
       `,
-      [
-        payload.tenant_id,
-        integrationId,
-        accountEmail || '',
-        sourceStatus,
-        JSON.stringify({ oauth_connected_at: new Date().toISOString(), provider_account_email: accountEmail || null })
-      ]
+      [payload.tenant_id, integrationId]
     )
+    if (existingSources.rowCount > 1) {
+      console.warn('WARN GOOGLE OAUTH MULTIPLE_TENANT_SOURCES:', {
+        request_id: req.requestId || null,
+        tenant_source_count: existingSources.rowCount,
+        selected_source_id: existingSources.rows[0]?.id || null,
+      })
+    }
 
-    let sourceId = updatedSource.rows[0]?.id || null
+    let sourceId = null
+    let sourceFolderId = null
+    if (existingSources.rowCount > 0) {
+      const updatedSource = await client.query(
+        `
+        UPDATE tenant_document_sources
+        SET
+          integration_id = $2::uuid,
+          status = $4::text,
+          sync_enabled = true,
+          provider_account_email = $3::text,
+          last_sync_status = CASE
+            WHEN COALESCE(folder_id, '') = '' THEN 'folder_required'
+            ELSE last_sync_status
+          END,
+          last_sync_error = NULL,
+          metadata_json = COALESCE(metadata_json, '{}'::jsonb)
+            || $5::jsonb
+            || jsonb_build_object('folder_required', COALESCE(folder_id, '') = ''),
+          updated_at = NOW()
+        WHERE id = $1::uuid
+          AND tenant_id = $6::uuid
+          AND provider = 'google_drive'
+        RETURNING id, folder_id
+        `,
+        [
+          existingSources.rows[0].id,
+          integrationId,
+          accountEmail || '',
+          sourceStatus,
+          sourceMetadata,
+          payload.tenant_id,
+        ]
+      )
+      sourceId = updatedSource.rows[0]?.id || null
+      sourceFolderId = updatedSource.rows[0]?.folder_id || null
+    }
     if (!sourceId) {
       const insertedSource = await client.query(
         `
@@ -330,36 +360,42 @@ router.get('/oauth/callback', async (req, res) => {
           status,
           sync_enabled,
           scan_frequency,
+          last_sync_status,
           provider_account_email,
           metadata_json,
           created_by_user_id,
           created_by,
           updated_at
         )
-        VALUES ($1::uuid,$2::uuid,'google_drive','Google Drive',$3::text,true,'manual',$4::text,$5::jsonb,$6::uuid,$6::uuid,NOW())
-        RETURNING id
+        VALUES ($1::uuid,$2::uuid,'google_drive','Google Drive',$3::text,true,'manual','folder_required',$4::text,$5::jsonb,$6::uuid,$6::uuid,NOW())
+        RETURNING id, folder_id
         `,
         [
           payload.tenant_id,
           integrationId,
           sourceStatus,
           accountEmail || '',
-          JSON.stringify({ oauth_connected_at: new Date().toISOString(), provider_account_email: accountEmail || null }),
+          JSON.stringify({ oauth_connected_at: new Date().toISOString(), provider_account_email: accountEmail || null, folder_required: true }),
           payload.user_id
         ]
       )
       sourceId = insertedSource.rows[0]?.id || null
+      sourceFolderId = insertedSource.rows[0]?.folder_id || null
     }
 
     await client.query('COMMIT')
-    return res.redirect(`${frontendUrl}/evidencias?google=connected&drive_status=connected&integration_id=${integrationId}&source_id=${sourceId || ''}`)
+    const driveStatus = sourceFolderId ? 'connected' : 'folder_required'
+    return res.redirect(`${frontendUrl}/evidencias?google=connected&drive_status=${driveStatus}&integration_id=${integrationId}&source_id=${sourceId || ''}`)
   } catch (err) {
     await client.query('ROLLBACK')
     const invalidState = /state|firma|expirado|incompleto|proveedor/i.test(String(err.message || ''))
     console.error('ERROR GOOGLE OAUTH CALLBACK:', {
       request_id: req.requestId || null,
+      stage: 'persist_google_source',
       code: invalidState ? 'INVALID_STATE' : 'CALLBACK_FAILED',
-      message: err.message
+      message: err.message,
+      constraint: err.constraint || null,
+      safe_status_attempted: 'active',
     })
     return res.redirect(`${frontendUrl}/evidencias?google=error&drive_status=error&reason=${invalidState ? 'invalid_state' : 'callback_failed'}`)
   } finally {
@@ -437,9 +473,10 @@ router.post('/select-folder', auth, async (req, res) => {
         folder_id = $3::text,
         folder_path = $4::text,
         folder_display_name = $4::text,
-        status = 'connected',
+        status = 'active',
         sync_enabled = true,
         metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $5::jsonb,
+        last_sync_status = NULL,
         last_sync_error = NULL,
         updated_at = NOW()
       WHERE id = $1::uuid

@@ -720,7 +720,7 @@ async function syncGoogleDriveSource({
       `
       UPDATE tenant_document_sources
       SET last_sync_at = NOW(),
-          status = 'connected',
+          status = 'active',
           last_sync_status = $3,
           last_sync_error = NULL,
           updated_at = NOW()
