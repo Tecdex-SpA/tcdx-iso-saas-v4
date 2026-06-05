@@ -8,6 +8,7 @@ const {
 const zoho = require('../services/zohoWorkdriveClient.service');
 
 const router = express.Router();
+const ZOHO_PROVIDER = 'zoho_workdrive';
 
 function getUserTenantId(user) {
   return user?.tenant_id || user?.tenantId || user?.tenant || user?.company_id || user?.companyId || null;
@@ -26,19 +27,41 @@ function isSuperAdmin(user) {
 }
 
 function canManage(user) {
-  return isSuperAdmin(user) || ['tenant_admin', 'admin', 'compliance_manager'].includes(role(user));
+  return isSuperAdmin(user) || ['tenant_admin', 'admin', 'admin_cumplimiento', 'compliance_admin', 'compliance_manager'].includes(role(user));
+}
+
+function ensureTenantAccess(req, tenantId) {
+  if (isSuperAdmin(req.user)) return true;
+  return String(getUserTenantId(req.user)) === String(tenantId);
 }
 
 function resolveTenantId(req) {
   return isSuperAdmin(req.user) ? (req.query.tenant_id || req.body?.tenant_id || getUserTenantId(req.user)) : getUserTenantId(req.user);
 }
 
+function assertManageZoho(req, res) {
+  const tenantId = resolveTenantId(req);
+  if (!tenantId) {
+    res.status(400).json({ ok: false, code: 'TENANT_REQUIRED', error: 'tenant_id es obligatorio' });
+    return null;
+  }
+  if (!ensureTenantAccess(req, tenantId)) {
+    res.status(403).json({ ok: false, code: 'TENANT_DENIED', error: 'No autorizado para este tenant' });
+    return null;
+  }
+  if (!canManage(req.user)) {
+    res.status(403).json({ ok: false, code: 'RBAC_DENIED', error: 'No autorizado para administrar Zoho WorkDrive' });
+    return null;
+  }
+  return tenantId;
+}
+
 function getFrontendUrl() {
-  return String(process.env.FRONTEND_URL || 'https://181.212.166.187:8443').replace(/\/$/, '');
+  return String(process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || 'https://181.212.166.187:8443').replace(/\/$/, '');
 }
 
 function stateSecret() {
-  const secret = getJwtSecret() || process.env.SESSION_SECRET || process.env.AGENT_TOKEN_SIGNING_SECRET;
+  const secret = getJwtSecret() || process.env.SESSION_SECRET || process.env.TOKEN_ENCRYPTION_KEY || process.env.AGENT_TOKEN_SIGNING_SECRET;
   if (!secret) throw new Error('No existe secreto para firmar state OAuth');
   return secret;
 }
@@ -57,7 +80,9 @@ function verifyState(state) {
     throw new Error('Firma OAuth state inválida');
   }
   const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-  if (!parsed.tenant_id || !parsed.user_id || Date.now() - Number(parsed.iat || 0) > 10 * 60 * 1000) {
+  const ageMs = Date.now() - Number(parsed.iat || 0);
+  const expiresAt = Number(parsed.expires_at || 0);
+  if (!parsed.tenant_id || !parsed.user_id || ageMs < 0 || ageMs > 10 * 60 * 1000 || (expiresAt && Date.now() > expiresAt)) {
     throw new Error('State OAuth expirado o incompleto');
   }
   return parsed;
@@ -66,263 +91,634 @@ function verifyState(state) {
 function notConfigured(res) {
   return res.status(503).json({
     ok: false,
-    code: 'ZOHO_CONNECTOR_NOT_CONFIGURED',
-    error: 'Conector Zoho no configurado',
+    code: 'ZOHO_PLATFORM_CONFIG_MISSING',
+    error: 'Zoho WorkDrive no está configurado por la plataforma.',
   });
 }
 
-router.get('/oauth/start', auth, async (req, res) => {
+function tokenMetadata(tokens = {}) {
+  return {
+    ...zoho.extractTokenMetadata(tokens),
+    scopes: zoho.getScopes(),
+  };
+}
+
+function metadataValue(row, key) {
+  const metadata = row?.metadata_json || {};
+  return metadata?.[key] || metadata?.zoho?.[key] || null;
+}
+
+function resolveApiBaseUrl(source, credential) {
+  return metadataValue(source, 'api_domain') || metadataValue(credential, 'api_domain') || null;
+}
+
+async function getTenantZohoSource({ tenantId, sourceId = null }) {
+  const params = [tenantId];
+  let sourceFilter = '';
+  if (sourceId) {
+    params.push(sourceId);
+    sourceFilter = `AND s.id = $2::uuid`;
+  }
+
+  const result = await pool.query(
+    `
+    SELECT s.*
+    FROM tenant_document_sources s
+    WHERE s.tenant_id = $1::uuid
+      AND s.provider = $${params.length + 1}
+      AND COALESCE(s.status, '') <> 'disconnected'
+      ${sourceFilter}
+    ORDER BY s.updated_at DESC NULLS LAST, s.created_at DESC NULLS LAST
+    LIMIT 1
+    `,
+    [...params, ZOHO_PROVIDER]
+  );
+  return result.rows[0] || null;
+}
+
+async function getCredential({ tenantId, credentialId = null, sourceId = null }) {
+  const params = [tenantId, ZOHO_PROVIDER];
+  const where = [`tenant_id = $1::uuid`, `provider = $2`];
+  if (credentialId) {
+    params.push(credentialId);
+    where.push(`id = $${params.length}::uuid`);
+  }
+  if (sourceId) {
+    params.push(sourceId);
+    where.push(`source_id = $${params.length}::uuid`);
+  }
+
+  const result = await pool.query(
+    `SELECT * FROM tenant_document_provider_credentials WHERE ${where.join(' AND ')} ORDER BY updated_at DESC NULLS LAST, created_at DESC LIMIT 1`,
+    params
+  );
+  return result.rows[0] || null;
+}
+
+async function ensureFreshCredential(credential) {
+  const tokens = zoho.decryptZohoCredential(credential);
+  const expiresAt = credential.token_expires_at ? new Date(credential.token_expires_at).getTime() : 0;
+  const shouldRefresh = tokens.refresh_token && (!tokens.access_token || !expiresAt || expiresAt < Date.now() + 5 * 60 * 1000);
+  if (!shouldRefresh) return { credential, tokens };
+
+  const refreshed = await zoho.refreshAccessToken(tokens.refresh_token);
+  const encrypted = zoho.encryptZohoTokens({
+    ...refreshed,
+    refresh_token: refreshed.refresh_token || tokens.refresh_token,
+  });
+  const metadata = tokenMetadata(refreshed);
+  const result = await pool.query(
+    `
+    UPDATE tenant_document_provider_credentials
+    SET access_token_encrypted = COALESCE($2, access_token_encrypted),
+        refresh_token_encrypted = COALESCE($3, refresh_token_encrypted),
+        token_expires_at = COALESCE($4, token_expires_at),
+        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $5::jsonb,
+        updated_at = NOW()
+    WHERE id = $1::uuid
+    RETURNING *
+    `,
+    [
+      credential.id,
+      encrypted.access_token_encrypted,
+      encrypted.refresh_token_encrypted,
+      encrypted.token_expires_at,
+      JSON.stringify(metadata),
+    ]
+  );
+  return { credential: result.rows[0], tokens: zoho.decryptZohoCredential(result.rows[0]) };
+}
+
+async function upsertCredential({ client, tenantId, userId, tokens, sourceId = null }) {
+  const existing = sourceId
+    ? await client.query(
+        `SELECT * FROM tenant_document_provider_credentials WHERE tenant_id = $1::uuid AND provider = $2 AND source_id = $3::uuid ORDER BY updated_at DESC NULLS LAST, created_at DESC LIMIT 1`,
+        [tenantId, ZOHO_PROVIDER, sourceId]
+      )
+    : await client.query(
+        `SELECT * FROM tenant_document_provider_credentials WHERE tenant_id = $1::uuid AND provider = $2 ORDER BY updated_at DESC NULLS LAST, created_at DESC LIMIT 1`,
+        [tenantId, ZOHO_PROVIDER]
+      );
+  const encrypted = zoho.encryptZohoTokens(tokens);
+  const metadata = tokenMetadata(tokens);
+
+  if (existing.rowCount > 0) {
+    const result = await client.query(
+      `
+      UPDATE tenant_document_provider_credentials
+      SET access_token_encrypted = COALESCE($2, access_token_encrypted),
+          refresh_token_encrypted = COALESCE($3, refresh_token_encrypted),
+          token_expires_at = COALESCE($4, token_expires_at),
+          scopes = $5,
+          metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $6::jsonb,
+          updated_at = NOW()
+      WHERE id = $1::uuid
+      RETURNING *
+      `,
+      [
+        existing.rows[0].id,
+        encrypted.access_token_encrypted,
+        encrypted.refresh_token_encrypted,
+        encrypted.token_expires_at,
+        zoho.getScopes(),
+        JSON.stringify(metadata),
+      ]
+    );
+    return result.rows[0];
+  }
+
+  const result = await client.query(
+    `
+    INSERT INTO tenant_document_provider_credentials (
+      tenant_id, provider, access_token_encrypted, refresh_token_encrypted,
+      token_expires_at, scopes, metadata_json, created_by, source_id
+    )
+    VALUES ($1::uuid,$2,$3,$4,$5,$6,$7::jsonb,$8::uuid,$9::uuid)
+    RETURNING *
+    `,
+    [
+      tenantId,
+      ZOHO_PROVIDER,
+      encrypted.access_token_encrypted,
+      encrypted.refresh_token_encrypted,
+      encrypted.token_expires_at,
+      zoho.getScopes(),
+      JSON.stringify(metadata),
+      userId || null,
+      sourceId,
+    ]
+  );
+  return result.rows[0];
+}
+
+function normalizeFolder(item) {
+  const attributes = item?.attributes || {};
+  const id = item?.id || attributes.id || attributes.resource_id;
+  const name = attributes.name || attributes.display_attr_name || attributes.display_html_name || attributes.title || id;
+  return {
+    id,
+    provider_folder_id: id,
+    name,
+    parent_id: attributes.parent_id || null,
+    path: attributes.path || name,
+    display_path: attributes.path || name,
+    item_type: 'folder',
+    can_select: true,
+    web_view_url: attributes.permalink || null,
+    modified_at: attributes.modified_time || null,
+    provider_team_id: attributes.library_id || attributes.team_id || null,
+  };
+}
+
+function normalizeRelativePath(...parts) {
+  return parts
+    .map((part) => String(part || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''))
+    .filter(Boolean)
+    .join('/');
+}
+
+async function upsertZohoDocument({ tenantId, source, credential, item, relativePath }) {
+  const normalized = zoho.normalizeZohoFileToDocumentIndex(item);
+  const isFolder = Boolean(normalized.metadata_json?.zoho?.is_folder);
+  const finalRelativePath = relativePath || normalized.relative_path || normalized.file_name;
+  const metadata = {
+    ...normalized.metadata_json,
+    zoho: {
+      ...(normalized.metadata_json?.zoho || {}),
+      api_domain: metadataValue(credential, 'api_domain') || null,
+      source_id: source.id,
+      folder_id: source.folder_id,
+      relative_path: finalRelativePath,
+      parent_folder_id: normalized.metadata_json?.zoho?.parent_folder_id || normalized.metadata_json?.zoho?.parent_id || null,
+    },
+  };
+
+  await pool.query(
+    `
+    INSERT INTO document_index (
+      tenant_id, source_id, provider, provider_file_id, provider_version_id,
+      file_name, mime_type, file_extension, file_url, web_view_url, size_bytes,
+      modified_at, relative_path, indexed_at, last_seen_at, status, metadata_json
+    )
+    VALUES (
+      $1::uuid,$2::uuid,$3,$4,$5,
+      $6,$7,$8,$9,$10,$11::bigint,
+      $12::timestamp,$13::text,NOW(),NOW(),'indexed',$14::jsonb
+    )
+    ON CONFLICT (tenant_id, provider, provider_file_id)
+    DO UPDATE SET
+      source_id = EXCLUDED.source_id,
+      provider_version_id = EXCLUDED.provider_version_id,
+      file_name = EXCLUDED.file_name,
+      mime_type = EXCLUDED.mime_type,
+      file_extension = EXCLUDED.file_extension,
+      file_url = EXCLUDED.file_url,
+      web_view_url = EXCLUDED.web_view_url,
+      size_bytes = EXCLUDED.size_bytes,
+      modified_at = EXCLUDED.modified_at,
+      relative_path = EXCLUDED.relative_path,
+      last_seen_at = NOW(),
+      status = 'updated',
+      metadata_json = COALESCE(document_index.metadata_json, '{}'::jsonb) || EXCLUDED.metadata_json
+    `,
+    [
+      tenantId,
+      source.id,
+      ZOHO_PROVIDER,
+      normalized.provider_file_id,
+      normalized.provider_version_id,
+      normalized.file_name,
+      normalized.mime_type || (isFolder ? 'application/vnd.zoho.workdrive.folder' : null),
+      isFolder ? 'folder' : normalized.file_extension,
+      normalized.file_url,
+      normalized.web_view_url,
+      normalized.size_bytes,
+      normalized.modified_at,
+      finalRelativePath,
+      JSON.stringify(metadata),
+    ]
+  );
+
+  return isFolder ? 'folder' : 'file';
+}
+
+async function listZohoFilesRecursive({ accessToken, apiBaseUrl, folderId, includeSubfolders, maxFiles = 1000 }) {
+  const files = [];
+  const warnings = [];
+  const visited = new Set();
+
+  async function walk(currentFolderId, currentPath, depth) {
+    if (visited.has(currentFolderId) || files.length >= maxFiles) return;
+    visited.add(currentFolderId);
+    const listed = await zoho.listFiles({ accessToken, apiBaseUrl, folderId: currentFolderId, includeSubfolders });
+    for (const item of listed.files || []) {
+      if (files.length >= maxFiles) break;
+      const normalized = zoho.normalizeZohoFileToDocumentIndex(item);
+      const name = normalized.file_name || normalized.provider_file_id;
+      const relativePath = normalizeRelativePath(currentPath, name);
+      files.push({ item, relativePath });
+      if (includeSubfolders && normalized.metadata_json?.zoho?.is_folder && depth < 5) {
+        await walk(normalized.provider_file_id, relativePath, depth + 1);
+      }
+    }
+  }
+
+  await walk(folderId, '', 0).catch((error) => {
+    warnings.push({ type: 'zoho_folder_walk_failed', message: error.message });
+  });
+
+  return { files, warnings };
+}
+
+async function startOAuth(req, res) {
   if (!zoho.isZohoConfigured()) return notConfigured(res);
-  const tenantId = resolveTenantId(req);
-  if (!tenantId) return res.status(400).json({ error: 'tenant_id es obligatorio' });
-  if (!canManage(req.user)) return res.status(403).json({ error: 'No autorizado para conectar Zoho WorkDrive' });
+  const tenantId = assertManageZoho(req, res);
+  if (!tenantId) return;
 
   const state = signState({
-    provider: 'zoho_workdrive',
+    provider: ZOHO_PROVIDER,
     tenant_id: tenantId,
     user_id: getUserId(req.user),
     nonce: crypto.randomBytes(16).toString('hex'),
+    return_to: '/evidencias',
+    expires_at: Date.now() + 10 * 60 * 1000,
     iat: Date.now(),
   });
-  return res.json({ provider: 'zoho_workdrive', auth_url: zoho.buildAuthorizationUrl({ state }) });
-});
+  return res.json({ provider: ZOHO_PROVIDER, auth_url: zoho.buildAuthorizationUrl({ state }) });
+}
+
+router.get('/oauth/start', auth, startOAuth);
+router.post('/oauth/start', auth, startOAuth);
 
 router.get('/oauth/callback', async (req, res) => {
   const client = await pool.connect();
   const frontendUrl = getFrontendUrl();
   try {
     if (req.query.error) {
-      return res.redirect(`${frontendUrl}/evidencias?zoho_status=error&reason=${encodeURIComponent(String(req.query.error))}`);
+      return res.redirect(`${frontendUrl}/evidencias?zoho=error&drive_status=error&reason=${encodeURIComponent(String(req.query.error))}`);
     }
     if (!zoho.isZohoConfigured()) {
-      return res.redirect(`${frontendUrl}/evidencias?zoho_status=error&reason=not_configured`);
+      return res.redirect(`${frontendUrl}/evidencias?zoho=error&drive_status=error&reason=not_configured`);
     }
     if (!req.query.code || !req.query.state) {
-      return res.redirect(`${frontendUrl}/evidencias?zoho_status=error&reason=missing_code_or_state`);
+      return res.redirect(`${frontendUrl}/evidencias?zoho=error&drive_status=error&reason=missing_code_or_state`);
     }
+
     const payload = verifyState(req.query.state);
-    if (payload.provider !== 'zoho_workdrive') throw new Error('Proveedor OAuth inválido');
+    if (payload.provider !== ZOHO_PROVIDER) throw new Error('Proveedor OAuth inválido');
     const tokens = await zoho.exchangeCodeForTokens(String(req.query.code));
-    const encrypted = zoho.encryptZohoTokens(tokens);
+    const tokenMeta = tokenMetadata(tokens);
 
     await client.query('BEGIN');
-    const credential = await client.query(
+
+    const existingSources = await client.query(
       `
-      INSERT INTO tenant_document_provider_credentials (
-        tenant_id, provider, access_token_encrypted, refresh_token_encrypted,
-        token_expires_at, scopes, metadata_json, created_by
-      )
-      VALUES ($1,'zoho_workdrive',$2,$3,$4,$5,$6::jsonb,$7)
-      RETURNING id
+      SELECT id, folder_id
+      FROM tenant_document_sources
+      WHERE tenant_id = $1::uuid
+        AND provider = $2
+        AND COALESCE(status, '') <> 'disconnected'
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
       `,
-      [
-        payload.tenant_id,
-        encrypted.access_token_encrypted,
-        encrypted.refresh_token_encrypted,
-        encrypted.token_expires_at,
-        zoho.getScopes(),
-        JSON.stringify({ oauth_connected_at: new Date().toISOString() }),
-        payload.user_id,
-      ]
+      [payload.tenant_id, ZOHO_PROVIDER]
     );
+    if (existingSources.rowCount > 1) {
+      console.warn('WARN ZOHO OAUTH MULTIPLE_TENANT_SOURCES:', {
+        request_id: req.requestId || null,
+        tenant_source_count: existingSources.rowCount,
+        selected_source_id: existingSources.rows[0]?.id || null,
+      });
+    }
+
+    let sourceId = existingSources.rows[0]?.id || null;
+    let sourceFolderId = existingSources.rows[0]?.folder_id || null;
+    let credential = await upsertCredential({
+      client,
+      tenantId: payload.tenant_id,
+      userId: payload.user_id,
+      tokens,
+      sourceId,
+    });
+
+    const metadata = JSON.stringify({
+      oauth_connected_at: new Date().toISOString(),
+      folder_required: !sourceFolderId,
+      provider: ZOHO_PROVIDER,
+      ...tokenMeta,
+    });
+
+    if (sourceId) {
+      const updated = await client.query(
+        `
+        UPDATE tenant_document_sources
+        SET status = 'active',
+            sync_enabled = true,
+            provider_account_email = COALESCE(provider_account_email, NULL),
+            last_sync_status = CASE
+              WHEN COALESCE(folder_id, '') = '' THEN 'folder_required'
+              ELSE last_sync_status
+            END,
+            last_sync_error = NULL,
+            metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $3::jsonb,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND tenant_id = $2::uuid
+          AND provider = $4
+        RETURNING id, folder_id
+        `,
+        [sourceId, payload.tenant_id, metadata, ZOHO_PROVIDER]
+      );
+      sourceId = updated.rows[0]?.id || sourceId;
+      sourceFolderId = updated.rows[0]?.folder_id || null;
+    } else {
+      const inserted = await client.query(
+        `
+        INSERT INTO tenant_document_sources (
+          tenant_id, provider, source_name, status, sync_enabled, scan_frequency,
+          last_sync_status, metadata_json, created_by_user_id, created_by, updated_at
+        )
+        VALUES ($1::uuid,$2,'Zoho WorkDrive','active',true,'manual','folder_required',$3::jsonb,$4::uuid,$4::uuid,NOW())
+        RETURNING id, folder_id
+        `,
+        [payload.tenant_id, ZOHO_PROVIDER, metadata, payload.user_id]
+      );
+      sourceId = inserted.rows[0]?.id || null;
+      sourceFolderId = inserted.rows[0]?.folder_id || null;
+    }
+
+    credential = await client.query(
+      `
+      UPDATE tenant_document_provider_credentials
+      SET source_id = $2::uuid,
+          metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $3::jsonb,
+          updated_at = NOW()
+      WHERE id = $1::uuid
+      RETURNING *
+      `,
+      [credential.id, sourceId, metadata]
+    );
+
     await client.query('COMMIT');
-    return res.redirect(`${frontendUrl}/evidencias?zoho_status=connected&credential_id=${credential.rows[0].id}`);
+    const driveStatus = sourceFolderId ? 'connected' : 'folder_required';
+    return res.redirect(`${frontendUrl}/evidencias?zoho=connected&drive_status=${driveStatus}&source_id=${sourceId || ''}&credential_id=${credential.rows[0]?.id || ''}`);
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('ERROR ZOHO OAUTH CALLBACK:', error.message);
-    return res.redirect(`${frontendUrl}/evidencias?zoho_status=error&reason=callback_failed`);
+    console.error('ERROR ZOHO OAUTH CALLBACK:', {
+      request_id: req.requestId || null,
+      stage: 'zoho_oauth_callback',
+      code: error.code || 'CALLBACK_FAILED',
+      message: error.message,
+      constraint: error.constraint || null,
+      token_logged: false,
+    });
+    const invalidState = /state|firma|expirado|incompleto|proveedor/i.test(String(error.message || ''));
+    return res.redirect(`${frontendUrl}/evidencias?zoho=error&drive_status=error&reason=${invalidState ? 'invalid_state' : 'callback_failed'}`);
   } finally {
     client.release();
   }
 });
 
-async function getCredential({ tenantId, credentialId = null, sourceId = null }) {
-  const params = [tenantId];
-  let where = `tenant_id = $1::uuid AND provider = 'zoho_workdrive'`;
-  if (credentialId) {
-    params.push(credentialId);
-    where += ` AND id = $${params.length}::uuid`;
-  }
-  if (sourceId) {
-    params.push(sourceId);
-    where += ` AND source_id = $${params.length}::uuid`;
-  }
-
-  const result = await pool.query(
-    `SELECT * FROM tenant_document_provider_credentials WHERE ${where} ORDER BY created_at DESC LIMIT 1`,
-    params
-  );
-  return result.rows[0] || null;
-}
-
 router.get('/folders', auth, async (req, res) => {
   if (!zoho.isZohoConfigured()) return notConfigured(res);
-  const tenantId = resolveTenantId(req);
-  if (!tenantId) return res.status(400).json({ error: 'tenant_id es obligatorio' });
+  const tenantId = assertManageZoho(req, res);
+  if (!tenantId) return;
+
   try {
-    const credential = await getCredential({ tenantId, credentialId: req.query.credential_id || null });
-    if (!credential) return res.status(404).json({ error: 'Credencial Zoho no encontrada' });
-    const tokens = zoho.decryptZohoCredential(credential);
+    const source = await getTenantZohoSource({ tenantId, sourceId: req.query.source_id || null });
+    if (!source) return res.status(409).json({ ok: false, code: 'ZOHO_NOT_CONNECTED', error: 'Zoho WorkDrive no está conectado para este tenant.' });
+    const credential = await getCredential({ tenantId, sourceId: source.id });
+    if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
+    const fresh = await ensureFreshCredential(credential);
+    const apiBaseUrl = resolveApiBaseUrl(source, fresh.credential);
     const folders = await zoho.listFolders({
-      accessToken: tokens.access_token,
-      parentId: req.query.parent_id || 'root',
+      accessToken: fresh.tokens.access_token,
+      apiBaseUrl,
+      parentId: req.query.parentId || req.query.parent_id || 'root',
       pageToken: req.query.page_token || null,
     });
+
     return res.json({
-      provider: 'zoho_workdrive',
-      folders: folders.folders.map((folder) => ({
-        id: folder.id,
-        name: folder.attributes?.name || folder.attributes?.display_attr_name || folder.id,
-        web_view_url: folder.attributes?.permalink || null,
-        modified_at: folder.attributes?.modified_time || null,
-      })),
+      ok: true,
+      provider: ZOHO_PROVIDER,
+      source_id: source.id,
+      parent_id: req.query.parentId || req.query.parent_id || 'root',
+      folders: folders.folders.map(normalizeFolder),
       next_page_token: folders.next_page_token,
     });
   } catch (error) {
-    console.error('ERROR LIST ZOHO FOLDERS:', error.message);
+    console.error('ERROR LIST ZOHO FOLDERS:', {
+      request_id: req.requestId || null,
+      code: error.code || 'ZOHO_FOLDER_LIST_FAILED',
+      message: error.message,
+    });
     return res.status(error.statusCode || 500).json({
       ok: false,
-      code: error.code || 'ZOHO_FOLDERS_ERROR',
-      error: error.statusCode ? error.message : 'Error listando carpetas Zoho',
+      code: error.code || 'ZOHO_FOLDER_LIST_FAILED',
+      error: error.statusCode ? error.message : 'Error listando carpetas Zoho WorkDrive',
+    });
+  }
+});
+
+router.post('/select-folder', auth, async (req, res) => {
+  if (!zoho.isZohoConfigured()) return notConfigured(res);
+  const tenantId = assertManageZoho(req, res);
+  if (!tenantId) return;
+
+  const sourceId = req.body?.source_id || null;
+  const folderId = String(req.body?.folder_id || '').trim();
+  const folderName = String(req.body?.folder_name || req.body?.folder_display_name || '').trim();
+  if (!folderId) return res.status(400).json({ ok: false, code: 'ZOHO_FOLDER_REQUIRED', error: 'folder_id es obligatorio' });
+
+  try {
+    const source = await getTenantZohoSource({ tenantId, sourceId });
+    if (!source) return res.status(409).json({ ok: false, code: 'ZOHO_NOT_CONNECTED', error: 'Zoho WorkDrive no está conectado para este tenant.' });
+    const credential = await getCredential({ tenantId, sourceId: source.id });
+    if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
+    const fresh = await ensureFreshCredential(credential);
+    const apiBaseUrl = resolveApiBaseUrl(source, fresh.credential);
+    const metadata = await zoho.getFileMetadata({ accessToken: fresh.tokens.access_token, apiBaseUrl, fileId: folderId }).catch(() => null);
+    const normalized = metadata ? normalizeFolder(metadata) : { id: folderId, name: folderName || 'Zoho WorkDrive', path: folderName || 'Zoho WorkDrive', provider_team_id: null };
+    const result = await pool.query(
+      `
+      UPDATE tenant_document_sources
+      SET folder_id = $3::text,
+          folder_display_name = $4::text,
+          folder_path = $5::text,
+          provider_team_id = COALESCE($6::text, provider_team_id),
+          include_subfolders = $7::boolean,
+          status = 'active',
+          sync_enabled = true,
+          last_sync_status = 'folder_selected',
+          last_sync_error = NULL,
+          metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $8::jsonb,
+          updated_at = NOW()
+      WHERE id = $1::uuid
+        AND tenant_id = $2::uuid
+        AND provider = $9
+      RETURNING *
+      `,
+      [
+        source.id,
+        tenantId,
+        folderId,
+        normalized.name,
+        normalized.display_path || normalized.path || normalized.name,
+        normalized.provider_team_id || null,
+        req.body?.include_subfolders !== false,
+        JSON.stringify({ folder_required: false, root_folder_id: folderId, root_folder_name: normalized.name, provider: ZOHO_PROVIDER }),
+        ZOHO_PROVIDER,
+      ]
+    );
+    return res.json({ ok: true, source: result.rows[0] });
+  } catch (error) {
+    console.error('ERROR SELECT ZOHO FOLDER:', {
+      request_id: req.requestId || null,
+      code: error.code || 'ZOHO_SELECT_FOLDER_FAILED',
+      message: error.message,
+    });
+    return res.status(error.statusCode || 500).json({
+      ok: false,
+      code: error.code || 'ZOHO_SELECT_FOLDER_FAILED',
+      error: error.statusCode ? error.message : 'No fue posible seleccionar la carpeta Zoho WorkDrive.',
     });
   }
 });
 
 router.post('/sources', auth, async (req, res) => {
-  if (!zoho.isZohoConfigured()) return notConfigured(res);
-  const tenantId = resolveTenantId(req);
-  if (!tenantId) return res.status(400).json({ error: 'tenant_id es obligatorio' });
-  if (!canManage(req.user)) return res.status(403).json({ error: 'No autorizado para crear fuente Zoho' });
-
-  const credentialId = req.body?.credential_id || null;
-  const folderId = String(req.body?.folder_id || '').trim();
-  const sourceName = String(req.body?.source_name || req.body?.folder_display_name || 'Zoho WorkDrive').trim();
-  if (!credentialId || !folderId || !sourceName) {
-    return res.status(400).json({ error: 'credential_id, folder_id y source_name son obligatorios' });
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const credential = await client.query(
-      `SELECT id FROM tenant_document_provider_credentials WHERE id = $1::uuid AND tenant_id = $2::uuid AND provider = 'zoho_workdrive' LIMIT 1`,
-      [credentialId, tenantId]
-    );
-    if (credential.rowCount === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Credencial Zoho no encontrada' });
-    }
-    const source = await client.query(
-      `
-      INSERT INTO tenant_document_sources (
-        tenant_id, provider, source_name, status, folder_id, folder_path,
-        folder_display_name, include_subfolders, associated_standard_code,
-        created_by_user_id, created_by, metadata_json
-      )
-      VALUES ($1,'zoho_workdrive',$2,'active',$3,$4,$5,$6,$7,$8,$8,$9::jsonb)
-      RETURNING *
-      `,
-      [
-        tenantId,
-        sourceName,
-        folderId,
-        req.body?.folder_path || sourceName,
-        req.body?.folder_display_name || sourceName,
-        req.body?.include_subfolders !== false,
-        req.body?.associated_standard_code || null,
-        getUserId(req.user),
-        JSON.stringify({ credential_id: credentialId }),
-      ]
-    );
-    await client.query(
-      `UPDATE tenant_document_provider_credentials SET source_id = $1::uuid, updated_at = NOW() WHERE id = $2::uuid AND tenant_id = $3::uuid`,
-      [source.rows[0].id, credentialId, tenantId]
-    );
-    await client.query('COMMIT');
-    return res.status(201).json({ source: source.rows[0] });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('ERROR CREATE ZOHO SOURCE:', error.message);
-    return res.status(500).json({ error: 'Error creando fuente Zoho' });
-  } finally {
-    client.release();
-  }
+  return res.status(410).json({
+    ok: false,
+    code: 'ZOHO_SOURCE_CREATION_REPLACED',
+    error: 'Use /api/document-integrations/zoho/select-folder después de conectar Zoho WorkDrive.',
+  });
 });
 
 router.post('/sync', auth, async (req, res) => {
   if (!zoho.isZohoConfigured()) return notConfigured(res);
-  const tenantId = resolveTenantId(req);
-  if (!tenantId) return res.status(400).json({ error: 'tenant_id es obligatorio' });
-  if (!canManage(req.user)) return res.status(403).json({ error: 'No autorizado para sincronizar Zoho' });
+  const tenantId = assertManageZoho(req, res);
+  if (!tenantId) return;
   const sourceId = req.body?.source_id || req.query.source_id;
-  if (!sourceId) return res.status(400).json({ error: 'source_id es obligatorio' });
+  if (!sourceId) return res.status(400).json({ ok: false, code: 'SOURCE_REQUIRED', error: 'source_id es obligatorio' });
 
   try {
-    const sourceResult = await pool.query(
-      `SELECT * FROM tenant_document_sources WHERE id = $1::uuid AND tenant_id = $2::uuid AND provider = 'zoho_workdrive' LIMIT 1`,
-      [sourceId, tenantId]
-    );
-    if (sourceResult.rowCount === 0) return res.status(404).json({ error: 'Fuente Zoho no encontrada' });
-    const source = sourceResult.rows[0];
-    const credential = await getCredential({ tenantId, sourceId });
-    if (!credential) return res.status(404).json({ error: 'Credencial Zoho no encontrada' });
-    const tokens = zoho.decryptZohoCredential(credential);
-    const listed = await zoho.listFiles({ accessToken: tokens.access_token, folderId: source.folder_id, includeSubfolders: source.include_subfolders !== false });
-
-    let indexed = 0;
-    let skipped = 0;
-    for (const item of listed.files.slice(0, 500)) {
-      const normalized = zoho.normalizeZohoFileToDocumentIndex(item);
-      if (normalized.metadata_json?.zoho?.is_folder) {
-        skipped += 1;
-        continue;
-      }
-      await pool.query(
-        `
-        INSERT INTO document_index (
-          tenant_id, source_id, provider, provider_file_id, provider_version_id,
-          file_name, mime_type, file_extension, file_url, web_view_url, size_bytes,
-          modified_at, relative_path, indexed_at, last_seen_at, status, metadata_json
-        )
-        VALUES ($1,$2,'zoho_workdrive',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW(),'indexed',$13::jsonb)
-        ON CONFLICT (tenant_id, provider, provider_file_id)
-        DO UPDATE SET
-          source_id = EXCLUDED.source_id,
-          provider_version_id = EXCLUDED.provider_version_id,
-          file_name = EXCLUDED.file_name,
-          mime_type = EXCLUDED.mime_type,
-          file_extension = EXCLUDED.file_extension,
-          file_url = EXCLUDED.file_url,
-          web_view_url = EXCLUDED.web_view_url,
-          size_bytes = EXCLUDED.size_bytes,
-          modified_at = EXCLUDED.modified_at,
-          relative_path = EXCLUDED.relative_path,
-          last_seen_at = NOW(),
-          status = 'updated',
-          metadata_json = EXCLUDED.metadata_json
-        `,
-        [
-          tenantId,
-          sourceId,
-          normalized.provider_file_id,
-          normalized.provider_version_id,
-          normalized.file_name,
-          normalized.mime_type,
-          normalized.file_extension,
-          normalized.file_url,
-          normalized.web_view_url,
-          normalized.size_bytes,
-          normalized.modified_at,
-          normalized.relative_path,
-          JSON.stringify(normalized.metadata_json),
-        ]
-      );
-      indexed += 1;
+    const source = await getTenantZohoSource({ tenantId, sourceId });
+    if (!source) return res.status(404).json({ ok: false, code: 'ZOHO_SOURCE_NOT_FOUND', error: 'Fuente Zoho no encontrada' });
+    if (!source.folder_id) {
+      return res.status(409).json({ ok: false, code: 'ZOHO_ROOT_FOLDER_REQUIRED', error: 'Seleccione una carpeta de Zoho WorkDrive antes de sincronizar.' });
     }
-    return res.json({ ok: true, provider: 'zoho_workdrive', files_seen: listed.files.length, files_indexed: indexed, files_skipped: skipped });
+    const credential = await getCredential({ tenantId, sourceId: source.id });
+    if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
+    const fresh = await ensureFreshCredential(credential);
+    const apiBaseUrl = resolveApiBaseUrl(source, fresh.credential);
+    const listed = await listZohoFilesRecursive({
+      accessToken: fresh.tokens.access_token,
+      apiBaseUrl,
+      folderId: source.folder_id,
+      includeSubfolders: source.include_subfolders !== false,
+      maxFiles: Number(req.body?.max_files || 1000),
+    });
+
+    let filesIndexed = 0;
+    let foldersIndexed = 0;
+    let filesErrors = 0;
+    const warnings = [...listed.warnings];
+    for (const row of listed.files) {
+      try {
+        const kind = await upsertZohoDocument({
+          tenantId,
+          source,
+          credential: fresh.credential,
+          item: row.item,
+          relativePath: row.relativePath,
+        });
+        if (kind === 'folder') foldersIndexed += 1;
+        else filesIndexed += 1;
+      } catch (error) {
+        filesErrors += 1;
+        warnings.push({ type: 'zoho_file_upsert_failed', message: error.message });
+      }
+    }
+
+    const finalStatus = filesErrors ? 'completed_with_warnings' : 'completed';
+    await pool.query(
+      `
+      UPDATE tenant_document_sources
+      SET last_sync_at = NOW(),
+          status = 'active',
+          last_sync_status = $3,
+          last_sync_error = NULL,
+          updated_at = NOW()
+      WHERE id = $1::uuid
+        AND tenant_id = $2::uuid
+      `,
+      [source.id, tenantId, finalStatus]
+    );
+
+    return res.json({
+      ok: true,
+      provider: ZOHO_PROVIDER,
+      status: finalStatus,
+      files_seen: listed.files.length,
+      files_indexed: filesIndexed,
+      files_created: filesIndexed,
+      files_updated: 0,
+      folders_seen: foldersIndexed,
+      folders_indexed: foldersIndexed,
+      files_skipped: 0,
+      files_errors: filesErrors,
+      warnings_count: warnings.length,
+      warnings: warnings.slice(0, 20),
+    });
   } catch (error) {
-    console.error('ERROR SYNC ZOHO:', error.message);
-    return res.status(error.statusCode || 500).json({ ok: false, code: error.code || 'ZOHO_SYNC_ERROR', error: error.statusCode ? error.message : 'Error sincronizando Zoho' });
+    console.error('ERROR SYNC ZOHO:', {
+      request_id: req.requestId || null,
+      code: error.code || 'ZOHO_SYNC_ERROR',
+      message: error.message,
+    });
+    return res.status(error.statusCode || 500).json({
+      ok: false,
+      code: error.code || 'ZOHO_SYNC_ERROR',
+      error: error.statusCode ? error.message : 'Error sincronizando Zoho',
+    });
   }
 });
 

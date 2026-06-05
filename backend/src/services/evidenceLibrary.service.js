@@ -8,6 +8,7 @@ const pool = require('../config/db');
 const aiEngineClient = require('./aiEngineClient.service');
 const { analyzeDocument } = require('./documentAiAnalysis.service');
 const { extractDocumentContent } = require('./documentContentExtraction.service');
+const zohoWorkdrive = require('./zohoWorkdriveClient.service');
 
 const READ_ROLES = new Set(['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin', 'auditor', 'responsable_area', 'area_owner', 'operativo']);
 const MANAGE_ROLES = new Set(['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin']);
@@ -1010,9 +1011,26 @@ function defaultSourceActions(sourceType, sourceId = null, status = 'available')
     ];
   }
   if (sourceType === 'zoho_drive' || sourceType === 'zoho_workdrive') {
-    return sourceId
-      ? [action('sync', 'Sincronizar', { method: 'POST', path: '/api/document-integrations/zoho/sync', body: { source_id: sourceId } }), action('connect', 'Reconectar', { method: 'GET', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' })]
-      : [action('connect', 'Conectar Zoho Drive', { method: 'GET', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' })];
+    if (!zohoWorkdrive.isZohoConfigured()) {
+      return [action('connect', 'Conectar Zoho WorkDrive', { enabled: false, kind: 'info', reason: 'Zoho WorkDrive no está configurado por la plataforma.' })];
+    }
+    if (!sourceId || currentStatus === 'not_connected' || currentStatus === 'available') {
+      return [action('connect', 'Conectar Zoho WorkDrive', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' })];
+    }
+    if (currentStatus === 'folder_required') {
+      return [
+        action('select_folder', 'Seleccionar carpeta', { kind: 'zoho_folder_selector', body: { source_id: sourceId } }),
+        action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' }),
+      ];
+    }
+    if (currentStatus === 'needs_reconnection') {
+      return [action('reconnect', 'Reconectar Zoho WorkDrive', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' })];
+    }
+    return [
+      action('sync', currentStatus === 'sync_error' ? 'Sincronizar nuevamente' : 'Sincronizar', { method: 'POST', path: '/api/document-integrations/zoho/sync', body: { source_id: sourceId } }),
+      action('change_folder', 'Cambiar carpeta', { kind: 'zoho_folder_selector', body: { source_id: sourceId } }),
+      action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' }),
+    ];
   }
   if (sourceType === 'sync_agent') {
     return [action('configure', active ? 'Validar agente' : 'Configurar agente', { method: 'POST', path: '/api/document-integrations/agents/pairing-codes' })];
@@ -1035,7 +1053,7 @@ async function listSources({ user }) {
   const { tenantId } = assertAccess(user, 'read');
   const cards = [
     { source_type: 'google_drive', source_name: 'Google Drive', status: 'available', documents_count: 0 },
-    { source_type: 'zoho_drive', source_name: 'Zoho Drive', status: 'available', documents_count: 0 },
+    { source_type: 'zoho_drive', source_name: 'Zoho WorkDrive', status: zohoWorkdrive.isZohoConfigured() ? 'available' : 'configuration_required', documents_count: 0 },
     { source_type: 'sync_agent', source_name: 'Sync Agent', status: 'available', documents_count: 0 },
     { source_type: 'mounted_folder', source_name: 'Carpeta montada', status: 'available', documents_count: 0 },
     { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0 },
@@ -1131,6 +1149,16 @@ async function listSources({ user }) {
           } else {
             status = 'connected';
           }
+        } else if (cardType === 'zoho_drive') {
+          if (!zohoWorkdrive.isZohoConfigured()) {
+            status = 'configuration_required';
+          } else if (!row.folder_id) {
+            status = 'folder_required';
+          } else if (row.last_sync_status === 'failed' || row.last_sync_error) {
+            status = 'sync_error';
+          } else {
+            status = 'active';
+          }
         }
         match.status = status;
         match.source_id = row.id;
@@ -1174,9 +1202,21 @@ async function listSources({ user }) {
       normalizedCard.provider_account_email = null;
       normalizedCard.account_email = null;
     }
+    if (normalizedCard.source_type === 'zoho_drive' && !zohoWorkdrive.isZohoConfigured()) {
+      normalizedCard.status = 'configuration_required';
+      normalizedCard.provider_account_email = null;
+      normalizedCard.account_email = null;
+      normalizedCard.last_sync_error = 'Zoho WorkDrive no está configurado por la plataforma.';
+    } else if (normalizedCard.source_type === 'zoho_drive' && !normalizedCard.source_id) {
+      normalizedCard.status = 'not_connected';
+      normalizedCard.root_folder_id = null;
+      normalizedCard.root_folder_name = null;
+      normalizedCard.provider_account_email = null;
+      normalizedCard.account_email = null;
+    }
     return {
       ...normalizedCard,
-      connected: Boolean(normalizedCard.source_id && ['connected', 'folder_required', 'sync_error'].includes(String(normalizedCard.status || '').toLowerCase())),
+      connected: Boolean(normalizedCard.source_id && ['active', 'connected', 'folder_required', 'sync_error'].includes(String(normalizedCard.status || '').toLowerCase())),
       item_type: 'source',
       can_sync: true,
       actions: defaultSourceActions(normalizedCard.source_type, normalizedCard.source_id, normalizedCard.status),

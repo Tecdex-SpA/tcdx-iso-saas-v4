@@ -23,11 +23,20 @@ function isZohoConfigured() {
 
 function assertZohoConfigured() {
   if (!isZohoConfigured()) {
-    const err = new Error('Conector Zoho no configurado');
+    const err = new Error('Zoho WorkDrive no está configurado por la plataforma.');
     err.statusCode = 503;
-    err.code = 'ZOHO_CONNECTOR_NOT_CONFIGURED';
+    err.code = 'ZOHO_PLATFORM_CONFIG_MISSING';
     throw err;
   }
+}
+
+function getConfigStatus() {
+  const required = ['ZOHO_CLIENT_ID', 'ZOHO_CLIENT_SECRET', 'ZOHO_REDIRECT_URI', 'ZOHO_ACCOUNTS_BASE_URL', 'ZOHO_API_BASE_URL'];
+  const missing = required.filter((key) => !process.env[key]);
+  return {
+    configured: missing.length === 0,
+    missing,
+  };
 }
 
 function getAccountsBaseUrl() {
@@ -40,8 +49,14 @@ function getApiBaseUrl() {
   return trimSlash(process.env.ZOHO_API_BASE_URL);
 }
 
+function resolveApiBaseUrl(value = null) {
+  const raw = String(value || '').trim();
+  if (raw) return trimSlash(raw);
+  return getApiBaseUrl();
+}
+
 function getScopes() {
-  return String(process.env.ZOHO_WORKDRIVE_SCOPES || DEFAULT_SCOPES.join(','))
+  return String(process.env.ZOHO_SCOPES || process.env.ZOHO_WORKDRIVE_SCOPES || DEFAULT_SCOPES.join(','))
     .split(/[\s,]+/)
     .map((scope) => scope.trim())
     .filter(Boolean);
@@ -78,6 +93,15 @@ async function readJsonResponse(response, fallbackMessage) {
   }
 
   return json;
+}
+
+function extractTokenMetadata(tokens = {}) {
+  return {
+    api_domain: tokens.api_domain || tokens.apiDomain || null,
+    accounts_server: tokens.accounts_server || tokens.accountsServer || null,
+    location: tokens.location || null,
+    token_type: tokens.token_type || null,
+  };
 }
 
 async function exchangeCodeForTokens(code) {
@@ -117,8 +141,8 @@ async function refreshAccessToken(refreshToken) {
   return readJsonResponse(response, 'Error refrescando token Zoho');
 }
 
-async function zohoGetJson({ accessToken, path, searchParams = {} }) {
-  const url = new URL(`${getApiBaseUrl()}${path}`);
+async function zohoGetJson({ accessToken, path, searchParams = {}, apiBaseUrl = null }) {
+  const url = new URL(`${resolveApiBaseUrl(apiBaseUrl)}${path}`);
   Object.entries(searchParams || {}).forEach(([key, value]) => {
     if (value !== null && value !== undefined && value !== '') {
       url.searchParams.set(key, String(value));
@@ -132,7 +156,7 @@ async function zohoGetJson({ accessToken, path, searchParams = {} }) {
   return readJsonResponse(response, 'Error consultando Zoho WorkDrive');
 }
 
-async function listFolders({ accessToken, parentId = 'root', pageToken = null }) {
+async function listFolders({ accessToken, parentId = 'root', pageToken = null, apiBaseUrl = null }) {
   const path = parentId && parentId !== 'root'
     ? `/workdrive/files/${encodeURIComponent(parentId)}/files`
     : '/workdrive/files';
@@ -140,6 +164,7 @@ async function listFolders({ accessToken, parentId = 'root', pageToken = null })
   const json = await zohoGetJson({
     accessToken,
     path,
+    apiBaseUrl,
     searchParams: {
       'page[limit]': 100,
       'page[token]': pageToken || undefined,
@@ -154,7 +179,7 @@ async function listFolders({ accessToken, parentId = 'root', pageToken = null })
   };
 }
 
-async function listFiles({ accessToken, folderId, includeSubfolders = true }) {
+async function listFiles({ accessToken, folderId, includeSubfolders = true, apiBaseUrl = null }) {
   const path = folderId
     ? `/workdrive/files/${encodeURIComponent(folderId)}/files`
     : '/workdrive/files';
@@ -162,6 +187,7 @@ async function listFiles({ accessToken, folderId, includeSubfolders = true }) {
   const json = await zohoGetJson({
     accessToken,
     path,
+    apiBaseUrl,
     searchParams: { 'page[limit]': 100 },
   });
 
@@ -173,16 +199,17 @@ async function listFiles({ accessToken, folderId, includeSubfolders = true }) {
   };
 }
 
-async function getFileMetadata({ accessToken, fileId }) {
+async function getFileMetadata({ accessToken, fileId, apiBaseUrl = null }) {
   const json = await zohoGetJson({
     accessToken,
     path: `/workdrive/files/${encodeURIComponent(fileId)}`,
+    apiBaseUrl,
   });
   return json?.data || json;
 }
 
-async function downloadFile({ accessToken, fileId }) {
-  const metadata = await getFileMetadata({ accessToken, fileId });
+async function downloadFile({ accessToken, fileId, apiBaseUrl = null }) {
+  const metadata = await getFileMetadata({ accessToken, fileId, apiBaseUrl });
   const downloadUrl = metadata?.attributes?.download_url;
   if (!downloadUrl) {
     const err = new Error('Documento Zoho no contiene download_url');
@@ -228,10 +255,15 @@ function normalizeZohoFileToDocumentIndex(file) {
     relative_path: attributes.path || name,
     metadata_json: {
       zoho: {
+        id,
         parent_id: attributes.parent_id || null,
+        parent_folder_id: attributes.parent_id || null,
+        file_id: id,
+        provider_file_id: id,
         is_folder: Boolean(attributes.is_folder),
         download_url_present: Boolean(attributes.download_url),
         library_id: attributes.library_id || null,
+        relative_path: attributes.path || name,
       },
     },
   };
@@ -255,6 +287,8 @@ function decryptZohoCredential(credential) {
 
 module.exports = {
   isZohoConfigured,
+  assertZohoConfigured,
+  getConfigStatus,
   buildAuthorizationUrl,
   exchangeCodeForTokens,
   refreshAccessToken,
@@ -266,4 +300,6 @@ module.exports = {
   encryptZohoTokens,
   decryptZohoCredential,
   getScopes,
+  extractTokenMetadata,
+  resolveApiBaseUrl,
 };
