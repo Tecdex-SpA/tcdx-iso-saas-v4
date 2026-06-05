@@ -89,7 +89,37 @@ The folder browser treats these values as logical WorkDrive root aliases:
 - `my_drive`
 - `mi_unidad`
 
-The backend must not call Zoho with `fileId=root`. For root browsing it resolves tenant credentials and tries the WorkDrive root/team-folder listing endpoints, then normalizes the response to:
+The backend must not call Zoho with `fileId=root`. For root browsing it resolves tenant credentials and performs container discovery for:
+
+- `Mis carpetas` / private space;
+- `Carpetas del equipo` / team folders;
+- `Compartido conmigo` when the WorkDrive API exposes it for the connected account.
+
+Root discovery may return navigable synthetic nodes before a real provider folder is selected:
+
+```json
+{
+  "id": "zoho:privatespace:root",
+  "name": "Mis carpetas",
+  "type": "private_space",
+  "can_open": true,
+  "can_select": true
+}
+```
+
+```json
+{
+  "id": "zoho:teamfolders:root",
+  "name": "Carpetas del equipo",
+  "type": "team_folder_root",
+  "can_open": true,
+  "can_select": false
+}
+```
+
+Opening `zoho:privatespace:root` lists folders in private space. Opening `zoho:teamfolders:root` lists team folders such as `General` or project-specific team folders if the user has access.
+
+The normalized response shape is:
 
 ```json
 {
@@ -98,18 +128,22 @@ The backend must not call Zoho with `fileId=root`. For root browsing it resolves
     "source_id": "tenant_document_sources.id",
     "current": {
       "id": "root",
-      "name": "Mi unidad",
-      "path": "Mi unidad",
+      "name": "Zoho WorkDrive",
+      "path": "Zoho WorkDrive",
       "parent_id": null,
       "type": "root"
     },
     "folders": [],
-    "breadcrumbs": [{ "id": "root", "name": "Mi unidad" }]
+    "breadcrumbs": [{ "id": "root", "name": "Zoho WorkDrive" }],
+    "details": {
+      "reason": null,
+      "stage": "root_discovery_completed"
+    }
   }
 }
 ```
 
-If Zoho returns no folders, the endpoint returns `ok: true` with `folders: []`.
+If Zoho returns no folders inside an opened container, the endpoint returns `ok: true` with `folders: []` and a safe `details.reason`, for example `empty_private_space`, `no_workdrive_team`, or `no_visible_folders`.
 
 Zoho API failures return safe diagnostics only:
 

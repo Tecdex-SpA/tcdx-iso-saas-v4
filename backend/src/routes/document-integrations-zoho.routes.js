@@ -117,6 +117,12 @@ function resolveApiBaseUrl(source, credential) {
   return metadataValue(source, 'api_domain') || metadataValue(credential, 'api_domain') || null;
 }
 
+function shortId(value) {
+  const raw = String(value || '');
+  if (raw.length <= 12) return raw;
+  return `${raw.slice(0, 8)}...${raw.slice(-4)}`;
+}
+
 async function getTenantZohoSource({ tenantId, sourceId = null }) {
   const params = [tenantId];
   let sourceFilter = '';
@@ -257,9 +263,21 @@ async function upsertCredential({ client, tenantId, userId, tokens, sourceId = n
 }
 
 function normalizeFolder(item) {
+  if (item?.provider === ZOHO_PROVIDER && item?.can_open !== undefined && item?.name) {
+    return {
+      ...item,
+      provider: ZOHO_PROVIDER,
+      item_type: 'folder',
+      type: item.type || 'folder',
+      can_open: item.can_open !== false,
+      can_select: item.can_select !== false,
+      path: item.path || item.display_path || item.name,
+      display_path: item.display_path || item.path || item.name,
+    };
+  }
   const attributes = item?.attributes || {};
   const id = item?.id || attributes.id || attributes.resource_id;
-  const name = attributes.name || attributes.display_attr_name || attributes.display_html_name || attributes.title || id;
+  const name = attributes.name || attributes.display_name || attributes.display_attr_name || attributes.display_html_name || attributes.title || id;
   const parentId = attributes.parent_id || attributes.parentId || null;
   const path = attributes.path || attributes.display_path || attributes.displayPath || name;
   return {
@@ -295,6 +313,31 @@ function zohoErrorDetails(error, fallbackStage = null) {
     provider_message: providerMessage,
     endpoint: error.endpoint || null,
     hint,
+  };
+}
+
+function successDetails(folders, foldersResult, fallbackStage) {
+  const details = foldersResult.details || {};
+  if (folders.length > 0) {
+    return {
+      reason: details.reason || null,
+      stage: details.stage || fallbackStage,
+      message: details.message || null,
+      api_domain: details.api_domain || null,
+      provider_status: details.provider_status || null,
+      provider_message: details.provider_message || null,
+      private_folders_count: details.private_folders_count,
+      team_folders_count: details.team_folders_count,
+      shared_folders_count: details.shared_folders_count,
+    };
+  }
+  return {
+    reason: details.reason || 'no_visible_folders',
+    stage: details.stage || fallbackStage,
+    message: details.message || 'No se encontraron carpetas visibles en Zoho WorkDrive para esta cuenta.',
+    api_domain: details.api_domain || null,
+    provider_status: details.provider_status || null,
+    provider_message: details.provider_message || null,
   };
 }
 
@@ -567,6 +610,13 @@ router.get('/folders', auth, async (req, res) => {
     if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
     const fresh = await ensureFreshCredential(credential);
     const apiBaseUrl = resolveApiBaseUrl(source, fresh.credential);
+    console.info('ZOHO_FOLDERS_DISCOVERY_START:', {
+      request_id: req.requestId || null,
+      tenant: shortId(tenantId),
+      source_id: source.id,
+      parent_id: parentId,
+      stage: parentId === 'root' ? 'root_discovery' : 'folder_navigation',
+    });
     const folders = await zoho.listFolders({
       accessToken: fresh.tokens.access_token,
       apiBaseUrl,
@@ -592,12 +642,59 @@ router.get('/folders', auth, async (req, res) => {
         display_path: path,
       };
     });
+    const details = successDetails(normalizedFolders, folders, current.type === 'root' ? 'root_discovery_completed' : 'list_folder');
     const breadcrumbs = parentId === 'root'
-      ? [{ id: 'root', name: 'Mi unidad' }]
+      ? [{ id: 'root', name: current.name || 'Zoho WorkDrive' }]
       : [
           { id: 'root', name: 'Mi unidad' },
           { id: current.id, name: current.name || current.id },
         ];
+    if (parentId === 'root') {
+      await pool.query(
+        `
+        UPDATE tenant_document_sources
+        SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $3::jsonb,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND tenant_id = $2::uuid
+          AND provider = $4
+        `,
+        [
+          source.id,
+          tenantId,
+          JSON.stringify({
+            root_discovery: {
+              stage: details.stage,
+              reason: details.reason,
+              private_folders_count: details.private_folders_count || 0,
+              team_folders_count: details.team_folders_count || 0,
+              shared_folders_count: details.shared_folders_count || 0,
+              checked_at: new Date().toISOString(),
+            },
+          }),
+          ZOHO_PROVIDER,
+        ]
+      ).catch(() => null);
+    }
+    console.info('ZOHO_FOLDERS_DISCOVERY_RESULT:', {
+      request_id: req.requestId || null,
+      tenant: shortId(tenantId),
+      source_id: source.id,
+      parent_id: parentId,
+      stage: details.stage,
+      count: normalizedFolders.length,
+      reason: details.reason || null,
+    });
+    if (normalizedFolders.length === 0) {
+      console.warn('ZOHO_FOLDERS_EMPTY_WITH_REASON:', {
+        request_id: req.requestId || null,
+        tenant: shortId(tenantId),
+        source_id: source.id,
+        parent_id: parentId,
+        stage: details.stage,
+        reason: details.reason,
+      });
+    }
 
     return res.json({
       ok: true,
@@ -608,18 +705,22 @@ router.get('/folders', auth, async (req, res) => {
       folders: normalizedFolders,
       next_page_token: folders.next_page_token,
       breadcrumbs,
+      details,
       data: {
         source_id: source.id,
         current,
         folders: normalizedFolders,
         breadcrumbs,
         next_page_token: folders.next_page_token,
+        details,
       },
     });
   } catch (error) {
     const details = zohoErrorDetails(error, error.stage || 'list_folder');
-    console.error('ERROR LIST ZOHO FOLDERS:', {
+    console.error('ZOHO_API_ERROR:', {
       request_id: req.requestId || null,
+      tenant: shortId(tenantId),
+      source_id: sourceId || null,
       code: error.code || 'ZOHO_FOLDER_LIST_FAILED',
       message: error.message,
       details,

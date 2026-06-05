@@ -45,6 +45,11 @@ type GoogleFolder = {
   display_path?: string | null;
   parent_id?: string | null;
   type?: string | null;
+  item_type?: string | null;
+  provider?: string | null;
+  can_open?: boolean;
+  can_select?: boolean;
+  children_count?: number | null;
   mime_type?: string | null;
   web_view_url?: string | null;
 };
@@ -510,11 +515,12 @@ export default function UnifiedEvidenceLibrary({
       const rows = Array.isArray(json.data?.folders) ? json.data.folders : (Array.isArray(json.folders) ? json.folders : []);
       const breadcrumbs = Array.isArray(json.data?.breadcrumbs) ? json.data.breadcrumbs : null;
       const current = json.data?.current || json.current || null;
+      const details = json.data?.details || json.details || null;
       setGoogleFolders(rows);
       setGoogleFolderParentId(current?.id || parentId);
       setGoogleFolderTrail(breadcrumbs || trail);
       if (rows.length === 0) {
-        setGoogleFolderMessage('Esta carpeta no contiene subcarpetas visibles.');
+        setGoogleFolderMessage(details?.message || 'Esta carpeta no contiene subcarpetas visibles.');
       }
     } catch (error: any) {
       setGoogleFolders([]);
@@ -999,21 +1005,27 @@ export default function UnifiedEvidenceLibrary({
                   <div key={folder.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-slate-900">{folder.name}</div>
-                      <div className="text-xs text-slate-500">Carpeta {folderProviderLabel(googleFolderSource)}</div>
+                      <div className="text-xs text-slate-500">
+                        {folder.type === 'private_space' ? 'Mis carpetas'
+                          : folder.type === 'team_folder_root' ? 'Contenedor de carpetas del equipo'
+                            : `Carpeta ${folderProviderLabel(googleFolderSource)}`}
+                        {typeof folder.children_count === 'number' ? ` · ${folder.children_count} visibles` : ''}
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => enterGoogleFolder(folder)}
+                        disabled={folder.can_open === false}
                         className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
                       >
                         Entrar
                       </button>
                       <button
                         onClick={() => selectGoogleFolder(folder)}
-                        disabled={working === `google-select-${folder.id}`}
+                        disabled={working === `google-select-${folder.id}` || folder.can_select === false}
                         className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
                       >
-                        {working === `google-select-${folder.id}` ? 'Guardando...' : 'Usar esta carpeta'}
+                        {working === `google-select-${folder.id}` ? 'Guardando...' : folder.can_select === false ? 'No seleccionable' : 'Usar esta carpeta'}
                       </button>
                     </div>
                   </div>
