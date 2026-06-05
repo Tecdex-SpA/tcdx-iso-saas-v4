@@ -22,7 +22,8 @@ const EVIDENCE_USAGES = new Set([
   'action_evidence',
   'reference',
 ]);
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const OPERATION_REF_RE = /^(document_index|evidence):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const schemaCache = new Map();
 
 function normalizeRole(user = {}) {
@@ -73,6 +74,7 @@ function isUuid(value) {
 function sourceIdShape(value) {
   const raw = String(value || '').trim();
   if (!raw) return 'missing';
+  if (OPERATION_REF_RE.test(raw)) return 'operation_ref';
   if (isUuid(raw)) return 'uuid';
   if (raw.includes(':')) return 'prefixed';
   if (/^[A-Za-z0-9_-]{12,}$/.test(raw)) return 'provider_like';
