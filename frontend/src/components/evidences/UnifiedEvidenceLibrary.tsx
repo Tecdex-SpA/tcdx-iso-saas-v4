@@ -528,7 +528,10 @@ export default function UnifiedEvidenceLibrary({
       const details = error?.details;
       const hint = details?.hint ? ` ${details.hint}` : '';
       const provider = details?.provider_status ? ` Estado proveedor: ${details.provider_status}.` : '';
-      setGoogleFolderMessage(`${error.message || `No fue posible listar carpetas de ${folderProviderLabel(source)}.`}${provider}${hint}`);
+      const providerCode = details?.provider_code ? ` Código: ${details.provider_code}.` : '';
+      const providerMessage = details?.provider_message ? ` Mensaje proveedor: ${details.provider_message}.` : '';
+      const stage = details?.stage ? ` Etapa: ${details.stage}.` : '';
+      setGoogleFolderMessage(`${error.message || `No fue posible listar carpetas de ${folderProviderLabel(source)}.`}${stage}${provider}${providerCode}${providerMessage}${hint}`);
     } finally {
       setWorking('');
     }
