@@ -1,10 +1,38 @@
 #!/usr/bin/env node
 
+const fs = require('fs');
+const path = require('path');
+
+const envPath = path.resolve(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+  require('dotenv').config({ path: envPath });
+}
+
+function applyDatabaseUrl() {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    const url = new URL(process.env.DATABASE_URL);
+    process.env.DB_HOST = process.env.DB_HOST || url.hostname;
+    process.env.DB_PORT = process.env.DB_PORT || url.port || '5432';
+    process.env.DB_USER = process.env.DB_USER || decodeURIComponent(url.username || '');
+    process.env.DB_PASSWORD = process.env.DB_PASSWORD || decodeURIComponent(url.password || '');
+    process.env.DB_NAME = process.env.DB_NAME || decodeURIComponent(url.pathname.replace(/^\//, ''));
+    if (url.searchParams.get('sslmode')) {
+      process.env.DB_SSL = process.env.DB_SSL || String(url.searchParams.get('sslmode') !== 'disable');
+    }
+  } catch {
+    // Keep pg's normal error path; never print database credentials.
+  }
+}
+
+applyDatabaseUrl();
+
 const pool = require('../src/config/db');
 const zoho = require('../src/services/zohoWorkdriveClient.service');
 
 const SOURCE_ID = String(process.env.SOURCE_ID || '').trim();
 const KNOWN_FOLDER_ID = String(process.env.KNOWN_FOLDER_ID || '').trim();
+const WORKSPACE_ID = String(process.env.WORKSPACE_ID || '').trim();
 const ZOHO_PROVIDER = 'zoho_workdrive';
 
 function topKeys(value) {
@@ -94,7 +122,12 @@ async function main() {
     source_id: source.id,
     tenant_id: `${String(source.tenant_id).slice(0, 8)}...${String(source.tenant_id).slice(-4)}`,
     provider: source.provider,
+    account_email: source.provider_account_email || null,
+    scopes: credential.scopes || credential.metadata_json?.scopes || credential.metadata_json?.granted_scopes || null,
+    token_expires_at: credential.token_expires_at || null,
     api_domain: apiBaseUrl,
+    workspace_id: WORKSPACE_ID || source.metadata_json?.workspace_id || source.metadata_json?.zoho_workspace_id || null,
+    folder_id: KNOWN_FOLDER_ID || source.folder_id || null,
     known_folder_id_present: Boolean(KNOWN_FOLDER_ID),
   }, null, 2));
 
@@ -108,6 +141,7 @@ async function main() {
     });
     console.log(JSON.stringify({
       path: result.path,
+      method: 'GET',
       status: result.status,
       provider_code: result.provider_code,
       provider_message: result.provider_message,
@@ -115,12 +149,57 @@ async function main() {
       top_keys: topKeys(result.json),
       data_len: dataLength(result.json),
       first_items: firstItems(result.json),
+      raw_snippet: result.raw_snippet || null,
       attempts: (result.diagnostics || []).map((attempt) => ({
         accept: attempt.accept,
         status: attempt.status,
         provider_code: attempt.provider_code,
         provider_message: attempt.provider_message,
         top_keys: attempt.response_keys,
+      })),
+    }, null, 2));
+  }
+
+  if (KNOWN_FOLDER_ID) {
+    const contents = await zoho.listZohoFolderContents({
+      accessToken: tokens.access_token,
+      apiBaseUrl,
+      folderId: KNOWN_FOLDER_ID,
+      workspaceId: WORKSPACE_ID || source.metadata_json?.workspace_id || source.metadata_json?.zoho_workspace_id || null,
+      spaceType: source.metadata_json?.zoho_space_type || null,
+      preferredEndpoint: source.metadata_json?.zoho_working_list_endpoint || null,
+      stage: 'script_folder_contents_probe',
+    }).catch((error) => ({
+      ok: false,
+      code: error.code || 'ZOHO_FOLDER_CONTENTS_FAILED',
+      message: error.message,
+      diagnostics: error.diagnostics || [],
+    }));
+    console.log(JSON.stringify({
+      matrix_probe: true,
+      ok: contents.ok !== false,
+      code: contents.code || null,
+      message: contents.message || null,
+      working_endpoint: contents.working_endpoint || null,
+      files_count: contents.files?.length || 0,
+      folders_count: contents.folders?.length || 0,
+      first_items: [...(contents.folders || []), ...(contents.files || [])].slice(0, 5).map((item) => ({
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        is_folder: item.item_type === 'folder',
+        mime_type: item.mime_type,
+        parent_id: item.parent_id,
+      })),
+      diagnostics: (contents.diagnostics || []).map((attempt) => ({
+        path: attempt.path,
+        method: 'GET',
+        status: attempt.status,
+        provider_code: attempt.provider_code,
+        provider_message: attempt.provider_message,
+        response_keys: attempt.response_keys,
+        data_len: attempt.data_len,
+        raw_snippet: attempt.raw_snippet || null,
       })),
     }, null, 2));
   }
