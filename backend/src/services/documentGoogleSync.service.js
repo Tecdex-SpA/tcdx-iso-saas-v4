@@ -8,7 +8,6 @@ const {
 } = require('./providers/googleDrive.provider')
 
 const GOOGLE_FOLDER_MIME = 'application/vnd.google-apps.folder'
-const PRESERVED_INDEX_STATUSES = new Set(['excluded', 'discarded', 'ignored'])
 
 function extractExtension(fileName) {
   const name = String(fileName || '')
@@ -150,7 +149,6 @@ async function upsertDocument({ tenantId, sourceRow, integrationRow, file, folde
     },
     folder_path: folderPath || sourceRow.folder_path || sourceRow.source_name || null,
     relative_path: relativePath,
-    last_sync_operation: 'created',
     synced_at: new Date().toISOString()
   }
 
@@ -203,8 +201,6 @@ async function upsertDocument({ tenantId, sourceRow, integrationRow, file, folde
   }
 
   const current = existing.rows[0]
-  const currentStatus = String(current.status || '').toLowerCase()
-  const preserveStatus = PRESERVED_INDEX_STATUSES.has(currentStatus)
   const changed = (
     !sameNullable(current.provider_version_id, providerVersionId) ||
     !sameNullable(current.file_name, file.name) ||
@@ -214,9 +210,8 @@ async function upsertDocument({ tenantId, sourceRow, integrationRow, file, folde
     !sameNullable(current.checksum, file.md5Checksum || null) ||
     !sameTimestamp(current.modified_at, modifiedAt) ||
     !sameNullable(current.relative_path, relativePath) ||
-    ['missing', 'error'].includes(currentStatus)
+    ['missing', 'ignored', 'error'].includes(String(current.status || '').toLowerCase())
   )
-  const nextOperation = preserveStatus ? 'excluded_preserved' : (changed ? 'updated' : 'unchanged')
 
   await pool.query(
     `
@@ -253,17 +248,16 @@ async function upsertDocument({ tenantId, sourceRow, integrationRow, file, folde
       file.md5Checksum || null,
       modifiedAt,
       relativePath,
-      preserveStatus ? current.status : 'indexed',
+      changed ? 'updated' : (current.status || 'indexed'),
       JSON.stringify({
         ...metadata,
-        last_sync_operation: nextOperation,
         previous_version_id: sameNullable(current.provider_version_id, providerVersionId) ? null : current.provider_version_id || null
       }),
       tenantId
     ]
   )
 
-  return nextOperation
+  return changed ? 'updated' : 'unchanged'
 }
 
 async function upsertFolder({ tenantId, sourceRow, integrationRow, folder, folderPath, parentFolderId }) {
@@ -281,7 +275,6 @@ async function upsertFolder({ tenantId, sourceRow, integrationRow, folder, folde
     folder_path: folderPath || sourceRow.folder_path || sourceRow.source_name || null,
     relative_path: relativePath,
     is_folder: true,
-    last_sync_operation: 'created',
     synced_at: new Date().toISOString()
   }
 
@@ -330,14 +323,11 @@ async function upsertFolder({ tenantId, sourceRow, integrationRow, folder, folde
   }
 
   const current = existing.rows[0]
-  const currentStatus = String(current.status || '').toLowerCase()
-  const preserveStatus = PRESERVED_INDEX_STATUSES.has(currentStatus)
   const changed = (
     !sameNullable(current.file_name, folder.name) ||
     !sameNullable(current.relative_path, relativePath) ||
-    ['missing', 'error'].includes(currentStatus)
+    ['missing', 'ignored', 'error'].includes(String(current.status || '').toLowerCase())
   )
-  const nextOperation = preserveStatus ? 'excluded_preserved' : (changed ? 'updated' : 'unchanged')
 
   await pool.query(
     `
@@ -368,13 +358,13 @@ async function upsertFolder({ tenantId, sourceRow, integrationRow, folder, folde
       folder.webViewLink || null,
       folder.modifiedTime ? new Date(folder.modifiedTime) : null,
       relativePath,
-      preserveStatus ? current.status : 'indexed',
-      JSON.stringify({ ...metadata, last_sync_operation: nextOperation }),
+      changed ? 'updated' : (current.status || 'indexed'),
+      JSON.stringify(metadata),
       tenantId
     ]
   )
 
-  return nextOperation
+  return changed ? 'updated' : 'unchanged'
 }
 
 async function listAllPages({ oauthClient, folderId, warnings }) {

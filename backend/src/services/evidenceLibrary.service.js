@@ -15,8 +15,6 @@ const MANAGE_ROLES = new Set(['admin', 'tenant_admin', 'admin_cumplimiento', 'co
 const SOURCE_TYPES = new Set(['document_index', 'evidence']);
 const TARGET_TYPES = new Set(['control', 'nonconformity', 'finding', 'process', 'operation', 'risk', 'action']);
 const GOOGLE_FOLDER_MIME = 'application/vnd.google-apps.folder';
-const HIDDEN_INDEX_STATUSES = new Set(['deleted', 'ignored', 'missing', 'excluded', 'discarded']);
-const EXCLUDED_INDEX_STATUSES = new Set(['excluded', 'discarded', 'ignored']);
 const EVIDENCE_USAGES = new Set([
   'primary_evidence',
   'supporting_evidence',
@@ -422,24 +420,6 @@ function sourceLabel(sourceType, row = {}) {
   if (provider.includes('manual')) return 'Carga manual';
   if (sourceType === 'evidence') return 'Carga manual';
   return row.source_name || 'Repositorio documental';
-}
-
-function documentVisibilityMode(filters = {}) {
-  const version = String(filters.version || '').toLowerCase();
-  const status = String(filters.status || '').toLowerCase();
-  if (version === 'excluded' || status === 'excluded') return 'excluded';
-  if (version === 'all' || status === 'all') return 'all';
-  return 'active';
-}
-
-function documentIndexVisibilitySql(alias = 'd', mode = 'active') {
-  if (mode === 'excluded') {
-    return `AND COALESCE(${alias}.status, 'indexed') IN ('excluded', 'discarded', 'ignored')`;
-  }
-  if (mode === 'all') {
-    return `AND COALESCE(${alias}.status, 'indexed') NOT IN ('deleted', 'missing')`;
-  }
-  return `AND COALESCE(${alias}.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing', 'excluded', 'discarded')`;
 }
 
 function isFolderDocument(row = {}) {
@@ -1211,7 +1191,7 @@ async function listSources({ user }) {
     }
   }
 
-  if (visibilityMode !== 'excluded' && await tableExists('evidences')) {
+  if (await tableExists('evidences')) {
     const result = await pool.query(
       `
       SELECT COUNT(*)::int AS documents_count, MAX(created_at) AS last_sync_at
@@ -1293,7 +1273,6 @@ async function listDocuments({ user, filters = {} }) {
   const params = [tenantId];
   const term = `%${String(filters.search || '').trim()}%`;
   const docs = [];
-  const visibilityMode = documentVisibilityMode(filters);
 
   if (await tableExists('document_index')) {
     const hasAiAnalysis = await tableExists('document_ai_analysis');
@@ -1350,7 +1329,7 @@ async function listDocuments({ user, filters = {} }) {
        AND p.source_id = d.id
       ` : ''}
       WHERE d.tenant_id = $1::uuid
-        ${documentIndexVisibilitySql('d', visibilityMode)}
+        AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
         AND ($2 = '%%' OR d.file_name ILIKE $2 OR COALESCE(d.file_url, '') ILIKE $2 OR COALESCE(d.metadata_json::text, '') ILIKE $2)
       ORDER BY d.indexed_at DESC NULLS LAST, d.modified_at DESC NULLS LAST
       LIMIT 500
@@ -1417,7 +1396,7 @@ async function listDocuments({ user, filters = {} }) {
   if (filters.document_type) {
     enriched = enriched.filter((doc) => String(doc.document_type || '').toLowerCase() === String(filters.document_type).toLowerCase());
   }
-  if (filters.status && !['all', 'excluded'].includes(String(filters.status).toLowerCase())) {
+  if (filters.status) {
     enriched = enriched.filter((doc) => String(doc.status || '').toLowerCase() === String(filters.status).toLowerCase());
   }
   if (filters.semantic_status) {
@@ -1445,7 +1424,7 @@ async function listDocuments({ user, filters = {} }) {
       doc.has_previous_versions = versions.length > 1;
       doc.active_version = doc.active_version || `v${versions.length - index}`;
     });
-    rows.push(...(['all', 'excluded'].includes(String(filters.version || '').toLowerCase()) ? versions : [versions[0]]));
+    rows.push(...(filters.version === 'all' ? versions : [versions[0]]));
   }
 
   rows.sort((a, b) => new Date(b.last_indexed_at || 0).getTime() - new Date(a.last_indexed_at || 0).getTime());
@@ -1551,7 +1530,7 @@ async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) 
        AND s.tenant_id = d.tenant_id
       WHERE d.tenant_id = $1::uuid
         AND d.id = $2::uuid
-        AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'missing')
+        AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
       LIMIT 1
       `,
       [tenantId, sourceId]
@@ -1576,14 +1555,6 @@ async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) 
 
   if (!source) {
     throw publicError(404, 'SOURCE_DOCUMENT_NOT_FOUND', 'Documento/evidencia no encontrado para el tenant autenticado.');
-  }
-
-  if (
-    sourceType === 'document_index' &&
-    EXCLUDED_INDEX_STATUSES.has(String(source.status || '').toLowerCase()) &&
-    ['analyze', 'associate'].includes(mode)
-  ) {
-    throw publicError(409, 'DOCUMENT_INDEX_EXCLUDED', 'El documento esta excluido del indice. Restaurelo antes de analizarlo o asociarlo.');
   }
 
   const isFolder = sourceType === 'document_index' && isFolderDocument(source);
@@ -2028,7 +1999,7 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
     FROM document_index d
     WHERE d.tenant_id = $1::uuid
       AND d.id <> $2::uuid
-      AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing', 'excluded', 'discarded')
+      AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
       AND (
         ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = $3::text)
         OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = $3::text)
@@ -2045,13 +2016,7 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'relative_path', '') ILIKE $4::text)
       )
     ORDER BY
-      CASE
-        WHEN COALESCE(d.mime_type, '') = 'application/vnd.google-apps.folder'
-          OR COALESCE(d.metadata_json->'google'->>'is_folder', 'false') = 'true'
-          OR COALESCE(d.metadata_json->'zoho'->>'is_folder', 'false') = 'true'
-          OR COALESCE(d.file_extension, '') = 'folder'
-        THEN 0 ELSE 1
-      END,
+      CASE WHEN COALESCE(d.mime_type, '') = 'application/vnd.google-apps.folder' THEN 0 ELSE 1 END,
       d.file_name ASC
     LIMIT 250
     `,
@@ -2063,280 +2028,6 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
 
   const rows = result.rows.map(mapDocumentRow);
   return { data: rows, total: rows.length };
-}
-
-async function loadDocumentIndexForIndexAction(client, tenantId, documentIndexId) {
-  const result = await client.query(
-    `
-    SELECT *
-    FROM document_index
-    WHERE tenant_id = $1::uuid
-      AND id = $2::uuid
-      AND COALESCE(status, 'indexed') <> 'deleted'
-    LIMIT 1
-    `,
-    [tenantId, documentIndexId]
-  );
-  if (result.rowCount === 0) {
-    throw publicError(404, 'DOCUMENT_INDEX_NOT_FOUND', 'Documento indexado no encontrado para este tenant.');
-  }
-  return result.rows[0];
-}
-
-async function listDocumentIndexSubtree(client, tenantId, rootDocumentIndexId) {
-  const result = await client.query(
-    `
-    WITH RECURSIVE tree AS (
-      SELECT
-        d.id,
-        d.source_id,
-        d.provider,
-        d.provider_file_id,
-        d.file_name,
-        d.mime_type,
-        d.file_extension,
-        d.status,
-        d.metadata_json,
-        0 AS depth,
-        ARRAY[d.id] AS visited_ids
-      FROM document_index d
-      WHERE d.tenant_id = $1::uuid
-        AND d.id = $2::uuid
-      UNION ALL
-      SELECT
-        child.id,
-        child.source_id,
-        child.provider,
-        child.provider_file_id,
-        child.file_name,
-        child.mime_type,
-        child.file_extension,
-        child.status,
-        child.metadata_json,
-        tree.depth + 1 AS depth,
-        tree.visited_ids || child.id
-      FROM document_index child
-      JOIN tree
-        ON child.tenant_id = $1::uuid
-       AND child.provider = tree.provider
-       AND (
-          COALESCE(child.metadata_json->'google'->>'parent_folder_id', '') = tree.provider_file_id
-          OR COALESCE(child.metadata_json->'zoho'->>'parent_folder_id', '') = tree.provider_file_id
-          OR COALESCE(child.metadata_json->>'parent_id', '') = tree.provider_file_id
-       )
-      WHERE child.id <> ALL(tree.visited_ids)
-        AND tree.depth < 25
-    )
-    SELECT *
-    FROM tree
-    ORDER BY depth ASC, file_name ASC
-    `,
-    [tenantId, rootDocumentIndexId]
-  );
-  return result.rows;
-}
-
-function rowIsFolderIndex(row = {}) {
-  return isFolderDocument({
-    source_type: 'document_index',
-    ...row,
-    metadata: row.metadata_json || {},
-  });
-}
-
-async function excludeDocumentFromIndex({ user, payload = {} }) {
-  const { tenantId, userId } = assertAccess(user, 'manage');
-  if (!(await tableExists('tenant_document_index_exclusions'))) {
-    throw publicError(500, 'EXCLUSIONS_TABLE_MISSING', 'La tabla de exclusiones documentales no esta disponible.');
-  }
-
-  const sourceType = String(payload.source_type || '').trim();
-  const sourceId = String(payload.source_id || '').trim();
-  const scope = String(payload.scope || 'item').toLowerCase() === 'subtree' ? 'subtree' : 'item';
-  const reason = asString(payload.reason || 'not_useful', 120) || 'not_useful';
-  const notes = asString(payload.notes || '', 1000);
-  if (sourceType !== 'document_index' || !isUuid(sourceId)) {
-    throw publicError(400, 'INVALID_EXCLUSION_SOURCE', 'Seleccione un elemento indexado valido para excluir.');
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const root = await loadDocumentIndexForIndexAction(client, tenantId, sourceId);
-    const affected = scope === 'subtree'
-      ? await listDocumentIndexSubtree(client, tenantId, sourceId)
-      : [root];
-
-    for (const row of affected) {
-      const itemScope = scope === 'subtree' && rowIsFolderIndex(row) ? 'subtree' : 'item';
-      await client.query(
-        `
-        INSERT INTO tenant_document_index_exclusions (
-          tenant_id, provider, source_id, document_index_id, provider_file_id,
-          exclusion_scope, reason, notes, is_active, excluded_by_user_id, excluded_at,
-          metadata_json, updated_at
-        )
-        VALUES (
-          $1::uuid, $2::text, $3::uuid, $4::uuid, $5::text,
-          $6::text, $7::text, $8::text, true, $9::uuid, NOW(),
-          $10::jsonb, NOW()
-        )
-        ON CONFLICT (tenant_id, provider, provider_file_id) WHERE is_active = true
-        DO UPDATE SET
-          source_id = EXCLUDED.source_id,
-          document_index_id = EXCLUDED.document_index_id,
-          exclusion_scope = EXCLUDED.exclusion_scope,
-          reason = EXCLUDED.reason,
-          notes = EXCLUDED.notes,
-          excluded_by_user_id = EXCLUDED.excluded_by_user_id,
-          excluded_at = NOW(),
-          restored_by_user_id = NULL,
-          restored_at = NULL,
-          metadata_json = COALESCE(tenant_document_index_exclusions.metadata_json, '{}'::jsonb) || EXCLUDED.metadata_json,
-          updated_at = NOW()
-        `,
-        [
-          tenantId,
-          row.provider,
-          row.source_id,
-          row.id,
-          row.provider_file_id,
-          itemScope,
-          reason,
-          notes,
-          userId,
-          JSON.stringify({
-            root_document_index_id: root.id,
-            root_provider_file_id: root.provider_file_id,
-            requested_scope: scope,
-            item_type: rowIsFolderIndex(row) ? 'folder' : 'file',
-          }),
-        ]
-      );
-    }
-
-    const ids = affected.map((row) => row.id);
-    await client.query(
-      `
-      UPDATE document_index
-      SET status = 'excluded',
-          metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $3::jsonb,
-          last_seen_at = NOW()
-      WHERE tenant_id = $1::uuid
-        AND id = ANY($2::uuid[])
-      `,
-      [
-        tenantId,
-        ids,
-        JSON.stringify({
-          excluded_at: new Date().toISOString(),
-          excluded_by_user_id: userId || null,
-          exclusion_scope: scope,
-          exclusion_reason: reason,
-        }),
-      ]
-    );
-
-    await client.query('COMMIT');
-    return {
-      excluded: {
-        document_index_id: root.id,
-        provider: root.provider,
-        provider_file_id: root.provider_file_id,
-        scope,
-        affected_count: affected.length,
-      },
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-async function restoreDocumentIndex({ user, payload = {} }) {
-  const { tenantId, userId } = assertAccess(user, 'manage');
-  if (!(await tableExists('tenant_document_index_exclusions'))) {
-    throw publicError(500, 'EXCLUSIONS_TABLE_MISSING', 'La tabla de exclusiones documentales no esta disponible.');
-  }
-
-  const sourceType = String(payload.source_type || '').trim();
-  const sourceId = String(payload.source_id || '').trim();
-  const restoreScope = String(payload.restore_scope || 'item').toLowerCase() === 'subtree' ? 'subtree' : 'item';
-  if (sourceType !== 'document_index' || !isUuid(sourceId)) {
-    throw publicError(400, 'INVALID_RESTORE_SOURCE', 'Seleccione un elemento indexado valido para restaurar.');
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const root = await loadDocumentIndexForIndexAction(client, tenantId, sourceId);
-    const affected = restoreScope === 'subtree'
-      ? await listDocumentIndexSubtree(client, tenantId, sourceId)
-      : [root];
-    const ids = affected.map((row) => row.id);
-    const providerIds = affected.map((row) => row.provider_file_id).filter(Boolean);
-
-    await client.query(
-      `
-      UPDATE tenant_document_index_exclusions
-      SET is_active = false,
-          restored_by_user_id = $4::uuid,
-          restored_at = NOW(),
-          updated_at = NOW(),
-          metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $5::jsonb
-      WHERE tenant_id = $1::uuid
-        AND provider = $2::text
-        AND provider_file_id = ANY($3::text[])
-        AND is_active = true
-      `,
-      [
-        tenantId,
-        root.provider,
-        providerIds,
-        userId,
-        JSON.stringify({
-          restored_scope: restoreScope,
-          restored_root_document_index_id: root.id,
-        }),
-      ]
-    );
-
-    await client.query(
-      `
-      UPDATE document_index
-      SET status = 'indexed',
-          metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $3::jsonb,
-          last_seen_at = NOW()
-      WHERE tenant_id = $1::uuid
-        AND id = ANY($2::uuid[])
-        AND COALESCE(status, 'indexed') IN ('excluded', 'discarded', 'ignored')
-      `,
-      [
-        tenantId,
-        ids,
-        JSON.stringify({
-          restored_at: new Date().toISOString(),
-          restored_by_user_id: userId || null,
-          restored_scope: restoreScope,
-        }),
-      ]
-    );
-
-    await client.query('COMMIT');
-    return {
-      restored_count: affected.length,
-      document_index_id: root.id,
-      provider: root.provider,
-      provider_file_id: root.provider_file_id,
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
 }
 
 async function getSourceText(tenantId, source) {
@@ -2708,6 +2399,4 @@ module.exports = {
   manualUploadZip,
   analyzeSemanticEvidence,
   reviewSuggestion,
-  excludeDocumentFromIndex,
-  restoreDocumentIndex,
 };

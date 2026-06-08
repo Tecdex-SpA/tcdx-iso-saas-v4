@@ -15,8 +15,6 @@ const {
   manualUploadZip,
   analyzeSemanticEvidence,
   reviewSuggestion,
-  excludeDocumentFromIndex,
-  restoreDocumentIndex,
 } = require('../services/evidenceLibrary.service');
 
 const router = express.Router();
@@ -106,30 +104,6 @@ router.get('/documents/:sourceType/:sourceId', async (req, res) => {
       sourceId: req.params.sourceId,
     });
     return res.json({ ok: true, data });
-  } catch (error) {
-    return sendError(res, error);
-  }
-});
-
-router.post('/index/exclusions', async (req, res) => {
-  try {
-    const data = await excludeDocumentFromIndex({
-      user: req.user,
-      payload: req.body || {},
-    });
-    return res.status(201).json({ ok: true, ...data });
-  } catch (error) {
-    return sendError(res, error);
-  }
-});
-
-router.post('/index/restore', async (req, res) => {
-  try {
-    const data = await restoreDocumentIndex({
-      user: req.user,
-      payload: req.body || {},
-    });
-    return res.json({ ok: true, ...data });
   } catch (error) {
     return sendError(res, error);
   }
