@@ -32,7 +32,7 @@ type SourceAction = {
   label: string;
   method?: string;
   path?: string | null;
-  kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip' | 'google_folder_selector' | 'zoho_folder_selector';
+  kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip' | 'google_folder_selector' | 'zoho_folder_selector' | 'zoho_folder_url';
   enabled?: boolean;
   reason?: string | null;
   body?: Record<string, any> | null;
@@ -346,6 +346,11 @@ export default function UnifiedEvidenceLibrary({
   const [googleFolderTrail, setGoogleFolderTrail] = useState<Array<{ id: string; name: string }>>([{ id: 'root', name: 'Mi unidad' }]);
   const [googleFolderMessage, setGoogleFolderMessage] = useState('');
   const [googleFolderHadError, setGoogleFolderHadError] = useState(false);
+  const [zohoUrlOpen, setZohoUrlOpen] = useState(false);
+  const [zohoUrlSource, setZohoUrlSource] = useState<SourceCard | null>(null);
+  const [zohoFolderUrl, setZohoFolderUrl] = useState('');
+  const [zohoFolderName, setZohoFolderName] = useState('');
+  const [zohoUrlMessage, setZohoUrlMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState('');
   const [tab, setTab] = useState<'summary' | 'associations' | 'suggestions' | 'chunks' | 'versions' | 'history'>('summary');
@@ -576,6 +581,49 @@ export default function UnifiedEvidenceLibrary({
     }
   };
 
+  const openZohoUrlSelector = (source: SourceCard) => {
+    setZohoUrlSource(source);
+    setZohoFolderUrl('');
+    setZohoFolderName('');
+    setZohoUrlMessage('');
+    setZohoUrlOpen(true);
+  };
+
+  const submitZohoFolderUrl = async () => {
+    if (!zohoUrlSource?.source_id || !zohoFolderUrl.trim()) {
+      setZohoUrlMessage('Pegue una URL de carpeta Zoho WorkDrive.');
+      return;
+    }
+    setWorking('zoho-folder-url');
+    setZohoUrlMessage('');
+    try {
+      const json = await fetchJson(`${API_URL}/api/document-integrations/zoho/select-folder-url`, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          source_id: zohoUrlSource.source_id,
+          folder_url: zohoFolderUrl.trim(),
+          folder_name: zohoFolderName.trim() || undefined,
+        }),
+      });
+      const validation = json.validation || {};
+      setZohoUrlMessage(
+        `Carpeta seleccionada. Archivos visibles: ${validation.files_count || 0}. Carpetas visibles: ${validation.folders_count || 0}.`
+      );
+      setZohoUrlOpen(false);
+      await loadSources();
+      await loadDocuments();
+    } catch (error: any) {
+      const details = error?.details;
+      const provider = details?.provider_status ? ` Estado proveedor: ${details.provider_status}.` : '';
+      const providerCode = details?.provider_code ? ` Código: ${details.provider_code}.` : '';
+      const stage = details?.stage ? ` Etapa: ${details.stage}.` : '';
+      const hint = details?.hint ? ` ${details.hint}` : '';
+      setZohoUrlMessage(`${error.message || 'No fue posible seleccionar la carpeta desde la URL.'}${stage}${provider}${providerCode}${hint}`);
+    } finally {
+      setWorking('');
+    }
+  };
+
   useEffect(() => {
     loadSources();
   }, [token]);
@@ -691,6 +739,10 @@ export default function UnifiedEvidenceLibrary({
     }
     if (resolvedAction.kind === 'google_folder_selector' || resolvedAction.kind === 'zoho_folder_selector') {
       await openGoogleFolderSelector(source);
+      return;
+    }
+    if (resolvedAction.kind === 'zoho_folder_url') {
+      openZohoUrlSelector(source);
       return;
     }
     if (resolvedAction.enabled === false || !resolvedAction.path) {
@@ -1043,6 +1095,53 @@ export default function UnifiedEvidenceLibrary({
             </div>
             <div className="mt-2 text-xs text-slate-500">
               Carpeta actual: {googleFolderTrail[googleFolderTrail.length - 1]?.name || googleFolderParentId}
+            </div>
+          </div>
+        )}
+        {zohoUrlOpen && zohoUrlSource && (
+          <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="font-bold text-slate-900">Pegar URL de carpeta Zoho WorkDrive</div>
+                <div className="mt-1 text-sm text-slate-600">
+                  Copie la URL desde una carpeta real de Zoho WorkDrive. No use la raíz general.
+                </div>
+              </div>
+              <button
+                onClick={() => setZohoUrlOpen(false)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_220px_auto]">
+              <input
+                value={zohoFolderUrl}
+                onChange={(event) => setZohoFolderUrl(event.target.value)}
+                placeholder="https://workplace.zoho.com/#workdrive_app/.../privatespace/folders/..."
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              />
+              <input
+                value={zohoFolderName}
+                onChange={(event) => setZohoFolderName(event.target.value)}
+                placeholder="Nombre opcional"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              />
+              <button
+                onClick={submitZohoFolderUrl}
+                disabled={!zohoFolderUrl.trim() || working === 'zoho-folder-url'}
+                className="rounded-xl bg-sky-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {working === 'zoho-folder-url' ? 'Validando...' : 'Usar URL'}
+              </button>
+            </div>
+            {zohoUrlMessage && (
+              <div className="mt-3 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm text-slate-700">
+                {zohoUrlMessage}
+              </div>
+            )}
+            <div className="mt-2 text-xs text-slate-500">
+              Formatos aceptados: workdrive.zoho.com/folder/&lt;id&gt; o workplace.zoho.com/#workdrive_app/&lt;workspace&gt;/privatespace/folders/&lt;id&gt;.
             </div>
           </div>
         )}

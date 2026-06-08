@@ -127,7 +127,7 @@ Root discovery may return navigable synthetic nodes before a real provider folde
   "name": "Mis carpetas",
   "type": "private_space",
   "can_open": true,
-  "can_select": true
+  "can_select": false
 }
 ```
 
@@ -143,19 +143,37 @@ Root discovery may return navigable synthetic nodes before a real provider folde
 
 Opening `zoho:privatespace:root` lists folders in private space. Opening `zoho:teamfolders:root` lists team folders such as `General` or project-specific team folders if the user has access.
 
-For this Sprint 3.5 implementation, `zoho:privatespace:root` is a synthetic application root, not a physical Zoho folder ID. It is stored as the selected folder only with metadata:
+For this Sprint 3.5 implementation, `zoho:privatespace:root` is a synthetic application root, not a physical Zoho folder ID. It is only a UI navigation container. It must not be stored as the final synchronizable folder.
 
-- `zoho_root_mode = files_root`
-- `zoho_root_kind = personal_files_root`
-- `zoho_root_endpoint = /workdrive/api/v1/files`
-
-Browsing and syncing `Mis carpetas` must therefore call:
+When the WorkDrive folder browser cannot reliably list the user's visible folders, the supported fallback is selecting a real folder by URL from Zoho WorkDrive:
 
 ```text
-GET /workdrive/api/v1/files
+POST /api/document-integrations/zoho/select-folder-url
 ```
 
-It must not use `/workdrive/privatespace/folders/files` and must not treat `zoho:privatespace:root` as a provider folder ID. Selecting `Mis carpetas` stores the internal alias `folder_id = zoho:root:files`; legacy rows with `folder_id = zoho:privatespace:root` are normalized on sync. If `/files` returns `200` with no visible items, sync stores `last_sync_status = completed_empty` and returns a clear empty message instead of a misleading successful indexed count.
+Accepted examples:
+
+```text
+https://workdrive.zoho.com/folder/<folder_id>
+https://workplace.zoho.com/#workdrive_app/<workspace_id>/privatespace/folders/<folder_id>
+https://workplace.zoho.com/#workdrive_app/<workspace_id>/teamfolders/<folder_id>
+```
+
+The backend extracts `folder_id`, optional `workspace_id`, and `zoho_space_type`, strips query strings, validates that the URL belongs to Zoho, and stores the selected real folder in `tenant_document_sources`:
+
+- `folder_id = <real Zoho folder id>`
+- `folder_display_name`
+- `folder_path`
+- `metadata_json.workspace_id`
+- `metadata_json.zoho_workspace_id`
+- `metadata_json.zoho_space_type`
+- `metadata_json.zoho_url_source`
+- `metadata_json.zoho_root_kind = real_folder`
+- `metadata_json.zoho_root_mode = folder`
+- `metadata_json.selected_from_url = true`
+- `metadata_json.zoho_working_list_endpoint` when a working endpoint is found
+
+Sync rejects any selected `folder_id` that starts with `zoho:` and returns `ZOHO_SYNTHETIC_ROOT_NOT_SYNCABLE`. If a real folder returns zero elements after the controlled endpoint matrix, sync returns `ZOHO_FOLDER_EMPTY_OR_UNREADABLE` with tested endpoints instead of silently returning `completed_empty`.
 
 GET requests to WorkDrive do not send `Content-Type: application/json`. The backend probes media headers in this order when Zoho returns `415`:
 
@@ -167,7 +185,7 @@ Operational diagnostics can be run without exposing tokens:
 
 ```bash
 cd backend
-SOURCE_ID=<tenant_document_sources.id> KNOWN_FOLDER_ID=<optional_zoho_folder_id> node scripts/probe-zoho-workdrive.js
+SOURCE_ID=<tenant_document_sources.id> WORKSPACE_ID=<optional_workspace_id> KNOWN_FOLDER_ID=<optional_zoho_folder_id> node scripts/probe-zoho-workdrive.js
 ```
 
 The normalized response shape is:
