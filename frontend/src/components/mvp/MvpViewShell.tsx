@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import {
@@ -23,6 +24,7 @@ type MvpViewShellProps = {
   description: string;
   links: MvpLink[];
   notes?: string[];
+  children?: ReactNode;
 };
 
 const toneClasses = {
@@ -44,6 +46,7 @@ export default function MvpViewShell({
   description,
   links,
   notes = [],
+  children,
 }: MvpViewShellProps) {
   const role = getCurrentRole();
   const roleGroup = getMvpRoleGroup(role);
@@ -78,6 +81,8 @@ export default function MvpViewShell({
             ))}
           </section>
         )}
+
+        {children}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {visibleLinks.map((link) => (
