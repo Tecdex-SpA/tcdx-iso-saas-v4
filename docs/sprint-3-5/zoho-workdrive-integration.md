@@ -28,10 +28,10 @@ Required backend variables:
 - `ZOHO_CLIENT_SECRET`
 - `ZOHO_REDIRECT_URI`
 - `ZOHO_ACCOUNTS_BASE_URL`
-- `ZOHO_API_BASE_URL`
 
 Optional:
 
+- `ZOHO_API_BASE_URL` defaults to `https://www.zohoapis.com`
 - `ZOHO_SCOPES`
 - `ZOHO_WORKDRIVE_SCOPES`
 
@@ -142,6 +142,19 @@ Root discovery may return navigable synthetic nodes before a real provider folde
 ```
 
 Opening `zoho:privatespace:root` lists folders in private space. Opening `zoho:teamfolders:root` lists team folders such as `General` or project-specific team folders if the user has access.
+
+For this Sprint 3.5 implementation, `zoho:privatespace:root` is a synthetic application root, not a physical Zoho folder ID. It is stored as the selected folder only with metadata:
+
+- `zoho_root_mode = files_root`
+- `zoho_root_endpoint = /workdrive/api/v1/files`
+
+Browsing and syncing `Mis carpetas` must therefore call:
+
+```text
+GET /workdrive/api/v1/files
+```
+
+It must not use `/workdrive/privatespace/folders/files` and must not treat `zoho:privatespace:root` as a provider folder ID. If `/files` returns `200` with no visible items, sync stores `last_sync_status = completed_empty` and returns a clear empty message instead of a misleading successful indexed count.
 
 The normalized response shape is:
 

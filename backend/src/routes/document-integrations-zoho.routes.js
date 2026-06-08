@@ -369,6 +369,9 @@ function successDetails(folders, foldersResult, fallbackStage) {
       private_folders_count: details.private_folders_count,
       team_folders_count: details.team_folders_count,
       shared_folders_count: details.shared_folders_count,
+      folders_count: details.folders_count,
+      files_count: details.files_count,
+      total_items_count: details.total_items_count,
       diagnostics: Array.isArray(details.diagnostics) ? details.diagnostics.slice(0, 10) : undefined,
       ok_endpoints: details.ok_endpoints || undefined,
     };
@@ -380,6 +383,9 @@ function successDetails(folders, foldersResult, fallbackStage) {
     api_domain: details.api_domain || null,
     provider_status: details.provider_status || null,
     provider_message: details.provider_message || null,
+    folders_count: details.folders_count,
+    files_count: details.files_count,
+    total_items_count: details.total_items_count,
     diagnostics: Array.isArray(details.diagnostics) ? details.diagnostics.slice(0, 10) : undefined,
     ok_endpoints: details.ok_endpoints || undefined,
   };
@@ -489,14 +495,18 @@ async function listZohoFilesRecursive({ accessToken, apiBaseUrl, folderId, inclu
       const relativePath = normalizeRelativePath(currentPath, name);
       files.push({ item, relativePath });
       if (includeSubfolders && normalized.metadata_json?.zoho?.is_folder && depth < 5) {
-        await walk(normalized.provider_file_id, relativePath, depth + 1);
+        await walk(normalized.provider_file_id, relativePath, depth + 1).catch((error) => {
+          warnings.push({
+            type: 'zoho_folder_walk_failed',
+            folder_id: normalized.provider_file_id,
+            message: error.message,
+          });
+        });
       }
     }
   }
 
-  await walk(folderId, '', 0).catch((error) => {
-    warnings.push({ type: 'zoho_folder_walk_failed', message: error.message });
-  });
+  await walk(folderId, '', 0);
 
   return { files, warnings };
 }
@@ -842,6 +852,30 @@ router.get('/folders', auth, async (req, res) => {
       };
     });
     const details = successDetails(normalizedFolders, folders, current.type === 'root' ? 'root_discovery_completed' : 'list_folder');
+    if (details.stage === 'list_private_space') {
+      console.info('ZOHO_ROOT_FILES_RESULT:', {
+        request_id: req.requestId || null,
+        tenant: shortId(tenantId),
+        source_id: source.id,
+        stage: details.stage,
+        endpoint: '/workdrive/api/v1/files',
+        folders_count: details.folders_count || normalizedFolders.length,
+        files_count: details.files_count || 0,
+        total_items_count: details.total_items_count || null,
+        reason: details.reason || null,
+      });
+    } else if (details.stage === 'list_folder') {
+      console.info('ZOHO_FOLDER_CHILDREN_RESULT:', {
+        request_id: req.requestId || null,
+        tenant: shortId(tenantId),
+        source_id: source.id,
+        stage: details.stage,
+        parent_id: parentId,
+        folders_count: details.folders_count || normalizedFolders.length,
+        files_count: details.files_count || 0,
+        reason: details.reason || null,
+      });
+    }
     const breadcrumbs = parentId === 'root'
       ? [{ id: 'root', name: current.name || 'Zoho WorkDrive' }]
       : [
@@ -972,6 +1006,7 @@ router.post('/select-folder', auth, async (req, res) => {
       ? normalizeFolder(metadata)
       : { id: folderId, name: folderName || 'Zoho WorkDrive', path: folderPath || folderName || 'Zoho WorkDrive', display_path: folderPath || folderName || 'Zoho WorkDrive', provider_team_id: null };
     const selectedPath = folderPath || normalized.display_path || normalized.path || normalized.name;
+    const isPersonalRoot = folderId === 'zoho:privatespace:root';
     const result = await pool.query(
       `
       UPDATE tenant_document_sources
@@ -1004,6 +1039,8 @@ router.post('/select-folder', auth, async (req, res) => {
           root_folder_id: folderId,
           root_folder_name: normalized.name,
           root_folder_path: selectedPath,
+          zoho_root_mode: isPersonalRoot ? 'files_root' : 'folder',
+          zoho_root_endpoint: isPersonalRoot ? '/workdrive/api/v1/files' : null,
           provider: ZOHO_PROVIDER,
           selected_at: new Date().toISOString(),
         }),
@@ -1068,6 +1105,14 @@ router.post('/sync', auth, async (req, res) => {
     if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
     const fresh = await ensureFreshCredential(credential);
     const apiBaseUrl = resolveApiBaseUrl(source, fresh.credential);
+    console.info('ZOHO_SYNC_START:', {
+      request_id: req.requestId || null,
+      tenant: shortId(tenantId),
+      source_id: source.id,
+      stage: 'sync_start',
+      folder_id: source.folder_id,
+      root_mode: metadataValue(source, 'zoho_root_mode') || null,
+    });
     const listed = await listZohoFilesRecursive({
       accessToken: fresh.tokens.access_token,
       apiBaseUrl,
@@ -1079,8 +1124,13 @@ router.post('/sync', auth, async (req, res) => {
     let filesIndexed = 0;
     let foldersIndexed = 0;
     let filesErrors = 0;
+    let filesSeen = 0;
+    let foldersSeen = 0;
     const warnings = [...listed.warnings];
     for (const row of listed.files) {
+      const normalized = zoho.normalizeZohoFileToDocumentIndex(row.item);
+      if (normalized.metadata_json?.zoho?.is_folder) foldersSeen += 1;
+      else filesSeen += 1;
       try {
         const kind = await upsertZohoDocument({
           tenantId,
@@ -1097,46 +1147,108 @@ router.post('/sync', auth, async (req, res) => {
       }
     }
 
-    const finalStatus = filesErrors ? 'completed_with_warnings' : 'completed';
+    const totalIndexed = filesIndexed + foldersIndexed;
+    const totalSeen = filesSeen + foldersSeen;
+    const finalStatus = totalSeen === 0
+      ? 'completed_empty'
+      : totalIndexed === 0 && filesErrors > 0
+        ? 'error'
+        : (filesErrors || warnings.length) ? 'completed_with_warnings' : 'completed';
+    const finalError = finalStatus === 'error'
+      ? 'Zoho WorkDrive no pudo indexar los elementos visibles.'
+      : null;
     await pool.query(
       `
       UPDATE tenant_document_sources
       SET last_sync_at = NOW(),
           status = 'active',
           last_sync_status = $3,
-          last_sync_error = NULL,
+          last_sync_error = $4,
           updated_at = NOW()
       WHERE id = $1::uuid
         AND tenant_id = $2::uuid
       `,
-      [source.id, tenantId, finalStatus]
+      [source.id, tenantId, finalStatus, finalError]
     );
+    console.info('ZOHO_SYNC_RESULT:', {
+      request_id: req.requestId || null,
+      tenant: shortId(tenantId),
+      source_id: source.id,
+      stage: 'sync_result',
+      status: finalStatus,
+      files_seen: filesSeen,
+      files_indexed: filesIndexed,
+      folders_seen: foldersSeen,
+      folders_indexed: foldersIndexed,
+      files_errors: filesErrors,
+      warnings_count: warnings.length,
+    });
+
+    if (finalStatus === 'error') {
+      return res.status(500).json({
+        ok: false,
+        provider: ZOHO_PROVIDER,
+        status: finalStatus,
+        code: 'ZOHO_SYNC_INDEX_FAILED',
+        error: finalError,
+        files_seen: filesSeen,
+        files_indexed: filesIndexed,
+        folders_seen: foldersSeen,
+        folders_indexed: foldersIndexed,
+        files_errors: filesErrors,
+        warnings_count: warnings.length,
+        warnings: warnings.slice(0, 20),
+      });
+    }
 
     return res.json({
       ok: true,
       provider: ZOHO_PROVIDER,
       status: finalStatus,
-      files_seen: listed.files.length,
+      files_seen: filesSeen,
       files_indexed: filesIndexed,
       files_created: filesIndexed,
       files_updated: 0,
-      folders_seen: foldersIndexed,
+      folders_seen: foldersSeen,
       folders_indexed: foldersIndexed,
       files_skipped: 0,
       files_errors: filesErrors,
       warnings_count: warnings.length,
       warnings: warnings.slice(0, 20),
+      message: finalStatus === 'completed_empty'
+        ? 'Zoho WorkDrive no devolvió archivos visibles para la carpeta seleccionada.'
+        : undefined,
     });
   } catch (error) {
-    console.error('ERROR SYNC ZOHO:', {
+    const details = zohoErrorDetails(error, error.stage || 'sync_zoho');
+    console.error('ZOHO_API_ERROR:', {
       request_id: req.requestId || null,
+      tenant: shortId(tenantId),
+      source_id: sourceId || null,
       code: error.code || 'ZOHO_SYNC_ERROR',
       message: error.message,
+      details,
     });
+    await pool.query(
+      `
+      UPDATE tenant_document_sources
+      SET status = 'active',
+          last_sync_status = 'error',
+          last_sync_error = $3::text,
+          updated_at = NOW()
+      WHERE id = $1::uuid
+        AND tenant_id = $2::uuid
+        AND provider = $4
+      `,
+      [sourceId, tenantId, error.message || 'Error sincronizando Zoho WorkDrive', ZOHO_PROVIDER]
+    ).catch(() => null);
     return res.status(error.statusCode || 500).json({
       ok: false,
+      provider: ZOHO_PROVIDER,
+      status: 'error',
       code: error.code || 'ZOHO_SYNC_ERROR',
       error: error.statusCode ? error.message : 'Error sincronizando Zoho',
+      details,
     });
   }
 });
