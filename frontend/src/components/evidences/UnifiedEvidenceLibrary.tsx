@@ -32,7 +32,7 @@ type SourceAction = {
   label: string;
   method?: string;
   path?: string | null;
-  kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip' | 'google_folder_selector' | 'zoho_folder_selector' | 'zoho_folder_url';
+  kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip' | 'google_folder_selector' | 'zoho_folder_selector' | 'zoho_folder_url' | 'disconnect_provider';
   enabled?: boolean;
   reason?: string | null;
   body?: Record<string, any> | null;
@@ -745,6 +745,30 @@ export default function UnifiedEvidenceLibrary({
       openZohoUrlSelector(source);
       return;
     }
+    if (resolvedAction.kind === 'disconnect_provider') {
+      const providerLabel = source.source_type === 'zoho_drive' ? 'Zoho WorkDrive' : 'Google Drive';
+      const confirmed = window.confirm(
+        `¿Deseas desconectar ${providerLabel}?\nNo se eliminarán documentos ya indexados ni asociaciones existentes, pero se detendrá la sincronización y se eliminarán credenciales locales.`
+      );
+      if (!confirmed) return;
+      setWorking(`source-${source.source_type}-${resolvedAction.key}`);
+      setManualUploadMessage('');
+      try {
+        const json = await fetchJson(`${API_URL}${resolvedAction.path}`, token, {
+          method: resolvedAction.method || 'POST',
+          body: JSON.stringify({ ...(resolvedAction.body || {}), reason: 'user_requested' }),
+        });
+        const warning = json.revocation?.warning ? ` ${json.revocation.warning}` : '';
+        setManualUploadMessage(`${json.message || `${providerLabel} desconectado.`}${warning}`);
+        await loadSources();
+        await loadDocuments();
+      } catch (error: any) {
+        setManualUploadMessage(error.message || `No fue posible desconectar ${providerLabel}.`);
+      } finally {
+        setWorking('');
+      }
+      return;
+    }
     if (resolvedAction.enabled === false || !resolvedAction.path) {
       alert(resolvedAction.reason || 'Configuración pendiente.');
       return;
@@ -940,7 +964,11 @@ export default function UnifiedEvidenceLibrary({
                     onClick={() => runSourceAction(source, sourceAction)}
                     disabled={!canManage || sourceAction.enabled === false || working === `source-${source.source_type}-${sourceAction.key}`}
                     title={sourceAction.enabled === false ? sourceAction.reason || 'Configuración pendiente' : sourceAction.label}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={`w-full rounded-lg border px-2 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                      sourceAction.kind === 'disconnect_provider'
+                        ? 'border-red-200 bg-white text-red-700'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
                   >
                     {working === `source-${source.source_type}-${sourceAction.key}` ? 'Ejecutando...' : sourceAction.label}
                   </button>

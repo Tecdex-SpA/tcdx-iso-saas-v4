@@ -4,6 +4,7 @@ const pool = require('../config/db')
 const auth = require('../middleware/auth')
 const crypto = require('crypto')
 const { encryptToken } = require('../utils/cryptoTokens')
+const { decryptToken } = require('../utils/cryptoTokens')
 const {
   getJwtSecret,
 } = require('../config/security')
@@ -81,6 +82,37 @@ async function getTenantGoogleSource({ tenantId, sourceId = null }) {
   return result.rows[0] || null
 }
 
+async function getTenantGoogleSourceForDisconnect({ tenantId, sourceId = null }) {
+  const params = [tenantId]
+  let sourceFilter = `AND COALESCE(s.status, '') <> 'disconnected'`
+  if (sourceId) {
+    params.push(sourceId)
+    sourceFilter = `AND s.id = $2::uuid`
+  }
+
+  const result = await pool.query(
+    `
+    SELECT s.*, i.status AS integration_status,
+           i.encrypted_access_token, i.encrypted_refresh_token,
+           i.provider_account_email AS integration_account_email
+    FROM tenant_document_sources s
+    LEFT JOIN tenant_integrations i
+      ON i.id = s.integration_id
+     AND i.tenant_id = s.tenant_id
+    WHERE s.tenant_id = $1::uuid
+      AND s.provider = 'google_drive'
+      ${sourceFilter}
+    ORDER BY
+      CASE WHEN s.integration_id IS NOT NULL THEN 0 ELSE 1 END,
+      s.updated_at DESC NULLS LAST,
+      s.created_at DESC NULLS LAST
+    LIMIT 1
+    `,
+    params
+  )
+  return result.rows[0] || null
+}
+
 function assertManageGoogle(req, res) {
   const tenantId = resolveTenantId(req)
   if (!tenantId) {
@@ -100,6 +132,45 @@ function assertManageGoogle(req, res) {
 
 function getFrontendUrl() {
   return String(process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || 'https://181.212.166.187:8443').replace(/\/$/, '')
+}
+
+async function revokeGoogleToken({ accessToken, refreshToken }) {
+  const token = refreshToken || accessToken
+  const attempted = Boolean(token)
+  if (!token) {
+    return {
+      attempted: false,
+      success: false,
+      provider_status: null,
+      warning: 'No había token local para revocar. Credenciales locales eliminadas.',
+    }
+  }
+  try {
+    const body = new URLSearchParams({ token })
+    const response = await fetch('https://oauth2.googleapis.com/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    })
+    if (response.status === 200) {
+      return { attempted, success: true, provider_status: response.status }
+    }
+    return {
+      attempted,
+      success: false,
+      provider_status: response.status,
+      warning: response.status === 400
+        ? 'Token ya inválido o no revocable. Credenciales locales eliminadas.'
+        : 'Google no confirmó la revocación. Credenciales locales eliminadas.',
+    }
+  } catch (error) {
+    return {
+      attempted,
+      success: false,
+      provider_status: null,
+      warning: 'No fue posible confirmar la revocación externa. Credenciales locales eliminadas.',
+    }
+  }
 }
 
 function getStateSecret() {
@@ -552,6 +623,139 @@ router.post('/sync', auth, async (req, res) => {
       ok: false,
       code: err.code || 'GOOGLE_SYNC_FAILED',
       error: err.statusCode ? err.message : 'No fue posible sincronizar Google Drive.',
+    })
+  }
+})
+
+router.post('/disconnect', auth, async (req, res) => {
+  const tenantId = assertManageGoogle(req, res)
+  if (!tenantId) return
+
+  const sourceId = req.body?.source_id || null
+  const reason = String(req.body?.reason || 'user_requested').slice(0, 120)
+  if (sourceId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(sourceId))) {
+    return res.status(400).json({ ok: false, code: 'INVALID_SOURCE_ID', error: 'source_id debe ser UUID de tenant_document_sources.' })
+  }
+
+  let source
+  try {
+    source = await getTenantGoogleSourceForDisconnect({ tenantId, sourceId })
+    if (!source) {
+      return res.status(404).json({ ok: false, code: 'GOOGLE_SOURCE_NOT_FOUND', error: 'Fuente Google Drive no encontrada para este tenant.' })
+    }
+
+    let accessToken = null
+    let refreshToken = null
+    try {
+      accessToken = decryptToken(source.encrypted_access_token)
+      refreshToken = decryptToken(source.encrypted_refresh_token)
+    } catch (error) {
+      console.warn('WARN GOOGLE DISCONNECT TOKEN_DECRYPT_FAILED:', {
+        request_id: req.requestId || null,
+        tenant: String(tenantId).slice(0, 8),
+        source_id: source.id,
+        token_logged: false,
+      })
+    }
+    const revocation = await revokeGoogleToken({ accessToken, refreshToken })
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query(
+        `
+        DELETE FROM tenant_document_provider_credentials
+        WHERE tenant_id = $1::uuid
+          AND provider = 'google_drive'
+          AND source_id = $2::uuid
+        `,
+        [tenantId, source.id]
+      )
+      await client.query(
+        `
+        UPDATE tenant_document_sources
+        SET status = 'disconnected',
+            sync_enabled = false,
+            last_sync_status = 'disconnected',
+            last_sync_error = NULL,
+            folder_id = NULL,
+            folder_path = NULL,
+            folder_display_name = NULL,
+            provider_account_email = NULL,
+            provider_team_id = NULL,
+            metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $3::jsonb,
+            updated_at = NOW()
+        WHERE tenant_id = $1::uuid
+          AND provider = 'google_drive'
+          AND id = $2::uuid
+        `,
+        [
+          tenantId,
+          source.id,
+          JSON.stringify({
+            disconnected_at: new Date().toISOString(),
+            disconnected_by_user_id: getUserId(req.user) || null,
+            disconnect_reason: reason,
+            previous_provider_account_email: source.provider_account_email || source.integration_account_email || null,
+            previous_root_folder_id: source.folder_id || null,
+            previous_root_folder_name: source.folder_display_name || source.folder_path || null,
+            revocation,
+          }),
+        ]
+      )
+      if (source.integration_id) {
+        await client.query(
+          `
+          UPDATE tenant_integrations
+          SET status = 'disconnected',
+              encrypted_access_token = NULL,
+              encrypted_refresh_token = NULL,
+              disconnected_at = NOW(),
+              metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $3::jsonb,
+              updated_at = NOW()
+          WHERE id = $1::uuid
+            AND tenant_id = $2::uuid
+            AND provider = 'google_drive'
+          `,
+          [
+            source.integration_id,
+            tenantId,
+            JSON.stringify({
+              disconnected_at: new Date().toISOString(),
+              disconnected_by_user_id: getUserId(req.user) || null,
+              disconnect_reason: reason,
+              revocation,
+            }),
+          ]
+        )
+      }
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+    return res.json({
+      ok: true,
+      provider: 'google_drive',
+      source_id: source.id,
+      status: 'disconnected',
+      revocation,
+      message: revocation.success ? 'Google Drive desconectado correctamente.' : 'Google Drive fue desconectado localmente.',
+    })
+  } catch (err) {
+    console.error('ERROR DISCONNECT GOOGLE DRIVE:', {
+      request_id: req.requestId || null,
+      tenant: tenantId ? String(tenantId).slice(0, 8) : null,
+      source_id: source?.id || sourceId || null,
+      code: err.code || 'GOOGLE_DISCONNECT_FAILED',
+      message: err.message,
+      token_logged: false,
+    })
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      code: err.code || 'GOOGLE_DISCONNECT_FAILED',
+      error: err.statusCode ? err.message : 'No fue posible desconectar Google Drive.',
     })
   }
 })

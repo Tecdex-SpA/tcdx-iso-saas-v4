@@ -169,6 +169,29 @@ async function getTenantZohoSource({ tenantId, sourceId = null }) {
   return result.rows[0] || null;
 }
 
+async function getTenantZohoSourceForDisconnect({ tenantId, sourceId = null }) {
+  const params = [tenantId];
+  let sourceFilter = `AND COALESCE(s.status, '') <> 'disconnected'`;
+  if (sourceId) {
+    params.push(sourceId);
+    sourceFilter = `AND s.id = $2::uuid`;
+  }
+
+  const result = await pool.query(
+    `
+    SELECT s.*
+    FROM tenant_document_sources s
+    WHERE s.tenant_id = $1::uuid
+      AND s.provider = $${params.length + 1}
+      ${sourceFilter}
+    ORDER BY s.updated_at DESC NULLS LAST, s.created_at DESC NULLS LAST
+    LIMIT 1
+    `,
+    [...params, ZOHO_PROVIDER]
+  );
+  return result.rows[0] || null;
+}
+
 async function getCredential({ tenantId, credentialId = null, sourceId = null }) {
   const params = [tenantId, ZOHO_PROVIDER];
   const where = [`tenant_id = $1::uuid`, `provider = $2`];
@@ -1533,6 +1556,159 @@ router.post('/sync', auth, async (req, res) => {
       code: error.code || 'ZOHO_SYNC_ERROR',
       error: error.statusCode ? error.message : 'Error sincronizando Zoho',
       details,
+    });
+  }
+});
+
+router.post('/disconnect', auth, async (req, res) => {
+  const tenantId = assertManageZoho(req, res);
+  if (!tenantId) return;
+  const sourceId = req.body?.source_id || null;
+  const reason = String(req.body?.reason || 'user_requested').slice(0, 120);
+  if (sourceId && !isUuid(sourceId)) {
+    return res.status(400).json({
+      ok: false,
+      code: 'INVALID_SOURCE_ID',
+      error: 'source_id debe ser UUID de tenant_document_sources.',
+    });
+  }
+
+  let source;
+  try {
+    source = await getTenantZohoSourceForDisconnect({ tenantId, sourceId });
+    if (!source) {
+      return res.status(404).json({
+        ok: false,
+        code: 'ZOHO_SOURCE_NOT_FOUND',
+        error: 'Fuente Zoho WorkDrive no encontrada para este tenant.',
+      });
+    }
+    const credential = await getCredential({ tenantId, sourceId: source.id });
+    let tokens = {};
+    if (credential) {
+      try {
+        tokens = zoho.decryptZohoCredential(credential);
+      } catch (error) {
+        console.warn('WARN ZOHO DISCONNECT TOKEN_DECRYPT_FAILED:', {
+          request_id: req.requestId || null,
+          tenant: shortId(tenantId),
+          source_id: source.id,
+          token_logged: false,
+        });
+      }
+    }
+    const accountsServerUrl =
+      metadataValue(credential, 'accounts_server') ||
+      metadataValue(source, 'accounts_server') ||
+      process.env.ZOHO_ACCOUNTS_BASE_URL ||
+      'https://accounts.zoho.com';
+    const revocation = await zoho.revokeZohoToken({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      accountsServerUrl,
+    });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `
+        DELETE FROM tenant_document_provider_credentials
+        WHERE tenant_id = $1::uuid
+          AND provider = $2
+          AND (source_id = $3::uuid OR source_id IS NULL)
+        `,
+        [tenantId, ZOHO_PROVIDER, source.id]
+      );
+      await client.query(
+        `
+        UPDATE tenant_document_sources
+        SET status = 'disconnected',
+            sync_enabled = false,
+            last_sync_status = 'disconnected',
+            last_sync_error = NULL,
+            folder_id = NULL,
+            folder_path = NULL,
+            folder_display_name = NULL,
+            provider_account_email = NULL,
+            provider_team_id = NULL,
+            metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $4::jsonb,
+            updated_at = NOW()
+        WHERE tenant_id = $1::uuid
+          AND provider = $2
+          AND id = $3::uuid
+        `,
+        [
+          tenantId,
+          ZOHO_PROVIDER,
+          source.id,
+          JSON.stringify({
+            disconnected_at: new Date().toISOString(),
+            disconnected_by_user_id: getUserId(req.user) || null,
+            disconnect_reason: reason,
+            previous_provider_account_email: source.provider_account_email || null,
+            previous_root_folder_id: source.folder_id || null,
+            previous_root_folder_name: source.folder_display_name || source.folder_path || null,
+            revocation,
+          }),
+        ]
+      );
+      if (source.integration_id) {
+        await client.query(
+          `
+          UPDATE tenant_integrations
+          SET status = 'disconnected',
+              disconnected_at = NOW(),
+              encrypted_access_token = NULL,
+              encrypted_refresh_token = NULL,
+              metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $4::jsonb,
+              updated_at = NOW()
+          WHERE id = $1::uuid
+            AND tenant_id = $2::uuid
+            AND provider = $3
+          `,
+          [
+            source.integration_id,
+            tenantId,
+            ZOHO_PROVIDER,
+            JSON.stringify({
+              disconnected_at: new Date().toISOString(),
+              disconnected_by_user_id: getUserId(req.user) || null,
+              disconnect_reason: reason,
+              revocation,
+            }),
+          ]
+        ).catch(() => null);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    return res.json({
+      ok: true,
+      provider: ZOHO_PROVIDER,
+      source_id: source.id,
+      status: 'disconnected',
+      revocation,
+      message: revocation.success ? 'Zoho WorkDrive desconectado correctamente.' : 'Zoho WorkDrive fue desconectado localmente.',
+    });
+  } catch (error) {
+    console.error('ERROR DISCONNECT ZOHO WORKDRIVE:', {
+      request_id: req.requestId || null,
+      tenant: shortId(tenantId),
+      source_id: source?.id || sourceId || null,
+      code: error.code || 'ZOHO_DISCONNECT_FAILED',
+      message: error.message,
+      token_logged: false,
+    });
+    return res.status(error.statusCode || 500).json({
+      ok: false,
+      code: error.code || 'ZOHO_DISCONNECT_FAILED',
+      error: error.statusCode ? error.message : 'No fue posible desconectar Zoho WorkDrive.',
     });
   }
 });

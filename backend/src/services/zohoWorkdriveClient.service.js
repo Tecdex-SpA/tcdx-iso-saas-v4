@@ -52,6 +52,11 @@ function getAccountsBaseUrl() {
   return trimSlash(process.env.ZOHO_ACCOUNTS_BASE_URL);
 }
 
+function resolveAccountsServerUrl(value = null) {
+  const raw = String(value || process.env.ZOHO_ACCOUNTS_BASE_URL || 'https://accounts.zoho.com').trim();
+  return trimSlash(raw || 'https://accounts.zoho.com');
+}
+
 function getApiBaseUrl() {
   return trimSlash(process.env.ZOHO_API_BASE_URL || 'https://www.zohoapis.com');
 }
@@ -542,6 +547,53 @@ async function refreshAccessToken(refreshToken) {
   });
 
   return readJsonResponse(response, 'Error refrescando token Zoho', { stage: 'refresh_token' });
+}
+
+async function revokeZohoToken({ accessToken, refreshToken, accountsServerUrl = null }) {
+  const token = refreshToken || accessToken;
+  const attempted = Boolean(token);
+  if (!token) {
+    return {
+      attempted: false,
+      success: false,
+      provider_status: null,
+      warning: 'No había token local para revocar. Credenciales locales eliminadas.',
+    };
+  }
+  try {
+    const url = new URL(`${resolveAccountsServerUrl(accountsServerUrl)}/oauth/v2/token/revoke`);
+    url.searchParams.set('token', token);
+    const response = await fetch(url.toString(), { method: 'POST' });
+    const parsed = await readDiagnosticResponse(response);
+    const providerStatus = response.status;
+    const success = response.ok && (
+      parsed.json?.status === 'success' ||
+      parsed.json?.status === 'successfully revoked' ||
+      parsed.json?.message === 'success'
+    );
+    if (success) {
+      return { attempted, success: true, provider_status: providerStatus };
+    }
+    return {
+      attempted,
+      success: false,
+      provider_status: providerStatus,
+      provider_code: parsed.provider_code,
+      provider_message: parsed.provider_message,
+      warning: providerStatus === 400
+        ? 'Token ya inválido o no revocable. Credenciales locales eliminadas.'
+        : 'Zoho no confirmó la revocación. Credenciales locales eliminadas.',
+    };
+  } catch (error) {
+    return {
+      attempted,
+      success: false,
+      provider_status: error?.statusCode || error?.provider_status || null,
+      provider_code: error?.provider_code || null,
+      provider_message: error?.provider_message || null,
+      warning: 'No fue posible confirmar la revocación externa. Credenciales locales eliminadas.',
+    };
+  }
 }
 
 async function zohoGetJson({ accessToken, path, searchParams = {}, apiBaseUrl = null, stage = null }) {
@@ -1508,6 +1560,8 @@ module.exports = {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
   refreshAccessToken,
+  revokeZohoToken,
+  resolveAccountsServerUrl,
   getZohoAccountIdentity,
   callZohoWorkdriveApi,
   parseZohoFolderUrl,

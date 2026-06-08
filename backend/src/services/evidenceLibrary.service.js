@@ -999,15 +999,20 @@ function defaultSourceActions(sourceType, sourceId = null, status = 'available')
       return [
         action('select_folder', 'Seleccionar carpeta', { kind: 'google_folder_selector', body: { source_id: sourceId } }),
         action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' }),
+        action('disconnect', 'Desconectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/disconnect', kind: 'disconnect_provider', body: { source_id: sourceId } }),
       ];
     }
     if (currentStatus === 'needs_reconnection') {
-      return [action('reconnect', 'Reconectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' })];
+      return [
+        action('reconnect', 'Reconectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' }),
+        action('disconnect', 'Desconectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/disconnect', kind: 'disconnect_provider', body: { source_id: sourceId } }),
+      ];
     }
     return [
       action('sync', currentStatus === 'sync_error' ? 'Sincronizar nuevamente' : 'Sincronizar carpeta', { method: 'POST', path: '/api/document-integrations/google/sync', body: { source_id: sourceId } }),
       action('change_folder', 'Cambiar carpeta', { kind: 'google_folder_selector', body: { source_id: sourceId } }),
       action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth' }),
+      action('disconnect', 'Desconectar Google Drive', { method: 'POST', path: '/api/document-integrations/google/disconnect', kind: 'disconnect_provider', body: { source_id: sourceId } }),
     ];
   }
   if (sourceType === 'zoho_drive' || sourceType === 'zoho_workdrive') {
@@ -1022,16 +1027,21 @@ function defaultSourceActions(sourceType, sourceId = null, status = 'available')
         action('select_folder', 'Seleccionar carpeta', { kind: 'zoho_folder_selector', body: { source_id: sourceId } }),
         action('select_folder_url', 'Pegar URL de carpeta', { kind: 'zoho_folder_url', body: { source_id: sourceId } }),
         action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' }),
+        action('disconnect', 'Desconectar Zoho WorkDrive', { method: 'POST', path: '/api/document-integrations/zoho/disconnect', kind: 'disconnect_provider', body: { source_id: sourceId } }),
       ];
     }
     if (currentStatus === 'needs_reconnection' || currentStatus === 'zoho_oauth_unauthorized') {
-      return [action('reconnect', 'Reconectar Zoho WorkDrive', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' })];
+      return [
+        action('reconnect', 'Reconectar Zoho WorkDrive', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' }),
+        action('disconnect', 'Desconectar Zoho WorkDrive', { method: 'POST', path: '/api/document-integrations/zoho/disconnect', kind: 'disconnect_provider', body: { source_id: sourceId } }),
+      ];
     }
     return [
       action('sync', currentStatus === 'sync_error' ? 'Sincronizar nuevamente' : 'Sincronizar', { method: 'POST', path: '/api/document-integrations/zoho/sync', body: { source_id: sourceId } }),
       action('change_folder', 'Cambiar carpeta', { kind: 'zoho_folder_selector', body: { source_id: sourceId } }),
       action('select_folder_url', 'Pegar URL de carpeta', { kind: 'zoho_folder_url', body: { source_id: sourceId } }),
       action('reconnect', 'Reconectar', { method: 'POST', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth' }),
+      action('disconnect', 'Desconectar Zoho WorkDrive', { method: 'POST', path: '/api/document-integrations/zoho/disconnect', kind: 'disconnect_provider', body: { source_id: sourceId } }),
     ];
   }
   if (sourceType === 'sync_agent') {
@@ -1212,7 +1222,7 @@ async function listSources({ user }) {
       normalizedCard.account_email = null;
       normalizedCard.last_sync_error = 'Zoho WorkDrive no está configurado por la plataforma.';
     } else if (normalizedCard.source_type === 'zoho_drive' && !normalizedCard.source_id) {
-      normalizedCard.status = 'not_connected';
+      normalizedCard.status = 'available';
       normalizedCard.root_folder_id = null;
       normalizedCard.root_folder_name = null;
       normalizedCard.provider_account_email = null;

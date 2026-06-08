@@ -237,6 +237,30 @@ Tokens, auth headers, tenant secrets and OAuth codes must never be logged or ret
 
 Zoho token responses may include `api_domain`, `accounts_server`, or `location`. These values are stored in credential/source metadata when available. WorkDrive API calls use the tenant-stored `api_domain` first and `ZOHO_API_BASE_URL` as fallback.
 
+## Disconnect
+
+Tenants can disconnect Zoho WorkDrive from `/evidencias` without deleting historical evidence.
+
+The disconnect action calls:
+
+```text
+POST /api/document-integrations/zoho/disconnect
+```
+
+The backend:
+
+- derives `tenant_id` from auth context;
+- validates the optional `source_id` against the authenticated tenant;
+- attempts to revoke the refresh token first, then access token if needed;
+- uses the tenant-stored `accounts_server` when available for multi-DC token revocation;
+- deletes local rows in `tenant_document_provider_credentials` for the tenant/provider/source;
+- updates `tenant_document_sources.status` to `disconnected`;
+- sets `sync_enabled = false` and `last_sync_status = disconnected`;
+- clears selected folder and provider account display fields;
+- preserves `document_index`, semantic analysis, suggestions, evidence associations, and uploaded evidence history.
+
+If Zoho returns an invalid-token or revoke failure response, local disconnect still succeeds. The safe revocation result is stored in `metadata_json.revocation`; tokens and secrets are never logged or returned.
+
 ## Known Limitations
 
 - BYO tenant OAuth app is future enterprise scope, not Sprint 3.5 default.
