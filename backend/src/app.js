@@ -288,6 +288,7 @@ app.use('/api/controls', controlsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/ai-auditor', aiAuditorRoutes);
 app.use('/api/diagnostic', diagnosticRoutes);
+app.use('/api/diagnostics', diagnosticRoutes);
 app.use('/api/nonconformities', ncRoutes);
 app.use('/api/dashboard-controls', dashboardControls);
 app.use('/api/evidences', evidencesRoutes);
