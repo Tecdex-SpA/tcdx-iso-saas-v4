@@ -558,11 +558,25 @@ export default function UnifiedEvidenceLibrary({
     setFolderChildrenLoading(true);
     setFolderChildrenMessage('');
     try {
-      const json = await fetchJson(
-        `${API_URL}/api/evidence-library/documents/document_index/${documentIndexId}/children?version=${encodeURIComponent(filters.version || 'active')}`,
-        token
-      );
+      const url = `${API_URL}/api/evidence-library/documents/document_index/${documentIndexId}/children?version=${encodeURIComponent(filters.version || 'active')}`;
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('OPEN_FOLDER_REQUEST', {
+          source_id: doc.source_id || null,
+          provider_file_id: doc.provider_file_id || null,
+          origin: doc.origin || doc.source_label || null,
+          item_type: doc.item_type || null,
+          url,
+        });
+      }
+      const json = await fetchJson(url, token);
       const rows = Array.isArray(json.data) ? json.data : [];
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('OPEN_FOLDER_RESPONSE', {
+          ok: Boolean(json.ok),
+          total: typeof json.total === 'number' ? json.total : null,
+          rows_len: rows.length,
+        });
+      }
       setFolderNavigationStack((prev) => [...prev, { folder: doc, documents, selected }]);
       setDocuments(rows);
       setSelected(rows[0] || null);
@@ -1513,6 +1527,7 @@ export default function UnifiedEvidenceLibrary({
                               <button
                                 type="button"
                                 onClick={(event) => {
+                                  event.preventDefault();
                                   event.stopPropagation();
                                   openFolder(doc);
                                 }}
