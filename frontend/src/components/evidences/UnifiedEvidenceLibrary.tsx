@@ -138,6 +138,12 @@ type DetailPayload = {
   history: Array<{ event: string; at?: string | null; label: string }>;
 };
 
+type FolderNavigationFrame = {
+  folder: LibraryDocument;
+  documents: LibraryDocument[];
+  selected: LibraryDocument | null;
+};
+
 const targetLabels: Record<string, string> = {
   control: 'Control',
   nonconformity: 'No conformidad',
@@ -298,12 +304,40 @@ function isOperationRef(value?: string | null) {
   return /^(document_index|evidence):[0-9a-fA-F-]{36}$/.test(String(value || '').trim());
 }
 
+function getDocumentIndexId(item?: Partial<LibraryDocument> | null) {
+  const candidates = [item?.source_id, item?.operation_ref, item?.library_item_id, item?.id];
+  for (const raw of candidates) {
+    const value = String(raw || '').trim();
+    if (!value) continue;
+    const normalized = value.startsWith('document_index:') ? value.replace('document_index:', '') : value;
+    if (isUuidLike(normalized)) return normalized;
+  }
+  const fallback = String(candidates.find(Boolean) || '').trim();
+  return fallback.startsWith('document_index:') ? fallback.replace('document_index:', '') : fallback;
+}
+
 function resolveLibraryActionSource(doc: LibraryDocument | null) {
   if (!doc) return null;
+  if (doc.source_type === 'document_index') {
+    const documentIndexId = getDocumentIndexId(doc);
+    if (isUuidLike(documentIndexId)) {
+      return {
+        operation_ref: `document_index:${documentIndexId}`,
+        source_type: doc.source_type,
+        source_id: documentIndexId,
+      };
+    }
+    return null;
+  }
+
   const rawSourceId = String(doc.source_id || '').trim();
   const operationRef = String(doc.operation_ref || '').trim();
-  if (doc.source_type && isUuidLike(rawSourceId) && isOperationRef(operationRef)) {
-    return { operation_ref: operationRef, source_type: doc.source_type, source_id: rawSourceId };
+  if (doc.source_type === 'evidence' && isUuidLike(rawSourceId)) {
+    return {
+      operation_ref: isOperationRef(operationRef) ? operationRef : `evidence:${rawSourceId}`,
+      source_type: doc.source_type,
+      source_id: rawSourceId,
+    };
   }
   return null;
 }
@@ -342,6 +376,8 @@ export default function UnifiedEvidenceLibrary({
   const [folderChildrenFor, setFolderChildrenFor] = useState('');
   const [folderChildrenLoading, setFolderChildrenLoading] = useState(false);
   const [folderChildrenMessage, setFolderChildrenMessage] = useState('');
+  const [folderNavigationStack, setFolderNavigationStack] = useState<FolderNavigationFrame[]>([]);
+  const [folderContextMessage, setFolderContextMessage] = useState('');
   const [manualUploadMessage, setManualUploadMessage] = useState('');
   const [manualUploadOpen, setManualUploadOpen] = useState(false);
   const [manualUploadMode, setManualUploadMode] = useState<'files' | 'zip'>('files');
@@ -389,6 +425,7 @@ export default function UnifiedEvidenceLibrary({
   const selectedCanExclude = Boolean(selected && canManage && !selectedIsExcluded && selected.source_type === 'document_index' && selected.can_exclude !== false);
   const selectedCanRestore = Boolean(selected && canManage && selectedIsExcluded && selected.source_type === 'document_index' && selected.can_restore !== false);
   const visibleSources = sources.length ? sources : fallbackSources;
+  const currentFolder = folderNavigationStack[folderNavigationStack.length - 1]?.folder || null;
   const hasActiveFilters = Boolean(
     filters.search ||
       filters.origin ||
@@ -409,6 +446,31 @@ export default function UnifiedEvidenceLibrary({
       semantic_status: '',
       version: 'active',
     });
+  };
+
+  const restoreDocumentList = (rows: LibraryDocument[], preferred: LibraryDocument | null) => {
+    setDocuments(rows);
+    setSelected((preferred && rows.some((row) => row.id === preferred.id)) ? preferred : (rows[0] || null));
+    setDetail(null);
+    setTab('summary');
+    setFolderChildren([]);
+    setFolderChildrenFor('');
+    setFolderChildrenMessage('');
+    setFolderContextMessage('');
+  };
+
+  const goUpFolder = () => {
+    if (folderNavigationStack.length === 0) return;
+    const previousFrame = folderNavigationStack[folderNavigationStack.length - 1];
+    setFolderNavigationStack((prev) => prev.slice(0, -1));
+    restoreDocumentList(previousFrame.documents, previousFrame.selected);
+  };
+
+  const returnToLibraryRoot = () => {
+    if (folderNavigationStack.length === 0) return;
+    const rootFrame = folderNavigationStack[0];
+    setFolderNavigationStack([]);
+    restoreDocumentList(rootFrame.documents, rootFrame.selected);
   };
 
   const selectDocument = (doc: LibraryDocument) => {
@@ -440,6 +502,11 @@ export default function UnifiedEvidenceLibrary({
       });
       const json = await fetchJson(`${API_URL}/api/evidence-library/documents?${params.toString()}`, token);
       const rows = Array.isArray(json.data) ? json.data : [];
+      setFolderNavigationStack([]);
+      setFolderContextMessage('');
+      setFolderChildren([]);
+      setFolderChildrenFor('');
+      setFolderChildrenMessage('');
       setDocuments(rows);
       setSelected((prev) => {
         if (prev && rows.some((row: LibraryDocument) => row.id === prev.id)) return prev;
@@ -447,6 +514,11 @@ export default function UnifiedEvidenceLibrary({
       });
     } catch (error: any) {
       setLibraryError(error);
+      setFolderNavigationStack([]);
+      setFolderContextMessage('');
+      setFolderChildren([]);
+      setFolderChildrenFor('');
+      setFolderChildrenMessage('');
       setDocuments([]);
       setSelected(null);
     } finally {
@@ -476,7 +548,8 @@ export default function UnifiedEvidenceLibrary({
     if (!doc || doc.item_type !== 'folder' || !doc.can_open) return;
     const source = resolveLibraryActionSource(doc);
     traceLibraryAction('open_folder', doc, source);
-    if (!source) {
+    const documentIndexId = getDocumentIndexId(doc);
+    if (!source || source.source_type !== 'document_index' || !isUuidLike(documentIndexId)) {
       setFolderChildren([]);
       setFolderChildrenFor(doc.id);
       setFolderChildrenMessage('Identificador de carpeta inválido. Seleccione una carpeta indexada de la biblioteca.');
@@ -486,19 +559,23 @@ export default function UnifiedEvidenceLibrary({
     setFolderChildrenMessage('');
     try {
       const json = await fetchJson(
-        `${API_URL}/api/evidence-library/documents/${source.source_type}/${source.source_id}/children?version=${encodeURIComponent(filters.version)}`,
+        `${API_URL}/api/evidence-library/documents/document_index/${documentIndexId}/children?version=${encodeURIComponent(filters.version || 'active')}`,
         token
       );
       const rows = Array.isArray(json.data) ? json.data : [];
-      setFolderChildren(rows);
-      setFolderChildrenFor(doc.id);
-      if (rows.length === 0) {
-        setFolderChildrenMessage('Esta carpeta no tiene contenido indexado. Sincronice la fuente o carpeta.');
-      }
+      setFolderNavigationStack((prev) => [...prev, { folder: doc, documents, selected }]);
+      setDocuments(rows);
+      setSelected(rows[0] || null);
+      setDetail(null);
+      setTab('summary');
+      setFolderChildren([]);
+      setFolderChildrenFor('');
+      setFolderChildrenMessage('');
+      setFolderContextMessage(rows.length === 0 ? 'Esta carpeta no tiene documentos o subcarpetas visibles.' : '');
     } catch (error: any) {
       setFolderChildren([]);
       setFolderChildrenFor(doc.id);
-      setFolderChildrenMessage(error.message || 'No fue posible abrir la carpeta.');
+      setFolderChildrenMessage(error?.details?.message || error.message || 'No fue posible abrir la carpeta.');
     } finally {
       setFolderChildrenLoading(false);
     }
@@ -1335,8 +1412,37 @@ export default function UnifiedEvidenceLibrary({
       <div className="grid min-h-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
         <section className="min-h-0 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-4 py-3">
-            <h2 className="font-bold text-slate-900">Biblioteca documental</h2>
-            <p className="text-xs text-slate-500">Vista unica de documentos indexados y evidencias cargadas.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-bold text-slate-900">Biblioteca documental</h2>
+                <p className="text-xs text-slate-500">
+                  {currentFolder
+                    ? `Carpeta actual: ${currentFolder.filename || currentFolder.title} · ${documents.length} elementos`
+                    : 'Vista unica de documentos indexados y evidencias cargadas.'}
+                </p>
+              </div>
+              {currentFolder && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={goUpFolder}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                  >
+                    Subir nivel
+                  </button>
+                  <button
+                    onClick={returnToLibraryRoot}
+                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700"
+                  >
+                    Volver a Biblioteca Documental
+                  </button>
+                </div>
+              )}
+            </div>
+            {folderContextMessage && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                {folderContextMessage}
+              </div>
+            )}
           </div>
           <div className="max-h-[68vh] overflow-auto">
             <table className="w-full min-w-[980px] text-left text-sm">
@@ -1368,7 +1474,14 @@ export default function UnifiedEvidenceLibrary({
                 ) : documents.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
-                      {hasActiveFilters ? (
+                      {currentFolder ? (
+                        <div>
+                          <div className="font-semibold text-slate-700">Esta carpeta no tiene documentos o subcarpetas visibles.</div>
+                          <button onClick={goUpFolder} className="mt-3 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
+                            Subir nivel
+                          </button>
+                        </div>
+                      ) : hasActiveFilters ? (
                         <div>
                           <div className="font-semibold text-slate-700">No hay documentos que coincidan con los filtros actuales.</div>
                           <button onClick={clearFilters} className="mt-3 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
@@ -1394,7 +1507,22 @@ export default function UnifiedEvidenceLibrary({
                         <div className="font-semibold text-slate-900">{doc.filename || doc.title}</div>
                         <div className="text-xs text-slate-500">
                           {itemTypeLabel(doc.item_type)} · {doc.active_version || 'v1'} {doc.is_active_version !== false ? '(Activa)' : '(Version anterior)'}
-                          {doc.item_type === 'folder' ? ' · Abrir para ver contenido' : ''}
+                          {doc.item_type === 'folder' ? (
+                            <>
+                              {' · '}
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openFolder(doc);
+                                }}
+                                disabled={folderChildrenLoading}
+                                className="font-semibold text-amber-700 underline-offset-2 hover:underline disabled:opacity-50"
+                              >
+                                Abrir para ver contenido
+                              </button>
+                            </>
+                          ) : null}
                           {doc.is_excluded ? ' · Excluido' : ''}
                         </div>
                       </td>
