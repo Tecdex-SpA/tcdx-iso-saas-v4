@@ -7,6 +7,13 @@ const DEFAULT_SCOPES = [
   'ZohoFiles.files.READ',
 ];
 const WORKDRIVE_API_PREFIX = '/workdrive/api/v1';
+const PERSONAL_ROOT_ALIAS = 'zoho:root:files';
+const LEGACY_PRIVATE_ROOT_ALIAS = 'zoho:privatespace:root';
+const ACCEPT_HEADER_VARIANTS = [
+  'application/vnd.api+json',
+  'application/json',
+  '*/*',
+];
 
 function trimSlash(value) {
   return String(value || '').replace(/\/+$/, '');
@@ -206,6 +213,14 @@ function responseKeys(json = {}) {
   return Object.keys(json).slice(0, 20);
 }
 
+function safeRawSnippet(text = '') {
+  const raw = String(text || '').slice(0, 500);
+  if (/(access[_-]?token|refresh[_-]?token|authorization|client[_-]?secret|zoho-oauthtoken|gocspx)/i.test(raw)) {
+    return '[redacted]';
+  }
+  return raw;
+}
+
 function normalizeWorkdrivePath(path) {
   const raw = String(path || '').trim();
   if (!raw) return `${WORKDRIVE_API_PREFIX}/files`;
@@ -229,6 +244,8 @@ async function readDiagnosticResponse(response) {
     json,
     provider_code: providerErrorCode(json),
     provider_message: providerErrorMessage(json),
+    raw_text: text,
+    raw_snippet: safeRawSnippet(text),
   };
 }
 
@@ -302,44 +319,79 @@ async function callZohoWorkdriveApi({
   path,
   method = 'GET',
   query = {},
+  body = null,
   stage = null,
   allowFailure = false,
 }) {
   const normalizedPath = normalizeWorkdrivePath(path);
   const url = buildZohoUrl({ path: normalizedPath, searchParams: query, apiBaseUrl });
-  const response = await fetch(url, {
-    method,
-    headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
-  });
-  const parsed = await readDiagnosticResponse(response);
-  const result = {
-    ok: response.ok,
-    json: parsed.json,
-    status: response.status,
-    status_text: response.statusText,
-    provider_code: parsed.provider_code,
-    provider_message: parsed.provider_message,
-    endpoint: safeEndpoint(url.toString()),
-    path: normalizedPath,
-    response_keys: responseKeys(parsed.json),
-    stage,
-  };
+  const attempts = [];
+  const methodUpper = String(method || 'GET').toUpperCase();
 
-  if (!response.ok && !allowFailure) {
-    const err = new Error(result.provider_message || 'Error consultando Zoho WorkDrive');
-    err.statusCode = response.status;
-    err.code = 'ZOHO_API_ERROR';
-    err.provider_status = response.status;
-    err.provider_status_text = response.statusText;
-    err.provider_code = result.provider_code;
-    err.provider_message = result.provider_message;
-    err.endpoint = result.endpoint;
-    err.stage = stage;
-    err.details = parsed.json;
-    throw err;
+  for (const accept of ACCEPT_HEADER_VARIANTS) {
+    const headers = {
+      Authorization: `Zoho-oauthtoken ${accessToken}`,
+      Accept: accept,
+    };
+    if (methodUpper !== 'GET' && body !== null && body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+    }
+    const response = await fetch(url, {
+      method: methodUpper,
+      headers,
+      body: methodUpper === 'GET' || body === null || body === undefined ? undefined : JSON.stringify(body),
+    });
+    const parsed = await readDiagnosticResponse(response);
+    const result = {
+      ok: response.ok,
+      json: parsed.json,
+      status: response.status,
+      status_text: response.statusText,
+      provider_code: parsed.provider_code,
+      provider_message: parsed.provider_message,
+      endpoint: safeEndpoint(url.toString()),
+      path: normalizedPath,
+      response_keys: responseKeys(parsed.json),
+      raw_snippet: parsed.raw_snippet,
+      accept,
+      stage,
+    };
+    attempts.push({
+      path: normalizedPath,
+      status: result.status,
+      provider_code: result.provider_code,
+      provider_message: result.provider_message,
+      response_keys: result.response_keys,
+      accept,
+      raw_snippet: result.raw_snippet,
+    });
+
+    if (response.ok || response.status !== 415 || accept === ACCEPT_HEADER_VARIANTS[ACCEPT_HEADER_VARIANTS.length - 1]) {
+      result.diagnostics = attempts;
+      if (!response.ok && !allowFailure) {
+        const err = new Error(result.provider_message || 'Error consultando Zoho WorkDrive');
+        err.statusCode = response.status;
+        err.code = 'ZOHO_API_ERROR';
+        err.provider_status = response.status;
+        err.provider_status_text = response.statusText;
+        err.provider_code = result.provider_code;
+        err.provider_message = result.provider_message;
+        err.endpoint = result.endpoint;
+        err.stage = stage;
+        err.details = parsed.json;
+        err.diagnostics = attempts;
+        throw err;
+      }
+      return result;
+    }
   }
 
-  return result;
+  const err = new Error('Error consultando Zoho WorkDrive');
+  err.code = 'ZOHO_API_ERROR';
+  err.stage = stage;
+  err.endpoint = safeEndpoint(url.toString());
+  err.diagnostics = attempts;
+  throw err;
 }
 
 function extractTokenMetadata(tokens = {}) {
@@ -447,8 +499,6 @@ function privateSpaceCandidates() {
   return [
     '/workdrive/api/v1/files',
     '/workdrive/api/v1/privatefolders',
-    '/workdrive/api/v1/privatespace/folders/files',
-    '/workdrive/api/v1/privatespace/folders',
   ];
 }
 
@@ -457,8 +507,6 @@ function teamFolderRootCandidates() {
     '/workdrive/api/v1/teams',
     '/workdrive/api/v1/teamfolders',
     '/workdrive/api/v1/workspaces',
-    '/workdrive/teamfolders',
-    '/workdrive/workspaces',
   ];
 }
 
@@ -474,6 +522,8 @@ function childFolderCandidates(parentId) {
   return [
     `/workdrive/api/v1/files/${encoded}/files`,
     `/workdrive/api/v1/files/${encoded}/folders`,
+    `/workdrive/api/v1/files?parent_id=${encoded}`,
+    `/workdrive/api/v1/files?filter[parent_id]=${encoded}`,
     `/workdrive/api/v1/teamfolders/${encoded}/files`,
     `/workdrive/api/v1/teamfolders/${encoded}/folders`,
   ];
@@ -624,7 +674,7 @@ async function getZohoAccountIdentity({ accessToken, apiBaseUrl = null }) {
 function rootAlias(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized || ['root', 'my_drive', 'mi_unidad'].includes(normalized)) return 'root';
-  if (normalized === 'zoho:privatespace:root') return 'private_space';
+  if (normalized === LEGACY_PRIVATE_ROOT_ALIAS || normalized === PERSONAL_ROOT_ALIAS) return 'private_space';
   if (normalized === 'zoho:teamfolders:root') return 'team_folder_root';
   if (normalized === 'zoho:shared:root') return 'shared_root';
   return null;
@@ -788,6 +838,9 @@ async function listZohoRootFiles({ accessToken, apiBaseUrl = null, pageToken = n
       provider_message: result.provider_message,
       ok: result.ok,
       response_keys: result.response_keys,
+      accept: result.accept,
+      raw_snippet: result.raw_snippet,
+      attempts: result.diagnostics,
     }],
     raw: result.json,
   };
@@ -862,6 +915,8 @@ async function listZohoFolderChildren({ accessToken, apiBaseUrl = null, folderId
   const candidates = [
     `/workdrive/api/v1/files/${encoded}/files`,
     `/workdrive/api/v1/files/${encoded}/folders`,
+    `/workdrive/api/v1/files?parent_id=${encoded}`,
+    `/workdrive/api/v1/files?filter[parent_id]=${encoded}`,
     `/workdrive/api/v1/teamfolders/${encoded}/files`,
     `/workdrive/api/v1/teamfolders/${encoded}/folders`,
   ];
@@ -889,6 +944,15 @@ function normalizeWorkdriveDisplayPath(prefix, item = {}) {
   const attributes = item?.attributes || {};
   const name = item?.name || attributes.name || attributes.display_name || attributes.display_attr_name || attributes.title || item?.id || '';
   return [prefix, name].filter(Boolean).join('/');
+}
+
+function isPersonalRootId(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === PERSONAL_ROOT_ALIAS || normalized === LEGACY_PRIVATE_ROOT_ALIAS;
+}
+
+function personalRootAlias() {
+  return PERSONAL_ROOT_ALIAS;
 }
 
 async function probeZohoWorkdriveAccess({ accessToken, apiBaseUrl = null }) {
@@ -960,7 +1024,9 @@ async function listFolders({ accessToken, parentId = 'root', pageToken = null, a
         ...emptyDetails({
           reason: fallbackReason,
           stage,
-          message: emptyMessage,
+          message: listed.files.length > 0
+            ? 'Esta ubicación contiene archivos pero no subcarpetas visibles.'
+            : emptyMessage,
           apiBaseUrl: resolvedApiBaseUrl,
           diagnostics: listed.diagnostics,
         }),
@@ -1032,7 +1098,9 @@ async function listFolders({ accessToken, parentId = 'root', pageToken = null, a
         ...emptyDetails({
           reason: fallbackReason,
           stage,
-          message: emptyMessage,
+          message: listed.files.length > 0
+            ? 'Esta ubicación contiene archivos pero no subcarpetas visibles.'
+            : emptyMessage,
           apiBaseUrl: resolvedApiBaseUrl,
         }),
         folders_count: 0,
@@ -1199,6 +1267,9 @@ module.exports = {
   diagnosticZohoWorkdriveEndpoints,
   probeZohoWorkdriveAccess,
   discoverZohoRootContainers,
+  isPersonalRootId,
+  personalRootAlias,
+  normalizeZohoItem,
   listZohoRootFiles,
   listZohoFolderChildren,
   listZohoTeams,
