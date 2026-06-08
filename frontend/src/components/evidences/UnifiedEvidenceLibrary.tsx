@@ -1332,15 +1332,15 @@ export default function UnifiedEvidenceLibrary({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
-        <section className="rounded-2xl border border-blue-200 bg-white shadow-sm">
+      <div className="grid min-h-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <section className="min-h-0 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-4 py-3">
             <h2 className="font-bold text-slate-900">Biblioteca documental</h2>
             <p className="text-xs text-slate-500">Vista unica de documentos indexados y evidencias cargadas.</p>
           </div>
-          <div className="overflow-x-auto">
+          <div className="max-h-[68vh] overflow-auto">
             <table className="w-full min-w-[980px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase text-slate-500 shadow-sm">
                 <tr>
                   <th className="px-4 py-3">Documento</th>
                   <th className="px-3 py-3">Tipo</th>
@@ -1427,7 +1427,7 @@ export default function UnifiedEvidenceLibrary({
           </div>
         </section>
 
-        <aside className="rounded-2xl border border-teal-200 bg-white shadow-sm">
+        <aside className="max-h-[76vh] overflow-hidden rounded-2xl border border-teal-200 bg-white shadow-sm xl:sticky xl:top-4">
           {!selected ? (
             <div className="p-5 text-sm text-slate-500">Selecciona un documento para ver detalle.</div>
           ) : (
@@ -1440,18 +1440,60 @@ export default function UnifiedEvidenceLibrary({
                       {sourceBadge(selected.origin || selected.source_label)} · {selected.active_version || 'v1'}
                     </div>
                   </div>
-                  {canManage && (
-                    <button
-                      onClick={analyzeSelected}
-                      disabled={working === 'analyze' || !selectedCanAnalyze}
-                      title={!selectedCanAnalyze ? (selectedIsExcluded ? 'Restaurar al índice antes de analizar.' : 'Seleccione un archivo/documento, no una carpeta.') : 'Analizar utilidad como evidencia'}
-                      className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-                    >
-                      {selectedIsExcluded ? 'Excluido' : selectedCanOpen ? 'No analizable' : working === 'analyze' ? 'Analizando...' : 'Analizar utilidad'}
-                    </button>
-                  )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    disabled={!selected || !canManage || !selectedCanAnalyze}
+                    title={!selectedCanAnalyze ? (selectedIsExcluded ? 'Restaurar al índice antes de analizar.' : 'Seleccione un archivo/documento, no una carpeta.') : 'Actualizar análisis documental'}
+                    onClick={analyzeSelected}
+                    className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {working === 'analyze' ? 'Analizando...' : 'Actualizar análisis documental'}
+                  </button>
+                  <button
+                    disabled={!selected || !selectedCanAssociate}
+                    title={!selectedCanAssociate ? (selectedIsExcluded ? 'Restaurar al índice antes de asociar.' : 'Las carpetas no se pueden asociar como evidencia.') : 'Asociar documento'}
+                    onClick={() => setTab('associations')}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Asociar a...
+                  </button>
+                  {selectedCanExclude && selected?.item_type !== 'folder' && (
+                    <button
+                      disabled={working === 'exclude-item'}
+                      onClick={() => excludeSelected('item')}
+                      className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Excluir del índice
+                    </button>
+                  )}
+                  {selectedCanExclude && selected?.item_type === 'folder' && (
+                    <>
+                      <button
+                        disabled={working === 'exclude-item'}
+                        onClick={() => excludeSelected('item')}
+                        className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Excluir carpeta
+                      </button>
+                      <button
+                        disabled={working === 'exclude-subtree'}
+                        onClick={() => excludeSelected('subtree')}
+                        className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Excluir carpeta y contenido
+                      </button>
+                    </>
+                  )}
+                  {selectedCanRestore && (
+                    <button
+                      disabled={working === 'restore-item'}
+                      onClick={() => restoreSelected('item')}
+                      className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Restaurar al índice
+                    </button>
+                  )}
                   {(['summary', 'associations', 'suggestions', 'chunks', 'versions', 'history'] as const).map((item) => (
                     <button
                       key={item}
@@ -1464,7 +1506,7 @@ export default function UnifiedEvidenceLibrary({
                 </div>
               </div>
 
-              <div className="max-h-[740px] overflow-y-auto p-4">
+              <div className="max-h-[calc(76vh-132px)] overflow-y-auto p-4">
                 {tab === 'summary' && (
                   <div className="space-y-3 text-sm">
                     <Info label="Tipo de elemento" value={itemTypeLabel(selected.item_type)} />
@@ -1659,21 +1701,6 @@ export default function UnifiedEvidenceLibrary({
             <button disabled={!selected} onClick={() => openFolder(selected)} className="rounded-xl border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-700 disabled:opacity-50">Abrir carpeta</button>
           )}
           <button disabled={!selected || !selectedCanAssociate} title={!selectedCanAssociate ? (selectedIsExcluded ? 'Restaurar al índice antes de asociar.' : 'Las carpetas no se pueden asociar como evidencia.') : 'Asociar documento'} onClick={() => setTab('associations')} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Asociar a...</button>
-          {selectedCanExclude && selected?.item_type !== 'folder' && (
-            <button disabled={working === 'exclude-item'} onClick={() => excludeSelected('item')} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50">Excluir del índice</button>
-          )}
-          {selectedCanExclude && selected?.item_type === 'folder' && (
-            <>
-              <button disabled={working === 'exclude-item'} onClick={() => excludeSelected('item')} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50">Excluir carpeta</button>
-              <button disabled={working === 'exclude-subtree'} onClick={() => excludeSelected('subtree')} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">Excluir carpeta y contenido</button>
-            </>
-          )}
-          {selectedCanRestore && (
-            <button disabled={working === 'restore-item'} onClick={() => restoreSelected('item')} className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 disabled:opacity-50">Restaurar al índice</button>
-          )}
-          {selectedCanRestore && selected?.item_type === 'folder' && (
-            <button disabled={working === 'restore-subtree'} onClick={() => restoreSelected('subtree')} className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50">Restaurar carpeta y contenido</button>
-          )}
         </div>
         {selected?.disabled_reason && (
           <div className="mt-2 text-xs text-amber-700">{selected.disabled_reason}</div>
