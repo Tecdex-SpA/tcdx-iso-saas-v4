@@ -985,6 +985,13 @@ router.post('/select-folder', auth, async (req, res) => {
     });
   }
   if (!folderId) return res.status(400).json({ ok: false, code: 'ZOHO_FOLDER_REQUIRED', error: 'folder_id es obligatorio' });
+  if (folderId === 'zoho:teamfolders:root') {
+    return res.status(400).json({
+      ok: false,
+      code: 'ZOHO_TEAM_ROOT_NOT_SELECTABLE',
+      error: 'Carpetas del equipo es un contenedor. Entre a una carpeta real antes de seleccionarla.',
+    });
+  }
 
   try {
     const source = await getTenantZohoSource({ tenantId, sourceId });
@@ -1001,12 +1008,15 @@ router.post('/select-folder', auth, async (req, res) => {
     if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });
     const fresh = await ensureFreshCredential(credential);
     const apiBaseUrl = resolveApiBaseUrl(source, fresh.credential);
-    const metadata = await zoho.getFileMetadata({ accessToken: fresh.tokens.access_token, apiBaseUrl, fileId: folderId }).catch(() => null);
+    const isPersonalRoot = zoho.isPersonalRootId(folderId);
+    const storedFolderId = isPersonalRoot ? zoho.personalRootAlias() : folderId;
+    const metadata = isPersonalRoot
+      ? null
+      : await zoho.getFileMetadata({ accessToken: fresh.tokens.access_token, apiBaseUrl, fileId: folderId }).catch(() => null);
     const normalized = metadata
       ? normalizeFolder(metadata)
       : { id: folderId, name: folderName || 'Zoho WorkDrive', path: folderPath || folderName || 'Zoho WorkDrive', display_path: folderPath || folderName || 'Zoho WorkDrive', provider_team_id: null };
     const selectedPath = folderPath || normalized.display_path || normalized.path || normalized.name;
-    const isPersonalRoot = folderId === 'zoho:privatespace:root';
     const result = await pool.query(
       `
       UPDATE tenant_document_sources
@@ -1029,16 +1039,17 @@ router.post('/select-folder', auth, async (req, res) => {
       [
         source.id,
         tenantId,
-        folderId,
+        storedFolderId,
         normalized.name,
         selectedPath,
         normalized.provider_team_id || null,
         req.body?.include_subfolders !== false,
         JSON.stringify({
           folder_required: false,
-          root_folder_id: folderId,
+          root_folder_id: storedFolderId,
           root_folder_name: normalized.name,
           root_folder_path: selectedPath,
+          zoho_root_kind: isPersonalRoot ? 'personal_files_root' : 'real_folder',
           zoho_root_mode: isPersonalRoot ? 'files_root' : 'folder',
           zoho_root_endpoint: isPersonalRoot ? '/workdrive/api/v1/files' : null,
           provider: ZOHO_PROVIDER,
@@ -1100,6 +1111,39 @@ router.post('/sync', auth, async (req, res) => {
     }
     if (!source.folder_id) {
       return res.status(409).json({ ok: false, code: 'ZOHO_ROOT_FOLDER_REQUIRED', error: 'Seleccione una carpeta de Zoho WorkDrive antes de sincronizar.' });
+    }
+    if (source.folder_id === 'zoho:privatespace:root') {
+      source.folder_id = zoho.personalRootAlias();
+      source.metadata_json = {
+        ...(source.metadata_json || {}),
+        zoho_root_kind: 'personal_files_root',
+        zoho_root_mode: 'files_root',
+        zoho_root_endpoint: '/workdrive/api/v1/files',
+      };
+      await pool.query(
+        `
+        UPDATE tenant_document_sources
+        SET folder_id = $3::text,
+            metadata_json = COALESCE(metadata_json, '{}'::jsonb) || $4::jsonb,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND tenant_id = $2::uuid
+          AND provider = $5
+        `,
+        [
+          source.id,
+          tenantId,
+          zoho.personalRootAlias(),
+          JSON.stringify({
+            zoho_root_kind: 'personal_files_root',
+            zoho_root_mode: 'files_root',
+            zoho_root_endpoint: '/workdrive/api/v1/files',
+            legacy_folder_id_normalized_from: 'zoho:privatespace:root',
+            normalized_at: new Date().toISOString(),
+          }),
+          ZOHO_PROVIDER,
+        ]
+      ).catch(() => null);
     }
     const credential = await getCredential({ tenantId, sourceId: source.id });
     if (!credential) return res.status(409).json({ ok: false, code: 'ZOHO_RECONNECT_REQUIRED', error: 'Reconecte Zoho WorkDrive para continuar.' });

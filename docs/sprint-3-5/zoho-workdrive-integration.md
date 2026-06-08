@@ -146,6 +146,7 @@ Opening `zoho:privatespace:root` lists folders in private space. Opening `zoho:t
 For this Sprint 3.5 implementation, `zoho:privatespace:root` is a synthetic application root, not a physical Zoho folder ID. It is stored as the selected folder only with metadata:
 
 - `zoho_root_mode = files_root`
+- `zoho_root_kind = personal_files_root`
 - `zoho_root_endpoint = /workdrive/api/v1/files`
 
 Browsing and syncing `Mis carpetas` must therefore call:
@@ -154,7 +155,20 @@ Browsing and syncing `Mis carpetas` must therefore call:
 GET /workdrive/api/v1/files
 ```
 
-It must not use `/workdrive/privatespace/folders/files` and must not treat `zoho:privatespace:root` as a provider folder ID. If `/files` returns `200` with no visible items, sync stores `last_sync_status = completed_empty` and returns a clear empty message instead of a misleading successful indexed count.
+It must not use `/workdrive/privatespace/folders/files` and must not treat `zoho:privatespace:root` as a provider folder ID. Selecting `Mis carpetas` stores the internal alias `folder_id = zoho:root:files`; legacy rows with `folder_id = zoho:privatespace:root` are normalized on sync. If `/files` returns `200` with no visible items, sync stores `last_sync_status = completed_empty` and returns a clear empty message instead of a misleading successful indexed count.
+
+GET requests to WorkDrive do not send `Content-Type: application/json`. The backend probes media headers in this order when Zoho returns `415`:
+
+1. `Accept: application/vnd.api+json`
+2. `Accept: application/json`
+3. `Accept: */*`
+
+Operational diagnostics can be run without exposing tokens:
+
+```bash
+cd backend
+SOURCE_ID=<tenant_document_sources.id> KNOWN_FOLDER_ID=<optional_zoho_folder_id> node scripts/probe-zoho-workdrive.js
+```
 
 The normalized response shape is:
 
