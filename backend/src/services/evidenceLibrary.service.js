@@ -110,6 +110,28 @@ function providerIdShape(value) {
   return sourceIdShape(raw);
 }
 
+function documentVisibilityMode(filters = {}) {
+  const mode = String(filters.version || filters.visibility || 'active').toLowerCase().trim();
+  if (mode === 'excluded' || mode === 'all') return mode;
+  return 'active';
+}
+
+function documentVisibilitySql(alias, mode, hasExclusions) {
+  const status = `COALESCE(${alias}.status, 'indexed')`;
+  const exclusionCheck = hasExclusions ? '(x.id IS NOT NULL OR sx.id IS NOT NULL)' : 'false';
+  if (mode === 'excluded') {
+    return `AND (${status} = 'excluded' OR ${exclusionCheck})`;
+  }
+  if (mode === 'all') {
+    return `AND ${status} NOT IN ('deleted', 'missing')`;
+  }
+  return `AND ${status} NOT IN ('deleted', 'ignored', 'missing', 'excluded') ${hasExclusions ? 'AND x.id IS NULL' : ''}`;
+}
+
+function isExcludedRow(row = {}) {
+  return String(row.status || '').toLowerCase() === 'excluded' || Boolean(row.exclusion_id);
+}
+
 function safeUploadFileName(value, fallback = 'documento') {
   const base = path.basename(String(value || fallback)).replace(/[\r\n"]/g, '_');
   const clean = base.replace(/[^\w.\- ()\[\]áéíóúÁÉÍÓÚñÑ]/g, '_').replace(/_+/g, '_').slice(0, 180);
@@ -528,6 +550,7 @@ function buildChunks(text, maxSize = 1200) {
 
 function mapDocumentRow(row) {
   const itemType = itemTypeForRow(row);
+  const excluded = isExcludedRow(row);
   const sourceType = row.source_type;
   const sourceIdCandidate = sourceType === 'document_index'
     ? (row.db_source_id || row.document_index_id || (isUuid(row.source_id) ? row.source_id : null) || (isUuid(row.id) ? row.id : null))
@@ -560,11 +583,18 @@ function mapDocumentRow(row) {
     mime_type: row.mime_type || null,
     file_extension: row.file_extension || null,
     item_type: itemType,
-    can_analyze: itemType === 'file',
-    can_associate: itemType === 'file',
-    can_open: itemType === 'folder',
+    is_excluded: excluded,
+    exclusion_id: row.exclusion_id || null,
+    exclusion_scope: row.exclusion_scope || null,
+    can_analyze: itemType === 'file' && !excluded,
+    can_associate: itemType === 'file' && !excluded,
+    can_open: itemType === 'folder' && !excluded,
     can_sync: itemType === 'folder',
-    disabled_reason: itemType === 'folder' ? 'Las carpetas no se pueden analizar ni asociar como evidencia. Abra la carpeta y seleccione un archivo.' : null,
+    can_exclude: sourceType === 'document_index' && !excluded,
+    can_restore: sourceType === 'document_index' && excluded,
+    disabled_reason: excluded
+      ? 'Elemento excluido del índice visible. Restáurelo antes de analizarlo o asociarlo.'
+      : (itemType === 'folder' ? 'Las carpetas no se pueden analizar ni asociar como evidencia. Abra la carpeta y seleccione un archivo.' : null),
     document_type: itemType === 'folder' ? 'folder' : (row.profile_document_type || row.detected_document_type || row.document_type || 'unknown'),
     status: row.status || 'indexed',
     semantic_status: row.semantic_status || (row.detected_document_type ? 'processed' : 'not_processed'),
@@ -1273,10 +1303,12 @@ async function listDocuments({ user, filters = {} }) {
   const params = [tenantId];
   const term = `%${String(filters.search || '').trim()}%`;
   const docs = [];
+  const visibilityMode = documentVisibilityMode(filters);
 
   if (await tableExists('document_index')) {
     const hasAiAnalysis = await tableExists('document_ai_analysis');
     const hasSemanticProfiles = await tableExists('tenant_evidence_semantic_profiles');
+    const hasExclusions = await tableExists('tenant_document_index_exclusions');
     const result = await pool.query(
       `
       ${hasAiAnalysis ? `
@@ -1318,6 +1350,10 @@ async function listDocuments({ user, filters = {} }) {
         COALESCE(${hasSemanticProfiles ? 'p.semantic_status,' : ''} ${hasAiAnalysis ? "CASE WHEN la.document_id IS NOT NULL THEN 'processed' ELSE 'not_processed' END" : "'not_processed'"}) AS semantic_status,
         COALESCE(${hasSemanticProfiles ? 'p.usefulness_score,' : ''} ${hasAiAnalysis ? 'la.confidence_score * 100,' : ''} NULL) AS usefulness_score,
         ${hasSemanticProfiles ? 'p.document_type' : 'NULL'} AS profile_document_type,
+        ${hasExclusions ? 'COALESCE(x.id, sx.id)' : 'NULL::uuid'} AS exclusion_id,
+        ${hasExclusions ? 'COALESCE(x.exclusion_scope, sx.exclusion_scope)' : 'NULL::text'} AS exclusion_scope,
+        ${hasExclusions ? 'COALESCE(x.reason, sx.reason)' : 'NULL::text'} AS exclusion_reason,
+        ${hasExclusions ? 'COALESCE(x.excluded_at, sx.excluded_at)' : 'NULL::timestamp'} AS excluded_at,
         d.metadata_json AS metadata
       FROM document_index d
       ${hasAiAnalysis ? `LEFT JOIN latest_analysis la
@@ -1328,8 +1364,39 @@ async function listDocuments({ user, filters = {} }) {
        AND p.source_type = 'document_index'
        AND p.source_id = d.id
       ` : ''}
+      ${hasExclusions ? `LEFT JOIN tenant_document_index_exclusions x
+        ON x.tenant_id = d.tenant_id
+       AND x.provider = d.provider
+       AND x.provider_file_id = d.provider_file_id
+       AND x.is_active = true
+      LEFT JOIN tenant_document_index_exclusions sx
+        ON sx.tenant_id = d.tenant_id
+       AND sx.provider = d.provider
+       AND sx.is_active = true
+       AND sx.exclusion_scope = 'subtree'
+       AND sx.provider_file_id <> d.provider_file_id
+       AND (
+         COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = sx.provider_file_id
+         OR COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = sx.provider_file_id
+         OR COALESCE(d.metadata_json->>'parent_folder_id', '') = sx.provider_file_id
+         OR COALESCE(d.metadata_json->>'parent_id', '') = sx.provider_file_id
+         OR COALESCE(d.metadata_json->>'source_folder_id', '') = sx.provider_file_id
+         OR COALESCE(d.metadata_json->'google'->'parents', '[]'::jsonb) ? sx.provider_file_id
+         OR EXISTS (
+           SELECT 1
+           FROM document_index root
+           WHERE root.tenant_id = sx.tenant_id
+             AND root.id = sx.document_index_id
+             AND root.provider = d.provider
+             AND root.relative_path IS NOT NULL
+             AND root.relative_path <> ''
+             AND d.source_id IS NOT DISTINCT FROM root.source_id
+             AND d.relative_path ILIKE root.relative_path || '/%'
+         )
+       )
+      ` : ''}
       WHERE d.tenant_id = $1::uuid
-        AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
+        ${documentVisibilitySql('d', visibilityMode, hasExclusions)}
         AND ($2 = '%%' OR d.file_name ILIKE $2 OR COALESCE(d.file_url, '') ILIKE $2 OR COALESCE(d.metadata_json::text, '') ILIKE $2)
       ORDER BY d.indexed_at DESC NULLS LAST, d.modified_at DESC NULLS LAST
       LIMIT 500
@@ -1342,7 +1409,7 @@ async function listDocuments({ user, filters = {} }) {
     docs.push(...result.rows.map(mapDocumentRow));
   }
 
-  if (await tableExists('evidences')) {
+  if (visibilityMode !== 'excluded' && await tableExists('evidences')) {
     const result = await pool.query(
       `
       SELECT
@@ -1489,6 +1556,57 @@ async function resolveDocumentIndexIdFromProviderLike(tenantId, providerLikeId) 
   return null;
 }
 
+async function documentIndexHasActiveExclusion(tenantId, source = {}) {
+  if (String(source.status || '').toLowerCase() === 'excluded') return true;
+  if (!source.id || !source.provider || !source.provider_file_id) return false;
+  if (!(await tableExists('tenant_document_index_exclusions'))) return false;
+  const result = await pool.query(
+    `
+    SELECT COALESCE(x.id, sx.id) AS exclusion_id
+    FROM document_index d
+    LEFT JOIN tenant_document_index_exclusions x
+      ON x.tenant_id = d.tenant_id
+     AND x.provider = d.provider
+     AND x.provider_file_id = d.provider_file_id
+     AND x.is_active = true
+    LEFT JOIN tenant_document_index_exclusions sx
+      ON sx.tenant_id = d.tenant_id
+     AND sx.provider = d.provider
+     AND sx.is_active = true
+     AND sx.exclusion_scope = 'subtree'
+     AND sx.provider_file_id <> d.provider_file_id
+     AND (
+       COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->>'parent_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->>'parent_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->>'source_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->'google'->'parents', '[]'::jsonb) ? sx.provider_file_id
+       OR EXISTS (
+         SELECT 1
+         FROM document_index root
+         WHERE root.tenant_id = sx.tenant_id
+           AND root.id = sx.document_index_id
+           AND root.provider = d.provider
+           AND root.relative_path IS NOT NULL
+           AND root.relative_path <> ''
+           AND d.source_id IS NOT DISTINCT FROM root.source_id
+           AND d.relative_path ILIKE root.relative_path || '/%'
+       )
+     )
+    WHERE d.tenant_id = $1::uuid
+      AND d.id = $2::uuid
+      AND (x.id IS NOT NULL OR sx.id IS NOT NULL)
+    LIMIT 1
+    `,
+    [tenantId, source.id]
+  ).catch((error) => {
+    if (['42P01', '42703'].includes(error.code)) return { rows: [] };
+    throw error;
+  });
+  return result.rowCount > 0;
+}
+
 async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) {
   const mode = options.mode || 'read';
   const normalizedPayload = normalizeSourcePayload(input);
@@ -1558,6 +1676,10 @@ async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) 
   }
 
   const isFolder = sourceType === 'document_index' && isFolderDocument(source);
+  const isExcluded = sourceType === 'document_index' && await documentIndexHasActiveExclusion(tenantId, source);
+  if (isExcluded && ['analyze', 'associate'].includes(mode)) {
+    throw publicError(409, 'DOCUMENT_INDEX_EXCLUDED', 'El elemento está excluido del índice. Restáurelo antes de analizarlo o asociarlo.');
+  }
   if (isFolder && mode === 'associate') {
     throw publicError(400, 'FOLDER_NOT_ASSOCIABLE', 'Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.');
   }
@@ -1918,8 +2040,9 @@ async function getDocumentDetail({ user, sourceType, sourceId }) {
   };
 }
 
-async function listDocumentChildren({ user, sourceType, sourceId }) {
+async function listDocumentChildren({ user, sourceType, sourceId, filters = {} }) {
   const { tenantId } = assertAccess(user, 'read');
+  const visibilityMode = documentVisibilityMode(filters);
   const normalizedSource = normalizeSourcePayload({ source_type: sourceType, source_id: sourceId });
   const { source } = await resolveEvidenceLibrarySource(
     { source_type: normalizedSource.sourceType, source_id: normalizedSource.sourceId },
@@ -1957,6 +2080,7 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
     800
   );
   const folderPathLike = folderRelativePath ? `${folderRelativePath.replace(/\/+$/, '')}/%` : null;
+  const hasExclusions = await tableExists('tenant_document_index_exclusions');
 
   const result = await pool.query(
     `
@@ -1995,11 +2119,46 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
       'not_processed' AS semantic_status,
       NULL::numeric AS usefulness_score,
       NULL::text AS profile_document_type,
+      ${hasExclusions ? 'COALESCE(x.id, sx.id)' : 'NULL::uuid'} AS exclusion_id,
+      ${hasExclusions ? 'COALESCE(x.exclusion_scope, sx.exclusion_scope)' : 'NULL::text'} AS exclusion_scope,
+      ${hasExclusions ? 'COALESCE(x.reason, sx.reason)' : 'NULL::text'} AS exclusion_reason,
+      ${hasExclusions ? 'COALESCE(x.excluded_at, sx.excluded_at)' : 'NULL::timestamp'} AS excluded_at,
       d.metadata_json AS metadata
     FROM document_index d
+    ${hasExclusions ? `LEFT JOIN tenant_document_index_exclusions x
+      ON x.tenant_id = d.tenant_id
+     AND x.provider = d.provider
+     AND x.provider_file_id = d.provider_file_id
+     AND x.is_active = true
+    LEFT JOIN tenant_document_index_exclusions sx
+      ON sx.tenant_id = d.tenant_id
+     AND sx.provider = d.provider
+     AND sx.is_active = true
+     AND sx.exclusion_scope = 'subtree'
+     AND sx.provider_file_id <> d.provider_file_id
+     AND (
+       COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->>'parent_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->>'parent_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->>'source_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->'google'->'parents', '[]'::jsonb) ? sx.provider_file_id
+       OR EXISTS (
+         SELECT 1
+         FROM document_index root
+         WHERE root.tenant_id = sx.tenant_id
+           AND root.id = sx.document_index_id
+           AND root.provider = d.provider
+           AND root.relative_path IS NOT NULL
+           AND root.relative_path <> ''
+           AND d.source_id IS NOT DISTINCT FROM root.source_id
+           AND d.relative_path ILIKE root.relative_path || '/%'
+       )
+     )
+    ` : ''}
     WHERE d.tenant_id = $1::uuid
       AND d.id <> $2::uuid
-      AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
+      ${documentVisibilitySql('d', visibilityMode, hasExclusions)}
       AND (
         ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = $3::text)
         OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = $3::text)
@@ -2016,7 +2175,12 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
         OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'relative_path', '') ILIKE $4::text)
       )
     ORDER BY
-      CASE WHEN COALESCE(d.mime_type, '') = 'application/vnd.google-apps.folder' THEN 0 ELSE 1 END,
+      CASE
+        WHEN COALESCE(d.mime_type, '') = 'application/vnd.google-apps.folder'
+          OR COALESCE(d.metadata_json->'google'->>'is_folder', 'false') = 'true'
+          OR COALESCE(d.metadata_json->'zoho'->>'is_folder', 'false') = 'true'
+          OR COALESCE(d.file_extension, '') = 'folder'
+        THEN 0 ELSE 1 END,
       d.file_name ASC
     LIMIT 250
     `,
@@ -2028,6 +2192,290 @@ async function listDocumentChildren({ user, sourceType, sourceId }) {
 
   const rows = result.rows.map(mapDocumentRow);
   return { data: rows, total: rows.length };
+}
+
+async function assertExclusionsTableAvailable() {
+  if (!(await tableExists('tenant_document_index_exclusions'))) {
+    throw publicError(500, 'DOCUMENT_INDEX_EXCLUSIONS_TABLE_MISSING', 'La tabla de exclusiones del índice documental no está disponible.');
+  }
+}
+
+async function loadDocumentIndexForIndexAction(client, tenantId, sourceId) {
+  if (!isUuid(sourceId)) {
+    throw publicError(400, 'INVALID_SOURCE_ID', 'Identificador de documento inválido.');
+  }
+  const result = await client.query(
+    `
+    SELECT *
+    FROM document_index
+    WHERE tenant_id = $1::uuid
+      AND id = $2::uuid
+      AND COALESCE(status, 'indexed') NOT IN ('deleted', 'missing')
+    LIMIT 1
+    `,
+    [tenantId, sourceId]
+  );
+  if (result.rowCount === 0) {
+    throw publicError(404, 'DOCUMENT_INDEX_NOT_FOUND', 'Documento indexado no encontrado para el tenant autenticado.');
+  }
+  return result.rows[0];
+}
+
+async function listDocumentIndexSubtree(client, tenantId, rootId) {
+  const result = await client.query(
+    `
+    WITH RECURSIVE tree AS (
+      SELECT
+        d.*,
+        0 AS depth,
+        ARRAY[COALESCE(d.provider_file_id, d.id::text)]::text[] AS visited_provider_ids
+      FROM document_index d
+      WHERE d.tenant_id = $1::uuid
+        AND d.id = $2::uuid
+        AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'missing')
+
+      UNION ALL
+
+      SELECT
+        child.*,
+        tree.depth + 1 AS depth,
+        tree.visited_provider_ids || COALESCE(child.provider_file_id, child.id::text)
+      FROM document_index child
+      JOIN tree
+        ON tree.tenant_id = child.tenant_id
+       AND tree.provider = child.provider
+       AND COALESCE(child.status, 'indexed') NOT IN ('deleted', 'missing')
+       AND tree.depth < 50
+       AND child.id <> tree.id
+       AND COALESCE(child.provider_file_id, child.id::text) <> ALL(tree.visited_provider_ids)
+       AND (
+         (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->'google'->>'parent_folder_id', '') = tree.provider_file_id)
+         OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->'zoho'->>'parent_folder_id', '') = tree.provider_file_id)
+         OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->>'parent_folder_id', '') = tree.provider_file_id)
+         OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->>'parent_id', '') = tree.provider_file_id)
+         OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->>'source_folder_id', '') = tree.provider_file_id)
+         OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->'google'->'parents', '[]'::jsonb) ? tree.provider_file_id)
+         OR (
+           tree.relative_path IS NOT NULL
+           AND tree.relative_path <> ''
+           AND child.source_id IS NOT DISTINCT FROM tree.source_id
+           AND child.relative_path ILIKE tree.relative_path || '/%'
+         )
+       )
+    )
+    SELECT DISTINCT ON (id) *
+    FROM tree
+    ORDER BY id, depth ASC
+    `,
+    [tenantId, rootId]
+  );
+  return result.rows;
+}
+
+function normalizeIndexScope(value, fallback = 'item') {
+  const raw = String(value || fallback).toLowerCase().trim();
+  return raw === 'subtree' ? 'subtree' : 'item';
+}
+
+async function excludeDocumentFromIndex({ user, payload = {} }) {
+  const { tenantId, userId } = assertAccess(user, 'manage');
+  await assertExclusionsTableAvailable();
+  const normalizedSource = normalizeSourcePayload(payload);
+  if (normalizedSource.sourceType !== 'document_index') {
+    throw publicError(400, 'INVALID_SOURCE_TYPE', 'Solo documentos indexados pueden excluirse del índice.');
+  }
+  const scope = normalizeIndexScope(payload.scope, 'item');
+  const reason = asString(payload.reason, 120) || 'not_useful';
+  const notes = asString(payload.notes, 1000);
+  const warnings = [];
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    const root = await loadDocumentIndexForIndexAction(client, tenantId, normalizedSource.sourceId);
+    const isFolder = isFolderDocument(root);
+    let affectedRows = [root];
+    if (scope === 'subtree') {
+      if (!isFolder) {
+        warnings.push('El elemento no es carpeta; se excluyó solo el archivo seleccionado.');
+      } else {
+        affectedRows = await listDocumentIndexSubtree(client, tenantId, root.id);
+        if (affectedRows.length <= 1) {
+          warnings.push('No se encontraron descendientes indexados por jerarquía exacta; se excluyó solo la carpeta seleccionada.');
+        }
+      }
+    }
+
+    const now = new Date().toISOString();
+    for (const row of affectedRows) {
+      await client.query(
+        `
+        INSERT INTO tenant_document_index_exclusions (
+          tenant_id,
+          provider,
+          source_id,
+          document_index_id,
+          provider_file_id,
+          exclusion_scope,
+          reason,
+          notes,
+          is_active,
+          excluded_by_user_id,
+          excluded_at,
+          metadata_json,
+          updated_at
+        )
+        VALUES (
+          $1::uuid,
+          $2::text,
+          $3::uuid,
+          $4::uuid,
+          $5::text,
+          $6::text,
+          $7::text,
+          $8::text,
+          true,
+          $9::uuid,
+          NOW(),
+          $10::jsonb,
+          NOW()
+        )
+        ON CONFLICT (tenant_id, provider, provider_file_id) WHERE is_active = true
+        DO UPDATE SET
+          document_index_id = EXCLUDED.document_index_id,
+          source_id = EXCLUDED.source_id,
+          exclusion_scope = EXCLUDED.exclusion_scope,
+          reason = EXCLUDED.reason,
+          notes = EXCLUDED.notes,
+          excluded_by_user_id = EXCLUDED.excluded_by_user_id,
+          excluded_at = NOW(),
+          metadata_json = tenant_document_index_exclusions.metadata_json || EXCLUDED.metadata_json,
+          updated_at = NOW()
+        `,
+        [
+          tenantId,
+          row.provider,
+          row.source_id || null,
+          row.id,
+          row.provider_file_id,
+          row.id === root.id ? scope : 'item',
+          reason,
+          notes,
+          userId || null,
+          JSON.stringify({
+            source: 'evidence_library',
+            root_document_index_id: root.id,
+            requested_scope: scope,
+          }),
+        ]
+      );
+    }
+
+    const affectedIds = affectedRows.map((row) => row.id);
+    await client.query(
+      `
+      UPDATE document_index
+      SET status = 'excluded',
+          metadata_json = COALESCE(metadata_json, '{}'::jsonb)
+            || jsonb_build_object(
+              'excluded_at', $3::text,
+              'excluded_by_user_id', $4::text,
+              'exclusion_scope', $5::text,
+              'exclusion_reason', $6::text,
+              'exclusion_notes', $7::text
+            )
+      WHERE tenant_id = $1::uuid
+        AND id = ANY($2::uuid[])
+      `,
+      [tenantId, affectedIds, now, userId || null, scope, reason, notes]
+    );
+    await client.query('COMMIT');
+    return {
+      excluded: {
+        document_index_id: root.id,
+        provider: root.provider,
+        provider_file_id: root.provider_file_id,
+        scope,
+        affected_count: affectedRows.length,
+        warnings,
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => null);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function restoreDocumentIndex({ user, payload = {} }) {
+  const { tenantId, userId } = assertAccess(user, 'manage');
+  await assertExclusionsTableAvailable();
+  const normalizedSource = normalizeSourcePayload(payload);
+  if (normalizedSource.sourceType !== 'document_index') {
+    throw publicError(400, 'INVALID_SOURCE_TYPE', 'Solo documentos indexados pueden restaurarse al índice.');
+  }
+  const restoreScope = normalizeIndexScope(payload.restore_scope || payload.scope, 'item');
+  const warnings = [];
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    const root = await loadDocumentIndexForIndexAction(client, tenantId, normalizedSource.sourceId);
+    const isFolder = isFolderDocument(root);
+    let affectedRows = [root];
+    if (restoreScope === 'subtree') {
+      if (!isFolder) {
+        warnings.push('El elemento no es carpeta; se restauró solo el archivo seleccionado.');
+      } else {
+        affectedRows = await listDocumentIndexSubtree(client, tenantId, root.id);
+        if (affectedRows.length <= 1) {
+          warnings.push('No se encontraron descendientes indexados por jerarquía exacta; se restauró solo la carpeta seleccionada.');
+        }
+      }
+    }
+
+    const affectedIds = affectedRows.map((row) => row.id);
+    const affectedProviderPairs = affectedRows.map((row) => `${row.provider}:${row.provider_file_id}`);
+    await client.query(
+      `
+      UPDATE tenant_document_index_exclusions
+      SET is_active = false,
+          restored_by_user_id = $3::uuid,
+          restored_at = NOW(),
+          updated_at = NOW()
+      WHERE tenant_id = $1::uuid
+        AND is_active = true
+        AND (provider || ':' || provider_file_id) = ANY($2::text[])
+      `,
+      [tenantId, affectedProviderPairs, userId || null]
+    );
+    const restored = await client.query(
+      `
+      UPDATE document_index
+      SET status = 'indexed',
+          metadata_json = COALESCE(metadata_json, '{}'::jsonb)
+            || jsonb_build_object(
+              'restored_at', $3::text,
+              'restored_by_user_id', $4::text
+            )
+      WHERE tenant_id = $1::uuid
+        AND id = ANY($2::uuid[])
+        AND COALESCE(status, 'indexed') = 'excluded'
+      `,
+      [tenantId, affectedIds, new Date().toISOString(), userId || null]
+    );
+    await client.query('COMMIT');
+    return {
+      restored_count: restored.rowCount,
+      warnings,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => null);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function getSourceText(tenantId, source) {
@@ -2397,6 +2845,8 @@ module.exports = {
   listTargetCandidates,
   manualUploadFiles,
   manualUploadZip,
+  excludeDocumentFromIndex,
+  restoreDocumentIndex,
   analyzeSemanticEvidence,
   reviewSuggestion,
 };

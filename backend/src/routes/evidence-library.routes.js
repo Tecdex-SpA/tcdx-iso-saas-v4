@@ -13,6 +13,8 @@ const {
   listTargetCandidates,
   manualUploadFiles,
   manualUploadZip,
+  excludeDocumentFromIndex,
+  restoreDocumentIndex,
   analyzeSemanticEvidence,
   reviewSuggestion,
 } = require('../services/evidenceLibrary.service');
@@ -89,8 +91,33 @@ router.get('/documents/:sourceType/:sourceId/children', async (req, res) => {
       user: req.user,
       sourceType: req.params.sourceType,
       sourceId: req.params.sourceId,
+      filters: req.query || {},
     });
     return res.json({ ok: true, ...result });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.post('/index/exclusions', async (req, res) => {
+  try {
+    const data = await excludeDocumentFromIndex({
+      user: req.user,
+      payload: req.body || {},
+    });
+    return res.status(201).json({ ok: true, ...data });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.post('/index/restore', async (req, res) => {
+  try {
+    const data = await restoreDocumentIndex({
+      user: req.user,
+      payload: req.body || {},
+    });
+    return res.json({ ok: true, ...data });
   } catch (error) {
     return sendError(res, error);
   }

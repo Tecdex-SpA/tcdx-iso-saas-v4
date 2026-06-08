@@ -71,6 +71,11 @@ type LibraryDocument = {
   can_associate?: boolean;
   can_open?: boolean;
   can_sync?: boolean;
+  can_exclude?: boolean;
+  can_restore?: boolean;
+  is_excluded?: boolean;
+  exclusion_scope?: string | null;
+  exclusion_id?: string | null;
   disabled_reason?: string | null;
   title: string;
   filename: string;
@@ -221,6 +226,9 @@ function statusClass(value?: string | null) {
   }
   if (status === 'folder_required') {
     return 'border-amber-200 bg-amber-50 text-amber-700';
+  }
+  if (status === 'excluded') {
+    return 'border-slate-300 bg-slate-100 text-slate-700';
   }
   if (['failed', 'rejected', 'rechazada', 'error', 'zoho_oauth_unauthorized'].includes(status)) {
     return 'border-red-200 bg-red-50 text-red-700';
@@ -374,9 +382,12 @@ export default function UnifiedEvidenceLibrary({
 
   const selectedSourceType = selected?.source_type || '';
   const selectedSourceId = selected?.source_id || '';
-  const selectedCanAnalyze = Boolean(selected && selected.can_analyze !== false && selected.item_type !== 'folder');
-  const selectedCanAssociate = Boolean(selected && selected.can_associate !== false && selected.item_type !== 'folder');
-  const selectedCanOpen = Boolean(selected && selected.can_open === true);
+  const selectedIsExcluded = Boolean(selected?.is_excluded || String(selected?.status || '').toLowerCase() === 'excluded');
+  const selectedCanAnalyze = Boolean(selected && !selectedIsExcluded && selected.can_analyze !== false && selected.item_type !== 'folder');
+  const selectedCanAssociate = Boolean(selected && !selectedIsExcluded && selected.can_associate !== false && selected.item_type !== 'folder');
+  const selectedCanOpen = Boolean(selected && !selectedIsExcluded && selected.can_open === true);
+  const selectedCanExclude = Boolean(selected && canManage && !selectedIsExcluded && selected.source_type === 'document_index' && selected.can_exclude !== false);
+  const selectedCanRestore = Boolean(selected && canManage && selectedIsExcluded && selected.source_type === 'document_index' && selected.can_restore !== false);
   const visibleSources = sources.length ? sources : fallbackSources;
   const hasActiveFilters = Boolean(
     filters.search ||
@@ -385,7 +396,7 @@ export default function UnifiedEvidenceLibrary({
       filters.status ||
       filters.association ||
       filters.semantic_status ||
-      filters.version === 'all'
+      filters.version !== 'active'
   );
 
   const clearFilters = () => {
@@ -475,7 +486,7 @@ export default function UnifiedEvidenceLibrary({
     setFolderChildrenMessage('');
     try {
       const json = await fetchJson(
-        `${API_URL}/api/evidence-library/documents/${source.source_type}/${source.source_id}/children`,
+        `${API_URL}/api/evidence-library/documents/${source.source_type}/${source.source_id}/children?version=${encodeURIComponent(filters.version)}`,
         token
       );
       const rows = Array.isArray(json.data) ? json.data : [];
@@ -712,6 +723,81 @@ export default function UnifiedEvidenceLibrary({
       await loadDetail(selected);
     } catch (error: any) {
       alert(error.message || 'No fue posible guardar la asociacion.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const excludeSelected = async (scope: 'item' | 'subtree') => {
+    if (!selected || !selectedCanExclude) return;
+    const source = resolveLibraryActionSource(selected);
+    if (!source || source.source_type !== 'document_index') {
+      alert('Seleccione un elemento indexado válido de la biblioteca.');
+      return;
+    }
+    const isFolder = selected.item_type === 'folder';
+    const message = isFolder
+      ? (scope === 'subtree'
+        ? 'Esta carpeta y su contenido indexado dejarán de mostrarse en la biblioteca documental. No se eliminarán archivos del proveedor ni asociaciones históricas.'
+        : 'Esta carpeta dejará de mostrarse en la biblioteca documental. No se eliminará del proveedor.')
+      : 'Este archivo dejará de mostrarse en la biblioteca documental. No se eliminará del proveedor ni se borrarán asociaciones históricas.';
+    if (!window.confirm(message)) return;
+
+    setWorking(`exclude-${scope}`);
+    setManualUploadMessage('');
+    try {
+      const json = await fetchJson(`${API_URL}/api/evidence-library/index/exclusions`, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          source_type: source.source_type,
+          source_id: source.source_id,
+          scope,
+          reason: 'not_useful',
+          notes: '',
+        }),
+      });
+      const excluded = json.excluded || {};
+      const warnings = Array.isArray(excluded.warnings) && excluded.warnings.length
+        ? ` Advertencias: ${excluded.warnings.join(' ')}`
+        : '';
+      setManualUploadMessage(`Elemento excluido del índice. Afectados: ${excluded.affected_count || 1}.${warnings}`);
+      await loadDocuments();
+      await loadSources();
+    } catch (error: any) {
+      alert(error.message || 'No fue posible excluir el elemento del índice.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const restoreSelected = async (restoreScope: 'item' | 'subtree' = 'item') => {
+    if (!selected || !selectedCanRestore) return;
+    const source = resolveLibraryActionSource(selected);
+    if (!source || source.source_type !== 'document_index') {
+      alert('Seleccione un elemento indexado válido de la biblioteca.');
+      return;
+    }
+    if (!window.confirm('Este elemento volverá a mostrarse en la biblioteca documental.')) return;
+
+    setWorking(`restore-${restoreScope}`);
+    setManualUploadMessage('');
+    try {
+      const json = await fetchJson(`${API_URL}/api/evidence-library/index/restore`, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          source_type: source.source_type,
+          source_id: source.source_id,
+          restore_scope: restoreScope,
+        }),
+      });
+      const warnings = Array.isArray(json.warnings) && json.warnings.length
+        ? ` Advertencias: ${json.warnings.join(' ')}`
+        : '';
+      setManualUploadMessage(`Elemento restaurado al índice. Restaurados: ${json.restored_count || 0}.${warnings}`);
+      await loadDocuments();
+      await loadSources();
+    } catch (error: any) {
+      alert(error.message || 'No fue posible restaurar el elemento al índice.');
     } finally {
       setWorking('');
     }
@@ -1176,7 +1262,7 @@ export default function UnifiedEvidenceLibrary({
       </section>
 
       <div className="mb-5 rounded-2xl border border-violet-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-7">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-8">
           <input
             value={filters.search}
             onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
@@ -1202,11 +1288,18 @@ export default function UnifiedEvidenceLibrary({
             <option value="unknown">Sin clasificar</option>
           </select>
           <select value={filters.status} onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
-            <option value="">Estado: todos</option>
+            <option value="">Estado documental: todos</option>
             <option value="indexed">Indexado</option>
+            <option value="updated">Actualizado</option>
+            <option value="excluded">Excluido</option>
             <option value="analyzed">Analizado</option>
             <option value="aprobada">Evidencia</option>
             <option value="pendiente">Pendiente</option>
+          </select>
+          <select value={filters.version} onChange={(event) => setFilters((prev) => ({ ...prev, version: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+            <option value="active">Estado: Activos</option>
+            <option value="excluded">Estado: Excluidos</option>
+            <option value="all">Estado: Todos</option>
           </select>
           <select value={filters.association} onChange={(event) => setFilters((prev) => ({ ...prev, association: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
             <option value="">Asociacion: todas</option>
@@ -1235,15 +1328,7 @@ export default function UnifiedEvidenceLibrary({
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3 text-xs text-slate-500">
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={filters.version === 'all'}
-              onChange={(event) => setFilters((prev) => ({ ...prev, version: event.target.checked ? 'all' : 'active' }))}
-            />
-            Mostrar versiones anteriores
-          </label>
-          <span>Por defecto se muestra solo la version activa mas reciente.</span>
+          <span>Por defecto se muestran solo documentos activos/indexados. Los excluidos se revisan con el filtro Estado.</span>
         </div>
       </div>
 
@@ -1310,11 +1395,17 @@ export default function UnifiedEvidenceLibrary({
                         <div className="text-xs text-slate-500">
                           {itemTypeLabel(doc.item_type)} · {doc.active_version || 'v1'} {doc.is_active_version !== false ? '(Activa)' : '(Version anterior)'}
                           {doc.item_type === 'folder' ? ' · Abrir para ver contenido' : ''}
+                          {doc.is_excluded ? ' · Excluido' : ''}
                         </div>
                       </td>
                       <td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold">{typeLabel(doc.document_type)}</span></td>
                       <td className="px-3 py-3">{sourceBadge(doc.origin || doc.source_label)}</td>
-                      <td className="px-3 py-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(doc.status)}`}>{doc.status || 'indexed'}</span></td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(doc.status)}`}>{doc.status || 'indexed'}</span>
+                          {doc.is_excluded && <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">Excluido</span>}
+                        </div>
+                      </td>
                       <td className="px-3 py-3">
                         {associationTotal(doc) > 0 ? (
                           <span className="font-semibold text-blue-700">{associationTotal(doc)} asociacion(es)</span>
@@ -1353,10 +1444,10 @@ export default function UnifiedEvidenceLibrary({
                     <button
                       onClick={analyzeSelected}
                       disabled={working === 'analyze' || !selectedCanAnalyze}
-                      title={!selectedCanAnalyze ? 'Seleccione un archivo/documento, no una carpeta.' : 'Analizar utilidad como evidencia'}
+                      title={!selectedCanAnalyze ? (selectedIsExcluded ? 'Restaurar al índice antes de analizar.' : 'Seleccione un archivo/documento, no una carpeta.') : 'Analizar utilidad como evidencia'}
                       className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                     >
-                      {selectedCanOpen ? 'No analizable' : working === 'analyze' ? 'Analizando...' : 'Analizar utilidad'}
+                      {selectedIsExcluded ? 'Excluido' : selectedCanOpen ? 'No analizable' : working === 'analyze' ? 'Analizando...' : 'Analizar utilidad'}
                     </button>
                   )}
                 </div>
@@ -1377,6 +1468,7 @@ export default function UnifiedEvidenceLibrary({
                 {tab === 'summary' && (
                   <div className="space-y-3 text-sm">
                     <Info label="Tipo de elemento" value={itemTypeLabel(selected.item_type)} />
+                    {selectedIsExcluded && <Info label="Estado del índice" value="Excluido" />}
                     <Info label="Tipo sugerido" value={typeLabel(detail?.document?.profile?.document_type || selected.document_type)} />
                     <Info label="Estado semantico" value={detail?.document?.profile?.semantic_status || selected.semantic_status || 'not_processed'} />
                     <Info label="Score de utilidad" value={detail?.document?.profile?.usefulness_score ? `${detail.document.profile.usefulness_score}%` : selected.usefulness_score ? `${selected.usefulness_score}%` : '-'} />
@@ -1450,7 +1542,9 @@ export default function UnifiedEvidenceLibrary({
 
                     {canManage && !selectedCanAssociate && (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                        Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.
+                        {selectedIsExcluded
+                          ? 'Este elemento está excluido del índice. Restáurelo antes de asociarlo como evidencia.'
+                          : 'Las carpetas no se pueden asociar como evidencia. Abra la carpeta y seleccione un archivo.'}
                       </div>
                     )}
 
@@ -1560,12 +1654,26 @@ export default function UnifiedEvidenceLibrary({
         <div className="text-sm font-bold text-slate-900">Acciones rapidas</div>
         <div className="mt-3 flex flex-wrap gap-2">
           <button disabled={!selected} onClick={() => selected && setTab('summary')} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Ver detalle</button>
-          <button disabled={!selected || !canManage || !selectedCanAnalyze} title={!selectedCanAnalyze ? 'Seleccione un archivo/documento, no una carpeta.' : 'Actualizar análisis documental'} onClick={analyzeSelected} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Actualizar analisis documental</button>
+          <button disabled={!selected || !canManage || !selectedCanAnalyze} title={!selectedCanAnalyze ? (selectedIsExcluded ? 'Restaurar al índice antes de analizar.' : 'Seleccione un archivo/documento, no una carpeta.') : 'Actualizar análisis documental'} onClick={analyzeSelected} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Actualizar analisis documental</button>
           {selectedCanOpen && (
             <button disabled={!selected} onClick={() => openFolder(selected)} className="rounded-xl border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-700 disabled:opacity-50">Abrir carpeta</button>
           )}
-          <button disabled={!selected || !selectedCanAssociate} title={!selectedCanAssociate ? 'Las carpetas no se pueden asociar como evidencia.' : 'Asociar documento'} onClick={() => setTab('associations')} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Asociar a...</button>
-          <button disabled className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 opacity-50">Descartar del indice</button>
+          <button disabled={!selected || !selectedCanAssociate} title={!selectedCanAssociate ? (selectedIsExcluded ? 'Restaurar al índice antes de asociar.' : 'Las carpetas no se pueden asociar como evidencia.') : 'Asociar documento'} onClick={() => setTab('associations')} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Asociar a...</button>
+          {selectedCanExclude && selected?.item_type !== 'folder' && (
+            <button disabled={working === 'exclude-item'} onClick={() => excludeSelected('item')} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50">Excluir del índice</button>
+          )}
+          {selectedCanExclude && selected?.item_type === 'folder' && (
+            <>
+              <button disabled={working === 'exclude-item'} onClick={() => excludeSelected('item')} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50">Excluir carpeta</button>
+              <button disabled={working === 'exclude-subtree'} onClick={() => excludeSelected('subtree')} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">Excluir carpeta y contenido</button>
+            </>
+          )}
+          {selectedCanRestore && (
+            <button disabled={working === 'restore-item'} onClick={() => restoreSelected('item')} className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 disabled:opacity-50">Restaurar al índice</button>
+          )}
+          {selectedCanRestore && selected?.item_type === 'folder' && (
+            <button disabled={working === 'restore-subtree'} onClick={() => restoreSelected('subtree')} className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50">Restaurar carpeta y contenido</button>
+          )}
         </div>
         {selected?.disabled_reason && (
           <div className="mt-2 text-xs text-amber-700">{selected.disabled_reason}</div>
