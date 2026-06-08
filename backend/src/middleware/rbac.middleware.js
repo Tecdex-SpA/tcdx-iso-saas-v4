@@ -253,6 +253,16 @@ const API_RULES = [
     write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
   },
   {
+    prefix: '/api/diagnostic/ai-contextual-recommendations',
+    read: TENANT_READ_ROLES,
+    write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+  },
+  {
+    prefix: '/api/diagnostics/ai-contextual-recommendations',
+    read: TENANT_READ_ROLES,
+    write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+  },
+  {
     prefix: '/api/diagnostic',
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,
