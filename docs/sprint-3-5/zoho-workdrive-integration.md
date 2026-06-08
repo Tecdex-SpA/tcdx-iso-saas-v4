@@ -237,6 +237,87 @@ Tokens, auth headers, tenant secrets and OAuth codes must never be logged or ret
 
 Zoho token responses may include `api_domain`, `accounts_server`, or `location`. These values are stored in credential/source metadata when available. WorkDrive API calls use the tenant-stored `api_domain` first and `ZOHO_API_BASE_URL` as fallback.
 
+## Evidence Library Folder Children
+
+Zoho WorkDrive folders are opened from Biblioteca documental through the standard indexed-folder endpoint:
+
+```text
+GET /api/evidence-library/documents/document_index/<document_index.id>/children?version=active
+```
+
+The endpoint does not call Zoho API for each folder opening when children are already indexed. It resolves children from `document_index` using the authenticated tenant and the real provider folder ID:
+
+```text
+parent document_index.provider_file_id = X
+
+child metadata_json.zoho.parent_folder_id = X
+OR child metadata_json.zoho.parent_id = X
+OR child metadata_json.zoho.folder_id = X
+```
+
+The folder's provider ID is resolved in this order:
+
+1. `document_index.provider_file_id`
+2. `metadata_json.zoho.provider_file_id`
+3. `metadata_json.zoho.id`
+4. `metadata_json.zoho.file_id`
+
+Name matching and path prefix matching are not used as the primary Zoho relationship. Path prefix fallback remains limited to non-Zoho indexed folders for legacy providers.
+
+Folder detection accepts any of:
+
+- `metadata_json.zoho.is_folder = true`
+- `metadata_json.zoho.item_type = folder`
+- `mime_type = application/vnd.zoho.workdrive.folder`
+
+Children are sorted with folders first, then files, then `file_name ASC`.
+
+Visibility follows the same Biblioteca documental contract:
+
+- `version=active`: indexed items without active exclusions.
+- `version=excluded`: `status = excluded` or active exclusion rows.
+- `version=all`: indexed and excluded items, excluding deleted/ignored/missing rows.
+
+Folders return `can_open=true`, `can_analyze=false`, and `can_associate=false`. Files return `can_open=false`, `can_analyze=true`, and `can_associate=true` unless excluded. Excluded rows return `can_restore=true` and disable open/analyze/associate/exclude actions.
+
+Safe diagnostics may emit:
+
+- `ZOHO_CHILDREN_QUERY`
+- `ZOHO_CHILDREN_RESULT`
+- `ZOHO_HIERARCHY_WARNING`
+
+These logs contain only partial tenant IDs, source IDs, document-index folder IDs, provider folder IDs, counts, and warning codes. Tokens, secrets, and Authorization headers must never be logged.
+
+## Sync Metadata Hierarchy
+
+Zoho sync persists enough metadata for fast tenant-scoped hierarchical navigation:
+
+```json
+{
+  "zoho": {
+    "id": "<item_id>",
+    "file_id": "<item_id>",
+    "provider_file_id": "<item_id>",
+    "item_type": "folder|file",
+    "is_folder": true,
+    "parent_id": "<parent_folder_id|null>",
+    "parent_folder_id": "<parent_folder_id|null>",
+    "folder_id": "<parent_folder_id|null>",
+    "root_folder_id": "<selected_source_folder_id>",
+    "source_id": "<tenant_document_sources.id>",
+    "workspace_id": "<workspace_id|null>",
+    "api_domain": "https://www.zohoapis.com",
+    "relative_path": "<path from selected root>"
+  }
+}
+```
+
+For folders, `provider_file_id` is the folder's own Zoho ID and `parent_folder_id` is the real parent folder ID. For files, `provider_file_id` is the file's own Zoho ID and `parent_folder_id` is the containing folder ID.
+
+Sync does not use the selected root folder as every item's parent when Zoho provides a real parent. It also preserves `status = excluded` on conflict, and active items are written as `indexed`; sync must not reintroduce `updated`.
+
+`relative_path` is constructed from the current traversal path and item name, not from historical indexed paths or name-based hierarchy inference. Traversal uses visited folder IDs to avoid loops. If Zoho returns an item name containing path separators or a folder loop is detected, sync records a safe hierarchy warning and continues with a conservative basename/path.
+
 ## Disconnect
 
 Tenants can disconnect Zoho WorkDrive from `/evidencias` without deleting historical evidence.

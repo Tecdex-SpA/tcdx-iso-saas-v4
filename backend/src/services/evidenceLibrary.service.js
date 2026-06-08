@@ -15,6 +15,8 @@ const MANAGE_ROLES = new Set(['admin', 'tenant_admin', 'admin_cumplimiento', 'co
 const SOURCE_TYPES = new Set(['document_index', 'evidence']);
 const TARGET_TYPES = new Set(['control', 'nonconformity', 'finding', 'process', 'operation', 'risk', 'action']);
 const GOOGLE_FOLDER_MIME = 'application/vnd.google-apps.folder';
+const ZOHO_PROVIDER = 'zoho_workdrive';
+const ZOHO_FOLDER_MIME = 'application/vnd.zoho.workdrive.folder';
 const EVIDENCE_USAGES = new Set([
   'primary_evidence',
   'supporting_evidence',
@@ -110,6 +112,12 @@ function providerIdShape(value) {
   return sourceIdShape(raw);
 }
 
+function shortLogId(value) {
+  const raw = String(value || '');
+  if (raw.length <= 12) return raw;
+  return `${raw.slice(0, 8)}...${raw.slice(-4)}`;
+}
+
 function documentVisibilityMode(filters = {}) {
   const mode = String(filters.version || filters.visibility || 'active').toLowerCase().trim();
   if (mode === 'excluded' || mode === 'all') return mode;
@@ -123,9 +131,9 @@ function documentVisibilitySql(alias, mode, hasExclusions) {
     return `AND (${status} = 'excluded' OR ${exclusionCheck})`;
   }
   if (mode === 'all') {
-    return `AND ${status} NOT IN ('deleted', 'missing')`;
+    return `AND ${status} NOT IN ('deleted', 'ignored', 'missing')`;
   }
-  return `AND ${status} NOT IN ('deleted', 'ignored', 'missing', 'excluded') ${hasExclusions ? 'AND x.id IS NULL' : ''}`;
+  return `AND ${status} NOT IN ('deleted', 'ignored', 'missing', 'excluded') ${hasExclusions ? 'AND x.id IS NULL AND sx.id IS NULL' : ''}`;
 }
 
 function isExcludedRow(row = {}) {
@@ -454,12 +462,15 @@ function isFolderDocument(row = {}) {
 
   return (
     mime === GOOGLE_FOLDER_MIME ||
+    mime === ZOHO_FOLDER_MIME ||
     extension === 'folder' ||
     documentType === 'folder' ||
     google.is_folder === true ||
     String(google.is_folder || '').toLowerCase() === 'true' ||
+    String(google.item_type || '').toLowerCase() === 'folder' ||
     zoho.is_folder === true ||
-    String(zoho.is_folder || '').toLowerCase() === 'true'
+    String(zoho.is_folder || '').toLowerCase() === 'true' ||
+    String(zoho.item_type || '').toLowerCase() === 'folder'
   );
 }
 
@@ -467,6 +478,32 @@ function itemTypeForRow(row = {}) {
   if (row.item_type) return row.item_type;
   if (row.source_type === 'evidence') return 'file';
   return isFolderDocument(row) ? 'folder' : 'file';
+}
+
+function folderProviderFileId(source = {}) {
+  const metadata = source.metadata || source.metadata_json || {};
+  const provider = String(source.provider || source.origin || '').toLowerCase();
+  if (provider === ZOHO_PROVIDER) {
+    const zoho = metadata.zoho || {};
+    return asString(
+      source.provider_file_id ||
+        zoho.provider_file_id ||
+        zoho.id ||
+        zoho.file_id,
+      200
+    );
+  }
+
+  return asString(
+    source.provider_file_id ||
+      metadata.provider_file_id ||
+      metadata.google?.id ||
+      metadata.google?.folder_id ||
+      metadata.zoho?.provider_file_id ||
+      metadata.zoho?.id ||
+      metadata.zoho?.file_id,
+    200
+  );
 }
 
 function documentKey(row) {
@@ -1378,6 +1415,8 @@ async function listDocuments({ user, filters = {} }) {
        AND (
          COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = sx.provider_file_id
          OR COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = sx.provider_file_id
+         OR COALESCE(d.metadata_json->'zoho'->>'parent_id', '') = sx.provider_file_id
+         OR COALESCE(d.metadata_json->'zoho'->>'folder_id', '') = sx.provider_file_id
          OR COALESCE(d.metadata_json->>'parent_folder_id', '') = sx.provider_file_id
          OR COALESCE(d.metadata_json->>'parent_id', '') = sx.provider_file_id
          OR COALESCE(d.metadata_json->>'source_folder_id', '') = sx.provider_file_id
@@ -1578,6 +1617,8 @@ async function documentIndexHasActiveExclusion(tenantId, source = {}) {
      AND (
        COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = sx.provider_file_id
        OR COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->'zoho'->>'parent_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->'zoho'->>'folder_id', '') = sx.provider_file_id
        OR COALESCE(d.metadata_json->>'parent_folder_id', '') = sx.provider_file_id
        OR COALESCE(d.metadata_json->>'parent_id', '') = sx.provider_file_id
        OR COALESCE(d.metadata_json->>'source_folder_id', '') = sx.provider_file_id
@@ -2058,16 +2099,10 @@ async function listDocumentChildren({ user, sourceType, sourceId, filters = {} }
     throw publicError(400, 'NOT_A_FOLDER', 'El elemento seleccionado no es una carpeta.');
   }
 
+  const parentProvider = String(source.provider || '').toLowerCase();
+  const isZohoFolder = parentProvider === ZOHO_PROVIDER;
   const sourceMetadata = source.metadata_json || source.metadata || {};
-  const folderProviderId = asString(
-    source.provider_file_id ||
-      sourceMetadata.provider_file_id ||
-      sourceMetadata.google?.id ||
-      sourceMetadata.google?.folder_id ||
-      sourceMetadata.zoho?.id ||
-      sourceMetadata.zoho?.folder_id,
-    200
-  );
+  const folderProviderId = folderProviderFileId(source);
   const folderRelativePath = asString(
     source.relative_path ||
       source.metadata_json?.relative_path ||
@@ -2081,6 +2116,26 @@ async function listDocumentChildren({ user, sourceType, sourceId, filters = {} }
   );
   const folderPathLike = folderRelativePath ? `${folderRelativePath.replace(/\/+$/, '')}/%` : null;
   const hasExclusions = await tableExists('tenant_document_index_exclusions');
+
+  if (isZohoFolder && !folderProviderId) {
+    console.warn('ZOHO_HIERARCHY_WARNING:', {
+      tenant: shortLogId(tenantId),
+      source_id: source.source_id || null,
+      folder_document_index_id: normalizedSource.sourceId,
+      warning: 'missing_parent_provider_file_id',
+    });
+    throw publicError(409, 'ZOHO_FOLDER_PROVIDER_ID_MISSING', 'La carpeta Zoho no tiene identificador de proveedor para resolver sus hijos.');
+  }
+
+  if (isZohoFolder) {
+    console.info('ZOHO_CHILDREN_QUERY:', {
+      tenant: shortLogId(tenantId),
+      source_id: source.source_id || null,
+      folder_document_index_id: normalizedSource.sourceId,
+      parent_provider_file_id: shortLogId(folderProviderId),
+      visibility: visibilityMode,
+    });
+  }
 
   const result = await pool.query(
     `
@@ -2108,8 +2163,11 @@ async function listDocumentChildren({ user, sourceType, sourceId, filters = {} }
       d.indexed_at AS last_indexed_at,
       CASE
         WHEN COALESCE(d.mime_type, '') = 'application/vnd.google-apps.folder'
+          OR COALESCE(d.mime_type, '') = 'application/vnd.zoho.workdrive.folder'
           OR COALESCE(d.metadata_json->'google'->>'is_folder', 'false') = 'true'
+          OR COALESCE(d.metadata_json->'google'->>'item_type', '') = 'folder'
           OR COALESCE(d.metadata_json->'zoho'->>'is_folder', 'false') = 'true'
+          OR COALESCE(d.metadata_json->'zoho'->>'item_type', '') = 'folder'
           OR COALESCE(d.metadata_json->>'is_folder', 'false') = 'true'
           OR COALESCE(d.metadata_json->>'manual_upload', 'false') = 'true' AND COALESCE(d.file_extension, '') = 'folder'
           OR COALESCE(d.file_extension, '') = 'folder'
@@ -2139,6 +2197,8 @@ async function listDocumentChildren({ user, sourceType, sourceId, filters = {} }
      AND (
        COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = sx.provider_file_id
        OR COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->'zoho'->>'parent_id', '') = sx.provider_file_id
+       OR COALESCE(d.metadata_json->'zoho'->>'folder_id', '') = sx.provider_file_id
        OR COALESCE(d.metadata_json->>'parent_folder_id', '') = sx.provider_file_id
        OR COALESCE(d.metadata_json->>'parent_id', '') = sx.provider_file_id
        OR COALESCE(d.metadata_json->>'source_folder_id', '') = sx.provider_file_id
@@ -2158,39 +2218,66 @@ async function listDocumentChildren({ user, sourceType, sourceId, filters = {} }
     ` : ''}
     WHERE d.tenant_id = $1::uuid
       AND d.id <> $2::uuid
+      AND d.provider = $5::text
       ${documentVisibilitySql('d', visibilityMode, hasExclusions)}
       AND (
-        ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = $3::text)
-        OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = $3::text)
-        OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->>'parent_id', '') = $3::text)
-        OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->>'source_folder_id', '') = $3::text)
-        OR ($4::text IS NOT NULL AND d.relative_path ILIKE $4::text)
-        OR ($4::text IS NOT NULL AND d.file_url ILIKE $4::text)
-        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'relative_path', '') ILIKE $4::text)
-        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'path', '') ILIKE $4::text)
-        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'folder_path', '') ILIKE $4::text)
-        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'parent_path', '') ILIKE $4::text)
-        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'relative_path', '') ILIKE $4::text)
-        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'relative_path', '') ILIKE $4::text)
-        OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'relative_path', '') ILIKE $4::text)
+        (
+          $5::text = 'zoho_workdrive'
+          AND $3::text IS NOT NULL
+          AND (
+            COALESCE(d.metadata_json->'zoho'->>'parent_folder_id', '') = $3::text
+            OR COALESCE(d.metadata_json->'zoho'->>'parent_id', '') = $3::text
+            OR COALESCE(d.metadata_json->'zoho'->>'folder_id', '') = $3::text
+          )
+        )
+        OR (
+          $5::text <> 'zoho_workdrive'
+          AND (
+            ($3::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'parent_folder_id', '') = $3::text)
+            OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->>'parent_id', '') = $3::text)
+            OR ($3::text IS NOT NULL AND COALESCE(d.metadata_json->>'source_folder_id', '') = $3::text)
+            OR ($4::text IS NOT NULL AND d.relative_path ILIKE $4::text)
+            OR ($4::text IS NOT NULL AND d.file_url ILIKE $4::text)
+            OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'relative_path', '') ILIKE $4::text)
+            OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'path', '') ILIKE $4::text)
+            OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'folder_path', '') ILIKE $4::text)
+            OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'parent_path', '') ILIKE $4::text)
+            OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->>'relative_path', '') ILIKE $4::text)
+            OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'google'->>'relative_path', '') ILIKE $4::text)
+            OR ($4::text IS NOT NULL AND COALESCE(d.metadata_json->'zoho'->>'relative_path', '') ILIKE $4::text)
+          )
+        )
       )
     ORDER BY
       CASE
         WHEN COALESCE(d.mime_type, '') = 'application/vnd.google-apps.folder'
+          OR COALESCE(d.mime_type, '') = 'application/vnd.zoho.workdrive.folder'
           OR COALESCE(d.metadata_json->'google'->>'is_folder', 'false') = 'true'
+          OR COALESCE(d.metadata_json->'google'->>'item_type', '') = 'folder'
           OR COALESCE(d.metadata_json->'zoho'->>'is_folder', 'false') = 'true'
+          OR COALESCE(d.metadata_json->'zoho'->>'item_type', '') = 'folder'
           OR COALESCE(d.file_extension, '') = 'folder'
         THEN 0 ELSE 1 END,
       d.file_name ASC
     LIMIT 250
     `,
-    [tenantId, normalizedSource.sourceId, folderProviderId, folderPathLike]
+    [tenantId, normalizedSource.sourceId, folderProviderId, folderPathLike, parentProvider]
   ).catch((error) => {
     if (['42P01', '42703'].includes(error.code)) return { rows: [] };
     throw error;
   });
 
   const rows = result.rows.map(mapDocumentRow);
+  if (isZohoFolder) {
+    console.info('ZOHO_CHILDREN_RESULT:', {
+      tenant: shortLogId(tenantId),
+      source_id: source.source_id || null,
+      folder_document_index_id: normalizedSource.sourceId,
+      parent_provider_file_id: shortLogId(folderProviderId),
+      children_count: rows.length,
+      warnings_count: 0,
+    });
+  }
   return { data: rows, total: rows.length };
 }
 
@@ -2251,6 +2338,8 @@ async function listDocumentIndexSubtree(client, tenantId, rootId) {
        AND (
          (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->'google'->>'parent_folder_id', '') = tree.provider_file_id)
          OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->'zoho'->>'parent_folder_id', '') = tree.provider_file_id)
+         OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->'zoho'->>'parent_id', '') = tree.provider_file_id)
+         OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->'zoho'->>'folder_id', '') = tree.provider_file_id)
          OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->>'parent_folder_id', '') = tree.provider_file_id)
          OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->>'parent_id', '') = tree.provider_file_id)
          OR (tree.provider_file_id IS NOT NULL AND COALESCE(child.metadata_json->>'source_folder_id', '') = tree.provider_file_id)
