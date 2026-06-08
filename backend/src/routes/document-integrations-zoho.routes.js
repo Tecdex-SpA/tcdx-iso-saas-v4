@@ -463,19 +463,27 @@ async function upsertZohoDocument({ tenantId, source, credential, item, relative
   const normalized = zoho.normalizeZohoFileToDocumentIndex(item);
   const isFolder = Boolean(normalized.metadata_json?.zoho?.is_folder);
   const finalRelativePath = relativePath || normalized.relative_path || normalized.file_name;
+  const workspaceId = metadataValue(source, 'workspace_id') || metadataValue(source, 'zoho_workspace_id') || null;
+  const folderPath = normalizeRelativePath(...String(finalRelativePath || '').split('/').slice(0, -1));
   const metadata = {
     ...normalized.metadata_json,
+    last_sync_operation: 'created',
     zoho: {
       ...(normalized.metadata_json?.zoho || {}),
       api_domain: metadataValue(credential, 'api_domain') || null,
       source_id: source.id,
       folder_id: source.folder_id,
       relative_path: finalRelativePath,
+      folder_path: folderPath || null,
+      workspace_id: workspaceId,
+      zoho_workspace_id: workspaceId,
+      zoho_space_type: metadataValue(source, 'zoho_space_type') || null,
+      item_type: isFolder ? 'folder' : 'file',
       parent_folder_id: normalized.metadata_json?.zoho?.parent_folder_id || normalized.metadata_json?.zoho?.parent_id || null,
     },
   };
 
-  await pool.query(
+  const result = await pool.query(
     `
     INSERT INTO document_index (
       tenant_id, source_id, provider, provider_file_id, provider_version_id,
@@ -500,8 +508,24 @@ async function upsertZohoDocument({ tenantId, source, credential, item, relative
       modified_at = EXCLUDED.modified_at,
       relative_path = EXCLUDED.relative_path,
       last_seen_at = NOW(),
-      status = 'updated',
-      metadata_json = COALESCE(document_index.metadata_json, '{}'::jsonb) || EXCLUDED.metadata_json
+      status = CASE
+        WHEN document_index.status IN ('excluded', 'discarded', 'ignored') THEN document_index.status
+        ELSE 'indexed'
+      END,
+      metadata_json = COALESCE(document_index.metadata_json, '{}'::jsonb)
+        || EXCLUDED.metadata_json
+        || jsonb_build_object(
+          'last_sync_operation',
+          CASE
+            WHEN document_index.status IN ('excluded', 'discarded', 'ignored') THEN 'excluded_preserved'
+            WHEN document_index.provider_version_id IS NOT DISTINCT FROM EXCLUDED.provider_version_id
+              AND document_index.modified_at IS NOT DISTINCT FROM EXCLUDED.modified_at
+              AND document_index.relative_path IS NOT DISTINCT FROM EXCLUDED.relative_path
+            THEN 'unchanged'
+            ELSE 'updated'
+          END
+        )
+    RETURNING status, metadata_json->>'last_sync_operation' AS last_sync_operation
     `,
     [
       tenantId,
@@ -521,7 +545,40 @@ async function upsertZohoDocument({ tenantId, source, credential, item, relative
     ]
   );
 
+  if (['excluded', 'discarded', 'ignored'].includes(String(result.rows[0]?.status || '').toLowerCase())) {
+    return isFolder ? 'excluded_folder' : 'excluded_file';
+  }
   return isFolder ? 'folder' : 'file';
+}
+
+async function isZohoDocumentIndexExcluded({ tenantId, providerFileId, ancestorFolderIds = [] }) {
+  const exact = String(providerFileId || '').trim();
+  const ancestors = (Array.isArray(ancestorFolderIds) ? ancestorFolderIds : [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  if (!exact && ancestors.length === 0) return false;
+  const result = await pool.query(
+    `
+    SELECT id, provider_file_id, exclusion_scope
+    FROM tenant_document_index_exclusions
+    WHERE tenant_id = $1::uuid
+      AND provider = $2
+      AND is_active = true
+      AND (
+        provider_file_id = $3::text
+        OR (
+          exclusion_scope = 'subtree'
+          AND provider_file_id = ANY($4::text[])
+        )
+      )
+    LIMIT 1
+    `,
+    [tenantId, ZOHO_PROVIDER, exact || null, ancestors]
+  ).catch((error) => {
+    if (['42P01', '42703'].includes(error.code)) return { rows: [] };
+    throw error;
+  });
+  return result.rowCount > 0;
 }
 
 async function listZohoFilesRecursive({
@@ -563,9 +620,13 @@ async function listZohoFilesRecursive({
       const normalized = zoho.normalizeZohoFileToDocumentIndex(item);
       const name = normalized.file_name || normalized.provider_file_id;
       const relativePath = normalizeRelativePath(currentPath, name);
-      files.push({ item, relativePath });
+      const ancestorFolderIds = [...(options.ancestorFolderIds || []), currentFolderId].filter(Boolean);
+      files.push({ item, relativePath, parentFolderId: currentFolderId, ancestorFolderIds });
       if (includeSubfolders && normalized.metadata_json?.zoho?.is_folder && depth < 5) {
-        await walk(normalized.provider_file_id, relativePath, depth + 1, options).catch((error) => {
+        await walk(normalized.provider_file_id, relativePath, depth + 1, {
+          ...options,
+          ancestorFolderIds,
+        }).catch((error) => {
           warnings.push({
             type: 'zoho_folder_walk_failed',
             folder_id: normalized.provider_file_id,
@@ -1363,12 +1424,22 @@ router.post('/sync', auth, async (req, res) => {
     let filesErrors = 0;
     let filesSeen = 0;
     let foldersSeen = 0;
+    let excludedPreserved = 0;
     const warnings = [...listed.warnings];
     for (const row of listed.files) {
       const normalized = zoho.normalizeZohoFileToDocumentIndex(row.item);
       if (normalized.metadata_json?.zoho?.is_folder) foldersSeen += 1;
       else filesSeen += 1;
       try {
+        const excluded = await isZohoDocumentIndexExcluded({
+          tenantId,
+          providerFileId: normalized.provider_file_id,
+          ancestorFolderIds: row.ancestorFolderIds || [],
+        });
+        if (excluded) {
+          excludedPreserved += 1;
+          continue;
+        }
         const kind = await upsertZohoDocument({
           tenantId,
           source,
@@ -1376,8 +1447,13 @@ router.post('/sync', auth, async (req, res) => {
           item: row.item,
           relativePath: row.relativePath,
         });
-        if (kind === 'folder') foldersIndexed += 1;
-        else filesIndexed += 1;
+        if (kind === 'excluded_folder' || kind === 'excluded_file') {
+          excludedPreserved += 1;
+        } else if (kind === 'folder') {
+          foldersIndexed += 1;
+        } else {
+          filesIndexed += 1;
+        }
       } catch (error) {
         filesErrors += 1;
         warnings.push({ type: 'zoho_file_upsert_failed', message: error.message });
@@ -1507,6 +1583,7 @@ router.post('/sync', auth, async (req, res) => {
         folders_indexed: foldersIndexed,
         files_errors: filesErrors,
         warnings_count: warnings.length,
+        excluded_preserved: excludedPreserved,
         warnings: warnings.slice(0, 20),
       });
     }
@@ -1524,6 +1601,7 @@ router.post('/sync', auth, async (req, res) => {
       files_skipped: 0,
       files_errors: filesErrors,
       warnings_count: warnings.length,
+      excluded_preserved: excludedPreserved,
       warnings: warnings.slice(0, 20),
     });
   } catch (error) {

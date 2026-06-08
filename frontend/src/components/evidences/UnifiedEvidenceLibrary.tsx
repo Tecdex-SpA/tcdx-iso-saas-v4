@@ -219,6 +219,9 @@ function statusClass(value?: string | null) {
   if (['pending_review', 'pending', 'not_processed', 'pendiente'].includes(status)) {
     return 'border-amber-200 bg-amber-50 text-amber-700';
   }
+  if (['excluded', 'discarded', 'ignored'].includes(status)) {
+    return 'border-slate-300 bg-slate-100 text-slate-600';
+  }
   if (status === 'folder_required') {
     return 'border-amber-200 bg-amber-50 text-amber-700';
   }
@@ -374,9 +377,10 @@ export default function UnifiedEvidenceLibrary({
 
   const selectedSourceType = selected?.source_type || '';
   const selectedSourceId = selected?.source_id || '';
-  const selectedCanAnalyze = Boolean(selected && selected.can_analyze !== false && selected.item_type !== 'folder');
-  const selectedCanAssociate = Boolean(selected && selected.can_associate !== false && selected.item_type !== 'folder');
-  const selectedCanOpen = Boolean(selected && selected.can_open === true);
+  const selectedIsExcluded = ['excluded', 'discarded', 'ignored'].includes(String(selected?.status || '').toLowerCase());
+  const selectedCanAnalyze = Boolean(selected && !selectedIsExcluded && selected.can_analyze !== false && selected.item_type !== 'folder');
+  const selectedCanAssociate = Boolean(selected && !selectedIsExcluded && selected.can_associate !== false && selected.item_type !== 'folder');
+  const selectedCanOpen = Boolean(selected && !selectedIsExcluded && selected.can_open === true);
   const visibleSources = sources.length ? sources : fallbackSources;
   const hasActiveFilters = Boolean(
     filters.search ||
@@ -385,7 +389,7 @@ export default function UnifiedEvidenceLibrary({
       filters.status ||
       filters.association ||
       filters.semantic_status ||
-      filters.version === 'all'
+      filters.version !== 'active'
   );
 
   const clearFilters = () => {
@@ -712,6 +716,69 @@ export default function UnifiedEvidenceLibrary({
       await loadDetail(selected);
     } catch (error: any) {
       alert(error.message || 'No fue posible guardar la asociacion.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const excludeSelected = async (scope: 'item' | 'subtree' = 'item') => {
+    if (!selected || !canManage) return;
+    const source = resolveLibraryActionSource(selected);
+    traceLibraryAction('exclude_index', selected, source);
+    if (!source || source.source_type !== 'document_index') {
+      alert('Seleccione un elemento indexado válido para excluir.');
+      return;
+    }
+    const message = selected.item_type === 'folder'
+      ? scope === 'subtree'
+        ? 'Esta carpeta y su contenido indexado dejarán de mostrarse en la biblioteca documental. No se eliminarán del proveedor.'
+        : 'Esta carpeta dejará de mostrarse en la biblioteca documental. No se eliminará del proveedor.'
+      : 'Este archivo dejará de mostrarse en la biblioteca documental. No se eliminará del proveedor ni se borrarán asociaciones históricas.';
+    if (!window.confirm(message)) return;
+    setWorking(`exclude-${scope}`);
+    try {
+      await fetchJson(`${API_URL}/api/evidence-library/index/exclusions`, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          source_type: source.source_type,
+          source_id: source.source_id,
+          scope,
+          reason: 'not_useful',
+          notes: '',
+        }),
+      });
+      await loadDocuments();
+      setDetail(null);
+    } catch (error: any) {
+      alert(error.message || 'No fue posible excluir el elemento del índice.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const restoreSelected = async (restoreScope: 'item' | 'subtree' = 'item') => {
+    if (!selected || !canManage) return;
+    const source = resolveLibraryActionSource(selected);
+    traceLibraryAction('restore_index', selected, source);
+    if (!source || source.source_type !== 'document_index') {
+      alert('Seleccione un elemento indexado válido para restaurar.');
+      return;
+    }
+    if (!window.confirm('Este elemento volverá a mostrarse en la biblioteca documental activa.')) return;
+    setWorking(`restore-${restoreScope}`);
+    try {
+      await fetchJson(`${API_URL}/api/evidence-library/index/restore`, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          source_type: source.source_type,
+          source_id: source.source_id,
+          restore_scope: restoreScope,
+        }),
+      });
+      await loadDocuments();
+      setDetail(null);
+    } catch (error: any) {
+      alert(error.message || 'No fue posible restaurar el elemento al índice.');
     } finally {
       setWorking('');
     }
@@ -1189,7 +1256,7 @@ export default function UnifiedEvidenceLibrary({
           <select value={filters.origin} onChange={(event) => setFilters((prev) => ({ ...prev, origin: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
             <option value="">Origen: todos</option>
             <option value="google_drive">Google Drive</option>
-            <option value="zoho">Zoho Drive</option>
+            <option value="zoho_workdrive">Zoho WorkDrive</option>
             <option value="manual_upload">Carga manual</option>
           </select>
           <select value={filters.document_type} onChange={(event) => setFilters((prev) => ({ ...prev, document_type: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
@@ -1204,6 +1271,7 @@ export default function UnifiedEvidenceLibrary({
           <select value={filters.status} onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
             <option value="">Estado: todos</option>
             <option value="indexed">Indexado</option>
+            <option value="excluded">Excluido</option>
             <option value="analyzed">Analizado</option>
             <option value="aprobada">Evidencia</option>
             <option value="pendiente">Pendiente</option>
@@ -1235,15 +1303,16 @@ export default function UnifiedEvidenceLibrary({
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3 text-xs text-slate-500">
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={filters.version === 'all'}
-              onChange={(event) => setFilters((prev) => ({ ...prev, version: event.target.checked ? 'all' : 'active' }))}
-            />
-            Mostrar versiones anteriores
-          </label>
-          <span>Por defecto se muestra solo la version activa mas reciente.</span>
+          <select
+            value={filters.version}
+            onChange={(event) => setFilters((prev) => ({ ...prev, version: event.target.value }))}
+            className="rounded-xl border border-slate-200 px-2 py-1 text-xs font-semibold"
+          >
+            <option value="active">Activos / indexados</option>
+            <option value="excluded">Excluidos</option>
+            <option value="all">Todos</option>
+          </select>
+          <span>Por defecto se muestran solo documentos activos/indexados.</span>
         </div>
       </div>
 
@@ -1565,7 +1634,18 @@ export default function UnifiedEvidenceLibrary({
             <button disabled={!selected} onClick={() => openFolder(selected)} className="rounded-xl border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-700 disabled:opacity-50">Abrir carpeta</button>
           )}
           <button disabled={!selected || !selectedCanAssociate} title={!selectedCanAssociate ? 'Las carpetas no se pueden asociar como evidencia.' : 'Asociar documento'} onClick={() => setTab('associations')} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-50">Asociar a...</button>
-          <button disabled className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 opacity-50">Descartar del indice</button>
+          {selected && !selectedIsExcluded && selected.item_type === 'file' && (
+            <button disabled={!canManage || working === 'exclude-item'} onClick={() => excludeSelected('item')} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50">Excluir del indice</button>
+          )}
+          {selected && !selectedIsExcluded && selected.item_type === 'folder' && (
+            <>
+              <button disabled={!canManage || working === 'exclude-item'} onClick={() => excludeSelected('item')} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50">Excluir carpeta</button>
+              <button disabled={!canManage || working === 'exclude-subtree'} onClick={() => excludeSelected('subtree')} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">Excluir carpeta y contenido</button>
+            </>
+          )}
+          {selected && selectedIsExcluded && (
+            <button disabled={!canManage || working === 'restore-item'} onClick={() => restoreSelected(selected.item_type === 'folder' ? 'subtree' : 'item')} className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 disabled:opacity-50">Restaurar al indice</button>
+          )}
         </div>
         {selected?.disabled_reason && (
           <div className="mt-2 text-xs text-amber-700">{selected.disabled_reason}</div>
