@@ -263,6 +263,26 @@ const API_RULES = [
     write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
   },
   {
+    prefix: '/api/diagnostic/suggestions/accept-gap',
+    read: TENANT_READ_ROLES,
+    write: [...TENANT_AUDIT_WRITE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+  },
+  {
+    prefix: '/api/diagnostics/suggestions/accept-gap',
+    read: TENANT_READ_ROLES,
+    write: [...TENANT_AUDIT_WRITE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+  },
+  {
+    prefix: '/api/diagnostic/suggestions/accept-action',
+    read: TENANT_READ_ROLES,
+    write: [...TENANT_AREA_WRITE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+  },
+  {
+    prefix: '/api/diagnostics/suggestions/accept-action',
+    read: TENANT_READ_ROLES,
+    write: [...TENANT_AREA_WRITE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+  },
+  {
     prefix: '/api/diagnostic',
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,

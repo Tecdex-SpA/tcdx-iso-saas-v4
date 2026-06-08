@@ -1,6 +1,7 @@
 'use client';
 
 import MvpViewShell from '@/components/mvp/MvpViewShell';
+import StrengthenedDiagnosticPanel from '@/components/diagnostics/StrengthenedDiagnosticPanel';
 
 export default function CumplimientoAuditoriaPage() {
   return (
@@ -63,6 +64,8 @@ export default function CumplimientoAuditoriaPage() {
           tone: 'rose',
         },
       ]}
-    />
+    >
+      <StrengthenedDiagnosticPanel />
+    </MvpViewShell>
   );
 }

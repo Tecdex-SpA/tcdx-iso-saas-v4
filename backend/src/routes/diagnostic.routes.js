@@ -4,6 +4,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const diagnosticService = require('../services/diagnostic.service');
 const diagnosticAiService = require('../services/diagnosticAi.service');
+const diagnosticAcceptanceService = require('../services/diagnosticAcceptance.service');
 
 const ALLOWED_STATUSES = [
   'cumple',
@@ -249,6 +250,30 @@ router.post('/recommendations', auth, async (req, res) => {
 router.post('/ai-contextual-recommendations', auth, async (req, res) => {
   try {
     const data = await diagnosticAiService.generateContextualRecommendations({
+      user: req.user,
+      payload: req.body || {},
+    });
+    return sendDiagnosticData(res, data);
+  } catch (error) {
+    return sendDiagnosticError(res, error);
+  }
+});
+
+router.post('/suggestions/accept-gap', auth, async (req, res) => {
+  try {
+    const data = await diagnosticAcceptanceService.acceptGap({
+      user: req.user,
+      payload: req.body || {},
+    });
+    return sendDiagnosticData(res, data);
+  } catch (error) {
+    return sendDiagnosticError(res, error);
+  }
+});
+
+router.post('/suggestions/accept-action', auth, async (req, res) => {
+  try {
+    const data = await diagnosticAcceptanceService.acceptAction({
       user: req.user,
       payload: req.body || {},
     });
