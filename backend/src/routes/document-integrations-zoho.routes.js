@@ -459,19 +459,43 @@ function normalizeRelativePath(...parts) {
     .join('/');
 }
 
+function normalizeZohoSyncItemName(name, fallback, warnings, providerFileId) {
+  const raw = String(name || fallback || '').trim().replace(/\\/g, '/');
+  const parts = raw.split('/').map((part) => part.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    warnings.push({
+      type: 'zoho_relative_path_name_contains_separator',
+      provider_file_id: providerFileId || null,
+      message: 'Zoho item name contained a path separator; using the item basename for relative_path.',
+    });
+  }
+  return parts[parts.length - 1] || fallback || providerFileId || 'Elemento Zoho';
+}
+
 async function upsertZohoDocument({ tenantId, source, credential, item, relativePath }) {
   const normalized = zoho.normalizeZohoFileToDocumentIndex(item);
   const isFolder = Boolean(normalized.metadata_json?.zoho?.is_folder);
   const finalRelativePath = relativePath || normalized.relative_path || normalized.file_name;
+  const zohoMetadata = normalized.metadata_json?.zoho || {};
+  const itemProviderFileId = normalized.provider_file_id || zohoMetadata.provider_file_id || zohoMetadata.id || zohoMetadata.file_id || null;
+  const parentFolderId = zohoMetadata.parent_folder_id || zohoMetadata.parent_id || zohoMetadata.folder_id || null;
   const metadata = {
     ...normalized.metadata_json,
     zoho: {
-      ...(normalized.metadata_json?.zoho || {}),
+      ...zohoMetadata,
+      id: itemProviderFileId,
+      file_id: itemProviderFileId,
+      provider_file_id: itemProviderFileId,
+      item_type: isFolder ? 'folder' : 'file',
+      is_folder: isFolder,
       api_domain: metadataValue(credential, 'api_domain') || null,
       source_id: source.id,
-      folder_id: source.folder_id,
+      root_folder_id: source.folder_id,
+      folder_id: parentFolderId,
+      parent_id: parentFolderId,
+      parent_folder_id: parentFolderId,
+      workspace_id: metadataValue(source, 'workspace_id') || metadataValue(source, 'zoho_workspace_id') || null,
       relative_path: finalRelativePath,
-      parent_folder_id: normalized.metadata_json?.zoho?.parent_folder_id || normalized.metadata_json?.zoho?.parent_id || null,
     },
   };
 
@@ -500,7 +524,10 @@ async function upsertZohoDocument({ tenantId, source, credential, item, relative
       modified_at = EXCLUDED.modified_at,
       relative_path = EXCLUDED.relative_path,
       last_seen_at = NOW(),
-      status = 'updated',
+      status = CASE
+        WHEN document_index.status = 'excluded' THEN 'excluded'
+        ELSE 'indexed'
+      END,
       metadata_json = COALESCE(document_index.metadata_json, '{}'::jsonb) || EXCLUDED.metadata_json
     `,
     [
@@ -541,7 +568,15 @@ async function listZohoFilesRecursive({
   let rootWorkingEndpoint = null;
 
   async function walk(currentFolderId, currentPath, depth, options = {}) {
-    if (visited.has(currentFolderId) || files.length >= maxFiles) return;
+    if (files.length >= maxFiles) return;
+    if (visited.has(currentFolderId)) {
+      warnings.push({
+        type: 'zoho_folder_loop_skipped',
+        folder_id: currentFolderId,
+        message: 'Zoho folder traversal skipped an already visited folder id.',
+      });
+      return;
+    }
     visited.add(currentFolderId);
     const listed = await zoho.listZohoFolderContents({
       accessToken,
@@ -561,7 +596,12 @@ async function listZohoFilesRecursive({
     for (const item of [...(listed.folders || []), ...(listed.files || [])]) {
       if (files.length >= maxFiles) break;
       const normalized = zoho.normalizeZohoFileToDocumentIndex(item);
-      const name = normalized.file_name || normalized.provider_file_id;
+      const name = normalizeZohoSyncItemName(
+        normalized.file_name,
+        normalized.provider_file_id,
+        warnings,
+        normalized.provider_file_id
+      );
       const relativePath = normalizeRelativePath(currentPath, name);
       files.push({ item, relativePath });
       if (includeSubfolders && normalized.metadata_json?.zoho?.is_folder && depth < 5) {
@@ -1383,6 +1423,19 @@ router.post('/sync', auth, async (req, res) => {
         warnings.push({ type: 'zoho_file_upsert_failed', message: error.message });
       }
     }
+    warnings
+      .filter((warning) => String(warning.type || '').startsWith('zoho_'))
+      .slice(0, 10)
+      .forEach((warning) => {
+        console.warn('ZOHO_HIERARCHY_WARNING:', {
+          request_id: req.requestId || null,
+          tenant: shortId(tenantId),
+          source_id: source.id,
+          folder_id: warning.folder_id || null,
+          provider_file_id: warning.provider_file_id || null,
+          warning: warning.type,
+        });
+      });
 
     const totalIndexed = filesIndexed + foldersIndexed;
     const totalSeen = filesSeen + foldersSeen;

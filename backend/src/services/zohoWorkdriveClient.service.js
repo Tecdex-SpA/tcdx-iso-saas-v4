@@ -766,7 +766,15 @@ function normalizeZohoItem(item = {}, context = {}) {
     item?.size ||
     0
   ) || null;
-  const parentId = attributes.parent_id || attributes.parentId || attributes.parent_folder_id || item?.parent_id || context.parentId || null;
+  const parentId = attributes.parent_id ||
+    attributes.parentId ||
+    attributes.parent_folder_id ||
+    item?.parent_id ||
+    item?.parentId ||
+    item?.parent_folder_id ||
+    context.parentId ||
+    item?.folder_id ||
+    null;
   const path = attributes.path || attributes.display_path || item?.path || context.path || name;
   const permalink = attributes.permalink || attributes.web_view_url || item?.web_view_url || links?.self || links?.download || null;
 
@@ -793,9 +801,11 @@ function normalizeZohoItem(item = {}, context = {}) {
         type: rawType || null,
         parent_id: parentId,
         parent_folder_id: parentId,
+        folder_id: parentId,
         file_id: id,
         provider_file_id: id,
         is_folder: isFolder,
+        item_type: isFolder ? 'folder' : 'file',
         unknown_type: !rawType && attributes.is_folder === undefined && !mimeType,
         download_url_present: Boolean(attributes.download_url),
         download_url: attributes.download_url || null,
@@ -1525,6 +1535,7 @@ function normalizeZohoFileToDocumentIndex(file) {
         id,
         parent_id: normalized.parent_id || null,
         parent_folder_id: normalized.parent_id || null,
+        folder_id: normalized.parent_id || null,
         file_id: id,
         provider_file_id: id,
         is_folder: normalized.item_type === 'folder',
