@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const diagnosticService = require('../services/diagnostic.service');
 
 const ALLOWED_STATUSES = [
   'cumple',
@@ -18,6 +19,31 @@ const OPEN_NC_STATUSES = [
   'pendiente',
   'en curso'
 ];
+
+function sendDiagnosticData(res, data, extra = {}) {
+  return res.json({
+    ok: true,
+    data,
+    ...extra,
+  });
+}
+
+function sendDiagnosticError(res, error) {
+  const status = Number(error?.status || error?.statusCode || 500);
+  const safeStatus = status >= 400 && status < 600 ? status : 500;
+
+  if (safeStatus >= 500) {
+    console.error('ERROR DIAGNOSTIC SERVICE:', error);
+  }
+
+  return res.status(safeStatus).json({
+    ok: false,
+    code: error?.code || 'DIAGNOSTIC_ERROR',
+    error: safeStatus >= 500 ? 'No fue posible procesar el diagnostico.' : error.message,
+    details: safeStatus < 500 ? error?.details || undefined : undefined,
+    request_id: res.req?.requestId || null,
+  });
+}
 
 function getUserTenantId(user) {
   return (
@@ -130,6 +156,94 @@ async function getDiagnosticControlById(client, id) {
 
   return result.rows[0] || null;
 }
+
+function queryFilters(query = {}) {
+  return {
+    process_id: query.process_id || query.processId || null,
+    operation_id: query.operation_id || query.operationId || null,
+    area: query.area || null,
+    responsible_user_id: query.responsible_user_id || query.responsibleUserId || null,
+    evidence_status: query.evidence_status || query.evidenceStatus || null,
+    gap_status: query.gap_status || query.gapStatus || null,
+    action_status: query.action_status || query.actionStatus || null,
+    criticality: query.criticality || query.criticidad || null,
+  };
+}
+
+// =============================
+// SPRINT 4.1 DIAGNOSTICO FORTALECIDO DETERMINISTICO
+// =============================
+router.get('/standards', auth, async (req, res) => {
+  try {
+    const data = await diagnosticService.listActiveStandards({
+      user: req.user,
+      tenantId: req.query?.tenant_id || req.query?.tenantId || null,
+    });
+    return sendDiagnosticData(res, data, { count: data.length });
+  } catch (error) {
+    return sendDiagnosticError(res, error);
+  }
+});
+
+router.get('/summary', auth, async (req, res) => {
+  try {
+    const data = await diagnosticService.getSummary({
+      user: req.user,
+      tenantId: req.query?.tenant_id || req.query?.tenantId || null,
+      standardId: req.query?.standard_id || req.query?.standardId || req.query?.standard_code,
+      standardCode: req.query?.standard_code || req.query?.standardCode,
+      filters: queryFilters(req.query || {}),
+    });
+    return sendDiagnosticData(res, data);
+  } catch (error) {
+    return sendDiagnosticError(res, error);
+  }
+});
+
+router.get('/processes', auth, async (req, res) => {
+  try {
+    const data = await diagnosticService.getProcesses({
+      user: req.user,
+      tenantId: req.query?.tenant_id || req.query?.tenantId || null,
+      standardId: req.query?.standard_id || req.query?.standardId || req.query?.standard_code,
+      standardCode: req.query?.standard_code || req.query?.standardCode,
+      filters: queryFilters(req.query || {}),
+    });
+    return sendDiagnosticData(res, data, { count: data.processes.length });
+  } catch (error) {
+    return sendDiagnosticError(res, error);
+  }
+});
+
+router.get('/process-detail', auth, async (req, res) => {
+  try {
+    const data = await diagnosticService.getProcessDetail({
+      user: req.user,
+      tenantId: req.query?.tenant_id || req.query?.tenantId || null,
+      standardId: req.query?.standard_id || req.query?.standardId || req.query?.standard_code,
+      standardCode: req.query?.standard_code || req.query?.standardCode,
+      processId: req.query?.process_id || req.query?.processId || null,
+      operationId: req.query?.operation_id || req.query?.operationId || null,
+      filters: queryFilters(req.query || {}),
+    });
+    return sendDiagnosticData(res, data, { count: data.controls.length });
+  } catch (error) {
+    return sendDiagnosticError(res, error);
+  }
+});
+
+router.post('/recommendations', auth, async (req, res) => {
+  try {
+    const data = await diagnosticService.generateRecommendations({
+      user: req.user,
+      tenantId: req.body?.tenant_id || req.body?.tenantId || null,
+      payload: req.body || {},
+    });
+    return sendDiagnosticData(res, data);
+  } catch (error) {
+    return sendDiagnosticError(res, error);
+  }
+});
 
 // =============================
 // GET DIAGNÓSTICO

@@ -243,8 +243,23 @@ const API_RULES = [
     write: TENANT_ADMIN_ROLES,
   },
   {
+    prefix: '/api/diagnostic/recommendations',
+    read: TENANT_READ_ROLES,
+    write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+  },
+  {
+    prefix: '/api/diagnostics/recommendations',
+    read: TENANT_READ_ROLES,
+    write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+  },
+  {
     prefix: '/api/diagnostic',
-    read: TENANT_OPERATE_ROLES,
+    read: TENANT_READ_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
+    prefix: '/api/diagnostics',
+    read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,
   },
   {
