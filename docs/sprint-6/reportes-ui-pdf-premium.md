@@ -22,6 +22,7 @@ La pestaña permite:
 6. confirmar revisión humana;
 7. exportar PDF o ZIP;
 8. generar recomendación de alcance ISO 9001/27001.
+9. revisar historial local de Reportes Premium exportados.
 
 ## Endpoints backend
 
@@ -119,6 +120,67 @@ La UI muestra:
 
 No muestra `provider_file_id` como ID principal. No expone chunks completos, prompts internos, traces IA ni secretos.
 
+## Fix cierre Sprint 6
+
+El cierre comercial de Sprint 6 agrega dos mejoras de UX sobre `/exportes`:
+
+1. historial visible de Reportes Premium;
+2. preview estructurado visual, sin JSON crudo como vista principal.
+
+### Historial de Reportes Premium
+
+Implementación elegida:
+
+- historial local en frontend con `localStorage`;
+- clave separada por tenant/usuario a partir del JWT;
+- sin persistir contenido de reportes;
+- sin guardar tokens;
+- sin guardar fuentes completas;
+- sin guardar datos sensibles;
+- sin crear migraciones.
+
+Motivo:
+
+- el backend premium exporta PDF/ZIP on-demand;
+- existe `report_exports` para flujos legacy, pero el export premium no registra filas para evitar acoplarlo a FK/rutas históricas sin revisión de modelo;
+- Sprint 6 no requiere persistencia global aprobada.
+
+Cada export PDF/ZIP exitoso agrega una entrada con metadata mínima:
+
+- fecha/hora;
+- plantilla y `template_code`;
+- formato PDF/ZIP;
+- estado `generado`;
+- usuario si está disponible en el token;
+- periodo, norma y proceso si aplican;
+- si incluyó narrativa;
+- si incluyó fuentes;
+- si la narrativa fue fallback;
+- nombre del archivo descargado;
+- badge de revisión humana confirmada.
+
+El blob de descarga queda disponible solo mientras vive la sesión de navegador. Después de refrescar la página, el historial conserva la metadata, pero muestra:
+
+> Disponible solo durante la sesión actual. Vuelva a exportar para descargar nuevamente.
+
+### Preview visual sin JSON crudo
+
+El preview de `POST /api/reports/preview` se renderiza en componentes visuales:
+
+- resumen ejecutivo con tenant, periodo, plantilla, fecha, estado y revisión humana;
+- tarjetas de métricas principales;
+- health con score, estado, drivers y dimensiones si existen;
+- KPIs en tabla;
+- brechas en tabla/lista;
+- acciones en tabla;
+- riesgos en tabla;
+- evidencias en tabla;
+- controles en tabla;
+- auditoría/lifecycle/preparación documental en listas legibles;
+- fuentes en tabla trazable.
+
+Si llega una estructura no mapeada, la UI usa un panel key-value limitado. Para roles Admin/Auditor se habilita `Ver detalle técnico sanitizado`, cerrado por defecto. Ese detalle elimina claves sensibles como `provider_file_id`, prompts, traces, chunks, textos completos, tokens, secretos y URLs internas.
+
 ## Revisión humana
 
 La UI exige checkbox:
@@ -152,6 +214,10 @@ Los endpoints nuevos quedan bajo `/api/reports`, con RBAC existente de reportes 
 - La UI genera narrativa 6.2.
 - Se ven fuentes trazables.
 - Se ve bloque de recomendación de alcance ISO.
+- Se ve `Historial de Reportes Premium`.
+- Cada export exitoso agrega metadata mínima al historial local.
+- El preview se renderiza como tarjetas/tablas/listas.
+- JSON técnico, si aparece, queda colapsado y sanitizado.
 - PDF se exporta solo con revisión humana confirmada.
 - ZIP incluye PDF y JSON de trazabilidad.
 - PDF incluye disclaimer.
@@ -172,7 +238,11 @@ Admin Cumplimiento:
 6. Revisar fuentes.
 7. Confirmar revisión humana.
 8. Exportar PDF.
-9. Abrir PDF y validar portada, métricas, secciones, fuentes y disclaimer.
+9. Exportar ZIP.
+10. Ver entradas en `Historial de Reportes Premium`.
+11. Reintentar descarga desde historial durante la sesión.
+12. Limpiar historial local.
+13. Abrir PDF y validar portada, métricas, secciones, fuentes y disclaimer.
 
 Auditor:
 
@@ -195,5 +265,7 @@ Recomendador de alcance:
 
 - El render PDF depende de Chrome/Chromium no-Snap o `PUPPETEER_EXECUTABLE_PATH`.
 - El endpoint export on-demand no registra historial en `report_exports` para evitar FK legacy y migraciones.
+- El historial premium es local por tenant/usuario; no es auditoría persistente ni evidencia formal.
+- La descarga desde historial solo funciona en la sesión que conserva el blob en memoria.
 - El selector de proceso usa UUID opcional; un selector completo por proceso puede mejorarse sin bloquear el flujo 6.3.
 - La revisión humana queda como confirmación de export, no como workflow formal de aprobación.
