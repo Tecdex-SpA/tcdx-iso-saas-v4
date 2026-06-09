@@ -7,6 +7,7 @@ import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText } from '@/i18n/displayText';
+import PremiumReportsPanel from '@/components/reports/PremiumReportsPanel';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
@@ -376,7 +377,7 @@ export default function ExportesPage() {
   const [selectedReportCode, setSelectedReportCode] = useState('');
   const [selectedStandardKey, setSelectedStandardKey] = useState('');
   const [period, setPeriod] = useState(() => getDefaultPeriod(locale));
-  const [activeTab, setActiveTab] = useState<'generate' | 'history'>('generate');
+  const [activeTab, setActiveTab] = useState<'premium' | 'generate' | 'history'>('premium');
 
   const currentRole = getUserRoleFromToken();
 
@@ -654,11 +655,8 @@ export default function ExportesPage() {
           setSelectedReportCode(loadedReports[0].code);
         }
 
-        if (
-          isReadOnlyReports ||
-          !loadedReports.some((report: ReportType) => report.can_generate)
-        ) {
-          setActiveTab('history');
+        if (!loadedReports.some((report: ReportType) => report.can_generate)) {
+          setActiveTab('premium');
         }
       } catch (err: any) {
         console.error('ERROR LOAD EXPORTES:', err);
@@ -1055,6 +1053,19 @@ export default function ExportesPage() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
+              onClick={() => setActiveTab('premium')}
+              className={[
+                'rounded-2xl px-4 py-3 text-sm font-bold transition',
+                activeTab === 'premium'
+                  ? 'bg-[#0B2F4F] text-white'
+                  : 'text-slate-600 hover:bg-slate-100',
+              ].join(' ')}
+            >
+              Reportes Premium
+            </button>
+
+            <button
+              type="button"
               onClick={() => { if (!isReadOnlyReports) setActiveTab('generate'); }}
               className={[
                 'rounded-2xl px-4 py-3 text-sm font-bold transition',
@@ -1102,6 +1113,13 @@ export default function ExportesPage() {
             </div>
             <div className="mt-1">{reportJobMessage}</div>
           </div>
+        )}
+
+        {activeTab === 'premium' && (
+          <PremiumReportsPanel
+            locale={locale}
+            selectedStandard={selectedStandard}
+          />
         )}
 
         {activeTab === 'generate' && (
