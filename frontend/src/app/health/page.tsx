@@ -56,6 +56,72 @@ type StandardHealth = {
   kpi_deteriorated_controls_color: string;
 };
 
+type SprintHealthSummary = {
+  global_score: number;
+  status: string;
+  label: string;
+  color?: string;
+  updated_at?: string;
+  drivers?: string[];
+  explanation?: string;
+  dimensions?: Record<string, { score: number; weight: number }>;
+  totals?: Record<string, number>;
+  document_maturity?: {
+    total_documents?: number;
+    useful_documents?: number;
+    processed_documents?: number;
+    excluded_documents?: number;
+    score?: number;
+  };
+  data_quality_warnings?: string[];
+};
+
+type SprintStandardHealth = {
+  id?: string;
+  standard_id?: string;
+  standard_code?: string;
+  name?: string;
+  score?: number;
+  status?: string;
+  label?: string;
+  controls_evaluated?: number;
+  controls_covered?: number;
+  controls_partially_covered?: number;
+  controls_without_evidence?: number;
+  gaps_open?: number;
+  actions_overdue?: number;
+  recommendations_pending?: number;
+  explanation?: string;
+};
+
+type SprintProcessHealth = {
+  id?: string | null;
+  process_id?: string | null;
+  operation_id?: string | null;
+  name?: string;
+  standard_code?: string;
+  score?: number;
+  status?: string;
+  label?: string;
+  controls_applicable?: number;
+  coverage?: number;
+  gaps_open?: number;
+  actions_overdue?: number;
+  risks_high?: number;
+  missing_evidence?: number;
+  main_issue?: string;
+  explanation?: string;
+};
+
+type SprintKpi = {
+  code: string;
+  name: string;
+  value: number;
+  unit: string;
+  status: string;
+  description: string;
+};
+
 type CauseJson = {
   cause_key?: string;
   cause_label?: string;
@@ -475,6 +541,16 @@ function statusColor(status?: string) {
   return 'bg-gray-100 text-gray-700 border-gray-200';
 }
 
+function sprintHealthColor(status?: string) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'high') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  if (normalized === 'acceptable') return 'bg-blue-100 text-blue-700 border-blue-200';
+  if (normalized === 'medium') return 'bg-amber-100 text-amber-700 border-amber-200';
+  if (normalized === 'low') return 'bg-orange-100 text-orange-700 border-orange-200';
+  if (normalized === 'critical') return 'bg-red-100 text-red-700 border-red-200';
+  return 'bg-gray-100 text-gray-700 border-gray-200';
+}
+
 function priorityColor(priority?: string) {
   if (priority === 'urgente') {
     return 'bg-red-100 text-red-700 border-red-200';
@@ -765,6 +841,10 @@ export default function HealthDashboardPage() {
 
   const [summaries, setSummaries] = useState<HealthSummary[]>([]);
   const [standards, setStandards] = useState<StandardHealth[]>([]);
+  const [sprintHealthSummary, setSprintHealthSummary] = useState<SprintHealthSummary | null>(null);
+  const [sprintStandards, setSprintStandards] = useState<SprintStandardHealth[]>([]);
+  const [sprintProcesses, setSprintProcesses] = useState<SprintProcessHealth[]>([]);
+  const [sprintKpis, setSprintKpis] = useState<SprintKpi[]>([]);
   const [rootCauses, setRootCauses] = useState<RootCauseTenant[]>([]);
   const [standardRootCauses, setStandardRootCauses] = useState<
     RootCauseStandard[]
@@ -797,6 +877,7 @@ export default function HealthDashboardPage() {
 
   const [selectedTenantId, setSelectedTenantId] = useState<string>('');
   const [selectedStandardCode, setSelectedStandardCode] = useState<string>('');
+  const [selectedSprintProcess, setSelectedSprintProcess] = useState<string>('');
   const [remediationPriorityFilter, setRemediationPriorityFilter] =
     useState<string>('');
   const [remediationGapFilter, setRemediationGapFilter] =
@@ -899,6 +980,35 @@ export default function HealthDashboardPage() {
     }
 
     return json;
+  }
+
+  async function loadSprintHealth(
+    tenantId?: string,
+    authTokenParam?: string | null
+  ) {
+    const authToken = authTokenParam || token;
+
+    if (!authToken) return;
+
+    try {
+      const [summaryJson, standardsJson, processesJson, kpisJson] = await Promise.all([
+        fetchJson('/api/health/summary', authToken, tenantId),
+        fetchJson('/api/health/standards', authToken, tenantId),
+        fetchJson('/api/health/processes', authToken, tenantId),
+        fetchJson('/api/health/kpis', authToken, tenantId),
+      ]);
+
+      setSprintHealthSummary(summaryJson.data || null);
+      setSprintStandards(Array.isArray(standardsJson.data) ? standardsJson.data : []);
+      setSprintProcesses(Array.isArray(processesJson.data) ? processesJson.data : []);
+      setSprintKpis(Array.isArray(kpisJson.data) ? kpisJson.data : []);
+    } catch (err: any) {
+      setError(err.message || 'No fue posible cargar Health/KPIs Sprint 5.');
+      setSprintHealthSummary(null);
+      setSprintStandards([]);
+      setSprintProcesses([]);
+      setSprintKpis([]);
+    }
   }
 
   async function loadRemediationData(
@@ -1038,6 +1148,7 @@ export default function HealthDashboardPage() {
 
       if (finalTenantId) {
         setSelectedTenantId(finalTenantId);
+        await loadSprintHealth(finalTenantId, authToken);
 
         const [standardsJson, riskJson, standardRootJson] = await Promise.all([
           fetchJson('/health/standards', authToken, finalTenantId),
@@ -1070,6 +1181,7 @@ export default function HealthDashboardPage() {
   async function handleTenantChange(tenantId: string) {
     setSelectedTenantId(tenantId);
     setSelectedStandardCode('');
+    setSelectedSprintProcess('');
     setRemediationPriorityFilter('');
     setRemediationGapFilter('');
     await loadDashboard(tenantId);
@@ -1084,6 +1196,7 @@ export default function HealthDashboardPage() {
     try {
       setRefreshing(true);
       setError('');
+      await loadSprintHealth(selectedTenantId || undefined, token);
 
       const res = await fetch(
         buildUrl('/health/refresh', selectedTenantId || undefined),
@@ -1241,6 +1354,26 @@ export default function HealthDashboardPage() {
   );
   const mainCause = selectedRootCause?.main_cause_json;
   const mainRemediationGap = selectedRemediationSummary?.main_gap_summary_json;
+  const filteredSprintStandards = useMemo(() => {
+    if (!selectedStandardCode) return sprintStandards;
+    return sprintStandards.filter((item) => item.standard_code === selectedStandardCode);
+  }, [sprintStandards, selectedStandardCode]);
+  const filteredSprintProcesses = useMemo(() => {
+    return sprintProcesses.filter((item) => {
+      const key = `${item.standard_code || ''}:${item.process_id || item.operation_id || item.id || item.name || ''}`;
+      if (selectedStandardCode && item.standard_code !== selectedStandardCode) return false;
+      if (selectedSprintProcess && key !== selectedSprintProcess) return false;
+      return true;
+    });
+  }, [sprintProcesses, selectedStandardCode, selectedSprintProcess]);
+  const sprintProcessOptions = useMemo(() => {
+    return sprintProcesses
+      .filter((item) => !selectedStandardCode || item.standard_code === selectedStandardCode)
+      .map((item) => ({
+        key: `${item.standard_code || ''}:${item.process_id || item.operation_id || item.id || item.name || ''}`,
+        label: `${item.standard_code || 'ISO'} · ${item.name || 'Proceso'}`,
+      }));
+  }, [sprintProcesses, selectedStandardCode]);
 
   return (
     <AppLayout>
@@ -1299,6 +1432,205 @@ export default function HealthDashboardPage() {
                 compact
               />
             </div>
+
+            {sprintHealthSummary && (
+              <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
+                      Cumplimiento y Auditoría · Salud del sistema
+                    </p>
+                    <h2 className="mt-2 text-2xl font-bold text-gray-900">
+                      Health por norma y proceso
+                    </h2>
+                    <p className="mt-2 max-w-4xl text-sm leading-6 text-gray-600">
+                      Health es un indicador calculado de gestión, no certificación ni aprobación automática.
+                      Fórmula: 35% cobertura de controles, 20% evidencias, 15% brechas,
+                      15% acciones, 10% riesgos y 5% ciclo ISO/auditoría.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 bg-gray-950 px-5 py-4 text-white">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">
+                      Health global
+                    </div>
+                    <div className="mt-2 flex items-end gap-3">
+                      <span className="text-5xl font-bold">{toNumber(sprintHealthSummary.global_score).toFixed(0)}</span>
+                      <span className={`mb-1 rounded-full border px-3 py-1 text-xs font-semibold ${sprintHealthColor(sprintHealthSummary.status)}`}>
+                        {sprintHealthSummary.label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+                  {sprintHealthSummary.explanation || 'Sin explicación de cálculo disponible.'}
+                </div>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium text-gray-500">Controles sin evidencia</div>
+                    <div className="mt-1 text-2xl font-bold text-gray-900">
+                      {toNumber(sprintHealthSummary.totals?.controls_without_evidence)}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium text-gray-500">Brechas abiertas</div>
+                    <div className="mt-1 text-2xl font-bold text-gray-900">
+                      {toNumber(sprintHealthSummary.totals?.gaps_open)}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium text-gray-500">Acciones vencidas</div>
+                    <div className="mt-1 text-2xl font-bold text-gray-900">
+                      {toNumber(sprintHealthSummary.totals?.actions_overdue)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-3 md:flex-row">
+                  <select
+                    value={selectedStandardCode}
+                    onChange={(e) => {
+                      setSelectedStandardCode(e.target.value);
+                      setSelectedSprintProcess('');
+                    }}
+                    className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm"
+                  >
+                    <option value="">Todas las normas</option>
+                    {sprintStandards.map((item) => (
+                      <option key={item.standard_code || item.id} value={item.standard_code || ''}>
+                        {item.name || item.standard_code}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={selectedSprintProcess}
+                    onChange={(e) => setSelectedSprintProcess(e.target.value)}
+                    className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm"
+                  >
+                    <option value="">Todos los procesos</option>
+                    {sprintProcessOptions.map((item) => (
+                      <option key={item.key} value={item.key}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Health por norma</h3>
+                    <div className="mt-3 space-y-3">
+                      {filteredSprintStandards.length === 0 ? (
+                        <p className="text-sm text-gray-500">No hay normas evaluables.</p>
+                      ) : (
+                        filteredSprintStandards.map((item) => (
+                          <div key={item.standard_code || item.id} className="rounded-xl bg-white p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-semibold text-gray-900">{item.name || item.standard_code}</div>
+                                <div className="mt-1 text-xs text-gray-500">
+                                  {item.controls_covered || 0} cubiertos · {item.controls_without_evidence || 0} sin evidencia · {item.actions_overdue || 0} acciones vencidas
+                                </div>
+                              </div>
+                              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${sprintHealthColor(item.status)}`}>
+                                {toNumber(item.score).toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Health por proceso</h3>
+                    <div className="mt-3 space-y-3">
+                      {filteredSprintProcesses.length === 0 ? (
+                        <p className="text-sm text-gray-500">No hay procesos evaluables para el filtro.</p>
+                      ) : (
+                        filteredSprintProcesses.slice(0, 8).map((item) => (
+                          <div key={`${item.standard_code}-${item.id || item.operation_id || item.name}`} className="rounded-xl bg-white p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-semibold text-gray-900">{item.name || 'Proceso'}</div>
+                                <div className="mt-1 text-xs text-gray-500">
+                                  {item.standard_code} · {item.main_issue || 'sin causa principal'}
+                                </div>
+                              </div>
+                              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${sprintHealthColor(item.status)}`}>
+                                {toNumber(item.score).toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-xl border border-gray-200 bg-white">
+                  <div className="border-b border-gray-200 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-gray-900">KPIs mínimos reproducibles</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[840px] w-full text-sm">
+                      <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <tr>
+                          <th className="px-4 py-3">Código</th>
+                          <th className="px-4 py-3">KPI</th>
+                          <th className="px-4 py-3 text-right">Valor</th>
+                          <th className="px-4 py-3">Estado</th>
+                          <th className="px-4 py-3">Descripción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {sprintKpis.map((item) => (
+                          <tr key={item.code}>
+                            <td className="px-4 py-3 font-semibold text-gray-900">{item.code}</td>
+                            <td className="px-4 py-3 text-gray-700">{item.name}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                              {toNumber(item.value).toFixed(item.unit === '%' ? 0 : 0)} {item.unit}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${sprintHealthColor(item.status)}`}>
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">{item.description}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <a href="/cumplimiento-auditoria" className="rounded-xl bg-gray-950 px-4 py-2 text-sm font-semibold text-white">
+                    Abrir diagnóstico fortalecido
+                  </a>
+                  <a href="/evidencias" className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
+                    Ver evidencias
+                  </a>
+                  <a href="/planes-accion" className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
+                    Ver planes de acción
+                  </a>
+                  <a href="/riesgos" className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
+                    Ver riesgos
+                  </a>
+                </div>
+
+                {sprintHealthSummary.data_quality_warnings && sprintHealthSummary.data_quality_warnings.length > 0 && (
+                  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    {sprintHealthSummary.data_quality_warnings.slice(0, 4).map((warning) => (
+                      <p key={warning}>{warning}</p>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             {selectedSummary && (
               <>

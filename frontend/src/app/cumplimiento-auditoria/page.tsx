@@ -22,6 +22,13 @@ export default function CumplimientoAuditoriaPage() {
           tone: 'blue',
         },
         {
+          href: '/health',
+          title: 'Salud del sistema',
+          description: 'Health global, por norma/proceso y KPIs mínimos reproducibles.',
+          feature: 'compliance.read',
+          tone: 'emerald',
+        },
+        {
           href: '/controles',
           title: 'Controles',
           description: 'Gestión y revisión de controles aplicables al tenant.',

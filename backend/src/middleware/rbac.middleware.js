@@ -202,6 +202,11 @@ const API_RULES = [
 
   // Salud ISO: viewer puede leer, no recalcular ni generar acciones
   {
+    prefix: '/api/health',
+    read: TENANT_READ_ROLES,
+    write: ['admin', 'tenant_admin', 'auditor'],
+  },
+  {
     prefix: '/health',
     read: TENANT_READ_ROLES,
     write: ['admin', 'tenant_admin', 'auditor'],

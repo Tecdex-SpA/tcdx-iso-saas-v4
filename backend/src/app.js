@@ -315,6 +315,7 @@ app.use('/api/findings', findingsRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/health', auth, enforceApiAccess, healthRoutes);
+app.use('/api/health', healthRoutes);
 app.use('/api/files/tenant', tenantFilesRoutes);
 app.use('/api/ai-feedback', aiFeedbackRoutes);
 app.use('/api/ai-external-lookup', aiExternalLookupRoutes);
