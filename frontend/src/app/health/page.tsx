@@ -122,6 +122,29 @@ type SprintKpi = {
   description: string;
 };
 
+type SprintHealthDashboard = {
+  global_score?: number;
+  label?: string;
+  status?: string;
+  explanation?: string;
+  critical_processes?: Array<{
+    id?: string | null;
+    process_id?: string | null;
+    operation_id?: string | null;
+    name?: string;
+    standard_code?: string;
+    score?: number;
+    status?: string;
+    main_issue?: string;
+  }>;
+  alerts?: {
+    critical_gaps?: number;
+    overdue_actions?: number;
+    missing_evidence?: number;
+  };
+  data_quality_warnings?: string[];
+};
+
 type CauseJson = {
   cause_key?: string;
   cause_label?: string;
@@ -842,6 +865,7 @@ export default function HealthDashboardPage() {
   const [summaries, setSummaries] = useState<HealthSummary[]>([]);
   const [standards, setStandards] = useState<StandardHealth[]>([]);
   const [sprintHealthSummary, setSprintHealthSummary] = useState<SprintHealthSummary | null>(null);
+  const [sprintHealthDashboard, setSprintHealthDashboard] = useState<SprintHealthDashboard | null>(null);
   const [sprintStandards, setSprintStandards] = useState<SprintStandardHealth[]>([]);
   const [sprintProcesses, setSprintProcesses] = useState<SprintProcessHealth[]>([]);
   const [sprintKpis, setSprintKpis] = useState<SprintKpi[]>([]);
@@ -884,11 +908,14 @@ export default function HealthDashboardPage() {
     useState<string>('');
 
   const [loading, setLoading] = useState(true);
+  const [loadingSprintHealth, setLoadingSprintHealth] = useState(true);
   const [loadingRemediation, setLoadingRemediation] = useState(false);
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [creatingActionId, setCreatingActionId] = useState('');
   const [error, setError] = useState('');
+  const [sprintHealthError, setSprintHealthError] = useState('');
+  const [lastSprintHealthLoadedAt, setLastSprintHealthLoadedAt] = useState<string>('');
 
   const selectedSummary = useMemo(() => {
     return (
@@ -988,26 +1015,38 @@ export default function HealthDashboardPage() {
   ) {
     const authToken = authTokenParam || token;
 
-    if (!authToken) return;
+    if (!authToken) {
+      setLoadingSprintHealth(false);
+      return;
+    }
 
     try {
-      const [summaryJson, standardsJson, processesJson, kpisJson] = await Promise.all([
+      setLoadingSprintHealth(true);
+      setSprintHealthError('');
+
+      const [summaryJson, dashboardJson, standardsJson, processesJson, kpisJson] = await Promise.all([
         fetchJson('/api/health/summary', authToken, tenantId),
+        fetchJson('/api/health/dashboard', authToken, tenantId),
         fetchJson('/api/health/standards', authToken, tenantId),
         fetchJson('/api/health/processes', authToken, tenantId),
         fetchJson('/api/health/kpis', authToken, tenantId),
       ]);
 
       setSprintHealthSummary(summaryJson.data || null);
+      setSprintHealthDashboard(dashboardJson.data || null);
       setSprintStandards(Array.isArray(standardsJson.data) ? standardsJson.data : []);
       setSprintProcesses(Array.isArray(processesJson.data) ? processesJson.data : []);
       setSprintKpis(Array.isArray(kpisJson.data) ? kpisJson.data : []);
+      setLastSprintHealthLoadedAt(new Date().toISOString());
     } catch (err: any) {
-      setError(err.message || 'No fue posible cargar Health/KPIs Sprint 5.');
+      setSprintHealthError(err.message || 'No fue posible cargar Health/KPIs Sprint 5.');
       setSprintHealthSummary(null);
+      setSprintHealthDashboard(null);
       setSprintStandards([]);
       setSprintProcesses([]);
       setSprintKpis([]);
+    } finally {
+      setLoadingSprintHealth(false);
     }
   }
 
@@ -1120,6 +1159,7 @@ export default function HealthDashboardPage() {
 
     if (!authToken) {
       setLoading(false);
+      setLoadingSprintHealth(false);
       setError(t('health.errors.missingToken'));
       return;
     }
@@ -1127,6 +1167,8 @@ export default function HealthDashboardPage() {
     try {
       setLoading(true);
       setError('');
+
+      await loadSprintHealth(tenantId, authToken);
 
       const [dashboardJson, rootCausesJson] = await Promise.all([
         fetchJson('/health/dashboard', authToken, tenantId),
@@ -1148,7 +1190,10 @@ export default function HealthDashboardPage() {
 
       if (finalTenantId) {
         setSelectedTenantId(finalTenantId);
-        await loadSprintHealth(finalTenantId, authToken);
+
+        if (finalTenantId !== tenantId) {
+          await loadSprintHealth(finalTenantId, authToken);
+        }
 
         const [standardsJson, riskJson, standardRootJson] = await Promise.all([
           fetchJson('/health/standards', authToken, finalTenantId),
@@ -1317,6 +1362,7 @@ export default function HealthDashboardPage() {
       loadDashboard(undefined, authToken);
     } else {
       setLoading(false);
+      setLoadingSprintHealth(false);
       setError(t('health.errors.missingToken'));
     }
 
@@ -1378,7 +1424,7 @@ export default function HealthDashboardPage() {
   return (
     <AppLayout>
       <div className="min-h-screen bg-gray-100 p-6">
-        {loading && summaries.length === 0 ? (
+        {loading && summaries.length === 0 && loadingSprintHealth ? (
           <div className="rounded-2xl bg-white p-6 shadow-sm">
             <p className="text-gray-600">{t('health.loadingDashboard')}</p>
           </div>
@@ -1433,8 +1479,32 @@ export default function HealthDashboardPage() {
               />
             </div>
 
-            {sprintHealthSummary && (
-              <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              {loadingSprintHealth ? (
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-5 text-sm text-blue-900">
+                  Cargando salud del sistema...
+                </div>
+              ) : sprintHealthError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+                  <p className="font-semibold">No fue posible cargar salud del sistema.</p>
+                  <p className="mt-1">{sprintHealthError}</p>
+                  <button
+                    type="button"
+                    onClick={() => loadSprintHealth(selectedTenantId || undefined, token)}
+                    className="mt-4 rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-800"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              ) : !sprintHealthSummary ? (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">
+                  <p className="font-semibold text-gray-900">No hay datos de salud disponibles.</p>
+                  <p className="mt-1">
+                    No se encontraron normas, procesos o controles evaluables para calcular Health.
+                  </p>
+                </div>
+              ) : (
+                <>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
@@ -1447,6 +1517,10 @@ export default function HealthDashboardPage() {
                       Health es un indicador calculado de gestión, no certificación ni aprobación automática.
                       Fórmula: 35% cobertura de controles, 20% evidencias, 15% brechas,
                       15% acciones, 10% riesgos y 5% ciclo ISO/auditoría.
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Última actualización:{' '}
+                      {formatDateTime(sprintHealthSummary.updated_at || lastSprintHealthLoadedAt)}
                     </p>
                   </div>
 
@@ -1467,23 +1541,36 @@ export default function HealthDashboardPage() {
                   {sprintHealthSummary.explanation || 'Sin explicación de cálculo disponible.'}
                 </div>
 
+                {sprintHealthSummary.drivers && sprintHealthSummary.drivers.length > 0 && (
+                  <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Drivers principales</h3>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {sprintHealthSummary.drivers.map((driver) => (
+                        <span key={driver} className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+                          {driver}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-5 grid gap-4 md:grid-cols-3">
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                     <div className="text-xs font-medium text-gray-500">Controles sin evidencia</div>
                     <div className="mt-1 text-2xl font-bold text-gray-900">
-                      {toNumber(sprintHealthSummary.totals?.controls_without_evidence)}
+                      {toNumber(sprintHealthSummary.totals?.controls_without_evidence ?? sprintHealthDashboard?.alerts?.missing_evidence)}
                     </div>
                   </div>
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                     <div className="text-xs font-medium text-gray-500">Brechas abiertas</div>
                     <div className="mt-1 text-2xl font-bold text-gray-900">
-                      {toNumber(sprintHealthSummary.totals?.gaps_open)}
+                      {toNumber(sprintHealthSummary.totals?.gaps_open ?? sprintHealthDashboard?.alerts?.critical_gaps)}
                     </div>
                   </div>
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                     <div className="text-xs font-medium text-gray-500">Acciones vencidas</div>
                     <div className="mt-1 text-2xl font-bold text-gray-900">
-                      {toNumber(sprintHealthSummary.totals?.actions_overdue)}
+                      {toNumber(sprintHealthSummary.totals?.actions_overdue ?? sprintHealthDashboard?.alerts?.overdue_actions)}
                     </div>
                   </div>
                 </div>
@@ -1629,8 +1716,9 @@ export default function HealthDashboardPage() {
                     ))}
                   </div>
                 )}
-              </section>
-            )}
+                </>
+              )}
+            </section>
 
             {selectedSummary && (
               <>
