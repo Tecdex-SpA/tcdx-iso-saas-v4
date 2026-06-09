@@ -14,6 +14,7 @@ const { buildReportAiEnrichment } = require('../services/reportAiEnrichment.serv
 const reportTemplates = require('../services/reportTemplates.service');
 const reportBuilder = require('../services/reportBuilder.service');
 const reportAiNarrative = require('../services/reportAiNarrative.service');
+const reportPremiumExport = require('../services/reportPremiumExport.service');
 const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
 const {
   renderExecutivePremiumTemplate,
@@ -818,6 +819,48 @@ router.post('/narrative', auth, async (req, res) => {
     return sendReportPreviewError(res, error);
   }
 });
+
+async function sendPremiumExport({ req, res, format }) {
+  try {
+    const bundle = await reportPremiumExport.buildExportBundle({
+      user: req.user,
+      payload: req.body || {},
+      requestedTenantId: req.query?.tenant_id || null,
+      format,
+    });
+    res.setHeader('Content-Type', bundle.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${bundle.fileName}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(201).send(bundle.buffer);
+  } catch (error) {
+    const status = Number(error?.status || 500);
+    return res.status(status >= 400 && status < 600 ? status : 500).json({
+      ok: false,
+      code: error?.code || 'REPORT_PREMIUM_EXPORT_ERROR',
+      error: status >= 500
+        ? 'No fue posible exportar el reporte premium.'
+        : error.message,
+      details: status >= 500 ? null : error.details || null,
+      request_id: req.requestId || null,
+    });
+  }
+}
+
+// =====================================================
+// POST /api/reports/export/pdf
+// Sprint 6.3: export PDF premium revisable desde preview/narrativa.
+// =====================================================
+router.post('/export/pdf', auth, async (req, res) => (
+  sendPremiumExport({ req, res, format: 'pdf' })
+));
+
+// =====================================================
+// POST /api/reports/export/zip
+// Sprint 6.3: export ZIP con PDF + JSON de trazabilidad.
+// =====================================================
+router.post('/export/zip', auth, async (req, res) => (
+  sendPremiumExport({ req, res, format: 'zip' })
+));
 
 // =====================================================
 // GET /api/reports/sources
