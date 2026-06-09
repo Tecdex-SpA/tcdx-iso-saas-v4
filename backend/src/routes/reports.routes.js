@@ -13,6 +13,7 @@ const { buildReportData } = require('../reports/services/reportData.service');
 const { buildReportAiEnrichment } = require('../services/reportAiEnrichment.service');
 const reportTemplates = require('../services/reportTemplates.service');
 const reportBuilder = require('../services/reportBuilder.service');
+const reportAiNarrative = require('../services/reportAiNarrative.service');
 const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
 const {
   renderExecutivePremiumTemplate,
@@ -791,6 +792,23 @@ router.get('/templates', auth, async (req, res) => {
 router.post('/preview', auth, async (req, res) => {
   try {
     const data = await reportBuilder.buildPreview({
+      user: req.user,
+      payload: req.body || {},
+      requestedTenantId: req.query?.tenant_id || null,
+    });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return sendReportPreviewError(res, error);
+  }
+});
+
+// =====================================================
+// POST /api/reports/narrative
+// Sprint 6.2: narrativa IA operacional con fuentes.
+// =====================================================
+router.post('/narrative', auth, async (req, res) => {
+  try {
+    const data = await reportAiNarrative.buildNarrative({
       user: req.user,
       payload: req.body || {},
       requestedTenantId: req.query?.tenant_id || null,
