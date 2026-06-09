@@ -11,6 +11,8 @@ const asyncJobs = require('../services/asyncJob.service');
 
 const { buildReportData } = require('../reports/services/reportData.service');
 const { buildReportAiEnrichment } = require('../services/reportAiEnrichment.service');
+const reportTemplates = require('../services/reportTemplates.service');
+const reportBuilder = require('../services/reportBuilder.service');
 const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
 const {
   renderExecutivePremiumTemplate,
@@ -64,6 +66,18 @@ function isPremiumReportTypeCode(reportTypeCode) {
 const reportRuntimeJobs = new Map();
 const REPORT_JOB_TTL_MS = Number(process.env.REPORT_JOB_TTL_MS || 1000 * 60 * 60 * 6);
 const REPORT_DEEP_MIN_TIMEOUT_MS = 600000;
+
+function sendReportPreviewError(res, error) {
+  const status = Number(error?.status || 500);
+  return res.status(status).json({
+    ok: false,
+    code: error?.code || 'REPORT_PREVIEW_ERROR',
+    error: status >= 500
+      ? 'No fue posible preparar el preview del reporte.'
+      : error.message,
+    details: status >= 500 ? null : error.details || null,
+  });
+}
 
 function parsePositiveInt(value, fallback = null) {
   const parsed = Number.parseInt(String(value || ''), 10);
@@ -753,6 +767,80 @@ async function ensureTargetTenantAccess({ role, userId, userTenantId, targetTena
 
   return true;
 }
+
+// =====================================================
+// GET /api/reports/templates
+// Sprint 6.1: plantillas disponibles para preview JSON.
+// =====================================================
+router.get('/templates', auth, async (req, res) => {
+  try {
+    const role = req.user?.role || req.user?.user_role || req.user?.userRole;
+    return res.json({
+      ok: true,
+      data: reportTemplates.listTemplatesForRole(role),
+    });
+  } catch (error) {
+    return sendReportPreviewError(res, error);
+  }
+});
+
+// =====================================================
+// POST /api/reports/preview
+// Sprint 6.1: preview estructurado, sin IA ni PDF premium.
+// =====================================================
+router.post('/preview', auth, async (req, res) => {
+  try {
+    const data = await reportBuilder.buildPreview({
+      user: req.user,
+      payload: req.body || {},
+      requestedTenantId: req.query?.tenant_id || null,
+    });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return sendReportPreviewError(res, error);
+  }
+});
+
+// =====================================================
+// GET /api/reports/sources
+// Sprint 6.1: fuentes internas normalizadas para reportes.
+// =====================================================
+router.get('/sources', auth, async (req, res) => {
+  try {
+    const data = await reportBuilder.listSources({
+      user: req.user,
+      query: req.query || {},
+    });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return sendReportPreviewError(res, error);
+  }
+});
+
+// =====================================================
+// GET /api/reports/health
+// Sprint 6.1: atajo de preview para reporte de salud.
+// =====================================================
+router.get('/health', auth, async (req, res) => {
+  try {
+    const data = await reportBuilder.buildPreview({
+      user: req.user,
+      payload: {
+        template_code: 'system_health',
+        standard_id: req.query?.standard_id,
+        process_id: req.query?.process_id,
+        operation_id: req.query?.operation_id,
+        period_from: req.query?.period_from,
+        period_to: req.query?.period_to,
+        include_sources: String(req.query?.include_sources || 'true') !== 'false',
+      },
+      requestedTenantId: req.query?.tenant_id || null,
+    });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return sendReportPreviewError(res, error);
+  }
+});
 
 // =====================================================
 // GET /api/reports/types
