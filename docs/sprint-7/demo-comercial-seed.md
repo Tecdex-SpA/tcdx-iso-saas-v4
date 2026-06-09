@@ -14,6 +14,12 @@ database/demo/demo_comercial_tcdx.sql
 
 El script crea o reutiliza el tenant `Empresa Demo TCDX Compliance`, industria `Servicios tecnologicos / SaaS B2B`, con alcance ISO 9001 e ISO 27001.
 
+Nota Sprint 7.1B: el seed base fue corregido para usar `finding_type = 'observacion'` en hallazgos demo y para no insertar `findings.tenant_control_id`, porque en el esquema real esa columna puede referenciar `public.controls` y no `public.tenant_controls`. La madurez comercial se aplica despues con:
+
+```text
+database/demo/demo_comercial_tcdx_maturity_patch.sql
+```
+
 Datos principales:
 
 - Tenant demo y perfil comercial/aplicabilidad.

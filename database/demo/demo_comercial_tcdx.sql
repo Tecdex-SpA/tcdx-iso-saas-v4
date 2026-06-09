@@ -7,7 +7,7 @@
 -- ADVERTENCIA:
 -- - Ejecutar solo si se desea poblar datos demo comerciales.
 -- - Script idempotente y tenant-scoped.
--- - No ejecuta DROP TABLE, TRUNCATE ni DELETE masivo.
+-- - No ejecuta operaciones destructivas ni borrados masivos.
 -- - No modifica estructura de tablas.
 -- - No toca tenants reales.
 -- - No crea archivos fisicos ni credenciales de conectores.
@@ -1678,19 +1678,8 @@ BEGIN
       FROM (
         VALUES
           ('ISO9001', 'Hallazgo menor ISO 9001 - trazabilidad de acciones correctivas', 'Falta evidencia de seguimiento de eficacia para acciones correctivas cerradas.', 'observacion', 'media', 'abierto'),
-          ('ISO27001', 'Hallazgo mayor ISO 27001 - prueba de restauración no documentada', 'No existe prueba reciente documentada de restauracion para backups criticos.', 'no_conformidad', 'alta', 'abierto')
+          ('ISO27001', 'Hallazgo mayor ISO 27001 - prueba de restauración no documentada', 'No existe prueba reciente documentada de restauracion para backups criticos.', 'observacion', 'alta', 'abierto')
       ) AS rows(iso_code, title, description, finding_type, severity, status)
-    ),
-    control_pick AS (
-      SELECT DISTINCT ON (cc.iso)
-        cc.iso,
-        tc.id AS tenant_control_id
-      FROM public.tenant_controls tc
-      JOIN public.controls_catalog cc
-        ON cc.id = tc.control_id
-      WHERE tc.tenant_id = v_tenant_id
-        AND cc.iso IN ('ISO9001', 'ISO27001')
-      ORDER BY cc.iso, tc.score ASC, tc.created_at
     )
     INSERT INTO public.findings (
       tenant_id,
@@ -1701,7 +1690,6 @@ BEGIN
       severity,
       status,
       source_type,
-      tenant_control_id,
       created_by,
       created_at,
       updated_at
@@ -1715,13 +1703,10 @@ BEGIN
       f.severity,
       f.status,
       'manual',
-      cp.tenant_control_id,
       v_auditor_id,
       now(),
       now()
     FROM finding_seed f
-    LEFT JOIN control_pick cp
-      ON cp.iso = f.iso_code
     WHERE NOT EXISTS (
       SELECT 1
       FROM public.findings existing
