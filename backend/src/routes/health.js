@@ -15,6 +15,7 @@ const {
 const {
   buildTenantApplicabilityUniverse,
 } = require('../services/companyProfileApplicabilityEngine.service');
+const sprintHealthService = require('../services/health.service');
 
 // =====================================================
 // Middleware local de autenticación para rutas Health
@@ -126,6 +127,27 @@ function requireTenantForNonSuper(req, res) {
   }
 
   return scope;
+}
+
+function isApiHealthRequest(req) {
+  return String(req.baseUrl || '').startsWith('/api/health');
+}
+
+function healthQueryParams(req) {
+  return {
+    standardId: req.query.standard_id || req.query.standardId || req.query.standard_code || req.query.standardCode || null,
+    standardCode: req.query.standard_code || req.query.standardCode || null,
+    processId: req.query.process_id || req.query.processId || null,
+    operationId: req.query.operation_id || req.query.operationId || null,
+  };
+}
+
+function sendSprintHealth(res, data, extra = {}) {
+  return res.json({
+    ok: true,
+    data,
+    ...extra,
+  });
 }
 
 function normalizePriority(priority) {
@@ -309,10 +331,88 @@ async function buildHealthScope(scope, sourceName, extra = {}) {
 router.use(authenticateHealth);
 
 // =====================================================
+// GET /api/health/summary
+// =====================================================
+router.get('/summary', async (req, res) => {
+  try {
+    const params = healthQueryParams(req);
+    const data = await sprintHealthService.getSummary({
+      user: req.user,
+      standardId: params.standardId,
+      standardCode: params.standardCode,
+    });
+    return sendSprintHealth(res, data);
+  } catch (error) {
+    console.error('Error en /api/health/summary:', error);
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || 'Error obteniendo resumen de salud del sistema',
+      ...errorDetail(error),
+    });
+  }
+});
+
+// =====================================================
+// GET /api/health/processes
+// =====================================================
+router.get('/processes', async (req, res) => {
+  try {
+    const params = healthQueryParams(req);
+    const data = await sprintHealthService.getProcessesHealth({
+      user: req.user,
+      standardId: params.standardId,
+      standardCode: params.standardCode,
+      processId: params.processId,
+      operationId: params.operationId,
+    });
+    return sendSprintHealth(res, data.processes, {
+      data_quality_warnings: data.data_quality_warnings,
+      count: data.processes.length,
+    });
+  } catch (error) {
+    console.error('Error en /api/health/processes:', error);
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || 'Error obteniendo salud por proceso',
+      ...errorDetail(error),
+    });
+  }
+});
+
+// =====================================================
+// GET /api/health/process-detail
+// =====================================================
+router.get('/process-detail', async (req, res) => {
+  try {
+    const params = healthQueryParams(req);
+    const data = await sprintHealthService.getProcessDetail({
+      user: req.user,
+      standardId: params.standardId,
+      standardCode: params.standardCode,
+      processId: params.processId,
+      operationId: params.operationId,
+    });
+    return sendSprintHealth(res, data);
+  } catch (error) {
+    console.error('Error en /api/health/process-detail:', error);
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || 'Error obteniendo detalle de salud por proceso',
+      ...errorDetail(error),
+    });
+  }
+});
+
+// =====================================================
 // GET /health/dashboard
 // =====================================================
 router.get('/dashboard', async (req, res) => {
   try {
+    if (isApiHealthRequest(req)) {
+      const data = await sprintHealthService.getDashboard({ user: req.user });
+      return sendSprintHealth(res, data);
+    }
+
     const scope = requireTenantForNonSuper(req, res);
     if (!scope) return;
 
@@ -366,6 +466,19 @@ router.get('/dashboard', async (req, res) => {
 // =====================================================
 router.get('/standards', async (req, res) => {
   try {
+    if (isApiHealthRequest(req)) {
+      const params = healthQueryParams(req);
+      const data = await sprintHealthService.getStandardsHealth({
+        user: req.user,
+        standardId: params.standardId,
+        standardCode: params.standardCode,
+      });
+      return sendSprintHealth(res, data.standards, {
+        data_quality_warnings: data.data_quality_warnings,
+        count: data.standards.length,
+      });
+    }
+
     const scope = requireTenantForNonSuper(req, res);
     if (!scope) return;
     const standardCode = req.query.standard_code || req.query.standardCode || '';
@@ -430,6 +543,11 @@ router.get('/standards', async (req, res) => {
 // =====================================================
 router.get('/kpis', async (req, res) => {
   try {
+    if (isApiHealthRequest(req)) {
+      const data = await sprintHealthService.getKpis({ user: req.user });
+      return sendSprintHealth(res, data, { count: data.length });
+    }
+
     const scope = requireTenantForNonSuper(req, res);
     if (!scope) return;
 

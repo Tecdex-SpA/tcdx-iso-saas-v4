@@ -74,6 +74,37 @@ type EffectiveIsoHealthRow = {
   kpi_health_status?: string | null;
 };
 
+type SystemHealthDashboard = {
+  global_score?: number;
+  label?: string;
+  status?: string;
+  color?: string;
+  explanation?: string;
+  standards?: Array<{
+    id?: string;
+    name?: string;
+    score?: number;
+    status?: string;
+    label?: string;
+  }>;
+  critical_processes?: Array<{
+    id?: string | null;
+    process_id?: string | null;
+    operation_id?: string | null;
+    name?: string;
+    standard_code?: string;
+    score?: number;
+    status?: string;
+    main_issue?: string;
+  }>;
+  alerts?: {
+    critical_gaps?: number;
+    overdue_actions?: number;
+    missing_evidence?: number;
+  };
+  data_quality_warnings?: string[];
+};
+
 function normalizeDashboardView(value?: string | null): DashboardView {
   return value === 'kpi' || value === 'iso' || value === 'executive'
     ? value
@@ -107,6 +138,18 @@ function getEffectiveHealthTone(value?: string | null): string {
   if (normalized === 'sin_alcance' || normalized === 'fuera_alcance' || normalized === 'no_aplicable') {
     return 'border-slate-200 bg-slate-50 text-slate-500';
   }
+
+  return 'border-slate-200 bg-slate-50 text-slate-600';
+}
+
+function getSystemHealthTone(value?: string | null): string {
+  const normalized = String(value || '').toLowerCase();
+
+  if (normalized === 'high') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (normalized === 'acceptable') return 'border-blue-200 bg-blue-50 text-blue-700';
+  if (normalized === 'medium') return 'border-amber-200 bg-amber-50 text-amber-700';
+  if (normalized === 'low') return 'border-orange-200 bg-orange-50 text-orange-700';
+  if (normalized === 'critical') return 'border-red-200 bg-red-50 text-red-700';
 
   return 'border-slate-200 bg-slate-50 text-slate-600';
 }
@@ -774,6 +817,7 @@ function DashboardPageContent() {
   const [controls, setControls] = useState<any[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [effectiveHealthRows, setEffectiveHealthRows] = useState<EffectiveIsoHealthRow[]>([]);
+  const [systemHealthDashboard, setSystemHealthDashboard] = useState<SystemHealthDashboard | null>(null);
   const [nextAudits, setNextAudits] = useState<AuditItem[]>([]);
   const [auditSummary, setAuditSummary] = useState<DashboardAuditSummary | null>(null);
   const [riskSummary, setRiskSummary] = useState<any[]>([]);
@@ -782,11 +826,34 @@ function DashboardPageContent() {
   const [loading, setLoading] = useState(true);
   const [loadingKpis, setLoadingKpis] = useState(false);
   const [effectiveHealthLoading, setEffectiveHealthLoading] = useState(false);
+  const [systemHealthLoading, setSystemHealthLoading] = useState(false);
+  const [systemHealthError, setSystemHealthError] = useState('');
   const [recalculatingKpis, setRecalculatingKpis] = useState(false);
   const [refreshingExecutive, setRefreshingExecutive] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const [kpiData, setKpiData] = useState<KpiDashboardResponse | null>(null);
+  const loadSystemHealthDashboard = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setSystemHealthDashboard(null);
+      return;
+    }
+
+    try {
+      setSystemHealthLoading(true);
+      setSystemHealthError('');
+      const json = await fetchJson(`${API_URL}/api/health/dashboard`, token);
+      setSystemHealthDashboard(json?.data || null);
+    } catch (err) {
+      console.error('ERROR SYSTEM HEALTH DASHBOARD:', err);
+      setSystemHealthDashboard(null);
+      setSystemHealthError('No fue posible cargar salud del sistema.');
+    } finally {
+      setSystemHealthLoading(false);
+    }
+  }, []);
+
   const loadEffectiveHealthSummary = useCallback(async () => {
     const token = localStorage.getItem('token');
     const user = getUserFromToken();
@@ -925,15 +992,17 @@ function DashboardPageContent() {
   }, []);
 
   useEffect(() => {
+    loadSystemHealthDashboard();
     loadEffectiveHealthSummary();
     loadExecutiveDashboard();
     loadKpiDashboard();
-  }, [loadEffectiveHealthSummary, loadExecutiveDashboard, loadKpiDashboard]);
+  }, [loadSystemHealthDashboard, loadEffectiveHealthSummary, loadExecutiveDashboard, loadKpiDashboard]);
 
   const handleRefreshDashboard = async () => {
     try {
       setRefreshingExecutive(true);
       await Promise.all([
+        loadSystemHealthDashboard(),
         loadEffectiveHealthSummary(),
         loadExecutiveDashboard(),
         loadKpiDashboard(),
@@ -1486,7 +1555,7 @@ function DashboardPageContent() {
                       : 'text-slate-600 hover:bg-slate-100',
                   ].join(' ')}
                 >
-                  Centro Control ISO
+                  Salud del sistema
                 </button>
               </div>
 
@@ -1589,15 +1658,10 @@ function DashboardPageContent() {
 
                   </div>
 
-                  <EffectiveIsoHealthSection
-                    rows={effectiveActiveRows}
-                    loading={effectiveHealthLoading}
-                    totalActiveControls={effectiveTotalActiveControls}
-                    compliesControls={effectiveCompliesControls}
-                    controlsWithoutEvidence={effectiveControlsWithoutEvidence}
-                    overduePlans={effectiveOverduePlans}
-                    compliancePercent={effectiveCompliancePercent}
-                    officialEvidencePercent={effectiveOfficialEvidencePercent}
+                  <SystemHealthDashboardSection
+                    data={systemHealthDashboard}
+                    loading={systemHealthLoading}
+                    error={systemHealthError}
                   />
 
                   {totalKpis > 0 && (
@@ -1977,24 +2041,157 @@ function DashboardPageContent() {
           )}
 
           {activeView === 'iso' && (
-            <IsoControlCenterView
-              rows={effectiveActiveRows}
-              priorityRows={effectivePriorityRows}
-              suggestedActions={isoSuggestedActions}
-              loading={effectiveHealthLoading}
-              totalActiveControls={effectiveTotalActiveControls}
-              compliesControls={effectiveCompliesControls}
-              controlsWithoutEvidence={effectiveControlsWithoutEvidence}
-              overduePlans={effectiveOverduePlans}
-              compliancePercent={effectiveCompliancePercent}
-              officialEvidencePercent={effectiveOfficialEvidencePercent}
-              averageHealthScore={effectiveAverageHealthScore}
-              globalStatus={effectiveGlobalStatus}
+            <SystemHealthDashboardSection
+              data={systemHealthDashboard}
+              loading={systemHealthLoading}
+              error={systemHealthError}
+              expanded
             />
           )}
         </div>
       </div>
     </AppLayout>
+  );
+}
+
+function SystemHealthDashboardSection({
+  data,
+  loading,
+  error,
+  expanded = false,
+}: {
+  data: SystemHealthDashboard | null;
+  loading: boolean;
+  error: string;
+  expanded?: boolean;
+}) {
+  const alerts = data?.alerts || {};
+  const topProcesses = data?.critical_processes || [];
+  const standards = data?.standards || [];
+  const score = Number(data?.global_score || 0);
+
+  return (
+    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+            Salud del sistema
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+            Lectura ejecutiva de health ISO
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+            Health es un indicador calculado de gestión, no certificación ni aprobación automática.
+          </p>
+        </div>
+
+        <a
+          href="/health"
+          className="inline-flex w-fit rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+        >
+          Ver salud completa
+        </a>
+      </div>
+
+      {loading ? (
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+          Cargando salud del sistema...
+        </div>
+      ) : error ? (
+        <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
+      ) : !data ? (
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+          No fue posible cargar salud del sistema.
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <div className="rounded-[26px] border border-slate-200 bg-slate-950 p-5 text-white">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
+                Health global
+              </div>
+              <div className="mt-4 flex flex-wrap items-end gap-3">
+                <span className="text-5xl font-bold tracking-tight">{score.toFixed(0)}</span>
+                <span className={`mb-1 rounded-full border px-3 py-1 text-xs font-semibold ${getSystemHealthTone(data.status)}`}>
+                  {data.label || 'Sin salud'}
+                </span>
+              </div>
+              <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/12">
+                <div
+                  className="h-full rounded-full bg-blue-400"
+                  style={{ width: `${Math.max(4, Math.min(100, score))}%` }}
+                />
+              </div>
+              <p className="mt-4 text-sm leading-6 text-white/75">
+                {data.explanation || 'Sin explicación disponible para el cálculo.'}
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <PriorityMiniMetric label="Brechas críticas" value={String(alerts.critical_gaps || 0)} />
+              <PriorityMiniMetric label="Acciones vencidas" value={String(alerts.overdue_actions || 0)} />
+              <PriorityMiniMetric label="Evidencia faltante" value={String(alerts.missing_evidence || 0)} />
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-sm font-semibold text-slate-950">Salud por norma</h3>
+              {standards.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">No hay normas activas evaluables.</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {standards.slice(0, expanded ? 8 : 4).map((standard) => (
+                    <div key={standard.id || standard.name} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">{standard.name || 'Norma'}</div>
+                        <div className="text-xs text-slate-500">{standard.label || standard.status || 'Sin estado'}</div>
+                      </div>
+                      <div className="text-right text-lg font-bold text-slate-950">
+                        {Number(standard.score || 0).toFixed(0)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-sm font-semibold text-slate-950">Top procesos críticos</h3>
+              {topProcesses.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">No hay procesos críticos destacados.</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {topProcesses.slice(0, expanded ? 6 : 3).map((process) => (
+                    <div key={`${process.standard_code}-${process.id || process.operation_id || process.name}`} className="rounded-xl bg-white px-3 py-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">{process.name || 'Proceso'}</div>
+                          <div className="text-xs text-slate-500">{process.standard_code || 'ISO'} · {process.main_issue || 'sin causa principal'}</div>
+                        </div>
+                        <div className="text-right text-lg font-bold text-slate-950">
+                          {Number(process.score || 0).toFixed(0)}%
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {data.data_quality_warnings && data.data_quality_warnings.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              {data.data_quality_warnings.slice(0, 3).map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -2204,7 +2401,7 @@ function IsoControlCenterView({
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1.4fr)_390px]">
           <div className="p-6 lg:p-7">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Centro Control ISO
+              Salud del sistema
             </p>
             <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
               Priorización táctica basada en salud ISO efectiva
@@ -2256,7 +2453,7 @@ function IsoControlCenterView({
 
       {loading ? (
         <section className="rounded-[30px] border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-          Cargando Centro Control ISO...
+          Cargando salud del sistema...
         </section>
       ) : rows.length === 0 ? (
         <section className="rounded-[30px] border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
