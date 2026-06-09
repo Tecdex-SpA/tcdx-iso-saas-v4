@@ -219,6 +219,11 @@ const API_RULES = [
     write: [...TENANT_REPORT_ROLES, 'dealer'],
   },
   {
+    prefix: '/api/iso-scope',
+    read: [...TENANT_READ_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    write: [...TENANT_READ_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+  },
+  {
     prefix: '/api/files/tenant',
     read: TENANT_READ_ROLES,
     write: [],

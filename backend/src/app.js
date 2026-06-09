@@ -57,6 +57,7 @@ const isoOperationalExecutionRoutes = require('./routes/iso-operational-executio
 const isoRecommendedActionsRoutes = require('./routes/iso-recommended-actions.routes');
 const isoCommandCenterRoutes = require('./routes/iso-command-center.routes');
 const isoAuditorRoutes = require('./routes/iso-auditor.routes');
+const isoScopeRoutes = require('./routes/iso-scope.routes');
 const aiTenantSearchRoutes = require('./routes/ai-tenant-search.routes');
 const lifecycleRoutes = require('./routes/lifecycle.routes');
 const aiFeedbackRoutes = require('./routes/ai-feedback.routes');
@@ -339,6 +340,7 @@ app.use('/api/iso-operational-execution', isoOperationalExecutionRoutes);
 app.use('/api/iso-recommended-actions', isoRecommendedActionsRoutes);
 app.use('/api/iso-command-center', isoCommandCenterRoutes);
 app.use('/api/iso-auditor', isoAuditorRoutes);
+app.use('/api/iso-scope', isoScopeRoutes);
 app.use('/api/ai-compliance/tenant-search', aiTenantSearchRoutes);
 app.use('/api/lifecycle', lifecycleRoutes);
 
