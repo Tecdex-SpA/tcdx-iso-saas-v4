@@ -136,7 +136,7 @@ SELECT COUNT(*) FROM audit_document_templates WHERE standard_code = 'ISO27001';
 ```bash
 TOKEN=$(curl -s -X POST "http://localhost:3000/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@rieltec.com","password":"123456"}' | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))")
+  -d '{"email":"<qa-user-email>","password":"<qa-user-password>"}' | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))")
 
 curl -s -H "Authorization: Bearer $TOKEN" \
   "http://localhost:3000/api/audit-preparation/templates?standard_code=ISO9001" | python3 -m json.tool

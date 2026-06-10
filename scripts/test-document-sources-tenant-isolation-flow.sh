@@ -2,8 +2,8 @@
 set -euo pipefail
 
 BASE_URL="${TCDX_BASE_URL:-https://181.212.166.187:8443}"
-EMAIL_A="${TCDX_EMAIL:-admin@rieltec.com}"
-PASSWORD_A="${TCDX_PASSWORD:-123456}"
+EMAIL_A="${TCDX_EMAIL:-}"
+PASSWORD_A="${TCDX_PASSWORD:-}"
 EMAIL_B="${TCDX_TENANT_B_EMAIL:-}"
 PASSWORD_B="${TCDX_TENANT_B_PASSWORD:-}"
 OUT_DIR="${TCDX_QA_OUT_DIR:-qa-results/document-sources-tenant-isolation/$(date +%Y%m%d-%H%M%S)}"

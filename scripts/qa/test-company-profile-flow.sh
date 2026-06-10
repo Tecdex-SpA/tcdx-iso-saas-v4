@@ -2,8 +2,8 @@
 set -euo pipefail
 
 BASE_URL="${TCDX_BASE_URL:-https://181.212.166.187:8443}"
-EMAIL="${TCDX_EMAIL:-admin@rieltec.com}"
-PASSWORD="${TCDX_PASSWORD:-123456}"
+EMAIL="${TCDX_EMAIL:-}"
+PASSWORD="${TCDX_PASSWORD:-}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 OUT_DIR="${TCDX_QA_OUT_DIR:-./qa-results/company-profile-flow/$STAMP}"
 

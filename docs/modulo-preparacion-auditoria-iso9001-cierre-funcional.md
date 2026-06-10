@@ -107,7 +107,7 @@ Login:
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@rieltec.com","password":"123456"}' \
+  -d '{"email":"<qa-user-email>","password":"<qa-user-password>"}' \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))')
 ```
 

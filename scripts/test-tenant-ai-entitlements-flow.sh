@@ -2,7 +2,7 @@
 set -euo pipefail
 
 BASE_URL="${TCDX_BASE_URL:-https://181.212.166.187:8443}"
-EMAIL="${TCDX_EMAIL:-admin@rieltec.com}"
+EMAIL="${TCDX_EMAIL:-}"
 PASSWORD="${TCDX_PASSWORD:-}"
 TENANT_ID="${TCDX_TENANT_ID:-}"
 OUT_DIR="${TCDX_OUT_DIR:-./qa-results/tenant-ai-entitlements/$(date +%Y%m%d-%H%M%S)}"

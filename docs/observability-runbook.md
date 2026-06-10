@@ -29,8 +29,8 @@ Esta fase no incorpora herramientas pesadas. Usa scripts versionados, `curl`, sy
 API_URL=http://bk.tcdx.int:3000 \
 FRONTEND_URL=https://181.212.166.187:8443 \
 AI_ENGINE_URL=http://ai.tcdx.int:8001 \
-EMAIL=admin@rieltec.com \
-PASSWORD=123456 \
+EMAIL="<qa-user-email>" \
+PASSWORD="<qa-user-password>" \
 bash scripts/monitor-runtime.sh
 ```
 
@@ -62,8 +62,8 @@ En Mac puede producir advertencias porque no existen `systemctl` o `journalctl`.
 API_URL=http://bk.tcdx.int:3000 \
 FRONTEND_URL=https://181.212.166.187:8443 \
 AI_ENGINE_URL=http://ai.tcdx.int:8001 \
-EMAIL=admin@rieltec.com \
-PASSWORD=123456 \
+EMAIL="<qa-user-email>" \
+PASSWORD="<qa-user-password>" \
 bash scripts/qa-observability.sh
 ```
 

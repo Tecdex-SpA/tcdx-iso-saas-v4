@@ -2,8 +2,8 @@
 set -euo pipefail
 
 BASE_URL="${TCDX_BASE_URL:-https://181.212.166.187:8443}"
-EMAIL="${TCDX_EMAIL:-admin@rieltec.com}"
-PASSWORD="${TCDX_PASSWORD:-123456}"
+EMAIL="${TCDX_EMAIL:-}"
+PASSWORD="${TCDX_PASSWORD:-}"
 AI_EMAIL="${TCDX_AI_EMAIL:-}"
 AI_PASSWORD="${TCDX_AI_PASSWORD:-}"
 OUT_DIR="${TCDX_OUT_DIR:-./qa-results/ai-entitlements-hardening/$(date +%Y%m%d-%H%M%S)}"

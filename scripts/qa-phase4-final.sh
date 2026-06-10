@@ -7,8 +7,8 @@ cd "$ROOT"
 API_URL="${API_URL:-https://181.212.166.187:8443}"
 FRONTEND_URL="${FRONTEND_URL:-https://181.212.166.187:8443}"
 AI_ENGINE_URL="${AI_ENGINE_URL:-http://ai.tcdx.int:8001}"
-EMAIL="${EMAIL:-admin@rieltec.com}"
-PASSWORD="${PASSWORD:-123456}"
+EMAIL="${EMAIL:-}"
+PASSWORD="${PASSWORD:-}"
 
 TS="$(date '+%Y%m%d_%H%M%S')"
 mkdir -p qa-results

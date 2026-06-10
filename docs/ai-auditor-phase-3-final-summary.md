@@ -141,7 +141,7 @@ El PDF incluye:
 El script principal es:
 
 ```bash
-API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL=admin@rieltec.com PASSWORD=123456 bash ./scripts/qa-ai-auditor-full.sh
+API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL="<qa-user-email>" PASSWORD="<qa-user-password>" bash ./scripts/qa-ai-auditor-full.sh
 ```
 
 Valida:

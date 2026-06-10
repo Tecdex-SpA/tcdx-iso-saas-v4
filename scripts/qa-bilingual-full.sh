@@ -3,8 +3,8 @@ set -Eeuo pipefail
 
 API_URL="${API_URL:-https://181.212.166.187:8443}"
 FRONTEND_URL="${FRONTEND_URL:-https://181.212.166.187:8443}"
-EMAIL="${EMAIL:-admin@rieltec.com}"
-PASSWORD="${PASSWORD:-123456}"
+EMAIL="${EMAIL:-}"
+PASSWORD="${PASSWORD:-}"
 QA_STRICT="${QA_STRICT:-false}"
 
 TS="$(date '+%Y%m%d_%H%M%S')"
@@ -287,7 +287,7 @@ for locale in en es; do
   curl -s -X POST "$API_URL/api/auth/login" \
     -H "Content-Type: application/json" \
     -H "x-tcdx-locale: $locale" \
-    -d '{"email":"admin@rieltec.com","password":"mala"}' > "$OUT"
+    -d '{"email":"qa.invalid@example.invalid","password":"mala"}' > "$OUT"
 
   code="$(json_get "$OUT" "error_code")"
   resp_locale="$(json_get "$OUT" "locale")"
