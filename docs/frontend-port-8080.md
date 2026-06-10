@@ -37,5 +37,5 @@ NEXT_PUBLIC_FRONTEND_INTERNAL_URL=http://127.0.0.1:8080
 ## QA
 
 ```bash
-API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL=admin@rieltec.com PASSWORD=123456 bash ./scripts/qa-ai-auditor-full.sh
+API_URL=http://bk.tcdx.int:3000 FRONTEND_URL=https://181.212.166.187:8443 EMAIL="<qa-user-email>" PASSWORD="<qa-user-password>" bash ./scripts/qa-ai-auditor-full.sh
 ```

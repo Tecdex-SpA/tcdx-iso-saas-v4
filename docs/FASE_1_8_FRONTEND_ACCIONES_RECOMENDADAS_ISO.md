@@ -56,8 +56,8 @@ Validacion contra API desplegada:
 ```bash
 cd /Users/andresbarouh/repos/tcdx-iso-saas
 export API_URL="http://bk.tcdx.int:3000"
-export TEST_EMAIL="admin@rieltec.com"
-export TEST_PASSWORD="123456"
+export TEST_EMAIL="<qa-user-email>"
+export TEST_PASSWORD="<qa-user-password>"
 bash scripts/validate-iso-recommended-actions.sh
 ```
 

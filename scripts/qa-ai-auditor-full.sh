@@ -3,8 +3,8 @@ set -Eeuo pipefail
 
 API_URL="${API_URL:-https://181.212.166.187:8443}"
 FRONTEND_URL="${FRONTEND_URL:-https://181.212.166.187:8443}"
-EMAIL="${EMAIL:-admin@rieltec.com}"
-PASSWORD="${PASSWORD:-123456}"
+EMAIL="${EMAIL:-}"
+PASSWORD="${PASSWORD:-}"
 QA_STRICT="${QA_STRICT:-false}"
 
 TS="$(date '+%Y%m%d_%H%M%S')"
@@ -20,6 +20,18 @@ PASS=0
 WARN=0
 FAIL=0
 : > "$CHECKS_FILE"
+
+require_secret_env() {
+  local name="$1"
+  local value="$2"
+  if [ -z "$value" ]; then
+    echo "ERROR: $name debe venir por variable de entorno; no hay credenciales demo por defecto." >&2
+    exit 2
+  fi
+}
+
+require_secret_env "EMAIL" "$EMAIL"
+require_secret_env "PASSWORD" "$PASSWORD"
 
 log_check() {
   local status="$1"

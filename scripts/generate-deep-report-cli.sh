@@ -2,8 +2,8 @@
 set -euo pipefail
 
 BASE_URL="${TCDX_BASE_URL:-https://181.212.166.187:8443}"
-EMAIL="${TCDX_EMAIL:-admin@rieltec.com}"
-PASSWORD="${TCDX_PASSWORD:-123456}"
+EMAIL="${TCDX_EMAIL:-}"
+PASSWORD="${TCDX_PASSWORD:-}"
 
 REPORT_TYPE_CODE="${TCDX_REPORT_TYPE_CODE:-executive_iso_status}"
 REPORT_PERIOD="${TCDX_REPORT_PERIOD:-Mayo 2026}"
@@ -28,6 +28,15 @@ ts() {
 
 log() {
   echo "[$(ts)] $*"
+}
+
+require_secret_env() {
+  local name="$1"
+  local value="$2"
+  if [[ -z "$value" ]]; then
+    log "ERROR: $name debe venir por variable de entorno; no hay credenciales demo por defecto."
+    exit 2
+  fi
 }
 
 json_get() {
@@ -89,6 +98,9 @@ log "DEPTH=$DEPTH"
 log "QUALITY=$QUALITY"
 log "OUT_DIR=$OUT_DIR"
 log "============================================================"
+
+require_secret_env "TCDX_EMAIL" "$EMAIL"
+require_secret_env "TCDX_PASSWORD" "$PASSWORD"
 
 log "1) Login..."
 

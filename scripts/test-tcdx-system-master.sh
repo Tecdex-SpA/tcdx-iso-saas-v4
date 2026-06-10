@@ -17,16 +17,16 @@ set -Eeuo pipefail
 #
 # Optional:
 #   BASE_URL="https://181.212.166.187:8443" \
-#   TCDX_QA_EMAIL="admin@rieltec.com" \
-#   TCDX_QA_PASSWORD="123456" \
+#   TCDX_QA_EMAIL="<qa-user-email>" \
+#   TCDX_QA_PASSWORD="<qa-user-password>" \
 #   AI_INTERNAL_TOKEN="<token-from-env>" \
 #   RUN_SSH_CHECKS=true \
 #   ./scripts/test-tcdx-system-master.sh
 # ============================================================
 
 BASE_URL="${BASE_URL:-https://181.212.166.187:8443}"
-TEST_EMAIL="${TEST_EMAIL:-${TCDX_QA_EMAIL:-admin@rieltec.com}}"
-TEST_PASSWORD="${TEST_PASSWORD:-${TCDX_QA_PASSWORD:-123456}}"
+TEST_EMAIL="${TEST_EMAIL:-${TCDX_QA_EMAIL:-}}"
+TEST_PASSWORD="${TEST_PASSWORD:-${TCDX_QA_PASSWORD:-}}"
 AI_INTERNAL_TOKEN="${AI_INTERNAL_TOKEN:-${TCDX_AI_INTERNAL_TOKEN:-}}"
 AI_ENGINE_PUBLIC_DOCS_EXPECTED="${AI_ENGINE_PUBLIC_DOCS_EXPECTED:-lab}"
 
@@ -64,6 +64,14 @@ log() {
 fail() {
   log "ERROR: $*"
   exit 1
+}
+
+require_secret_env() {
+  local name="$1"
+  local value="$2"
+  if [[ -z "$value" ]]; then
+    fail "$name debe venir por variable de entorno; este script no define credenciales demo por defecto."
+  fi
 }
 
 need_cmd() {
@@ -382,6 +390,9 @@ PY
 
 need_cmd curl
 need_cmd python3
+
+require_secret_env "TEST_EMAIL/TCDX_QA_EMAIL" "$TEST_EMAIL"
+require_secret_env "TEST_PASSWORD/TCDX_QA_PASSWORD" "$TEST_PASSWORD"
 
 cat > "$ENV_SNAPSHOT" <<EOF
 BASE_URL=$BASE_URL

@@ -4,7 +4,7 @@ Esta checklist deja el piloto SaaS en modo controlado. No reemplaza una auditori
 
 ## Seguridad y credenciales
 
-- Rotar la clave demo de `admin@rieltec.com` antes de cualquier piloto publico.
+- Rotar la clave demo de `<qa-user-email>` antes de cualquier piloto publico.
 - Definir `TCDX_QA_EMAIL` y `TCDX_QA_PASSWORD` para QA; no depender de credenciales demo en scripts operativos.
 - Mantener `AI_INTERNAL_TOKEN`, `JWT_SECRET`, `DB_PASSWORD`, `GOOGLE_CLIENT_SECRET` y claves privadas fuera de Git.
 - Configurar `AI_ENGINE_PUBLIC_DOCS=false` en el AI Engine para ocultar `/docs`, `/redoc` y `/openapi.json` en produccion.

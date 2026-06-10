@@ -110,8 +110,8 @@ Script:
 ```bash
 export API_URL="http://bk.tcdx.int:3000"
 export FRONTEND_URL="https://181.212.166.187:8443"
-export TEST_EMAIL="admin@rieltec.com"
-export TEST_PASSWORD="123456"
+export TEST_EMAIL="<qa-user-email>"
+export TEST_PASSWORD="<qa-user-password>"
 bash scripts/validate-iso-command-center.sh
 ```
 

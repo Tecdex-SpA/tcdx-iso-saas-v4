@@ -44,7 +44,7 @@ El script no toca frontend, backend, IA Engine, Google Drive, Zoho WorkDrive ni 
 Todos usan la password demo sugerida:
 
 ```text
-Demo.123456
+<demo-password-from-env>
 ```
 
 El SQL inserta `password_hash` bcrypt compatible con backend Node.js. No inserta passwords en texto plano.
@@ -363,4 +363,4 @@ Revisar que el diff no contenga secretos reales:
 git diff -- database/demo/demo_comercial_tcdx.sql docs/sprint-7/demo-comercial-seed.md | grep -Ei 'password|secret|token|apikey|api_key|PGPASSWORD'
 ```
 
-La aparicion de `password_hash`, `Demo.123456` y `PGPASSWORD='<DB_PASSWORD>'` es esperada. No debe aparecer una password real.
+La aparicion de `password_hash`, `<demo-password-from-env>` y `PGPASSWORD='<DB_PASSWORD>'` es esperada. No debe aparecer una password real.

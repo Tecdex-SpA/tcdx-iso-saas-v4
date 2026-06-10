@@ -44,8 +44,8 @@ Desde la raíz del repo:
 ```bash
 API_URL=http://bk.tcdx.int:3000 \
 FRONTEND_URL=https://181.212.166.187:8443 \
-EMAIL=admin@rieltec.com \
-PASSWORD=123456 \
+EMAIL="<qa-user-email>" \
+PASSWORD="<qa-user-password>" \
 bash ./scripts/qa-ai-auditor-full.sh
 ```
 

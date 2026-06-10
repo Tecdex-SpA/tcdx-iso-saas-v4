@@ -56,7 +56,7 @@ The token value must match between backend and ai-engine. Do not paste token val
 ```bash
 TOKEN="$(curl -sk -X POST 'https://181.212.166.187:8443/api/auth/login' \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@rieltec.com","password":"123456"}' | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))')"
+  -d '{"email":"<qa-user-email>","password":"<qa-user-password>"}' | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))')"
 
 curl -sk -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \

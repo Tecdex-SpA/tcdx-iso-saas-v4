@@ -125,8 +125,8 @@ Variables:
 ```bash
 API_URL="http://bk.tcdx.int:3000"
 FRONTEND_URL="https://181.212.166.187:8443"
-TEST_EMAIL="admin@rieltec.com"
-TEST_PASSWORD="123456"
+TEST_EMAIL="<qa-user-email>"
+TEST_PASSWORD="<qa-user-password>"
 ALLOW_WRITE_TEST="false"
 ```
 
