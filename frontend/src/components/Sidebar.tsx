@@ -7,6 +7,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import {
   CLIENT_MVP_NAV_ITEMS,
+  PLATFORM_ROLES,
   canAccessMvpFeature,
   isPathInRoutes,
 } from '@/utils/mvpPermissions';
@@ -167,14 +168,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       const token = localStorage.getItem('token');
 
       // Plataforma y dealer no dependen de módulos tenant en sidebar.
-      if (
-        resolvedRole === 'dealer' ||
-        resolvedRole === 'superadmin' ||
-        resolvedRole === 'super_admin' ||
-        resolvedRole === 'platform_admin' ||
-        resolvedRole === 'admin_global' ||
-        resolvedRole === 'global_admin'
-      ) {
+      if (resolvedRole === 'dealer' || PLATFORM_ROLES.includes(resolvedRole || '')) {
         setModuleMap({});
         setModulesLoaded(true);
         return;
@@ -214,12 +208,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const normalizedRole = String(role || '').toLowerCase();
 
   const isDealer = normalizedRole === 'dealer';
-  const isPlatformAdmin =
-    normalizedRole === 'superadmin' ||
-    normalizedRole === 'super_admin' ||
-    normalizedRole === 'platform_admin' ||
-    normalizedRole === 'admin_global' ||
-    normalizedRole === 'global_admin';
+  const isPlatformAdmin = PLATFORM_ROLES.includes(normalizedRole);
 
   const canSeeAiCompliance =
     !entitlementsLoading && aiEnabled && canUseAiFeature('suggestions');
@@ -287,7 +276,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   }, [canSeeAiCompliance, hasModule, iconClass, normalizedRole]);
 
   const platformItems = [
-
     {
       href: '/admin-saas',
       label: t('sidebar.saasAdmin'),
@@ -302,71 +290,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           <path d="M16 13h1" />
           <path d="M16 17h1" />
           <circle cx="19" cy="5" r="2" />
-        </svg>
-      ),
-    },
-
-
-    {
-      href: '/cotizador',
-      label: t('sidebar.quoteBuilder'),
-      icon: (
-        <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path d="M7 3h8l4 4v14H7z" />
-          <path d="M15 3v4h4" />
-          <path d="M10 11h6" />
-          <path d="M10 15h6" />
-          <path d="M10 19h3" />
-          <path d="M4 7h3" />
-          <path d="M4 11h3" />
-          <path d="M4 15h3" />
-        </svg>
-      ),
-    },
-    {
-      href: '/usuarios',
-      label: t('sidebar.users'),
-      icon: (
-        <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-        </svg>
-      ),
-    },
-    {
-      href: '/prefacturacion',
-      label: t('sidebar.prebilling'),
-      icon: (
-        <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path d="M4 4h16v16H4z" />
-          <path d="M8 8h8" />
-          <path d="M8 12h8" />
-          <path d="M8 16h5" />
-        </svg>
-      ),
-    },
-    {
-      href: '/health',
-      label: t('sidebar.controlHealth'),
-      icon: (
-        <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
-          <path d="M3.5 12h4l1.5-3 3 6 2-4h6.5" />
-        </svg>
-      ),
-    },
-
-    {
-      href: '/exportes',
-      label: t('sidebar.exports'),
-      icon: (
-        <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-          <path d="M14 3v6h6" />
-          <path d="M8 13h8" />
-          <path d="M8 17h8" />
-          <path d="M8 9h3" />
         </svg>
       ),
     },
@@ -411,19 +334,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           <path d="M8 8h8" />
           <path d="M8 12h8" />
           <path d="M8 16h5" />
-        </svg>
-      ),
-    },
-    {
-      href: '/exportes',
-      label: t('sidebar.exports'),
-      icon: (
-        <svg className={iconClass} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-          <path d="M14 3v6h6" />
-          <path d="M8 13h8" />
-          <path d="M8 17h8" />
-          <path d="M8 9h3" />
         </svg>
       ),
     },

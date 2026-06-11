@@ -19,6 +19,7 @@ import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import {
   DEALER_ROUTES,
   INTERNAL_CLIENT_HIDDEN_ROUTES,
+  PLATFORM_ROLES,
   PLATFORM_ROUTES,
   canAccessMvpFeature,
   getMvpRouteRule,
@@ -190,12 +191,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           user?.role || user?.user_role || user?.userRole || ''
         ).toLowerCase();
 
-        const isPlatform =
-          role === 'superadmin' ||
-          role === 'super_admin' ||
-          role === 'platform_admin' ||
-          role === 'admin_global' ||
-          role === 'global_admin';
+        const isPlatform = PLATFORM_ROLES.includes(role);
 
         const isDealer = role === 'dealer';
 
@@ -214,12 +210,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (!isDealer && !isPlatform && isRoute(routeRules.dealerOnly)) {
-          window.location.href = homePath;
-          return;
-        }
-
-        if (!isPlatform && isRoute(routeRules.platformOnly)) {
+        if (!isDealer && isRoute(routeRules.dealerOnly)) {
           window.location.href = homePath;
           return;
         }

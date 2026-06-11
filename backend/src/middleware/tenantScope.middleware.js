@@ -81,6 +81,7 @@ function methodMatches(method, methods) {
 const PATH_TENANT_PATTERNS = [
   { pattern: /^\/api\/dashboard\/([^/?]+)\/?$/i, methods: ['GET', 'HEAD'] },
   { pattern: /^\/api\/dashboard-controls\/([^/?]+)\/?$/i, methods: ['GET', 'HEAD'] },
+  { pattern: /^\/api\/objectives\/([^/?]+)\/?$/i, methods: ['GET', 'HEAD'] },
   { pattern: /^\/api\/controls\/(?:workbench|catalog|catalog-mode)\/([^/?]+)(?:\/[^/?]+)?\/?$/i },
   { pattern: /^\/api\/controls\/([^/?]+)\/?$/i, methods: ['GET', 'HEAD'] },
   { pattern: /^\/api\/evidences\/jobs\/([^/?]+)\/?$/i, methods: ['GET', 'HEAD'] },

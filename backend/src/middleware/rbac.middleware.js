@@ -31,7 +31,22 @@ const TENANT_OPERATE_ROLES = ['admin', 'tenant_admin', 'auditor', ...AREA_OWNER_
 const TENANT_ADMIN_ROLES = ['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin'];
 const TENANT_AREA_WRITE_ROLES = ['admin', 'tenant_admin', ...AREA_OWNER_ROLES];
 const TENANT_AUDIT_WRITE_ROLES = ['admin', 'tenant_admin', 'auditor'];
-const TENANT_REPORT_ROLES = ['admin', 'tenant_admin', 'auditor', ...EXECUTIVE_ROLES];
+const REPORT_READ_ROLES = [
+  'admin',
+  'tenant_admin',
+  'admin_cumplimiento',
+  'compliance_admin',
+  'auditor',
+  ...AREA_OWNER_ROLES,
+  ...EXECUTIVE_ROLES,
+];
+const REPORT_GENERATE_ROLES = [
+  'admin',
+  'tenant_admin',
+  'admin_cumplimiento',
+  'compliance_admin',
+  'auditor',
+];
 const TENANT_DASHBOARD_ROLES = ['admin', 'tenant_admin', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
 
 function roleIsPlatform(role) {
@@ -52,6 +67,38 @@ function pathOf(req) {
 
 function starts(path, prefix) {
   return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+function getReportPermission(req, path) {
+  if (!starts(path, '/api/reports')) return null;
+
+  const method = String(req.method || '').toUpperCase();
+
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    if (starts(path, '/api/reports/download')) return 'download';
+    if (starts(path, '/api/reports/jobs')) return 'generate';
+    return 'read';
+  }
+
+  if (starts(path, '/api/reports/schedules')) return 'admin';
+  return 'generate';
+}
+
+function roleCanUseReports(role, permission) {
+  if (role === 'dealer') {
+    // reports.routes.js valida asignacion tenant-dealer antes de operar.
+    return ['read', 'download', 'generate', 'admin'].includes(permission);
+  }
+
+  if (permission === 'read' || permission === 'download') {
+    return REPORT_READ_ROLES.includes(role);
+  }
+
+  if (permission === 'generate') {
+    return REPORT_GENERATE_ROLES.includes(role);
+  }
+
+  return false;
 }
 
 const API_RULES = [
@@ -212,12 +259,6 @@ const API_RULES = [
     write: ['admin', 'tenant_admin', 'auditor'],
   },
 
-  // Reportes: viewer puede ver/descargar lo disponible, no administrar/generar si es POST
-  {
-    prefix: '/api/reports',
-    read: [...TENANT_REPORT_ROLES, 'dealer'],
-    write: [...TENANT_REPORT_ROLES, 'dealer'],
-  },
   {
     prefix: '/api/iso-scope',
     read: [...TENANT_READ_ROLES, 'admin_cumplimiento', 'compliance_admin'],
@@ -479,12 +520,20 @@ function enforceApiAccess(req, res, next) {
     return next();
   }
 
+  const reportPermission = getReportPermission(req, path);
+  if (reportPermission) {
+    if (roleCanUseReports(role, reportPermission)) {
+      return next();
+    }
+
+    return deny(res, `Permiso reports:${reportPermission} requerido`);
+  }
+
   if (role === 'dealer') {
     const dealerAllowed =
       starts(path, '/api/me') ||
       starts(path, '/api/quotes') ||
       (starts(path, '/api/admin-saas/dealer') && read) ||
-      (starts(path, '/api/reports') && read) ||
       starts(path, '/api/billing');
 
     if (dealerAllowed) return next();

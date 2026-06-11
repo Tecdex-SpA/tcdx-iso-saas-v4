@@ -34,6 +34,7 @@ export type MvpFeatureKey =
   | 'reports.export'
   | 'ai_compliance.read'
   | 'ai_compliance.suggest'
+  | 'configuration.profile.self'
   | 'configuration.users.manage'
   | 'configuration.company_profile.manage'
   | 'config.companyProfile.view'
@@ -123,10 +124,11 @@ const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'risks.write': ['admin', 'area_owner'],
   'action_plans.read': ['admin', 'auditor', 'area_owner', 'executive'],
   'action_plans.write': ['admin', 'area_owner'],
-  'reports.read': ['admin', 'auditor', 'executive'],
-  'reports.export': ['admin', 'auditor', 'executive'],
+  'reports.read': ['admin', 'auditor', 'area_owner', 'executive'],
+  'reports.export': ['admin', 'auditor'],
   'ai_compliance.read': ['admin', 'auditor'],
   'ai_compliance.suggest': ['admin', 'auditor'],
+  'configuration.profile.self': ['admin', 'auditor', 'area_owner', 'executive'],
   'configuration.users.manage': ['admin'],
   'configuration.company_profile.manage': ['admin'],
   'config.companyProfile.view': ['admin'],
@@ -209,7 +211,8 @@ export const MVP_ROUTE_RULES: MvpRouteRule[] = [
   { routes: ['/planes-accion', '/plan-accion', '/acciones-recomendadas'], feature: 'action_plans.read' },
   { routes: ['/exportes'], feature: 'reports.read' },
   { routes: ['/ia-compliance'], feature: 'ai_compliance.read', moduleKey: 'ai' },
-  { routes: ['/configuracion', '/usuarios', '/perfil', '/perfil-empresa'], feature: 'configuration.users.manage' },
+  { routes: ['/perfil'], feature: 'configuration.profile.self' },
+  { routes: ['/configuracion', '/usuarios', '/perfil-empresa'], feature: 'configuration.users.manage' },
 ];
 
 export const INTERNAL_CLIENT_HIDDEN_ROUTES = [
