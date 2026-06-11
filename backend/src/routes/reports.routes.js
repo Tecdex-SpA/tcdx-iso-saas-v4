@@ -169,11 +169,12 @@ function normalizeRole(role) {
     gerencia: 'manager',
     management: 'manager',
 
-    compliance: 'compliance',
-    compliance_manager: 'compliance',
-    compliance_admin: 'compliance',
-    encargado_cumplimiento: 'compliance',
-    responsable_cumplimiento: 'compliance',
+    compliance: 'admin',
+    compliance_manager: 'admin',
+    compliance_admin: 'admin',
+    admin_cumplimiento: 'admin',
+    encargado_cumplimiento: 'admin',
+    responsable_cumplimiento: 'admin',
 
     auditor: 'auditor',
     internal_auditor: 'auditor',
@@ -184,6 +185,19 @@ function normalizeRole(role) {
     dealer: 'dealer',
     partner: 'dealer',
     reseller: 'dealer',
+
+    viewer: 'viewer',
+    cliente: 'viewer',
+    client: 'viewer',
+    read_only: 'viewer',
+    readonly: 'viewer',
+    solo_lectura: 'viewer',
+    ejecutivo: 'viewer',
+    ejecutivo_cliente: 'viewer',
+
+    operativo: 'operativo',
+    responsable_area: 'operativo',
+    area_owner: 'operativo',
 
     superadmin: 'superadmin',
     super_admin: 'superadmin',
@@ -219,7 +233,7 @@ function normalizeRole(role) {
   }
 
   if (raw.includes('compliance') || raw.includes('cumplimiento')) {
-    return 'compliance';
+    return 'admin';
   }
 
   if (raw.includes('manager') || raw.includes('gerente') || raw.includes('gerencia')) {
@@ -492,7 +506,7 @@ function resolveReportFilePath(tenantId, fileUrl) {
   );
 }
 
-function canAccessReportExport({ role, userId, userTenantId, row }) {
+function canAccessReportExport({ role, userTenantId, row }) {
   if (!row) return false;
   if (isPlatformRole(role)) return true;
 
@@ -500,7 +514,7 @@ function canAccessReportExport({ role, userId, userTenantId, row }) {
     return row.dealer_can_access === true;
   }
 
-  return String(row.tenant_id) === String(userTenantId) || String(row.requested_by) === String(userId);
+  return Boolean(userTenantId) && String(row.tenant_id) === String(userTenantId);
 }
 
 async function getReportType(reportTypeCode) {
