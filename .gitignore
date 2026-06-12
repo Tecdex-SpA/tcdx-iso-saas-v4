@@ -94,3 +94,4 @@ qa-results/
 frontend/.env.local
 backend/.env
 ai-engine/.env\n.env\n\n.env.local\n\n.env.production\n\n.env.development\n\nfrontend/.env.local\n\nbackend/.env\n\nai-engine/.env\n
+reports/plan_fortalecimiento_tcdx_iso_saas.md
