@@ -205,10 +205,9 @@ type MvpRouteRule = {
 export const MVP_ROUTE_RULES: MvpRouteRule[] = [
   { routes: ['/dashboard'], feature: 'dashboard.read' },
   { routes: ['/cumplimiento-auditoria'], feature: 'compliance.read' },
-  { routes: ['/diagnostico', '/controles', '/soa', '/ciclo-vida', '/auditorias', '/auditorias/ejecucion', '/hallazgos', '/no-conformidades'], feature: 'compliance.read' },
   { routes: ['/evidencias'], feature: 'evidences.read', moduleKey: 'evidences' },
-  { routes: ['/riesgos', '/matriz-riesgo', '/activos'], feature: 'risks.read', moduleKey: 'risks' },
-  { routes: ['/planes-accion', '/plan-accion', '/acciones-recomendadas'], feature: 'action_plans.read' },
+  { routes: ['/riesgos'], feature: 'risks.read', moduleKey: 'risks' },
+  { routes: ['/planes-accion'], feature: 'action_plans.read' },
   { routes: ['/exportes'], feature: 'reports.read' },
   { routes: ['/ia-compliance'], feature: 'ai_compliance.read', moduleKey: 'ai' },
   { routes: ['/perfil'], feature: 'configuration.profile.self' },
@@ -217,17 +216,29 @@ export const MVP_ROUTE_RULES: MvpRouteRule[] = [
 
 export const INTERNAL_CLIENT_HIDDEN_ROUTES = [
   '/administrar-kpis',
+  '/acciones-recomendadas',
+  '/activos',
+  '/auditorias',
+  '/auditorias/ejecucion',
   '/centro-control-iso',
   '/command-center-iso',
+  '/controles',
   '/dashboard-kpi',
   '/dashboard-v2',
+  '/diagnostico',
   '/documentos',
   '/ejecucion-iso',
+  '/hallazgos',
   '/health',
   '/ia',
   '/ia-auditor',
   '/auditorias/ia',
   '/auditor-iso',
+  '/matriz-riesgo',
+  '/no-conformidades',
+  '/plan-accion',
+  '/soa',
+  '/ciclo-vida',
 ];
 
 export const PLATFORM_ROUTES = ['/admin-saas', '/empresas'];
