@@ -15,10 +15,20 @@ pass() {
   printf 'PASS: %s\n' "$1"
 }
 
-contains_route() {
-  local route="$1"
-  local marker="$2"
-  rg -n "$marker" frontend/src/utils/mvpPermissions.ts | rg -q "'$route'"
+has_command() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+files_contain_fixed_string() {
+  local pattern="$1"
+  shift
+
+  if has_command rg; then
+    rg -q --fixed-strings -- "$pattern" "$@"
+    return $?
+  fi
+
+  grep -F -q -- "$pattern" "$@"
 }
 
 route_in_client_nav() {
@@ -213,11 +223,20 @@ b3_live_reference_files=(
 )
 
 for route in /dashboard-kpi /centro-control-iso /command-center-iso /auditor-iso; do
-  if rg -q --fixed-strings "$route" "${b3_live_reference_files[@]}"; then
-    fail "$route still has a live B.3 QA/backend/demo reference"
-  else
-    pass "$route has no live B.3 QA/backend/demo references"
-  fi
+  files_contain_fixed_string "$route" "${b3_live_reference_files[@]}"
+  search_status=$?
+
+  case "$search_status" in
+    0)
+      fail "$route still has a live B.3 QA/backend/demo reference"
+      ;;
+    1)
+      pass "$route has no live B.3 QA/backend/demo references"
+      ;;
+    *)
+      fail "$route live-reference search failed with status $search_status"
+      ;;
+  esac
 done
 
 for route in /health /dashboard-v2 /dashboard-kpi /ia-auditor /auditorias/ia /auditor-iso /command-center-iso /centro-control-iso /ejecucion-iso /documentos; do

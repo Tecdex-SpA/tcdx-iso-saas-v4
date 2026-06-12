@@ -55,3 +55,12 @@ Las paginas redirect (`/dashboard-v2`, `/dashboard-kpi`, `/auditor-iso`, `/centr
 | `/centro-control-iso` | quarantined_outside_app_router | Movida fuera de `frontend/src`. | `frontend/legacy-pages-archive/centro-control-iso/page.tsx` | Retirada | archived_outside_frontend_src |
 | `/command-center-iso` | quarantined_outside_app_router | Movida fuera de `frontend/src`. | `frontend/legacy-pages-archive/command-center-iso/page.tsx` | Retirada | archived_outside_frontend_src |
 | `/auditor-iso` | quarantined_outside_app_router | Movida fuera de `frontend/src`. | `frontend/legacy-pages-archive/auditor-iso/page.tsx` | Retirada | archived_outside_frontend_src |
+
+## Resultado B.6
+
+| Ruta | Evidencia principal | Riesgo | Decisión recomendada B.7 |
+| ---- | ------------------- | ------ | ------------------------ |
+| `/dashboard-v2` | Redirect puro; validadores y APIs V2 siguen vivos. | Bajo para pagina, medio para contratos asociados. | ready_for_b7_quarantine |
+| `/ia` | UI funcional sobre `/api/ai/recommendations/:tenantId`; no es redirect. | Medio por posible valor no migrado a IA Compliance. | merge_into_mvp_then_quarantine |
+| `/ejecucion-iso` | Genera, aprueba y rechaza sugerencias tenant-scoped. | Alto por escritura y creacion de registros. | keep_enterprise_post_mvp |
+| `/documentos` | Genera y archiva documentos; tiene deep links runtime. | Alto por persistencia y contratos backend/frontend vivos. | requires_backend_contract_review |
