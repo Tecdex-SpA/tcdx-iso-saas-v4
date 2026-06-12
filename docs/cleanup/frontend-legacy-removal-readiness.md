@@ -1,7 +1,7 @@
-# Frontend legacy removal readiness B.1
+# Frontend legacy removal readiness B.1/B.2
 
 Fecha: 2026-06-12
-Rama: `chore/cleanup-b1-legacy-quarantine`
+Ultima revision: `chore/cleanup-b2-frontend-redirects`
 
 No se borraron paginas frontend. Se revisaron archivos `frontend/src/app/**/page.tsx`, imports, componentes compartidos y endpoints llamados desde las paginas legacy solicitadas.
 
@@ -19,3 +19,12 @@ No se borraron paginas frontend. Se revisaron archivos `frontend/src/app/**/page
 ## Lectura B.1
 
 Las paginas redirect (`/dashboard-v2`, `/dashboard-kpi`, `/auditor-iso`, `/centro-control-iso`, `/command-center-iso`) son candidatas mas seguras para B.2. Las paginas con escritura o generacion (`/ejecucion-iso`, `/documentos`) requieren decision de producto y revision de dependencias antes de cualquier eliminacion.
+
+## Resultado B.2
+
+| Ruta | Decision B.2 | Evidencia que impide mover | Siguiente condicion |
+| ---- | ------------ | -------------------------- | ------------------- |
+| `/dashboard-kpi` | kept_requires_review | `scripts/qa-bilingual-full.sh` prueba la ruta; `scripts/qa-i18n-db-display.sh` referencia el archivo; docs demo/QA vigentes describen el redirect. | Actualizar QA y confirmar retiro de compatibilidad URL en una etapa coordinada. |
+| `/centro-control-iso` | kept_requires_review | `scripts/validate-iso-unified-command-center.sh` prueba la URL; docs demo/QA vigentes describen el redirect. | Retirar o adaptar el validador y confirmar ausencia de enlaces externos. |
+| `/command-center-iso` | kept_requires_review | `scripts/validate-iso-command-center.sh` prueba la URL; docs demo/QA vigentes describen el redirect. | Retirar o adaptar el validador y confirmar ausencia de enlaces externos. |
+| `/auditor-iso` | kept_requires_review | `backend/src/services/isoCommandCenter.service.js` emite la ruta; `scripts/validate-iso-auditor.sh` la prueba; docs de consolidacion la documentan. | Cambiar el enlace runtime a `/auditorias?view=preauditoria` y actualizar QA antes de mover la pagina. |

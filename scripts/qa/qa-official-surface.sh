@@ -57,6 +57,22 @@ process.exit(match && match[0].includes(`'${route}'`) ? 0 : 1);
 NODE
 }
 
+is_b2_redirect_route() {
+  case "$1" in
+    /dashboard-kpi|/centro-control-iso|/command-center-iso|/auditor-iso)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+app_page_exists() {
+  local route="${1#/}"
+  [ -f "frontend/src/app/$route/page.tsx" ]
+}
+
 printf '## Official surface QA\n'
 
 if find frontend/src/app -path '*/page.tsx' -type f | grep -q .; then
@@ -138,10 +154,19 @@ for route in "${non_mvp_client_routes[@]}"; do
     pass "$route is not in CLIENT_MVP_NAV_ITEMS"
   fi
 
+  if is_b2_redirect_route "$route" && ! app_page_exists "$route"; then
+    pass "$route is removed from app router"
+    continue
+  fi
+
   if route_in_array_block "$route" INTERNAL_CLIENT_HIDDEN_ROUTES || \
      route_in_array_block "$route" PLATFORM_ROUTES || \
      route_in_array_block "$route" DEALER_ROUTES; then
-    pass "$route is controlled by hidden/platform/dealer routes"
+    if is_b2_redirect_route "$route"; then
+      pass "$route remains in app router and is controlled by hidden/platform/dealer routes"
+    else
+      pass "$route is controlled by hidden/platform/dealer routes"
+    fi
   else
     fail "$route is not controlled by hidden/platform/dealer routes"
   fi
