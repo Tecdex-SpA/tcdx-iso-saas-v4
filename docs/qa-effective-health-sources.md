@@ -3,18 +3,15 @@
 ## Estado consolidado
 
 - `/dashboard` es la entrada principal para Vista Ejecutiva, Vista KPI y Centro Control ISO.
-- `/dashboard?view=kpi` reemplaza la experiencia visible de `/dashboard-kpi`.
-- `/dashboard?view=iso` reemplaza la experiencia visible de `/centro-control-iso` y `/command-center-iso`.
+- `/dashboard` concentra la experiencia visible KPI y Centro Control ISO.
 - `/dashboard-v2` queda como ruta legacy con redireccion segura a `/dashboard`.
 
 ## Rutas legacy
 
-- `/dashboard-kpi` redirige a `/dashboard?view=kpi`.
-- `/centro-control-iso` redirige a `/dashboard?view=iso`.
-- `/command-center-iso` redirige a `/dashboard?view=iso`.
 - `/dashboard-v2` redirige a `/dashboard`.
 
-Las rutas no se eliminaron fisicamente para evitar romper enlaces guardados o integraciones existentes.
+Los redirects desacoplados en B.3 dejan de ser contrato de QA y demo. Su
+historial y retiro se controlan desde `docs/cleanup/`.
 
 ## Pantallas que ya usan salud efectiva
 
@@ -67,7 +64,7 @@ No se reescribieron prompts ni flujos completos de IA Auditor en esta pasada.
 
 - Revisar en una pasada posterior los templates PDF para mejorar microcopy visual sobre evidencia oficial y fuera de alcance.
 - Auditar modulos historicos de ciclo de vida que aun muestran `health_status`/`avg_health_score` propios del flujo de lifecycle.
-- Evaluar si `/centro-control-iso` debe eliminarse fisicamente cuando no existan enlaces externos activos.
+- Ejecutar la cuarentena fisica de redirects desacoplados en B.4.
 - Revisar reportes avanzados pagina por pagina si se decide redisenar exportes premium completos.
 
 ## Pasada liviana Exportes + Ciclo de Vida

@@ -247,7 +247,7 @@ else
 fi
 
 # Frontend HTTP
-for route in /login /dashboard /dashboard-kpi /health /ciclo-vida /controles /evidencias /hallazgos /plan-accion /auditorias /matriz-riesgo /activos /exportes; do
+for route in /login /dashboard /health /ciclo-vida /controles /evidencias /hallazgos /plan-accion /auditorias /matriz-riesgo /activos /exportes; do
   code="$(http_code "$FRONTEND_URL$route")"
   case "$code" in
     200|301|302|307|308) pass "frontend$route" "HTTP $code" ;;

@@ -149,7 +149,7 @@ for FILE in \
   frontend/src/app/admin-saas/page.tsx \
   frontend/src/app/prefacturacion/page.tsx \
   frontend/src/app/cotizador/page.tsx \
-  frontend/src/app/dashboard-kpi/page.tsx \
+  frontend/src/app/dashboard/page.tsx \
   frontend/src/app/administrar-kpis/page.tsx
 do
   if [ -f "$FILE" ]; then

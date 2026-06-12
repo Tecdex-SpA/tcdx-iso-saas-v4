@@ -28,3 +28,12 @@ Las paginas redirect (`/dashboard-v2`, `/dashboard-kpi`, `/auditor-iso`, `/centr
 | `/centro-control-iso` | kept_requires_review | `scripts/validate-iso-unified-command-center.sh` prueba la URL; docs demo/QA vigentes describen el redirect. | Retirar o adaptar el validador y confirmar ausencia de enlaces externos. |
 | `/command-center-iso` | kept_requires_review | `scripts/validate-iso-command-center.sh` prueba la URL; docs demo/QA vigentes describen el redirect. | Retirar o adaptar el validador y confirmar ausencia de enlaces externos. |
 | `/auditor-iso` | kept_requires_review | `backend/src/services/isoCommandCenter.service.js` emite la ruta; `scripts/validate-iso-auditor.sh` la prueba; docs de consolidacion la documentan. | Cambiar el enlace runtime a `/auditorias?view=preauditoria` y actualizar QA antes de mover la pagina. |
+
+## Resultado B.3
+
+| Ruta | Estado B.2 | Referencias B.3 | Acción B.3 | Estado para B.4 |
+| ---- | ---------- | --------------- | ---------- | --------------- |
+| `/dashboard-kpi` | kept_requires_review | QA bilingue, QA i18n, demo y QA health actualizados a `/dashboard`; quedan pagina redirect, guard, hidden route y referencias historicas/cleanup. | Desacoplada de QA y documentacion vigente. | ready_for_quarantine |
+| `/centro-control-iso` | kept_requires_review | Validador command center y docs vigentes actualizados a `/dashboard`; quedan pagina redirect, guard, hidden route, componentes por nombre y referencias historicas/cleanup. | Desacoplada de QA y documentacion vigente. | ready_for_quarantine |
+| `/command-center-iso` | kept_requires_review | Validador command center y docs vigentes actualizados a `/dashboard`; quedan pagina redirect, guard, hidden route, componentes por nombre y referencias historicas/cleanup. | Desacoplada de QA y documentacion vigente. | ready_for_quarantine |
+| `/auditor-iso` | kept_requires_review | Deep link backend y QA actualizados a `/cumplimiento-auditoria`; doc de consolidacion marcada historica. Quedan pagina redirect, guard, hidden route, componentes por nombre y referencias historicas/cleanup. | Desacoplada de runtime, QA y demo. | ready_for_quarantine |

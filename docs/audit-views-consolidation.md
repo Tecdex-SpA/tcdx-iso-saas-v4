@@ -1,5 +1,10 @@
 # Consolidación de vistas de auditoría
 
+> Nota B.3: este documento conserva rutas legacy como referencia historica de
+> la consolidacion. La superficie MVP oficial usa
+> `/cumplimiento-auditoria`; nuevos deep links y QA no deben apuntar a
+> `/auditor-iso`.
+
 ## Mapa de vistas
 
 | view | current route | current purpose | backend endpoints | reusable components | target tab | action |

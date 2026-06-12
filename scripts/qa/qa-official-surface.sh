@@ -172,6 +172,25 @@ for route in "${non_mvp_client_routes[@]}"; do
   fi
 done
 
+b3_live_reference_files=(
+  backend/src/services/isoCommandCenter.service.js
+  scripts/qa-bilingual-full.sh
+  scripts/qa-i18n-db-display.sh
+  scripts/validate-iso-unified-command-center.sh
+  scripts/validate-iso-command-center.sh
+  scripts/validate-iso-auditor.sh
+  docs/demo/official-demo-routes.md
+  docs/qa-effective-health-sources.md
+)
+
+for route in /dashboard-kpi /centro-control-iso /command-center-iso /auditor-iso; do
+  if rg -q --fixed-strings "$route" "${b3_live_reference_files[@]}"; then
+    fail "$route still has a live B.3 QA/backend/demo reference"
+  else
+    pass "$route has no live B.3 QA/backend/demo references"
+  fi
+done
+
 for route in /health /dashboard-v2 /dashboard-kpi /ia-auditor /auditorias/ia /auditor-iso /command-center-iso /centro-control-iso /ejecucion-iso /documentos; do
   if route_in_mvp_rules "$route"; then
     fail "$route must not be in MVP_ROUTE_RULES"

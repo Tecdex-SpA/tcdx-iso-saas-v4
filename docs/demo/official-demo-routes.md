@@ -87,7 +87,6 @@ Estas rutas son un canal separado y no deben mezclarse con la demo cliente.
 | `/ia` | Legacy IA |
 | `/ia-auditor` | Interna/beta |
 | `/auditorias/ia` | Interna/beta |
-| `/auditor-iso` | Interna/beta |
 
 Ocultar significa retirarlas de la navegacion oficial para clientes. No implica
 borrar archivos, rutas frontend, endpoints backend ni contratos existentes.
@@ -98,13 +97,12 @@ El acceso directo de clientes se redirige al home autorizado mediante
 
 | Ruta legacy | Comportamiento actual |
 |---|---|
-| `/dashboard-kpi` | Redirige a `/dashboard?view=kpi` |
 | `/dashboard-v2` | Redirige a `/dashboard` |
-| `/centro-control-iso` | Redirige a `/dashboard?view=iso` |
-| `/command-center-iso` | Redirige a `/dashboard?view=iso` |
 
-Los aliases se conservan para enlaces existentes. No deben aparecer como
-opciones independientes del sidebar de demo.
+La demo cliente usa `/dashboard` para KPI y Centro Control ISO, y
+`/cumplimiento-auditoria` para el acceso agregado a auditoria. Los aliases
+retirados del contrato de demo pueden permanecer temporalmente como wrappers
+tecnicos, pero no deben ser usados por QA, deep links ni navegacion nueva.
 
 ## Navegacion y layout
 

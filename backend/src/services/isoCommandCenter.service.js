@@ -862,7 +862,7 @@ function buildQuickLinks() {
     { label: 'Matriz de riesgos', route: '/matriz-riesgo', kind: 'risks' },
     { label: 'Acciones recomendadas', route: '/acciones-recomendadas', kind: 'actions' },
     { label: 'Documentos ISO', route: '/documentos', kind: 'documents' },
-    { label: 'Auditor ISO', route: '/auditor-iso', kind: 'auditor' },
+    { label: 'Auditor ISO', route: '/cumplimiento-auditoria', kind: 'auditor' },
     { label: 'Evidencias', route: '/evidencias', kind: 'evidence' },
     { label: 'Controles', route: '/controles', kind: 'controls' },
   ];
