@@ -73,6 +73,11 @@ app_page_exists() {
   [ -f "frontend/src/app/$route/page.tsx" ]
 }
 
+legacy_page_exists() {
+  local route="${1#/}"
+  [ -f "frontend/src/legacy-pages/$route/page.tsx" ]
+}
+
 printf '## Official surface QA\n'
 
 if find frontend/src/app -path '*/page.tsx' -type f | grep -q .; then
@@ -154,8 +159,14 @@ for route in "${non_mvp_client_routes[@]}"; do
     pass "$route is not in CLIENT_MVP_NAV_ITEMS"
   fi
 
-  if is_b2_redirect_route "$route" && ! app_page_exists "$route"; then
-    pass "$route is removed from app router"
+  if is_b2_redirect_route "$route"; then
+    if app_page_exists "$route"; then
+      fail "$route must not remain active in app router"
+    elif legacy_page_exists "$route"; then
+      pass "$route is quarantined outside app router"
+    else
+      fail "$route is absent from app router but missing from legacy-pages quarantine"
+    fi
     continue
   fi
 

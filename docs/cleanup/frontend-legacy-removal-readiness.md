@@ -37,3 +37,12 @@ Las paginas redirect (`/dashboard-v2`, `/dashboard-kpi`, `/auditor-iso`, `/centr
 | `/centro-control-iso` | kept_requires_review | Validador command center y docs vigentes actualizados a `/dashboard`; quedan pagina redirect, guard, hidden route, componentes por nombre y referencias historicas/cleanup. | Desacoplada de QA y documentacion vigente. | ready_for_quarantine |
 | `/command-center-iso` | kept_requires_review | Validador command center y docs vigentes actualizados a `/dashboard`; quedan pagina redirect, guard, hidden route, componentes por nombre y referencias historicas/cleanup. | Desacoplada de QA y documentacion vigente. | ready_for_quarantine |
 | `/auditor-iso` | kept_requires_review | Deep link backend y QA actualizados a `/cumplimiento-auditoria`; doc de consolidacion marcada historica. Quedan pagina redirect, guard, hidden route, componentes por nombre y referencias historicas/cleanup. | Desacoplada de runtime, QA y demo. | ready_for_quarantine |
+
+## Resultado B.4
+
+| Ruta | Estado B.3 | Acción B.4 | Ubicación preservada | Estado final |
+| ---- | ---------- | ---------- | -------------------- | ------------ |
+| `/dashboard-kpi` | ready_for_quarantine | Movida fuera de `frontend/src/app`. | `frontend/src/legacy-pages/dashboard-kpi/page.tsx` | quarantined_outside_app_router |
+| `/centro-control-iso` | ready_for_quarantine | Movida fuera de `frontend/src/app`. | `frontend/src/legacy-pages/centro-control-iso/page.tsx` | quarantined_outside_app_router |
+| `/command-center-iso` | ready_for_quarantine | Movida fuera de `frontend/src/app`. | `frontend/src/legacy-pages/command-center-iso/page.tsx` | quarantined_outside_app_router |
+| `/auditor-iso` | ready_for_quarantine | Movida fuera de `frontend/src/app`. | `frontend/src/legacy-pages/auditor-iso/page.tsx` | quarantined_outside_app_router |
