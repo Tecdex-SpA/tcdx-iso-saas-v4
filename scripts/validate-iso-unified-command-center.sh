@@ -80,9 +80,9 @@ if [[ -n "${DATABASE_URL:-}" ]]; then
   fi
 fi
 
-frontend_code="$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL}/centro-control-iso")"
+frontend_code="$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL}/dashboard")"
 if [[ "$frontend_code" != "200" && "$frontend_code" != "307" && "$frontend_code" != "308" ]]; then
-  echo "ERROR: frontend /centro-control-iso devolvio HTTP ${frontend_code}" >&2
+  echo "ERROR: frontend /dashboard devolvio HTTP ${frontend_code}" >&2
   exit 1
 fi
 

@@ -41,9 +41,9 @@ fi
 
 rm -f "$tmp"
 
-frontend_code="$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL}/auditor-iso")"
+frontend_code="$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL}/cumplimiento-auditoria")"
 if [[ "$frontend_code" != "200" && "$frontend_code" != "307" && "$frontend_code" != "308" ]]; then
-  echo "ERROR: frontend /auditor-iso devolvio HTTP ${frontend_code}" >&2
+  echo "ERROR: frontend /cumplimiento-auditoria devolvio HTTP ${frontend_code}" >&2
   exit 1
 fi
 

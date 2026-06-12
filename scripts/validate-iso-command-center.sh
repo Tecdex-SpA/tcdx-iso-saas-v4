@@ -96,10 +96,10 @@ else
   echo "INFO: jq no disponible; se validaron HTTP 2xx, sin inspeccion JSON avanzada."
 fi
 
-if curl -s -I "${FRONTEND_URL}/command-center-iso" >/dev/null 2>&1; then
-  echo "OK: frontend responde en ${FRONTEND_URL}/command-center-iso"
+if curl -s -I "${FRONTEND_URL}/dashboard" >/dev/null 2>&1; then
+  echo "OK: frontend oficial responde en ${FRONTEND_URL}/dashboard"
 else
-  echo "INFO: frontend no disponible en ${FRONTEND_URL}/command-center-iso; valida luego del deploy."
+  echo "INFO: frontend oficial no disponible en ${FRONTEND_URL}/dashboard; valida luego del deploy."
 fi
 
 db_counts
