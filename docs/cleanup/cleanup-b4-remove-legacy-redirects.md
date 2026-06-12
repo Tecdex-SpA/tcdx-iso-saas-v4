@@ -45,6 +45,13 @@ git mv frontend/src/legacy-pages/auditor-iso frontend/src/app/auditor-iso
 
 Tambien se puede revertir el commit B.4 completo con `git revert <commit_b4>`.
 
+## Nota B.5
+
+B.5 movio estas copias historicas desde `frontend/src/legacy-pages` hacia
+`frontend/legacy-pages-archive`. Ya no forman parte de `frontend/src` ni de las
+reglas `INTERNAL_CLIENT_HIDDEN_ROUTES`; el guard oficial valida la nueva
+ubicacion.
+
 ## Validaciones
 
 | Comando | Resultado | Observacion |

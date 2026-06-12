@@ -73,9 +73,9 @@ app_page_exists() {
   [ -f "frontend/src/app/$route/page.tsx" ]
 }
 
-legacy_page_exists() {
+archived_page_exists() {
   local route="${1#/}"
-  [ -f "frontend/src/legacy-pages/$route/page.tsx" ]
+  [ -f "frontend/legacy-pages-archive/$route/page.tsx" ]
 }
 
 printf '## Official surface QA\n'
@@ -160,12 +160,30 @@ for route in "${non_mvp_client_routes[@]}"; do
   fi
 
   if is_b2_redirect_route "$route"; then
+    if route_in_array_block "$route" INTERNAL_CLIENT_HIDDEN_ROUTES; then
+      fail "$route must not remain in INTERNAL_CLIENT_HIDDEN_ROUTES"
+    else
+      pass "$route is absent from INTERNAL_CLIENT_HIDDEN_ROUTES"
+    fi
+
+    if route_in_array_block "$route" PLATFORM_ROUTES; then
+      fail "$route must not remain in PLATFORM_ROUTES"
+    else
+      pass "$route is absent from PLATFORM_ROUTES"
+    fi
+
+    if route_in_array_block "$route" DEALER_ROUTES; then
+      fail "$route must not remain in DEALER_ROUTES"
+    else
+      pass "$route is absent from DEALER_ROUTES"
+    fi
+
     if app_page_exists "$route"; then
       fail "$route must not remain active in app router"
-    elif legacy_page_exists "$route"; then
-      pass "$route is quarantined outside app router"
+    elif archived_page_exists "$route"; then
+      pass "$route is archived outside frontend src"
     else
-      fail "$route is absent from app router but missing from legacy-pages quarantine"
+      fail "$route is absent from app router but missing from legacy-pages archive"
     fi
     continue
   fi

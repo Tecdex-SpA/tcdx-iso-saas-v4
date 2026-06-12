@@ -46,3 +46,12 @@ Las paginas redirect (`/dashboard-v2`, `/dashboard-kpi`, `/auditor-iso`, `/centr
 | `/centro-control-iso` | ready_for_quarantine | Movida fuera de `frontend/src/app`. | `frontend/src/legacy-pages/centro-control-iso/page.tsx` | quarantined_outside_app_router |
 | `/command-center-iso` | ready_for_quarantine | Movida fuera de `frontend/src/app`. | `frontend/src/legacy-pages/command-center-iso/page.tsx` | quarantined_outside_app_router |
 | `/auditor-iso` | ready_for_quarantine | Movida fuera de `frontend/src/app`. | `frontend/src/legacy-pages/auditor-iso/page.tsx` | quarantined_outside_app_router |
+
+## Resultado B.5
+
+| Ruta | Estado B.4 | Acción B.5 | Ubicación final | Regla hidden | Estado final |
+| ---- | ---------- | ---------- | --------------- | ------------ | ------------ |
+| `/dashboard-kpi` | quarantined_outside_app_router | Movida fuera de `frontend/src`. | `frontend/legacy-pages-archive/dashboard-kpi/page.tsx` | Retirada | archived_outside_frontend_src |
+| `/centro-control-iso` | quarantined_outside_app_router | Movida fuera de `frontend/src`. | `frontend/legacy-pages-archive/centro-control-iso/page.tsx` | Retirada | archived_outside_frontend_src |
+| `/command-center-iso` | quarantined_outside_app_router | Movida fuera de `frontend/src`. | `frontend/legacy-pages-archive/command-center-iso/page.tsx` | Retirada | archived_outside_frontend_src |
+| `/auditor-iso` | quarantined_outside_app_router | Movida fuera de `frontend/src`. | `frontend/legacy-pages-archive/auditor-iso/page.tsx` | Retirada | archived_outside_frontend_src |
