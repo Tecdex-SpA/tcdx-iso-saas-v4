@@ -35,3 +35,13 @@ efectos.
   su acceso y encaje con planes de accion.
 - `/documentos`: resolver deep links y contrato backend antes de cualquier
   movimiento.
+
+## Resultado de ejecucion B.7
+
+- `/dashboard-v2`: `kept_temporarily`. La revalidacion encontro validadores y
+  documentacion QA/demo vigente que aun exigen compatibilidad con la URL.
+- `/ia`: `blocked_pending_mvp_merge`. No es un redirect y su contrato de
+  recomendaciones no tiene paridad demostrada en `/ia-compliance`.
+- `/ejecucion-iso`: `kept_enterprise_post_mvp`, activa y controlada.
+- `/documentos`: `blocked_by_backend_contract_review`, activa y controlada.
+- No se movieron ni borraron paginas en B.7.

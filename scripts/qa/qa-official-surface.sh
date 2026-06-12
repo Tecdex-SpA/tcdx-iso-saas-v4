@@ -31,40 +31,49 @@ files_contain_fixed_string() {
   grep -F -q -- "$pattern" "$@"
 }
 
+array_block_contains() {
+  local array_name="$1"
+  local needle="$2"
+
+  awk -v array_name="$array_name" -v needle="$needle" '
+    BEGIN {
+      in_block = 0
+      block_found = 0
+      needle_found = 0
+    }
+    $0 ~ ("^export const " array_name) {
+      in_block = 1
+      block_found = 1
+    }
+    in_block && index($0, needle) {
+      needle_found = 1
+    }
+    in_block && /\];/ {
+      in_block = 0
+    }
+    END {
+      if (!block_found) {
+        exit 2
+      }
+      exit needle_found ? 0 : 1
+    }
+  ' frontend/src/utils/mvpPermissions.ts
+}
+
 route_in_client_nav() {
   local route="$1"
-  node - "$route" <<'NODE'
-const fs = require('fs');
-const route = process.argv[2];
-const text = fs.readFileSync('frontend/src/utils/mvpPermissions.ts', 'utf8');
-const match = text.match(/export const CLIENT_MVP_NAV_ITEMS[\s\S]*?\n\];/);
-process.exit(match && match[0].includes(`href: '${route}'`) ? 0 : 1);
-NODE
+  array_block_contains CLIENT_MVP_NAV_ITEMS "href: '$route'"
 }
 
 route_in_array_block() {
   local route="$1"
   local array_name="$2"
-  node - "$route" "$array_name" <<'NODE'
-const fs = require('fs');
-const route = process.argv[2];
-const arrayName = process.argv[3];
-const text = fs.readFileSync('frontend/src/utils/mvpPermissions.ts', 'utf8');
-const re = new RegExp(`export const ${arrayName}\\s*=\\s*\\[[\\s\\S]*?\\];`);
-const match = text.match(re);
-process.exit(match && match[0].includes(`'${route}'`) ? 0 : 1);
-NODE
+  array_block_contains "$array_name" "'$route'"
 }
 
 route_in_mvp_rules() {
   local route="$1"
-  node - "$route" <<'NODE'
-const fs = require('fs');
-const route = process.argv[2];
-const text = fs.readFileSync('frontend/src/utils/mvpPermissions.ts', 'utf8');
-const match = text.match(/export const MVP_ROUTE_RULES[\s\S]*?\n\];/);
-process.exit(match && match[0].includes(`'${route}'`) ? 0 : 1);
-NODE
+  array_block_contains MVP_ROUTE_RULES "'$route'"
 }
 
 is_b2_redirect_route() {
@@ -89,6 +98,22 @@ archived_page_exists() {
 }
 
 printf '## Official surface QA\n'
+
+required_surface_arrays=(
+  CLIENT_MVP_NAV_ITEMS
+  MVP_ROUTE_RULES
+  INTERNAL_CLIENT_HIDDEN_ROUTES
+  PLATFORM_ROUTES
+  DEALER_ROUTES
+)
+
+for array_name in "${required_surface_arrays[@]}"; do
+  if grep -F -q -- "export const $array_name" frontend/src/utils/mvpPermissions.ts; then
+    pass "$array_name declaration exists"
+  else
+    fail "$array_name declaration is missing"
+  fi
+done
 
 if find frontend/src/app -path '*/page.tsx' -type f | grep -q .; then
   pass "frontend app pages can be listed"
@@ -208,6 +233,29 @@ for route in "${non_mvp_client_routes[@]}"; do
     fi
   else
     fail "$route is not controlled by hidden/platform/dealer routes"
+  fi
+done
+
+b7_retained_active_routes=(
+  /dashboard-v2
+  /ia
+  /ejecucion-iso
+  /documentos
+)
+
+for route in "${b7_retained_active_routes[@]}"; do
+  if app_page_exists "$route"; then
+    pass "$route remains active after B.7 review"
+  else
+    fail "$route must remain active until its B.7 blocker is resolved"
+  fi
+
+  if route_in_array_block "$route" INTERNAL_CLIENT_HIDDEN_ROUTES || \
+     route_in_array_block "$route" PLATFORM_ROUTES || \
+     route_in_array_block "$route" DEALER_ROUTES; then
+    pass "$route remains controlled outside the client MVP surface"
+  else
+    fail "$route must remain controlled by hidden/platform/dealer routes"
   fi
 done
 

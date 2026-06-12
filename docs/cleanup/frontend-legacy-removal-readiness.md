@@ -64,3 +64,12 @@ Las paginas redirect (`/dashboard-v2`, `/dashboard-kpi`, `/auditor-iso`, `/centr
 | `/ia` | UI funcional sobre `/api/ai/recommendations/:tenantId`; no es redirect. | Medio por posible valor no migrado a IA Compliance. | merge_into_mvp_then_quarantine |
 | `/ejecucion-iso` | Genera, aprueba y rechaza sugerencias tenant-scoped. | Alto por escritura y creacion de registros. | keep_enterprise_post_mvp |
 | `/documentos` | Genera y archiva documentos; tiene deep links runtime. | Alto por persistencia y contratos backend/frontend vivos. | requires_backend_contract_review |
+
+## Resultado B.7
+
+| Ruta | Estado B.6 | Evidencia revalidada | Accion B.7 | Estado final |
+| ---- | ---------- | -------------------- | ---------- | ------------ |
+| `/dashboard-v2` | ready_for_b7_quarantine | Siete validadores y docs QA/demo vigentes mantienen la URL redirect. | No mover hasta desacoplar el contrato de compatibilidad. | kept_temporarily |
+| `/ia` | merge_into_mvp_then_quarantine | La pagina consume un contrato de recomendaciones y presenta informacion sin paridad demostrada en IA Compliance. | No mover hasta completar o descartar la fusion MVP. | blocked_pending_mvp_merge |
+| `/ejecucion-iso` | keep_enterprise_post_mvp | Mantiene generacion y decision humana sobre sugerencias. | Conservar activa y oculta. | kept_enterprise_post_mvp |
+| `/documentos` | requires_backend_contract_review | Mantiene deep links y contratos backend/frontend persistentes. | Conservar activa y oculta hasta revision del contrato. | blocked_by_backend_contract_review |
