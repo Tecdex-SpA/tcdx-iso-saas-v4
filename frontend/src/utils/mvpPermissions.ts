@@ -205,7 +205,7 @@ type MvpRouteRule = {
 export const MVP_ROUTE_RULES: MvpRouteRule[] = [
   { routes: ['/dashboard'], feature: 'dashboard.read' },
   { routes: ['/cumplimiento-auditoria'], feature: 'compliance.read' },
-  { routes: ['/diagnostico', '/health', '/controles', '/soa', '/ciclo-vida', '/auditorias', '/auditorias/ejecucion', '/hallazgos', '/no-conformidades'], feature: 'compliance.read' },
+  { routes: ['/diagnostico', '/controles', '/soa', '/ciclo-vida', '/auditorias', '/auditorias/ejecucion', '/hallazgos', '/no-conformidades'], feature: 'compliance.read' },
   { routes: ['/evidencias'], feature: 'evidences.read', moduleKey: 'evidences' },
   { routes: ['/riesgos', '/matriz-riesgo', '/activos'], feature: 'risks.read', moduleKey: 'risks' },
   { routes: ['/planes-accion', '/plan-accion', '/acciones-recomendadas'], feature: 'action_plans.read' },
@@ -223,6 +223,7 @@ export const INTERNAL_CLIENT_HIDDEN_ROUTES = [
   '/dashboard-v2',
   '/documentos',
   '/ejecucion-iso',
+  '/health',
   '/ia',
   '/ia-auditor',
   '/auditorias/ia',
