@@ -1,7 +1,7 @@
 # Frontend legacy removal readiness B.1/B.2
 
 Fecha: 2026-06-12
-Ultima revision: `chore/cleanup-b2-frontend-redirects`
+Ultima revision: `chore/cleanup-b8-final-baseline`
 
 No se borraron paginas frontend. Se revisaron archivos `frontend/src/app/**/page.tsx`, imports, componentes compartidos y endpoints llamados desde las paginas legacy solicitadas.
 
@@ -73,3 +73,20 @@ Las paginas redirect (`/dashboard-v2`, `/dashboard-kpi`, `/auditor-iso`, `/centr
 | `/ia` | merge_into_mvp_then_quarantine | La pagina consume un contrato de recomendaciones y presenta informacion sin paridad demostrada en IA Compliance. | No mover hasta completar o descartar la fusion MVP. | blocked_pending_mvp_merge |
 | `/ejecucion-iso` | keep_enterprise_post_mvp | Mantiene generacion y decision humana sobre sugerencias. | Conservar activa y oculta. | kept_enterprise_post_mvp |
 | `/documentos` | requires_backend_contract_review | Mantiene deep links y contratos backend/frontend persistentes. | Conservar activa y oculta hasta revision del contrato. | blocked_by_backend_contract_review |
+
+## Baseline final B.8
+
+| Ruta | Estado final |
+| ---- | ------------ |
+| `/dashboard-kpi` | archived_outside_frontend_src |
+| `/centro-control-iso` | archived_outside_frontend_src |
+| `/command-center-iso` | archived_outside_frontend_src |
+| `/auditor-iso` | archived_outside_frontend_src |
+| `/dashboard-v2` | kept_temporarily_qa_demo_dependency |
+| `/ia` | blocked_pending_mvp_merge |
+| `/ejecucion-iso` | kept_enterprise_post_mvp |
+| `/documentos` | blocked_by_backend_contract_review |
+
+B.8 cierra la fase de cleanup frontend/legacy. Los estados retenidos se
+resuelven en fases independientes; no son candidatos autorizados para borrado
+o movimiento por este documento.

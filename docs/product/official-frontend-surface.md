@@ -1,8 +1,8 @@
 # Official frontend surface
 
 Fecha: 2026-06-12
-Rama: `chore/cleanup-stage-3a-official-surface`
-Base: `be10f25`
+Rama de baseline: `chore/cleanup-b8-final-baseline`
+Base de baseline: `f58b9e7`
 
 Fuente inspeccionada: `frontend/src/app/**/page.tsx`, `frontend/src/utils/mvpPermissions.ts`, `frontend/src/components/Sidebar.tsx`, `frontend/src/components/AppLayout.tsx`.
 
@@ -57,3 +57,35 @@ Fuente inspeccionada: `frontend/src/app/**/page.tsx`, `frontend/src/utils/mvpPer
 `CLIENT_MVP_NAV_ITEMS` queda limitado a: `/dashboard`, `/cumplimiento-auditoria`, `/evidencias`, `/riesgos`, `/planes-accion`, `/exportes`, `/ia-compliance`, `/configuracion`.
 
 Las rutas `/perfil-empresa` y `/usuarios` son parte de la superficie MVP bajo Configuracion, aunque no aparezcan como items principales del Sidebar.
+
+## Baseline final B.8
+
+### Superficie MVP cliente
+
+`/dashboard`, `/cumplimiento-auditoria`, `/evidencias`, `/riesgos`,
+`/planes-accion`, `/exportes`, `/ia-compliance`, `/configuracion`,
+`/perfil-empresa` y `/usuarios`.
+
+### Superficies separadas del cliente MVP
+
+- Plataforma: `/admin-saas`, `/empresas`.
+- Dealer/comercial: `/dealer`, `/cotizador`, `/prefacturacion`.
+- Internas o administracion: por ejemplo `/health` y `/administrar-kpis`.
+- Enterprise/post-MVP: rutas operativas detalladas marcadas como
+  `enterprise_post_mvp` en la tabla.
+
+### Archivadas fuera del App Router
+
+`/dashboard-kpi`, `/centro-control-iso`, `/command-center-iso` y
+`/auditor-iso` permanecen en `frontend/legacy-pages-archive/`.
+
+### Retenidas por bloqueo explicito
+
+- `/dashboard-v2`: `kept_temporarily_qa_demo_dependency`.
+- `/ia`: `blocked_pending_mvp_merge`.
+- `/ejecucion-iso`: `kept_enterprise_post_mvp`.
+- `/documentos`: `blocked_by_backend_contract_review`.
+
+El build esperado para este baseline es de 42 paginas. El control automatizado
+oficial es `scripts/qa/qa-official-surface.sh`, ejecutable con `rg` o con el
+fallback de herramientas POSIX.
