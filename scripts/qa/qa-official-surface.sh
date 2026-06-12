@@ -65,7 +65,7 @@ else
   fail "frontend app pages could not be listed"
 fi
 
-client_nav_routes=(
+official_mvp_routes=(
   /dashboard
   /cumplimiento-auditoria
   /evidencias
@@ -74,13 +74,33 @@ client_nav_routes=(
   /exportes
   /ia-compliance
   /configuracion
+  /perfil-empresa
+  /usuarios
 )
 
-for route in "${client_nav_routes[@]}"; do
-  if route_in_client_nav "$route"; then
-    pass "$route is present in CLIENT_MVP_NAV_ITEMS"
+for route in "${official_mvp_routes[@]}"; do
+  if route_in_client_nav "$route" || route_in_mvp_rules "$route"; then
+    pass "$route is allowed by client MVP surface"
   else
-    fail "$route is missing from CLIENT_MVP_NAV_ITEMS"
+    fail "$route is missing from CLIENT_MVP_NAV_ITEMS or MVP_ROUTE_RULES"
+  fi
+
+  if route_in_array_block "$route" INTERNAL_CLIENT_HIDDEN_ROUTES; then
+    fail "$route must not be in INTERNAL_CLIENT_HIDDEN_ROUTES"
+  else
+    pass "$route is not in INTERNAL_CLIENT_HIDDEN_ROUTES"
+  fi
+
+  if route_in_array_block "$route" PLATFORM_ROUTES; then
+    fail "$route must not be in PLATFORM_ROUTES"
+  else
+    pass "$route is not in PLATFORM_ROUTES"
+  fi
+
+  if route_in_array_block "$route" DEALER_ROUTES; then
+    fail "$route must not be in DEALER_ROUTES"
+  else
+    pass "$route is not in DEALER_ROUTES"
   fi
 done
 
