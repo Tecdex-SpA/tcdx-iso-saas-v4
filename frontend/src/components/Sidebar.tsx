@@ -219,6 +219,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       return isPathInRoutes(pathname, [
         '/cumplimiento-auditoria',
         '/diagnostico',
+        '/health',
         '/controles',
         '/soa',
         '/ciclo-vida',

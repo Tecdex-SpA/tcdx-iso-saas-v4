@@ -10,6 +10,7 @@ export type MvpRoleGroup =
 export type MvpFeatureKey =
   | 'dashboard.read'
   | 'compliance.read'
+  | 'compliance.functional_subflows.read'
   | 'compliance.write'
   | 'compliance.lifecycle.read'
   | 'compliance.lifecycle.request_progress'
@@ -27,8 +28,10 @@ export type MvpFeatureKey =
   | 'semantic_evidence.accept_suggestion'
   | 'semantic_evidence.reject_suggestion'
   | 'risks.read'
+  | 'risks.functional_subflows.read'
   | 'risks.write'
   | 'action_plans.read'
+  | 'action_plans.functional_subflows.read'
   | 'action_plans.write'
   | 'reports.read'
   | 'reports.export'
@@ -104,6 +107,7 @@ export function getMvpRoleGroup(role?: string | null): MvpRoleGroup {
 const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'dashboard.read': ['admin', 'area_owner', 'executive'],
   'compliance.read': ['admin', 'auditor', 'area_owner', 'executive'],
+  'compliance.functional_subflows.read': ['admin', 'auditor', 'area_owner'],
   'compliance.write': ['admin'],
   'compliance.lifecycle.read': ['admin', 'auditor', 'area_owner', 'executive'],
   'compliance.lifecycle.request_progress': ['admin'],
@@ -121,8 +125,10 @@ const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'semantic_evidence.accept_suggestion': ['admin'],
   'semantic_evidence.reject_suggestion': ['admin'],
   'risks.read': ['admin', 'auditor', 'area_owner', 'executive'],
+  'risks.functional_subflows.read': ['admin', 'auditor', 'area_owner'],
   'risks.write': ['admin', 'area_owner'],
   'action_plans.read': ['admin', 'auditor', 'area_owner', 'executive'],
+  'action_plans.functional_subflows.read': ['admin', 'auditor', 'area_owner'],
   'action_plans.write': ['admin', 'area_owner'],
   'reports.read': ['admin', 'auditor', 'area_owner', 'executive'],
   'reports.export': ['admin', 'auditor'],
@@ -194,6 +200,33 @@ export const CLIENT_MVP_NAV_ITEMS: MvpNavItem[] = [
   { href: '/configuracion', label: 'Configuración', feature: 'configuration.users.manage' },
 ];
 
+export const COMPLIANCE_FUNCTIONAL_MVP_SUBFLOW_ROUTES = [
+  '/diagnostico',
+  '/health',
+  '/controles',
+  '/soa',
+  '/ciclo-vida',
+  '/auditorias',
+  '/hallazgos',
+  '/no-conformidades',
+];
+
+export const RISKS_FUNCTIONAL_MVP_SUBFLOW_ROUTES = [
+  '/matriz-riesgo',
+  '/activos',
+];
+
+export const ACTION_PLANS_FUNCTIONAL_MVP_SUBFLOW_ROUTES = [
+  '/plan-accion',
+  '/acciones-recomendadas',
+];
+
+export const FUNCTIONAL_MVP_SUBFLOW_ROUTES = [
+  ...COMPLIANCE_FUNCTIONAL_MVP_SUBFLOW_ROUTES,
+  ...RISKS_FUNCTIONAL_MVP_SUBFLOW_ROUTES,
+  ...ACTION_PLANS_FUNCTIONAL_MVP_SUBFLOW_ROUTES,
+];
+
 type MvpRouteRule = {
   routes: string[];
   feature: MvpFeatureKey;
@@ -205,9 +238,22 @@ type MvpRouteRule = {
 export const MVP_ROUTE_RULES: MvpRouteRule[] = [
   { routes: ['/dashboard'], feature: 'dashboard.read' },
   { routes: ['/cumplimiento-auditoria'], feature: 'compliance.read' },
+  {
+    routes: COMPLIANCE_FUNCTIONAL_MVP_SUBFLOW_ROUTES,
+    feature: 'compliance.functional_subflows.read',
+  },
   { routes: ['/evidencias'], feature: 'evidences.read', moduleKey: 'evidences' },
   { routes: ['/riesgos'], feature: 'risks.read', moduleKey: 'risks' },
+  {
+    routes: RISKS_FUNCTIONAL_MVP_SUBFLOW_ROUTES,
+    feature: 'risks.functional_subflows.read',
+    moduleKey: 'risks',
+  },
   { routes: ['/planes-accion'], feature: 'action_plans.read' },
+  {
+    routes: ACTION_PLANS_FUNCTIONAL_MVP_SUBFLOW_ROUTES,
+    feature: 'action_plans.functional_subflows.read',
+  },
   { routes: ['/exportes'], feature: 'reports.read' },
   { routes: ['/ia-compliance'], feature: 'ai_compliance.read', moduleKey: 'ai' },
   { routes: ['/perfil'], feature: 'configuration.profile.self' },

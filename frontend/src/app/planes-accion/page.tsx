@@ -13,14 +13,14 @@ export default function PlanesAccionPage() {
           href: '/plan-accion',
           title: 'Plan de acción',
           description: 'Gestión de acciones, responsables, estados y evidencia de avance.',
-          feature: 'action_plans.read',
+          feature: 'action_plans.functional_subflows.read',
           tone: 'emerald',
         },
         {
           href: '/acciones-recomendadas',
           title: 'Acciones recomendadas',
           description: 'Recomendaciones originadas desde diagnóstico, riesgos, evidencias y auditoría.',
-          feature: 'action_plans.read',
+          feature: 'action_plans.functional_subflows.read',
           tone: 'blue',
         },
       ]}
