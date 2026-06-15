@@ -24,6 +24,9 @@ DBA y mantenibilidad.
   Compliance.
 - Identificar informacion comercialmente util y trazabilidad requerida.
 - Mantener aprobacion humana y scope tenant.
+- IA.2 confirma drift de contrato y clasifica `PUT /api/ai/apply/:tenant_control_id`
+  como reemplazable por borrador revisable de plan de accion antes de retirar
+  `/ia`.
 - Retirar `/ia` solo tras pruebas de paridad y guard actualizado.
 
 ### Fase Documentos / Integraciones

@@ -4,7 +4,7 @@ Fecha: 2026-06-12
 
 | ID | Frente | Hallazgo | Severidad | Estado | Bloquea MVP | Proxima accion | Fase sugerida |
 | -- | ------ | -------- | --------- | ------ | ----------: | -------------- | ------------- |
-| B8-01 | IA frontend | `/ia` conserva recomendaciones y datos sin paridad demostrada en `/ia-compliance`. | Media | `blocked_pending_mvp_merge` | No | Mapear contratos, migrar valor util y validar paridad antes de retirar. | Fase IA |
+| B8-01 | IA frontend | `/ia` conserva recomendaciones legacy por control y contrato desalineado con su UI; IA.2 confirma que `PUT /api/ai/apply/:tenant_control_id` tiene efectos reales sin trazabilidad IA suficiente. | Alta | `blocked_pending_ia3_safe_replacement` | No | IA.3 debe reemplazar aplicacion directa por borrador revisable, decidir contrato de lectura y solo despues archivar `/ia`. | Fase IA |
 | B8-02 | Documentos | `/documentos` mantiene generacion, archivo, deep links y contratos backend. | Alta | `blocked_by_backend_contract_review` | No | Inventariar endpoints, integraciones, persistencia y enlaces runtime. | Documentos/integraciones |
 | B8-03 | Dashboard legacy | `/dashboard-v2` sigue requerido por siete validadores y docs QA/demo. | Media | `kept_temporarily_qa_demo_dependency` | No | Migrar checks a `/dashboard` y retirar compatibilidad solo con evidencia. | Dashboard QA |
 | B8-04 | Ejecucion ISO | `/ejecucion-iso` genera y somete sugerencias a aprobacion humana. | Media | `kept_enterprise_post_mvp` | No | Definir acceso, empaquetado y ownership enterprise. | Producto enterprise |
