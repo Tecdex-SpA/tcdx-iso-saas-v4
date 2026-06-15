@@ -18,6 +18,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import {
   DEALER_ROUTES,
+  FUNCTIONAL_MVP_SUBFLOW_ROUTES,
   INTERNAL_CLIENT_HIDDEN_ROUTES,
   PLATFORM_ROLES,
   PLATFORM_ROUTES,
@@ -194,6 +195,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         const isPlatform = PLATFORM_ROLES.includes(role);
 
         const isDealer = role === 'dealer';
+        const isFunctionalMvpSubflow = FUNCTIONAL_MVP_SUBFLOW_ROUTES.includes(pathname);
 
         const homePath = getHomePathByRole(role);
         const isExecutiveClient =
@@ -215,12 +217,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (!isPlatform && isRoute(routeRules.platformOnly)) {
+        if (!isPlatform && isRoute(routeRules.platformOnly) && !isFunctionalMvpSubflow) {
           window.location.href = homePath;
           return;
         }
 
-        if (!isPlatform && !isDealer && isPathInRoutes(pathname, INTERNAL_CLIENT_HIDDEN_ROUTES)) {
+        if (
+          !isPlatform &&
+          !isDealer &&
+          isPathInRoutes(pathname, INTERNAL_CLIENT_HIDDEN_ROUTES) &&
+          !isFunctionalMvpSubflow
+        ) {
           window.location.href = homePath;
           return;
         }

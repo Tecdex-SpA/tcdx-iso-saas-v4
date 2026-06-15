@@ -13,14 +13,14 @@ export default function RiesgosPage() {
           href: '/matriz-riesgo',
           title: 'Matriz de riesgos',
           description: 'Riesgos ISO priorizados por contexto, controles y evidencias.',
-          feature: 'risks.read',
+          feature: 'risks.functional_subflows.read',
           tone: 'amber',
         },
         {
           href: '/activos',
           title: 'Activos',
           description: 'Inventario de activos usado como contexto para riesgos y controles.',
-          feature: 'risks.read',
+          feature: 'risks.functional_subflows.read',
           tone: 'slate',
         },
       ]}
