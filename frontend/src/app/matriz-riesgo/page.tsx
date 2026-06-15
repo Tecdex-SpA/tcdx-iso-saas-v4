@@ -666,13 +666,13 @@ function RiskMatrixPageContent() {
     if (!token) {
       setAiActionFeedback({
         kind: 'error',
-        message: 'No hay sesion activa. Ingresa nuevamente antes de aplicar una accion IA.',
+        message: 'No hay sesion activa. Ingresa nuevamente antes de crear un borrador IA.',
       });
       return;
     }
 
     const confirmed = window.confirm(
-      'Esta accion aplicara la correccion IA del control seleccionado y refrescara la matriz. ¿Deseas continuar?'
+      'La IA no aplicara cambios directamente. Se creara un borrador de plan de accion revisable. ¿Deseas continuar?'
     );
 
     if (!confirmed) return;
@@ -681,7 +681,7 @@ function RiskMatrixPageContent() {
       setApplyingAiControlId(tenant_control_id);
       setAiActionFeedback({
         kind: 'info',
-        message: 'Aplicando accion IA sobre el control seleccionado...',
+        message: 'Creando borrador de plan de accion desde recomendacion IA...',
       });
 
       const response = await fetch(`${API_URL}/api/ai/apply/${tenant_control_id}`, {
@@ -699,7 +699,7 @@ function RiskMatrixPageContent() {
       }
 
       if (!response.ok || json?.success === false || json?.ok === false) {
-        throw new Error(json?.error || `No fue posible aplicar la accion IA (HTTP ${response.status}).`);
+        throw new Error(json?.message || json?.error || `No fue posible crear el borrador IA (HTTP ${response.status}).`);
       }
 
       if (iso) {
@@ -708,7 +708,9 @@ function RiskMatrixPageContent() {
 
       setAiActionFeedback({
         kind: 'success',
-        message: 'Accion IA aplicada correctamente. La matriz y los controles fueron actualizados.',
+        message: json?.action_plan_id
+          ? `Borrador IA creado para revision humana. Plan: ${json.action_plan_id}.`
+          : 'Borrador IA creado para revision humana.',
       });
     } catch (err) {
       console.error('ERROR APPLY AI:', err);
@@ -1394,7 +1396,7 @@ function RiskMatrixPageContent() {
                       disabled={applyingAiControlId === c.id}
                       className="inline-flex items-center gap-2 rounded bg-blue-600 px-3 py-1 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {applyingAiControlId === c.id ? 'Aplicando...' : t('riskMatrix.applyAiAction')}
+                      {applyingAiControlId === c.id ? 'Creando...' : 'Crear borrador IA'}
                     </button>
                   )}
                 </div>

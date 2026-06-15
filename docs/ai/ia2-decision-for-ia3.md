@@ -57,6 +57,22 @@ IA.2 no cierra `/ia`. IA.2 deja preparado el cierre futuro con estas reglas:
 - si se descarta valor de `/ia`, documentar paridad funcional con
   `/ia-compliance` antes de archivar.
 
+## 6. Estado IA.3-C
+
+IA.3-C ejecuto la recomendacion priorizada de IA.2:
+
+- `PUT /api/ai/apply/:tenant_control_id` ya no aplica cambios directos sobre
+  controles, no resuelve no conformidades y no inserta evidencias automaticas;
+- el endpoint conserva compatibilidad de ruta, pero crea o reutiliza un
+  borrador revisable en `action_plans`;
+- el consumidor runtime detectado `/matriz-riesgo` fue ajustado a "Crear
+  borrador IA";
+- `/ia` no fue archivada ni movida.
+
+Siguiente decision: IA.4 debe migrar la lectura util de `/ia` a
+`/ia-compliance/sugerencias` o documentar paridad/descarte antes de archivar la
+superficie legacy.
+
 ## 5. Validaciones ejecutadas
 
 | Validacion | Resultado | Evidencia |

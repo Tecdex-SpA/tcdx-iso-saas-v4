@@ -55,7 +55,7 @@ export default function IACompliancePage() {
               </p>
             </div>
             <div className="rounded-lg border border-white/12 bg-white/8 px-4 py-3 text-sm text-white/72">
-              Revisión no destructiva · Requiere validación humana
+              La IA no aplica cambios directamente. Genera un borrador revisable por una persona autorizada.
             </div>
           </div>
         </section>

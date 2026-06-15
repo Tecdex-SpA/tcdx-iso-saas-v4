@@ -27,6 +27,12 @@ DBA y mantenibilidad.
 - IA.2 confirma drift de contrato y clasifica `PUT /api/ai/apply/:tenant_control_id`
   como reemplazable por borrador revisable de plan de accion antes de retirar
   `/ia`.
+- IA.3 reemplazo el efecto directo del `PUT` por creacion/reutilizacion de
+  borrador en `action_plans`, con consumidor `/matriz-riesgo` actualizado a
+  "Crear borrador IA".
+- IA.4 debe decidir la lectura legacy: migrar accion/evidencia/prioridad/
+  explicacion a `/ia-compliance/sugerencias` o documentar descarte antes de
+  archivar `/ia`.
 - Retirar `/ia` solo tras pruebas de paridad y guard actualizado.
 
 ### Fase Documentos / Integraciones

@@ -36,7 +36,7 @@ Fuente inspeccionada: `frontend/src/app/**/page.tsx`, `frontend/src/utils/mvpPer
 | `/exportes` | `frontend/src/app/exportes/page.tsx` | visible_mvp_cliente | Si | Admin, auditor, area owner, executive read; export limitado | reports.read/export | Reportes y exportes. | Conservar. |
 | `/hallazgos` | `frontend/src/app/hallazgos/page.tsx` | enterprise_post_mvp | No | Interno/platform por guard oculto | compliance | Detalle de hallazgos; MVP agregado en cumplimiento. | Consolidar en cumplimiento. |
 | `/health` | `frontend/src/app/health/page.tsx` | internal_admin | No | Interno/platform por guard oculto | operational/health | Salud tecnica/operacional no cliente MVP. | Mantener oculto. |
-| `/ia` | `frontend/src/app/ia/page.tsx` | legacy_candidate | No | Interno/platform por guard oculto | ai | Recomendaciones legacy sobre controles; IA.2 confirma drift de contrato y riesgo de apply directo en `/api/ai`. | `blocked_pending_ia3_safe_replacement`; IA.3 debe resolver borrador revisable/contrato antes de cuarentena. |
+| `/ia` | `frontend/src/app/ia/page.tsx` | legacy_candidate | No | Interno/platform por guard oculto | ai | Recomendaciones legacy sobre controles; IA.3 reemplazo apply directo por borrador revisable, pero persiste drift de lectura frente a IA Compliance. | `blocked_pending_ia4_read_migration_or_archive`; IA.4 debe migrar lectura util o documentar paridad antes de cuarentena. |
 | `/ia-auditor` | `frontend/src/app/ia-auditor/page.tsx` | enterprise_post_mvp | No | Interno/platform por guard oculto | ai/auditor | IA Auditor senior/enterprise. | Mantener oculto. |
 | `/ia-compliance` | `frontend/src/app/ia-compliance/page.tsx` | visible_mvp_cliente | Si | Admin, auditor con modulo `ai` | ai_compliance.read | IA cliente trazable basica. | Conservar. |
 | `/ia-compliance/sugerencias` | `frontend/src/app/ia-compliance/sugerencias/page.tsx` | enterprise_post_mvp | No | Admin/auditor con modulo `ai` | ai_compliance.suggest | Subflujo dependiente de IA Compliance; no nav principal MVP. | Mantener controlado por modulo IA. |
@@ -82,7 +82,7 @@ Las rutas `/perfil-empresa` y `/usuarios` son parte de la superficie MVP bajo Co
 ### Retenidas por bloqueo explicito
 
 - `/dashboard-v2`: `kept_temporarily_qa_demo_dependency`.
-- `/ia`: `blocked_pending_mvp_merge`.
+- `/ia`: `blocked_pending_ia4_read_migration_or_archive`.
 - `/ejecucion-iso`: `kept_enterprise_post_mvp`.
 - `/documentos`: `blocked_by_backend_contract_review`.
 
