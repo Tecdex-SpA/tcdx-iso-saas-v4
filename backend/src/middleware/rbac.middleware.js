@@ -164,6 +164,11 @@ const API_RULES = [
     write: TENANT_AREA_WRITE_ROLES,
   },
   {
+    prefix: '/api/operational-risks',
+    read: TENANT_READ_ROLES,
+    write: TENANT_AREA_WRITE_ROLES,
+  },
+  {
     prefix: '/api/iso-operational-execution',
     read: TENANT_READ_ROLES,
     write: TENANT_OPERATE_ROLES,

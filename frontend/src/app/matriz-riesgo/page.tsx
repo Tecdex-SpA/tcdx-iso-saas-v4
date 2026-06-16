@@ -6,8 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
-import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
-import { translateDisplayText, translateClauseLabel, translateStandardLabel } from '@/i18n/displayText';
+import { translateClauseLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
@@ -129,6 +128,66 @@ type HeatmapCell = {
   impact: number;
 };
 
+type OperationalRiskModel = 'ISO27001_TTIA' | 'ISO9001_COP_SIMPLE' | 'ISO9001_COP_AVANZADO';
+
+type OperationalRiskSimulation = {
+  id: string;
+  norma_tipo: 'ISO27001' | 'ISO9001';
+  modelo_usado: OperationalRiskModel;
+  nombre_riesgo: string;
+  proceso_afectado?: string | null;
+  iteraciones: number;
+  media_operativa_anual: number;
+  peor_escenario_p95: number;
+  probabilidad_disrupcion_critica?: number | null;
+  created_at?: string;
+};
+
+type OperationalRiskForm = {
+  norma_tipo: 'ISO27001' | 'ISO9001';
+  modelo_usado: OperationalRiskModel;
+  nombre_riesgo: string;
+  proceso_afectado: string;
+  frecuencia_min: string;
+  frecuencia_mode: string;
+  frecuencia_max: string;
+  impacto_min: string;
+  impacto_mode: string;
+  impacto_max: string;
+  tasa_error_min: string;
+  tasa_error_mode: string;
+  tasa_error_max: string;
+  volumen_operativo_anual: string;
+  umbral_disrupcion_critica_horas: string;
+  iteraciones: string;
+};
+
+type OperationalRiskRecommendation = {
+  diagnostico_operativo?: string;
+  controles_sugeridos?: unknown[];
+  efectividad_estimada_pct?: number | string | null;
+  requiere_validacion_humana?: boolean;
+};
+
+const DEFAULT_OPERATIONAL_RISK_FORM: OperationalRiskForm = {
+  norma_tipo: 'ISO27001',
+  modelo_usado: 'ISO27001_TTIA',
+  nombre_riesgo: '',
+  proceso_afectado: '',
+  frecuencia_min: '1',
+  frecuencia_mode: '3',
+  frecuencia_max: '8',
+  impacto_min: '2',
+  impacto_mode: '6',
+  impacto_max: '16',
+  tasa_error_min: '1',
+  tasa_error_mode: '3',
+  tasa_error_max: '8',
+  volumen_operativo_anual: '1000',
+  umbral_disrupcion_critica_horas: '40',
+  iteraciones: '10000',
+};
+
 function resolveTenantId(user: any): string {
   return (
     user?.tenant_id ||
@@ -170,8 +229,30 @@ function axisLabel(value: number) {
   return 'Muy baja';
 }
 
+function resolveRole(user: any): string {
+  return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase().trim();
+}
+
+function canCreateOperationalSimulation(user: any) {
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'admin_global',
+    'global_admin',
+    'owner',
+    'admin',
+    'tenant_admin',
+    'admin_cumplimiento',
+    'compliance_admin',
+    'operativo',
+    'responsable_area',
+    'area_owner',
+  ].includes(resolveRole(user));
+}
+
 export default function RiskMatrixPage() {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
 
   return (
     <Suspense
@@ -217,6 +298,15 @@ function RiskMatrixPageContent() {
     kind: 'success' | 'error' | 'info';
     message: string;
   } | null>(null);
+  const [operationalRiskForm, setOperationalRiskForm] = useState<OperationalRiskForm>(DEFAULT_OPERATIONAL_RISK_FORM);
+  const [operationalSimulations, setOperationalSimulations] = useState<OperationalRiskSimulation[]>([]);
+  const [selectedOperationalSimulation, setSelectedOperationalSimulation] = useState<OperationalRiskSimulation | null>(null);
+  const [loadingOperationalSimulations, setLoadingOperationalSimulations] = useState(false);
+  const [runningOperationalSimulation, setRunningOperationalSimulation] = useState(false);
+  const [operationalRiskError, setOperationalRiskError] = useState('');
+  const [operationalRiskMessage, setOperationalRiskMessage] = useState('');
+  const [recommendationLoadingId, setRecommendationLoadingId] = useState('');
+  const [recommendationBySimulationId, setRecommendationBySimulationId] = useState<Record<string, OperationalRiskRecommendation>>({});
 
   const focusAppliedRef = useRef(false);
 
@@ -239,6 +329,10 @@ function RiskMatrixPageContent() {
   const matrixSummary = useMemo(() => {
     return matrixRun?.summary_json || matrixRun || {};
   }, [matrixRun]);
+
+  const userCanCreateOperationalSimulation = useMemo(() => {
+    return canCreateOperationalSimulation(getUserFromToken());
+  }, []);
 
   const topMatrixItems = useMemo(() => {
     return [...matrixItems]
@@ -317,6 +411,176 @@ function RiskMatrixPageContent() {
   const formatNumber = (value: any) => {
     const n = Number(value || 0);
     return Number.isFinite(n) ? n.toFixed(2).replace('.00', '') : '0';
+  };
+
+  const formatProbability = (value: any) => {
+    if (value === null || value === undefined || value === '') return '-';
+    const n = Number(value);
+    return Number.isFinite(n) ? `${(n * 100).toFixed(1)}%` : '-';
+  };
+
+  const updateOperationalRiskField = (field: keyof OperationalRiskForm, value: string) => {
+    setOperationalRiskForm((prev) => {
+      const next = { ...prev, [field]: value } as OperationalRiskForm;
+
+      if (field === 'norma_tipo') {
+        next.modelo_usado = value === 'ISO27001' ? 'ISO27001_TTIA' : 'ISO9001_COP_SIMPLE';
+      }
+
+      if (field === 'modelo_usado' && value === 'ISO27001_TTIA') {
+        next.norma_tipo = 'ISO27001';
+      }
+
+      if (field === 'modelo_usado' && value.startsWith('ISO9001')) {
+        next.norma_tipo = 'ISO9001';
+      }
+
+      return next;
+    });
+  };
+
+  const loadOperationalSimulations = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      setLoadingOperationalSimulations(true);
+      setOperationalRiskError('');
+
+      const params = new URLSearchParams();
+      if (operationalRiskForm.norma_tipo) {
+        params.set('norma_tipo', operationalRiskForm.norma_tipo);
+      }
+
+      const res = await fetch(`${API_URL}/api/operational-risks/simulations?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || 'No fue posible cargar simulaciones operativas');
+      }
+
+      const rows = Array.isArray(json?.data) ? json.data : [];
+      setOperationalSimulations(rows);
+      setSelectedOperationalSimulation((prev) => {
+        if (prev && rows.some((row: OperationalRiskSimulation) => row.id === prev.id)) return prev;
+        return rows[0] || null;
+      });
+    } catch (err: any) {
+      console.error('ERROR LOAD OPERATIONAL RISK SIMULATIONS:', err);
+      setOperationalRiskError(err?.message || 'Error cargando simulaciones operativas');
+    } finally {
+      setLoadingOperationalSimulations(false);
+    }
+  };
+
+  const runOperationalRiskSimulation = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setOperationalRiskError('No hay sesion activa. Ingresa nuevamente antes de simular.');
+      return;
+    }
+
+    try {
+      setRunningOperationalSimulation(true);
+      setOperationalRiskError('');
+      setOperationalRiskMessage('');
+
+      const advanced = operationalRiskForm.modelo_usado === 'ISO9001_COP_AVANZADO';
+      const body: Record<string, unknown> = {
+        norma_tipo: operationalRiskForm.norma_tipo,
+        modelo_usado: operationalRiskForm.modelo_usado,
+        nombre_riesgo: operationalRiskForm.nombre_riesgo,
+        proceso_afectado: operationalRiskForm.proceso_afectado,
+        frecuencia: {
+          min: Number(operationalRiskForm.frecuencia_min),
+          mode: Number(operationalRiskForm.frecuencia_mode),
+          max: Number(operationalRiskForm.frecuencia_max),
+          unidad: 'eventos_por_ano',
+        },
+        impacto_operativo: {
+          min: Number(operationalRiskForm.impacto_min),
+          mode: Number(operationalRiskForm.impacto_mode),
+          max: Number(operationalRiskForm.impacto_max),
+          unidad: operationalRiskForm.norma_tipo === 'ISO27001' ? 'horas_por_evento' : 'horas_reproceso_por_error',
+        },
+        umbral_disrupcion_critica_horas: Number(operationalRiskForm.umbral_disrupcion_critica_horas),
+        iteraciones: Number(operationalRiskForm.iteraciones || 10000),
+      };
+
+      if (advanced) {
+        body.tasa_error = {
+          min: Number(operationalRiskForm.tasa_error_min),
+          mode: Number(operationalRiskForm.tasa_error_mode),
+          max: Number(operationalRiskForm.tasa_error_max),
+          unidad: 'porcentaje',
+        };
+        body.tiempo_subsanacion = {
+          min: Number(operationalRiskForm.impacto_min),
+          mode: Number(operationalRiskForm.impacto_mode),
+          max: Number(operationalRiskForm.impacto_max),
+          unidad: 'horas_reproceso_por_error',
+        };
+        body.volumen_operativo_anual = Number(operationalRiskForm.volumen_operativo_anual);
+      }
+
+      const res = await fetch(`${API_URL}/api/operational-risks/simulations`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || 'No fue posible ejecutar la simulacion');
+      }
+
+      const created = json?.data as OperationalRiskSimulation;
+      setSelectedOperationalSimulation(created);
+      setOperationalRiskMessage('Simulacion operativa guardada con metricas agregadas.');
+      await loadOperationalSimulations();
+    } catch (err: any) {
+      console.error('ERROR RUN OPERATIONAL RISK SIMULATION:', err);
+      setOperationalRiskError(err?.message || 'Error ejecutando simulacion operativa');
+    } finally {
+      setRunningOperationalSimulation(false);
+    }
+  };
+
+  const generateOperationalRecommendation = async (simulationId: string) => {
+    const token = localStorage.getItem('token');
+    if (!token || !simulationId) return;
+
+    try {
+      setRecommendationLoadingId(simulationId);
+      setOperationalRiskError('');
+      setOperationalRiskMessage('');
+
+      const res = await fetch(`${API_URL}/api/operational-risks/simulations/${simulationId}/recommendations`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || 'No fue posible generar recomendacion operativa');
+      }
+
+      setRecommendationBySimulationId((prev) => ({
+        ...prev,
+        [simulationId]: json?.data || {},
+      }));
+      setOperationalRiskMessage('Recomendacion rule-based generada para revision humana.');
+    } catch (err: any) {
+      console.error('ERROR GENERATE OPERATIONAL RISK RECOMMENDATION:', err);
+      setOperationalRiskError(err?.message || 'Error generando recomendacion operativa');
+    } finally {
+      setRecommendationLoadingId('');
+    }
   };
 
   const loadScope = async () => {
@@ -607,7 +871,25 @@ function RiskMatrixPageContent() {
   useEffect(() => {
     void loadScope();
     void loadMatrixOptions();
+    void loadOperationalSimulations();
   }, []);
+
+  useEffect(() => {
+    if (iso === 'ISO27001' || iso === 'ISO9001') {
+      setOperationalRiskForm((prev) => {
+        if (prev.norma_tipo === iso) return prev;
+        return {
+          ...prev,
+          norma_tipo: iso,
+          modelo_usado: iso === 'ISO27001' ? 'ISO27001_TTIA' : 'ISO9001_COP_SIMPLE',
+        };
+      });
+    }
+  }, [iso]);
+
+  useEffect(() => {
+    void loadOperationalSimulations();
+  }, [operationalRiskForm.norma_tipo]);
 
   useEffect(() => {
     if (selectedMatrixOption) {
@@ -763,6 +1045,25 @@ function RiskMatrixPageContent() {
     if (raw === 'MEDIO') return t('statuses.findings.medio');
     return t('statuses.findings.bajo');
   };
+
+  const renderOperationalNumberInput = (
+    label: string,
+    field: keyof OperationalRiskForm,
+    min = '0',
+    step = '0.01'
+  ) => (
+    <label className="block">
+      <span className="text-xs font-semibold text-slate-600">{label}</span>
+      <input
+        type="number"
+        min={min}
+        step={step}
+        value={operationalRiskForm[field]}
+        onChange={(e) => updateOperationalRiskField(field, e.target.value)}
+        className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+      />
+    </label>
+  );
 
   const applyFocus = (control: RiskControlRow) => {
     setFocusedControlId(control.id);
@@ -1137,6 +1438,238 @@ function RiskMatrixPageContent() {
             </div>
           )}
         </div>
+
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-950">Simulación Operativa</h2>
+                <p className="text-sm text-slate-500">
+                  Beta-PERT para cuantificar horas operativas de indisponibilidad o reproceso dentro del flujo de riesgos.
+                </p>
+              </div>
+              <span className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">
+                Este cálculo estima pérdida operativa en horas, no impacto financiero.
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-5 p-5 xl:grid-cols-[1fr_0.95fr]">
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-600">Norma</span>
+                  <select
+                    value={operationalRiskForm.norma_tipo}
+                    onChange={(e) => updateOperationalRiskField('norma_tipo', e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                  >
+                    <option value="ISO27001">ISO27001</option>
+                    <option value="ISO9001">ISO9001</option>
+                  </select>
+                </label>
+
+                <label className="block md:col-span-2">
+                  <span className="text-xs font-semibold text-slate-600">Modelo</span>
+                  <select
+                    value={operationalRiskForm.modelo_usado}
+                    onChange={(e) => updateOperationalRiskField('modelo_usado', e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                  >
+                    {operationalRiskForm.norma_tipo === 'ISO27001' ? (
+                      <option value="ISO27001_TTIA">ISO27001_TTIA</option>
+                    ) : (
+                      <>
+                        <option value="ISO9001_COP_SIMPLE">ISO9001_COP_SIMPLE</option>
+                        <option value="ISO9001_COP_AVANZADO">ISO9001_COP_AVANZADO</option>
+                      </>
+                    )}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-600">Nombre del riesgo</span>
+                  <input
+                    type="text"
+                    value={operationalRiskForm.nombre_riesgo}
+                    onChange={(e) => updateOperationalRiskField('nombre_riesgo', e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Interrupción de servicio crítico"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-600">Proceso afectado</span>
+                  <input
+                    type="text"
+                    value={operationalRiskForm.proceso_afectado}
+                    onChange={(e) => updateOperationalRiskField('proceso_afectado', e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Continuidad operacional"
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {renderOperationalNumberInput('Frecuencia min', 'frecuencia_min')}
+                {renderOperationalNumberInput('Frecuencia mode', 'frecuencia_mode')}
+                {renderOperationalNumberInput('Frecuencia max', 'frecuencia_max')}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {renderOperationalNumberInput(
+                  operationalRiskForm.norma_tipo === 'ISO27001' ? 'MTTR min (horas)' : 'Reproceso min (horas)',
+                  'impacto_min'
+                )}
+                {renderOperationalNumberInput(
+                  operationalRiskForm.norma_tipo === 'ISO27001' ? 'MTTR mode (horas)' : 'Reproceso mode (horas)',
+                  'impacto_mode'
+                )}
+                {renderOperationalNumberInput(
+                  operationalRiskForm.norma_tipo === 'ISO27001' ? 'MTTR max (horas)' : 'Reproceso max (horas)',
+                  'impacto_max'
+                )}
+              </div>
+
+              {operationalRiskForm.modelo_usado === 'ISO9001_COP_AVANZADO' && (
+                <div className="rounded border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 text-sm font-semibold text-slate-800">Parámetros avanzados ISO9001</div>
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {renderOperationalNumberInput('Tasa error min (%)', 'tasa_error_min')}
+                    {renderOperationalNumberInput('Tasa error mode (%)', 'tasa_error_mode')}
+                    {renderOperationalNumberInput('Tasa error max (%)', 'tasa_error_max')}
+                    {renderOperationalNumberInput('Volumen anual', 'volumen_operativo_anual', '0', '1')}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {renderOperationalNumberInput('Umbral crítico (horas)', 'umbral_disrupcion_critica_horas')}
+                {renderOperationalNumberInput('Iteraciones', 'iteraciones', '10000', '1')}
+              </div>
+
+              {operationalRiskError && (
+                <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  {operationalRiskError}
+                </div>
+              )}
+
+              {operationalRiskMessage && (
+                <div className="rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  {operationalRiskMessage}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={runOperationalRiskSimulation}
+                disabled={!userCanCreateOperationalSimulation || runningOperationalSimulation}
+                className="inline-flex items-center justify-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {runningOperationalSimulation ? 'Ejecutando...' : 'Ejecutar simulación'}
+              </button>
+              {!userCanCreateOperationalSimulation && (
+                <p className="text-xs text-slate-500">
+                  Tu rol puede consultar resultados, pero no crear simulaciones operativas.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              {selectedOperationalSimulation && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    ['Media anual', `${formatNumber(selectedOperationalSimulation.media_operativa_anual)} h`],
+                    ['P95', `${formatNumber(selectedOperationalSimulation.peor_escenario_p95)} h`],
+                    ['Prob. umbral', formatProbability(selectedOperationalSimulation.probabilidad_disrupcion_critica)],
+                    ['Iteraciones', formatNumber(selectedOperationalSimulation.iteraciones)],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded border border-slate-200 p-4">
+                      <div className="text-xs font-semibold text-slate-500">{label}</div>
+                      <div className="mt-1 text-2xl font-bold text-slate-950">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="overflow-hidden rounded border border-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Simulaciones guardadas</h3>
+                  <button
+                    type="button"
+                    onClick={loadOperationalSimulations}
+                    className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Actualizar
+                  </button>
+                </div>
+
+                {loadingOperationalSimulations ? (
+                  <div className="p-4 text-sm text-slate-500">Cargando simulaciones...</div>
+                ) : operationalSimulations.length === 0 ? (
+                  <div className="p-4 text-sm text-slate-500">
+                    Aún no hay simulaciones operativas para esta norma.
+                  </div>
+                ) : (
+                  <div className="max-h-[360px] divide-y divide-slate-100 overflow-y-auto">
+                    {operationalSimulations.map((simulation) => (
+                      <div
+                        key={simulation.id}
+                        className={[
+                          'cursor-pointer p-4 transition hover:bg-slate-50',
+                          selectedOperationalSimulation?.id === simulation.id ? 'bg-blue-50' : '',
+                        ].join(' ')}
+                        onClick={() => setSelectedOperationalSimulation(simulation)}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-slate-950">{simulation.nombre_riesgo}</div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {simulation.norma_tipo} · {simulation.modelo_usado} · {simulation.proceso_afectado || 'Proceso no especificado'}
+                            </div>
+                          </div>
+                          <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                            P95 {formatNumber(simulation.peor_escenario_p95)} h
+                          </span>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>Media {formatNumber(simulation.media_operativa_anual)} h</span>
+                          <span>Umbral {formatProbability(simulation.probabilidad_disrupcion_critica)}</span>
+                          <span>{formatNumber(simulation.iteraciones)} iter.</span>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void generateOperationalRecommendation(simulation.id);
+                            }}
+                            disabled={!userCanCreateOperationalSimulation || recommendationLoadingId === simulation.id}
+                            className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {recommendationLoadingId === simulation.id ? 'Generando...' : 'Generar recomendación'}
+                          </button>
+                        </div>
+
+                        {recommendationBySimulationId[simulation.id] && (
+                          <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                            <div className="font-semibold">Recomendación de apoyo, requiere validación humana.</div>
+                            <div className="mt-1">
+                              {recommendationBySimulationId[simulation.id]?.diagnostico_operativo}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
 
         {!iso && (
           <div className="bg-white p-6 rounded shadow space-y-3">

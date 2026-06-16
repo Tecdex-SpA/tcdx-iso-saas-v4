@@ -51,6 +51,7 @@ backups/
 *.zip
 *.dump
 *.sql
+!database/migrations/*.sql
 *.bak
 
 # =========================
