@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-EXPECTED_DEPLOY_DIR="${TCDX_DEPLOY_MAIN_DIR:-$HOME/repos/tcdx-iso-saas}"
+EXPECTED_DEPLOY_DIR="${TCDX_DEPLOY_MAIN_DIR:-$HOME/repos/tcdx-iso-saas-v4}"
 CURRENT_DIR="$(pwd -P)"
 EXPECTED_DIR="$(cd "$EXPECTED_DEPLOY_DIR" 2>/dev/null && pwd -P || printf '%s' "$EXPECTED_DEPLOY_DIR")"
 CURRENT_BRANCH="$(git branch --show-current 2>/dev/null || true)"
@@ -11,160 +11,18 @@ ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
 DEPLOY_TS="$(date '+%Y-%m-%d %H:%M:%S %Z')"
 
 DEPLOY_USER="${TCDX_DEPLOY_USER:-tecdex}"
+BACKEND_HOST="${TCDX_BACKEND_HOST:-${TCDX_NEW_BACKEND_HOST:-bk-v4.tcdx.int}}"
+FRONTEND_HOST="${TCDX_FRONTEND_HOST:-${TCDX_NEW_FRONTEND_HOST:-www-v4.tcdx.int}}"
+AI_HOST="${TCDX_AI_HOST:-${TCDX_NEW_AI_HOST:-ai-v4.tcdx.int}}"
 
-# Antiguas VMs UTM/local. No se definen hosts legacy por defecto:
-# si se necesita operar un ambiente histórico, debe declararse explícitamente
-# mediante TCDX_LEGACY_BACKEND_HOST/TCDX_LEGACY_FRONTEND_HOST/TCDX_LEGACY_AI_HOST.
-LEGACY_BACKEND_HOST="${TCDX_LEGACY_BACKEND_HOST:-}"
-LEGACY_FRONTEND_HOST="${TCDX_LEGACY_FRONTEND_HOST:-}"
-LEGACY_AI_HOST="${TCDX_LEGACY_AI_HOST:-}"
+REMOTE_REPO_DIR="${TCDX_REMOTE_REPO_DIR:-/home/tecdex/tcdx-iso-saas-v4}"
+REMOTE_BACKEND_DIR="${REMOTE_REPO_DIR}/backend"
+REMOTE_FRONTEND_DIR="${REMOTE_REPO_DIR}/frontend"
+REMOTE_AI_ENGINE_DIR="${REMOTE_REPO_DIR}/ai-engine"
 
-# Nuevas VMs ESXi/VPN
-NEW_BACKEND_HOST="${TCDX_NEW_BACKEND_HOST:-}"
-NEW_FRONTEND_HOST="${TCDX_NEW_FRONTEND_HOST:-}"
-NEW_AI_HOST="${TCDX_NEW_AI_HOST:-}"
-
-ask_deploy_target() {
-  local legacy_available=false
-  if [[ -n "$LEGACY_BACKEND_HOST" && -n "$LEGACY_FRONTEND_HOST" && -n "$LEGACY_AI_HOST" ]]; then
-    legacy_available=true
-  fi
-
-  if [[ -n "${TCDX_DEPLOY_TARGET:-}" ]]; then
-    case "$TCDX_DEPLOY_TARGET" in
-      legacy|new|all)
-        if [[ "$TCDX_DEPLOY_TARGET" != "new" && "$legacy_available" != "true" ]]; then
-          echo "ERROR: target legacy/all requiere hosts legacy explícitos por entorno." >&2
-          exit 1
-        fi
-        echo "$TCDX_DEPLOY_TARGET"
-        return 0
-        ;;
-      *)
-        echo "ERROR: TCDX_DEPLOY_TARGET inválido: $TCDX_DEPLOY_TARGET" >&2
-        echo "Valores permitidos: legacy, new, all" >&2
-        exit 1
-        ;;
-    esac
-  fi
-
-  echo "" >&2
-  echo "======================================" >&2
-  echo " SELECCIONAR AMBIENTE DE DEPLOY" >&2
-  echo "======================================" >&2
-  echo "" >&2
-  if [[ "$legacy_available" == "true" ]]; then
-    echo "1) Solo VMs antiguas UTM/local" >&2
-    echo "   Backend:   ${LEGACY_BACKEND_HOST}" >&2
-    echo "   AI Engine: ${LEGACY_AI_HOST}" >&2
-    echo "   Frontend:  ${LEGACY_FRONTEND_HOST}" >&2
-    echo "" >&2
-  else
-    echo "1) VMs antiguas UTM/local no configuradas en este entorno" >&2
-    echo "" >&2
-  fi
-  echo "2) Solo nuevas VMs ESXi/VPN" >&2
-  echo "   Backend:   ${NEW_BACKEND_HOST}" >&2
-  echo "   AI Engine: ${NEW_AI_HOST}" >&2
-  echo "   Frontend:  ${NEW_FRONTEND_HOST}" >&2
-  echo "" >&2
-  echo "3) Ambos ambientes: UTM/local + ESXi/VPN" >&2
-  echo "   Backend:   ${LEGACY_BACKEND_HOST} + ${NEW_BACKEND_HOST}" >&2
-  echo "   AI Engine: ${LEGACY_AI_HOST} + ${NEW_AI_HOST}" >&2
-  echo "   Frontend:  ${LEGACY_FRONTEND_HOST} + ${NEW_FRONTEND_HOST}" >&2
-  echo "" >&2
-
-  while true; do
-    read -r -p "Elige ambiente de deploy [1=UTM, 2=ESXi, 3=Ambos]: " choice
-
-    case "$choice" in
-      1)
-        if [[ "$legacy_available" != "true" ]]; then
-          echo "Ambiente legacy no configurado. Define hosts legacy explícitos si realmente lo necesitas." >&2
-          continue
-        fi
-        read -r -p "Confirmar deploy SOLO en VMs antiguas UTM/local? [s/N]: " confirm
-        case "$confirm" in
-          s|S|si|SI|sí|SÍ)
-            echo "legacy"
-            return 0
-            ;;
-          *)
-            echo "Operación cancelada." >&2
-            exit 1
-            ;;
-        esac
-        ;;
-      2)
-        read -r -p "Confirmar deploy SOLO en nuevas VMs ESXi/VPN? [s/N]: " confirm
-        case "$confirm" in
-          s|S|si|SI|sí|SÍ)
-            echo "new"
-            return 0
-            ;;
-          *)
-            echo "Operación cancelada." >&2
-            exit 1
-            ;;
-        esac
-        ;;
-      3)
-        if [[ "$legacy_available" != "true" ]]; then
-          echo "Deploy combinado no disponible sin hosts legacy explícitos." >&2
-          continue
-        fi
-        read -r -p "Confirmar deploy en AMBOS ambientes? [s/N]: " confirm
-        case "$confirm" in
-          s|S|si|SI|sí|SÍ)
-            echo "all"
-            return 0
-            ;;
-          *)
-            echo "Operación cancelada." >&2
-            exit 1
-            ;;
-        esac
-        ;;
-      *)
-        echo "Opción inválida. Usa 1, 2 o 3." >&2
-        ;;
-    esac
-  done
-}
-
-DEPLOY_TARGET="$(ask_deploy_target)"
-
-declare -a BACKEND_HOSTS=()
-declare -a AI_HOSTS=()
-declare -a FRONTEND_HOSTS=()
-
-if [[ "$DEPLOY_TARGET" == "new" || "$DEPLOY_TARGET" == "all" ]]; then
-  : "${NEW_BACKEND_HOST:?TCDX_NEW_BACKEND_HOST requerido}"
-  : "${NEW_FRONTEND_HOST:?TCDX_NEW_FRONTEND_HOST requerido}"
-  : "${NEW_AI_HOST:?TCDX_NEW_AI_HOST requerido}"
-fi
-
-case "$DEPLOY_TARGET" in
-  all)
-    BACKEND_HOSTS=("$LEGACY_BACKEND_HOST" "$NEW_BACKEND_HOST")
-    AI_HOSTS=("$LEGACY_AI_HOST" "$NEW_AI_HOST")
-    FRONTEND_HOSTS=("$LEGACY_FRONTEND_HOST" "$NEW_FRONTEND_HOST")
-    ;;
-  legacy)
-    BACKEND_HOSTS=("$LEGACY_BACKEND_HOST")
-    AI_HOSTS=("$LEGACY_AI_HOST")
-    FRONTEND_HOSTS=("$LEGACY_FRONTEND_HOST")
-    ;;
-  new)
-    BACKEND_HOSTS=("$NEW_BACKEND_HOST")
-    AI_HOSTS=("$NEW_AI_HOST")
-    FRONTEND_HOSTS=("$NEW_FRONTEND_HOST")
-    ;;
-  *)
-    echo "ERROR: target inválido: $DEPLOY_TARGET"
-    exit 1
-    ;;
-esac
+BACKEND_WRAPPER="/home/tecdex/deploy-backend.sh"
+FRONTEND_WRAPPER="/home/tecdex/deploy-frontend.sh"
+AI_ENGINE_WRAPPER="/home/tecdex/deploy-ai-engine.sh"
 
 run_ssh() {
   local host="$1"
@@ -177,51 +35,83 @@ run_ssh() {
     "$@"
 }
 
+preflight_remote() {
+  local label="$1"
+  local host="$2"
+  local remote_dir="$3"
+  local wrapper="$4"
+  local service="$5"
+
+  echo ""
+  echo "Preflight remoto ${label}: ${host}"
+
+  run_ssh "$host" "hostname" >/dev/null || {
+    echo "ERROR: SSH no respondio para ${label} en ${host}."
+    exit 1
+  }
+
+  run_ssh "$host" "test -d '${remote_dir}'" || {
+    echo "ERROR: ruta remota no existe para ${label}: ${remote_dir}"
+    exit 1
+  }
+
+  run_ssh "$host" "test -x '${wrapper}'" || {
+    echo "ERROR: wrapper remoto no existe o no es ejecutable para ${label}: ${wrapper}"
+    exit 1
+  }
+
+  run_ssh "$host" "systemctl list-unit-files '${service}' >/dev/null" || {
+    echo "ERROR: servicio esperado no existe para ${label}: ${service}"
+    exit 1
+  }
+
+  echo "${label} OK"
+}
+
 deploy_remote() {
   local label="$1"
   local host="$2"
-  local script="$3"
+  local wrapper="$3"
 
   echo ""
   echo "--------------------------------------"
   echo "Deploy ${label}: ${host}"
-  echo "Script: ${script}"
+  echo "Wrapper: ${wrapper}"
   echo "--------------------------------------"
 
-  ssh "${DEPLOY_USER}@${host}" "${script}"
+  run_ssh "$host" "$wrapper"
 }
 
 validate_backend() {
-  local host="$1"
-
   echo ""
-  echo "Validando backend: ${host}"
+  echo "Validando backend: ${BACKEND_HOST}"
 
-  ssh "${DEPLOY_USER}@${host}" '
-    systemctl is-active tecdex-backend &&
+  run_ssh "$BACKEND_HOST" '
+    systemctl is-active tecdex-backend.service &&
     for i in {1..25}; do
-      if curl -fsS http://localhost:3000 >/dev/null; then
+      if curl -fsS http://localhost:3000/health >/dev/null; then
         echo "backend OK"
         exit 0
       fi
       echo "esperando backend... $i/25"
       sleep 1
     done
-    echo "ERROR: backend no responde"
-    sudo systemctl status tecdex-backend --no-pager || true
-    sudo journalctl -u tecdex-backend -n 80 --no-pager || true
+    echo "ERROR: backend no responde en /health"
+    sudo systemctl status tecdex-backend.service --no-pager || true
+    sudo journalctl -u tecdex-backend.service -n 80 --no-pager || true
     exit 1
-  '
+  ' || {
+    echo "ERROR: servicio backend no quedó activo o healthcheck no paso."
+    exit 1
+  }
 }
 
 validate_ai() {
-  local host="$1"
-
   echo ""
-  echo "Validando AI Engine: ${host}"
+  echo "Validando AI Engine: ${AI_HOST}"
 
-  ssh "${DEPLOY_USER}@${host}" '
-    systemctl is-active ai-engine &&
+  run_ssh "$AI_HOST" '
+    systemctl is-active ai-engine.service &&
     for i in {1..25}; do
       if curl -fsS http://localhost:8001/health >/dev/null; then
         echo "ai-engine OK"
@@ -230,58 +120,60 @@ validate_ai() {
       echo "esperando ai-engine... $i/25"
       sleep 1
     done
-    echo "ERROR: ai-engine no responde"
-    sudo systemctl status ai-engine --no-pager || true
-    sudo journalctl -u ai-engine -n 80 --no-pager || true
+    echo "ERROR: ai-engine no responde en /health"
+    sudo systemctl status ai-engine.service --no-pager || true
+    sudo journalctl -u ai-engine.service -n 80 --no-pager || true
     exit 1
-  '
+  ' || {
+    echo "ERROR: servicio AI Engine no quedó activo o healthcheck no paso."
+    exit 1
+  }
 }
 
 validate_frontend() {
-  local host="$1"
-
   echo ""
-  echo "Validando frontend: ${host}"
+  echo "Validando frontend: ${FRONTEND_HOST}"
 
-  ssh "${DEPLOY_USER}@${host}" '
-    systemctl is-active tcdx-frontend &&
+  run_ssh "$FRONTEND_HOST" '
+    systemctl is-active tcdx-frontend.service &&
     for i in {1..35}; do
       if curl -fsS http://localhost:3001 >/dev/null; then
         echo "frontend OK en 3001"
         exit 0
       fi
-
-      if curl -fsS http://localhost:3000 >/dev/null; then
-        echo "frontend OK en 3000"
-        exit 0
-      fi
-
       echo "esperando frontend... $i/35"
       sleep 1
     done
-    echo "ERROR: frontend no responde ni en 3001 ni en 3000"
-    sudo systemctl status tcdx-frontend --no-pager || true
-    sudo journalctl -u tcdx-frontend -n 80 --no-pager || true
+    echo "ERROR: frontend no responde en 3001"
+    sudo systemctl status tcdx-frontend.service --no-pager || true
+    sudo journalctl -u tcdx-frontend.service -n 80 --no-pager || true
     exit 1
-  '
+  ' || {
+    echo "ERROR: servicio frontend no quedó activo o healthcheck no paso."
+    exit 1
+  }
 }
 
 echo ""
 echo "======================================"
 echo " PREFLIGHT DEPLOY TCDX ISO SAAS"
+echo " Deploy v4 only"
 echo "======================================"
-echo "Fecha/hora:       ${DEPLOY_TS}"
-echo "Carpeta actual:   ${CURRENT_DIR}"
-echo "Carpeta esperada: ${EXPECTED_DIR}"
-echo "Rama actual:      ${CURRENT_BRANCH:-no-detectada}"
-echo "Ultimo commit:    ${CURRENT_COMMIT:-no-detectado}"
-echo "Origin:           ${ORIGIN_URL:-no-detectado}"
-echo "Usuario deploy:   ${DEPLOY_USER}"
-echo "Target:           ${DEPLOY_TARGET}"
-echo ""
-echo "Backends:         ${BACKEND_HOSTS[*]}"
-echo "AI Engines:       ${AI_HOSTS[*]}"
-echo "Frontends:        ${FRONTEND_HOSTS[*]}"
+echo "Fecha/hora:        ${DEPLOY_TS}"
+echo "Carpeta actual:    ${CURRENT_DIR}"
+echo "Carpeta esperada:  ${EXPECTED_DIR}"
+echo "Rama actual:       ${CURRENT_BRANCH:-no-detectada}"
+echo "Ultimo commit:     ${CURRENT_COMMIT:-no-detectado}"
+echo "Origin:            ${ORIGIN_URL:-no-detectado}"
+echo "Usuario deploy:    ${DEPLOY_USER}"
+echo "Deploy mode:       v4 only"
+echo "Backend host:      ${BACKEND_HOST}"
+echo "AI Engine host:    ${AI_HOST}"
+echo "Frontend host:     ${FRONTEND_HOST}"
+echo "Remote repo dir:   ${REMOTE_REPO_DIR}"
+echo "Backend dir:       ${REMOTE_BACKEND_DIR}"
+echo "Frontend dir:      ${REMOTE_FRONTEND_DIR}"
+echo "AI engine dir:     ${REMOTE_AI_ENGINE_DIR}"
 
 if [[ ! -d .git && ! -f .git ]]; then
   echo ""
@@ -293,7 +185,7 @@ fi
 
 if [[ "$CURRENT_DIR" != "$EXPECTED_DIR" ]]; then
   echo ""
-  echo "ERROR: deploy bloqueado porque no estás en el worktree main estable."
+  echo "ERROR: deploy bloqueado porque no estás en el worktree estable esperado."
   echo "Worktree permitido:"
   echo "  ${EXPECTED_DIR}"
   echo "Worktree actual:"
@@ -344,76 +236,43 @@ echo "Preflight Git OK."
 echo ""
 
 echo "======================================"
-echo " VALIDANDO SSH Y SCRIPTS REMOTOS"
+echo " VALIDANDO SSH, RUTAS, WRAPPERS Y SERVICIOS"
 echo "======================================"
 
-for host in "${BACKEND_HOSTS[@]}"; do
-  echo ""
-  echo "Backend host: $host"
-  run_ssh "$host" "hostname && test -x /home/tecdex/deploy-backend.sh && echo 'deploy-backend.sh OK'"
-done
-
-for host in "${AI_HOSTS[@]}"; do
-  echo ""
-  echo "AI host: $host"
-  run_ssh "$host" "hostname && test -x /home/tecdex/deploy-ai-engine.sh && echo 'deploy-ai-engine.sh OK'"
-done
-
-for host in "${FRONTEND_HOSTS[@]}"; do
-  echo ""
-  echo "Frontend host: $host"
-  run_ssh "$host" "hostname && test -x /home/tecdex/deploy-frontend.sh && echo 'deploy-frontend.sh OK'"
-done
+preflight_remote "backend" "$BACKEND_HOST" "$REMOTE_BACKEND_DIR" "$BACKEND_WRAPPER" "tecdex-backend.service"
+preflight_remote "AI Engine" "$AI_HOST" "$REMOTE_AI_ENGINE_DIR" "$AI_ENGINE_WRAPPER" "ai-engine.service"
+preflight_remote "frontend" "$FRONTEND_HOST" "$REMOTE_FRONTEND_DIR" "$FRONTEND_WRAPPER" "tcdx-frontend.service"
 
 echo ""
 echo "======================================"
-echo " DEPLOY GLOBAL BACKEND"
+echo " DEPLOY BACKEND"
 echo "======================================"
-
-for host in "${BACKEND_HOSTS[@]}"; do
-  deploy_remote "backend" "$host" "/home/tecdex/deploy-backend.sh"
-done
+deploy_remote "backend" "$BACKEND_HOST" "$BACKEND_WRAPPER"
 
 echo ""
 echo "======================================"
-echo " DEPLOY GLOBAL AI ENGINE"
+echo " DEPLOY AI ENGINE"
 echo "======================================"
-
-for host in "${AI_HOSTS[@]}"; do
-  deploy_remote "ai-engine" "$host" "/home/tecdex/deploy-ai-engine.sh"
-done
+deploy_remote "AI Engine" "$AI_HOST" "$AI_ENGINE_WRAPPER"
 
 echo ""
 echo "======================================"
-echo " DEPLOY GLOBAL FRONTEND"
+echo " DEPLOY FRONTEND"
 echo "======================================"
-
-for host in "${FRONTEND_HOSTS[@]}"; do
-  deploy_remote "frontend" "$host" "/home/tecdex/deploy-frontend.sh"
-done
+deploy_remote "frontend" "$FRONTEND_HOST" "$FRONTEND_WRAPPER"
 
 echo ""
 echo "======================================"
 echo " VALIDACION POST-DEPLOY"
 echo "======================================"
-
-for host in "${BACKEND_HOSTS[@]}"; do
-  validate_backend "$host"
-done
-
-for host in "${AI_HOSTS[@]}"; do
-  validate_ai "$host"
-done
-
-for host in "${FRONTEND_HOSTS[@]}"; do
-  validate_frontend "$host"
-done
+validate_backend
+validate_ai
+validate_frontend
 
 echo ""
 echo "======================================"
-echo " DEPLOY GLOBAL FINALIZADO OK"
+echo " DEPLOY V4 FINALIZADO OK"
 echo "======================================"
-echo "Target desplegado: ${DEPLOY_TARGET}"
-echo "Backends:          ${BACKEND_HOSTS[*]}"
-echo "AI Engines:        ${AI_HOSTS[*]}"
-echo "Frontends:         ${FRONTEND_HOSTS[*]}"
+echo "Backend:      ${BACKEND_HOST}"
+echo "AI Engine:    ${AI_HOST}"
+echo "Frontend:     ${FRONTEND_HOST}"
