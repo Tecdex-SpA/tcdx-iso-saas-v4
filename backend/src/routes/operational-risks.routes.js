@@ -3,6 +3,7 @@ const pool = require('../config/db');
 const { errorDetail } = require('../utils/errorResponse');
 const monteCarlo = require('../services/operationalRiskMonteCarlo.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
+const operationalRiskAi = require('../services/operationalRiskAi.service');
 
 const router = express.Router();
 
@@ -506,54 +507,25 @@ router.post('/ai-analysis', async (req, res) => {
 
     monteCarlo.assertCanReadTenant(req.user, tenantId);
 
-    const payload = normalizeAiPayload(req.body || {});
-    if (payload.risks.length === 0) {
-      throw monteCarlo.publicError(400, 'AI_ANALYSIS_RISKS_REQUIRED', 'Se requiere al menos un riesgo para analisis AI');
-    }
-
-    const requestId = `beta_pert_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const aiPayload = {
-      tenant_id: tenantId,
-      request_id: requestId,
-      locale: 'es',
-      task_type: 'operational_risk_beta_pert_analysis',
-      prompt_version: 'beta-pert-operational-risk-v1',
-      question: buildOperationalAiPrompt(payload),
-      context: {
-        tenant: { tenant_id: tenantId },
-        scope: {
-          module: 'operational-risks',
-          view: 'beta-pert',
-          analysis_scope: payload.scope,
-          prompt_version: 'beta-pert-operational-risk-v1',
-        },
-        operational_risk_beta_pert: payload,
-      },
-      options: {
-        model_mode: 'balanced',
-        response_format: 'json',
-        require_json: true,
-        human_review_required: true,
-      },
-    };
+    const payload = operationalRiskAi.normalizeAiPayload(req.body || {});
+    const requestId = operationalRiskAi.buildRequestId();
+    const aiPayload = operationalRiskAi.buildAiEnginePayload({ tenantId, requestId, payload });
 
     const aiResult = await aiEngineClient.analyzeWithSeniorAuditor(aiPayload);
-    if (isAiUnavailable(aiResult)) {
-      const code = aiResult?.code || aiResult?.engine?.error_type || 'AI_ENGINE_UNAVAILABLE';
-      const status = code === 'AI_DISABLED_BY_PLAN' ? 403 : 503;
-      return res.status(status).json({
+    const unavailable = operationalRiskAi.classifyAiEngineResult(aiResult);
+    if (unavailable) {
+      return res.status(unavailable.status).json({
         ok: false,
-        code,
-        error: code === 'AI_DISABLED_BY_PLAN'
-          ? 'AI Auditor no esta habilitado para este tenant.'
-          : 'AI Auditor no esta disponible para analisis operacional Beta-PERT en este momento.',
+        code: unavailable.code,
+        error: unavailable.message,
         ai_available: false,
+        reason: unavailable.reason || null,
         request_id: aiResult?.request_id || requestId,
         engine: aiResult?.engine || aiResult?.trace || null,
       });
     }
 
-    const analysis = normalizeOperationalAiAnalysis(aiResult, payload);
+    const analysis = operationalRiskAi.normalizeOperationalAiAnalysis(aiResult, payload);
     return sendData(res, {
       analysis,
       ai_available: true,
@@ -643,7 +615,7 @@ router.post('/simulations/:id/recommendations/ai', async (req, res) => {
       throw monteCarlo.publicError(404, 'SIMULATION_NOT_FOUND', 'Simulacion no encontrada');
     }
 
-    const analysis = normalizeAnalysisToSave(req.body?.analysis);
+    const analysis = operationalRiskAi.normalizeAnalysisToSave(req.body?.analysis);
     const controlsPayload = {
       source: 'ai-engine',
       scope: safeText(req.body?.scope || analysis.scope, 'portfolio', 40),

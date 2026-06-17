@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const monteCarlo = require('./operationalRiskMonteCarlo.service');
+const operationalRiskAi = require('./operationalRiskAi.service');
 
 function assertThrowsCode(fn, code) {
   assert.throws(fn, (error) => error?.code === code);
@@ -62,6 +63,99 @@ function runTests() {
   const viewer = { role: 'viewer', tenant_id: tenantA.tenant_id };
   assert.equal(monteCarlo.canReadOperationalRisk(viewer), true);
   assert.equal(monteCarlo.canCreateOperationalRisk(viewer), false);
+
+  assertThrowsCode(
+    () => operationalRiskAi.normalizeAiPayload({ risks: [] }),
+    'ai_invalid_payload'
+  );
+
+  const aiPayload = operationalRiskAi.normalizeAiPayload({
+    scope: 'portfolio',
+    kpis: {
+      exposureExpectedAccumulated: 45,
+      conservativeP95: 120,
+      criticalProbabilityAverage: 0.22,
+      highPrioritizedRisks: 2,
+    },
+    risks: [
+      {
+        id: 'simulation-1',
+        name: 'Caida de servicio critico',
+        standard: 'ISO27001',
+        process: 'Continuidad operacional',
+        expectedAnnualExposure: 45,
+        p95: 120,
+        criticalProbability: 0.22,
+        status: 'alto',
+        probabilityScore: 3,
+        impactScore: 5,
+        frequency: { min: 1, mode: 3, max: 6 },
+        impact: { min: 8, mode: 24, max: 72 },
+      },
+    ],
+  });
+  assert.equal(aiPayload.risks.length, 1);
+  assert.equal(aiPayload.methodology.conservativeP95, 'SUM(peor_escenario_p95)');
+
+  const prompt = operationalRiskAi.buildOperationalAiPrompt(aiPayload);
+  assert.ok(prompt.includes(operationalRiskAi.PROMPT_VERSION));
+  assert.ok(prompt.includes('No afirmes P95 de portafolio'));
+
+  const disabled = operationalRiskAi.classifyAiEngineResult({
+    ok: false,
+    disabled_by_plan: true,
+    engine: { ai_disabled_reason: 'ai_feature_disabled' },
+  });
+  assert.equal(disabled.code, 'ai_feature_not_enabled');
+  assert.equal(disabled.status, 403);
+
+  const unconfigured = operationalRiskAi.classifyAiEngineResult({
+    ok: false,
+    engine: {
+      ai_engine_used: false,
+      fallback_used: true,
+      error_type: 'AI_ENGINE_UNAVAILABLE',
+      error_message: 'AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado',
+    },
+  });
+  assert.equal(unconfigured.code, 'ai_engine_unconfigured');
+
+  const normalizedAi = operationalRiskAi.normalizeOperationalAiAnalysis({
+    ok: true,
+    request_id: 'req-1',
+    engine: { ai_engine_used: true, selected_model: 'gpt-test' },
+    structured_result: {
+      diagnostico_ejecutivo: 'Exposicion operacional alta con concentracion en continuidad.',
+      riesgos_prioritarios: [{ nombre: 'Caida de servicio critico', motivo: 'P95 alto', prioridad: 'alta' }],
+      acciones_sugeridas: [{ accion: 'Probar recuperacion y reforzar monitoreo.', horizonte: '30_dias' }],
+      controles_iso_sugeridos: [{ norma: 'ISO27001', control_o_clausula: 'A.5.30', descripcion: 'Preparacion TIC para continuidad.' }],
+      advertencias_metodologicas: ['P95 conservador no es P95 de portafolio.'],
+      proximos_pasos: ['Validar owner y umbral operativo.'],
+      efectividad_estimada_pct: 35,
+    },
+  }, aiPayload);
+  assert.equal(normalizedAi.guardable, true);
+  assert.equal(normalizedAi.ai_model, 'gpt-test');
+  assert.equal(normalizedAi.prompt_version, operationalRiskAi.PROMPT_VERSION);
+
+  assertThrowsCode(
+    () => operationalRiskAi.normalizeOperationalAiAnalysis({ ok: true, answer: 'texto libre sin json' }, aiPayload),
+    'ai_invalid_response'
+  );
+
+  assertThrowsCode(
+    () => operationalRiskAi.normalizeAnalysisToSave({ ...normalizedAi, prompt_version: 'old' }),
+    'ai_invalid_response'
+  );
+
+  assertThrowsCode(
+    () => operationalRiskAi.normalizeAnalysisToSave({ ...normalizedAi, ai_model: 'backend_fallback' }),
+    'ai_invalid_response'
+  );
+
+  const saveable = operationalRiskAi.normalizeAnalysisToSave(normalizedAi);
+  assert.equal(saveable.prompt_version, operationalRiskAi.PROMPT_VERSION);
+  assert.equal(saveable.source, 'ai-engine');
 
   console.log('operationalRiskMonteCarlo.service tests OK');
 }

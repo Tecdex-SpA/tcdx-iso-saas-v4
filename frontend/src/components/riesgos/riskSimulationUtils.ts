@@ -147,6 +147,8 @@ export type OperationalAiAnalysis = {
   scope?: 'portfolio' | 'simulation' | string;
   request_id?: string | null;
   ai_engine_used?: boolean;
+  source?: string;
+  guardable?: boolean;
 };
 
 export const HORIZON_OPTIONS: Array<{ value: QuantitativeRiskHorizon; label: string; factor: number }> = [
