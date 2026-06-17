@@ -5,6 +5,9 @@ import BetaPertRiskMatrix from './BetaPertRiskMatrix';
 import QuantitativeRiskDashboard from './QuantitativeRiskDashboard';
 import QuantitativeRiskTable from './QuantitativeRiskTable';
 import RiskSimulationDetailPanel from './RiskSimulationDetailPanel';
+import OperationalRiskSimulationForm, {
+  type OperationalRiskSimulationFormState,
+} from './OperationalRiskSimulationForm';
 import {
   DEFAULT_QUANTITATIVE_FILTERS,
   HORIZON_OPTIONS,
@@ -23,13 +26,18 @@ type FilterOption = {
 };
 
 type QuantitativeRiskSimulationViewProps = {
+  form: OperationalRiskSimulationFormState;
   simulations: OperationalRiskSimulationRow[];
   loading: boolean;
+  formLoading: boolean;
   error?: string;
   message?: string;
   standardOptions?: FilterOption[];
+  canCreateSimulation?: boolean;
   canCreateRecommendation?: boolean;
   recommendationLoadingId?: string;
+  onFormChange: (field: keyof OperationalRiskSimulationFormState, value: string) => void;
+  onSubmitSimulation: () => void;
   onRefresh: () => void;
   onGenerateRecommendation?: (simulationId: string) => void;
 };
@@ -47,13 +55,18 @@ function horizonLabel(value: QuantitativeRiskFilters['horizon']) {
 }
 
 export default function QuantitativeRiskSimulationView({
+  form,
   simulations,
   loading,
+  formLoading,
   error = '',
   message = '',
   standardOptions = [],
+  canCreateSimulation = false,
   canCreateRecommendation = false,
   recommendationLoadingId = '',
+  onFormChange,
+  onSubmitSimulation,
   onRefresh,
   onGenerateRecommendation,
 }: QuantitativeRiskSimulationViewProps) {
@@ -107,6 +120,16 @@ export default function QuantitativeRiskSimulationView({
 
   return (
     <section className="space-y-5">
+      <OperationalRiskSimulationForm
+        form={form}
+        onChange={onFormChange}
+        onSubmit={onSubmitSimulation}
+        loading={formLoading}
+        disabled={!canCreateSimulation}
+        error={error}
+        successMessage={message}
+      />
+
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-4 lg:grid-cols-4">
           <label className="block">
@@ -165,18 +188,6 @@ export default function QuantitativeRiskSimulationView({
           </label>
         </div>
       </div>
-
-      {error && (
-        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {error}
-        </div>
-      )}
-
-      {message && (
-        <div className="rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {message}
-        </div>
-      )}
 
       {loading ? (
         <div className="rounded-lg border border-slate-200 bg-white px-5 py-8 text-sm text-slate-500 shadow-sm">
