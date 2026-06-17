@@ -9,8 +9,10 @@ type QuantitativeRiskTableProps = {
   risks: QuantitativeRisk[];
   selectedRiskId?: string;
   onSelectRisk: (risk: QuantitativeRisk) => void;
+  onEditRisk?: (risk: QuantitativeRisk) => void;
   onGenerateRecommendation?: (risk: QuantitativeRisk) => void;
   recommendationLoadingId?: string;
+  canEditRisk?: boolean;
   canCreateRecommendation?: boolean;
 };
 
@@ -25,8 +27,10 @@ export default function QuantitativeRiskTable({
   risks,
   selectedRiskId,
   onSelectRisk,
+  onEditRisk,
   onGenerateRecommendation,
   recommendationLoadingId,
+  canEditRisk = false,
   canCreateRecommendation = false,
 }: QuantitativeRiskTableProps) {
   return (
@@ -79,17 +83,30 @@ export default function QuantitativeRiskTable({
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onGenerateRecommendation?.(risk);
-                      }}
-                      disabled={!canCreateRecommendation || !onGenerateRecommendation || loading}
-                      className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {loading ? 'Generando...' : 'Recomendacion'}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onEditRisk?.(risk);
+                        }}
+                        disabled={!canEditRisk || !onEditRisk}
+                        className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onGenerateRecommendation?.(risk);
+                        }}
+                        disabled={!canCreateRecommendation || !onGenerateRecommendation || loading}
+                        className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {loading ? 'Generando...' : 'Recomendacion'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

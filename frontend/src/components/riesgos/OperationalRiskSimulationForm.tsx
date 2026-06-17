@@ -29,6 +29,10 @@ type OperationalRiskSimulationFormProps = {
   disabled?: boolean;
   error?: string;
   successMessage?: string;
+  mode?: 'create' | 'edit';
+  editingLabel?: string;
+  submitLabel?: string;
+  onCancelEdit?: () => void;
 };
 
 function inputClassName() {
@@ -52,7 +56,13 @@ export default function OperationalRiskSimulationForm({
   disabled = false,
   error = '',
   successMessage = '',
+  mode = 'create',
+  editingLabel = '',
+  submitLabel = 'Ejecutar y guardar simulacion',
+  onCancelEdit,
 }: OperationalRiskSimulationFormProps) {
+  const isEditing = mode === 'edit';
+
   const numberInput = (
     label: string,
     field: keyof OperationalRiskSimulationFormState,
@@ -72,14 +82,23 @@ export default function OperationalRiskSimulationForm({
   );
 
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <section id="beta-pert-simulation-form" className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-5 py-4">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-950">Parametros de simulacion Beta-PERT</h2>
+            <h2 className="text-lg font-semibold text-slate-950">
+              {isEditing ? 'Editar simulacion operativa' : 'Nueva simulacion operativa'}
+            </h2>
             <p className="text-sm text-slate-500">
-              Ingresa supuestos operativos y guarda la simulacion para alimentar KPIs, matriz y tabla cuantitativa.
+              {isEditing
+                ? 'Ajusta los supuestos cargados desde la evaluacion seleccionada y guardalos como una nueva simulacion.'
+                : 'Ingresa supuestos operativos y guarda la simulacion para alimentar KPIs, matriz y tabla cuantitativa.'}
             </p>
+            {isEditing && editingLabel && (
+              <p className="mt-2 inline-flex rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
+                Editando: {editingLabel}
+              </p>
+            )}
           </div>
           <span className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">
             Estima impacto operacional en horas, no impacto financiero.
@@ -189,8 +208,18 @@ export default function OperationalRiskSimulationForm({
             disabled={disabled || loading}
             className="inline-flex items-center justify-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? 'Ejecutando...' : 'Ejecutar y guardar simulacion'}
+            {loading ? 'Guardando...' : submitLabel}
           </button>
+          {isEditing && onCancelEdit && (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              disabled={loading}
+              className="inline-flex items-center justify-center rounded border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancelar edicion
+            </button>
+          )}
           {disabled && (
             <p className="text-xs text-slate-500">
               Tu rol puede consultar resultados, pero no crear simulaciones operativas.

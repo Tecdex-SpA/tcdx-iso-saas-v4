@@ -9,7 +9,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { translateClauseLabel, translateStandardLabel } from '@/i18n/displayText';
 import QuantitativeRiskSimulationView from '@/components/riesgos/QuantitativeRiskSimulationView';
 import RiskViewSwitcher, { type RiskViewMode } from '@/components/riesgos/RiskViewSwitcher';
-import type { OperationalRiskSimulationRow } from '@/components/riesgos/riskSimulationUtils';
+import type { OperationalRiskSimulationRow, QuantitativeRisk } from '@/components/riesgos/riskSimulationUtils';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -172,6 +172,12 @@ type OperationalRiskRecommendation = {
   requiere_validacion_humana?: boolean;
 };
 
+type EditingOperationalSimulation = {
+  id: string;
+  code: string;
+  name: string;
+};
+
 const DEFAULT_OPERATIONAL_RISK_FORM: OperationalRiskForm = {
   norma_tipo: 'ISO27001',
   modelo_usado: 'ISO27001_TTIA',
@@ -190,6 +196,23 @@ const DEFAULT_OPERATIONAL_RISK_FORM: OperationalRiskForm = {
   umbral_disrupcion_critica_horas: '40',
   iteraciones: '10000',
 };
+
+function toFormString(value: unknown, fallback = '') {
+  if (value === null || value === undefined || value === '') return fallback;
+  return String(value);
+}
+
+function normalizeOperationalNorm(value: unknown): OperationalRiskForm['norma_tipo'] {
+  return String(value || '').toUpperCase().includes('ISO9001') ? 'ISO9001' : 'ISO27001';
+}
+
+function normalizeOperationalModel(value: unknown, norm: OperationalRiskForm['norma_tipo']): OperationalRiskModel {
+  const model = String(value || '');
+  if (model === 'ISO27001_TTIA' || model === 'ISO9001_COP_SIMPLE' || model === 'ISO9001_COP_AVANZADO') {
+    return model;
+  }
+  return norm === 'ISO9001' ? 'ISO9001_COP_SIMPLE' : 'ISO27001_TTIA';
+}
 
 function resolveTenantId(user: any): string {
   return (
@@ -304,6 +327,8 @@ function RiskMatrixPageContent() {
   } | null>(null);
   const [operationalRiskForm, setOperationalRiskForm] = useState<OperationalRiskForm>(DEFAULT_OPERATIONAL_RISK_FORM);
   const [operationalSimulations, setOperationalSimulations] = useState<OperationalRiskSimulation[]>([]);
+  const [selectedOperationalSimulationId, setSelectedOperationalSimulationId] = useState('');
+  const [editingOperationalSimulation, setEditingOperationalSimulation] = useState<EditingOperationalSimulation | null>(null);
   const [loadingOperationalSimulations, setLoadingOperationalSimulations] = useState(false);
   const [runningOperationalSimulation, setRunningOperationalSimulation] = useState(false);
   const [operationalRiskError, setOperationalRiskError] = useState('');
@@ -436,9 +461,63 @@ function RiskMatrixPageContent() {
     });
   };
 
+  const buildOperationalFormFromRisk = (risk: QuantitativeRisk): OperationalRiskForm => {
+    const row = risk.source || {};
+    const norm = normalizeOperationalNorm(row.norma_tipo || risk.normId);
+    const model = normalizeOperationalModel(row.modelo_usado, norm);
+    const impactMin = row.tiempo_subsanacion_min ?? row.impacto_min;
+    const impactMode = row.tiempo_subsanacion_mode ?? row.impacto_mode;
+    const impactMax = row.tiempo_subsanacion_max ?? row.impacto_max;
+
+    return {
+      norma_tipo: norm,
+      modelo_usado: model,
+      nombre_riesgo: toFormString(row.nombre_riesgo, risk.name),
+      proceso_afectado: toFormString(row.proceso_afectado, risk.processName),
+      frecuencia_min: toFormString(row.frecuencia_min, ''),
+      frecuencia_mode: toFormString(row.frecuencia_mode, ''),
+      frecuencia_max: toFormString(row.frecuencia_max, ''),
+      impacto_min: toFormString(impactMin, ''),
+      impacto_mode: toFormString(impactMode, ''),
+      impacto_max: toFormString(impactMax, ''),
+      tasa_error_min: toFormString(row.tasa_error_min, ''),
+      tasa_error_mode: toFormString(row.tasa_error_mode, ''),
+      tasa_error_max: toFormString(row.tasa_error_max, ''),
+      volumen_operativo_anual: toFormString(row.volumen_operativo_anual, ''),
+      umbral_disrupcion_critica_horas: toFormString(row.umbral_disrupcion_critica_horas, ''),
+      iteraciones: toFormString(row.iteraciones, DEFAULT_OPERATIONAL_RISK_FORM.iteraciones),
+    };
+  };
+
+  const beginEditOperationalSimulation = (risk: QuantitativeRisk) => {
+    setSelectedOperationalSimulationId(risk.id);
+    setEditingOperationalSimulation({
+      id: risk.id,
+      code: risk.code,
+      name: risk.name,
+    });
+    setOperationalRiskForm(buildOperationalFormFromRisk(risk));
+    setOperationalRiskError('');
+    setOperationalRiskMessage('Editando evaluacion existente. Al guardar se creara una nueva simulacion basada en estos parametros.');
+
+    window.setTimeout(() => {
+      document.getElementById('beta-pert-simulation-form')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 0);
+  };
+
+  const cancelOperationalSimulationEdit = () => {
+    setEditingOperationalSimulation(null);
+    setOperationalRiskForm(DEFAULT_OPERATIONAL_RISK_FORM);
+    setOperationalRiskError('');
+    setOperationalRiskMessage('');
+  };
+
   const loadOperationalSimulations = async () => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) return [];
 
     try {
       setLoadingOperationalSimulations(true);
@@ -457,9 +536,11 @@ function RiskMatrixPageContent() {
 
       const rows = Array.isArray(json?.data) ? json.data : [];
       setOperationalSimulations(rows);
+      return rows as OperationalRiskSimulation[];
     } catch (err: any) {
       console.error('ERROR LOAD OPERATIONAL RISK SIMULATIONS:', err);
       setOperationalRiskError(err?.message || 'Error cargando simulaciones operativas');
+      return [];
     } finally {
       setLoadingOperationalSimulations(false);
     }
@@ -529,8 +610,17 @@ function RiskMatrixPageContent() {
         throw new Error(json?.error || 'No fue posible ejecutar la simulacion');
       }
 
-      setOperationalRiskMessage('Simulacion operativa guardada con metricas agregadas.');
-      await loadOperationalSimulations();
+      const createdSimulation = json?.data as OperationalRiskSimulation | undefined;
+      const savingFromEdit = Boolean(editingOperationalSimulation);
+      const rows = await loadOperationalSimulations();
+
+      setSelectedOperationalSimulationId(createdSimulation?.id || rows[0]?.id || '');
+      setEditingOperationalSimulation(null);
+      setOperationalRiskMessage(
+        savingFromEdit
+          ? 'Simulacion guardada como nueva evaluacion.'
+          : 'Simulacion operativa guardada con metricas agregadas.'
+      );
     } catch (err: any) {
       console.error('ERROR RUN OPERATIONAL RISK SIMULATION:', err);
       setOperationalRiskError(err?.message || 'Error ejecutando simulacion operativa');
@@ -1131,8 +1221,19 @@ function RiskMatrixPageContent() {
             canCreateSimulation={userCanCreateOperationalSimulation}
             canCreateRecommendation={userCanCreateOperationalSimulation}
             recommendationLoadingId={recommendationLoadingId}
+            selectedSimulationId={selectedOperationalSimulationId}
+            isEditingSimulation={Boolean(editingOperationalSimulation)}
+            editingSimulationLabel={
+              editingOperationalSimulation
+                ? `${editingOperationalSimulation.code}: ${editingOperationalSimulation.name}`
+                : ''
+            }
+            submitLabel={editingOperationalSimulation ? 'Guardar como nueva simulacion' : 'Ejecutar y guardar simulacion'}
             onFormChange={updateOperationalRiskField}
             onSubmitSimulation={runOperationalRiskSimulation}
+            onCancelEditing={cancelOperationalSimulationEdit}
+            onSelectSimulation={setSelectedOperationalSimulationId}
+            onEditRisk={beginEditOperationalSimulation}
             onRefresh={loadOperationalSimulations}
             onGenerateRecommendation={(simulationId) => {
               void generateOperationalRecommendation(simulationId);

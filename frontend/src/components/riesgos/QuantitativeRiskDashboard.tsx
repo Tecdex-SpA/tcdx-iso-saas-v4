@@ -13,21 +13,24 @@ type QuantitativeRiskDashboardProps = {
 const cards = [
   {
     key: 'expectedExposure',
-    label: 'Exposicion esperada',
+    label: 'Exposicion esperada acumulada',
+    helper: 'Suma de medias anuales de los riesgos filtrados.',
     icon: 'hourglass' as const,
     iconClass: 'bg-blue-50 text-blue-700',
     valueClass: 'text-blue-700',
   },
   {
-    key: 'p95',
-    label: 'P95',
+    key: 'conservativeP95',
+    label: 'P95 agregado conservador',
+    helper: 'Suma de P95 individuales; no es P95 de portafolio simulado.',
     icon: 'trend' as const,
     iconClass: 'bg-violet-50 text-violet-700',
     valueClass: 'text-violet-700',
   },
   {
     key: 'criticalProbability',
-    label: 'Prob. disrupcion critica',
+    label: 'Prob. critica promedio',
+    helper: 'Promedio de probabilidad critica de riesgos filtrados.',
     icon: 'alert' as const,
     iconClass: 'bg-amber-50 text-amber-700',
     valueClass: 'text-amber-700',
@@ -35,6 +38,7 @@ const cards = [
   {
     key: 'prioritizedHighRisks',
     label: 'Riesgos altos priorizados',
+    helper: 'Conteo de riesgos clasificados como alto o critico.',
     icon: 'shield' as const,
     iconClass: 'bg-red-50 text-red-700',
     valueClass: 'text-red-700',
@@ -47,7 +51,7 @@ export default function QuantitativeRiskDashboard({
 }: QuantitativeRiskDashboardProps) {
   function renderValue(key: string) {
     if (key === 'expectedExposure') return `${formatRiskNumber(kpis.expectedExposure)} ${unitSuffix}`;
-    if (key === 'p95') return `${formatRiskNumber(kpis.p95)} ${unitSuffix}`;
+    if (key === 'conservativeP95') return `${formatRiskNumber(kpis.conservativeP95)} ${unitSuffix}`;
     if (key === 'criticalProbability') return formatRiskProbability(kpis.criticalProbability);
     return formatRiskNumber(kpis.prioritizedHighRisks);
   }
@@ -63,6 +67,7 @@ export default function QuantitativeRiskDashboard({
             <div>
               <div className="text-sm font-medium text-slate-700">{card.label}</div>
               <div className={`mt-1 text-2xl font-bold ${card.valueClass}`}>{renderValue(card.key)}</div>
+              <div className="mt-1 text-xs leading-4 text-slate-500">{card.helper}</div>
             </div>
           </div>
         </div>
