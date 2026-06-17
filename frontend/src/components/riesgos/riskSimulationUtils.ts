@@ -75,6 +75,60 @@ export type QuantitativeRiskKpis = {
   prioritizedHighRisks: number;
 };
 
+export type PortfolioExposureLevel = QuantitativeRiskStatus;
+
+export type ExecutiveRiskSummary = {
+  level: PortfolioExposureLevel;
+  title: string;
+  narrative: string;
+  priorityFocus: string;
+  p95Leader: QuantitativeRisk | null;
+  criticalProbabilityLeader: QuantitativeRisk | null;
+  expectedExposureLeader: QuantitativeRisk | null;
+  highOrCriticalCount: number;
+};
+
+export type RiskContributorItem = {
+  risk: QuantitativeRisk;
+  value: number;
+  contributionPercent: number | null;
+};
+
+export type TopRiskContributors = {
+  byP95: RiskContributorItem[];
+  byExpectedExposure: RiskContributorItem[];
+  byCriticalProbability: RiskContributorItem[];
+};
+
+export type RiskTreatmentRecommendation = {
+  treatment: 'Mitigar' | 'Transferir' | 'Aceptar' | 'Evitar';
+  action: string;
+  controlFocus: string;
+  priority: 'Baja' | 'Media' | 'Alta' | 'Critica';
+  horizon: 'inmediato' | '30 dias' | '60 dias' | '90 dias';
+  justification: string;
+};
+
+export type OperationalRiskRecommendationResult = {
+  diagnostico_operativo?: string;
+  controles_sugeridos?: unknown[];
+  efectividad_estimada_pct?: number | string | null;
+  requiere_validacion_humana?: boolean;
+};
+
+export type AiAuditorOperationalPayload = {
+  scope: 'operational-risk-beta-pert';
+  methodology: string;
+  kpis: {
+    expectedExposure: number;
+    conservativeP95: number;
+    criticalProbability: number | null;
+    prioritizedHighRisks: number;
+  };
+  selectedRisk: ReturnType<typeof toAiRiskPayload> | null;
+  risks: Array<ReturnType<typeof toAiRiskPayload>>;
+};
+
 export const HORIZON_OPTIONS: Array<{ value: QuantitativeRiskHorizon; label: string; factor: number }> = [
   { value: 'mensual', label: 'Mensual', factor: 1 / 12 },
   { value: 'trimestral', label: 'Trimestral', factor: 1 / 4 },
@@ -360,6 +414,261 @@ export function calculateQuantitativeRiskKpis(risks: QuantitativeRisk[]): Quanti
       ? criticalProbabilities.reduce((sum, value) => sum + value, 0) / criticalProbabilities.length
       : null,
     prioritizedHighRisks: risks.filter((risk) => risk.status === 'alto' || risk.status === 'critico').length,
+  };
+}
+
+function statusWeight(status: QuantitativeRiskStatus) {
+  if (status === 'critico') return 4;
+  if (status === 'alto') return 3;
+  if (status === 'medio') return 2;
+  return 1;
+}
+
+function levelLabel(level: PortfolioExposureLevel) {
+  if (level === 'critico') return 'critica';
+  if (level === 'alto') return 'alta';
+  if (level === 'medio') return 'media';
+  return 'baja';
+}
+
+function topBy(risks: QuantitativeRisk[], value: (risk: QuantitativeRisk) => number, total = 0): RiskContributorItem[] {
+  return [...risks]
+    .sort((a, b) => value(b) - value(a))
+    .slice(0, 3)
+    .map((risk) => ({
+      risk,
+      value: value(risk),
+      contributionPercent: total > 0 ? getRiskContributionPercent(value(risk), total) : null,
+    }));
+}
+
+export function getRiskContributionPercent(value: number, total: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(total) || total <= 0) return 0;
+  return Math.round((value / total) * 1000) / 10;
+}
+
+export function getTopRiskContributors(risks: QuantitativeRisk[]): TopRiskContributors {
+  const totalP95 = risks.reduce((sum, risk) => sum + risk.p95, 0);
+  const totalExpected = risks.reduce((sum, risk) => sum + risk.expectedValue, 0);
+
+  return {
+    byP95: topBy(risks, (risk) => risk.p95, totalP95),
+    byExpectedExposure: topBy(risks, (risk) => risk.expectedValue, totalExpected),
+    byCriticalProbability: topBy(
+      risks.filter((risk) => risk.criticalProbability !== null),
+      (risk) => Number(risk.criticalProbability || 0),
+      0
+    ),
+  };
+}
+
+export function getPortfolioExposureLevel(risks: QuantitativeRisk[], kpis: QuantitativeRiskKpis): PortfolioExposureLevel {
+  if (risks.length === 0) return 'bajo';
+
+  const criticalCount = risks.filter((risk) => risk.status === 'critico').length;
+  const highOrCriticalCount = risks.filter((risk) => risk.status === 'alto' || risk.status === 'critico').length;
+  const mediumCount = risks.filter((risk) => risk.status === 'medio').length;
+  const averageSeverity = risks.reduce((sum, risk) => sum + statusWeight(risk.status), 0) / risks.length;
+  const criticalProbability = Number(kpis.criticalProbability || 0);
+
+  if ((criticalCount >= 1 && kpis.conservativeP95 >= 120) || criticalProbability >= 0.5) return 'critico';
+  if (highOrCriticalCount >= 3 || criticalProbability >= 0.3 || averageSeverity >= 3) return 'alto';
+  if (mediumCount > 0 || kpis.expectedExposure >= 24 || averageSeverity >= 2) return 'medio';
+  return 'bajo';
+}
+
+export function buildExecutiveRiskSummary(
+  risks: QuantitativeRisk[],
+  kpis: QuantitativeRiskKpis
+): ExecutiveRiskSummary {
+  const contributors = getTopRiskContributors(risks);
+  const level = getPortfolioExposureLevel(risks, kpis);
+  const p95Leader = contributors.byP95[0]?.risk || null;
+  const expectedExposureLeader = contributors.byExpectedExposure[0]?.risk || null;
+  const criticalProbabilityLeader = contributors.byCriticalProbability[0]?.risk || null;
+  const highOrCriticalCount = risks.filter((risk) => risk.status === 'alto' || risk.status === 'critico').length;
+  const mainDrivers = [p95Leader?.name, expectedExposureLeader?.name]
+    .filter(Boolean)
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .slice(0, 2);
+
+  if (risks.length === 0) {
+    return {
+      level,
+      title: 'Sin exposicion operacional calculada',
+      narrative: 'No hay riesgos operativos evaluados para los filtros actuales.',
+      priorityFocus: 'Ingrese una simulacion para construir lectura ejecutiva y priorizacion.',
+      p95Leader: null,
+      criticalProbabilityLeader: null,
+      expectedExposureLeader: null,
+      highOrCriticalCount: 0,
+    };
+  }
+
+  const narrative = [
+    `Los riesgos filtrados muestran una exposicion operacional ${levelLabel(level)}.`,
+    mainDrivers.length
+      ? `La mayor concentracion se observa en ${mainDrivers.join(' y ')}.`
+      : 'La exposicion esta distribuida entre los riesgos evaluados.',
+    highOrCriticalCount > 0
+      ? `${highOrCriticalCount} riesgo(s) requieren priorizacion por estado alto o critico.`
+      : 'No se observan riesgos altos o criticos con los filtros actuales.',
+  ].join(' ');
+
+  const priorityFocus = criticalProbabilityLeader
+    ? `Reducir probabilidad critica y severidad en ${criticalProbabilityLeader.name}.`
+    : p95Leader
+      ? `Reducir P95 individual en ${p95Leader.name}.`
+      : 'Mantener monitoreo de controles y umbrales operativos.';
+
+  return {
+    level,
+    title: `Exposicion operacional ${levelLabel(level)}`,
+    narrative,
+    priorityFocus,
+    p95Leader,
+    criticalProbabilityLeader,
+    expectedExposureLeader,
+    highOrCriticalCount,
+  };
+}
+
+function includesAny(text: string, terms: string[]) {
+  const normalized = text.toLowerCase();
+  return terms.some((term) => normalized.includes(term));
+}
+
+function controlFocusForRisk(risk: QuantitativeRisk) {
+  const text = `${risk.name} ${risk.processName}`.toLowerCase();
+
+  if (includesAny(text, ['autenticacion', 'autenticación', 'acceso', 'iam', 'identidad'])) {
+    return 'IAM, MFA, monitoreo de accesos, contingencia y pruebas de acceso.';
+  }
+  if (includesAny(text, ['respaldo', 'backup', 'restauracion', 'restauración', 'continuidad', 'drp'])) {
+    return 'Pruebas de restauracion, RTO/RPO, DRP, playbooks y evidencias de continuidad.';
+  }
+  if (includesAny(text, ['cambio', 'cambios', 'liberacion', 'liberación', 'version', 'versión', 'release'])) {
+    return 'CAB, pipeline QA, rollback, control de cambios y pruebas automatizadas.';
+  }
+  if (includesAny(text, ['base de datos', 'database', 'infraestructura', 'capacidad', 'servidor'])) {
+    return 'Capacidad, monitoreo, tuning, escalamiento, alertas y pruebas de carga.';
+  }
+  if (includesAny(text, ['documentacion', 'documentación', 'documental', 'politica', 'política'])) {
+    return 'Control documental, ownership, revision periodica y versionamiento.';
+  }
+  if (includesAny(text, ['soporte', 'incidente', 'sla', 'mesa de ayuda', 'ticket'])) {
+    return 'Escalamiento, runbooks, guardias, metricas SLA y postmortems.';
+  }
+  if (includesAny(text, ['parametrizacion', 'parametrización', 'cliente', 'implementacion', 'implementación'])) {
+    return 'Checklist, QA funcional, doble validacion y control de entregables.';
+  }
+  if (includesAny(text, ['conciliacion', 'conciliación', 'backoffice', 'back office'])) {
+    return 'Controles preventivos, conciliacion automatizada, segregacion y revision dual.';
+  }
+
+  return 'Controles preventivos, monitoreo operativo, owner definido y evidencia de seguimiento.';
+}
+
+export function buildRiskTreatmentRecommendation(risk: QuantitativeRisk | null): RiskTreatmentRecommendation | null {
+  if (!risk) return null;
+
+  const highCriticalProbability = Number(risk.criticalProbability || 0) >= 0.3;
+  const controlFocus = controlFocusForRisk(risk);
+
+  if (risk.status === 'critico') {
+    return {
+      treatment: 'Mitigar',
+      action: 'Ejecutar plan de tratamiento inmediato con responsable, umbral de recuperacion y evidencia de control.',
+      controlFocus,
+      priority: 'Critica',
+      horizon: 'inmediato',
+      justification: 'El riesgo combina severidad operativa alta con probabilidad o impacto suficiente para afectar continuidad.',
+    };
+  }
+
+  if (risk.status === 'alto') {
+    return {
+      treatment: highCriticalProbability ? 'Mitigar' : 'Transferir',
+      action: highCriticalProbability
+        ? 'Reducir frecuencia y variabilidad del evento antes del siguiente ciclo de revision.'
+        : 'Evaluar mitigacion operativa y transferencia contractual/SLA si existe dependencia externa.',
+      controlFocus,
+      priority: 'Alta',
+      horizon: '30 dias',
+      justification: 'El score compuesto exige priorizacion, aunque puede admitir tratamiento gradual si la probabilidad critica es contenida.',
+    };
+  }
+
+  if (risk.status === 'medio') {
+    return {
+      treatment: 'Mitigar',
+      action: 'Aplicar controles selectivos y monitorear tendencia antes de escalar inversion.',
+      controlFocus,
+      priority: 'Media',
+      horizon: '60 dias',
+      justification: 'La exposicion requiere seguimiento, pero no desplaza a riesgos altos o criticos.',
+    };
+  }
+
+  return {
+    treatment: 'Aceptar',
+    action: 'Mantener monitoreo periodico y evidencia de control; revisar si cambian umbrales o frecuencia.',
+    controlFocus,
+    priority: 'Baja',
+    horizon: '90 dias',
+    justification: 'La exposicion calculada se mantiene dentro de niveles bajos para los filtros actuales.',
+  };
+}
+
+export function buildMethodologyNote() {
+  return 'Los KPI agregados resumen los riesgos filtrados. La exposicion esperada acumulada corresponde a la suma de medias anuales. El P95 agregado conservador corresponde a la suma de P95 individuales y no equivale a una simulacion de portafolio con correlacion entre riesgos.';
+}
+
+function toAiRiskPayload(risk: QuantitativeRisk) {
+  return {
+    id: risk.id,
+    name: risk.name,
+    norm: risk.normName,
+    process: risk.processName,
+    expectedValue: risk.expectedValue,
+    p95: risk.p95,
+    criticalProbability: risk.criticalProbability,
+    status: risk.status,
+    probabilityScore: risk.probabilityScore,
+    impactScore: risk.impactScore,
+    parameters: {
+      frequency: {
+        min: risk.frequencyMin,
+        mostLikely: risk.frequencyMostLikely,
+        max: risk.frequencyMax,
+      },
+      impact: {
+        min: risk.impactMin,
+        mostLikely: risk.impactMostLikely,
+        max: risk.impactMax,
+      },
+      iterations: risk.iterations,
+      criticalThreshold: risk.criticalThreshold,
+    },
+  };
+}
+
+export function getAiAuditorPayload(
+  risks: QuantitativeRisk[],
+  selectedRisk: QuantitativeRisk | null,
+  kpis: QuantitativeRiskKpis
+): AiAuditorOperationalPayload {
+  return {
+    scope: 'operational-risk-beta-pert',
+    methodology: buildMethodologyNote(),
+    kpis: {
+      expectedExposure: kpis.expectedExposure,
+      conservativeP95: kpis.conservativeP95,
+      criticalProbability: kpis.criticalProbability,
+      prioritizedHighRisks: kpis.prioritizedHighRisks,
+    },
+    selectedRisk: selectedRisk ? toAiRiskPayload(selectedRisk) : null,
+    risks: risks.slice(0, 25).map(toAiRiskPayload),
   };
 }
 

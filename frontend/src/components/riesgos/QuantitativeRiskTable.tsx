@@ -1,6 +1,8 @@
 import {
+  buildRiskTreatmentRecommendation,
   formatRiskNumber,
   formatRiskProbability,
+  getRiskContributionPercent,
   statusLabel,
   type QuantitativeRisk,
 } from './riskSimulationUtils';
@@ -8,6 +10,7 @@ import {
 type QuantitativeRiskTableProps = {
   risks: QuantitativeRisk[];
   selectedRiskId?: string;
+  totalP95?: number;
   onSelectRisk: (risk: QuantitativeRisk) => void;
   onEditRisk?: (risk: QuantitativeRisk) => void;
   onGenerateRecommendation?: (risk: QuantitativeRisk) => void;
@@ -26,6 +29,7 @@ function statusClass(status: QuantitativeRisk['status']) {
 export default function QuantitativeRiskTable({
   risks,
   selectedRiskId,
+  totalP95 = 0,
   onSelectRisk,
   onEditRisk,
   onGenerateRecommendation,
@@ -49,7 +53,9 @@ export default function QuantitativeRiskTable({
               <th className="px-4 py-3">Unidad</th>
               <th className="px-4 py-3">Media</th>
               <th className="px-4 py-3">P95</th>
+              <th className="px-4 py-3">Contrib. P95</th>
               <th className="px-4 py-3">% critico</th>
+              <th className="px-4 py-3">Prioridad</th>
               <th className="px-4 py-3">Estado</th>
               <th className="px-4 py-3">Acciones</th>
             </tr>
@@ -58,6 +64,8 @@ export default function QuantitativeRiskTable({
             {risks.map((risk) => {
               const selected = selectedRiskId === risk.id;
               const loading = recommendationLoadingId === risk.id;
+              const treatment = buildRiskTreatmentRecommendation(risk);
+              const p95Contribution = getRiskContributionPercent(risk.p95, totalP95);
 
               return (
                 <tr
@@ -76,7 +84,9 @@ export default function QuantitativeRiskTable({
                   <td className="px-4 py-3 text-slate-700">{risk.unit}</td>
                   <td className="px-4 py-3 font-semibold text-slate-900">{formatRiskNumber(risk.expectedValue)} h</td>
                   <td className="px-4 py-3 font-semibold text-slate-900">{formatRiskNumber(risk.p95)} h</td>
+                  <td className="px-4 py-3 text-slate-700">{formatRiskNumber(p95Contribution, 1)}%</td>
                   <td className="px-4 py-3 text-slate-700">{formatRiskProbability(risk.criticalProbability)}</td>
+                  <td className="px-4 py-3 text-slate-700">{treatment?.priority || '-'}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded px-2 py-1 text-xs font-bold ${statusClass(risk.status)}`}>
                       {statusLabel(risk.status)}

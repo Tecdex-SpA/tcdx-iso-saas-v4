@@ -1,13 +1,19 @@
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import {
+  buildRiskTreatmentRecommendation,
   formatRiskNumber,
   formatRiskProbability,
+  getRiskContributionPercent,
   statusLabel,
+  type OperationalRiskRecommendationResult,
   type QuantitativeRisk,
 } from './riskSimulationUtils';
 
 type RiskSimulationDetailPanelProps = {
   risk: QuantitativeRisk | null;
+  totalP95?: number;
+  totalExpectedExposure?: number;
+  recommendation?: OperationalRiskRecommendationResult;
 };
 
 function row(label: string, value: string) {
@@ -26,7 +32,12 @@ function statusClass(status: QuantitativeRisk['status']) {
   return 'border-emerald-200 bg-emerald-50 text-emerald-800';
 }
 
-export default function RiskSimulationDetailPanel({ risk }: RiskSimulationDetailPanelProps) {
+export default function RiskSimulationDetailPanel({
+  risk,
+  totalP95 = 0,
+  totalExpectedExposure = 0,
+  recommendation,
+}: RiskSimulationDetailPanelProps) {
   if (!risk) {
     return (
       <aside className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
@@ -34,6 +45,11 @@ export default function RiskSimulationDetailPanel({ risk }: RiskSimulationDetail
       </aside>
     );
   }
+
+  const treatment = buildRiskTreatmentRecommendation(risk);
+  const p95Contribution = getRiskContributionPercent(risk.p95, totalP95);
+  const expectedContribution = getRiskContributionPercent(risk.expectedValue, totalExpectedExposure);
+  const statusReason = `Probabilidad ${risk.probabilityScore}/5 e impacto ${risk.impactScore}/5 ubican este riesgo como ${statusLabel(risk.status).toLowerCase()}.`;
 
   return (
     <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -72,6 +88,13 @@ export default function RiskSimulationDetailPanel({ risk }: RiskSimulationDetail
         )}
       </div>
 
+      <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+        <div className="bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900">Contribucion al portafolio</div>
+        {row('P95 agregado', `${formatRiskNumber(p95Contribution, 1)}%`)}
+        {row('Media acumulada', `${formatRiskNumber(expectedContribution, 1)}%`)}
+        {row('Justificacion estado', statusReason)}
+      </div>
+
       <div className="mt-4 rounded-lg border border-slate-200">
         <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900">
           <TcdxIcon name="plan" className="h-4 w-4 text-blue-700" />
@@ -79,6 +102,25 @@ export default function RiskSimulationDetailPanel({ risk }: RiskSimulationDetail
         </div>
         <div className="px-3 py-3 text-sm leading-6 text-slate-700">{risk.suggestedAction}</div>
       </div>
+
+      {treatment && (
+        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50">
+          <div className="px-3 py-2 text-sm font-bold text-blue-900">Tratamiento recomendado</div>
+          <div className="space-y-2 px-3 pb-3 text-sm text-blue-950">
+            <div className="font-semibold">{treatment.treatment} · {treatment.priority} · {treatment.horizon}</div>
+            <div className="leading-6">{treatment.action}</div>
+          </div>
+        </div>
+      )}
+
+      {recommendation?.diagnostico_operativo && (
+        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50">
+          <div className="px-3 py-2 text-sm font-bold text-emerald-900">Recomendacion operacional generada</div>
+          <div className="px-3 pb-3 text-sm leading-6 text-emerald-900">
+            {recommendation.diagnostico_operativo}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

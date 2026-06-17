@@ -1221,6 +1221,7 @@ function RiskMatrixPageContent() {
             canCreateSimulation={userCanCreateOperationalSimulation}
             canCreateRecommendation={userCanCreateOperationalSimulation}
             recommendationLoadingId={recommendationLoadingId}
+            recommendationsBySimulationId={recommendationBySimulationId}
             selectedSimulationId={selectedOperationalSimulationId}
             isEditingSimulation={Boolean(editingOperationalSimulation)}
             editingSimulationLabel={
