@@ -5,7 +5,7 @@ import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://bk.tcdx.int:3000").rstrip("/")
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "").rstrip("/")
 AI_INTERNAL_TOKEN = os.getenv("AI_INTERNAL_TOKEN") or os.getenv("AI_TOKEN") or ""
 KNOWLEDGE_TIMEOUT = int(os.getenv("KNOWLEDGE_TIMEOUT", "15"))
 
@@ -81,6 +81,9 @@ def fetch_knowledge_hits(
     limit: int = 5,
     include_drafts: bool = False,
 ):
+    if not BACKEND_API_URL:
+        raise RuntimeError("BACKEND_API_URL no configurado")
+
     payload = {
         "q": question,
         "tenant_standards": tenant_standards or [],

@@ -77,11 +77,6 @@ const { aiLocaleResponseGuard } = require('./middleware/aiLocaleResponseGuard');
 const app = express();
 app.use(aiLocaleResponseGuard);
 
-const defaultFrontendUrl = 'https://181.212.166.187:8443';
-const defaultFrontendInternalUrl = 'http://www.tcdx.int:8080';
-const esxiFrontendUrl = 'https://181.212.166.187:8443';
-const esxiFrontendInternalUrl = 'http://192.168.2.33:8080';
-const esxiFrontendDnsUrl = 'http://www.tcdx.int:8080';
 const allowedCorsOrigins = Array.from(new Set([
   ...String(process.env.CORS_ORIGINS || '')
     .split(',')
@@ -91,14 +86,6 @@ const allowedCorsOrigins = Array.from(new Set([
   process.env.FRONTEND_URL,
   process.env.FRONTEND_INTERNAL_URL,
   process.env.PUBLIC_APP_URL,
-  process.env.BACKEND_PUBLIC_URL,
-  defaultFrontendUrl,
-  defaultFrontendInternalUrl,
-  esxiFrontendUrl,
-  esxiFrontendInternalUrl,
-  esxiFrontendDnsUrl,
-  'https://tcdx.dedyn.io',
-  'https://www.tcdx.dedyn.io',
 ].filter(Boolean)));
 // =============================
 // FASE 4B SECURITY HARDENING

@@ -20,9 +20,9 @@ LEGACY_FRONTEND_HOST="${TCDX_LEGACY_FRONTEND_HOST:-}"
 LEGACY_AI_HOST="${TCDX_LEGACY_AI_HOST:-}"
 
 # Nuevas VMs ESXi/VPN
-NEW_BACKEND_HOST="${TCDX_NEW_BACKEND_HOST:-bk.tcdx.int}"
-NEW_FRONTEND_HOST="${TCDX_NEW_FRONTEND_HOST:-www.tcdx.int}"
-NEW_AI_HOST="${TCDX_NEW_AI_HOST:-ai.tcdx.int}"
+NEW_BACKEND_HOST="${TCDX_NEW_BACKEND_HOST:-}"
+NEW_FRONTEND_HOST="${TCDX_NEW_FRONTEND_HOST:-}"
+NEW_AI_HOST="${TCDX_NEW_AI_HOST:-}"
 
 ask_deploy_target() {
   local legacy_available=false
@@ -138,6 +138,12 @@ declare -a BACKEND_HOSTS=()
 declare -a AI_HOSTS=()
 declare -a FRONTEND_HOSTS=()
 
+if [[ "$DEPLOY_TARGET" == "new" || "$DEPLOY_TARGET" == "all" ]]; then
+  : "${NEW_BACKEND_HOST:?TCDX_NEW_BACKEND_HOST requerido}"
+  : "${NEW_FRONTEND_HOST:?TCDX_NEW_FRONTEND_HOST requerido}"
+  : "${NEW_AI_HOST:?TCDX_NEW_AI_HOST requerido}"
+fi
+
 case "$DEPLOY_TARGET" in
   all)
     BACKEND_HOSTS=("$LEGACY_BACKEND_HOST" "$NEW_BACKEND_HOST")
@@ -240,8 +246,8 @@ validate_frontend() {
   ssh "${DEPLOY_USER}@${host}" '
     systemctl is-active tcdx-frontend &&
     for i in {1..35}; do
-      if curl -fsS http://localhost:8080 >/dev/null; then
-        echo "frontend OK en 8080"
+      if curl -fsS http://localhost:3001 >/dev/null; then
+        echo "frontend OK en 3001"
         exit 0
       fi
 
@@ -253,7 +259,7 @@ validate_frontend() {
       echo "esperando frontend... $i/35"
       sleep 1
     done
-    echo "ERROR: frontend no responde ni en 8080 ni en 3000"
+    echo "ERROR: frontend no responde ni en 3001 ni en 3000"
     sudo systemctl status tcdx-frontend --no-pager || true
     sudo journalctl -u tcdx-frontend -n 80 --no-pager || true
     exit 1

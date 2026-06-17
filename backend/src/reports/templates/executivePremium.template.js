@@ -100,7 +100,7 @@ function getBaseUrl() {
     process.env.REPORT_PUBLIC_BASE_URL ||
     process.env.PUBLIC_BASE_URL ||
     process.env.API_PUBLIC_URL ||
-    'https://181.212.166.187:8443'
+    ''
   ).replace(/\/+$/, '');
 }
 

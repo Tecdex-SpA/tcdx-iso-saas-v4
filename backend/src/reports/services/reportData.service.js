@@ -9,8 +9,14 @@ const {
   isTenantAiFeatureEnabled,
 } = require('../../services/tenantAiSettings.service');
 
-const AI_ENGINE_URL =
-  process.env.AI_ENGINE_URL || 'http://ai.tcdx.int:8001';
+const AI_ENGINE_URL = String(process.env.AI_ENGINE_URL || '').replace(/\/+$/, '');
+
+function getAiEngineUrl() {
+  if (!AI_ENGINE_URL) {
+    throw new Error('AI_ENGINE_URL no configurado');
+  }
+  return AI_ENGINE_URL;
+}
 
 function getAiInternalToken() {
   const token = process.env.AI_INTERNAL_TOKEN || process.env.AI_TOKEN || '';
@@ -64,7 +70,7 @@ async function safeAiCall(path, payload = {}, fallback = null, timeoutMs = 18000
   const timeout = setTimeout(() => controller.abort(), requestedTimeoutMs);
 
   try {
-    const response = await fetch(`${AI_ENGINE_URL}${path}`, {
+    const response = await fetch(`${getAiEngineUrl()}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

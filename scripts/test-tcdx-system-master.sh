@@ -6,7 +6,7 @@ set -Eeuo pipefail
 # Non-destructive end-to-end validation from local machine.
 #
 # Default target:
-#   https://181.212.166.187:8443
+#   ${TCDX_BASE_URL}
 #
 # Usage:
 #   cd ~/repos/tcdx-iso-saas
@@ -16,7 +16,7 @@ set -Eeuo pipefail
 #   ./scripts/test-tcdx-system-master.sh
 #
 # Optional:
-#   BASE_URL="https://181.212.166.187:8443" \
+#   BASE_URL="${TCDX_BASE_URL}" \
 #   TCDX_QA_EMAIL="<qa-user-email>" \
 #   TCDX_QA_PASSWORD="<qa-user-password>" \
 #   AI_INTERNAL_TOKEN="<token-from-env>" \
@@ -24,7 +24,8 @@ set -Eeuo pipefail
 #   ./scripts/test-tcdx-system-master.sh
 # ============================================================
 
-BASE_URL="${BASE_URL:-https://181.212.166.187:8443}"
+BASE_URL="${BASE_URL:-${TCDX_BASE_URL:-}}"
+: "${BASE_URL:?BASE_URL o TCDX_BASE_URL requerido, ej: http://localhost:3001}"
 TEST_EMAIL="${TEST_EMAIL:-${TCDX_QA_EMAIL:-}}"
 TEST_PASSWORD="${TEST_PASSWORD:-${TCDX_QA_PASSWORD:-}}"
 AI_INTERNAL_TOKEN="${AI_INTERNAL_TOKEN:-${TCDX_AI_INTERNAL_TOKEN:-}}"
@@ -35,9 +36,9 @@ RUN_REPO_SCAN="${RUN_REPO_SCAN:-true}"
 RUN_DEEP_AI="${RUN_DEEP_AI:-true}"
 
 SSH_USER="${SSH_USER:-tecdex}"
-BACKEND_HOST="${BACKEND_HOST:-bk.tcdx.int}"
-AI_HOST="${AI_HOST:-ai.tcdx.int}"
-FRONTEND_HOST="${FRONTEND_HOST:-www.tcdx.int}"
+BACKEND_HOST="${BACKEND_HOST:-}"
+AI_HOST="${AI_HOST:-}"
+FRONTEND_HOST="${FRONTEND_HOST:-}"
 DB_HOST="${DB_HOST:-db.tcdx.int}"
 
 OUT_DIR="${OUT_DIR:-./qa-results/tcdx-master-$(date +%Y%m%d_%H%M%S)}"
@@ -693,10 +694,13 @@ record_result "negative" "No-token IA Compliance backend should be 401/403" "GET
 
 # 9. Optional SSH/systemd checks
 if [[ "$RUN_SSH_CHECKS" = "true" ]]; then
+  : "${BACKEND_HOST:?BACKEND_HOST requerido para RUN_SSH_CHECKS=true}"
+  : "${AI_HOST:?AI_HOST requerido para RUN_SSH_CHECKS=true}"
+  : "${FRONTEND_HOST:?FRONTEND_HOST requerido para RUN_SSH_CHECKS=true}"
   log "9) Optional SSH/systemd checks"
   ssh_check "ssh" "Backend service status" "$BACKEND_HOST" "systemctl is-active tecdex-backend && curl -sS http://localhost:3000 >/dev/null" "$OUT_DIR/80-ssh-backend.txt" "0" "critical"
   ssh_check "ssh" "AI Engine service status" "$AI_HOST" "systemctl is-active ai-engine && curl -sS http://localhost:8001/health >/dev/null" "$OUT_DIR/81-ssh-ai-engine.txt" "0" "critical"
-  ssh_check "ssh" "Frontend service status" "$FRONTEND_HOST" "systemctl is-active tcdx-frontend && curl -sS http://localhost:8080 >/dev/null" "$OUT_DIR/82-ssh-frontend.txt" "0" "critical"
+  ssh_check "ssh" "Frontend service status" "$FRONTEND_HOST" "systemctl is-active tcdx-frontend && curl -sS http://localhost:3001 >/dev/null" "$OUT_DIR/82-ssh-frontend.txt" "0" "critical"
   ssh_check "ssh" "Nginx service status" "$FRONTEND_HOST" "systemctl is-active nginx && ss -tulpn | grep -q ':8443'" "$OUT_DIR/83-ssh-nginx.txt" "0" "critical"
   ssh_check "ssh" "DB port reachable from backend VM" "$BACKEND_HOST" "nc -vz $DB_HOST 5432" "$OUT_DIR/84-ssh-backend-db.txt" "0" "critical"
   ssh_check "ssh" "DB port reachable from AI VM" "$AI_HOST" "nc -vz $DB_HOST 5432" "$OUT_DIR/85-ssh-ai-db.txt" "0" "critical"

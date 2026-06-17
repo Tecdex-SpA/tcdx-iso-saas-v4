@@ -202,8 +202,14 @@ const aiEngineClient = require('../services/aiEngineClient.service');
 const { createAiTimer, resolveAiMode } = require('../services/aiRuntimeMetrics.service');
 const { isTenantAiFeatureEnabled } = require('../services/tenantAiSettings.service');
 
-const AI_ENGINE_URL =
-  process.env.AI_ENGINE_URL || 'http://ai.tcdx.int:8001';
+const AI_ENGINE_URL = String(process.env.AI_ENGINE_URL || '').replace(/\/+$/, '');
+
+function getAiEngineUrl() {
+  if (!AI_ENGINE_URL) {
+    throw new Error('AI_ENGINE_URL no configurado');
+  }
+  return AI_ENGINE_URL;
+}
 
 function getUserTenantId(user) {
   return (
@@ -830,7 +836,7 @@ async function probeAiEngineHealthEndpoint(path, method = 'GET') {
       headers['X-AI-Token'] = internalToken;
     }
 
-    const response = await fetch(`${AI_ENGINE_URL}${path}`, {
+    const response = await fetch(`${getAiEngineUrl()}${path}`, {
       method,
       headers,
       body: method === 'POST' ? JSON.stringify({ ping: true, locale: 'es' }) : undefined,
@@ -908,7 +914,7 @@ async function getRobustAiComplianceEngineHealth() {
             engineData.db_ok ??
             localDbOk,
           backend_db_connection: localDbOk,
-          engine_url: AI_ENGINE_URL,
+          engine_url: AI_ENGINE_URL || null,
           health_path: result.path,
           health_method: result.method,
           degraded: false,
@@ -928,7 +934,7 @@ async function getRobustAiComplianceEngineHealth() {
       env: process.env.NODE_ENV || 'production',
       db_connection: false,
       backend_db_connection: localDbOk,
-      engine_url: AI_ENGINE_URL,
+      engine_url: AI_ENGINE_URL || null,
       degraded: true,
       error: attempts.find((item) => item.error)?.error || 'AI Engine unavailable',
     },
@@ -962,7 +968,7 @@ async function callAiEngine(path, payload) {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(`${AI_ENGINE_URL}${path}`, {
+    const res = await fetch(`${getAiEngineUrl()}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1873,7 +1879,7 @@ router.get('/engine-health', auth, async (req, res) => {
 
 router.get('/engine-health', auth, async (_req, res) => {
   try {
-    const healthRes = await fetch(`${AI_ENGINE_URL}/health/deep`, {
+    const healthRes = await fetch(`${getAiEngineUrl()}/health/deep`, {
       headers: {
         'X-AI-Token': getAiInternalToken(),
       },

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${TCDX_BASE_URL:-https://181.212.166.187:8443}"
+: "${TCDX_BASE_URL:?TCDX_BASE_URL requerido, ej: http://localhost:3001}"
+BASE_URL="$TCDX_BASE_URL"
 EMAIL="${TCDX_EMAIL:-}"
 PASSWORD="${TCDX_PASSWORD:-}"
 SOURCE_ID="${TCDX_GOOGLE_TEST_SOURCE_ID:-}"

@@ -4,8 +4,8 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-API_URL="${API_URL:-https://181.212.166.187:8443}"
-FRONTEND_URL="${FRONTEND_URL:-https://181.212.166.187:8443}"
+: "${API_URL:?API_URL requerido, ej: http://localhost:3000}"
+: "${FRONTEND_URL:?FRONTEND_URL requerido, ej: http://localhost:3001}"
 EMAIL="${EMAIL:-}"
 PASSWORD="${PASSWORD:-}"
 TS="$(date '+%Y%m%d_%H%M%S')"

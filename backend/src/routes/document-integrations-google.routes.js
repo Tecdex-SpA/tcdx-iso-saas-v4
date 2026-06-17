@@ -131,7 +131,11 @@ function assertManageGoogle(req, res) {
 }
 
 function getFrontendUrl() {
-  return String(process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || 'https://181.212.166.187:8443').replace(/\/$/, '')
+  const frontendUrl = process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL
+  if (!frontendUrl) {
+    throw new Error('FRONTEND_URL o PUBLIC_APP_URL no configurado')
+  }
+  return String(frontendUrl).replace(/\/$/, '')
 }
 
 async function revokeGoogleToken({ accessToken, refreshToken }) {

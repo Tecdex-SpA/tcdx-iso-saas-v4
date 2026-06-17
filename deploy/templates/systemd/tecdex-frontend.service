@@ -10,7 +10,7 @@ Group=tecdex
 WorkingDirectory=/home/tecdex/frontend
 EnvironmentFile=-/home/tecdex/frontend/.env
 Environment=NODE_ENV=production
-Environment=PORT=8080
+Environment=PORT=3001
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=5

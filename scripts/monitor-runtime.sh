@@ -4,9 +4,9 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-API_URL="${API_URL:-https://181.212.166.187:8443}"
-FRONTEND_URL="${FRONTEND_URL:-https://181.212.166.187:8443}"
-AI_ENGINE_URL="${AI_ENGINE_URL:-http://ai.tcdx.int:8001}"
+: "${API_URL:?API_URL requerido, ej: http://localhost:3000}"
+: "${FRONTEND_URL:?FRONTEND_URL requerido, ej: http://localhost:3001}"
+: "${AI_ENGINE_URL:?AI_ENGINE_URL requerido, ej: http://localhost:8001}"
 REQUIRE_AI_ENGINE="${REQUIRE_AI_ENGINE:-false}"
 EMAIL="${EMAIL:-}"
 PASSWORD="${PASSWORD:-}"
