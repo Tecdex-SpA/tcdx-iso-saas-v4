@@ -273,9 +273,9 @@ echo ""
 echo "======================================"
 echo " VALIDACION POST-DEPLOY"
 echo "======================================"
-validate_backend
-validate_ai
-validate_frontend
+validate_backend "$BACKEND_HOST"
+validate_ai "$AI_HOST"
+validate_frontend "$FRONTEND_HOST"
 
 echo ""
 echo "======================================"
