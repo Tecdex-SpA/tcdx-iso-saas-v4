@@ -7,6 +7,9 @@ import { getUserFromToken } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { translateClauseLabel, translateStandardLabel } from '@/i18n/displayText';
+import QuantitativeRiskSimulationView from '@/components/riesgos/QuantitativeRiskSimulationView';
+import RiskViewSwitcher, { type RiskViewMode } from '@/components/riesgos/RiskViewSwitcher';
+import type { OperationalRiskSimulationRow } from '@/components/riesgos/riskSimulationUtils';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -130,14 +133,14 @@ type HeatmapCell = {
 
 type OperationalRiskModel = 'ISO27001_TTIA' | 'ISO9001_COP_SIMPLE' | 'ISO9001_COP_AVANZADO';
 
-type OperationalRiskSimulation = {
-  id: string;
+type OperationalRiskSimulation = OperationalRiskSimulationRow & {
   norma_tipo: 'ISO27001' | 'ISO9001';
   modelo_usado: OperationalRiskModel;
   nombre_riesgo: string;
   proceso_afectado?: string | null;
   iteraciones: number;
   media_operativa_anual: number;
+  peor_escenario_p90?: number | null;
   peor_escenario_p95: number;
   probabilidad_disrupcion_critica?: number | null;
   created_at?: string;
@@ -286,6 +289,7 @@ function RiskMatrixPageContent() {
   const [generatingMatrix, setGeneratingMatrix] = useState(false);
   const [matrixError, setMatrixError] = useState('');
   const [matrixDryRun, setMatrixDryRun] = useState(true);
+  const [riskViewMode, setRiskViewMode] = useState<RiskViewMode>('classic');
 
   const [scope, setScope] = useState<ScopeResponse>({ operations: [], standards: [] });
   const [loadingStandards, setLoadingStandards] = useState(true);
@@ -448,9 +452,6 @@ function RiskMatrixPageContent() {
       setOperationalRiskError('');
 
       const params = new URLSearchParams();
-      if (operationalRiskForm.norma_tipo) {
-        params.set('norma_tipo', operationalRiskForm.norma_tipo);
-      }
 
       const res = await fetch(`${API_URL}/api/operational-risks/simulations?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1136,9 +1137,9 @@ function RiskMatrixPageContent() {
     <AppLayout>
       <div className="p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">{t('riskMatrix.title')}</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">Riesgos</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {t('riskMatrix.subtitle')}
+            Comparacion de vistas de evaluacion
           </p>
         </div>
 
@@ -1149,6 +1150,27 @@ function RiskMatrixPageContent() {
           </div>
         )}
 
+        <RiskViewSwitcher value={riskViewMode} onChange={setRiskViewMode} />
+
+        {riskViewMode === 'betaPert' ? (
+          <QuantitativeRiskSimulationView
+            simulations={operationalSimulations}
+            loading={loadingOperationalSimulations}
+            error={operationalRiskError}
+            message={operationalRiskMessage}
+            standardOptions={operationalStandards.map((standard) => ({
+              value: standard.code,
+              label: `${standard.code}${standard.name ? ` - ${standard.name}` : ''}`,
+            }))}
+            canCreateRecommendation={userCanCreateOperationalSimulation}
+            recommendationLoadingId={recommendationLoadingId}
+            onRefresh={loadOperationalSimulations}
+            onGenerateRecommendation={(simulationId) => {
+              void generateOperationalRecommendation(simulationId);
+            }}
+          />
+        ) : (
+          <>
         <select
           value={iso}
           onChange={(e) => {
@@ -1936,6 +1958,8 @@ function RiskMatrixPageContent() {
               ))
             )}
           </div>
+        )}
+          </>
         )}
       </div>
     </AppLayout>

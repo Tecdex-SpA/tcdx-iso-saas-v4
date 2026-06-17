@@ -1,0 +1,238 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import BetaPertRiskMatrix from './BetaPertRiskMatrix';
+import QuantitativeRiskDashboard from './QuantitativeRiskDashboard';
+import QuantitativeRiskTable from './QuantitativeRiskTable';
+import RiskSimulationDetailPanel from './RiskSimulationDetailPanel';
+import {
+  DEFAULT_QUANTITATIVE_FILTERS,
+  HORIZON_OPTIONS,
+  buildQuantitativeRisks,
+  calculateQuantitativeRiskKpis,
+  filterQuantitativeRisks,
+  normalizeNormId,
+  type OperationalRiskSimulationRow,
+  type QuantitativeRisk,
+  type QuantitativeRiskFilters,
+} from './riskSimulationUtils';
+
+type FilterOption = {
+  value: string;
+  label: string;
+};
+
+type QuantitativeRiskSimulationViewProps = {
+  simulations: OperationalRiskSimulationRow[];
+  loading: boolean;
+  error?: string;
+  message?: string;
+  standardOptions?: FilterOption[];
+  canCreateRecommendation?: boolean;
+  recommendationLoadingId?: string;
+  onRefresh: () => void;
+  onGenerateRecommendation?: (simulationId: string) => void;
+};
+
+function selectClassName() {
+  return 'mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100';
+}
+
+function uniqueOptions(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+}
+
+function horizonLabel(value: QuantitativeRiskFilters['horizon']) {
+  return HORIZON_OPTIONS.find((option) => option.value === value)?.label || 'Anual';
+}
+
+export default function QuantitativeRiskSimulationView({
+  simulations,
+  loading,
+  error = '',
+  message = '',
+  standardOptions = [],
+  canCreateRecommendation = false,
+  recommendationLoadingId = '',
+  onRefresh,
+  onGenerateRecommendation,
+}: QuantitativeRiskSimulationViewProps) {
+  const [filters, setFilters] = useState<QuantitativeRiskFilters>(DEFAULT_QUANTITATIVE_FILTERS);
+  const [selectedRiskId, setSelectedRiskId] = useState('');
+
+  const allRisks = useMemo(() => {
+    return buildQuantitativeRisks(simulations, filters.horizon);
+  }, [simulations, filters.horizon]);
+
+  const normOptions = useMemo(() => {
+    const fromRisks = allRisks.map((risk) => ({ value: risk.normId, label: risk.normName }));
+    const fromStandards = standardOptions.map((option) => ({
+      value: normalizeNormId(option.value),
+      label: option.label,
+    }));
+    const byValue = new Map<string, FilterOption>();
+
+    [...fromStandards, ...fromRisks].forEach((option) => {
+      if (option.value) byValue.set(option.value, option);
+    });
+
+    return Array.from(byValue.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allRisks, standardOptions]);
+
+  const processOptions = useMemo(() => uniqueOptions(allRisks.map((risk) => risk.processName)), [allRisks]);
+  const unitOptions = useMemo(() => uniqueOptions(allRisks.map((risk) => risk.unit)), [allRisks]);
+
+  const filteredRisks = useMemo(() => {
+    return filterQuantitativeRisks(allRisks, filters);
+  }, [allRisks, filters]);
+
+  const kpis = useMemo(() => calculateQuantitativeRiskKpis(filteredRisks), [filteredRisks]);
+  const selectedRisk = useMemo(() => {
+    return filteredRisks.find((risk) => risk.id === selectedRiskId) || filteredRisks[0] || null;
+  }, [filteredRisks, selectedRiskId]);
+
+  const unitSuffix = filters.unit === 'all' || filters.unit.toLowerCase().includes('hora') ? 'h' : '';
+
+  function updateFilter<Key extends keyof QuantitativeRiskFilters>(key: Key, value: QuantitativeRiskFilters[Key]) {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(key === 'norm' ? { process: 'all' } : {}),
+    }));
+  }
+
+  function selectRisk(risk: QuantitativeRisk) {
+    setSelectedRiskId(risk.id);
+  }
+
+  return (
+    <section className="space-y-5">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-4 lg:grid-cols-4">
+          <label className="block">
+            <span className="text-xs font-bold text-slate-600">Norma</span>
+            <select
+              value={filters.norm}
+              onChange={(event) => updateFilter('norm', event.target.value)}
+              className={selectClassName()}
+            >
+              <option value="all">Todas</option>
+              {normOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-bold text-slate-600">Proceso</span>
+            <select
+              value={filters.process}
+              onChange={(event) => updateFilter('process', event.target.value)}
+              className={selectClassName()}
+            >
+              <option value="all">Todos</option>
+              {processOptions.map((process) => (
+                <option key={process} value={process}>{process}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-bold text-slate-600">Unidad de medicion</span>
+            <select
+              value={filters.unit}
+              onChange={(event) => updateFilter('unit', event.target.value)}
+              className={selectClassName()}
+            >
+              <option value="all">Todas</option>
+              {unitOptions.map((unit) => (
+                <option key={unit} value={unit}>{unit}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-bold text-slate-600">Horizonte</span>
+            <select
+              value={filters.horizon}
+              onChange={(event) => updateFilter('horizon', event.target.value as QuantitativeRiskFilters['horizon'])}
+              className={selectClassName()}
+            >
+              {HORIZON_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </div>
+      )}
+
+      {message && (
+        <div className="rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {message}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="rounded-lg border border-slate-200 bg-white px-5 py-8 text-sm text-slate-500 shadow-sm">
+          Cargando simulaciones operativas...
+        </div>
+      ) : simulations.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-8 text-sm leading-6 text-slate-600">
+          No hay simulaciones operativas guardadas para este tenant. La vista queda lista para mostrar datos reales cuando existan registros Beta-PERT / Monte Carlo.
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="rounded border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Actualizar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <QuantitativeRiskDashboard kpis={kpis} unitSuffix={unitSuffix} />
+
+          <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+            <BetaPertRiskMatrix
+              risks={filteredRisks}
+              selectedRiskId={selectedRisk?.id}
+              onSelectRisk={selectRisk}
+            />
+            <RiskSimulationDetailPanel risk={selectedRisk} />
+          </div>
+
+          <QuantitativeRiskTable
+            risks={filteredRisks}
+            selectedRiskId={selectedRisk?.id}
+            onSelectRisk={selectRisk}
+            canCreateRecommendation={canCreateRecommendation}
+            recommendationLoadingId={recommendationLoadingId}
+            onGenerateRecommendation={
+              onGenerateRecommendation
+                ? (risk) => onGenerateRecommendation(risk.id)
+                : undefined
+            }
+          />
+
+          <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 sm:flex-row sm:items-center sm:justify-between">
+            <span>Metricas normalizadas al horizonte {horizonLabel(filters.horizon).toLowerCase()} desde resultados anuales guardados.</span>
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="rounded border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
+            >
+              Actualizar datos
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
