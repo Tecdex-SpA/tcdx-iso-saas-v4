@@ -16,9 +16,13 @@ export type OperationalRiskSimulationRow = {
   impacto_min?: number | string | null;
   impacto_mode?: number | string | null;
   impacto_max?: number | string | null;
+  tasa_error_min?: number | string | null;
+  tasa_error_mode?: number | string | null;
+  tasa_error_max?: number | string | null;
   tiempo_subsanacion_min?: number | string | null;
   tiempo_subsanacion_mode?: number | string | null;
   tiempo_subsanacion_max?: number | string | null;
+  volumen_operativo_anual?: number | string | null;
   umbral_disrupcion_critica_horas?: number | string | null;
   iteraciones?: number | string | null;
   media_operativa_anual?: number | string | null;
@@ -66,7 +70,7 @@ export type QuantitativeRiskFilters = {
 
 export type QuantitativeRiskKpis = {
   expectedExposure: number;
-  p95: number;
+  conservativeP95: number;
   criticalProbability: number | null;
   prioritizedHighRisks: number;
 };
@@ -213,9 +217,9 @@ function unitLabel(row: OperationalRiskSimulationRow) {
 
 function probabilityScoreFrom(row: OperationalRiskSimulationRow, criticalProbability: number | null) {
   if (criticalProbability !== null) {
-    if (criticalProbability >= 0.8) return 5;
-    if (criticalProbability >= 0.5) return 4;
-    if (criticalProbability >= 0.2) return 3;
+    if (criticalProbability >= 0.5) return 5;
+    if (criticalProbability >= 0.3) return 4;
+    if (criticalProbability >= 0.15) return 3;
     if (criticalProbability >= 0.05) return 2;
     return 1;
   }
@@ -233,27 +237,23 @@ function probabilityScoreFrom(row: OperationalRiskSimulationRow, criticalProbabi
   return 1;
 }
 
-function impactScoreFrom(p95: number, threshold: number | null) {
-  if (!threshold || threshold <= 0) {
-    if (p95 >= 160) return 5;
-    if (p95 >= 80) return 4;
-    if (p95 >= 40) return 3;
-    if (p95 >= 16) return 2;
-    return 1;
-  }
-
-  const ratio = p95 / threshold;
-  if (ratio >= 1.5) return 5;
-  if (ratio >= 1) return 4;
-  if (ratio >= 0.65) return 3;
-  if (ratio >= 0.35) return 2;
+function impactScoreFrom(annualP95: number) {
+  if (annualP95 >= 120) return 5;
+  if (annualP95 >= 60) return 4;
+  if (annualP95 >= 24) return 3;
+  if (annualP95 >= 8) return 2;
   return 1;
 }
 
 function statusFrom(probabilityScore: number, impactScore: number, criticalProbability: number | null): QuantitativeRiskStatus {
   const score = probabilityScore * impactScore;
-  if (score >= 20 || Number(criticalProbability || 0) >= 0.5) return 'critico';
-  if (score >= 12 || Number(criticalProbability || 0) >= 0.2) return 'alto';
+  if (
+    (probabilityScore >= 5 && impactScore >= 4) ||
+    (impactScore === 5 && Number(criticalProbability || 0) >= 0.3)
+  ) {
+    return 'critico';
+  }
+  if (score >= 12) return 'alto';
   if (score >= 6) return 'medio';
   return 'bajo';
 }
@@ -282,11 +282,12 @@ export function normalizeOperationalSimulation(
   const expectedValue = toNumber(row.media_operativa_anual) * factor;
   const p90 = toNumber(row.peor_escenario_p90) * factor;
   const p95 = toNumber(row.peor_escenario_p95) * factor;
+  const annualP95 = toNumber(row.peor_escenario_p95);
   const criticalProbability = row.probabilidad_disrupcion_critica === null || row.probabilidad_disrupcion_critica === undefined
     ? null
     : toNumber(row.probabilidad_disrupcion_critica);
   const probabilityScore = clampScore(probabilityScoreFrom(row, criticalProbability));
-  const impactScore = clampScore(impactScoreFrom(p95, threshold));
+  const impactScore = clampScore(impactScoreFrom(annualP95));
   const status = statusFrom(probabilityScore, impactScore, criticalProbability);
   const impactMin = row.tiempo_subsanacion_min ?? row.impacto_min;
   const impactMode = row.tiempo_subsanacion_mode ?? row.impacto_mode;
@@ -342,7 +343,7 @@ export function calculateQuantitativeRiskKpis(risks: QuantitativeRisk[]): Quanti
   if (risks.length === 0) {
     return {
       expectedExposure: 0,
-      p95: 0,
+      conservativeP95: 0,
       criticalProbability: null,
       prioritizedHighRisks: 0,
     };
@@ -354,7 +355,7 @@ export function calculateQuantitativeRiskKpis(risks: QuantitativeRisk[]): Quanti
 
   return {
     expectedExposure: risks.reduce((sum, risk) => sum + risk.expectedValue, 0),
-    p95: risks.reduce((sum, risk) => sum + risk.p95, 0),
+    conservativeP95: risks.reduce((sum, risk) => sum + risk.p95, 0),
     criticalProbability: criticalProbabilities.length
       ? criticalProbabilities.reduce((sum, value) => sum + value, 0) / criticalProbabilities.length
       : null,

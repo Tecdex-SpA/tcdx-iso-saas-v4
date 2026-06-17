@@ -36,8 +36,15 @@ type QuantitativeRiskSimulationViewProps = {
   canCreateSimulation?: boolean;
   canCreateRecommendation?: boolean;
   recommendationLoadingId?: string;
+  selectedSimulationId?: string;
+  isEditingSimulation?: boolean;
+  editingSimulationLabel?: string;
+  submitLabel?: string;
   onFormChange: (field: keyof OperationalRiskSimulationFormState, value: string) => void;
   onSubmitSimulation: () => void;
+  onCancelEditing?: () => void;
+  onSelectSimulation?: (simulationId: string) => void;
+  onEditRisk?: (risk: QuantitativeRisk) => void;
   onRefresh: () => void;
   onGenerateRecommendation?: (simulationId: string) => void;
 };
@@ -65,8 +72,15 @@ export default function QuantitativeRiskSimulationView({
   canCreateSimulation = false,
   canCreateRecommendation = false,
   recommendationLoadingId = '',
+  selectedSimulationId = '',
+  isEditingSimulation = false,
+  editingSimulationLabel = '',
+  submitLabel,
   onFormChange,
   onSubmitSimulation,
+  onCancelEditing,
+  onSelectSimulation,
+  onEditRisk,
   onRefresh,
   onGenerateRecommendation,
 }: QuantitativeRiskSimulationViewProps) {
@@ -100,9 +114,10 @@ export default function QuantitativeRiskSimulationView({
   }, [allRisks, filters]);
 
   const kpis = useMemo(() => calculateQuantitativeRiskKpis(filteredRisks), [filteredRisks]);
+  const activeSelectedRiskId = selectedSimulationId || selectedRiskId;
   const selectedRisk = useMemo(() => {
-    return filteredRisks.find((risk) => risk.id === selectedRiskId) || filteredRisks[0] || null;
-  }, [filteredRisks, selectedRiskId]);
+    return filteredRisks.find((risk) => risk.id === activeSelectedRiskId) || filteredRisks[0] || null;
+  }, [filteredRisks, activeSelectedRiskId]);
 
   const unitSuffix = filters.unit === 'all' || filters.unit.toLowerCase().includes('hora') ? 'h' : '';
 
@@ -116,6 +131,7 @@ export default function QuantitativeRiskSimulationView({
 
   function selectRisk(risk: QuantitativeRisk) {
     setSelectedRiskId(risk.id);
+    onSelectSimulation?.(risk.id);
   }
 
   return (
@@ -128,6 +144,10 @@ export default function QuantitativeRiskSimulationView({
         disabled={!canCreateSimulation}
         error={error}
         successMessage={message}
+        mode={isEditingSimulation ? 'edit' : 'create'}
+        editingLabel={editingSimulationLabel}
+        submitLabel={submitLabel || (isEditingSimulation ? 'Guardar como nueva simulacion' : 'Ejecutar y guardar simulacion')}
+        onCancelEdit={isEditingSimulation ? onCancelEditing : undefined}
       />
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -210,6 +230,10 @@ export default function QuantitativeRiskSimulationView({
         <>
           <QuantitativeRiskDashboard kpis={kpis} unitSuffix={unitSuffix} />
 
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Los KPI agregados resumen los riesgos filtrados. El P95 agregado conservador corresponde a la suma de P95 individuales; no equivale a una simulacion de portafolio.
+          </div>
+
           <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
             <BetaPertRiskMatrix
               risks={filteredRisks}
@@ -223,6 +247,11 @@ export default function QuantitativeRiskSimulationView({
             risks={filteredRisks}
             selectedRiskId={selectedRisk?.id}
             onSelectRisk={selectRisk}
+            canEditRisk={canCreateSimulation}
+            onEditRisk={(risk) => {
+              selectRisk(risk);
+              onEditRisk?.(risk);
+            }}
             canCreateRecommendation={canCreateRecommendation}
             recommendationLoadingId={recommendationLoadingId}
             onGenerateRecommendation={
