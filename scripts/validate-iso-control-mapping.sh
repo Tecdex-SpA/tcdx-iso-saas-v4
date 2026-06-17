@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-API="${API:-https://181.212.166.187:8443}"
+: "${API:?API requerido, ej: http://localhost:3000}"
 TOKEN="${TOKEN:-}"
 APPLY_REAL="${APPLY_REAL:-false}"
 MIN_CONFIDENCE="${MIN_CONFIDENCE:-0.85}"

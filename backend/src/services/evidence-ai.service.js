@@ -27,8 +27,15 @@ const EVIDENCE_AI_SERVICE_USER_ID = String(
 ).trim();
 
 const OWN_AI_BASE_URL = String(
-  process.env.OWN_AI_BASE_URL || 'http://ai.tcdx.int:8001'
+  process.env.OWN_AI_BASE_URL || process.env.AI_ENGINE_URL || ''
 ).replace(/\/+$/, '');
+
+function getOwnAiBaseUrl() {
+  if (!OWN_AI_BASE_URL) {
+    throw new Error('OWN_AI_BASE_URL o AI_ENGINE_URL no configurado');
+  }
+  return OWN_AI_BASE_URL;
+}
 
 const OWN_AI_EVIDENCE_PROCESS_ENDPOINT = String(
   process.env.OWN_AI_EVIDENCE_PROCESS_ENDPOINT || '/api/evidences/process'
@@ -37,7 +44,7 @@ const OWN_AI_EVIDENCE_PROCESS_ENDPOINT = String(
 const OWN_AI_TIMEOUT_MS = Number(process.env.OWN_AI_TIMEOUT_MS || 45000);
 
 const BACKEND_PUBLIC_URL = String(
-  process.env.BACKEND_PUBLIC_URL || 'http://bk.tcdx.int:3000'
+  process.env.BACKEND_PUBLIC_URL || process.env.API_PUBLIC_URL || ''
 ).replace(/\/+$/, '');
 
 const OWN_AI_SHARED_SECRET = String(
@@ -513,7 +520,7 @@ async function callOwnAi(payload) {
     }
 
     const response = await fetch(
-      `${OWN_AI_BASE_URL}${OWN_AI_EVIDENCE_PROCESS_ENDPOINT}`,
+      `${getOwnAiBaseUrl()}${OWN_AI_EVIDENCE_PROCESS_ENDPOINT}`,
       {
         method: 'POST',
         headers,

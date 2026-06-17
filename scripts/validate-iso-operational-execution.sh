@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-API="${API_URL:-${API:-https://181.212.166.187:8443}}"
+API="${API_URL:-${API:-}}"
+: "${API:?API_URL o API requerido, ej: http://localhost:3000}"
 TOKEN="${TOKEN:-}"
 TEST_EMAIL="${TEST_EMAIL:-}"
 TEST_PASSWORD="${TEST_PASSWORD:-}"

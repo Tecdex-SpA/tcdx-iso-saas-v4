@@ -83,8 +83,7 @@ function postJsonToAI(path, payload) {
   return new Promise((resolve, reject) => {
     const aiHost =
       process.env.AI_HOST ||
-      process.env.AI_ENGINE_HOST ||
-      'ai.tcdx.int';
+      process.env.AI_ENGINE_HOST;
 
     const aiPort =
       process.env.AI_PORT ||
@@ -95,6 +94,10 @@ function postJsonToAI(path, payload) {
 
     if (!aiToken) {
       return reject(new Error('AI_INTERNAL_TOKEN no configurado'));
+    }
+
+    if (!aiHost) {
+      return reject(new Error('AI_HOST o AI_ENGINE_HOST no configurado'));
     }
 
     const body = JSON.stringify(payload || {});

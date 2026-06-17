@@ -9,8 +9,8 @@ class Settings:
     APP_PORT = int(os.getenv("APP_PORT", "8001"))
     APP_ENV = os.getenv("APP_ENV", "production")
 
-    BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://bk.tcdx.int:3000")
-    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://181.212.166.187:8443")
+    BACKEND_API_URL = os.getenv("BACKEND_API_URL", "")
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "")
 
     DB_HOST = os.getenv("DB_HOST", "db.tcdx.int")
     DB_PORT = int(os.getenv("DB_PORT", "5432"))

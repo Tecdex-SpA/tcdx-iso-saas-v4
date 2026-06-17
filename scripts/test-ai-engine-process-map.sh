@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AI_ENGINE_URL="${TCDX_AI_ENGINE_URL:-${AI_ENGINE_URL:-http://ai.tcdx.int:8001}}"
+AI_ENGINE_URL="${TCDX_AI_ENGINE_URL:-${AI_ENGINE_URL:-}}"
+: "${AI_ENGINE_URL:?TCDX_AI_ENGINE_URL o AI_ENGINE_URL requerido, ej: http://localhost:8001}"
 AI_TOKEN="${TCDX_AI_TOKEN:-${AI_INTERNAL_TOKEN:-}}"
 OUT_DIR="${TCDX_OUT_DIR:-./qa-results/ai-engine-process-map/$(date +%Y%m%d-%H%M%S)}"
 

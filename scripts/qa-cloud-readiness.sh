@@ -30,8 +30,8 @@ run_check(){ NAME="$1"; shift; if "$@" >/tmp/tcdx-cloud-readiness-check.log 2>&1
  run_check node.app node -c backend/src/app.js; run_check node.ai_auditor node -c backend/src/routes/ai-auditor.routes.js; run_check node.ai_compliance node -c backend/src/routes/ai-compliance.routes.js; run_check node.auth_middleware node -c backend/src/middleware/auth.js; run_check node.rbac_middleware node -c backend/src/middleware/rbac.middleware.js
  run_check python.ai_main python3 -m py_compile ai-engine/main.py; run_check python.ai_route python3 -m py_compile ai-engine/app/routes/ai.py
  run_check bash.env_check bash -n scripts/env-check.sh; run_check bash.qa_security bash -n scripts/qa-security-basic.sh; run_check bash.qa_rbac bash -n scripts/qa-rbac-basic.sh; run_check bash.qa_ai_auditor bash -n scripts/qa-ai-auditor-full.sh; run_check bash.qa_cloud bash -n scripts/qa-cloud-readiness.sh
- grep -q "PORT=8080" deploy/templates/systemd/tecdex-frontend.service && record PASS template.frontend_port "frontend systemd usa PORT=8080" || record FAIL template.frontend_port "frontend systemd no declara PORT=8080"
- grep -q "127.0.0.1:8080" deploy/templates/nginx/tcdx-frontend-http.conf && record PASS template.nginx_frontend_proxy "HTTP proxy a Next 8080" || record FAIL template.nginx_frontend_proxy "HTTP no proxy a Next 8080"
+ grep -q "PORT=3001" deploy/templates/systemd/tecdex-frontend.service && record PASS template.frontend_port "frontend systemd usa PORT=3001" || record FAIL template.frontend_port "frontend systemd no declara PORT=3001"
+ grep -q "127.0.0.1:3001" deploy/templates/nginx/tcdx-frontend-http.conf && record PASS template.nginx_frontend_proxy "HTTP proxy a Next 3001" || record FAIL template.nginx_frontend_proxy "HTTP no proxy a Next 3001"
  grep -q "127.0.0.1:3000" deploy/templates/nginx/tcdx-backend-api.conf && record PASS template.nginx_api_proxy "API proxy a backend 3000" || record FAIL template.nginx_api_proxy "API no proxy a backend 3000"
  echo ""; echo "Resumen:"; echo "PASS: $PASS"; echo "WARN: $WARN"; echo "FAIL: $FAIL"; echo "TXT : $TXT"; echo "JSON: $JSON"; echo "MD  : $MD"
 } | tee "$TXT"

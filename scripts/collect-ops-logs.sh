@@ -60,9 +60,9 @@ service_logs() {
 
   section "listening ports"
   if command -v ss >/dev/null 2>&1; then
-    ss -ltnp 2>/dev/null | grep -E ':3000|:8080|:8000|:5432|:80|:443' || true
+    ss -ltnp 2>/dev/null | grep -E ':3000|:3001|:8000|:5432|:80|:443' || true
   elif command -v netstat >/dev/null 2>&1; then
-    netstat -ltnp 2>/dev/null | grep -E ':3000|:8080|:8000|:5432|:80|:443' || true
+    netstat -ltnp 2>/dev/null | grep -E ':3000|:3001|:8000|:5432|:80|:443' || true
   else
     echo "WARN: ss/netstat no disponible"
   fi

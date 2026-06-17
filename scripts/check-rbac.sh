@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-API="${API:-https://181.212.166.187:8443}"
+: "${API:?API requerido, ej: http://localhost:3000}"
 
 GREEN="\033[0;32m"
 RED="\033[0;31m"

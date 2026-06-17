@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p ${PORT:-8080}",
+    "dev": "next dev -H 0.0.0.0 -p ${PORT:-3001}",
     "build": "next build --webpack",
-    "start": "next start -H 0.0.0.0 -p ${PORT:-8080}",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3001}",
     "check": "next build --webpack",
     "lint": "eslint",
     "lint:audit-preparation": "eslint src/components/auditorias/AuditPreparationPanel.tsx"

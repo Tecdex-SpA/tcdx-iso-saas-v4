@@ -1618,7 +1618,7 @@ function getReportPublicBaseUrl() {
     process.env.REPORT_PUBLIC_BASE_URL ||
     process.env.PUBLIC_BASE_URL ||
     process.env.API_PUBLIC_URL ||
-    'https://181.212.166.187:8443'
+    ''
   ).replace(/\/+$/, '');
 }
 
@@ -1712,7 +1712,7 @@ function getTcdxLogoSourceForReport() {
   return (
     process.env.REPORT_TCDX_LOGO_URL ||
     process.env.TCDX_LOGO_URL ||
-    'https://181.212.166.187:8443/logo.png'
+    '/uploads/logos/tcdx-logo.png'
   );
 }
 

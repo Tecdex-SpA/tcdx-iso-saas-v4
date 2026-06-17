@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-FRONTEND_URL="${FRONTEND_URL:-https://181.212.166.187:8443}"
+: "${FRONTEND_URL:?FRONTEND_URL requerido, ej: http://localhost:3001}"
 
 fail() {
   echo "FAIL $1" >&2
