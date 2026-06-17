@@ -1,8 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import AiAuditorOperationalRiskPanel from './AiAuditorOperationalRiskPanel';
 import BetaPertRiskMatrix from './BetaPertRiskMatrix';
+import QuantitativeRiskContributors from './QuantitativeRiskContributors';
 import QuantitativeRiskDashboard from './QuantitativeRiskDashboard';
+import QuantitativeRiskExecutiveSummary from './QuantitativeRiskExecutiveSummary';
+import QuantitativeRiskMethodologyNote from './QuantitativeRiskMethodologyNote';
+import QuantitativeRiskRecommendations from './QuantitativeRiskRecommendations';
 import QuantitativeRiskTable from './QuantitativeRiskTable';
 import RiskSimulationDetailPanel from './RiskSimulationDetailPanel';
 import OperationalRiskSimulationForm, {
@@ -15,6 +20,7 @@ import {
   calculateQuantitativeRiskKpis,
   filterQuantitativeRisks,
   normalizeNormId,
+  type OperationalRiskRecommendationResult,
   type OperationalRiskSimulationRow,
   type QuantitativeRisk,
   type QuantitativeRiskFilters,
@@ -36,6 +42,7 @@ type QuantitativeRiskSimulationViewProps = {
   canCreateSimulation?: boolean;
   canCreateRecommendation?: boolean;
   recommendationLoadingId?: string;
+  recommendationsBySimulationId?: Record<string, OperationalRiskRecommendationResult>;
   selectedSimulationId?: string;
   isEditingSimulation?: boolean;
   editingSimulationLabel?: string;
@@ -72,6 +79,7 @@ export default function QuantitativeRiskSimulationView({
   canCreateSimulation = false,
   canCreateRecommendation = false,
   recommendationLoadingId = '',
+  recommendationsBySimulationId = {},
   selectedSimulationId = '',
   isEditingSimulation = false,
   editingSimulationLabel = '',
@@ -120,6 +128,9 @@ export default function QuantitativeRiskSimulationView({
   }, [filteredRisks, activeSelectedRiskId]);
 
   const unitSuffix = filters.unit === 'all' || filters.unit.toLowerCase().includes('hora') ? 'h' : '';
+  const selectedRecommendation = selectedRisk ? recommendationsBySimulationId[selectedRisk.id] : undefined;
+  const totalP95 = kpis.conservativeP95;
+  const totalExpectedExposure = kpis.expectedExposure;
 
   function updateFilter<Key extends keyof QuantitativeRiskFilters>(key: Key, value: QuantitativeRiskFilters[Key]) {
     setFilters((prev) => ({
@@ -215,7 +226,28 @@ export default function QuantitativeRiskSimulationView({
         </div>
       ) : simulations.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-8 text-sm leading-6 text-slate-600">
-          No hay simulaciones operativas guardadas para este tenant. La vista queda lista para mostrar datos reales cuando existan registros Beta-PERT / Monte Carlo.
+          <div className="text-base font-bold text-slate-950">Sin simulaciones operativas guardadas</div>
+          <p className="mt-2">
+            Ingrese una simulacion operativa para estimar exposicion esperada, P95 conservador y probabilidad critica.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="font-semibold text-slate-900">Minimo</div>
+              <div className="text-xs text-slate-500">Escenario optimista razonable.</div>
+            </div>
+            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="font-semibold text-slate-900">Mas probable</div>
+              <div className="text-xs text-slate-500">Valor esperado por experiencia operacional.</div>
+            </div>
+            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="font-semibold text-slate-900">Maximo</div>
+              <div className="text-xs text-slate-500">Escenario severo plausible.</div>
+            </div>
+            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="font-semibold text-slate-900">Umbral critico</div>
+              <div className="text-xs text-slate-500">Limite operacional para medir disrupcion.</div>
+            </div>
+          </div>
           <div className="mt-4">
             <button
               type="button"
@@ -230,9 +262,14 @@ export default function QuantitativeRiskSimulationView({
         <>
           <QuantitativeRiskDashboard kpis={kpis} unitSuffix={unitSuffix} />
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Los KPI agregados resumen los riesgos filtrados. El P95 agregado conservador corresponde a la suma de P95 individuales; no equivale a una simulacion de portafolio.
-          </div>
+          <QuantitativeRiskMethodologyNote />
+
+          <QuantitativeRiskExecutiveSummary
+            risks={filteredRisks}
+            kpis={kpis}
+            unitSuffix={unitSuffix}
+            onSelectRisk={selectRisk}
+          />
 
           <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
             <BetaPertRiskMatrix
@@ -240,12 +277,38 @@ export default function QuantitativeRiskSimulationView({
               selectedRiskId={selectedRisk?.id}
               onSelectRisk={selectRisk}
             />
-            <RiskSimulationDetailPanel risk={selectedRisk} />
+            <RiskSimulationDetailPanel
+              risk={selectedRisk}
+              totalP95={totalP95}
+              totalExpectedExposure={totalExpectedExposure}
+              recommendation={selectedRecommendation}
+            />
           </div>
+
+          <QuantitativeRiskContributors
+            risks={filteredRisks}
+            unitSuffix={unitSuffix}
+            onSelectRisk={selectRisk}
+          />
+
+          <QuantitativeRiskRecommendations
+            risk={selectedRisk}
+            recommendation={selectedRecommendation}
+            loading={selectedRisk ? recommendationLoadingId === selectedRisk.id : false}
+            canGenerateRecommendation={canCreateRecommendation}
+            onGenerateRecommendation={
+              onGenerateRecommendation
+                ? (risk) => onGenerateRecommendation(risk.id)
+                : undefined
+            }
+          />
+
+          <AiAuditorOperationalRiskPanel risks={filteredRisks} selectedRisk={selectedRisk} kpis={kpis} />
 
           <QuantitativeRiskTable
             risks={filteredRisks}
             selectedRiskId={selectedRisk?.id}
+            totalP95={totalP95}
             onSelectRisk={selectRisk}
             canEditRisk={canCreateSimulation}
             onEditRisk={(risk) => {

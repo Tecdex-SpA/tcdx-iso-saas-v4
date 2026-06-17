@@ -11,10 +11,10 @@ type BetaPertRiskMatrixProps = {
 
 const probabilityLabels = [
   { value: 1, label: 'Rara', hint: '<5%' },
-  { value: 2, label: 'Poco probable', hint: '5-20%' },
-  { value: 3, label: 'Posible', hint: '20-50%' },
-  { value: 4, label: 'Probable', hint: '50-80%' },
-  { value: 5, label: 'Casi cierta', hint: '>80%' },
+  { value: 2, label: 'Poco probable', hint: '5-15%' },
+  { value: 3, label: 'Posible', hint: '15-30%' },
+  { value: 4, label: 'Probable', hint: '30-50%' },
+  { value: 5, label: 'Casi cierta', hint: '>=50%' },
 ];
 
 const impactLabels = [
