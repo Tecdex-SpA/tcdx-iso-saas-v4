@@ -19,12 +19,16 @@ import {
   buildQuantitativeRisks,
   calculateQuantitativeRiskKpis,
   filterQuantitativeRisks,
+  getAiAuditorPayload,
   normalizeNormId,
+  type OperationalAiAnalysis,
   type OperationalRiskRecommendationResult,
   type OperationalRiskSimulationRow,
   type QuantitativeRisk,
   type QuantitativeRiskFilters,
 } from './riskSimulationUtils';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 type FilterOption = {
   value: string;
@@ -94,6 +98,11 @@ export default function QuantitativeRiskSimulationView({
 }: QuantitativeRiskSimulationViewProps) {
   const [filters, setFilters] = useState<QuantitativeRiskFilters>(DEFAULT_QUANTITATIVE_FILTERS);
   const [selectedRiskId, setSelectedRiskId] = useState('');
+  const [aiAnalysis, setAiAnalysis] = useState<OperationalAiAnalysis | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiMessage, setAiMessage] = useState('');
 
   const allRisks = useMemo(() => {
     return buildQuantitativeRisks(simulations, filters.horizon);
@@ -143,6 +152,97 @@ export default function QuantitativeRiskSimulationView({
   function selectRisk(risk: QuantitativeRisk) {
     setSelectedRiskId(risk.id);
     onSelectSimulation?.(risk.id);
+    setAiAnalysis(null);
+    setAiError('');
+    setAiMessage('');
+  }
+
+  async function generateAiAnalysis() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setAiError('No hay sesion activa. Ingresa nuevamente antes de generar analisis AI.');
+      return;
+    }
+
+    try {
+      setAiLoading(true);
+      setAiError('');
+      setAiMessage('');
+      setAiAnalysis(null);
+
+      const payload = getAiAuditorPayload(filteredRisks, selectedRisk, kpis);
+      const res = await fetch(`${API_URL}/api/operational-risks/ai-analysis`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || 'AI Auditor no disponible para analisis operacional.');
+      }
+
+      const analysis = json?.data?.analysis as OperationalAiAnalysis | undefined;
+      if (!analysis?.diagnostico_ejecutivo) {
+        throw new Error('AI Auditor no devolvio un analisis estructurado utilizable.');
+      }
+
+      setAiAnalysis(analysis);
+      setAiMessage('Analisis AI generado. Revisa el resultado antes de guardarlo como recomendacion.');
+    } catch (err: unknown) {
+      setAiError(err instanceof Error ? err.message : 'Error generando analisis AI Auditor.');
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function saveAiRecommendation() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setAiError('No hay sesion activa. Ingresa nuevamente antes de guardar la recomendacion.');
+      return;
+    }
+    if (!selectedRisk) {
+      setAiError('Selecciona un riesgo evaluado antes de guardar el analisis AI.');
+      return;
+    }
+    if (!aiAnalysis) {
+      setAiError('Primero genera un analisis AI real antes de guardar.');
+      return;
+    }
+
+    try {
+      setAiSaving(true);
+      setAiError('');
+      setAiMessage('');
+
+      const res = await fetch(`${API_URL}/api/operational-risks/simulations/${selectedRisk.id}/recommendations/ai`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          analysis: aiAnalysis,
+          scope: aiAnalysis.scope || 'portfolio',
+          selectedRiskId: selectedRisk.id,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || 'No fue posible guardar el analisis AI como recomendacion.');
+      }
+
+      setAiMessage('Analisis AI guardado como recomendacion operacional.');
+    } catch (err: unknown) {
+      setAiError(err instanceof Error ? err.message : 'Error guardando recomendacion AI operacional.');
+    } finally {
+      setAiSaving(false);
+    }
   }
 
   return (
@@ -303,7 +403,18 @@ export default function QuantitativeRiskSimulationView({
             }
           />
 
-          <AiAuditorOperationalRiskPanel risks={filteredRisks} selectedRisk={selectedRisk} kpis={kpis} />
+          <AiAuditorOperationalRiskPanel
+            risks={filteredRisks}
+            selectedRisk={selectedRisk}
+            kpis={kpis}
+            analysis={aiAnalysis}
+            loading={aiLoading}
+            saving={aiSaving}
+            error={aiError}
+            successMessage={aiMessage}
+            onGenerate={generateAiAnalysis}
+            onSave={saveAiRecommendation}
+          />
 
           <QuantitativeRiskTable
             risks={filteredRisks}
