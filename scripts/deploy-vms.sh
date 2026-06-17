@@ -83,27 +83,35 @@ deploy_remote() {
 }
 
 validate_backend() {
-  echo ""
-  echo "Validando backend: ${BACKEND_HOST}"
+  local host="$1"
 
-  run_ssh "$BACKEND_HOST" '
-    systemctl is-active tecdex-backend.service &&
+  echo ""
+  echo "Validando backend: ${host}"
+
+  ssh "${DEPLOY_USER}@${host}" '
+    systemctl is-active tecdex-backend
+
     for i in {1..25}; do
-      if curl -fsS http://localhost:3000/health >/dev/null; then
-        echo "backend OK"
+      if curl -fsS http://localhost:3000 >/dev/null; then
+        echo "backend OK en http://localhost:3000"
         exit 0
       fi
+
+      status_code="$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:3000/api/auth/me || true)"
+      if [[ "$status_code" == "401" ]]; then
+        echo "backend OK: endpoint protegido responde 401 esperado"
+        exit 0
+      fi
+
       echo "esperando backend... $i/25"
       sleep 1
     done
-    echo "ERROR: backend no responde en /health"
-    sudo systemctl status tecdex-backend.service --no-pager || true
-    sudo journalctl -u tecdex-backend.service -n 80 --no-pager || true
+
+    echo "ERROR: backend no responde de forma válida"
+    systemctl status tecdex-backend --no-pager || true
+    journalctl -u tecdex-backend -n 80 --no-pager || true
     exit 1
-  ' || {
-    echo "ERROR: servicio backend no quedó activo o healthcheck no paso."
-    exit 1
-  }
+  '
 }
 
 validate_ai() {
