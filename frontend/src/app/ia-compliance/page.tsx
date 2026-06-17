@@ -9,7 +9,7 @@ import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText, translateStatusLabel } from '@/i18n/displayText';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
+  process.env.NEXT_PUBLIC_API_URL || '';
 
 const IA_COMPLIANCE_COPY = {
   es: {

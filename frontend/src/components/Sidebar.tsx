@@ -13,7 +13,7 @@ import {
 } from '@/utils/mvpPermissions';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
+  process.env.NEXT_PUBLIC_API_URL || '';
 
 const SERVICE_LOGO_SRC =
   process.env.NEXT_PUBLIC_TCDX_LOGO_URL || '/logo.png';

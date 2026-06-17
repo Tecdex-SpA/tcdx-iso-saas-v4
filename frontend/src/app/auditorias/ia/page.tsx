@@ -7,7 +7,7 @@ import { getUserFromToken } from '@/utils/auth';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
+  process.env.NEXT_PUBLIC_API_URL || '';
 
 function resolveTenantId(user: any) {
   return user?.tenant_id || user?.tenantId || user?.tenant || '';

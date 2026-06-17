@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 type IntegratedEvidence = {
   id: string;
