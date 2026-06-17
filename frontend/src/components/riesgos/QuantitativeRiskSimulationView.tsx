@@ -72,6 +72,22 @@ function horizonLabel(value: QuantitativeRiskFilters['horizon']) {
   return HORIZON_OPTIONS.find((option) => option.value === value)?.label || 'Anual';
 }
 
+function aiErrorMessage(code: string, fallback: string) {
+  const normalized = String(code || '').toLowerCase();
+  const messages: Record<string, string> = {
+    ai_disabled_for_tenant: 'AI Auditor no esta habilitado para esta empresa.',
+    ai_feature_not_enabled: 'La funcionalidad AI Auditor no esta habilitada para esta empresa.',
+    ai_engine_unconfigured: 'El motor AI no esta configurado para analisis operacional.',
+    ai_engine_unavailable: 'AI Auditor no esta disponible temporalmente. Intenta nuevamente mas tarde.',
+    ai_invalid_payload: 'No hay datos de riesgo suficientes para generar analisis AI.',
+    ai_invalid_response: 'AI Auditor respondio sin la estructura requerida para Beta-PERT.',
+    ai_timeout: 'AI Auditor excedio el tiempo de respuesta. Intenta nuevamente.',
+    ai_forbidden: 'No tienes permisos para ejecutar AI Auditor sobre estos riesgos.',
+    ai_unknown_error: 'No fue posible completar el analisis AI Auditor.',
+  };
+  return messages[normalized] || fallback || messages.ai_unknown_error;
+}
+
 export default function QuantitativeRiskSimulationView({
   form,
   simulations,
@@ -182,11 +198,11 @@ export default function QuantitativeRiskSimulationView({
       const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || 'AI Auditor no disponible para analisis operacional.');
+        throw new Error(aiErrorMessage(json?.code, json?.error || 'AI Auditor no disponible para analisis operacional.'));
       }
 
       const analysis = json?.data?.analysis as OperationalAiAnalysis | undefined;
-      if (!analysis?.diagnostico_ejecutivo) {
+      if (!analysis?.diagnostico_ejecutivo || analysis.guardable === false || analysis.ai_engine_used === false) {
         throw new Error('AI Auditor no devolvio un analisis estructurado utilizable.');
       }
 
@@ -209,8 +225,8 @@ export default function QuantitativeRiskSimulationView({
       setAiError('Selecciona un riesgo evaluado antes de guardar el analisis AI.');
       return;
     }
-    if (!aiAnalysis) {
-      setAiError('Primero genera un analisis AI real antes de guardar.');
+    if (!aiAnalysis || aiAnalysis.guardable === false || aiAnalysis.ai_engine_used === false) {
+      setAiError('Primero genera un analisis AI real y guardable antes de guardar.');
       return;
     }
 
@@ -234,7 +250,7 @@ export default function QuantitativeRiskSimulationView({
       const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || 'No fue posible guardar el analisis AI como recomendacion.');
+        throw new Error(aiErrorMessage(json?.code, json?.error || 'No fue posible guardar el analisis AI como recomendacion.'));
       }
 
       setAiMessage('Analisis AI guardado como recomendacion operacional.');

@@ -72,7 +72,17 @@ export default function AiAuditorOperationalRiskPanel({
 }: AiAuditorOperationalRiskPanelProps) {
   const payload = getAiAuditorPayload(risks, selectedRisk, kpis);
   const canGenerate = risks.length > 0 && !loading;
-  const canSave = Boolean(analysis && selectedRisk && !saving && !loading);
+  const canSave = Boolean(
+    analysis &&
+      analysis.guardable !== false &&
+      analysis.ai_engine_used !== false &&
+      selectedRisk &&
+      !saving &&
+      !loading
+  );
+  const engineLabel = analysis?.source === 'ai-engine' || analysis?.ai_engine_used !== false
+    ? 'ai-engine'
+    : 'origen no verificable';
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -146,7 +156,7 @@ export default function AiAuditorOperationalRiskPanel({
             <div className="text-sm font-bold text-blue-950">Diagnostico ejecutivo</div>
             <p className="mt-2 text-sm leading-6 text-blue-950">{analysis.diagnostico_ejecutivo}</p>
             <div className="mt-2 text-xs font-semibold text-blue-800">
-              Modelo: {analysis.ai_model || 'ai-engine'} · Prompt: {analysis.prompt_version || 'beta-pert-operational-risk-v1'}
+              Fuente: {engineLabel} - Modelo: {analysis.ai_model || 'ai-engine'} - Prompt: {analysis.prompt_version || 'beta-pert-operational-risk-v1'}
             </div>
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
