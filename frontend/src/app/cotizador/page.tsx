@@ -6,7 +6,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
 import { translateStatusLabel } from '@/i18n/displayText';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 type QuoteLine = {
   line_type: string;

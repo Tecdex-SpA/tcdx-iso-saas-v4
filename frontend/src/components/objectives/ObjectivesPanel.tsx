@@ -6,7 +6,7 @@ import { getStatusLabel } from '@/i18n/statusLabels';
 import { translateDisplayText } from '@/i18n/displayText';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://181.212.166.187:8443';
+  process.env.NEXT_PUBLIC_API_URL || '';
 
 type StandardOption = {
   code: string;

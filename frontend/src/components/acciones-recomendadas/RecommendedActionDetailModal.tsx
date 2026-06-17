@@ -16,7 +16,7 @@ import {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  'https://181.212.166.187:8443';
+  '';
 
 type Props = {
   action: RecommendedAction | null;
