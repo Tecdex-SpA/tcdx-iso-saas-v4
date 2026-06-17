@@ -304,7 +304,6 @@ function RiskMatrixPageContent() {
   } | null>(null);
   const [operationalRiskForm, setOperationalRiskForm] = useState<OperationalRiskForm>(DEFAULT_OPERATIONAL_RISK_FORM);
   const [operationalSimulations, setOperationalSimulations] = useState<OperationalRiskSimulation[]>([]);
-  const [selectedOperationalSimulation, setSelectedOperationalSimulation] = useState<OperationalRiskSimulation | null>(null);
   const [loadingOperationalSimulations, setLoadingOperationalSimulations] = useState(false);
   const [runningOperationalSimulation, setRunningOperationalSimulation] = useState(false);
   const [operationalRiskError, setOperationalRiskError] = useState('');
@@ -417,12 +416,6 @@ function RiskMatrixPageContent() {
     return Number.isFinite(n) ? n.toFixed(2).replace('.00', '') : '0';
   };
 
-  const formatProbability = (value: any) => {
-    if (value === null || value === undefined || value === '') return '-';
-    const n = Number(value);
-    return Number.isFinite(n) ? `${(n * 100).toFixed(1)}%` : '-';
-  };
-
   const updateOperationalRiskField = (field: keyof OperationalRiskForm, value: string) => {
     setOperationalRiskForm((prev) => {
       const next = { ...prev, [field]: value } as OperationalRiskForm;
@@ -464,10 +457,6 @@ function RiskMatrixPageContent() {
 
       const rows = Array.isArray(json?.data) ? json.data : [];
       setOperationalSimulations(rows);
-      setSelectedOperationalSimulation((prev) => {
-        if (prev && rows.some((row: OperationalRiskSimulation) => row.id === prev.id)) return prev;
-        return rows[0] || null;
-      });
     } catch (err: any) {
       console.error('ERROR LOAD OPERATIONAL RISK SIMULATIONS:', err);
       setOperationalRiskError(err?.message || 'Error cargando simulaciones operativas');
@@ -540,8 +529,6 @@ function RiskMatrixPageContent() {
         throw new Error(json?.error || 'No fue posible ejecutar la simulacion');
       }
 
-      const created = json?.data as OperationalRiskSimulation;
-      setSelectedOperationalSimulation(created);
       setOperationalRiskMessage('Simulacion operativa guardada con metricas agregadas.');
       await loadOperationalSimulations();
     } catch (err: any) {
@@ -889,10 +876,6 @@ function RiskMatrixPageContent() {
   }, [iso]);
 
   useEffect(() => {
-    void loadOperationalSimulations();
-  }, [operationalRiskForm.norma_tipo]);
-
-  useEffect(() => {
     if (selectedMatrixOption) {
       void loadLatestMatrix(selectedMatrixOption);
     } else {
@@ -1047,25 +1030,6 @@ function RiskMatrixPageContent() {
     return t('statuses.findings.bajo');
   };
 
-  const renderOperationalNumberInput = (
-    label: string,
-    field: keyof OperationalRiskForm,
-    min = '0',
-    step = '0.01'
-  ) => (
-    <label className="block">
-      <span className="text-xs font-semibold text-slate-600">{label}</span>
-      <input
-        type="number"
-        min={min}
-        step={step}
-        value={operationalRiskForm[field]}
-        onChange={(e) => updateOperationalRiskField(field, e.target.value)}
-        className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-      />
-    </label>
-  );
-
   const applyFocus = (control: RiskControlRow) => {
     setFocusedControlId(control.id);
     setSelectedLevel(control.nivel || null);
@@ -1154,16 +1118,21 @@ function RiskMatrixPageContent() {
 
         {riskViewMode === 'betaPert' ? (
           <QuantitativeRiskSimulationView
+            form={operationalRiskForm}
             simulations={operationalSimulations}
             loading={loadingOperationalSimulations}
+            formLoading={runningOperationalSimulation}
             error={operationalRiskError}
             message={operationalRiskMessage}
             standardOptions={operationalStandards.map((standard) => ({
               value: standard.code,
               label: `${standard.code}${standard.name ? ` - ${standard.name}` : ''}`,
             }))}
+            canCreateSimulation={userCanCreateOperationalSimulation}
             canCreateRecommendation={userCanCreateOperationalSimulation}
             recommendationLoadingId={recommendationLoadingId}
+            onFormChange={updateOperationalRiskField}
+            onSubmitSimulation={runOperationalRiskSimulation}
             onRefresh={loadOperationalSimulations}
             onGenerateRecommendation={(simulationId) => {
               void generateOperationalRecommendation(simulationId);
@@ -1460,238 +1429,6 @@ function RiskMatrixPageContent() {
             </div>
           )}
         </div>
-
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-950">Simulación Operativa</h2>
-                <p className="text-sm text-slate-500">
-                  Beta-PERT para cuantificar horas operativas de indisponibilidad o reproceso dentro del flujo de riesgos.
-                </p>
-              </div>
-              <span className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">
-                Este cálculo estima pérdida operativa en horas, no impacto financiero.
-              </span>
-            </div>
-          </div>
-
-          <div className="grid gap-5 p-5 xl:grid-cols-[1fr_0.95fr]">
-            <div className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <label className="block">
-                  <span className="text-xs font-semibold text-slate-600">Norma</span>
-                  <select
-                    value={operationalRiskForm.norma_tipo}
-                    onChange={(e) => updateOperationalRiskField('norma_tipo', e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                  >
-                    <option value="ISO27001">ISO27001</option>
-                    <option value="ISO9001">ISO9001</option>
-                  </select>
-                </label>
-
-                <label className="block md:col-span-2">
-                  <span className="text-xs font-semibold text-slate-600">Modelo</span>
-                  <select
-                    value={operationalRiskForm.modelo_usado}
-                    onChange={(e) => updateOperationalRiskField('modelo_usado', e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                  >
-                    {operationalRiskForm.norma_tipo === 'ISO27001' ? (
-                      <option value="ISO27001_TTIA">ISO27001_TTIA</option>
-                    ) : (
-                      <>
-                        <option value="ISO9001_COP_SIMPLE">ISO9001_COP_SIMPLE</option>
-                        <option value="ISO9001_COP_AVANZADO">ISO9001_COP_AVANZADO</option>
-                      </>
-                    )}
-                  </select>
-                </label>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="block">
-                  <span className="text-xs font-semibold text-slate-600">Nombre del riesgo</span>
-                  <input
-                    type="text"
-                    value={operationalRiskForm.nombre_riesgo}
-                    onChange={(e) => updateOperationalRiskField('nombre_riesgo', e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="Interrupción de servicio crítico"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-slate-600">Proceso afectado</span>
-                  <input
-                    type="text"
-                    value={operationalRiskForm.proceso_afectado}
-                    onChange={(e) => updateOperationalRiskField('proceso_afectado', e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="Continuidad operacional"
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                {renderOperationalNumberInput('Frecuencia min', 'frecuencia_min')}
-                {renderOperationalNumberInput('Frecuencia mode', 'frecuencia_mode')}
-                {renderOperationalNumberInput('Frecuencia max', 'frecuencia_max')}
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                {renderOperationalNumberInput(
-                  operationalRiskForm.norma_tipo === 'ISO27001' ? 'MTTR min (horas)' : 'Reproceso min (horas)',
-                  'impacto_min'
-                )}
-                {renderOperationalNumberInput(
-                  operationalRiskForm.norma_tipo === 'ISO27001' ? 'MTTR mode (horas)' : 'Reproceso mode (horas)',
-                  'impacto_mode'
-                )}
-                {renderOperationalNumberInput(
-                  operationalRiskForm.norma_tipo === 'ISO27001' ? 'MTTR max (horas)' : 'Reproceso max (horas)',
-                  'impacto_max'
-                )}
-              </div>
-
-              {operationalRiskForm.modelo_usado === 'ISO9001_COP_AVANZADO' && (
-                <div className="rounded border border-slate-200 bg-slate-50 p-4">
-                  <div className="mb-3 text-sm font-semibold text-slate-800">Parámetros avanzados ISO9001</div>
-                  <div className="grid gap-3 md:grid-cols-4">
-                    {renderOperationalNumberInput('Tasa error min (%)', 'tasa_error_min')}
-                    {renderOperationalNumberInput('Tasa error mode (%)', 'tasa_error_mode')}
-                    {renderOperationalNumberInput('Tasa error max (%)', 'tasa_error_max')}
-                    {renderOperationalNumberInput('Volumen anual', 'volumen_operativo_anual', '0', '1')}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid gap-3 md:grid-cols-2">
-                {renderOperationalNumberInput('Umbral crítico (horas)', 'umbral_disrupcion_critica_horas')}
-                {renderOperationalNumberInput('Iteraciones', 'iteraciones', '10000', '1')}
-              </div>
-
-              {operationalRiskError && (
-                <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                  {operationalRiskError}
-                </div>
-              )}
-
-              {operationalRiskMessage && (
-                <div className="rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  {operationalRiskMessage}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={runOperationalRiskSimulation}
-                disabled={!userCanCreateOperationalSimulation || runningOperationalSimulation}
-                className="inline-flex items-center justify-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {runningOperationalSimulation ? 'Ejecutando...' : 'Ejecutar simulación'}
-              </button>
-              {!userCanCreateOperationalSimulation && (
-                <p className="text-xs text-slate-500">
-                  Tu rol puede consultar resultados, pero no crear simulaciones operativas.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              {selectedOperationalSimulation && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    ['Media anual', `${formatNumber(selectedOperationalSimulation.media_operativa_anual)} h`],
-                    ['P95', `${formatNumber(selectedOperationalSimulation.peor_escenario_p95)} h`],
-                    ['Prob. umbral', formatProbability(selectedOperationalSimulation.probabilidad_disrupcion_critica)],
-                    ['Iteraciones', formatNumber(selectedOperationalSimulation.iteraciones)],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded border border-slate-200 p-4">
-                      <div className="text-xs font-semibold text-slate-500">{label}</div>
-                      <div className="mt-1 text-2xl font-bold text-slate-950">{value}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="overflow-hidden rounded border border-slate-200">
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                  <h3 className="text-sm font-semibold text-slate-900">Simulaciones guardadas</h3>
-                  <button
-                    type="button"
-                    onClick={loadOperationalSimulations}
-                    className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Actualizar
-                  </button>
-                </div>
-
-                {loadingOperationalSimulations ? (
-                  <div className="p-4 text-sm text-slate-500">Cargando simulaciones...</div>
-                ) : operationalSimulations.length === 0 ? (
-                  <div className="p-4 text-sm text-slate-500">
-                    Aún no hay simulaciones operativas para esta norma.
-                  </div>
-                ) : (
-                  <div className="max-h-[360px] divide-y divide-slate-100 overflow-y-auto">
-                    {operationalSimulations.map((simulation) => (
-                      <div
-                        key={simulation.id}
-                        className={[
-                          'cursor-pointer p-4 transition hover:bg-slate-50',
-                          selectedOperationalSimulation?.id === simulation.id ? 'bg-blue-50' : '',
-                        ].join(' ')}
-                        onClick={() => setSelectedOperationalSimulation(simulation)}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="font-semibold text-slate-950">{simulation.nombre_riesgo}</div>
-                            <div className="mt-1 text-xs text-slate-500">
-                              {simulation.norma_tipo} · {simulation.modelo_usado} · {simulation.proceso_afectado || 'Proceso no especificado'}
-                            </div>
-                          </div>
-                          <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-                            P95 {formatNumber(simulation.peor_escenario_p95)} h
-                          </span>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span>Media {formatNumber(simulation.media_operativa_anual)} h</span>
-                          <span>Umbral {formatProbability(simulation.probabilidad_disrupcion_critica)}</span>
-                          <span>{formatNumber(simulation.iteraciones)} iter.</span>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void generateOperationalRecommendation(simulation.id);
-                            }}
-                            disabled={!userCanCreateOperationalSimulation || recommendationLoadingId === simulation.id}
-                            className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {recommendationLoadingId === simulation.id ? 'Generando...' : 'Generar recomendación'}
-                          </button>
-                        </div>
-
-                        {recommendationBySimulationId[simulation.id] && (
-                          <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
-                            <div className="font-semibold">Recomendación de apoyo, requiere validación humana.</div>
-                            <div className="mt-1">
-                              {recommendationBySimulationId[simulation.id]?.diagnostico_operativo}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
 
         {!iso && (
           <div className="bg-white p-6 rounded shadow space-y-3">
