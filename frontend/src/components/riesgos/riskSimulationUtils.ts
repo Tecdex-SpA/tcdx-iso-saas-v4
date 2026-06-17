@@ -117,16 +117,36 @@ export type OperationalRiskRecommendationResult = {
 };
 
 export type AiAuditorOperationalPayload = {
-  scope: 'operational-risk-beta-pert';
-  methodology: string;
+  scope: 'portfolio' | 'simulation';
+  methodology: {
+    exposureExpectedAccumulated: string;
+    conservativeP95: string;
+    criticalProbabilityAverage: string;
+    warning: string;
+  };
   kpis: {
-    expectedExposure: number;
+    exposureExpectedAccumulated: number;
     conservativeP95: number;
-    criticalProbability: number | null;
-    prioritizedHighRisks: number;
+    criticalProbabilityAverage: number | null;
+    highPrioritizedRisks: number;
   };
   selectedRisk: ReturnType<typeof toAiRiskPayload> | null;
   risks: Array<ReturnType<typeof toAiRiskPayload>>;
+};
+
+export type OperationalAiAnalysis = {
+  diagnostico_ejecutivo: string;
+  riesgos_prioritarios: unknown[];
+  acciones_sugeridas: unknown[];
+  controles_iso_sugeridos: unknown[];
+  advertencias_metodologicas: unknown[];
+  proximos_pasos: unknown[];
+  efectividad_estimada_pct: number | null;
+  ai_model: string;
+  prompt_version: string;
+  scope?: 'portfolio' | 'simulation' | string;
+  request_id?: string | null;
+  ai_engine_used?: boolean;
 };
 
 export const HORIZON_OPTIONS: Array<{ value: QuantitativeRiskHorizon; label: string; factor: number }> = [
@@ -628,27 +648,24 @@ function toAiRiskPayload(risk: QuantitativeRisk) {
   return {
     id: risk.id,
     name: risk.name,
-    norm: risk.normName,
+    standard: risk.normId === 'ISO9001' ? 'ISO9001' : 'ISO27001',
+    model: String(risk.source.modelo_usado || ''),
     process: risk.processName,
-    expectedValue: risk.expectedValue,
+    expectedAnnualExposure: risk.expectedValue,
     p95: risk.p95,
     criticalProbability: risk.criticalProbability,
     status: risk.status,
     probabilityScore: risk.probabilityScore,
     impactScore: risk.impactScore,
-    parameters: {
-      frequency: {
-        min: risk.frequencyMin,
-        mostLikely: risk.frequencyMostLikely,
-        max: risk.frequencyMax,
-      },
-      impact: {
-        min: risk.impactMin,
-        mostLikely: risk.impactMostLikely,
-        max: risk.impactMax,
-      },
-      iterations: risk.iterations,
-      criticalThreshold: risk.criticalThreshold,
+    frequency: {
+      min: risk.frequencyMin,
+      mode: risk.frequencyMostLikely,
+      max: risk.frequencyMax,
+    },
+    impact: {
+      min: risk.impactMin,
+      mode: risk.impactMostLikely,
+      max: risk.impactMax,
     },
   };
 }
@@ -659,13 +676,18 @@ export function getAiAuditorPayload(
   kpis: QuantitativeRiskKpis
 ): AiAuditorOperationalPayload {
   return {
-    scope: 'operational-risk-beta-pert',
-    methodology: buildMethodologyNote(),
+    scope: risks.length > 1 ? 'portfolio' : 'simulation',
+    methodology: {
+      exposureExpectedAccumulated: 'SUM(media_operativa_anual)',
+      conservativeP95: 'SUM(peor_escenario_p95)',
+      criticalProbabilityAverage: 'AVG(probabilidad_disrupcion_critica)',
+      warning: 'El P95 agregado conservador no equivale a un P95 de portafolio simulado.',
+    },
     kpis: {
-      expectedExposure: kpis.expectedExposure,
+      exposureExpectedAccumulated: kpis.expectedExposure,
       conservativeP95: kpis.conservativeP95,
-      criticalProbability: kpis.criticalProbability,
-      prioritizedHighRisks: kpis.prioritizedHighRisks,
+      criticalProbabilityAverage: kpis.criticalProbability,
+      highPrioritizedRisks: kpis.prioritizedHighRisks,
     },
     selectedRisk: selectedRisk ? toAiRiskPayload(selectedRisk) : null,
     risks: risks.slice(0, 25).map(toAiRiskPayload),
