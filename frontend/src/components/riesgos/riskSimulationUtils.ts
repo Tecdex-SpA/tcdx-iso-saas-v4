@@ -136,7 +136,9 @@ export type AiAuditorOperationalPayload = {
 
 export type OperationalAiAnalysis = {
   diagnostico_ejecutivo: string;
+  lectura_portafolio?: string;
   riesgos_prioritarios: unknown[];
+  concentracion_exposicion?: unknown[];
   acciones_sugeridas: unknown[];
   controles_iso_sugeridos: unknown[];
   advertencias_metodologicas: unknown[];

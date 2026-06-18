@@ -159,6 +159,7 @@ function runTests() {
   assert.equal(normalizedAi.guardable, true);
   assert.equal(normalizedAi.ai_model, 'gpt-test');
   assert.equal(normalizedAi.prompt_version, operationalRiskAi.PROMPT_VERSION);
+  assert.equal(normalizedAi.source, 'ai-engine-operational-beta-pert');
 
   const wrapperAi = operationalRiskAi.normalizeOperationalAiAnalysis({
     ok: true,
@@ -186,6 +187,18 @@ function runTests() {
   );
 
   assertThrowsCode(
+    () => operationalRiskAi.normalizeOperationalAiAnalysis({
+      ok: true,
+      engine: { ai_engine_used: true, selected_model: 'qwen2.5:3b' },
+      structured_result: {
+        diagnostico_ejecutivo: 'Preparacion sin_datos: 0 controles activos, 0% cumplimiento efectivo.',
+        acciones_sugeridas: [{ accion: 'Revisar evidencia documental.', horizonte: '30_dias' }],
+      },
+    }, aiPayload),
+    'ai_domain_mismatch'
+  );
+
+  assertThrowsCode(
     () => operationalRiskAi.normalizeAnalysisToSave({ ...normalizedAi, prompt_version: 'old' }),
     'ai_invalid_response'
   );
@@ -197,7 +210,15 @@ function runTests() {
 
   const saveable = operationalRiskAi.normalizeAnalysisToSave(normalizedAi);
   assert.equal(saveable.prompt_version, operationalRiskAi.PROMPT_VERSION);
-  assert.equal(saveable.source, 'ai-engine');
+  assert.equal(saveable.source, 'ai-engine-operational-beta-pert');
+
+  assertThrowsCode(
+    () => operationalRiskAi.normalizeAnalysisToSave({
+      ...normalizedAi,
+      diagnostico_ejecutivo: 'Preparacion sin_datos: 0 controles activos.',
+    }),
+    'ai_domain_mismatch'
+  );
 
   console.log('operationalRiskMonteCarlo.service tests OK');
 }
