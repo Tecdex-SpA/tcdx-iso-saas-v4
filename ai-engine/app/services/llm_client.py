@@ -140,6 +140,25 @@ def _parse_json_text(value: Any) -> Dict[str, Any]:
         return {"answer": text}
 
 
+def build_ollama_combined_prompt(
+    prompt: str,
+    system_prompt: str = "",
+    response_contract_instruction: str = "",
+    append_default_json_contract: bool = True,
+) -> str:
+    contract = response_contract_instruction.strip()
+    if not contract and append_default_json_contract:
+        contract = "Devuelve exclusivamente JSON válido con los campos answer y structured_result."
+    return "\n\n".join([
+        item for item in [
+            system_prompt or "Responde siempre JSON válido en español.",
+            prompt,
+            contract,
+        ]
+        if item
+    ])
+
+
 def call_llm_json(
     prompt: str,
     system_prompt: str = "",
@@ -148,6 +167,8 @@ def call_llm_json(
     depth: str = "standard",
     local_compact: bool = False,
     model_mode: str = "",
+    response_contract_instruction: str = "",
+    append_default_json_contract: bool = True,
 ) -> dict:
     metadata = get_llm_metadata(depth, local_compact, model_mode)
     if not metadata["available"]:
@@ -188,11 +209,12 @@ def call_llm_json(
     if provider == "ollama":
         base_url = metadata["base_url"].rstrip("/")
         url = f"{base_url}/api/generate"
-        combined_prompt = "\n\n".join([
-            system_prompt or "Responde siempre JSON válido en español.",
-            prompt,
-            "Devuelve exclusivamente JSON válido con los campos answer y structured_result.",
-        ])
+        combined_prompt = build_ollama_combined_prompt(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            response_contract_instruction=response_contract_instruction,
+            append_default_json_contract=append_default_json_contract,
+        )
         payload = {
             "model": metadata["model"],
             "prompt": combined_prompt,
