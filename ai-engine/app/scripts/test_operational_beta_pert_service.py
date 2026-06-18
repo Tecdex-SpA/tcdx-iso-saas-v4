@@ -23,7 +23,7 @@ def test_payload_compaction_and_selected_risk():
         for index in range(12)
     ]
     payload = service.sanitize_beta_pert_payload({"risks": risks, "selectedRisk": risks[0]})
-    assert len(payload["risks"]) <= 8
+    assert len(payload["risks"]) <= 5
     assert payload["risks"][0]["id"] == "risk-0"
     assert len([risk for risk in payload["risks"] if risk["name"] == "Riesgo duplicado"]) == 1
 
@@ -42,6 +42,21 @@ def test_normalize_valid_analysis():
     }, payload, {"model": "qwen-test"})
     assert analysis["source"] == service.SOURCE
     assert analysis["prompt_version"] == service.PROMPT_VERSION
+    assert analysis["generation_mode"] == service.GENERATION_MODE
+    assert len(analysis["riesgos_prioritarios"]) > 0
+    assert len(analysis["controles_iso_sugeridos"]) > 0
+
+
+def test_normalize_partial_json_from_markdown():
+    payload = service.sanitize_beta_pert_payload({
+        "risks": [{"id": "risk-1", "name": "Error en liberacion de version", "standard": "ISO9001", "process": "Cambios TI", "p95": 80, "criticalProbability": 0.35}],
+        "kpis": {"conservativeP95": 80},
+    })
+    raw = 'texto previo ```json\n{"lectura_portafolio":"La exposicion se concentra en cambios TI."}\n``` texto final'
+    analysis = service.normalize_beta_pert_analysis(raw, payload, {"model": "qwen-test"})
+    assert analysis["lectura_portafolio"] == "La exposicion se concentra en cambios TI."
+    assert analysis["generation_mode"] == service.GENERATION_MODE
+    assert analysis["acciones_sugeridas"]
 
 
 def test_reject_documental_readiness():
@@ -61,5 +76,6 @@ if __name__ == "__main__":
     test_semantic_mapping()
     test_payload_compaction_and_selected_risk()
     test_normalize_valid_analysis()
+    test_normalize_partial_json_from_markdown()
     test_reject_documental_readiness()
     print("operational beta pert service tests OK")

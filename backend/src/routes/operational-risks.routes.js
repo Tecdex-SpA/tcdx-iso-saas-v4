@@ -664,7 +664,8 @@ router.post('/simulations/:id/recommendations/ai', async (req, res) => {
 
     const analysis = operationalRiskAi.normalizeAnalysisToSave(req.body?.analysis);
     const controlsPayload = {
-      source: 'ai-engine',
+      source: analysis.source,
+      generation_mode: analysis.generation_mode,
       scope: safeText(req.body?.scope || analysis.scope, 'portfolio', 40),
       selectedRiskId: safeText(req.body?.selectedRiskId, '', 80) || null,
       riesgos_prioritarios: analysis.riesgos_prioritarios,

@@ -197,7 +197,7 @@ function buildAiEnginePayload({ tenantId, requestId, payload }) {
     },
     options: {
       model_mode: 'fast',
-      depth: 'standard',
+      depth: 'executive',
       response_format: 'json',
       require_json: true,
       human_review_required: true,
@@ -366,6 +366,7 @@ function sourceObjectFromAiResult(aiResult) {
     candidate.executive_summary ||
     candidate.diagnosis ||
     candidate.diagnostic ||
+    candidate.lectura_portafolio ||
     candidate.acciones_sugeridas ||
     candidate.proximos_pasos
   )) || null;
@@ -420,17 +421,18 @@ function normalizeOperationalAiAnalysis(aiResult, payload) {
     '',
     3000
   );
+  const lecturaPortafolio = safeText(source.lectura_portafolio || source.portfolio_reading || source.risk_portfolio_reading, '', 3000);
   const acciones = normalizeList(source.acciones_sugeridas || source.recommended_actions || source.actions, normalizeSuggestedAction, 10);
   const proximosPasos = normalizeStringList(source.proximos_pasos || source.next_steps, 10);
   const aiModel = selectedModelFrom(aiResult, source);
 
-  if (!diagnostico || (acciones.length === 0 && proximosPasos.length === 0) || !aiModel) {
+  if ((!diagnostico && !lecturaPortafolio) || (acciones.length === 0 && proximosPasos.length === 0) || !aiModel) {
     throw publicAiError(502, 'ai_invalid_response', 'AI Auditor devolvio una respuesta incompleta para el contrato Beta-PERT.');
   }
 
   return {
     diagnostico_ejecutivo: diagnostico,
-    lectura_portafolio: safeText(source.lectura_portafolio || source.portfolio_reading || source.risk_portfolio_reading, '', 3000),
+    lectura_portafolio: lecturaPortafolio,
     riesgos_prioritarios: normalizeList(source.riesgos_prioritarios || source.prioritized_risks || source.key_risks, normalizePrioritizedRisk, 10),
     concentracion_exposicion: normalizeList(source.concentracion_exposicion || source.exposure_concentration, (item) => {
       if (!item || typeof item !== 'object') return null;
@@ -457,6 +459,7 @@ function normalizeOperationalAiAnalysis(aiResult, payload) {
     prompt_version: PROMPT_VERSION,
     scope: payload.scope,
     source: safeText(source.source, 'ai-engine-operational-beta-pert', 120),
+    generation_mode: safeText(source.generation_mode, 'semantic_plus_llm', 80),
     guardable: true,
     ai_engine_used: true,
     request_id: aiResult?.metadata?.request_id || aiResult?.request_id || aiResult?.engine?.request_id || null,
@@ -564,6 +567,7 @@ function normalizeAnalysisToSave(value) {
   );
   const promptVersion = safeText(analysis.prompt_version, '', 120);
   const source = safeText(analysis.source, '', 80);
+  const generationMode = safeText(analysis.generation_mode, '', 80);
   const aiModel = safeText(analysis.ai_model, '', 120);
   const acciones = normalizeList(analysis.acciones_sugeridas, normalizeSuggestedAction, 10);
   const proximosPasos = normalizeStringList(analysis.proximos_pasos, 10);
@@ -580,6 +584,9 @@ function normalizeAnalysisToSave(value) {
   }
   if ((!aiModel && source !== 'ai-engine') || deterministicModel || analysis.ai_engine_used === false || analysis.guardable === false) {
     throw publicAiError(400, 'ai_invalid_response', 'Solo se puede guardar analisis generado por ai-engine real.');
+  }
+  if (generationMode !== 'semantic_plus_llm') {
+    throw publicAiError(400, 'ai_invalid_response', 'El analisis AI debe venir del modo semantic_plus_llm.');
   }
   if (acciones.length === 0 && proximosPasos.length === 0) {
     throw publicAiError(400, 'ai_invalid_response', 'El analisis AI debe incluir acciones sugeridas o proximos pasos.');
@@ -609,6 +616,7 @@ function normalizeAnalysisToSave(value) {
     request_id: safeText(analysis.request_id, '', 120) || null,
     scope: safeText(analysis.scope || 'portfolio', 'portfolio', 40),
     source: safeText(analysis.source, 'ai-engine-operational-beta-pert', 120),
+    generation_mode: generationMode,
   };
 }
 

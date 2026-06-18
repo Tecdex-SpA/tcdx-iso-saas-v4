@@ -12,9 +12,10 @@ from app.services.rag_context_service import search_baseline_knowledge
 
 PROMPT_VERSION = "beta-pert-operational-risk-v1"
 SOURCE = "ai-engine-operational-beta-pert"
+GENERATION_MODE = "semantic_plus_llm"
 BASE_DIR = Path(__file__).resolve().parents[2]
 PROMPT_PATH = BASE_DIR / "prompts" / "operational_risk_beta_pert_v1.md"
-MAX_RISKS = 8
+MAX_RISKS = 5
 
 DOMAIN_MISMATCH_PATTERNS = [
     "preparacion sin_datos",
@@ -58,6 +59,20 @@ def _round(value: Any, digits: int = 2, fallback: Optional[float] = None) -> Opt
 
 def _list(value: Any, limit: int = 8) -> List[Any]:
     return value[:limit] if isinstance(value, list) else []
+
+
+def _unique_texts(items: List[str], limit: int = 8) -> List[str]:
+    result = []
+    seen = set()
+    for item in items:
+        text = _text(item, "", 700)
+        key = _normalize(text)
+        if text and key and key not in seen:
+            seen.add(key)
+            result.append(text)
+        if len(result) >= limit:
+            break
+    return result
 
 
 def _normalize(value: Any) -> str:
@@ -215,11 +230,64 @@ def infer_operational_domain(risk: Dict[str, Any]) -> Dict[str, Any]:
 def build_semantic_context(beta_payload: Dict[str, Any]) -> Dict[str, Any]:
     total_p95 = _num((beta_payload.get("kpis") or {}).get("conservativeP95"), 0) or 0
     domains = [infer_operational_domain(risk) for risk in beta_payload.get("risks", [])]
+    ranked_risks = sorted(beta_payload.get("risks", []), key=_risk_sort_key, reverse=True)
     concentration = []
-    for risk in beta_payload.get("risks", [])[:MAX_RISKS]:
+    prioritized = []
+    controls = []
+    base_actions = []
+    next_steps = [
+        "Validar owner operativo y umbral critico de los riesgos priorizados.",
+        "Revisar si las simulaciones duplicadas deben consolidarse antes de decisiones ejecutivas.",
+        "Definir plan de tratamiento para los riesgos con mayor P95 o probabilidad critica.",
+    ]
+
+    for risk in ranked_risks[:MAX_RISKS]:
+        domain = infer_operational_domain(risk)
         p95 = _num(risk.get("p95"), 0) or 0
+        critical_probability = _num(risk.get("criticalProbability"), 0) or 0
         contribution = round((p95 / total_p95 * 100), 2) if total_p95 > 0 else 0
-        concentration.append({"risk_id": risk.get("id"), "risk_name": risk.get("name"), "p95": p95, "contribution_p95_pct": contribution})
+        driver = "p95"
+        if critical_probability >= 0.5:
+            driver = "probabilidad"
+        elif contribution >= 30:
+            driver = "concentracion"
+        elif _num((risk.get("frequency") or {}).get("mode"), 0) and (_num((risk.get("frequency") or {}).get("mode"), 0) or 0) >= 5:
+            driver = "frecuencia"
+
+        priority = "media"
+        if _status_rank(risk.get("status")) >= 4 or (p95 >= 120 and critical_probability >= 0.3):
+            priority = "critica"
+        elif _status_rank(risk.get("status")) >= 3 or p95 >= 60 or critical_probability >= 0.3:
+            priority = "alta"
+        elif p95 < 24 and critical_probability < 0.15:
+            priority = "baja"
+
+        prioritized.append({
+            "nombre": risk.get("name"),
+            "motivo": f"P95 {round(p95, 2)} y probabilidad critica {round(critical_probability * 100, 2)}%.",
+            "prioridad": priority,
+            "driver": driver,
+        })
+        concentration.append({
+            "riesgo": risk.get("name"),
+            "contribucion_p95_pct": contribution,
+            "lectura": "Contribucion calculada sobre P95 agregado conservador.",
+        })
+        for suggestion in domain.get("iso_suggestions", [])[:2]:
+            standard = "ISO9001" if "9001" in str(risk.get("standard") or "") else "ISO27001"
+            controls.append({
+                "norma": standard,
+                "control_o_clausula": suggestion,
+                "descripcion": f"Aplicar {suggestion.lower()} para reducir exposicion operacional en {risk.get('name')}.",
+                "riesgo_relacionado": risk.get("name"),
+            })
+        horizon = "inmediato" if priority == "critica" else "30_dias" if priority == "alta" else "60_dias"
+        base_actions.append({
+            "accion": f"{domain.get('focus')} para {risk.get('name')}.",
+            "horizonte": horizon,
+            "responsable_sugerido": "Responsable del proceso",
+            "riesgo_relacionado": risk.get("name"),
+        })
 
     baseline = []
     for risk, domain in zip(beta_payload.get("risks", [])[:5], domains[:5]):
@@ -239,7 +307,22 @@ def build_semantic_context(beta_payload: Dict[str, Any]) -> Dict[str, Any]:
     risk_rules = get_knowledge_module("risk").get("risk_analysis_rules.json", {})
     return {
         "domains": domains,
-        "p95_concentration": concentration[:5],
+        "riesgos_prioritarios": prioritized[:3],
+        "concentracion_exposicion": concentration[:5],
+        "controles_iso_sugeridos": controls[:5],
+        "acciones_base_sugeridas": base_actions[:5],
+        "advertencias_metodologicas": [
+            "El P95 agregado conservador es suma de P95 individuales y no equivale a P95 de portafolio simulado.",
+            "La priorizacion combina estado, P95 individual, probabilidad critica y contribucion al total conservador.",
+        ],
+        "proximos_pasos_base": next_steps[:5],
+        "lectura_cuantitativa_base": {
+            "riesgos_analizados": len(beta_payload.get("risks", [])),
+            "exposicion_esperada_acumulada": (beta_payload.get("kpis") or {}).get("exposureExpectedAccumulated"),
+            "p95_agregado_conservador": total_p95,
+            "probabilidad_critica_promedio": (beta_payload.get("kpis") or {}).get("criticalProbabilityAverage"),
+            "riesgos_altos_priorizados": (beta_payload.get("kpis") or {}).get("highPrioritizedRisks"),
+        },
         "risk_rules": {
             "priority_factors": _list(risk_rules.get("risk_priority_factors"), 8),
             "high_priority_conditions": _list(risk_rules.get("high_priority_conditions"), 6),
@@ -253,21 +336,62 @@ def build_prompt_payload(beta_payload: Dict[str, Any], semantic_context: Dict[st
     return json.dumps({
         "task": "operational_risk_beta_pert_analysis",
         "prompt_version": PROMPT_VERSION,
-        "beta_pert": beta_payload,
-        "semantic_context": semantic_context,
+        "instruction": "Genera solo una sintesis ejecutiva corta. No calcules controles, concentracion ni riesgos prioritarios; esos campos los completa el servicio.",
+        "kpis": beta_payload.get("kpis"),
+        "selectedRisk": beta_payload.get("selectedRisk"),
+        "risks": beta_payload.get("risks", [])[:MAX_RISKS],
+        "semantic_summary": {
+            "dominios_operacionales": semantic_context.get("domains", [])[:MAX_RISKS],
+            "lectura_cuantitativa_base": semantic_context.get("lectura_cuantitativa_base"),
+            "advertencia_p95": semantic_context.get("advertencias_metodologicas", [None])[0],
+        },
         "required_output": {
             "diagnostico_ejecutivo": "string",
             "lectura_portafolio": "string",
-            "riesgos_prioritarios": "max 3",
-            "concentracion_exposicion": "top contributors by p95",
-            "acciones_sugeridas": "max 5",
-            "controles_iso_sugeridos": "max 5",
-            "advertencias_metodologicas": "max 3",
-            "proximos_pasos": "max 5",
-            "prompt_version": PROMPT_VERSION,
-            "source": SOURCE,
+            "acciones_sugeridas": ["string"],
+            "proximos_pasos": ["string"],
+            "advertencia_metodologica": "string",
         },
     }, ensure_ascii=False, default=str)
+
+
+def _safe_response_text(value: Any, max_len: int = 2000) -> str:
+    if isinstance(value, str):
+        raw = value
+    else:
+        raw = json.dumps(value, ensure_ascii=False, default=str)
+    raw = re.sub(r"(?i)(token|secret|password|api[_-]?key)\s*[:=]\s*[^,\s}]+", r"\1=[redacted]", raw)
+    return re.sub(r"\s+", " ", raw).strip()[:max_len]
+
+
+def _balanced_json_candidates(text: str) -> List[str]:
+    candidates = []
+    start = -1
+    depth = 0
+    in_string = False
+    escaped = False
+    for index, char in enumerate(text):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == "}" and depth > 0:
+            depth -= 1
+            if depth == 0 and start >= 0:
+                candidates.append(text[start:index + 1])
+                start = -1
+    return candidates
 
 
 def parse_json_candidate(value: Any) -> Optional[Dict[str, Any]]:
@@ -277,7 +401,12 @@ def parse_json_candidate(value: Any) -> Optional[Dict[str, Any]]:
         return None
     text = value.strip()
     fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", text, re.I)
-    candidates = [text, fenced.group(1) if fenced else "", text[text.find("{"): text.rfind("}") + 1] if "{" in text and "}" in text else ""]
+    candidates = [
+        text,
+        fenced.group(1) if fenced else "",
+        text[text.find("{"): text.rfind("}") + 1] if "{" in text and "}" in text else "",
+        *_balanced_json_candidates(text),
+    ]
     for candidate in [item for item in candidates if item]:
         try:
             parsed = json.loads(candidate)
@@ -291,7 +420,15 @@ def _first_analysis_candidate(value: Any, depth: int = 0) -> Optional[Dict[str, 
     if depth > 4 or value is None:
         return None
     parsed = parse_json_candidate(value)
-    if parsed and (parsed.get("diagnostico_ejecutivo") or parsed.get("analysis") or parsed.get("structured_result") or parsed.get("answer")):
+    if parsed and (
+        parsed.get("diagnostico_ejecutivo") or
+        parsed.get("lectura_portafolio") or
+        parsed.get("analysis") or
+        parsed.get("structured_result") or
+        parsed.get("answer") or
+        parsed.get("acciones_sugeridas") or
+        parsed.get("proximos_pasos")
+    ):
         for key in ["analysis", "structured_result", "answer"]:
             if isinstance(parsed.get(key), (dict, str)):
                 candidate = _first_analysis_candidate(parsed[key], depth + 1)
@@ -305,6 +442,31 @@ def _first_analysis_candidate(value: Any, depth: int = 0) -> Optional[Dict[str, 
                 if candidate:
                     return candidate
     return None
+
+
+def _log_parse_observation(
+    ai_raw: Any,
+    source: Optional[Dict[str, Any]],
+    metadata: Dict[str, Any],
+    trace_context: Optional[Dict[str, Any]],
+    parse_error_code: Optional[str],
+    missing_required_fields: Optional[List[str]] = None,
+) -> None:
+    trace_context = trace_context or {}
+    response_text = _safe_response_text(ai_raw)
+    print(json.dumps({
+        "event": "operational_beta_pert_ai_parse",
+        "request_id": trace_context.get("request_id"),
+        "tenant_id": trace_context.get("tenant_id"),
+        "model": metadata.get("model") or metadata.get("selected_model"),
+        "duration_ms": trace_context.get("duration_ms"),
+        "response_type": type(ai_raw).__name__,
+        "response_length": len(response_text),
+        "parse_error_code": parse_error_code,
+        "missing_required_fields": missing_required_fields or [],
+        "has_json_candidate": source is not None or parse_json_candidate(ai_raw) is not None,
+        "first_120_chars_sanitized": response_text[:120],
+    }, ensure_ascii=False, default=str))
 
 
 def _has_domain_mismatch(text: Any) -> bool:
@@ -346,17 +508,47 @@ def _string_list(value: Any, limit: int) -> List[str]:
     return result[:limit]
 
 
-def normalize_beta_pert_analysis(ai_raw: Any, beta_payload: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_beta_pert_analysis(
+    ai_raw: Any,
+    beta_payload: Dict[str, Any],
+    metadata: Dict[str, Any],
+    semantic_context: Optional[Dict[str, Any]] = None,
+    trace_context: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    semantic_context = semantic_context or build_semantic_context(beta_payload)
     source = _first_analysis_candidate(ai_raw)
     if not source:
+        _log_parse_observation(
+            ai_raw,
+            None,
+            metadata,
+            trace_context,
+            "ai_invalid_response",
+            ["json_candidate"],
+        )
         raise OperationalBetaPertError("ai_invalid_response", "AI operacional Beta-PERT devolvio una respuesta no estructurada.", 502)
     if _has_domain_mismatch(source):
+        _log_parse_observation(
+            ai_raw,
+            source,
+            metadata,
+            trace_context,
+            "ai_domain_mismatch",
+            [],
+        )
         raise OperationalBetaPertError("ai_domain_mismatch", "La respuesta AI corresponde a readiness documental y no a Beta-PERT operacional.", 502)
 
     diagnostico = _text(source.get("diagnostico_ejecutivo") or source.get("executive_summary") or source.get("diagnosis"), "", 1600)
     lectura = _text(source.get("lectura_portafolio") or source.get("portfolio_reading") or source.get("risk_portfolio_reading"), "", 1800)
+    missing = []
+    if not diagnostico and not lectura:
+        missing.append("diagnostico_ejecutivo_or_lectura_portafolio")
+    if missing:
+        _log_parse_observation(ai_raw, source, metadata, trace_context, "ai_invalid_response", missing)
+        raise OperationalBetaPertError("ai_invalid_response", "AI operacional Beta-PERT no entrego una sintesis util.", 502)
+
     acciones = []
-    for item in _list(source.get("acciones_sugeridas") or source.get("recommended_actions") or source.get("actions"), 5):
+    for item in _list(source.get("acciones_sugeridas") or source.get("recommended_actions") or source.get("actions"), 3):
         if isinstance(item, str):
             action = _text(item, "", 700)
             if action:
@@ -365,59 +557,48 @@ def normalize_beta_pert_analysis(ai_raw: Any, beta_payload: Dict[str, Any], meta
             action = _text(item.get("accion") or item.get("action") or item.get("descripcion") or item.get("description"), "", 700)
             if action:
                 acciones.append({"accion": action, "horizonte": _horizon(item.get("horizonte") or item.get("horizon")), "responsable_sugerido": _text(item.get("responsable_sugerido") or item.get("owner") or item.get("responsable"), "", 180) or None, "riesgo_relacionado": _text(item.get("riesgo_relacionado") or item.get("risk") or item.get("riesgo"), "", 220) or None})
-    proximos = _string_list(source.get("proximos_pasos") or source.get("next_steps"), 5)
-    if not diagnostico or (not acciones and not proximos):
-        raise OperationalBetaPertError("ai_invalid_response", "AI operacional Beta-PERT devolvio una respuesta incompleta.", 502)
+    base_actions = _list(semantic_context.get("acciones_base_sugeridas"), 5)
+    merged_actions = []
+    seen_actions = set()
+    for action in [*acciones, *base_actions]:
+        if not isinstance(action, dict):
+            continue
+        action_text = _text(action.get("accion"), "", 700)
+        key = _normalize(action_text)
+        if action_text and key not in seen_actions:
+            seen_actions.add(key)
+            merged_actions.append({
+                "accion": action_text,
+                "horizonte": _horizon(action.get("horizonte")),
+                "responsable_sugerido": _text(action.get("responsable_sugerido"), "", 180) or None,
+                "riesgo_relacionado": _text(action.get("riesgo_relacionado"), "", 220) or None,
+            })
+        if len(merged_actions) >= 5:
+            break
 
-    riesgos = []
-    for item in _list(source.get("riesgos_prioritarios") or source.get("prioritized_risks") or source.get("key_risks"), 3):
-        if isinstance(item, str):
-            name = _text(item, "", 220)
-            if name:
-                riesgos.append({"nombre": name, "motivo": "Priorizado por el analisis Beta-PERT.", "prioridad": "media", "driver": "p95"})
-        elif isinstance(item, dict):
-            name = _text(item.get("nombre") or item.get("name") or item.get("riesgo") or item.get("risk"), "", 220)
-            if name:
-                riesgos.append({"nombre": name, "motivo": _text(item.get("motivo") or item.get("reason") or item.get("descripcion") or item.get("description"), "", 700), "prioridad": _priority(item.get("prioridad") or item.get("priority")), "driver": _driver(item.get("driver"))})
-
-    concentracion = []
-    for item in _list(source.get("concentracion_exposicion") or source.get("exposure_concentration"), 5):
-        if isinstance(item, dict):
-            risk_name = _text(item.get("riesgo") or item.get("risk") or item.get("name"), "", 220)
-            if risk_name:
-                concentracion.append({"riesgo": risk_name, "contribucion_p95_pct": _round(item.get("contribucion_p95_pct") or item.get("contribution_p95_pct"), 2, 0), "lectura": _text(item.get("lectura") or item.get("reading") or item.get("descripcion"), "", 500)})
-    if not concentracion:
-        total_p95 = _num((beta_payload.get("kpis") or {}).get("conservativeP95"), 0) or 0
-        for risk in beta_payload.get("risks", [])[:3]:
-            p95 = _num(risk.get("p95"), 0) or 0
-            concentracion.append({"riesgo": risk.get("name"), "contribucion_p95_pct": round((p95 / total_p95 * 100), 2) if total_p95 else 0, "lectura": "Contribucion calculada sobre P95 agregado conservador."})
-
-    controles = []
-    for item in _list(source.get("controles_iso_sugeridos") or source.get("iso_controls") or source.get("controls"), 5):
-        if isinstance(item, str):
-            control = _text(item, "", 180)
-            if control:
-                controles.append({"norma": "ISO27001", "control_o_clausula": control, "descripcion": control, "riesgo_relacionado": None})
-        elif isinstance(item, dict):
-            standard = _text(item.get("norma") or item.get("standard"), "ISO27001", 40).upper().replace(" ", "")
-            control = _text(item.get("control_o_clausula") or item.get("control") or item.get("clausula") or item.get("clause"), "", 180)
-            desc = _text(item.get("descripcion") or item.get("description") or item.get("motivo"), "", 700)
-            if control or desc:
-                controles.append({"norma": "ISO9001" if "9001" in standard else "ISO27001", "control_o_clausula": control or "Control ISO sugerido", "descripcion": desc or control, "riesgo_relacionado": _text(item.get("riesgo_relacionado") or item.get("risk") or item.get("riesgo"), "", 220) or None})
+    llm_next_steps = _string_list(source.get("proximos_pasos") or source.get("next_steps"), 3)
+    proximos = _unique_texts([*llm_next_steps, *_list(semantic_context.get("proximos_pasos_base"), 5)], 5)
+    advertencia_llm = _text(source.get("advertencia_metodologica") or source.get("methodology_warning"), "", 700)
+    advertencias = _unique_texts([
+        *(_list(semantic_context.get("advertencias_metodologicas"), 3)),
+        advertencia_llm,
+    ], 3)
+    _log_parse_observation(ai_raw, source, metadata, trace_context, None, [])
 
     return {
         "diagnostico_ejecutivo": diagnostico,
         "lectura_portafolio": lectura,
-        "riesgos_prioritarios": riesgos[:3],
-        "concentracion_exposicion": concentracion[:5],
-        "acciones_sugeridas": acciones[:5],
-        "controles_iso_sugeridos": controles[:5],
-        "advertencias_metodologicas": _string_list(source.get("advertencias_metodologicas") or source.get("methodology_warnings") or ["El P95 agregado conservador es suma de P95 individuales y no equivale a P95 de portafolio simulado."], 3),
+        "riesgos_prioritarios": _list(semantic_context.get("riesgos_prioritarios"), 3),
+        "concentracion_exposicion": _list(semantic_context.get("concentracion_exposicion"), 5),
+        "acciones_sugeridas": merged_actions[:5],
+        "controles_iso_sugeridos": _list(semantic_context.get("controles_iso_sugeridos"), 5),
+        "advertencias_metodologicas": advertencias,
         "proximos_pasos": proximos[:5],
         "efectividad_estimada_pct": _round(source.get("efectividad_estimada_pct") or source.get("estimated_effectiveness_pct"), 2, None),
         "ai_model": _text(source.get("ai_model") or metadata.get("model") or metadata.get("selected_model") or "ai-engine", "ai-engine", 120),
         "prompt_version": PROMPT_VERSION,
         "source": SOURCE,
+        "generation_mode": GENERATION_MODE,
     }
 
 
@@ -444,9 +625,10 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not is_llm_available():
         raise OperationalBetaPertError("ai_engine_unavailable", "Motor LLM no disponible para analisis Beta-PERT.", 503)
 
-    prompt_payload = build_prompt_payload(beta_payload, build_semantic_context(beta_payload))
+    semantic_context = build_semantic_context(beta_payload)
+    prompt_payload = build_prompt_payload(beta_payload, semantic_context)
     try:
-        raw = call_llm_json(prompt=prompt_payload, system_prompt=_load_prompt(), temperature=0.15, timeout=90, depth=depth, local_compact=True, model_mode=llm_model_mode)
+        raw = call_llm_json(prompt=prompt_payload, system_prompt=_load_prompt(), temperature=0.1, timeout=75, depth=depth, local_compact=True, model_mode=llm_model_mode)
     except TimeoutError as exc:
         raise OperationalBetaPertError("ai_timeout", "AI operacional Beta-PERT excedio el tiempo de respuesta.", 504) from exc
     except Exception as exc:
@@ -456,7 +638,7 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise OperationalBetaPertError("ai_engine_unavailable", f"No fue posible ejecutar AI operacional Beta-PERT: {str(exc)[:160]}", 503) from exc
 
     duration_ms = int((time.perf_counter() - started_at) * 1000)
-    analysis = normalize_beta_pert_analysis(raw, beta_payload, metadata)
+    analysis = normalize_beta_pert_analysis(raw, beta_payload, metadata, semantic_context, {"request_id": request_id or None, "tenant_id": tenant_id, "duration_ms": duration_ms})
     print(json.dumps({"event": "operational_beta_pert_ai_ok", "request_id": request_id or None, "tenant_id": tenant_id, "risks_count": len(beta_payload["risks"]), "selected_model": metadata.get("model"), "provider": metadata.get("provider"), "duration_ms": duration_ms, "status": "ok"}, ensure_ascii=False, default=str))
     return {"success": True, "analysis": analysis, "metadata": {"request_id": request_id or "", "model": metadata.get("model"), "model_mode": "expert" if llm_model_mode == "deep" else llm_model_mode, "duration_ms": duration_ms, "risks_analyzed": len(beta_payload["risks"]), "generated_at": datetime.now(timezone.utc).isoformat()}}
 
