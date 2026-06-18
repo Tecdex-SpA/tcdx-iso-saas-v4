@@ -197,11 +197,9 @@ function buildAiEnginePayload({ tenantId, requestId, payload }) {
     },
     options: {
       model_mode: 'fast',
-      fast_mode: true,
       depth: 'standard',
       response_format: 'json',
       require_json: true,
-      return_structured_result: true,
       human_review_required: true,
     },
     request_metadata: {
@@ -373,6 +371,27 @@ function sourceObjectFromAiResult(aiResult) {
   )) || null;
 }
 
+function containsDocumentalReadiness(value) {
+  const text = safeText(
+    typeof value === 'string' ? value : JSON.stringify(value || {}),
+    '',
+    5000
+  )
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return [
+    'preparacion sin_datos',
+    'preparación sin_datos',
+    'controles activos',
+    'cumplimiento efectivo',
+    'evidencia oficial',
+    'controles sin evidencia',
+    '0 controles',
+    '0% cumplimiento',
+  ].some((pattern) => text.includes(pattern.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()));
+}
+
 function selectedModelFrom(aiResult, source = {}) {
   return safeText(
     source.ai_model ||
@@ -392,6 +411,9 @@ function normalizeOperationalAiAnalysis(aiResult, payload) {
   if (!source) {
     throw publicAiError(502, 'ai_invalid_response', 'AI Auditor devolvio una respuesta no estructurada.');
   }
+  if (containsDocumentalReadiness(source)) {
+    throw publicAiError(502, 'ai_domain_mismatch', 'La respuesta AI corresponde a readiness documental y no a Beta-PERT operacional.');
+  }
 
   const diagnostico = safeText(
     source.diagnostico_ejecutivo || source.executive_summary || source.diagnosis || source.diagnostic,
@@ -408,7 +430,18 @@ function normalizeOperationalAiAnalysis(aiResult, payload) {
 
   return {
     diagnostico_ejecutivo: diagnostico,
+    lectura_portafolio: safeText(source.lectura_portafolio || source.portfolio_reading || source.risk_portfolio_reading, '', 3000),
     riesgos_prioritarios: normalizeList(source.riesgos_prioritarios || source.prioritized_risks || source.key_risks, normalizePrioritizedRisk, 10),
+    concentracion_exposicion: normalizeList(source.concentracion_exposicion || source.exposure_concentration, (item) => {
+      if (!item || typeof item !== 'object') return null;
+      const riesgo = safeText(item.riesgo || item.risk || item.name, '', 220);
+      if (!riesgo) return null;
+      return {
+        riesgo,
+        contribucion_p95_pct: boundedNumber(item.contribucion_p95_pct ?? item.contribution_p95_pct, 0),
+        lectura: safeText(item.lectura || item.reading || item.descripcion || item.description, '', 700),
+      };
+    }, 10),
     acciones_sugeridas: acciones,
     controles_iso_sugeridos: normalizeList(source.controles_iso_sugeridos || source.iso_controls || source.controls, normalizeIsoControl, 10),
     advertencias_metodologicas: normalizeStringList(
@@ -423,10 +456,10 @@ function normalizeOperationalAiAnalysis(aiResult, payload) {
     ai_model: aiModel,
     prompt_version: PROMPT_VERSION,
     scope: payload.scope,
-    source: 'ai-engine',
+    source: safeText(source.source, 'ai-engine-operational-beta-pert', 120),
     guardable: true,
     ai_engine_used: true,
-    request_id: aiResult?.request_id || aiResult?.engine?.request_id || null,
+    request_id: aiResult?.metadata?.request_id || aiResult?.request_id || aiResult?.engine?.request_id || null,
   };
 }
 
@@ -463,6 +496,38 @@ function classifyAiEngineResult(aiResult) {
     safeText(engine.selected_model || engine.model, '', 120).toLowerCase() === 'backend_fallback';
 
   if (fallback || aiResult.ok === false) {
+    if (aiResult.code === 'ai_domain_mismatch' || errorType === 'ai_domain_mismatch') {
+      return {
+        status: 502,
+        code: 'ai_domain_mismatch',
+        message: 'La respuesta AI corresponde a readiness documental y no a Beta-PERT operacional.',
+        reason: errorType || aiResult.code,
+      };
+    }
+    if (aiResult.code === 'ai_invalid_payload') {
+      return {
+        status: 400,
+        code: 'ai_invalid_payload',
+        message: 'No hay datos de riesgo suficientes para generar analisis AI.',
+        reason: aiResult.code,
+      };
+    }
+    if (aiResult.code === 'ai_invalid_response' || errorType === 'ai_invalid_response') {
+      return {
+        status: 502,
+        code: 'ai_invalid_response',
+        message: 'AI Auditor devolvio una respuesta incompleta para el contrato Beta-PERT.',
+        reason: errorType || aiResult.code,
+      };
+    }
+    if (aiResult.code === 'ai_timeout' || errorType === 'ai_timeout') {
+      return {
+        status: 504,
+        code: 'ai_timeout',
+        message: 'AI Auditor excedio el tiempo de respuesta. Intenta nuevamente.',
+        reason: errorType || aiResult.code,
+      };
+    }
     if (errorType === 'AI_ENGINE_TIMEOUT' || errorType === 'AI_AUDITOR_TIMEOUT' || engine.timeout_stage) {
       return {
         status: 504,
@@ -507,6 +572,9 @@ function normalizeAnalysisToSave(value) {
   if (!diagnostico) {
     throw publicAiError(400, 'ai_invalid_response', 'diagnostico_ejecutivo es obligatorio.');
   }
+  if (containsDocumentalReadiness(analysis)) {
+    throw publicAiError(400, 'ai_domain_mismatch', 'No se puede guardar una respuesta de readiness documental como recomendacion Beta-PERT.');
+  }
   if (promptVersion !== PROMPT_VERSION) {
     throw publicAiError(400, 'ai_invalid_response', `prompt_version debe ser ${PROMPT_VERSION}.`);
   }
@@ -519,7 +587,18 @@ function normalizeAnalysisToSave(value) {
 
   return {
     diagnostico_ejecutivo: diagnostico,
+    lectura_portafolio: safeText(analysis.lectura_portafolio, '', 3000),
     riesgos_prioritarios: normalizeList(analysis.riesgos_prioritarios, normalizePrioritizedRisk, 10),
+    concentracion_exposicion: normalizeList(analysis.concentracion_exposicion, (item) => {
+      if (!item || typeof item !== 'object') return null;
+      const riesgo = safeText(item.riesgo || item.risk || item.name, '', 220);
+      if (!riesgo) return null;
+      return {
+        riesgo,
+        contribucion_p95_pct: boundedNumber(item.contribucion_p95_pct ?? item.contribution_p95_pct, 0),
+        lectura: safeText(item.lectura || item.reading || item.descripcion || item.description, '', 700),
+      };
+    }, 10),
     acciones_sugeridas: acciones,
     controles_iso_sugeridos: normalizeList(analysis.controles_iso_sugeridos, normalizeIsoControl, 10),
     advertencias_metodologicas: normalizeStringList(analysis.advertencias_metodologicas, 10),
@@ -529,7 +608,7 @@ function normalizeAnalysisToSave(value) {
     prompt_version: PROMPT_VERSION,
     request_id: safeText(analysis.request_id, '', 120) || null,
     scope: safeText(analysis.scope || 'portfolio', 'portfolio', 40),
-    source: 'ai-engine',
+    source: safeText(analysis.source, 'ai-engine-operational-beta-pert', 120),
   };
 }
 
@@ -550,5 +629,6 @@ module.exports = {
     normalizePrioritizedRisk,
     normalizeSuggestedAction,
     normalizeIsoControl,
+    containsDocumentalReadiness,
   },
 };

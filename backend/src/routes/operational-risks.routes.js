@@ -552,7 +552,7 @@ router.post('/ai-analysis', async (req, res) => {
     const requestId = operationalRiskAi.buildRequestId();
     const aiPayload = operationalRiskAi.buildAiEnginePayload({ tenantId, requestId, payload });
 
-    const aiResult = await aiEngineClient.analyzeWithSeniorAuditor(aiPayload);
+    const aiResult = await aiEngineClient.analyzeOperationalBetaPert(aiPayload);
     const unavailable = operationalRiskAi.classifyAiEngineResult(aiResult);
     if (unavailable) {
       return res.status(unavailable.status).json({
@@ -670,6 +670,8 @@ router.post('/simulations/:id/recommendations/ai', async (req, res) => {
       riesgos_prioritarios: analysis.riesgos_prioritarios,
       acciones_sugeridas: analysis.acciones_sugeridas,
       controles_iso_sugeridos: analysis.controles_iso_sugeridos,
+      concentracion_exposicion: analysis.concentracion_exposicion,
+      lectura_portafolio: analysis.lectura_portafolio,
       advertencias_metodologicas: analysis.advertencias_metodologicas,
       proximos_pasos: analysis.proximos_pasos,
       metadata: {

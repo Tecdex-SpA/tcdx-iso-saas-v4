@@ -81,7 +81,7 @@ export default function AiAuditorOperationalRiskPanel({
       !loading
   );
   const engineLabel = analysis?.source === 'ai-engine' || analysis?.ai_engine_used !== false
-    ? 'ai-engine'
+    ? (analysis?.source === 'ai-engine-operational-beta-pert' ? 'AI operacional Beta-PERT' : 'ai-engine')
     : 'origen no verificable';
 
   return (
@@ -161,12 +161,16 @@ export default function AiAuditorOperationalRiskPanel({
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
             <div className="text-sm font-bold text-blue-950">Diagnostico ejecutivo</div>
             <p className="mt-2 text-sm leading-6 text-blue-950">{analysis.diagnostico_ejecutivo}</p>
+            {analysis.lectura_portafolio && (
+              <p className="mt-2 text-sm leading-6 text-blue-900">{analysis.lectura_portafolio}</p>
+            )}
             <div className="mt-2 text-xs font-semibold text-blue-800">
               Fuente: {engineLabel} - Modelo: {analysis.ai_model || 'ai-engine'} - Prompt: {analysis.prompt_version || 'beta-pert-operational-risk-v1'}
             </div>
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
             <ListBlock title="Riesgos prioritarios" items={analysis.riesgos_prioritarios || []} />
+            <ListBlock title="Concentracion de exposicion" items={analysis.concentracion_exposicion || []} />
             <ListBlock title="Acciones sugeridas" items={analysis.acciones_sugeridas || []} />
             <ListBlock title="Controles ISO sugeridos" items={analysis.controles_iso_sugeridos || []} />
             <ListBlock title="Advertencias metodologicas" items={analysis.advertencias_metodologicas || []} />

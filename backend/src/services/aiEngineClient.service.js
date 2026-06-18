@@ -128,6 +128,7 @@ class AiEngineClient {
         httpError.code = response.status === 404 ? 'AI_ENGINE_ENDPOINT_NOT_FOUND' : 'AI_ENGINE_HTTP_ERROR';
         httpError.path = path;
         httpError.status = response.status;
+        httpError.response_json = json;
         httpError.response_preview = typeof detail === 'string' ? detail.slice(0, 300) : JSON.stringify(detail).slice(0, 300);
         throw httpError;
       }
@@ -203,6 +204,59 @@ class AiEngineClient {
         } catch (retryError) {
           return this.buildFallback(payload, retryError);
         }
+      }
+
+      return this.buildFallback(payload, error);
+    }
+  }
+
+  async analyzeOperationalBetaPert(payload, options = {}) {
+    const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
+    const aiAccess = tenantId ? await isTenantAiFeatureEnabled(tenantId, 'auditor') : { enabled: true };
+    if (!aiAccess.enabled) {
+      return this.buildDisabledByPlan(payload, 'auditor', aiAccess.reason);
+    }
+
+    if (!this.baseUrl || !this.token) {
+      return this.buildFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
+    }
+
+    const timeoutMs = Number.parseInt(
+      String(
+        options.timeoutMs ||
+          process.env.AI_OPERATIONAL_RISK_TIMEOUT_MS ||
+          process.env.AI_AUDITOR_TIMEOUT_MS ||
+          this.auditorTimeout
+      ),
+      10
+    ) || this.auditorTimeout;
+
+    try {
+      return await this.postJson('/api/ai/operational-risk/beta-pert/analyze', payload, { timeoutMs });
+    } catch (error) {
+      if (this.isNetworkError(error)) {
+        try {
+          return await this.postJson('/api/ai/operational-risk/beta-pert/analyze', payload, { timeoutMs });
+        } catch (retryError) {
+          return this.buildFallback(payload, retryError);
+        }
+      }
+
+      if (error?.response_json && typeof error.response_json === 'object') {
+        return {
+          ok: false,
+          ...error.response_json,
+          engine: {
+            ai_engine_used: true,
+            fallback_used: false,
+            ai_enrichment_failed: true,
+            error_type: error.response_json.code || error.code || 'AI_ENGINE_HTTP_ERROR',
+            error_message: error.response_json.message || error.message,
+            status: error.status || null,
+            path: error.path || null,
+            request_id: payload?.request_metadata?.request_id || payload?.request_id || null,
+          },
+        };
       }
 
       return this.buildFallback(payload, error);
