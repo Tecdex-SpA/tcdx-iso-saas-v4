@@ -1,5 +1,7 @@
+import json
+
 from app.services import operational_risk_beta_pert_service as service
-from app.services.llm_client import build_ollama_combined_prompt
+from app.services.llm_client import build_ollama_combined_prompt, get_ollama_generation_options
 
 
 def test_semantic_mapping():
@@ -29,6 +31,32 @@ def test_payload_compaction_and_selected_risk():
     assert len([risk for risk in payload["risks"] if risk["name"] == "Riesgo duplicado"]) == 1
 
 
+def test_llm_prompt_payload_uses_max_three_risks_and_keeps_selected():
+    risks = [
+        {
+            "id": f"risk-{index}",
+            "name": f"Riesgo {index}",
+            "standard": "ISO27001",
+            "model": "ISO27001_TTIA",
+            "process": "Continuidad",
+            "p95": index * 20,
+            "criticalProbability": index / 10,
+            "expectedAnnualExposure": index * 5,
+            "status": "alto",
+        }
+        for index in range(1, 6)
+    ]
+    selected = {**risks[0], "id": "selected-risk", "name": "Riesgo seleccionado menor", "p95": 1}
+    payload = service.sanitize_beta_pert_payload({"risks": risks, "selectedRisk": selected})
+    semantic_context = service.build_semantic_context(payload)
+    prompt_payload = json.loads(service.build_prompt_payload(payload, semantic_context))
+
+    assert len(prompt_payload["risks"]) == 3
+    assert prompt_payload["risks"][0]["id"] == "selected-risk"
+    assert set(prompt_payload["required_output"].keys()) == {"diagnostico_ejecutivo", "lectura_portafolio"}
+    assert len(prompt_payload["semantic_summary"]["dominios_operacionales"]) == 3
+
+
 def test_normalize_valid_analysis():
     payload = service.sanitize_beta_pert_payload({
         "risks": [{"id": "risk-1", "name": "Caida de servicio critico", "standard": "ISO27001", "process": "Continuidad", "p95": 120, "criticalProbability": 0.4}],
@@ -46,6 +74,24 @@ def test_normalize_valid_analysis():
     assert analysis["generation_mode"] == service.GENERATION_MODE
     assert len(analysis["riesgos_prioritarios"]) > 0
     assert len(analysis["controles_iso_sugeridos"]) > 0
+
+
+def test_normalize_two_field_llm_analysis_completes_semantic_outputs():
+    payload = service.sanitize_beta_pert_payload({
+        "risks": [{"id": "risk-1", "name": "Error en liberacion de version", "standard": "ISO9001", "process": "Cambios TI", "p95": 90, "criticalProbability": 0.38}],
+        "kpis": {"conservativeP95": 90},
+    })
+    analysis = service.normalize_beta_pert_analysis({
+        "diagnostico_ejecutivo": "La exposicion operacional es alta y esta asociada a cambios TI.",
+        "lectura_portafolio": "La cola conservadora esta dominada por riesgo de liberacion.",
+        "ai_model": "qwen-test",
+    }, payload, {"model": "qwen-test"})
+    assert analysis["diagnostico_ejecutivo"].startswith("La exposicion operacional")
+    assert analysis["acciones_sugeridas"]
+    assert analysis["proximos_pasos"]
+    assert analysis["controles_iso_sugeridos"]
+    assert analysis["efectividad_estimada_pct"] is None
+    assert analysis["generation_mode"] == service.GENERATION_MODE
 
 
 def test_normalize_partial_json_from_markdown():
@@ -161,6 +207,55 @@ def test_beta_pert_ollama_prompt_can_skip_default_answer_wrapper():
     assert "No uses wrapper answer" in prompt
 
 
+def test_beta_pert_ollama_generation_options_are_slim():
+    options = get_ollama_generation_options(
+        depth="standard",
+        local_compact=True,
+        temperature=0.0,
+        generation_options_override=service.SLIM_LLM_GENERATION_OPTIONS,
+    )
+    assert options["num_predict"] == 140
+    assert options["num_ctx"] == 1536
+    assert options["temperature"] == 0.0
+    assert options["top_p"] == 0.8
+    assert options["repeat_penalty"] == 1.03
+
+
+def test_analyze_uses_direct_contract_slim_options_and_timeout_cap():
+    captured = {}
+    original_call = service.call_llm_json
+    original_available = service.is_llm_available
+    original_metadata = service.get_llm_metadata
+    try:
+        service.is_llm_available = lambda: True
+        service.get_llm_metadata = lambda **kwargs: {"available": True, "provider": "ollama", "model": "qwen-test", "model_mode": "fast"}
+
+        def fake_call_llm_json(**kwargs):
+            captured.update(kwargs)
+            return {
+                "diagnostico_ejecutivo": "La exposicion operacional es alta por P95 concentrado.",
+                "lectura_portafolio": "El portafolio requiere foco ejecutivo en riesgos de continuidad.",
+            }
+
+        service.call_llm_json = fake_call_llm_json
+        result = service.analyze_operational_beta_pert({
+            "tenant_id": "tenant-test",
+            "risks": [{"id": "risk-1", "name": "Caida de servicio", "standard": "ISO27001", "process": "Continuidad", "p95": 90}],
+            "kpis": {"conservativeP95": 90},
+        })
+    finally:
+        service.call_llm_json = original_call
+        service.is_llm_available = original_available
+        service.get_llm_metadata = original_metadata
+
+    assert result["success"] is True
+    assert captured["append_default_json_contract"] is False
+    assert captured["response_contract_instruction"] == "Devuelve JSON directo sin wrapper: diagnostico_ejecutivo y lectura_portafolio."
+    assert captured["generation_options_override"] == service.SLIM_LLM_GENERATION_OPTIONS
+    assert captured["enforce_timeout_cap"] is True
+    assert captured["timeout"] == service.LLM_TIMEOUT_SECONDS
+
+
 def test_reject_documental_readiness():
     payload = service.sanitize_beta_pert_payload({"risks": [{"id": "risk-1", "name": "Caida servicio", "p95": 50}]})
     try:
@@ -177,7 +272,9 @@ def test_reject_documental_readiness():
 if __name__ == "__main__":
     test_semantic_mapping()
     test_payload_compaction_and_selected_risk()
+    test_llm_prompt_payload_uses_max_three_risks_and_keeps_selected()
     test_normalize_valid_analysis()
+    test_normalize_two_field_llm_analysis_completes_semantic_outputs()
     test_normalize_partial_json_from_markdown()
     test_accept_answer_string_json_wrapper()
     test_accept_nested_answer_string_json_wrapper()
@@ -186,5 +283,7 @@ if __name__ == "__main__":
     test_reject_readiness_inside_nested_answer_wrapper()
     test_reject_readiness_inside_json_like_incomplete_answer()
     test_beta_pert_ollama_prompt_can_skip_default_answer_wrapper()
+    test_beta_pert_ollama_generation_options_are_slim()
+    test_analyze_uses_direct_contract_slim_options_and_timeout_cap()
     test_reject_documental_readiness()
     print("operational beta pert service tests OK")
