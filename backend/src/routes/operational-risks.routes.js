@@ -4,6 +4,7 @@ const { errorDetail } = require('../utils/errorResponse');
 const monteCarlo = require('../services/operationalRiskMonteCarlo.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
 const operationalRiskAi = require('../services/operationalRiskAi.service');
+const operationalRiskAiJobs = require('../services/operationalRiskAiJobs.service');
 
 const router = express.Router();
 
@@ -339,6 +340,20 @@ function normalizeAnalysisToSave(value) {
   };
 }
 
+function getSelectedSimulationId(payload) {
+  return safeText(payload?.selectedRisk?.id, '', 80) || null;
+}
+
+function getSelectedSourceRiskId(payload) {
+  return safeText(
+    payload?.selectedRisk?.sourceRiskId ||
+      payload?.selectedRisk?.source_risk_id ||
+      payload?.selectedRisk?.source?.source_risk_id,
+    '',
+    80
+  ) || null;
+}
+
 router.post('/simulations', async (req, res) => {
   try {
     const tenantId = monteCarlo.resolveTenantIdForRequest(req.user, req.body?.tenant_id);
@@ -534,6 +549,84 @@ router.get('/simulations/:id', async (req, res) => {
     }
 
     return sendData(res, buildSimulationResponse(result.rows[0]));
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.post('/ai-analysis-jobs', async (req, res) => {
+  try {
+    const tenantId = getAiRequestTenantId(req);
+    if (!tenantId) {
+      throw monteCarlo.publicError(400, 'TENANT_REQUIRED', 'tenant_id es obligatorio');
+    }
+
+    monteCarlo.assertCanReadTenant(req.user, tenantId);
+
+    const payload = operationalRiskAi.normalizeAiPayload(req.body || {});
+    const simulationId = getSelectedSimulationId(payload);
+    const sourceRiskId = getSelectedSourceRiskId(payload);
+    const job = await operationalRiskAiJobs.createJob({
+      tenantId,
+      userId: monteCarlo.getUserId(req.user),
+      simulationId,
+      sourceRiskId,
+      payload,
+    });
+
+    operationalRiskAiJobs.enqueueJob(job.id);
+
+    return res.status(202).json({
+      ok: true,
+      success: true,
+      data: {
+        job_id: job.id,
+        status: job.status,
+        created_at: job.created_at,
+      },
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.get('/ai-analysis-jobs', async (req, res) => {
+  try {
+    const tenantId = getAiRequestTenantId(req);
+    if (!tenantId) {
+      throw monteCarlo.publicError(400, 'TENANT_REQUIRED', 'tenant_id es obligatorio');
+    }
+
+    monteCarlo.assertCanReadTenant(req.user, tenantId);
+
+    const jobs = await operationalRiskAiJobs.listJobsForTenant({
+      tenantId,
+      simulationId: req.query.simulation_id,
+      sourceRiskId: req.query.source_risk_id,
+      limit: req.query.limit,
+    });
+
+    return sendData(res, jobs, { success: true, count: jobs.length });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.get('/ai-analysis-jobs/:id', async (req, res) => {
+  try {
+    const tenantId = getAiRequestTenantId(req);
+    if (!tenantId) {
+      throw monteCarlo.publicError(400, 'TENANT_REQUIRED', 'tenant_id es obligatorio');
+    }
+
+    monteCarlo.assertCanReadTenant(req.user, tenantId);
+
+    const job = await operationalRiskAiJobs.getJobForTenant(req.params.id, tenantId);
+    if (!job) {
+      throw monteCarlo.publicError(404, 'AI_JOB_NOT_FOUND', 'Job AI no encontrado');
+    }
+
+    return sendData(res, { job }, { success: true });
   } catch (error) {
     return handleError(res, error);
   }

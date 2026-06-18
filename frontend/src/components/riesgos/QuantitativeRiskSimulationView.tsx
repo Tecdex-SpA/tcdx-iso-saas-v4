@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AiAuditorOperationalRiskPanel from './AiAuditorOperationalRiskPanel';
 import BetaPertRiskMatrix from './BetaPertRiskMatrix';
 import QuantitativeRiskContributors from './QuantitativeRiskContributors';
@@ -22,6 +22,7 @@ import {
   getAiAuditorPayload,
   normalizeNormId,
   type OperationalAiAnalysis,
+  type OperationalAiAnalysisJob,
   type OperationalRiskRecommendationResult,
   type OperationalRiskSimulationRow,
   type QuantitativeRisk,
@@ -139,6 +140,10 @@ export default function QuantitativeRiskSimulationView({
   const [filters, setFilters] = useState<QuantitativeRiskFilters>(DEFAULT_QUANTITATIVE_FILTERS);
   const [selectedRiskId, setSelectedRiskId] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState<OperationalAiAnalysis | null>(null);
+  const [aiJobs, setAiJobs] = useState<OperationalAiAnalysisJob[]>([]);
+  const [activeAiJob, setActiveAiJob] = useState<OperationalAiAnalysisJob | null>(null);
+  const [aiPollingJobId, setAiPollingJobId] = useState('');
+  const [aiHistoryLoading, setAiHistoryLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSaving, setAiSaving] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -193,8 +198,57 @@ export default function QuantitativeRiskSimulationView({
     setSelectedRiskId(risk.id);
     onSelectSimulation?.(risk.id);
     setAiAnalysis(null);
+    setActiveAiJob(null);
+    setAiPollingJobId('');
     setAiError('');
     setAiMessage('');
+  }
+
+  async function loadAiJobHistory(simulationId: string) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      return;
+    }
+
+    try {
+      setAiHistoryLoading(true);
+      const params = new URLSearchParams({ simulation_id: simulationId, limit: '10' });
+      const res = await fetch(`${API_URL}/api/operational-risks/ai-analysis-jobs?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const { json, text } = await readApiResponse(res);
+
+      if (!json) {
+        throw new Error(nonJsonAiError(res, text));
+      }
+      if (!res.ok || json?.ok === false) {
+        throw new Error(aiErrorMessage(json?.code, json?.message || json?.error || 'No fue posible cargar historial AI.'));
+      }
+
+      setAiJobs((json?.data || []) as OperationalAiAnalysisJob[]);
+    } catch (err: unknown) {
+      setAiError(err instanceof Error ? err.message : 'Error cargando historial AI Auditor.');
+    } finally {
+      setAiHistoryLoading(false);
+    }
+  }
+
+  async function fetchAiJob(jobId: string) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No hay sesion activa. Ingresa nuevamente antes de consultar el analisis AI.');
+    }
+    const res = await fetch(`${API_URL}/api/operational-risks/ai-analysis-jobs/${jobId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const { json, text } = await readApiResponse(res);
+    if (!json) {
+      throw new Error(nonJsonAiError(res, text));
+    }
+    if (!res.ok || json?.ok === false) {
+      throw new Error(aiErrorMessage(json?.code, json?.message || json?.error || 'No fue posible consultar el job AI.'));
+    }
+    return json?.data?.job as OperationalAiAnalysisJob;
   }
 
   async function generateAiAnalysis() {
@@ -209,9 +263,10 @@ export default function QuantitativeRiskSimulationView({
       setAiError('');
       setAiMessage('');
       setAiAnalysis(null);
+      setActiveAiJob(null);
 
       const payload = getAiAuditorPayload(filteredRisks, selectedRisk, kpis);
-      const res = await fetch(`${API_URL}/api/operational-risks/ai-analysis`, {
+      const res = await fetch(`${API_URL}/api/operational-risks/ai-analysis-jobs`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -229,19 +284,93 @@ export default function QuantitativeRiskSimulationView({
         throw new Error(aiErrorMessage(json?.code, json?.message || json?.error || 'AI Auditor no disponible para analisis operacional.'));
       }
 
-      const analysis = json?.data?.analysis as OperationalAiAnalysis | undefined;
-      if (!analysis?.diagnostico_ejecutivo || analysis.guardable === false || analysis.ai_engine_used === false) {
-        throw new Error('AI Auditor no devolvio un analisis estructurado utilizable.');
+      const jobId = String(json?.data?.job_id || '');
+      if (!jobId) {
+        throw new Error('El backend no devolvio identificador de job AI.');
       }
 
-      setAiAnalysis(analysis);
-      setAiMessage('Analisis AI generado. Revisa el resultado antes de guardarlo como recomendacion.');
+      const pendingJob: OperationalAiAnalysisJob = {
+        id: jobId,
+        status: (json?.data?.status || 'pending') as OperationalAiAnalysisJob['status'],
+        simulation_id: selectedRisk?.id || null,
+        source_risk_id: selectedRisk?.source.source_risk_id || null,
+        created_at: String(json?.data?.created_at || new Date().toISOString()),
+      };
+      setActiveAiJob(pendingJob);
+      setAiJobs((prev) => [pendingJob, ...prev.filter((job) => job.id !== jobId)]);
+      setAiPollingJobId(jobId);
+      setAiMessage('Analisis AI en proceso. Puedes seguir trabajando; el resultado aparecera en el historial.');
     } catch (err: unknown) {
       setAiError(err instanceof Error ? err.message : 'Error generando analisis AI Auditor.');
-    } finally {
       setAiLoading(false);
+      setAiPollingJobId('');
     }
   }
+
+  function useCompletedJob(job: OperationalAiAnalysisJob) {
+    if (job.status !== 'completed' || !job.analysis_json) return;
+    setActiveAiJob(job);
+    setAiAnalysis(job.analysis_json);
+    setAiError('');
+    setAiMessage('Analisis AI completado. Revisa el resultado antes de guardarlo como recomendacion.');
+  }
+
+  useEffect(() => {
+    if (!selectedRisk?.id) {
+      setAiJobs([]);
+      return;
+    }
+    loadAiJobHistory(selectedRisk.id);
+  }, [selectedRisk?.id]);
+
+  useEffect(() => {
+    if (!aiPollingJobId) return undefined;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const job = await fetchAiJob(aiPollingJobId);
+        if (cancelled) return;
+
+        setActiveAiJob(job);
+        setAiJobs((prev) => [job, ...prev.filter((item) => item.id !== job.id)]);
+
+        if (job.status === 'completed') {
+          if (job.analysis_json) {
+            setAiAnalysis(job.analysis_json);
+          }
+          setAiMessage('Analisis AI completado. Revisa el resultado antes de guardarlo como recomendacion.');
+          setAiLoading(false);
+          setAiPollingJobId('');
+          if (selectedRisk?.id) loadAiJobHistory(selectedRisk.id);
+        } else if (job.status === 'timeout') {
+          setAiError('El motor AI excedio el tiempo de generacion. El intento quedo registrado en el historial.');
+          setAiLoading(false);
+          setAiPollingJobId('');
+          if (selectedRisk?.id) loadAiJobHistory(selectedRisk.id);
+        } else if (job.status === 'failed') {
+          setAiError(job.error_message || 'No fue posible completar el analisis AI. El intento quedo registrado en el historial.');
+          setAiLoading(false);
+          setAiPollingJobId('');
+          if (selectedRisk?.id) loadAiJobHistory(selectedRisk.id);
+        } else {
+          setAiMessage('Analisis AI en proceso. Esto puede tardar unos minutos segun la carga del motor.');
+        }
+      } catch (err: unknown) {
+        if (cancelled) return;
+        setAiError(err instanceof Error ? err.message : 'Error consultando estado del analisis AI Auditor.');
+        setAiLoading(false);
+        setAiPollingJobId('');
+      }
+    };
+
+    poll();
+    const interval = window.setInterval(poll, 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [aiPollingJobId, selectedRisk?.id]);
 
   async function saveAiRecommendation() {
     const token = localStorage.getItem('token');
@@ -456,12 +585,16 @@ export default function QuantitativeRiskSimulationView({
             selectedRisk={selectedRisk}
             kpis={kpis}
             analysis={aiAnalysis}
+            jobs={aiJobs}
+            activeJob={activeAiJob}
             loading={aiLoading}
+            historyLoading={aiHistoryLoading}
             saving={aiSaving}
             error={aiError}
             successMessage={aiMessage}
             onGenerate={generateAiAnalysis}
             onSave={saveAiRecommendation}
+            onUseJobAnalysis={useCompletedJob}
           />
 
           <QuantitativeRiskTable

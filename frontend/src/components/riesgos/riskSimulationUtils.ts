@@ -154,6 +154,20 @@ export type OperationalAiAnalysis = {
   guardable?: boolean;
 };
 
+export type OperationalAiAnalysisJob = {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'timeout';
+  simulation_id?: string | null;
+  source_risk_id?: string | null;
+  analysis_json?: OperationalAiAnalysis | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  ai_model?: string | null;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+};
+
 export const HORIZON_OPTIONS: Array<{ value: QuantitativeRiskHorizon; label: string; factor: number }> = [
   { value: 'mensual', label: 'Mensual', factor: 1 / 12 },
   { value: 'trimestral', label: 'Trimestral', factor: 1 / 4 },
@@ -662,6 +676,7 @@ function roundForAi(value: number | null, decimals = 2) {
 function toAiRiskPayload(risk: QuantitativeRisk) {
   return {
     id: risk.id,
+    sourceRiskId: risk.source.source_risk_id || null,
     name: truncateText(risk.name, 120),
     standard: risk.normId === 'ISO9001' ? 'ISO9001' : 'ISO27001',
     model: truncateText(risk.source.modelo_usado, 80),

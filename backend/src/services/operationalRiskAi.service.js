@@ -40,6 +40,7 @@ function normalizePayloadRisk(risk) {
 
   return {
     id,
+    sourceRiskId: safeText(risk.sourceRiskId || risk.source_risk_id, '', 80) || null,
     name: name || 'Riesgo operativo',
     standard: safeText(risk.standard || risk.norm || risk.norma_tipo, '', 40),
     model: safeText(risk.model || risk.modelo_usado, '', 80),
