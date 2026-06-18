@@ -160,6 +160,7 @@ function runTests() {
   assert.equal(normalizedAi.ai_model, 'gpt-test');
   assert.equal(normalizedAi.prompt_version, operationalRiskAi.PROMPT_VERSION);
   assert.equal(normalizedAi.source, 'ai-engine-operational-beta-pert');
+  assert.equal(normalizedAi.generation_mode, 'semantic_plus_llm');
 
   const wrapperAi = operationalRiskAi.normalizeOperationalAiAnalysis({
     ok: true,
@@ -211,6 +212,12 @@ function runTests() {
   const saveable = operationalRiskAi.normalizeAnalysisToSave(normalizedAi);
   assert.equal(saveable.prompt_version, operationalRiskAi.PROMPT_VERSION);
   assert.equal(saveable.source, 'ai-engine-operational-beta-pert');
+  assert.equal(saveable.generation_mode, 'semantic_plus_llm');
+
+  assertThrowsCode(
+    () => operationalRiskAi.normalizeAnalysisToSave({ ...normalizedAi, generation_mode: 'semantic_only' }),
+    'ai_invalid_response'
+  );
 
   assertThrowsCode(
     () => operationalRiskAi.normalizeAnalysisToSave({

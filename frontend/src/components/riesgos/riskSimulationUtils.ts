@@ -150,6 +150,7 @@ export type OperationalAiAnalysis = {
   request_id?: string | null;
   ai_engine_used?: boolean;
   source?: string;
+  generation_mode?: string;
   guardable?: boolean;
 };
 
