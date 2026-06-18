@@ -416,32 +416,58 @@ def parse_json_candidate(value: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _first_analysis_candidate(value: Any, depth: int = 0) -> Optional[Dict[str, Any]]:
-    if depth > 4 or value is None:
-        return None
-    parsed = parse_json_candidate(value)
-    if parsed and (
-        parsed.get("diagnostico_ejecutivo") or
-        parsed.get("lectura_portafolio") or
-        parsed.get("analysis") or
-        parsed.get("structured_result") or
-        parsed.get("answer") or
-        parsed.get("acciones_sugeridas") or
-        parsed.get("proximos_pasos")
-    ):
-        for key in ["analysis", "structured_result", "answer"]:
-            if isinstance(parsed.get(key), (dict, str)):
-                candidate = _first_analysis_candidate(parsed[key], depth + 1)
-                if candidate:
-                    return candidate
-        return parsed
-    if isinstance(value, dict):
-        for key in ["analysis", "result", "content", "text", "output", "data", "raw", "message", "answer", "structured_result"]:
-            if key in value:
-                candidate = _first_analysis_candidate(value[key], depth + 1)
-                if candidate:
-                    return candidate
-    return None
+def _has_llm_summary_fields(value: Any) -> bool:
+    return isinstance(value, dict) and bool(value.get("diagnostico_ejecutivo") or value.get("lectura_portafolio"))
+
+
+def extract_llm_payload(value: Any, max_depth: int = 5) -> Dict[str, Any]:
+    wrapper_keys = ["answer", "analysis", "result", "content", "text", "output", "message", "data", "raw", "structured_result"]
+    seen_ids = set()
+
+    def walk(node: Any, depth: int, keys_seen: List[str]) -> Dict[str, Any]:
+        if depth > max_depth:
+            return {"payload": None, "unwrap_depth": depth, "wrapper_keys_seen": keys_seen, "has_json_candidate": False}
+
+        marker = id(node) if isinstance(node, (dict, list)) else None
+        if marker is not None:
+            if marker in seen_ids:
+                return {"payload": None, "unwrap_depth": depth, "wrapper_keys_seen": keys_seen, "has_json_candidate": False}
+            seen_ids.add(marker)
+
+        parsed = parse_json_candidate(node) if isinstance(node, str) else node
+        has_json_candidate = isinstance(parsed, dict)
+
+        if _has_llm_summary_fields(parsed):
+            return {
+                "payload": parsed,
+                "unwrap_depth": depth,
+                "wrapper_keys_seen": keys_seen,
+                "has_json_candidate": True,
+            }
+
+        if isinstance(parsed, dict):
+            for key in wrapper_keys:
+                if key not in parsed:
+                    continue
+                child = parsed.get(key)
+                if not isinstance(child, (dict, str)):
+                    continue
+                result = walk(child, depth + 1, [*keys_seen, key])
+                if result.get("payload"):
+                    return {
+                        **result,
+                        "has_json_candidate": True,
+                    }
+                has_json_candidate = has_json_candidate or bool(result.get("has_json_candidate"))
+
+        return {
+            "payload": None,
+            "unwrap_depth": depth,
+            "wrapper_keys_seen": keys_seen,
+            "has_json_candidate": has_json_candidate,
+        }
+
+    return walk(value, 0, [])
 
 
 def _log_parse_observation(
@@ -451,11 +477,14 @@ def _log_parse_observation(
     trace_context: Optional[Dict[str, Any]],
     parse_error_code: Optional[str],
     missing_required_fields: Optional[List[str]] = None,
+    unwrap_info: Optional[Dict[str, Any]] = None,
 ) -> None:
     trace_context = trace_context or {}
+    unwrap_info = unwrap_info or {}
     response_text = _safe_response_text(ai_raw)
     print(json.dumps({
         "event": "operational_beta_pert_ai_parse",
+        "parse_status": "error" if parse_error_code else "ok",
         "request_id": trace_context.get("request_id"),
         "tenant_id": trace_context.get("tenant_id"),
         "model": metadata.get("model") or metadata.get("selected_model"),
@@ -464,7 +493,11 @@ def _log_parse_observation(
         "response_length": len(response_text),
         "parse_error_code": parse_error_code,
         "missing_required_fields": missing_required_fields or [],
-        "has_json_candidate": source is not None or parse_json_candidate(ai_raw) is not None,
+        "unwrap_depth": unwrap_info.get("unwrap_depth", 0),
+        "wrapper_keys_seen": unwrap_info.get("wrapper_keys_seen", []),
+        "has_diagnostico": bool(source and source.get("diagnostico_ejecutivo")),
+        "has_lectura": bool(source and source.get("lectura_portafolio")),
+        "has_json_candidate": source is not None or bool(unwrap_info.get("has_json_candidate")) or parse_json_candidate(ai_raw) is not None,
         "first_120_chars_sanitized": response_text[:120],
     }, ensure_ascii=False, default=str))
 
@@ -516,7 +549,8 @@ def normalize_beta_pert_analysis(
     trace_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     semantic_context = semantic_context or build_semantic_context(beta_payload)
-    source = _first_analysis_candidate(ai_raw)
+    unwrap_info = extract_llm_payload(ai_raw)
+    source = unwrap_info.get("payload")
     if not source:
         _log_parse_observation(
             ai_raw,
@@ -525,6 +559,7 @@ def normalize_beta_pert_analysis(
             trace_context,
             "ai_invalid_response",
             ["json_candidate"],
+            unwrap_info,
         )
         raise OperationalBetaPertError("ai_invalid_response", "AI operacional Beta-PERT devolvio una respuesta no estructurada.", 502)
     if _has_domain_mismatch(source):
@@ -535,6 +570,7 @@ def normalize_beta_pert_analysis(
             trace_context,
             "ai_domain_mismatch",
             [],
+            unwrap_info,
         )
         raise OperationalBetaPertError("ai_domain_mismatch", "La respuesta AI corresponde a readiness documental y no a Beta-PERT operacional.", 502)
 
@@ -544,7 +580,7 @@ def normalize_beta_pert_analysis(
     if not diagnostico and not lectura:
         missing.append("diagnostico_ejecutivo_or_lectura_portafolio")
     if missing:
-        _log_parse_observation(ai_raw, source, metadata, trace_context, "ai_invalid_response", missing)
+        _log_parse_observation(ai_raw, source, metadata, trace_context, "ai_invalid_response", missing, unwrap_info)
         raise OperationalBetaPertError("ai_invalid_response", "AI operacional Beta-PERT no entrego una sintesis util.", 502)
 
     acciones = []
@@ -583,7 +619,7 @@ def normalize_beta_pert_analysis(
         *(_list(semantic_context.get("advertencias_metodologicas"), 3)),
         advertencia_llm,
     ], 3)
-    _log_parse_observation(ai_raw, source, metadata, trace_context, None, [])
+    _log_parse_observation(ai_raw, source, metadata, trace_context, None, [], unwrap_info)
 
     return {
         "diagnostico_ejecutivo": diagnostico,
