@@ -136,9 +136,13 @@ async function testCreateListAndTenantIsolation() {
 async function testRunJobCompletedUsesOperationalBetaPert() {
   const db = createFakeDb();
   let calledOperationalAnalyzer = false;
+  let capturedPayload = null;
+  let capturedOptions = null;
   const engineClient = {
-    async analyzeOperationalBetaPert() {
+    async analyzeOperationalBetaPert(payload, options) {
       calledOperationalAnalyzer = true;
+      capturedPayload = payload;
+      capturedOptions = options;
       return {
         success: true,
         analysis: {
@@ -167,6 +171,10 @@ async function testRunJobCompletedUsesOperationalBetaPert() {
 
   const completed = await service.runJob(job.id);
   assert.strictEqual(calledOperationalAnalyzer, true);
+  assert.strictEqual(capturedPayload.options.execution_mode, 'async_job');
+  assert.strictEqual(capturedPayload.options.allow_long_running, true);
+  assert.strictEqual(capturedPayload.request_metadata.execution_mode, 'async_job');
+  assert.strictEqual(capturedOptions.timeoutMs, 420000);
   assert.strictEqual(completed.status, 'completed');
   assert.strictEqual(completed.ai_model, 'qwen-test');
   assert.strictEqual(completed.analysis_json.diagnostico_ejecutivo, 'Exposicion operacional alta en continuidad.');

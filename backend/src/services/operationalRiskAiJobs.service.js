@@ -6,6 +6,7 @@ const monteCarlo = require('./operationalRiskMonteCarlo.service');
 const operationalRiskAi = require('./operationalRiskAi.service');
 
 const JOB_STATUSES = new Set(['pending', 'running', 'completed', 'failed', 'timeout']);
+const ASYNC_AI_TIMEOUT_MS = 420000;
 
 function safeText(value, fallback = '', maxLength = 1000) {
   return String(value || fallback || '').replace(/\u0000/g, '').trim().slice(0, maxLength);
@@ -230,10 +231,36 @@ function createOperationalRiskAiJobsService({
         requestId,
         payload: job.request_payload_json || {},
       });
-      const aiResult = await engineClient.analyzeOperationalBetaPert(aiPayload);
+      aiPayload.options = {
+        ...(aiPayload.options || {}),
+        execution_mode: 'async_job',
+        allow_long_running: true,
+      };
+      aiPayload.request_metadata = {
+        ...(aiPayload.request_metadata || {}),
+        execution_mode: 'async_job',
+      };
+
+      console.info('OPERATIONAL RISK AI JOB START:', {
+        job_id: jobId,
+        request_id: requestId,
+        execution_mode: aiPayload.options.execution_mode,
+        allow_long_running: aiPayload.options.allow_long_running,
+        timeout_ms: ASYNC_AI_TIMEOUT_MS,
+      });
+
+      const aiResult = await engineClient.analyzeOperationalBetaPert(aiPayload, {
+        timeoutMs: ASYNC_AI_TIMEOUT_MS,
+      });
       const unavailable = aiService.classifyAiEngineResult(aiResult);
       if (unavailable) {
         const mapped = mapAiError({ code: unavailable.code, status: unavailable.status, message: unavailable.message });
+        console.info('OPERATIONAL RISK AI JOB END:', {
+          job_id: jobId,
+          request_id: requestId,
+          status: mapped.status,
+          error_code: mapped.code,
+        });
         return markJob(jobId, mapped.status, {
           errorCode: mapped.code,
           errorMessage: mapped.message,
@@ -241,12 +268,23 @@ function createOperationalRiskAiJobsService({
       }
 
       const analysis = aiService.normalizeOperationalAiAnalysis(aiResult, job.request_payload_json || {});
+      console.info('OPERATIONAL RISK AI JOB END:', {
+        job_id: jobId,
+        request_id: requestId,
+        status: 'completed',
+        ai_model: analysis.ai_model,
+      });
       return markJob(jobId, 'completed', {
         analysis,
         aiModel: analysis.ai_model,
       });
     } catch (error) {
       const mapped = mapAiError(error);
+      console.info('OPERATIONAL RISK AI JOB END:', {
+        job_id: jobId,
+        status: mapped.status,
+        error_code: mapped.code,
+      });
       return markJob(jobId, mapped.status, {
         errorCode: mapped.code,
         errorMessage: mapped.message,
@@ -283,3 +321,4 @@ function createOperationalRiskAiJobsService({
 
 module.exports = createOperationalRiskAiJobsService();
 module.exports.createOperationalRiskAiJobsService = createOperationalRiskAiJobsService;
+module.exports.ASYNC_AI_TIMEOUT_MS = ASYNC_AI_TIMEOUT_MS;
