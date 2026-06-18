@@ -2,6 +2,7 @@ import {
   formatRiskNumber,
   getAiAuditorPayload,
   type OperationalAiAnalysis,
+  type OperationalAiAnalysisJob,
   type QuantitativeRisk,
   type QuantitativeRiskKpis,
 } from './riskSimulationUtils';
@@ -11,12 +12,16 @@ type AiAuditorOperationalRiskPanelProps = {
   selectedRisk: QuantitativeRisk | null;
   kpis: QuantitativeRiskKpis;
   analysis: OperationalAiAnalysis | null;
+  jobs: OperationalAiAnalysisJob[];
+  activeJob: OperationalAiAnalysisJob | null;
   loading: boolean;
+  historyLoading: boolean;
   saving: boolean;
   error?: string;
   successMessage?: string;
   onGenerate: () => void;
   onSave: () => void;
+  onUseJobAnalysis: (job: OperationalAiAnalysisJob) => void;
 };
 
 function stringifyItem(item: unknown) {
@@ -58,17 +63,59 @@ function ListBlock({ title, items }: { title: string; items: unknown[] }) {
   );
 }
 
+function statusLabel(status: OperationalAiAnalysisJob['status']) {
+  const labels: Record<OperationalAiAnalysisJob['status'], string> = {
+    pending: 'Pendiente',
+    running: 'En proceso',
+    completed: 'Completado',
+    failed: 'Fallido',
+    timeout: 'Timeout',
+  };
+  return labels[status] || status;
+}
+
+function statusClassName(status: OperationalAiAnalysisJob['status']) {
+  if (status === 'completed') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (status === 'failed' || status === 'timeout') return 'bg-red-50 text-red-700 border-red-200';
+  return 'bg-blue-50 text-blue-700 border-blue-200';
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return 'Sin fecha';
+  try {
+    return new Intl.DateTimeFormat('es-CL', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function analysisPreview(job: OperationalAiAnalysisJob) {
+  if (job.status === 'completed') {
+    return String(job.analysis_json?.diagnostico_ejecutivo || job.analysis_json?.lectura_portafolio || 'Analisis completado.').slice(0, 130);
+  }
+  return String(job.error_message || 'Intento registrado en historial.').slice(0, 130);
+}
+
 export default function AiAuditorOperationalRiskPanel({
   risks,
   selectedRisk,
   kpis,
   analysis,
+  jobs,
+  activeJob,
   loading,
+  historyLoading,
   saving,
   error = '',
   successMessage = '',
   onGenerate,
   onSave,
+  onUseJobAnalysis,
 }: AiAuditorOperationalRiskPanelProps) {
   const payload = getAiAuditorPayload(risks, selectedRisk, kpis);
   const canGenerate = risks.length > 0 && !loading;
@@ -101,7 +148,7 @@ export default function AiAuditorOperationalRiskPanel({
             disabled={!canGenerate}
             className="rounded bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? 'Generando...' : 'Generar analisis AI Auditor'}
+            {loading ? 'Procesando...' : 'Generar analisis AI Auditor'}
           </button>
           <button
             type="button"
@@ -149,7 +196,18 @@ export default function AiAuditorOperationalRiskPanel({
 
       {loading && (
         <div className="mt-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-          AI Auditor puede tardar hasta 2 minutos.
+          Analisis AI en proceso. Esto puede tardar unos minutos segun la carga del motor.
+        </div>
+      )}
+
+      {activeJob && (
+        <div className="mt-4 rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <span className="font-bold text-slate-950">Job actual:</span>{' '}
+          <span className={`inline-flex rounded border px-2 py-0.5 text-xs font-bold ${statusClassName(activeJob.status)}`}>
+            {statusLabel(activeJob.status)}
+          </span>
+          <span className="ml-2">Creado {formatDate(activeJob.created_at)}</span>
+          {activeJob.ai_model && <span className="ml-2">Modelo: {activeJob.ai_model}</span>}
         </div>
       )}
 
@@ -179,6 +237,51 @@ export default function AiAuditorOperationalRiskPanel({
           </div>
         </div>
       )}
+
+      <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-bold text-slate-950">Historial de analisis AI</div>
+            <div className="text-xs text-slate-500">
+              Se carga al seleccionar un riesgo/simulacion. Los intentos fallidos tambien quedan registrados.
+            </div>
+          </div>
+          {historyLoading && <span className="text-xs font-semibold text-slate-500">Cargando...</span>}
+        </div>
+
+        {jobs.length === 0 ? (
+          <div className="mt-3 rounded border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
+            Sin analisis AI registrados para la simulacion seleccionada.
+          </div>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {jobs.slice(0, 8).map((job) => (
+              <div key={job.id} className="rounded border border-slate-200 bg-white p-3">
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex rounded border px-2 py-0.5 text-xs font-bold ${statusClassName(job.status)}`}>
+                        {statusLabel(job.status)}
+                      </span>
+                      <span className="text-xs text-slate-500">{formatDate(job.completed_at || job.created_at)}</span>
+                      {job.ai_model && <span className="text-xs text-slate-500">{job.ai_model}</span>}
+                    </div>
+                    <div className="mt-2 text-sm leading-5 text-slate-700">{analysisPreview(job)}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onUseJobAnalysis(job)}
+                    disabled={job.status !== 'completed' || !job.analysis_json}
+                    className="rounded border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Usar este analisis
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
