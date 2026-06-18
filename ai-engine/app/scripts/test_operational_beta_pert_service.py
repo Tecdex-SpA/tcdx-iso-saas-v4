@@ -256,6 +256,59 @@ def test_analyze_uses_direct_contract_slim_options_and_timeout_cap():
     assert captured["timeout"] == service.LLM_TIMEOUT_SECONDS
 
 
+def test_timeout_policy_sync_and_async_job():
+    sync_payload = {
+        "tenant_id": "tenant-test",
+        "risks": [{"id": "risk-1", "name": "Caida de servicio", "standard": "ISO27001", "process": "Continuidad", "p95": 90}],
+    }
+    async_payload = {
+        **sync_payload,
+        "options": {"execution_mode": "async_job", "allow_long_running": True},
+        "request_metadata": {"execution_mode": "async_job"},
+    }
+    assert service.is_async_long_running(sync_payload) is False
+    assert service.resolve_llm_timeout_seconds(sync_payload) == service.LLM_TIMEOUT_SECONDS
+    assert service.is_async_long_running(async_payload) is True
+    assert service.resolve_llm_timeout_seconds(async_payload) == service.ASYNC_JOB_TIMEOUT_SECONDS
+
+
+def test_analyze_async_job_uses_long_timeout():
+    captured = {}
+    original_call = service.call_llm_json
+    original_available = service.is_llm_available
+    original_metadata = service.get_llm_metadata
+    try:
+        service.is_llm_available = lambda: True
+        service.get_llm_metadata = lambda **kwargs: {"available": True, "provider": "ollama", "model": "qwen-test", "model_mode": "fast"}
+
+        def fake_call_llm_json(**kwargs):
+            captured.update(kwargs)
+            return {
+                "diagnostico_ejecutivo": "La exposicion operacional es alta por P95 concentrado.",
+                "lectura_portafolio": "El portafolio requiere foco ejecutivo en riesgos de continuidad.",
+            }
+
+        service.call_llm_json = fake_call_llm_json
+        result = service.analyze_operational_beta_pert({
+            "tenant_id": "tenant-test",
+            "options": {"execution_mode": "async_job", "allow_long_running": True},
+            "request_metadata": {"execution_mode": "async_job"},
+            "risks": [{"id": "risk-1", "name": "Caida de servicio", "standard": "ISO27001", "process": "Continuidad", "p95": 90}],
+            "kpis": {"conservativeP95": 90},
+        })
+    finally:
+        service.call_llm_json = original_call
+        service.is_llm_available = original_available
+        service.get_llm_metadata = original_metadata
+
+    assert result["success"] is True
+    assert captured["timeout"] == service.ASYNC_JOB_TIMEOUT_SECONDS
+    assert captured["generation_options_override"] == service.SLIM_LLM_GENERATION_OPTIONS
+    assert captured["enforce_timeout_cap"] is True
+    assert result["metadata"]["execution_mode"] == "async_job"
+    assert result["metadata"]["allow_long_running"] is True
+
+
 def test_reject_documental_readiness():
     payload = service.sanitize_beta_pert_payload({"risks": [{"id": "risk-1", "name": "Caida servicio", "p95": 50}]})
     try:
@@ -285,5 +338,7 @@ if __name__ == "__main__":
     test_beta_pert_ollama_prompt_can_skip_default_answer_wrapper()
     test_beta_pert_ollama_generation_options_are_slim()
     test_analyze_uses_direct_contract_slim_options_and_timeout_cap()
+    test_timeout_policy_sync_and_async_job()
+    test_analyze_async_job_uses_long_timeout()
     test_reject_documental_readiness()
     print("operational beta pert service tests OK")

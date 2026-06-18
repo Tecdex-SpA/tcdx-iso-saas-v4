@@ -18,6 +18,7 @@ PROMPT_PATH = BASE_DIR / "prompts" / "operational_risk_beta_pert_v1.md"
 MAX_RISKS = 5
 MAX_LLM_RISKS = 3
 LLM_TIMEOUT_SECONDS = 75
+ASYNC_JOB_TIMEOUT_SECONDS = 300
 SLIM_LLM_GENERATION_OPTIONS = {
     "num_predict": 140,
     "num_ctx": 1536,
@@ -379,6 +380,20 @@ def build_prompt_payload(beta_payload: Dict[str, Any], semantic_context: Dict[st
             "lectura_portafolio": "string",
         },
     }, ensure_ascii=False, default=str)
+
+
+def is_async_long_running(payload: Dict[str, Any]) -> bool:
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    request_metadata = payload.get("request_metadata") if isinstance(payload.get("request_metadata"), dict) else {}
+    return (
+        options.get("allow_long_running") is True
+        or options.get("execution_mode") == "async_job"
+        or request_metadata.get("execution_mode") == "async_job"
+    )
+
+
+def resolve_llm_timeout_seconds(payload: Dict[str, Any]) -> int:
+    return ASYNC_JOB_TIMEOUT_SECONDS if is_async_long_running(payload) else LLM_TIMEOUT_SECONDS
 
 
 def _safe_response_text(value: Any, max_len: int = 2000) -> str:
@@ -758,12 +773,18 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
     if depth not in {"executive", "standard", "deep"}:
         depth = "standard"
     metadata = get_llm_metadata(depth=depth, local_compact=True, model_mode=llm_model_mode)
+    allow_long_running = is_async_long_running(payload)
+    execution_mode = "async_job" if allow_long_running else "sync"
+    llm_timeout_seconds = resolve_llm_timeout_seconds(payload)
 
     llm_risks_count = len(build_llm_risks(beta_payload))
     print(json.dumps({
         "event": "operational_beta_pert_ai_start",
         "request_id": request_id or None,
         "tenant_id": tenant_id,
+        "execution_mode": execution_mode,
+        "allow_long_running": allow_long_running,
+        "timeout_seconds": llm_timeout_seconds,
         "risks_count": len(beta_payload["risks"]),
         "llm_risks_count": llm_risks_count,
         "selected_model": metadata.get("model"),
@@ -781,7 +802,7 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
             prompt=prompt_payload,
             system_prompt=_load_prompt(),
             temperature=0.0,
-            timeout=LLM_TIMEOUT_SECONDS,
+            timeout=llm_timeout_seconds,
             depth=depth,
             local_compact=True,
             model_mode=llm_model_mode,
@@ -804,6 +825,9 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
         "event": "operational_beta_pert_ai_ok",
         "request_id": request_id or None,
         "tenant_id": tenant_id,
+        "execution_mode": execution_mode,
+        "allow_long_running": allow_long_running,
+        "timeout_seconds": llm_timeout_seconds,
         "risks_count": len(beta_payload["risks"]),
         "llm_risks_count": llm_risks_count,
         "selected_model": metadata.get("model"),
@@ -812,7 +836,7 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
         "generation_options_slim": True,
         "status": "ok",
     }, ensure_ascii=False, default=str))
-    return {"success": True, "analysis": analysis, "metadata": {"request_id": request_id or "", "model": metadata.get("model"), "model_mode": "expert" if llm_model_mode == "deep" else llm_model_mode, "duration_ms": duration_ms, "risks_analyzed": len(beta_payload["risks"]), "llm_risks_analyzed": llm_risks_count, "generated_at": datetime.now(timezone.utc).isoformat()}}
+    return {"success": True, "analysis": analysis, "metadata": {"request_id": request_id or "", "model": metadata.get("model"), "model_mode": "expert" if llm_model_mode == "deep" else llm_model_mode, "duration_ms": duration_ms, "risks_analyzed": len(beta_payload["risks"]), "llm_risks_analyzed": llm_risks_count, "execution_mode": execution_mode, "allow_long_running": allow_long_running, "timeout_seconds": llm_timeout_seconds, "generated_at": datetime.now(timezone.utc).isoformat()}}
 
 
 def error_response(error: Exception) -> Dict[str, Any]:
