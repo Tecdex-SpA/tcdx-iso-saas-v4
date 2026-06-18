@@ -646,30 +646,87 @@ export function buildMethodologyNote() {
   return 'Los KPI agregados resumen los riesgos filtrados. La exposicion esperada acumulada corresponde a la suma de medias anuales. El P95 agregado conservador corresponde a la suma de P95 individuales y no equivale a una simulacion de portafolio con correlacion entre riesgos.';
 }
 
+function truncateText(value: unknown, maxLength: number) {
+  return String(value || '').trim().slice(0, maxLength);
+}
+
+function roundForAi(value: number | null, decimals = 2) {
+  if (value === null || !Number.isFinite(value)) return null;
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
 function toAiRiskPayload(risk: QuantitativeRisk) {
   return {
     id: risk.id,
-    name: risk.name,
+    name: truncateText(risk.name, 120),
     standard: risk.normId === 'ISO9001' ? 'ISO9001' : 'ISO27001',
-    model: String(risk.source.modelo_usado || ''),
-    process: risk.processName,
-    expectedAnnualExposure: risk.expectedValue,
-    p95: risk.p95,
-    criticalProbability: risk.criticalProbability,
+    model: truncateText(risk.source.modelo_usado, 80),
+    process: truncateText(risk.processName, 80),
+    description: truncateText(risk.source.descripcion, 240),
+    expectedAnnualExposure: roundForAi(risk.expectedValue, 2),
+    p95: roundForAi(risk.p95, 2),
+    criticalProbability: roundForAi(risk.criticalProbability, 4),
     status: risk.status,
     probabilityScore: risk.probabilityScore,
     impactScore: risk.impactScore,
     frequency: {
-      min: risk.frequencyMin,
-      mode: risk.frequencyMostLikely,
-      max: risk.frequencyMax,
+      min: roundForAi(risk.frequencyMin, 2),
+      mode: roundForAi(risk.frequencyMostLikely, 2),
+      max: roundForAi(risk.frequencyMax, 2),
     },
     impact: {
-      min: risk.impactMin,
-      mode: risk.impactMostLikely,
-      max: risk.impactMax,
+      min: roundForAi(risk.impactMin, 2),
+      mode: roundForAi(risk.impactMostLikely, 2),
+      max: roundForAi(risk.impactMax, 2),
     },
   };
+}
+
+type AiRiskPayloadItem = ReturnType<typeof toAiRiskPayload>;
+
+function aiRiskKey(risk: AiRiskPayloadItem) {
+  return [risk.standard, risk.model, risk.name, risk.process].map((value) => String(value || '').toLowerCase()).join('|');
+}
+
+function aiStatusRank(status: string) {
+  if (status === 'critico') return 4;
+  if (status === 'alto') return 3;
+  if (status === 'medio') return 2;
+  return 1;
+}
+
+function aiRiskSort(a: AiRiskPayloadItem, b: AiRiskPayloadItem) {
+  return (
+    aiStatusRank(b.status) - aiStatusRank(a.status) ||
+    Number(b.p95 || 0) - Number(a.p95 || 0) ||
+    Number(b.criticalProbability || 0) - Number(a.criticalProbability || 0) ||
+    Number(b.expectedAnnualExposure || 0) - Number(a.expectedAnnualExposure || 0)
+  );
+}
+
+function compactAiRisks(risks: QuantitativeRisk[], selectedRisk: QuantitativeRisk | null) {
+  const selectedPayload = selectedRisk ? toAiRiskPayload(selectedRisk) : null;
+  const byKey = new Map<string, AiRiskPayloadItem>();
+
+  risks.map(toAiRiskPayload).forEach((risk) => {
+    const key = aiRiskKey(risk);
+    const current = byKey.get(key);
+    if (!current || Number(risk.p95 || 0) > Number(current.p95 || 0)) {
+      byKey.set(key, risk);
+    }
+  });
+
+  if (selectedPayload) {
+    byKey.set(aiRiskKey(selectedPayload), selectedPayload);
+  }
+
+  const ordered = Array.from(byKey.values()).sort(aiRiskSort);
+  if (!selectedPayload) return ordered.slice(0, 8);
+
+  const selectedKey = aiRiskKey(selectedPayload);
+  const rest = ordered.filter((risk) => aiRiskKey(risk) !== selectedKey);
+  return [selectedPayload, ...rest].slice(0, 8);
 }
 
 export function getAiAuditorPayload(
@@ -677,6 +734,8 @@ export function getAiAuditorPayload(
   selectedRisk: QuantitativeRisk | null,
   kpis: QuantitativeRiskKpis
 ): AiAuditorOperationalPayload {
+  const compactRisks = compactAiRisks(risks, selectedRisk);
+
   return {
     scope: risks.length > 1 ? 'portfolio' : 'simulation',
     methodology: {
@@ -692,7 +751,7 @@ export function getAiAuditorPayload(
       highPrioritizedRisks: kpis.prioritizedHighRisks,
     },
     selectedRisk: selectedRisk ? toAiRiskPayload(selectedRisk) : null,
-    risks: risks.slice(0, 25).map(toAiRiskPayload),
+    risks: compactRisks,
   };
 }
 

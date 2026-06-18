@@ -3,7 +3,7 @@
 const monteCarlo = require('./operationalRiskMonteCarlo.service');
 
 const PROMPT_VERSION = 'beta-pert-operational-risk-v1';
-const MAX_RISKS = 25;
+const MAX_RISKS = 8;
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -18,6 +18,13 @@ function boundedNumber(value, fallback = null) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function roundNumber(value, decimals = 2, fallback = null) {
+  const n = boundedNumber(value, fallback);
+  if (n === null) return null;
+  const factor = 10 ** decimals;
+  return Math.round(n * factor) / factor;
+}
+
 function publicAiError(status, code, message, details = {}) {
   const error = monteCarlo.publicError(status, code, message);
   Object.assign(error, details);
@@ -26,7 +33,7 @@ function publicAiError(status, code, message, details = {}) {
 
 function normalizePayloadRisk(risk) {
   if (!risk || typeof risk !== 'object') return null;
-  const name = safeText(risk.name || risk.nombre_riesgo, '', 220);
+  const name = safeText(risk.name || risk.nombre_riesgo, '', 120);
   const id = safeText(risk.id, '', 80);
 
   if (!name && !id) return null;
@@ -36,31 +43,85 @@ function normalizePayloadRisk(risk) {
     name: name || 'Riesgo operativo',
     standard: safeText(risk.standard || risk.norm || risk.norma_tipo, '', 40),
     model: safeText(risk.model || risk.modelo_usado, '', 80),
-    process: safeText(risk.process || risk.processName || risk.proceso_afectado, '', 180),
-    expectedAnnualExposure: boundedNumber(risk.expectedAnnualExposure ?? risk.expectedValue, 0),
-    p95: boundedNumber(risk.p95 ?? risk.peor_escenario_p95, 0),
-    criticalProbability: boundedNumber(risk.criticalProbability ?? risk.probabilidad_disrupcion_critica, null),
+    process: safeText(risk.process || risk.processName || risk.proceso_afectado, '', 80),
+    description: safeText(risk.description || risk.descripcion, '', 240),
+    expectedAnnualExposure: roundNumber(risk.expectedAnnualExposure ?? risk.expectedValue, 2, 0),
+    p95: roundNumber(risk.p95 ?? risk.peor_escenario_p95, 2, 0),
+    criticalProbability: roundNumber(risk.criticalProbability ?? risk.probabilidad_disrupcion_critica, 4, null),
     status: safeText(risk.status || risk.estado, '', 40),
     probabilityScore: boundedNumber(risk.probabilityScore, null),
     impactScore: boundedNumber(risk.impactScore, null),
     frequency: {
-      min: boundedNumber(risk.frequency?.min ?? risk.frecuencia_min, null),
-      mode: boundedNumber(risk.frequency?.mode ?? risk.frequency?.mostLikely ?? risk.frecuencia_mode, null),
-      max: boundedNumber(risk.frequency?.max ?? risk.frecuencia_max, null),
+      min: roundNumber(risk.frequency?.min ?? risk.frecuencia_min, 2, null),
+      mode: roundNumber(risk.frequency?.mode ?? risk.frequency?.mostLikely ?? risk.frecuencia_mode, 2, null),
+      max: roundNumber(risk.frequency?.max ?? risk.frecuencia_max, 2, null),
     },
     impact: {
-      min: boundedNumber(risk.impact?.min ?? risk.impacto_min, null),
-      mode: boundedNumber(risk.impact?.mode ?? risk.impact?.mostLikely ?? risk.impacto_mode, null),
-      max: boundedNumber(risk.impact?.max ?? risk.impacto_max, null),
+      min: roundNumber(risk.impact?.min ?? risk.impacto_min, 2, null),
+      mode: roundNumber(risk.impact?.mode ?? risk.impact?.mostLikely ?? risk.impacto_mode, 2, null),
+      max: roundNumber(risk.impact?.max ?? risk.impacto_max, 2, null),
     },
   };
 }
 
+function riskDedupKey(risk) {
+  return [
+    risk.standard,
+    risk.model,
+    risk.name,
+    risk.process,
+  ].map((value) => safeText(value, '', 160).toLowerCase()).join('|');
+}
+
+function statusRank(status) {
+  const normalized = safeText(status, '', 40)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (normalized === 'critico') return 4;
+  if (normalized === 'alto') return 3;
+  if (normalized === 'medio') return 2;
+  return 1;
+}
+
+function riskPrioritySort(a, b) {
+  return (
+    statusRank(b.status) - statusRank(a.status) ||
+    Number(b.p95 || 0) - Number(a.p95 || 0) ||
+    Number(b.criticalProbability || 0) - Number(a.criticalProbability || 0) ||
+    Number(b.expectedAnnualExposure || 0) - Number(a.expectedAnnualExposure || 0)
+  );
+}
+
+function compactRisksForAi(risks, selectedRisk = null) {
+  const byKey = new Map();
+  for (const risk of risks) {
+    const key = riskDedupKey(risk);
+    const current = byKey.get(key);
+    if (!current || Number(risk.p95 || 0) > Number(current.p95 || 0)) {
+      byKey.set(key, risk);
+    }
+  }
+
+  const selectedKey = selectedRisk ? riskDedupKey(selectedRisk) : '';
+  if (selectedRisk) {
+    byKey.set(selectedKey, selectedRisk);
+  }
+
+  const ordered = [...byKey.values()].sort(riskPrioritySort);
+  if (!selectedRisk) return ordered.slice(0, MAX_RISKS);
+
+  const selected = byKey.get(selectedKey) || selectedRisk;
+  const withoutSelected = ordered.filter((risk) => riskDedupKey(risk) !== selectedKey);
+  return [selected, ...withoutSelected].slice(0, MAX_RISKS);
+}
+
 function normalizeAiPayload(body = {}) {
-  const risks = asArray(body.risks)
-    .slice(0, MAX_RISKS)
+  const normalizedRisks = asArray(body.risks)
     .map(normalizePayloadRisk)
     .filter(Boolean);
+  const selectedRisk = normalizePayloadRisk(body.selectedRisk);
+  const risks = compactRisksForAi(normalizedRisks, selectedRisk);
 
   if (risks.length === 0) {
     throw publicAiError(400, 'ai_invalid_payload', 'Se requiere al menos un riesgo valido para analisis AI.');
@@ -83,23 +144,20 @@ function normalizeAiPayload(body = {}) {
       criticalProbabilityAverage: boundedNumber(kpis.criticalProbabilityAverage ?? kpis.criticalProbability, null),
       highPrioritizedRisks: boundedNumber(kpis.highPrioritizedRisks ?? kpis.prioritizedHighRisks, 0),
     },
-    selectedRisk: normalizePayloadRisk(body.selectedRisk),
+    selectedRisk,
     risks,
   };
 }
 
 function buildOperationalAiPrompt(payload) {
   return [
-    'Actua como AI Auditor v4 senior para analisis operacional de simulaciones Beta-PERT.',
-    'Responde exclusivamente en JSON valido, sin markdown, sin texto antes o despues del JSON.',
-    'Usa solo los datos enviados en el payload. No inventes riesgos, controles, metricas, tenants ni informacion externa.',
-    'Separa hechos calculados de inferencias en el diagnostico ejecutivo cuando corresponda.',
-    'No afirmes cumplimiento ISO certificado ni certificabilidad formal.',
-    'No afirmes P95 de portafolio: el P95 agregado conservador es la suma de P95 individuales.',
-    'Entrega recomendaciones accionables y controles/clausulas alineados con ISO 27001 o ISO 9001 segun la norma del riesgo.',
-    'Incluye advertencias metodologicas cuando la evidencia o agregacion limite la conclusion.',
-    `Prompt version obligatorio: ${PROMPT_VERSION}.`,
-    'Schema requerido:',
+    'Analiza riesgos operacionales Beta-PERT. Devuelve exclusivamente JSON valido.',
+    'No uses markdown, HTML, texto previo ni explicaciones fuera del JSON. No omitas claves; usa [] o null si falta dato.',
+    'Usa solo el payload. No inventes riesgos, metricas ni cumplimiento ISO certificado.',
+    'No afirmes P95 de portafolio. P95 agregado conservador = suma de P95 individuales.',
+    'Limites: diagnostico max 80 palabras, max 3 riesgos, 5 acciones, 5 controles, 3 advertencias, 5 proximos pasos.',
+    `prompt_version: ${PROMPT_VERSION}`,
+    'JSON exacto:',
     JSON.stringify({
       diagnostico_ejecutivo: 'string',
       riesgos_prioritarios: [{ nombre: 'string', motivo: 'string', prioridad: 'critica|alta|media|baja' }],
@@ -111,7 +169,7 @@ function buildOperationalAiPrompt(payload) {
       ai_model: 'string|null',
       prompt_version: PROMPT_VERSION,
     }),
-    `Payload metodologico y operativo: ${JSON.stringify(payload)}`,
+    `Payload: ${JSON.stringify(payload)}`,
   ].join('\n');
 }
 
@@ -138,7 +196,9 @@ function buildAiEnginePayload({ tenantId, requestId, payload }) {
       operational_risk_beta_pert: payload,
     },
     options: {
-      model_mode: 'balanced',
+      model_mode: 'fast',
+      fast_mode: true,
+      depth: 'standard',
       response_format: 'json',
       require_json: true,
       return_structured_result: true,
@@ -177,6 +237,36 @@ function parseJsonCandidate(value) {
   }
 
   return null;
+}
+
+function collectObjectCandidates(value, depth = 0) {
+  if (!value || depth > 3) return [];
+  if (typeof value === 'string') return [parseJsonCandidate(value)].filter(Boolean);
+  if (typeof value !== 'object') return [];
+
+  const candidates = [];
+  if (!Array.isArray(value)) candidates.push(value);
+
+  const keys = [
+    'analysis',
+    'result',
+    'content',
+    'text',
+    'output',
+    'data',
+    'raw',
+    'message',
+    'answer',
+    'structured_result',
+    'enhanced_answer',
+  ];
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      candidates.push(...collectObjectCandidates(value[key], depth + 1));
+    }
+  }
+
+  return candidates;
 }
 
 function normalizePriority(value) {
@@ -272,14 +362,15 @@ function normalizeList(value, normalizer, limit = 8) {
 }
 
 function sourceObjectFromAiResult(aiResult) {
-  const candidates = [
-    aiResult?.structured_result,
-    aiResult?.analysis,
-    aiResult?.data?.analysis,
-    parseJsonCandidate(aiResult?.answer),
-    parseJsonCandidate(aiResult?.message),
-  ];
-  return candidates.find((candidate) => candidate && typeof candidate === 'object' && !Array.isArray(candidate)) || null;
+  const candidates = collectObjectCandidates(aiResult);
+  return candidates.find((candidate) => candidate && typeof candidate === 'object' && !Array.isArray(candidate) && (
+    candidate.diagnostico_ejecutivo ||
+    candidate.executive_summary ||
+    candidate.diagnosis ||
+    candidate.diagnostic ||
+    candidate.acciones_sugeridas ||
+    candidate.proximos_pasos
+  )) || null;
 }
 
 function selectedModelFrom(aiResult, source = {}) {
@@ -289,7 +380,8 @@ function selectedModelFrom(aiResult, source = {}) {
       aiResult?.engine?.model ||
       aiResult?.metrics?.selected_model ||
       aiResult?.metrics?.model ||
-      aiResult?.source,
+      aiResult?.source ||
+      (aiResult?.ok !== false ? 'ai-engine' : ''),
     '',
     120
   );

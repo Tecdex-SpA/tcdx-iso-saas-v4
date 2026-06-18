@@ -88,6 +88,30 @@ function aiErrorMessage(code: string, fallback: string) {
   return messages[normalized] || fallback || messages.ai_unknown_error;
 }
 
+async function readApiResponse(response: Response) {
+  const contentType = response.headers.get('content-type') || '';
+  const body = await response.text();
+  if (contentType.includes('application/json')) {
+    try {
+      return { json: body ? JSON.parse(body) : null, text: body };
+    } catch {
+      return { json: null, text: body };
+    }
+  }
+  return { json: null, text: body };
+}
+
+function nonJsonAiError(response: Response, text: string) {
+  const normalized = String(text || '').toLowerCase();
+  if (response.status === 504 || normalized.includes('gateway time-out') || normalized.includes('gateway timeout')) {
+    return 'AI Auditor tardo demasiado en responder. Reintente con menos riesgos o mas tarde.';
+  }
+  if (normalized.includes('<html') || normalized.includes('<!doctype')) {
+    return 'El backend devolvio una respuesta no JSON para el analisis AI.';
+  }
+  return 'No fue posible leer la respuesta del analisis AI Auditor.';
+}
+
 export default function QuantitativeRiskSimulationView({
   form,
   simulations,
@@ -195,10 +219,14 @@ export default function QuantitativeRiskSimulationView({
         },
         body: JSON.stringify(payload),
       });
-      const json = await res.json();
+      const { json, text } = await readApiResponse(res);
+
+      if (!json) {
+        throw new Error(nonJsonAiError(res, text));
+      }
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(aiErrorMessage(json?.code, json?.error || 'AI Auditor no disponible para analisis operacional.'));
+        throw new Error(aiErrorMessage(json?.code, json?.message || json?.error || 'AI Auditor no disponible para analisis operacional.'));
       }
 
       const analysis = json?.data?.analysis as OperationalAiAnalysis | undefined;
@@ -247,10 +275,14 @@ export default function QuantitativeRiskSimulationView({
           selectedRiskId: selectedRisk.id,
         }),
       });
-      const json = await res.json();
+      const { json, text } = await readApiResponse(res);
+
+      if (!json) {
+        throw new Error(nonJsonAiError(res, text));
+      }
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(aiErrorMessage(json?.code, json?.error || 'No fue posible guardar el analisis AI como recomendacion.'));
+        throw new Error(aiErrorMessage(json?.code, json?.message || json?.error || 'No fue posible guardar el analisis AI como recomendacion.'));
       }
 
       setAiMessage('Analisis AI guardado como recomendacion operacional.');

@@ -146,6 +146,12 @@ export default function AiAuditorOperationalRiskPanel({
         </div>
       )}
 
+      {loading && (
+        <div className="mt-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          AI Auditor puede tardar hasta 2 minutos.
+        </div>
+      )}
+
       {!analysis ? (
         <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600">
           Genera un analisis AI cuando necesites lectura adicional. Si ai-engine no esta disponible o el tenant no tiene IA habilitada, la vista mantendra la lectura deterministica sin presentarla como IA.
