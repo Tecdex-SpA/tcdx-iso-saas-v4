@@ -16,6 +16,15 @@ GENERATION_MODE = "semantic_plus_llm"
 BASE_DIR = Path(__file__).resolve().parents[2]
 PROMPT_PATH = BASE_DIR / "prompts" / "operational_risk_beta_pert_v1.md"
 MAX_RISKS = 5
+MAX_LLM_RISKS = 3
+LLM_TIMEOUT_SECONDS = 75
+SLIM_LLM_GENERATION_OPTIONS = {
+    "num_predict": 140,
+    "num_ctx": 1536,
+    "temperature": 0.0,
+    "top_p": 0.8,
+    "repeat_penalty": 1.03,
+}
 
 DOMAIN_MISMATCH_PATTERNS = [
     "preparacion sin_datos",
@@ -332,25 +341,42 @@ def build_semantic_context(beta_payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def build_llm_risks(beta_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    risks = [risk for risk in beta_payload.get("risks", []) if isinstance(risk, dict)]
+    selected = beta_payload.get("selectedRisk") if isinstance(beta_payload.get("selectedRisk"), dict) else None
+    selected_key = _dedupe_key(selected) if selected else ""
+
+    by_key: Dict[str, Dict[str, Any]] = {_dedupe_key(risk): risk for risk in risks}
+    if selected:
+        by_key[selected_key] = selected
+
+    selected_risks = [by_key[selected_key]] if selected_key and selected_key in by_key else []
+    remaining = [
+        risk
+        for key, risk in by_key.items()
+        if not selected_key or key != selected_key
+    ]
+    ranked_remaining = sorted(remaining, key=_risk_sort_key, reverse=True)
+    return [*selected_risks, *ranked_remaining][:MAX_LLM_RISKS]
+
+
 def build_prompt_payload(beta_payload: Dict[str, Any], semantic_context: Dict[str, Any]) -> str:
+    llm_risks = build_llm_risks(beta_payload)
     return json.dumps({
         "task": "operational_risk_beta_pert_analysis",
         "prompt_version": PROMPT_VERSION,
-        "instruction": "Genera solo una sintesis ejecutiva corta. No calcules controles, concentracion ni riesgos prioritarios; esos campos los completa el servicio.",
+        "instruction": "Genera solo dos campos breves: diagnostico_ejecutivo y lectura_portafolio. No calcules acciones, controles, proximos pasos, concentracion ni riesgos prioritarios; esos campos los completa el servicio.",
         "kpis": beta_payload.get("kpis"),
         "selectedRisk": beta_payload.get("selectedRisk"),
-        "risks": beta_payload.get("risks", [])[:MAX_RISKS],
+        "risks": llm_risks,
         "semantic_summary": {
-            "dominios_operacionales": semantic_context.get("domains", [])[:MAX_RISKS],
+            "dominios_operacionales": [infer_operational_domain(risk) for risk in llm_risks],
             "lectura_cuantitativa_base": semantic_context.get("lectura_cuantitativa_base"),
             "advertencia_p95": semantic_context.get("advertencias_metodologicas", [None])[0],
         },
         "required_output": {
             "diagnostico_ejecutivo": "string",
             "lectura_portafolio": "string",
-            "acciones_sugeridas": ["string"],
-            "proximos_pasos": ["string"],
-            "advertencia_metodologica": "string",
         },
     }, ensure_ascii=False, default=str)
 
@@ -673,20 +699,10 @@ def normalize_beta_pert_analysis(
         _log_parse_observation(ai_raw, source, metadata, trace_context, "ai_invalid_response", missing, unwrap_info)
         raise OperationalBetaPertError("ai_invalid_response", "AI operacional Beta-PERT no entrego una sintesis util.", 502)
 
-    acciones = []
-    for item in _list(source.get("acciones_sugeridas") or source.get("recommended_actions") or source.get("actions"), 3):
-        if isinstance(item, str):
-            action = _text(item, "", 700)
-            if action:
-                acciones.append({"accion": action, "horizonte": "30_dias", "responsable_sugerido": None, "riesgo_relacionado": None})
-        elif isinstance(item, dict):
-            action = _text(item.get("accion") or item.get("action") or item.get("descripcion") or item.get("description"), "", 700)
-            if action:
-                acciones.append({"accion": action, "horizonte": _horizon(item.get("horizonte") or item.get("horizon")), "responsable_sugerido": _text(item.get("responsable_sugerido") or item.get("owner") or item.get("responsable"), "", 180) or None, "riesgo_relacionado": _text(item.get("riesgo_relacionado") or item.get("risk") or item.get("riesgo"), "", 220) or None})
     base_actions = _list(semantic_context.get("acciones_base_sugeridas"), 5)
     merged_actions = []
     seen_actions = set()
-    for action in [*acciones, *base_actions]:
+    for action in base_actions:
         if not isinstance(action, dict):
             continue
         action_text = _text(action.get("accion"), "", 700)
@@ -702,12 +718,9 @@ def normalize_beta_pert_analysis(
         if len(merged_actions) >= 5:
             break
 
-    llm_next_steps = _string_list(source.get("proximos_pasos") or source.get("next_steps"), 3)
-    proximos = _unique_texts([*llm_next_steps, *_list(semantic_context.get("proximos_pasos_base"), 5)], 5)
-    advertencia_llm = _text(source.get("advertencia_metodologica") or source.get("methodology_warning"), "", 700)
+    proximos = _unique_texts(_list(semantic_context.get("proximos_pasos_base"), 5), 5)
     advertencias = _unique_texts([
         *(_list(semantic_context.get("advertencias_metodologicas"), 3)),
-        advertencia_llm,
     ], 3)
     _log_parse_observation(ai_raw, source, metadata, trace_context, None, [], unwrap_info)
 
@@ -720,7 +733,7 @@ def normalize_beta_pert_analysis(
         "controles_iso_sugeridos": _list(semantic_context.get("controles_iso_sugeridos"), 5),
         "advertencias_metodologicas": advertencias,
         "proximos_pasos": proximos[:5],
-        "efectividad_estimada_pct": _round(source.get("efectividad_estimada_pct") or source.get("estimated_effectiveness_pct"), 2, None),
+        "efectividad_estimada_pct": None,
         "ai_model": _text(source.get("ai_model") or metadata.get("model") or metadata.get("selected_model") or "ai-engine", "ai-engine", 120),
         "prompt_version": PROMPT_VERSION,
         "source": SOURCE,
@@ -741,12 +754,22 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
     if model_mode not in {"fast", "balanced", "expert", "deep"}:
         model_mode = "fast"
     llm_model_mode = "deep" if model_mode == "expert" else model_mode
-    depth = str(options.get("depth") or ("deep" if llm_model_mode == "deep" else "standard"))
+    depth = str(options.get("depth") or ("deep" if llm_model_mode == "deep" else "executive"))
     if depth not in {"executive", "standard", "deep"}:
         depth = "standard"
     metadata = get_llm_metadata(depth=depth, local_compact=True, model_mode=llm_model_mode)
 
-    print(json.dumps({"event": "operational_beta_pert_ai_start", "request_id": request_id or None, "tenant_id": tenant_id, "risks_count": len(beta_payload["risks"]), "selected_model": metadata.get("model"), "provider": metadata.get("provider")}, ensure_ascii=False, default=str))
+    llm_risks_count = len(build_llm_risks(beta_payload))
+    print(json.dumps({
+        "event": "operational_beta_pert_ai_start",
+        "request_id": request_id or None,
+        "tenant_id": tenant_id,
+        "risks_count": len(beta_payload["risks"]),
+        "llm_risks_count": llm_risks_count,
+        "selected_model": metadata.get("model"),
+        "provider": metadata.get("provider"),
+        "generation_options_slim": True,
+    }, ensure_ascii=False, default=str))
 
     if not is_llm_available():
         raise OperationalBetaPertError("ai_engine_unavailable", "Motor LLM no disponible para analisis Beta-PERT.", 503)
@@ -757,13 +780,15 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
         raw = call_llm_json(
             prompt=prompt_payload,
             system_prompt=_load_prompt(),
-            temperature=0.1,
-            timeout=75,
+            temperature=0.0,
+            timeout=LLM_TIMEOUT_SECONDS,
             depth=depth,
             local_compact=True,
             model_mode=llm_model_mode,
-            response_contract_instruction="Devuelve JSON valido directo con diagnostico_ejecutivo, lectura_portafolio, acciones_sugeridas, proximos_pasos y advertencia_metodologica. No uses wrapper answer. No uses wrapper structured_result. No uses markdown ni texto fuera del JSON.",
+            response_contract_instruction="Devuelve JSON directo sin wrapper: diagnostico_ejecutivo y lectura_portafolio.",
             append_default_json_contract=False,
+            generation_options_override=SLIM_LLM_GENERATION_OPTIONS,
+            enforce_timeout_cap=True,
         )
     except TimeoutError as exc:
         raise OperationalBetaPertError("ai_timeout", "AI operacional Beta-PERT excedio el tiempo de respuesta.", 504) from exc
@@ -775,8 +800,19 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     duration_ms = int((time.perf_counter() - started_at) * 1000)
     analysis = normalize_beta_pert_analysis(raw, beta_payload, metadata, semantic_context, {"request_id": request_id or None, "tenant_id": tenant_id, "duration_ms": duration_ms})
-    print(json.dumps({"event": "operational_beta_pert_ai_ok", "request_id": request_id or None, "tenant_id": tenant_id, "risks_count": len(beta_payload["risks"]), "selected_model": metadata.get("model"), "provider": metadata.get("provider"), "duration_ms": duration_ms, "status": "ok"}, ensure_ascii=False, default=str))
-    return {"success": True, "analysis": analysis, "metadata": {"request_id": request_id or "", "model": metadata.get("model"), "model_mode": "expert" if llm_model_mode == "deep" else llm_model_mode, "duration_ms": duration_ms, "risks_analyzed": len(beta_payload["risks"]), "generated_at": datetime.now(timezone.utc).isoformat()}}
+    print(json.dumps({
+        "event": "operational_beta_pert_ai_ok",
+        "request_id": request_id or None,
+        "tenant_id": tenant_id,
+        "risks_count": len(beta_payload["risks"]),
+        "llm_risks_count": llm_risks_count,
+        "selected_model": metadata.get("model"),
+        "provider": metadata.get("provider"),
+        "duration_ms": duration_ms,
+        "generation_options_slim": True,
+        "status": "ok",
+    }, ensure_ascii=False, default=str))
+    return {"success": True, "analysis": analysis, "metadata": {"request_id": request_id or "", "model": metadata.get("model"), "model_mode": "expert" if llm_model_mode == "deep" else llm_model_mode, "duration_ms": duration_ms, "risks_analyzed": len(beta_payload["risks"]), "llm_risks_analyzed": llm_risks_count, "generated_at": datetime.now(timezone.utc).isoformat()}}
 
 
 def error_response(error: Exception) -> Dict[str, Any]:

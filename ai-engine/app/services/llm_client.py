@@ -2,7 +2,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 def _env(name: str, fallback: str = "") -> str:
@@ -92,7 +92,12 @@ def _int_env(name: str, fallback: int) -> int:
         return fallback
 
 
-def get_ollama_generation_options(depth: str = "standard", local_compact: bool = False, temperature: float = 0.2) -> Dict[str, Any]:
+def get_ollama_generation_options(
+    depth: str = "standard",
+    local_compact: bool = False,
+    temperature: float = 0.2,
+    generation_options_override: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     depth = depth if depth in {"executive", "standard", "deep"} else "standard"
     defaults = {
         "executive": _int_env("AI_ENGINE_LOCAL_COMPACT_NUM_PREDICT_EXECUTIVE", 220),
@@ -107,6 +112,10 @@ def get_ollama_generation_options(depth: str = "standard", local_compact: bool =
     if local_compact:
         options["num_predict"] = defaults[depth]
         options["num_ctx"] = _int_env("AI_ENGINE_LOCAL_COMPACT_NUM_CTX", 2048)
+    if isinstance(generation_options_override, dict):
+        for key, value in generation_options_override.items():
+            if value is not None:
+                options[key] = value
     return options
 
 
@@ -169,6 +178,8 @@ def call_llm_json(
     model_mode: str = "",
     response_contract_instruction: str = "",
     append_default_json_contract: bool = True,
+    generation_options_override: Optional[Dict[str, Any]] = None,
+    enforce_timeout_cap: bool = False,
 ) -> dict:
     metadata = get_llm_metadata(depth, local_compact, model_mode)
     if not metadata["available"]:
@@ -183,6 +194,8 @@ def call_llm_json(
     mode = (model_mode or metadata.get("model_mode") or "").lower()
     if mode == "deep" or depth == "deep":
         resolved_timeout_ms = max(resolved_timeout_ms, int(os.getenv("AI_ENGINE_DEEP_LLM_TIMEOUT_MS", "600000") or "600000"))
+    if enforce_timeout_cap:
+        resolved_timeout_ms = min(resolved_timeout_ms, int(timeout * 1000))
     timeout = resolved_timeout_ms / 1000
     provider = metadata["provider"]
 
@@ -220,7 +233,7 @@ def call_llm_json(
             "prompt": combined_prompt,
             "stream": False,
             "format": "json",
-            "options": get_ollama_generation_options(depth, local_compact, temperature),
+            "options": get_ollama_generation_options(depth, local_compact, temperature, generation_options_override),
         }
         data = _request_json(url, {"Content-Type": "application/json"}, payload, int(timeout))
         content = data.get("response") or (data.get("message") or {}).get("content") or ""
