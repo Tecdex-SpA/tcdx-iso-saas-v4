@@ -30,6 +30,47 @@ function handleError(res, error) {
   });
 }
 
+function sendAiAnalysisError(res, error) {
+  const rawCode = String(error?.code || '');
+  const status =
+    rawCode === 'AI_ENGINE_TIMEOUT' || rawCode === 'AI_AUDITOR_TIMEOUT' || error?.code === 'ai_timeout'
+      ? 504
+      : error?.status || 500;
+  const code =
+    rawCode === 'AI_ENGINE_TIMEOUT' || rawCode === 'AI_AUDITOR_TIMEOUT'
+      ? 'ai_timeout'
+      : rawCode === 'AI_ENGINE_NON_JSON_RESPONSE'
+        ? 'ai_invalid_response'
+        : rawCode === 'AI_ENGINE_ENDPOINT_NOT_FOUND' || rawCode === 'AI_ENGINE_HTTP_ERROR'
+          ? 'ai_engine_unavailable'
+          : rawCode || (status === 504 ? 'ai_timeout' : 'ai_unknown_error');
+  const message =
+    code === 'ai_timeout'
+      ? 'AI Auditor tardo demasiado en responder. Intente con menos riesgos o reintente.'
+      : code === 'ai_invalid_response'
+        ? 'AI Auditor devolvio una respuesta incompleta para el contrato Beta-PERT.'
+        : code === 'ai_invalid_payload'
+          ? 'No hay datos de riesgo suficientes para generar analisis AI.'
+          : 'No fue posible generar el analisis AI Auditor.';
+
+  if (status >= 500) {
+    console.error('ERROR OPERATIONAL RISKS AI:', {
+      code,
+      status,
+      message: error?.message || message,
+    });
+  }
+
+  return res.status(status).json({
+    ok: false,
+    success: false,
+    code,
+    message,
+    error: message,
+    guardable: false,
+  });
+}
+
 function buildSimulationResponse(row) {
   if (!row) return null;
   return {
@@ -516,9 +557,12 @@ router.post('/ai-analysis', async (req, res) => {
     if (unavailable) {
       return res.status(unavailable.status).json({
         ok: false,
+        success: false,
         code: unavailable.code,
+        message: unavailable.message,
         error: unavailable.message,
         ai_available: false,
+        guardable: false,
         reason: unavailable.reason || null,
         request_id: aiResult?.request_id || requestId,
         engine: aiResult?.engine || aiResult?.trace || null,
@@ -533,6 +577,9 @@ router.post('/ai-analysis', async (req, res) => {
       engine: aiResult?.engine || aiResult?.metrics || {},
     }, { success: true });
   } catch (error) {
+    if (String(error?.code || '').startsWith('ai_') || !error?.status || Number(error?.status || 0) >= 500) {
+      return sendAiAnalysisError(res, error);
+    }
     return handleError(res, error);
   }
 });

@@ -97,6 +97,28 @@ function runTests() {
   assert.equal(aiPayload.risks.length, 1);
   assert.equal(aiPayload.methodology.conservativeP95, 'SUM(peor_escenario_p95)');
 
+  const duplicatedRisks = Array.from({ length: 12 }, (_, index) => ({
+    id: `risk-${index}`,
+    name: index % 2 === 0 ? 'Riesgo duplicado' : `Riesgo ${index}`,
+    standard: 'ISO27001',
+    model: 'ISO27001_TTIA',
+    process: index % 2 === 0 ? 'Continuidad' : `Proceso ${index}`,
+    expectedAnnualExposure: index * 3.12345,
+    p95: index * 15.98765,
+    criticalProbability: index / 20,
+    status: index > 8 ? 'alto' : 'medio',
+    frequency: { min: 1, mode: 2, max: 3 },
+    impact: { min: 2, mode: 4, max: 6 },
+  }));
+  const compactPayload = operationalRiskAi.normalizeAiPayload({
+    risks: duplicatedRisks,
+    selectedRisk: duplicatedRisks[0],
+  });
+  assert.ok(compactPayload.risks.length <= 8);
+  assert.equal(compactPayload.risks[0].id, 'risk-0');
+  assert.equal(compactPayload.risks.filter((risk) => risk.name === 'Riesgo duplicado').length, 1);
+  assert.equal(compactPayload.risks[0].expectedAnnualExposure, 0);
+
   const prompt = operationalRiskAi.buildOperationalAiPrompt(aiPayload);
   assert.ok(prompt.includes(operationalRiskAi.PROMPT_VERSION));
   assert.ok(prompt.includes('No afirmes P95 de portafolio'));
@@ -137,6 +159,26 @@ function runTests() {
   assert.equal(normalizedAi.guardable, true);
   assert.equal(normalizedAi.ai_model, 'gpt-test');
   assert.equal(normalizedAi.prompt_version, operationalRiskAi.PROMPT_VERSION);
+
+  const wrapperAi = operationalRiskAi.normalizeOperationalAiAnalysis({
+    ok: true,
+    engine: { ai_engine_used: true, selected_model: 'qwen2.5:3b' },
+    result: {
+      content: {
+        diagnostico_ejecutivo: 'Lectura ejecutiva valida.',
+        acciones_sugeridas: [{ accion: 'Reducir recurrencia.', horizonte: '30_dias' }],
+      },
+    },
+  }, aiPayload);
+  assert.equal(wrapperAi.ai_model, 'qwen2.5:3b');
+  assert.equal(wrapperAi.prompt_version, operationalRiskAi.PROMPT_VERSION);
+
+  const markdownAi = operationalRiskAi.normalizeOperationalAiAnalysis({
+    ok: true,
+    source: 'ai-engine',
+    answer: '```json\n{\"diagnostico_ejecutivo\":\"JSON en markdown valido.\",\"acciones_sugeridas\":[{\"accion\":\"Priorizar control.\",\"horizonte\":\"inmediato\"}]}\n```',
+  }, aiPayload);
+  assert.equal(markdownAi.guardable, true);
 
   assertThrowsCode(
     () => operationalRiskAi.normalizeOperationalAiAnalysis({ ok: true, answer: 'texto libre sin json' }, aiPayload),
