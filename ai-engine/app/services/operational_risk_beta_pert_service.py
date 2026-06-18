@@ -416,6 +416,50 @@ def parse_json_candidate(value: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _decode_jsonish_string(value: str) -> str:
+    try:
+        return json.loads(f'"{value}"')
+    except Exception:
+        return value.replace('\\"', '"').replace("\\n", "\n").replace("\\t", "\t")
+
+
+def _extract_jsonish_string_field(text: str, field: str) -> str:
+    pattern = rf'"{re.escape(field)}"\s*:\s*"((?:\\.|[^"\\])*)'
+    match = re.search(pattern, text, re.S)
+    if not match:
+        return ""
+    return _text(_decode_jsonish_string(match.group(1)), "", 1600)
+
+
+def _extract_jsonish_string_array(text: str, field: str, limit: int = 3) -> List[str]:
+    match = re.search(rf'"{re.escape(field)}"\s*:\s*\[([\s\S]*?)(?:\]|$)', text)
+    if not match:
+        return []
+    values = []
+    for item in re.findall(r'"((?:\\.|[^"\\])*)"', match.group(1)):
+        decoded = _text(_decode_jsonish_string(item), "", 700)
+        if decoded:
+            values.append(decoded)
+        if len(values) >= limit:
+            break
+    return values
+
+
+def extract_beta_summary_fields_from_text(text: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(text, str) or not text.strip():
+        return None
+    extracted = {
+        "diagnostico_ejecutivo": _extract_jsonish_string_field(text, "diagnostico_ejecutivo"),
+        "lectura_portafolio": _extract_jsonish_string_field(text, "lectura_portafolio"),
+        "advertencia_metodologica": _extract_jsonish_string_field(text, "advertencia_metodologica"),
+        "acciones_sugeridas": _extract_jsonish_string_array(text, "acciones_sugeridas", 3),
+        "proximos_pasos": _extract_jsonish_string_array(text, "proximos_pasos", 3),
+    }
+    if extracted["diagnostico_ejecutivo"] or extracted["lectura_portafolio"]:
+        return {key: value for key, value in extracted.items() if value}
+    return None
+
+
 def _has_llm_summary_fields(value: Any) -> bool:
     return isinstance(value, dict) and bool(value.get("diagnostico_ejecutivo") or value.get("lectura_portafolio"))
 
@@ -460,11 +504,23 @@ def extract_llm_payload(value: Any, max_depth: int = 5) -> Dict[str, Any]:
                     }
                 has_json_candidate = has_json_candidate or bool(result.get("has_json_candidate"))
 
+        if isinstance(node, str):
+            recovered = extract_beta_summary_fields_from_text(node)
+            if recovered:
+                return {
+                    "payload": recovered,
+                    "unwrap_depth": depth,
+                    "wrapper_keys_seen": keys_seen,
+                    "has_json_candidate": has_json_candidate or "{" in node,
+                    "parse_recovery_mode": "field_extraction",
+                }
+
         return {
             "payload": None,
             "unwrap_depth": depth,
             "wrapper_keys_seen": keys_seen,
             "has_json_candidate": has_json_candidate,
+            "parse_recovery_mode": None,
         }
 
     return walk(value, 0, [])
@@ -492,6 +548,7 @@ def _log_parse_observation(
         "response_type": type(ai_raw).__name__,
         "response_length": len(response_text),
         "parse_error_code": parse_error_code,
+        "parse_recovery_mode": unwrap_info.get("parse_recovery_mode"),
         "missing_required_fields": missing_required_fields or [],
         "unwrap_depth": unwrap_info.get("unwrap_depth", 0),
         "wrapper_keys_seen": unwrap_info.get("wrapper_keys_seen", []),
@@ -505,6 +562,28 @@ def _log_parse_observation(
 def _has_domain_mismatch(text: Any) -> bool:
     normalized = _normalize(json.dumps(text, ensure_ascii=False, default=str) if not isinstance(text, str) else text)
     return any(_normalize(pattern) in normalized for pattern in DOMAIN_MISMATCH_PATTERNS)
+
+
+def _has_operational_summary_signal(value: Dict[str, Any]) -> bool:
+    text = _normalize(" ".join([
+        str(value.get("diagnostico_ejecutivo") or ""),
+        str(value.get("lectura_portafolio") or ""),
+    ]))
+    return any(token in text for token in [
+        "p95",
+        "riesgo",
+        "riesgos",
+        "operacional",
+        "operativa",
+        "exposicion",
+        "probabilidad",
+        "portafolio",
+        "impacto",
+        "frecuencia",
+        "proceso",
+        "beta",
+        "pert",
+    ])
 
 
 def _priority(value: Any) -> str:
@@ -573,6 +652,17 @@ def normalize_beta_pert_analysis(
             unwrap_info,
         )
         raise OperationalBetaPertError("ai_domain_mismatch", "La respuesta AI corresponde a readiness documental y no a Beta-PERT operacional.", 502)
+    if unwrap_info.get("parse_recovery_mode") == "field_extraction" and not _has_operational_summary_signal(source):
+        _log_parse_observation(
+            ai_raw,
+            source,
+            metadata,
+            trace_context,
+            "ai_invalid_response",
+            ["operational_summary_signal"],
+            unwrap_info,
+        )
+        raise OperationalBetaPertError("ai_invalid_response", "AI operacional Beta-PERT no entrego una sintesis operacional util.", 502)
 
     diagnostico = _text(source.get("diagnostico_ejecutivo") or source.get("executive_summary") or source.get("diagnosis"), "", 1600)
     lectura = _text(source.get("lectura_portafolio") or source.get("portfolio_reading") or source.get("risk_portfolio_reading"), "", 1800)
@@ -664,7 +754,17 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
     semantic_context = build_semantic_context(beta_payload)
     prompt_payload = build_prompt_payload(beta_payload, semantic_context)
     try:
-        raw = call_llm_json(prompt=prompt_payload, system_prompt=_load_prompt(), temperature=0.1, timeout=75, depth=depth, local_compact=True, model_mode=llm_model_mode)
+        raw = call_llm_json(
+            prompt=prompt_payload,
+            system_prompt=_load_prompt(),
+            temperature=0.1,
+            timeout=75,
+            depth=depth,
+            local_compact=True,
+            model_mode=llm_model_mode,
+            response_contract_instruction="Devuelve JSON valido directo con diagnostico_ejecutivo, lectura_portafolio, acciones_sugeridas, proximos_pasos y advertencia_metodologica. No uses wrapper answer. No uses wrapper structured_result. No uses markdown ni texto fuera del JSON.",
+            append_default_json_contract=False,
+        )
     except TimeoutError as exc:
         raise OperationalBetaPertError("ai_timeout", "AI operacional Beta-PERT excedio el tiempo de respuesta.", 504) from exc
     except Exception as exc:

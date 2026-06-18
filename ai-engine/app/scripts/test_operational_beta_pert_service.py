@@ -1,4 +1,5 @@
 from app.services import operational_risk_beta_pert_service as service
+from app.services.llm_client import build_ollama_combined_prompt
 
 
 def test_semantic_mapping():
@@ -78,9 +79,13 @@ def test_accept_nested_answer_string_json_wrapper():
         "risks": [{"id": "risk-1", "name": "Caida de servicio", "standard": "ISO27001", "process": "Continuidad", "p95": 90}],
         "kpis": {"conservativeP95": 90},
     })
-    analysis = service.normalize_beta_pert_analysis({
+    raw = {
         "answer": "{\"answer\":{\"diagnostico_ejecutivo\":\"Texto operacional con P95\", \"lectura_portafolio\":\"Lectura operacional\"}}"
-    }, payload, {"model": "qwen-test"})
+    }
+    unwrap = service.extract_llm_payload(raw)
+    assert unwrap["wrapper_keys_seen"] == ["answer", "answer"]
+    assert unwrap.get("parse_recovery_mode") is None
+    analysis = service.normalize_beta_pert_analysis(raw, payload, {"model": "qwen-test"})
     assert analysis["diagnostico_ejecutivo"] == "Texto operacional con P95"
     assert analysis["lectura_portafolio"] == "Lectura operacional"
     assert analysis["acciones_sugeridas"]
@@ -103,6 +108,24 @@ def test_accept_nested_answer_dict_wrapper():
     assert analysis["lectura_portafolio"] == "Lectura operacional"
 
 
+def test_recover_json_like_incomplete_answer_from_real_log_shape():
+    payload = service.sanitize_beta_pert_payload({
+        "risks": [{"id": "risk-1", "name": "Error en liberacion de version", "standard": "ISO9001", "process": "Cambios TI", "p95": 110, "criticalProbability": 0.42}],
+        "kpis": {"conservativeP95": 110},
+    })
+    raw = {
+        "answer": "{\n \"answer\": {\n \"diagnostico_ejecutivo\": \"El portafolio de riesgos presenta una exposición esperada alta y concentración relevante en P95.\",\n \"lectura_portafolio\": \"La exposición se concentra en riesgos de liberación y parametrización.\"\n }"
+    }
+    unwrap = service.extract_llm_payload(raw)
+    assert unwrap["parse_recovery_mode"] == "field_extraction"
+    assert unwrap["wrapper_keys_seen"] == ["answer"]
+    analysis = service.normalize_beta_pert_analysis(raw, payload, {"model": "qwen-test"})
+    assert "exposición esperada alta" in analysis["diagnostico_ejecutivo"]
+    assert "liberación" in analysis["lectura_portafolio"]
+    assert analysis["generation_mode"] == service.GENERATION_MODE
+    assert analysis["acciones_sugeridas"]
+
+
 def test_reject_readiness_inside_nested_answer_wrapper():
     payload = service.sanitize_beta_pert_payload({"risks": [{"id": "risk-1", "name": "Caida servicio", "p95": 50}]})
     try:
@@ -113,6 +136,29 @@ def test_reject_readiness_inside_nested_answer_wrapper():
         assert exc.code == "ai_domain_mismatch"
     else:
         raise AssertionError("Expected ai_domain_mismatch")
+
+
+def test_reject_readiness_inside_json_like_incomplete_answer():
+    payload = service.sanitize_beta_pert_payload({"risks": [{"id": "risk-1", "name": "Caida servicio", "p95": 50}]})
+    try:
+        service.normalize_beta_pert_analysis({
+            "answer": "{\n \"answer\": {\n \"diagnostico_ejecutivo\": \"Preparacion sin_datos: 0 controles activos\"\n }"
+        }, payload, {"model": "qwen-test"})
+    except service.OperationalBetaPertError as exc:
+        assert exc.code == "ai_domain_mismatch"
+    else:
+        raise AssertionError("Expected ai_domain_mismatch")
+
+
+def test_beta_pert_ollama_prompt_can_skip_default_answer_wrapper():
+    prompt = build_ollama_combined_prompt(
+        prompt='{"task":"operational_risk_beta_pert_analysis"}',
+        system_prompt="Sistema Beta-PERT",
+        response_contract_instruction="Devuelve JSON valido directo. No uses wrapper answer. No uses wrapper structured_result.",
+        append_default_json_contract=False,
+    )
+    assert "campos answer y structured_result" not in prompt
+    assert "No uses wrapper answer" in prompt
 
 
 def test_reject_documental_readiness():
@@ -136,6 +182,9 @@ if __name__ == "__main__":
     test_accept_answer_string_json_wrapper()
     test_accept_nested_answer_string_json_wrapper()
     test_accept_nested_answer_dict_wrapper()
+    test_recover_json_like_incomplete_answer_from_real_log_shape()
     test_reject_readiness_inside_nested_answer_wrapper()
+    test_reject_readiness_inside_json_like_incomplete_answer()
+    test_beta_pert_ollama_prompt_can_skip_default_answer_wrapper()
     test_reject_documental_readiness()
     print("operational beta pert service tests OK")
