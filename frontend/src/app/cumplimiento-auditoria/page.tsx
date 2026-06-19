@@ -22,7 +22,7 @@ export default function CumplimientoAuditoriaPage() {
           tone: 'blue',
         },
         {
-          href: '/health',
+          href: '/iso-health',
           title: 'Salud del sistema',
           description: 'Health global, por norma/proceso y KPIs mínimos reproducibles.',
           feature: 'compliance.functional_subflows.read',
