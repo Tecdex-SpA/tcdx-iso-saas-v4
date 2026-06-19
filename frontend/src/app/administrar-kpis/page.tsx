@@ -9,6 +9,12 @@ import { useTranslation } from '@/hooks/useTranslation';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+function isPlatformRole(user: unknown) {
+  const record = user && typeof user === 'object' ? user as Record<string, unknown> : {};
+  const role = String(record.role || record.user_role || record.userRole || '').toLowerCase();
+  return ['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner'].includes(role);
+}
+
 type LatestSnapshot = {
   id?: string;
   standard_code?: string | null;
@@ -120,6 +126,7 @@ export default function AdministrarKpisPage() {
   const { t } = useTranslation();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [canRefreshHealth, setCanRefreshHealth] = useState(false);
 
   const [standards, setStandards] = useState<StandardItem[]>([]);
   const [data, setData] = useState<KpiAdminItem[]>([]);
@@ -165,11 +172,34 @@ export default function AdministrarKpisPage() {
     setToken(authToken);
     setUser(u);
 
+    if (authToken) {
+      if (isPlatformRole(u)) {
+        setCanRefreshHealth(true);
+      } else {
+        fetch(`${API_URL}/api/me/permissions`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        })
+          .then((res) => res.json())
+          .then((json) => {
+            setCanRefreshHealth(json?.permission_map?.['health.refresh'] === true);
+          })
+          .catch(() => {
+            setCanRefreshHealth(false);
+          });
+      }
+    }
+
     if (!authToken || !u?.tenant_id) {
       setLoading(false);
       setLoadingStandards(false);
     }
   }, []);
+
+  function requireHealthRefresh() {
+    if (canRefreshHealth) return true;
+    alert('No tienes permisos para recalcular o administrar Health ISO.');
+    return false;
+  }
 
   useEffect(() => {
     if (!token || !user?.tenant_id) return;
@@ -301,6 +331,7 @@ export default function AdministrarKpisPage() {
 
   const createCustomKpi = async () => {
     if (!token || !user?.tenant_id) return;
+    if (!requireHealthRefresh()) return;
 
     if (!form.name.trim()) {
       alert(t('kpiAdmin.nameRequired'));
@@ -385,6 +416,7 @@ export default function AdministrarKpisPage() {
 
   const toggleTenantEnabled = async (item: KpiAdminItem) => {
     if (!token || !user?.tenant_id) return;
+    if (!requireHealthRefresh()) return;
 
     if (isHealthKpi(item)) {
       alert(t('kpiAdmin.healthKpisCannotDisable'));
@@ -430,6 +462,7 @@ export default function AdministrarKpisPage() {
 
   const updateTenantCustomization = async (item: KpiAdminItem) => {
     if (!token || !user?.tenant_id) return;
+    if (!requireHealthRefresh()) return;
 
     if (isHealthKpi(item)) {
       alert(t('kpiAdmin.healthKpisManaged'));
@@ -510,6 +543,8 @@ export default function AdministrarKpisPage() {
 
   const editCustomKpi = async (item: KpiAdminItem) => {
     if (!token || !user?.tenant_id) return;
+    if (!requireHealthRefresh()) return;
+
     if (item.is_standard) {
       alert(t('kpiAdmin.customEndpointOnly'));
       return;
@@ -616,6 +651,8 @@ export default function AdministrarKpisPage() {
 
   const deleteCustomKpi = async (item: KpiAdminItem) => {
     if (!token || !user?.tenant_id) return;
+    if (!requireHealthRefresh()) return;
+
     if (item.is_standard) {
       alert(t('kpiAdmin.deleteCustomOnly'));
       return;
@@ -659,6 +696,8 @@ export default function AdministrarKpisPage() {
       alert(t('kpiAdmin.noActiveSession'));
       return;
     }
+
+    if (!requireHealthRefresh()) return;
 
     if (isHealthKpi(item)) {
       alert(t('kpiAdmin.healthKpisAutomatic'));
@@ -811,6 +850,7 @@ export default function AdministrarKpisPage() {
 
   const recalculateKpis = async () => {
     if (!token || !user?.tenant_id) return;
+    if (!requireHealthRefresh()) return;
 
     try {
       setSaving('recalculate');
@@ -895,7 +935,8 @@ export default function AdministrarKpisPage() {
             <button
               type="button"
               onClick={recalculateKpis}
-              disabled={saving === 'recalculate'}
+              disabled={saving === 'recalculate' || !canRefreshHealth}
+              title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
               className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
             >
               {saving === 'recalculate' ? t('dashboardKpi.recalculating') : t('dashboardKpi.recalculateKpis')}

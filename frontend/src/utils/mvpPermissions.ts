@@ -10,6 +10,8 @@ export type MvpRoleGroup =
 export type MvpFeatureKey =
   | 'dashboard.read'
   | 'compliance.read'
+  | 'health.view'
+  | 'health.refresh'
   | 'compliance.functional_subflows.read'
   | 'compliance.write'
   | 'compliance.lifecycle.read'
@@ -107,6 +109,8 @@ export function getMvpRoleGroup(role?: string | null): MvpRoleGroup {
 const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'dashboard.read': ['admin', 'area_owner', 'executive'],
   'compliance.read': ['admin', 'auditor', 'area_owner', 'executive'],
+  'health.view': ['admin', 'auditor', 'area_owner', 'executive'],
+  'health.refresh': ['admin'],
   'compliance.functional_subflows.read': ['admin', 'auditor', 'area_owner'],
   'compliance.write': ['admin'],
   'compliance.lifecycle.read': ['admin', 'auditor', 'area_owner', 'executive'],
@@ -240,6 +244,8 @@ type MvpRouteRule = {
 export const MVP_ROUTE_RULES: MvpRouteRule[] = [
   { routes: ['/dashboard'], feature: 'dashboard.read' },
   { routes: ['/cumplimiento-auditoria'], feature: 'compliance.read' },
+  { routes: ['/iso-health', '/health'], feature: 'health.view', moduleKey: 'health' },
+  { routes: ['/administrar-kpis'], feature: 'health.view', moduleKey: 'health' },
   {
     routes: COMPLIANCE_FUNCTIONAL_MVP_SUBFLOW_ROUTES,
     feature: 'compliance.functional_subflows.read',
