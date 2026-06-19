@@ -681,26 +681,31 @@ function AiAuditorDashboardCta({ t }: { t: (key: string) => string }) {
 
 
   return (
-    <section className="mb-6 rounded-[30px] border border-indigo-100 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 text-white shadow-[0_20px_55px_rgba(15,23,42,0.16)]">
+    <section className="mb-6 overflow-hidden rounded-lg border border-blue-100 bg-[linear-gradient(135deg,#eef7ff_0%,#ffffff_55%,#f8fbff_100%)] p-5 text-slate-950 shadow-[0_12px_32px_rgba(8,25,58,0.08)]">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-indigo-200">
-            {t('aiAuditor.shortTitle')}
+        <div className="flex min-w-0 gap-4">
+          <span className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white text-blue-700 shadow-sm md:flex">
+            <TcdxIcon name="ai" className="h-9 w-9" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">
+              {t('aiAuditor.shortTitle')}
+            </div>
+            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+              {t('aiAuditor.dashboardCtaTitle')}
+            </h2>
+            <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+              {t('aiAuditor.dashboardCtaDescription')}
+            </p>
+            <p className="mt-2 text-xs font-semibold text-amber-700">
+              {t('aiAuditor.humanReviewNote')}
+            </p>
           </div>
-          <h2 className="mt-2 text-2xl font-black tracking-tight">
-            {t('aiAuditor.dashboardCtaTitle')}
-          </h2>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-300">
-            {t('aiAuditor.dashboardCtaDescription')}
-          </p>
-          <p className="mt-2 text-xs font-semibold text-amber-100">
-            {t('aiAuditor.humanReviewNote')}
-          </p>
         </div>
 
         <a
           href="/auditorias?view=ia"
-          className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 shadow-sm transition hover:bg-indigo-50"
+          className="inline-flex items-center justify-center rounded-lg bg-[#0b5cad] px-5 py-3 text-sm font-black text-white shadow-[0_10px_22px_rgba(11,92,173,0.22)] transition hover:bg-[#0f6fd6]"
         >
           {t('aiAuditor.runAnalysis')}
         </a>

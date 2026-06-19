@@ -490,7 +490,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <main className="tcdx-premium-main tcdx-scrollbar min-w-0 flex-1 overflow-auto px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5 lg:px-8 lg:py-7">
-          <div className="tcdx-premium-view">
+          <div className="tcdx-premium-view mx-auto w-full max-w-[1800px]">
             {children}
           </div>
         </main>

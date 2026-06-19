@@ -59,14 +59,18 @@ export default function QuantitativeRiskDashboard({
   return (
     <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => (
-        <div key={card.key} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div
+          key={card.key}
+          className="group relative min-h-[132px] overflow-hidden rounded-lg border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(8,25,58,0.07)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(8,25,58,0.10)]"
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent" />
           <div className="flex items-center gap-4">
-            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${card.iconClass}`}>
+            <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-white shadow-sm ${card.iconClass}`}>
               <TcdxIcon name={card.icon} className="h-5 w-5" />
             </span>
             <div>
-              <div className="text-sm font-medium text-slate-700">{card.label}</div>
-              <div className={`mt-1 text-2xl font-bold ${card.valueClass}`}>{renderValue(card.key)}</div>
+              <div className="text-sm font-bold text-slate-800">{card.label}</div>
+              <div className={`mt-1 text-2xl font-black tracking-tight ${card.valueClass}`}>{renderValue(card.key)}</div>
               <div className="mt-1 text-xs leading-4 text-slate-500">{card.helper}</div>
             </div>
           </div>

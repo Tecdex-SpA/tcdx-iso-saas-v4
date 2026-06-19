@@ -52,8 +52,8 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
         'group flex w-full items-center rounded-lg text-sm font-medium transition-all duration-200',
         collapsed ? 'justify-center px-2 py-3' : 'justify-start gap-3 px-3 py-2.5 text-left',
         active
-          ? 'bg-[#2563eb] text-white shadow-[0_12px_26px_rgba(37,99,235,0.34)]'
-          : 'text-white/76 hover:bg-white/9 hover:text-white',
+          ? 'bg-[linear-gradient(135deg,#0f6fd6_0%,#0b5cad_100%)] text-white shadow-[0_14px_30px_rgba(15,111,214,0.34)] ring-1 ring-white/12'
+          : 'text-white/76 hover:bg-white/10 hover:text-white hover:ring-1 hover:ring-white/8',
       ].join(' ')}
     >
       <span
@@ -354,7 +354,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   return (
     <aside
       className={[
-        'tcdx-shell-sidebar relative flex h-screen flex-col border-r border-white/10 text-white shadow-[18px_0_42px_rgba(8,25,58,0.2)] transition-all duration-300',
+        'tcdx-shell-sidebar relative flex h-screen flex-col border-r border-white/10 text-white shadow-[18px_0_42px_rgba(8,25,58,0.22)] transition-all duration-300',
         collapsed ? 'w-[88px] px-3 pt-4 pb-5' : 'w-[272px] px-4 pt-4 pb-5',
       ].join(' ')}
     >
@@ -375,7 +375,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         </svg>
       </button>
 
-      <div className={`mb-5 flex h-14 items-center ${collapsed ? 'justify-center' : 'justify-start pl-1'}`}>
+      <div className={`relative z-10 mb-5 flex h-14 items-center ${collapsed ? 'justify-center' : 'justify-start pl-1'}`}>
         <img
           src={SERVICE_LOGO_SRC}
           alt="Logo"
@@ -383,7 +383,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         />
       </div>
 
-      <nav className="tcdx-scrollbar flex-1 overflow-y-auto pr-1 text-sm">
+      <nav className="tcdx-scrollbar relative z-10 flex-1 overflow-y-auto pr-1 text-sm">
         {isPlatformAdmin && (
           <>
             {sectionLabel(t('sidebar.platform'))}
@@ -440,13 +440,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         )}
       </nav>
 
-      <div className={['mt-4 border-t border-white/10 pt-4', collapsed ? 'flex justify-center' : ''].join(' ')}>
+      <div className={['relative z-10 mt-4 border-t border-white/10 pt-4', collapsed ? 'flex justify-center' : ''].join(' ')}>
         {collapsed ? (
-          <div title={t('sidebar.poweredBy')} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/7">
+          <div title={t('sidebar.poweredBy')} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/8 ring-1 ring-white/10">
             <img src={SERVICE_LOGO_SRC} alt="Tecdex" className="h-7 w-7 object-contain" />
           </div>
         ) : (
-          <div className="rounded-lg border border-white/10 bg-white/6 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/42">
               Powered by
             </p>

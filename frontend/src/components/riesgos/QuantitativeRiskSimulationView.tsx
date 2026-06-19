@@ -442,7 +442,14 @@ export default function QuantitativeRiskSimulationView({
         onCancelEdit={isEditingSimulation ? onCancelEditing : undefined}
       />
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(8,25,58,0.06)]">
+        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">Segmentacion operacional</div>
+            <h3 className="mt-1 text-base font-bold text-slate-950">Filtros de simulacion</h3>
+          </div>
+          <div className="text-xs text-slate-500">Actualiza KPI, matriz, panel y tabla sin cambiar datos guardados.</div>
+        </div>
         <div className="grid gap-4 lg:grid-cols-4">
           <label className="block">
             <span className="text-xs font-bold text-slate-600">Norma</span>
@@ -502,29 +509,29 @@ export default function QuantitativeRiskSimulationView({
       </div>
 
       {loading ? (
-        <div className="rounded-lg border border-slate-200 bg-white px-5 py-8 text-sm text-slate-500 shadow-sm">
+        <div className="rounded-lg border border-slate-200 bg-white px-5 py-8 text-sm text-slate-500 shadow-[0_10px_30px_rgba(8,25,58,0.06)]">
           Cargando simulaciones operativas...
         </div>
       ) : simulations.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-8 text-sm leading-6 text-slate-600">
+        <div className="rounded-lg border border-dashed border-blue-200 bg-white px-5 py-8 text-sm leading-6 text-slate-600 shadow-[0_10px_30px_rgba(8,25,58,0.05)]">
           <div className="text-base font-bold text-slate-950">Sin simulaciones operativas guardadas</div>
           <p className="mt-2">
             Ingrese una simulacion operativa para estimar exposicion esperada, P95 conservador y probabilidad critica.
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <div className="font-semibold text-slate-900">Minimo</div>
               <div className="text-xs text-slate-500">Escenario optimista razonable.</div>
             </div>
-            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <div className="font-semibold text-slate-900">Mas probable</div>
               <div className="text-xs text-slate-500">Valor esperado por experiencia operacional.</div>
             </div>
-            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <div className="font-semibold text-slate-900">Maximo</div>
               <div className="text-xs text-slate-500">Escenario severo plausible.</div>
             </div>
-            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <div className="font-semibold text-slate-900">Umbral critico</div>
               <div className="text-xs text-slate-500">Limite operacional para medir disrupcion.</div>
             </div>
@@ -533,7 +540,7 @@ export default function QuantitativeRiskSimulationView({
             <button
               type="button"
               onClick={onRefresh}
-              className="rounded border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               Actualizar
             </button>
@@ -623,12 +630,12 @@ export default function QuantitativeRiskSimulationView({
             }
           />
 
-          <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <span>Metricas normalizadas al horizonte {horizonLabel(filters.horizon).toLowerCase()} desde resultados anuales guardados.</span>
             <button
               type="button"
               onClick={onRefresh}
-              className="rounded border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
+              className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
             >
               Actualizar datos
             </button>
