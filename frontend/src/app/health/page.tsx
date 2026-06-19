@@ -758,12 +758,32 @@ function getAuthHeaders(token: string | null) {
   };
 }
 
+function normalizeHealthApiPath(path: string) {
+  if (path.startsWith('/api/')) return path;
+  if (path.startsWith('/health')) return `/api${path}`;
+  return path;
+}
+
+function healthApiErrorMessage(status: number, json: any, fallback: string) {
+  const code = String(json?.code || '').toUpperCase();
+  if (status === 401 || code === 'NO_TOKEN') {
+    return 'Sesión no válida o expirada. Vuelve a iniciar sesión.';
+  }
+  if (status === 403) {
+    return 'No tienes permisos para acceder a este recurso.';
+  }
+  return json?.error || json?.message || fallback;
+}
+
 function buildUrl(
   path: string,
   tenantId?: string,
   extraParams?: Record<string, string>
 ) {
-  const url = new URL(`${API_URL}${path}`);
+  const baseUrl =
+    API_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+  const url = new URL(normalizeHealthApiPath(path), baseUrl);
 
   if (tenantId) {
     url.searchParams.set('tenant_id', tenantId);
@@ -1003,7 +1023,7 @@ export default function HealthDashboardPage() {
     }
 
     if (!res.ok || json.ok === false) {
-      throw new Error(json.error || t('health.errors.serviceQuery'))
+      throw new Error(healthApiErrorMessage(res.status, json, t('health.errors.serviceQuery')));
     }
 
     return json;
@@ -1261,7 +1281,7 @@ export default function HealthDashboardPage() {
       }
 
       if (!res.ok || json.ok === false) {
-        throw new Error(json.error || t('health.errors.refresh'));
+        throw new Error(healthApiErrorMessage(res.status, json, t('health.errors.refresh')));
       }
 
       await loadDashboard(selectedTenantId, token);
@@ -1294,7 +1314,7 @@ export default function HealthDashboardPage() {
       setCreatingActionId(actionKey);
       setError('');
 
-      const res = await fetch(`${API_URL}/health/remediation-plan/create-action`, {
+      const res = await fetch(buildUrl('/health/remediation-plan/create-action'), {
         method: 'POST',
         headers: getAuthHeaders(token),
         body: JSON.stringify({
@@ -1326,7 +1346,7 @@ export default function HealthDashboardPage() {
       }
 
       if (!res.ok || json.ok === false) {
-        throw new Error(json.error || t('health.errors.createPlan'));
+        throw new Error(healthApiErrorMessage(res.status, json, t('health.errors.createPlan')));
       }
 
       window.alert(

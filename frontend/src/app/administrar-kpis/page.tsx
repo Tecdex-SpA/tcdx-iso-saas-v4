@@ -886,7 +886,7 @@ export default function AdministrarKpisPage() {
 
           <div className="flex flex-wrap gap-3">
             <a
-              href="/health"
+              href="/dashboard?view=iso"
               className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
             >
               {t('kpiAdmin.viewHealth')}
@@ -1458,7 +1458,7 @@ export default function AdministrarKpisPage() {
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
                       {health ? (
                         <a
-                          href="/health"
+                          href="/dashboard?view=iso"
                           className="rounded-xl bg-emerald-600 px-3 py-1.5 text-center text-sm font-semibold text-white transition hover:bg-emerald-700"
                         >
                           {t('kpiAdmin.viewHealthDashboard')}

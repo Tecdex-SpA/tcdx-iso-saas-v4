@@ -295,12 +295,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           if (requiredModule) {
 
             if (!moduleIsEnabled(moduleAccess.module_map, requiredModule.module_key)) {
-              sessionStorage.setItem(
-                'module-access-denied-message',
-                t('app.moduleDisabled', { module: requiredModule.label })
-              );
-
-              window.location.href = requiredModule.fallback;
+              if (!cancelled) {
+                setAccessDeniedMessage(t('app.moduleDisabled', { module: requiredModule.label }));
+                setCheckingAccess(false);
+              }
               return;
             }
           }
@@ -393,6 +391,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             className="mt-4 rounded-lg bg-[#1f6feb] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#195fc9]"
           >
             {t('app.logoutAndSwitch')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/dashboard';
+            }}
+            className="ml-2 mt-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            {t('sidebar.dashboard')}
           </button>
         </div>
       </div>

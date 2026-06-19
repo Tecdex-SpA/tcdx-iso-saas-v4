@@ -1712,7 +1712,7 @@ function DashboardPageContent() {
 
                   <div className="flex flex-wrap gap-3">
                     <a
-                      href="/health"
+                      href="/dashboard?view=iso"
                       className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
                     >{t('dashboardKpi.viewHealth')}</a>
 
@@ -1819,7 +1819,7 @@ function DashboardPageContent() {
                       </div>
 
                       <a
-                        href="/health"
+                        href="/dashboard?view=iso"
                         className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
                       >{t('dashboardKpi.viewHealthDetail')}</a>
                     </div>
@@ -2086,7 +2086,7 @@ function SystemHealthDashboardSection({
         </div>
 
         <a
-          href="/health"
+          href="/dashboard?view=iso"
           className="inline-flex w-fit rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
         >
           Ver salud completa
