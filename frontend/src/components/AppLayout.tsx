@@ -55,6 +55,12 @@ type ModuleAccessResponse = {
   error?: string;
 };
 
+type PermissionsResponse = {
+  ok: boolean;
+  permission_map?: Record<string, boolean>;
+  error?: string;
+};
+
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { t } = useTranslation();
@@ -87,30 +93,40 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           routes: ['/ia-compliance'],
           fallback: '/dashboard',
           label: 'IA Compliance',
+          permission_key: null,
+          permission_denied_message: null,
         },
         {
           module_key: 'risks',
           routes: ['/riesgos', '/matriz-riesgo', '/activos'],
           fallback: '/dashboard',
           label: t('sidebar.riskMatrix'),
+          permission_key: null,
+          permission_denied_message: null,
         },
         {
           module_key: 'audits',
           routes: ['/auditorias'],
           fallback: '/dashboard',
           label: t('sidebar.audits'),
+          permission_key: null,
+          permission_denied_message: null,
         },
         {
           module_key: 'evidences',
           routes: ['/evidencias'],
           fallback: '/dashboard',
           label: t('sidebar.evidence'),
+          permission_key: null,
+          permission_denied_message: null,
         },
         {
           module_key: 'health',
           routes: ['/iso-health', '/health', '/administrar-kpis'],
           fallback: '/dashboard',
           label: 'Health ISO',
+          permission_key: 'health.view',
+          permission_denied_message: 'No tienes permisos para ver Health ISO.',
         },
       ],
     };
@@ -143,6 +159,30 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
     if (!res.ok || !json || json.ok === false) {
       throw new Error(json?.error || t('app.modulesError'));
+    }
+
+    return json;
+  }
+
+  async function getPermissions(token: string): Promise<PermissionsResponse> {
+    const res = await fetch(`${API_URL}/api/me/permissions`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const text = await res.text();
+
+    let json: PermissionsResponse | null = null;
+
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      throw new Error(t('app.invalidModulesResponse', { status: res.status }));
+    }
+
+    if (!res.ok || !json || json.ok === false) {
+      throw new Error(json?.error || t('app.permissionsError'));
     }
 
     return json;
@@ -300,6 +340,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 setCheckingAccess(false);
               }
               return;
+            }
+
+            if (requiredModule.permission_key) {
+              const permissions = await getPermissions(token);
+              if (permissions.permission_map?.[requiredModule.permission_key] !== true) {
+                if (!cancelled) {
+                  setAccessDeniedMessage(
+                    requiredModule.permission_denied_message || t('app.permissionsError')
+                  );
+                  setCheckingAccess(false);
+                }
+                return;
+              }
             }
           }
         }

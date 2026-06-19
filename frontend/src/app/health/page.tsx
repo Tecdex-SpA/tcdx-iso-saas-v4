@@ -4,10 +4,17 @@ import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getUserFromToken } from '@/utils/auth';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
+
+function isPlatformRole(user: unknown) {
+  const record = user && typeof user === 'object' ? user as Record<string, unknown> : {};
+  const role = String(record.role || record.user_role || record.userRole || '').toLowerCase();
+  return ['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner'].includes(role);
+}
 
 type HealthSummary = {
   tenant_id: string;
@@ -881,6 +888,7 @@ function CauseMiniCard({
 export default function HealthDashboardPage() {
   const { t } = useTranslation();
   const [token, setToken] = useState<string | null>(null);
+  const [canRefreshHealth, setCanRefreshHealth] = useState(false);
 
   const [summaries, setSummaries] = useState<HealthSummary[]>([]);
   const [standards, setStandards] = useState<StandardHealth[]>([]);
@@ -1258,6 +1266,11 @@ export default function HealthDashboardPage() {
       return;
     }
 
+    if (!canRefreshHealth) {
+      setError('No tienes permisos para recalcular o administrar Health ISO.');
+      return;
+    }
+
     try {
       setRefreshing(true);
       setError('');
@@ -1295,6 +1308,13 @@ export default function HealthDashboardPage() {
   async function createRemediationAction(item: RemediationPlanItem) {
     if (!token) {
       setError(t('health.errors.missingToken'));
+      return;
+    }
+
+    if (!canRefreshHealth) {
+      const message = 'No tienes permisos para recalcular o administrar Health ISO.';
+      setError(message);
+      window.alert(message);
       return;
     }
 
@@ -1376,9 +1396,24 @@ export default function HealthDashboardPage() {
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');
+    const user = getUserFromToken();
     setToken(authToken);
 
     if (authToken) {
+      if (isPlatformRole(user)) {
+        setCanRefreshHealth(true);
+      } else {
+        fetch(`${API_URL}/api/me/permissions`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        })
+          .then((res) => res.json())
+          .then((json) => {
+            setCanRefreshHealth(json?.permission_map?.['health.refresh'] === true);
+          })
+          .catch(() => {
+            setCanRefreshHealth(false);
+          });
+      }
       loadDashboard(undefined, authToken);
     } else {
       setLoading(false);
@@ -1477,7 +1512,8 @@ export default function HealthDashboardPage() {
 
                 <button
                   onClick={refreshHealth}
-                  disabled={refreshing}
+                  disabled={refreshing || !canRefreshHealth}
+                  title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
                   className="rounded-xl bg-[#1b2733] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#24384a] disabled:opacity-60"
                 >
                   {refreshing ? t('health.recalculating') : t('health.recalculateHealth')}
@@ -2607,7 +2643,8 @@ export default function HealthDashboardPage() {
                                   <button
                                     type="button"
                                     onClick={() => createRemediationAction(item)}
-                                    disabled={isCreating}
+                                    disabled={isCreating || !canRefreshHealth}
+                                    title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
                                     className="inline-flex min-w-[92px] items-center justify-center rounded-xl bg-[#1b2733] px-3 py-2 text-center text-xs font-semibold leading-tight text-white shadow-sm transition hover:bg-[#24384a] disabled:cursor-not-allowed disabled:opacity-60"
                                   >
                                     {isCreating ? t('health.creating') : t('health.createPlan')}
