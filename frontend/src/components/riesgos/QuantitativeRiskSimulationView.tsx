@@ -13,6 +13,7 @@ import RiskSimulationDetailPanel from './RiskSimulationDetailPanel';
 import OperationalRiskSimulationForm, {
   type OperationalRiskSimulationFormState,
 } from './OperationalRiskSimulationForm';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import {
   DEFAULT_QUANTITATIVE_FILTERS,
   HORIZON_OPTIONS,
@@ -148,6 +149,9 @@ export default function QuantitativeRiskSimulationView({
   const [aiSaving, setAiSaving] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiMessage, setAiMessage] = useState('');
+  const [includeWebContext, setIncludeWebContext] = useState(false);
+  const { canUseAiFeature } = useTenantEntitlements();
+  const webContextAvailable = canUseAiFeature('web_research');
 
   const allRisks = useMemo(() => {
     return buildQuantitativeRisks(simulations, filters.horizon);
@@ -265,7 +269,7 @@ export default function QuantitativeRiskSimulationView({
       setAiAnalysis(null);
       setActiveAiJob(null);
 
-      const payload = getAiAuditorPayload(filteredRisks, selectedRisk, kpis);
+      const payload = getAiAuditorPayload(filteredRisks, selectedRisk, kpis, includeWebContext && webContextAvailable);
       const res = await fetch(`${API_URL}/api/operational-risks/ai-analysis-jobs`, {
         method: 'POST',
         headers: {
@@ -590,8 +594,11 @@ export default function QuantitativeRiskSimulationView({
             loading={aiLoading}
             historyLoading={aiHistoryLoading}
             saving={aiSaving}
+            includeWebContext={includeWebContext}
+            webContextAvailable={webContextAvailable}
             error={aiError}
             successMessage={aiMessage}
+            onIncludeWebContextChange={setIncludeWebContext}
             onGenerate={generateAiAnalysis}
             onSave={saveAiRecommendation}
             onUseJobAnalysis={useCompletedJob}

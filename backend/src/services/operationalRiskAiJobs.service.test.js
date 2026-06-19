@@ -149,6 +149,10 @@ async function testRunJobCompletedUsesOperationalBetaPert() {
           diagnostico_ejecutivo: 'Exposicion operacional alta en continuidad.',
           lectura_portafolio: 'El P95 se concentra en la simulacion seleccionada.',
           acciones_sugeridas: [{ accion: 'Probar recuperacion.', horizonte: '30_dias' }],
+          acciones_tratamiento: [{ accion: 'Probar recuperacion.', horizonte: '30_dias', evidencia_esperada: 'Acta de prueba' }],
+          evidencia_requerida: [{ evidencia: 'Acta de prueba', tipo: 'prueba' }],
+          criterios_cierre: [{ criterio: 'Prueba aprobada', horizonte: '30_dias' }],
+          web_context: { used: false, status: 'not_requested', sources: [] },
           proximos_pasos: ['Asignar owner.'],
           ai_model: 'qwen-test',
           prompt_version: 'beta-pert-operational-risk-v1',
@@ -173,11 +177,101 @@ async function testRunJobCompletedUsesOperationalBetaPert() {
   assert.strictEqual(calledOperationalAnalyzer, true);
   assert.strictEqual(capturedPayload.options.execution_mode, 'async_job');
   assert.strictEqual(capturedPayload.options.allow_long_running, true);
+  assert.strictEqual(capturedPayload.options.include_web_context, false);
   assert.strictEqual(capturedPayload.request_metadata.execution_mode, 'async_job');
   assert.strictEqual(capturedOptions.timeoutMs, 420000);
   assert.strictEqual(completed.status, 'completed');
   assert.strictEqual(completed.ai_model, 'qwen-test');
   assert.strictEqual(completed.analysis_json.diagnostico_ejecutivo, 'Exposicion operacional alta en continuidad.');
+  assert.strictEqual(completed.analysis_json.web_context.status, 'not_requested');
+  assert.strictEqual(completed.analysis_json.evidencia_requerida.length, 1);
+}
+
+async function testRunJobPersistsAndPassesEnabledWebContext() {
+  const db = createFakeDb();
+  let capturedPayload = null;
+  const engineClient = {
+    async analyzeOperationalBetaPert(payload) {
+      capturedPayload = payload;
+      return {
+        success: true,
+        analysis: {
+          diagnostico_ejecutivo: 'Exposicion operacional alta en continuidad.',
+          lectura_portafolio: 'El P95 se concentra en continuidad.',
+          acciones_sugeridas: [{ accion: 'Probar recuperacion.', horizonte: '30_dias' }],
+          proximos_pasos: ['Asignar owner.'],
+          web_context: { used: true, status: 'used', queries: ['ISO 27001 continuity'], sources: [{ title: 'NIST', url: 'https://nist.gov' }] },
+          ai_model: 'qwen-test',
+          prompt_version: 'beta-pert-operational-risk-v1',
+          source: 'ai-engine-operational-beta-pert',
+          generation_mode: 'semantic_plus_llm',
+        },
+      };
+    },
+  };
+  const aiSettingsService = {
+    async isTenantAiFeatureEnabled() {
+      return { enabled: true, reason: 'ai_enabled' };
+    },
+  };
+  const service = createOperationalRiskAiJobsService({ db, engineClient, aiSettingsService });
+  const payload = { ...validPayload(), include_web_context: true, options: { include_web_context: true } };
+  const job = await service.createJob({
+    tenantId: TENANT_A,
+    userId: USER_ID,
+    simulationId: SIM_A,
+    payload,
+  });
+
+  assert.strictEqual(job.request_payload_json.include_web_context, true);
+  const completed = await service.runJob(job.id);
+  assert.strictEqual(capturedPayload.options.include_web_context, true);
+  assert.strictEqual(capturedPayload.request_metadata.include_web_context, true);
+  assert.strictEqual(completed.status, 'completed');
+  assert.strictEqual(completed.analysis_json.web_context.status, 'used');
+}
+
+async function testRunJobDisablesWebContextWhenTenantFeatureOff() {
+  const db = createFakeDb();
+  let capturedPayload = null;
+  const engineClient = {
+    async analyzeOperationalBetaPert(payload) {
+      capturedPayload = payload;
+      return {
+        success: true,
+        analysis: {
+          diagnostico_ejecutivo: 'Exposicion operacional alta en continuidad.',
+          lectura_portafolio: 'El P95 se concentra en continuidad.',
+          acciones_sugeridas: [{ accion: 'Probar recuperacion.', horizonte: '30_dias' }],
+          proximos_pasos: ['Asignar owner.'],
+          web_context: { used: false, status: 'disabled_for_tenant', sources: [] },
+          ai_model: 'qwen-test',
+          prompt_version: 'beta-pert-operational-risk-v1',
+          source: 'ai-engine-operational-beta-pert',
+          generation_mode: 'semantic_plus_llm',
+        },
+      };
+    },
+  };
+  const aiSettingsService = {
+    async isTenantAiFeatureEnabled() {
+      return { enabled: false, reason: 'ai_feature_disabled' };
+    },
+  };
+  const service = createOperationalRiskAiJobsService({ db, engineClient, aiSettingsService });
+  const job = await service.createJob({
+    tenantId: TENANT_A,
+    userId: USER_ID,
+    simulationId: SIM_A,
+    payload: { ...validPayload(), include_web_context: true, options: { include_web_context: true } },
+  });
+
+  const completed = await service.runJob(job.id);
+  assert.strictEqual(capturedPayload.options.include_web_context, false);
+  assert.strictEqual(capturedPayload.options.web_context_disabled_for_tenant, true);
+  assert.strictEqual(capturedPayload.request_metadata.web_context_reason, 'ai_feature_disabled');
+  assert.strictEqual(completed.status, 'completed');
+  assert.strictEqual(completed.analysis_json.web_context.status, 'disabled_for_tenant');
 }
 
 async function testRunJobTimeoutIsPersisted() {
@@ -209,6 +303,8 @@ async function testRunJobTimeoutIsPersisted() {
 (async () => {
   await testCreateListAndTenantIsolation();
   await testRunJobCompletedUsesOperationalBetaPert();
+  await testRunJobPersistsAndPassesEnabledWebContext();
+  await testRunJobDisablesWebContextWhenTenantFeatureOff();
   await testRunJobTimeoutIsPersisted();
   console.log('operationalRiskAiJobs.service tests OK');
 })().catch((error) => {

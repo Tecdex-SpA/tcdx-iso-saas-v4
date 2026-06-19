@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from app.services.knowledge_loader import get_knowledge_module
 from app.services.llm_client import call_llm_json, get_llm_metadata, is_llm_available
 from app.services.rag_context_service import search_baseline_knowledge
+from app.services.web_context_service import build_external_context
 
 PROMPT_VERSION = "beta-pert-operational-risk-v1"
 SOURCE = "ai-engine-operational-beta-pert"
@@ -60,6 +61,12 @@ def _num(value: Any, fallback: Optional[float] = None) -> Optional[float]:
         return number
     except Exception:
         return fallback
+
+
+def _bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "si", "sí", "on"}
 
 
 def _round(value: Any, digits: int = 2, fallback: Optional[float] = None) -> Optional[float]:
@@ -333,6 +340,16 @@ def build_semantic_context(beta_payload: Dict[str, Any]) -> Dict[str, Any]:
             "probabilidad_critica_promedio": (beta_payload.get("kpis") or {}).get("criticalProbabilityAverage"),
             "riesgos_altos_priorizados": (beta_payload.get("kpis") or {}).get("highPrioritizedRisks"),
         },
+        "web_context": {
+            "used": False,
+            "status": "not_requested",
+            "searched_at": None,
+            "queries": [],
+            "sources": [],
+            "external_insights": [],
+            "external_risk_signals": [],
+            "external_control_references": [],
+        },
         "risk_rules": {
             "priority_factors": _list(risk_rules.get("risk_priority_factors"), 8),
             "high_priority_conditions": _list(risk_rules.get("high_priority_conditions"), 6),
@@ -366,7 +383,7 @@ def build_prompt_payload(beta_payload: Dict[str, Any], semantic_context: Dict[st
     return json.dumps({
         "task": "operational_risk_beta_pert_analysis",
         "prompt_version": PROMPT_VERSION,
-        "instruction": "Genera solo dos campos breves: diagnostico_ejecutivo y lectura_portafolio. No calcules acciones, controles, proximos pasos, concentracion ni riesgos prioritarios; esos campos los completa el servicio.",
+        "instruction": "Genera una sintesis breve: diagnostico_ejecutivo, lectura_portafolio, hipotesis_operativas, datos_faltantes y nivel_confianza. No calcules acciones, controles, proximos pasos, evidencias, concentracion ni riesgos prioritarios; esos campos los completa el servicio.",
         "kpis": beta_payload.get("kpis"),
         "selectedRisk": beta_payload.get("selectedRisk"),
         "risks": llm_risks,
@@ -378,6 +395,12 @@ def build_prompt_payload(beta_payload: Dict[str, Any], semantic_context: Dict[st
         "required_output": {
             "diagnostico_ejecutivo": "string",
             "lectura_portafolio": "string",
+            "hipotesis_operativas": ["string"],
+            "datos_faltantes": ["string"],
+            "nivel_confianza": {
+                "nivel": "bajo|medio|alto",
+                "justificacion": "string",
+            },
         },
     }, ensure_ascii=False, default=str)
 
@@ -394,6 +417,281 @@ def is_async_long_running(payload: Dict[str, Any]) -> bool:
 
 def resolve_llm_timeout_seconds(payload: Dict[str, Any]) -> int:
     return ASYNC_JOB_TIMEOUT_SECONDS if is_async_long_running(payload) else LLM_TIMEOUT_SECONDS
+
+
+def _web_requested(payload: Dict[str, Any]) -> bool:
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    request_metadata = payload.get("request_metadata") if isinstance(payload.get("request_metadata"), dict) else {}
+    return any(_bool(value) for value in [
+        payload.get("include_web_context"),
+        payload.get("allow_web_context"),
+        options.get("include_web_context"),
+        options.get("allow_web_context"),
+        options.get("use_web"),
+        request_metadata.get("include_web_context"),
+        request_metadata.get("allow_web_context"),
+        request_metadata.get("use_web"),
+    ])
+
+
+def _web_disabled_for_tenant(payload: Dict[str, Any]) -> bool:
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    request_metadata = payload.get("request_metadata") if isinstance(payload.get("request_metadata"), dict) else {}
+    return any(_bool(value) for value in [
+        payload.get("web_context_disabled_for_tenant"),
+        options.get("web_context_disabled_for_tenant"),
+        request_metadata.get("web_context_disabled_for_tenant"),
+    ])
+
+
+def _web_queries_for_domains(beta_payload: Dict[str, Any], semantic_context: Dict[str, Any]) -> List[str]:
+    queries = []
+    for domain in _list(semantic_context.get("domains"), 5):
+        if not isinstance(domain, dict):
+            continue
+        domain_name = _text(domain.get("domain"), "", 80)
+        risk_name = _text(domain.get("risk_name"), "", 120)
+        standard = "ISO 9001" if "9001" in _normalize(risk_name) else ""
+        matching_risk = next((risk for risk in beta_payload.get("risks", []) if risk.get("name") == risk_name), {})
+        standard = "ISO 9001" if "9001" in str(matching_risk.get("standard") or "") else "ISO 27001"
+        if domain_name == "cambios_qa":
+            queries.append(f"{standard} change management release rollback operational risk best practices")
+        elif domain_name == "continuidad_resiliencia":
+            queries.append(f"{standard} business continuity backup recovery testing RTO RPO best practices")
+        elif domain_name == "respuesta_incidentes":
+            queries.append(f"{standard} incident response SLA escalation operational resilience best practices")
+        elif domain_name == "identidad_acceso":
+            queries.append(f"{standard} access management MFA monitoring operational risk best practices")
+        elif domain_name == "infraestructura_capacidad":
+            queries.append(f"{standard} infrastructure capacity availability monitoring operational risk best practices")
+        elif domain_name == "onboarding_calidad":
+            queries.append("SaaS customer onboarding configuration error quality control best practices")
+        elif domain_name == "control_operacional_backoffice":
+            queries.append("backoffice reconciliation operational control dual review best practices")
+        elif domain_name:
+            queries.append(f"{standard} operational risk treatment mitigation best practices")
+    return _unique_texts(queries, 4)
+
+
+def build_operational_web_context(
+    payload: Dict[str, Any],
+    beta_payload: Dict[str, Any],
+    semantic_context: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not _web_requested(payload):
+        return {
+            "used": False,
+            "status": "not_requested",
+            "searched_at": None,
+            "queries": [],
+            "sources": [],
+            "external_insights": [],
+            "external_risk_signals": [],
+            "external_control_references": [],
+        }
+
+    queries = _web_queries_for_domains(beta_payload, semantic_context)
+    if _web_disabled_for_tenant(payload):
+        return {
+            "used": False,
+            "status": "disabled_for_tenant",
+            "searched_at": None,
+            "queries": queries,
+            "sources": [],
+            "external_insights": [],
+            "external_risk_signals": [],
+            "external_control_references": [],
+            "message": "Contexto externo web no habilitado para este tenant.",
+        }
+
+    try:
+        external = build_external_context({
+            "allow_web_context": True,
+            "queries": queries,
+            "requested_output": "operational_beta_pert_context",
+            "standards": list({risk.get("standard") for risk in beta_payload.get("risks", []) if risk.get("standard")})[:3],
+        })
+    except Exception as exc:
+        return {
+            "used": False,
+            "status": "failed",
+            "searched_at": datetime.now(timezone.utc).isoformat(),
+            "queries": queries,
+            "sources": [],
+            "external_insights": [],
+            "external_risk_signals": [],
+            "external_control_references": [],
+            "error": _text(str(exc), "", 180),
+        }
+
+    sources = []
+    for item in _list(external.get("sources"), 6):
+        if not isinstance(item, dict):
+            continue
+        sources.append({
+            "title": _text(item.get("title"), "Fuente externa", 180),
+            "url": _text(item.get("url"), "", 600),
+            "source_type": _text(item.get("classification") or item.get("source"), "web", 80),
+            "retrieved_at": _text(item.get("retrieved_at"), datetime.now(timezone.utc).isoformat(), 80),
+            "relevance": _text(item.get("domain"), "", 120),
+            "summary": _text(item.get("summary") or item.get("description"), "", 360),
+        })
+
+    used = bool(external.get("used") and sources)
+    insights = _unique_texts([source.get("summary", "") for source in sources if source.get("summary")], 4)
+    references = _unique_texts([source.get("title", "") for source in sources if source.get("title")], 4)
+    return {
+        "used": used,
+        "status": "used" if used else "failed",
+        "searched_at": datetime.now(timezone.utc).isoformat(),
+        "queries": _list(external.get("queries"), 4) or queries,
+        "sources": sources,
+        "external_insights": insights,
+        "external_risk_signals": insights[:3],
+        "external_control_references": references,
+        "message": None if used else _text(external.get("reason"), "No se obtuvieron fuentes externas confiables.", 240),
+    }
+
+
+def _risk_by_name(beta_payload: Dict[str, Any], name: str) -> Dict[str, Any]:
+    normalized_name = _normalize(name)
+    return next((risk for risk in beta_payload.get("risks", []) if _normalize(risk.get("name")) == normalized_name), {})
+
+
+def _action_evidence_type(action_text: str) -> str:
+    text = _normalize(action_text)
+    if any(token in text for token in ["monitoreo", "alerta", "metric"]):
+        return "monitoreo"
+    if any(token in text for token in ["prueba", "rollback", "recuperacion", "rto", "rpo"]):
+        return "prueba"
+    if any(token in text for token in ["cab", "aprobacion", "revision"]):
+        return "aprobacion"
+    if any(token in text for token in ["reporte", "postmortem", "sla"]):
+        return "reporte"
+    return "registro"
+
+
+def build_enriched_operational_outputs(
+    beta_payload: Dict[str, Any],
+    semantic_context: Dict[str, Any],
+    llm_source: Dict[str, Any],
+    merged_actions: List[Dict[str, Any]],
+    proximos: List[str],
+    advertencias: List[str],
+    diagnostico: str,
+    lectura: str,
+) -> Dict[str, Any]:
+    quantitative_base = semantic_context.get("lectura_cuantitativa_base") or {}
+    lectura_cuantitativa = {
+        "exposicion_esperada_acumulada": quantitative_base.get("exposicion_esperada_acumulada"),
+        "p95_agregado_conservador": quantitative_base.get("p95_agregado_conservador"),
+        "probabilidad_critica_promedio": quantitative_base.get("probabilidad_critica_promedio"),
+        "riesgos_altos_priorizados": quantitative_base.get("riesgos_altos_priorizados"),
+        "lectura": lectura or "Lectura cuantitativa derivada de KPIs Beta-PERT filtrados.",
+        "advertencia_p95": "P95 agregado conservador = suma de P95 individuales; no equivale a P95 de portafolio simulado con correlaciones.",
+    }
+
+    actions = []
+    evidences = []
+    close_criteria = []
+    residuals = []
+    causes = []
+    for action in merged_actions[:5]:
+        action_text = _text(action.get("accion"), "", 700)
+        risk_name = _text(action.get("riesgo_relacionado"), "", 220)
+        risk = _risk_by_name(beta_payload, risk_name)
+        domain = infer_operational_domain(risk or {"name": risk_name})
+        evidence_type = _action_evidence_type(action_text)
+        evidence = {
+            "evidencia": f"Registro de ejecucion y verificacion para: {action_text}",
+            "objetivo": "Demostrar tratamiento aplicado y trazabilidad de decision operacional.",
+            "riesgo_relacionado": risk_name or None,
+            "tipo": evidence_type,
+        }
+        criterion = {
+            "criterio": f"Tratamiento verificado para {risk_name or 'riesgo priorizado'}.",
+            "metrica_o_prueba": "Evidencia aprobada por owner, resultado de prueba o metrica operacional dentro del umbral definido.",
+            "horizonte": action.get("horizonte") or "30_dias",
+            "riesgo_relacionado": risk_name or None,
+        }
+        actions.append({
+            **action,
+            "evidencia_esperada": evidence["evidencia"],
+            "criterio_cierre": criterion["metrica_o_prueba"],
+        })
+        evidences.append(evidence)
+        close_criteria.append(criterion)
+        residuals.append({
+            "riesgo": risk_name or "Riesgo priorizado",
+            "condicion_residual": "Persistira exposicion residual hasta validar eficacia del control y tendencia de frecuencia/impacto.",
+            "seguimiento_sugerido": f"Revisar P95 y probabilidad critica despues del hito {action.get('horizonte') or '30_dias'}.",
+        })
+        causes.append({
+            "causa": domain.get("focus") or "Debilidad operacional recurrente",
+            "fundamento": "Inferido desde nombre/proceso del riesgo y contribucion cuantitativa Beta-PERT.",
+            "riesgo_relacionado": risk_name or None,
+        })
+
+    llm_hypotheses = _unique_texts(_string_list(llm_source.get("hipotesis_operativas"), 3), 3)
+    if not llm_hypotheses:
+        llm_hypotheses = _unique_texts([
+            "La cola de perdida esta dominada por riesgos con P95 o probabilidad critica superiores.",
+            "La exposicion operativa requiere tratar primero riesgos con alta contribucion conservadora.",
+        ], 3)
+
+    llm_missing = _unique_texts(_string_list(llm_source.get("datos_faltantes"), 4), 4)
+    if not llm_missing:
+        llm_missing = [
+            "historial de incidentes",
+            "tiempos reales de recuperacion",
+            "evidencia de pruebas de rollback o continuidad",
+            "capacidad real vs pico operativo",
+        ]
+
+    confidence = llm_source.get("nivel_confianza") if isinstance(llm_source.get("nivel_confianza"), dict) else {}
+    confidence_level = _normalize(confidence.get("nivel"))
+    if confidence_level not in {"bajo", "medio", "alto"}:
+        confidence_level = "medio" if len(beta_payload.get("risks", [])) >= 3 else "bajo"
+    confidence_factors = [
+        "KPIs agregados disponibles",
+        "Riesgos Beta-PERT filtrados y deduplicados",
+        "Sin muestras de portafolio correlacionadas",
+    ]
+
+    return {
+        "resumen_ejecutivo": _text(diagnostico or lectura, "", 1200),
+        "lectura_cuantitativa": lectura_cuantitativa,
+        "hipotesis_operativas": llm_hypotheses,
+        "causas_probables": causes[:5],
+        "acciones_tratamiento": actions[:5],
+        "evidencia_requerida": evidences[:6],
+        "criterios_cierre": close_criteria[:6],
+        "riesgos_residuales": residuals[:5],
+        "datos_faltantes": llm_missing[:4],
+        "nivel_confianza": {
+            "nivel": confidence_level,
+            "justificacion": _text(confidence.get("justificacion"), "Confianza basada en KPIs Beta-PERT disponibles y semantica operacional inferida.", 300),
+            "factores": confidence_factors,
+        },
+        "web_context": semantic_context.get("web_context") or {
+            "used": False,
+            "status": "not_requested",
+            "searched_at": None,
+            "queries": [],
+            "sources": [],
+            "external_insights": [],
+            "external_risk_signals": [],
+            "external_control_references": [],
+        },
+        "uso_sugerido": [
+            "recomendacion_formal",
+            "plan_de_accion",
+            "revision_direccion",
+            "informe_ejecutivo",
+            "evidencia_analisis_riesgos",
+            "priorizacion_presupuestaria",
+        ],
+    }
 
 
 def _safe_response_text(value: Any, max_len: int = 2000) -> str:
@@ -493,6 +791,8 @@ def extract_beta_summary_fields_from_text(text: str) -> Optional[Dict[str, Any]]
         "diagnostico_ejecutivo": _extract_jsonish_string_field(text, "diagnostico_ejecutivo"),
         "lectura_portafolio": _extract_jsonish_string_field(text, "lectura_portafolio"),
         "advertencia_metodologica": _extract_jsonish_string_field(text, "advertencia_metodologica"),
+        "hipotesis_operativas": _extract_jsonish_string_array(text, "hipotesis_operativas", 3),
+        "datos_faltantes": _extract_jsonish_string_array(text, "datos_faltantes", 4),
         "acciones_sugeridas": _extract_jsonish_string_array(text, "acciones_sugeridas", 3),
         "proximos_pasos": _extract_jsonish_string_array(text, "proximos_pasos", 3),
     }
@@ -737,11 +1037,22 @@ def normalize_beta_pert_analysis(
     advertencias = _unique_texts([
         *(_list(semantic_context.get("advertencias_metodologicas"), 3)),
     ], 3)
+    enriched = build_enriched_operational_outputs(
+        beta_payload,
+        semantic_context,
+        source,
+        merged_actions,
+        proximos,
+        advertencias,
+        diagnostico,
+        lectura,
+    )
     _log_parse_observation(ai_raw, source, metadata, trace_context, None, [], unwrap_info)
 
     return {
         "diagnostico_ejecutivo": diagnostico,
         "lectura_portafolio": lectura,
+        **enriched,
         "riesgos_prioritarios": _list(semantic_context.get("riesgos_prioritarios"), 3),
         "concentracion_exposicion": _list(semantic_context.get("concentracion_exposicion"), 5),
         "acciones_sugeridas": merged_actions[:5],
@@ -753,6 +1064,7 @@ def normalize_beta_pert_analysis(
         "prompt_version": PROMPT_VERSION,
         "source": SOURCE,
         "generation_mode": GENERATION_MODE,
+        "human_review_required": True,
     }
 
 
@@ -776,6 +1088,7 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
     allow_long_running = is_async_long_running(payload)
     execution_mode = "async_job" if allow_long_running else "sync"
     llm_timeout_seconds = resolve_llm_timeout_seconds(payload)
+    include_web_context = _web_requested(payload)
 
     llm_risks_count = len(build_llm_risks(beta_payload))
     print(json.dumps({
@@ -790,12 +1103,14 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
         "selected_model": metadata.get("model"),
         "provider": metadata.get("provider"),
         "generation_options_slim": True,
+        "include_web_context": include_web_context,
     }, ensure_ascii=False, default=str))
 
     if not is_llm_available():
         raise OperationalBetaPertError("ai_engine_unavailable", "Motor LLM no disponible para analisis Beta-PERT.", 503)
 
     semantic_context = build_semantic_context(beta_payload)
+    semantic_context["web_context"] = build_operational_web_context(payload, beta_payload, semantic_context)
     prompt_payload = build_prompt_payload(beta_payload, semantic_context)
     try:
         raw = call_llm_json(
@@ -806,7 +1121,7 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
             depth=depth,
             local_compact=True,
             model_mode=llm_model_mode,
-            response_contract_instruction="Devuelve JSON directo sin wrapper: diagnostico_ejecutivo y lectura_portafolio.",
+            response_contract_instruction="Devuelve JSON directo sin wrapper: diagnostico_ejecutivo, lectura_portafolio, hipotesis_operativas, datos_faltantes y nivel_confianza.",
             append_default_json_contract=False,
             generation_options_override=SLIM_LLM_GENERATION_OPTIONS,
             enforce_timeout_cap=True,
@@ -834,6 +1149,8 @@ def analyze_operational_beta_pert(payload: Dict[str, Any]) -> Dict[str, Any]:
         "provider": metadata.get("provider"),
         "duration_ms": duration_ms,
         "generation_options_slim": True,
+        "include_web_context": include_web_context,
+        "web_context_status": (analysis.get("web_context") or {}).get("status"),
         "status": "ok",
     }, ensure_ascii=False, default=str))
     return {"success": True, "analysis": analysis, "metadata": {"request_id": request_id or "", "model": metadata.get("model"), "model_mode": "expert" if llm_model_mode == "deep" else llm_model_mode, "duration_ms": duration_ms, "risks_analyzed": len(beta_payload["risks"]), "llm_risks_analyzed": llm_risks_count, "execution_mode": execution_mode, "allow_long_running": allow_long_running, "timeout_seconds": llm_timeout_seconds, "generated_at": datetime.now(timezone.utc).isoformat()}}

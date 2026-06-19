@@ -148,9 +148,21 @@ function runTests() {
     engine: { ai_engine_used: true, selected_model: 'gpt-test' },
     structured_result: {
       diagnostico_ejecutivo: 'Exposicion operacional alta con concentracion en continuidad.',
+      resumen_ejecutivo: 'Resumen ejecutivo enriquecido.',
+      lectura_cuantitativa: { p95_agregado_conservador: 220, advertencia_p95: 'No es P95 de portafolio.' },
+      hipotesis_operativas: ['La cola se concentra en continuidad.'],
+      causas_probables: [{ causa: 'Falta de prueba DRP', fundamento: 'P95 alto', riesgo_relacionado: 'Caida de servicio critico' }],
       riesgos_prioritarios: [{ nombre: 'Caida de servicio critico', motivo: 'P95 alto', prioridad: 'alta' }],
       acciones_sugeridas: [{ accion: 'Probar recuperacion y reforzar monitoreo.', horizonte: '30_dias' }],
+      acciones_tratamiento: [{ accion: 'Probar recuperacion y reforzar monitoreo.', horizonte: '30_dias', evidencia_esperada: 'Acta de prueba' }],
       controles_iso_sugeridos: [{ norma: 'ISO27001', control_o_clausula: 'A.5.30', descripcion: 'Preparacion TIC para continuidad.' }],
+      evidencia_requerida: [{ evidencia: 'Acta de prueba', tipo: 'prueba' }],
+      criterios_cierre: [{ criterio: 'Prueba aprobada', horizonte: '30_dias' }],
+      riesgos_residuales: [{ riesgo: 'Caida de servicio critico', condicion_residual: 'Persisten fallas raras' }],
+      datos_faltantes: ['historial de incidentes'],
+      nivel_confianza: { nivel: 'medio', justificacion: 'Faltan incidentes historicos.' },
+      uso_sugerido: ['plan_de_accion', 'informe_ejecutivo'],
+      web_context: { used: true, status: 'used', queries: ['ISO 27001 continuity'], sources: [{ title: 'NIST', url: 'https://nist.gov' }] },
       advertencias_metodologicas: ['P95 conservador no es P95 de portafolio.'],
       proximos_pasos: ['Validar owner y umbral operativo.'],
       efectividad_estimada_pct: 35,
@@ -213,6 +225,10 @@ function runTests() {
   assert.equal(saveable.prompt_version, operationalRiskAi.PROMPT_VERSION);
   assert.equal(saveable.source, 'ai-engine-operational-beta-pert');
   assert.equal(saveable.generation_mode, 'semantic_plus_llm');
+  assert.equal(saveable.acciones_tratamiento.length, 1);
+  assert.equal(saveable.evidencia_requerida.length, 1);
+  assert.equal(saveable.web_context.status, 'used');
+  assert.equal(saveable.uso_sugerido.includes('plan_de_accion'), true);
 
   assertThrowsCode(
     () => operationalRiskAi.normalizeAnalysisToSave({ ...normalizedAi, generation_mode: 'semantic_only' }),

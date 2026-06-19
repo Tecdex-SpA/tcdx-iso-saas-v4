@@ -118,6 +118,10 @@ export type OperationalRiskRecommendationResult = {
 
 export type AiAuditorOperationalPayload = {
   scope: 'portfolio' | 'simulation';
+  include_web_context?: boolean;
+  options?: {
+    include_web_context?: boolean;
+  };
   methodology: {
     exposureExpectedAccumulated: string;
     conservativeP95: string;
@@ -137,10 +141,37 @@ export type AiAuditorOperationalPayload = {
 export type OperationalAiAnalysis = {
   diagnostico_ejecutivo: string;
   lectura_portafolio?: string;
+  resumen_ejecutivo?: string;
+  lectura_cuantitativa?: Record<string, unknown> | null;
+  hipotesis_operativas?: unknown[];
+  causas_probables?: unknown[];
   riesgos_prioritarios: unknown[];
   concentracion_exposicion?: unknown[];
   acciones_sugeridas: unknown[];
+  acciones_tratamiento?: unknown[];
   controles_iso_sugeridos: unknown[];
+  evidencia_requerida?: unknown[];
+  criterios_cierre?: unknown[];
+  riesgos_residuales?: unknown[];
+  datos_faltantes?: unknown[];
+  nivel_confianza?: {
+    nivel?: string;
+    justificacion?: string;
+    factores?: unknown[];
+  } | null;
+  uso_sugerido?: unknown[];
+  web_context?: {
+    used?: boolean;
+    status?: 'not_requested' | 'disabled_for_tenant' | 'used' | 'failed' | string;
+    searched_at?: string | null;
+    queries?: string[];
+    sources?: Array<Record<string, unknown>>;
+    external_insights?: string[];
+    external_risk_signals?: string[];
+    external_control_references?: string[];
+    message?: string | null;
+    error?: string | null;
+  } | null;
   advertencias_metodologicas: unknown[];
   proximos_pasos: unknown[];
   efectividad_estimada_pct: number | null;
@@ -163,6 +194,12 @@ export type OperationalAiAnalysisJob = {
   error_code?: string | null;
   error_message?: string | null;
   ai_model?: string | null;
+  request_payload_json?: {
+    include_web_context?: boolean;
+    options?: {
+      include_web_context?: boolean;
+    };
+  } | null;
   created_at: string;
   started_at?: string | null;
   completed_at?: string | null;
@@ -750,12 +787,17 @@ function compactAiRisks(risks: QuantitativeRisk[], selectedRisk: QuantitativeRis
 export function getAiAuditorPayload(
   risks: QuantitativeRisk[],
   selectedRisk: QuantitativeRisk | null,
-  kpis: QuantitativeRiskKpis
+  kpis: QuantitativeRiskKpis,
+  includeWebContext = false
 ): AiAuditorOperationalPayload {
   const compactRisks = compactAiRisks(risks, selectedRisk);
 
   return {
     scope: risks.length > 1 ? 'portfolio' : 'simulation',
+    include_web_context: includeWebContext,
+    options: {
+      include_web_context: includeWebContext,
+    },
     methodology: {
       exposureExpectedAccumulated: 'SUM(media_operativa_anual)',
       conservativeP95: 'SUM(peor_escenario_p95)',

@@ -4,6 +4,7 @@ const pool = require('../config/db');
 const aiEngineClient = require('./aiEngineClient.service');
 const monteCarlo = require('./operationalRiskMonteCarlo.service');
 const operationalRiskAi = require('./operationalRiskAi.service');
+const tenantAiSettings = require('./tenantAiSettings.service');
 
 const JOB_STATUSES = new Set(['pending', 'running', 'completed', 'failed', 'timeout']);
 const ASYNC_AI_TIMEOUT_MS = 420000;
@@ -81,6 +82,7 @@ function createOperationalRiskAiJobsService({
   db = pool,
   engineClient = aiEngineClient,
   aiService = operationalRiskAi,
+  aiSettingsService = tenantAiSettings,
 } = {}) {
   async function assertSimulationForTenant(simulationId, tenantId) {
     if (!simulationId) return null;
@@ -231,14 +233,32 @@ function createOperationalRiskAiJobsService({
         requestId,
         payload: job.request_payload_json || {},
       });
+      const requestedWebContext = job.request_payload_json?.include_web_context === true || job.request_payload_json?.options?.include_web_context === true;
+      let webContextEnabled = false;
+      let webContextReason = requestedWebContext ? 'not_checked' : 'not_requested';
+      if (requestedWebContext) {
+        try {
+          const webFeature = await aiSettingsService.isTenantAiFeatureEnabled(job.tenant_id, 'web_research');
+          webContextEnabled = webFeature.enabled === true;
+          webContextReason = webFeature.reason || (webContextEnabled ? 'ai_enabled' : 'ai_feature_disabled');
+        } catch (error) {
+          webContextEnabled = false;
+          webContextReason = 'ai_feature_check_failed';
+        }
+      }
       aiPayload.options = {
         ...(aiPayload.options || {}),
         execution_mode: 'async_job',
         allow_long_running: true,
+        include_web_context: requestedWebContext && webContextEnabled,
+        web_context_disabled_for_tenant: requestedWebContext && !webContextEnabled,
       };
       aiPayload.request_metadata = {
         ...(aiPayload.request_metadata || {}),
         execution_mode: 'async_job',
+        include_web_context: requestedWebContext && webContextEnabled,
+        web_context_disabled_for_tenant: requestedWebContext && !webContextEnabled,
+        web_context_reason: webContextReason,
       };
 
       console.info('OPERATIONAL RISK AI JOB START:', {
@@ -246,6 +266,8 @@ function createOperationalRiskAiJobsService({
         request_id: requestId,
         execution_mode: aiPayload.options.execution_mode,
         allow_long_running: aiPayload.options.allow_long_running,
+        include_web_context: aiPayload.options.include_web_context,
+        web_context_reason: webContextReason,
         timeout_ms: ASYNC_AI_TIMEOUT_MS,
       });
 

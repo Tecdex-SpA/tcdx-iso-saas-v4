@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import {
   formatRiskNumber,
   getAiAuditorPayload,
@@ -17,8 +18,11 @@ type AiAuditorOperationalRiskPanelProps = {
   loading: boolean;
   historyLoading: boolean;
   saving: boolean;
+  includeWebContext: boolean;
+  webContextAvailable: boolean;
   error?: string;
   successMessage?: string;
+  onIncludeWebContextChange: (value: boolean) => void;
   onGenerate: () => void;
   onSave: () => void;
   onUseJobAnalysis: (job: OperationalAiAnalysisJob) => void;
@@ -29,10 +33,14 @@ function stringifyItem(item: unknown) {
   if (item && typeof item === 'object') {
     const record = item as Record<string, unknown>;
     return String(
-      record.riesgo ||
+        record.riesgo ||
         record.risk ||
         record.accion ||
         record.action ||
+        record.evidencia ||
+        record.criterio ||
+        record.causa ||
+        record.condicion_residual ||
         record.control ||
         record.name ||
         record.title ||
@@ -45,7 +53,7 @@ function stringifyItem(item: unknown) {
 }
 
 function ListBlock({ title, items }: { title: string; items: unknown[] }) {
-  const visible = (items || []).map(stringifyItem).filter(Boolean).slice(0, 6);
+  const visible = (items || []).map(stringifyItem).filter(Boolean).slice(0, 8);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -53,7 +61,7 @@ function ListBlock({ title, items }: { title: string; items: unknown[] }) {
       {visible.length === 0 ? (
         <div className="mt-2 text-sm text-slate-500">Sin elementos reportados.</div>
       ) : (
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+        <ul className="mt-2 max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-sm leading-6 text-slate-700">
           {visible.map((item) => (
             <li key={item}>{item}</li>
           ))}
@@ -101,6 +109,27 @@ function analysisPreview(job: OperationalAiAnalysisJob) {
   return String(job.error_message || 'Intento registrado en historial.').slice(0, 130);
 }
 
+type DetailTab = 'resumen' | 'prioritarios' | 'acciones' | 'controles' | 'web' | 'metodologia';
+
+function jobMatchesDate(job: OperationalAiAnalysisJob, dateFilter: string) {
+  if (dateFilter === 'all') return true;
+  const rawDate = job.completed_at || job.created_at;
+  if (!rawDate) return false;
+  const created = new Date(rawDate).getTime();
+  if (!Number.isFinite(created)) return false;
+  const now = Date.now();
+  if (dateFilter === 'today') return created >= new Date().setHours(0, 0, 0, 0);
+  if (dateFilter === '7d') return now - created <= 7 * 24 * 60 * 60 * 1000;
+  return true;
+}
+
+function webStatusLabel(status?: string) {
+  if (status === 'used') return 'Contexto externo incluido';
+  if (status === 'disabled_for_tenant') return 'Contexto externo no disponible para este tenant';
+  if (status === 'failed') return 'Contexto externo fallido';
+  return 'Contexto externo no solicitado';
+}
+
 export default function AiAuditorOperationalRiskPanel({
   risks,
   selectedRisk,
@@ -111,12 +140,19 @@ export default function AiAuditorOperationalRiskPanel({
   loading,
   historyLoading,
   saving,
+  includeWebContext,
+  webContextAvailable,
   error = '',
   successMessage = '',
+  onIncludeWebContextChange,
   onGenerate,
   onSave,
   onUseJobAnalysis,
 }: AiAuditorOperationalRiskPanelProps) {
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyStatus, setHistoryStatus] = useState<'all' | OperationalAiAnalysisJob['status']>('all');
+  const [historyDate, setHistoryDate] = useState<'all' | 'today' | '7d'>('all');
+  const [activeTab, setActiveTab] = useState<DetailTab>('resumen');
   const payload = getAiAuditorPayload(risks, selectedRisk, kpis);
   const canGenerate = risks.length > 0 && !loading;
   const canSave = Boolean(
@@ -131,6 +167,33 @@ export default function AiAuditorOperationalRiskPanel({
   const engineLabel = analysis?.source === 'ai-engine' || analysis?.ai_engine_used !== false
     ? (analysis?.source === 'ai-engine-operational-beta-pert' ? 'AI operacional Beta-PERT' : 'ai-engine')
     : 'origen no verificable';
+  const filteredJobs = useMemo(() => {
+    const search = historySearch.trim().toLowerCase();
+    return jobs.filter((job) => {
+      if (historyStatus !== 'all' && job.status !== historyStatus) return false;
+      if (!jobMatchesDate(job, historyDate)) return false;
+      if (!search) return true;
+      const text = [
+        job.status,
+        job.ai_model || '',
+        job.error_code || '',
+        job.error_message || '',
+        job.analysis_json?.diagnostico_ejecutivo || '',
+        job.analysis_json?.lectura_portafolio || '',
+        job.analysis_json?.resumen_ejecutivo || '',
+      ].join(' ').toLowerCase();
+      return text.includes(search);
+    });
+  }, [historyDate, historySearch, historyStatus, jobs]);
+  const webContext = analysis?.web_context;
+  const tabs: Array<{ id: DetailTab; label: string }> = [
+    { id: 'resumen', label: 'Resumen' },
+    { id: 'prioritarios', label: 'Riesgos' },
+    { id: 'acciones', label: 'Acciones y evidencias' },
+    { id: 'controles', label: 'Controles ISO' },
+    { id: 'web', label: 'Contexto externo' },
+    { id: 'metodologia', label: 'Metodologia' },
+  ];
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -161,6 +224,24 @@ export default function AiAuditorOperationalRiskPanel({
         </div>
       </div>
 
+      <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 lg:flex-row lg:items-center lg:justify-between">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={includeWebContext}
+            disabled={!webContextAvailable || loading}
+            onChange={(event) => onIncludeWebContextChange(event.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="font-semibold text-slate-900">Incluir contexto externo web</span>
+        </label>
+        <span className="text-xs text-slate-500">
+          {webContextAvailable
+            ? 'Usa consultas sanitizadas y genericas; no envia datos sensibles del tenant.'
+            : 'Requiere web_research habilitado para este tenant.'}
+        </span>
+      </div>
+
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
           <div className="text-xs font-bold uppercase text-slate-500">Riesgos incluidos</div>
@@ -173,6 +254,12 @@ export default function AiAuditorOperationalRiskPanel({
         <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
           <div className="text-xs font-bold uppercase text-slate-500">P95 conservador</div>
           <div className="mt-1 text-sm font-bold text-slate-950">{formatRiskNumber(kpis.conservativeP95)} h</div>
+        </div>
+        <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 md:col-span-3">
+          <div className="text-xs font-bold uppercase text-slate-500">Contexto externo</div>
+          <div className="mt-1 text-sm font-bold text-slate-950">
+            {includeWebContext && webContextAvailable ? 'Solicitado para el proximo job' : webStatusLabel(webContext?.status)}
+          </div>
         </div>
       </div>
 
@@ -219,7 +306,7 @@ export default function AiAuditorOperationalRiskPanel({
         <div className="mt-4 space-y-4">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
             <div className="text-sm font-bold text-blue-950">Diagnostico ejecutivo</div>
-            <p className="mt-2 text-sm leading-6 text-blue-950">{analysis.diagnostico_ejecutivo}</p>
+            <p className="mt-2 text-sm leading-6 text-blue-950">{analysis.resumen_ejecutivo || analysis.diagnostico_ejecutivo}</p>
             {analysis.lectura_portafolio && (
               <p className="mt-2 text-sm leading-6 text-blue-900">{analysis.lectura_portafolio}</p>
             )}
@@ -227,13 +314,84 @@ export default function AiAuditorOperationalRiskPanel({
               Fuente: {engineLabel} - Modelo: {analysis.ai_model || 'ai-engine'} - Modo: {analysis.generation_mode || 'no verificable'} - Prompt: {analysis.prompt_version || 'beta-pert-operational-risk-v1'}
             </div>
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <ListBlock title="Riesgos prioritarios" items={analysis.riesgos_prioritarios || []} />
-            <ListBlock title="Concentracion de exposicion" items={analysis.concentracion_exposicion || []} />
-            <ListBlock title="Acciones sugeridas" items={analysis.acciones_sugeridas || []} />
-            <ListBlock title="Controles ISO sugeridos" items={analysis.controles_iso_sugeridos || []} />
-            <ListBlock title="Advertencias metodologicas" items={analysis.advertencias_metodologicas || []} />
-            <ListBlock title="Proximos pasos" items={analysis.proximos_pasos || []} />
+
+          <div className="rounded-lg border border-slate-200 bg-white">
+            <div className="flex gap-1 overflow-x-auto border-b border-slate-200 px-3 py-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`whitespace-nowrap rounded px-3 py-1.5 text-xs font-bold ${
+                    activeTab === tab.id
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="p-4">
+              {activeTab === 'resumen' && (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <ListBlock title="Lectura cuantitativa" items={[
+                    `Exposicion acumulada: ${formatRiskNumber(Number(analysis.lectura_cuantitativa?.exposicion_esperada_acumulada || 0))}`,
+                    `P95 conservador: ${formatRiskNumber(Number(analysis.lectura_cuantitativa?.p95_agregado_conservador || 0))}`,
+                    String(analysis.lectura_cuantitativa?.advertencia_p95 || 'P95 agregado conservador no equivale a P95 de portafolio simulado.'),
+                  ]} />
+                  <ListBlock title="Hipotesis operativas" items={analysis.hipotesis_operativas || []} />
+                  <ListBlock title="Datos faltantes" items={analysis.datos_faltantes || []} />
+                  <ListBlock title="Nivel de confianza" items={[
+                    `${analysis.nivel_confianza?.nivel || 'medio'}: ${analysis.nivel_confianza?.justificacion || 'Revision humana requerida.'}`,
+                    ...((analysis.nivel_confianza?.factores || []) as unknown[]),
+                  ]} />
+                </div>
+              )}
+              {activeTab === 'prioritarios' && (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <ListBlock title="Riesgos prioritarios" items={analysis.riesgos_prioritarios || []} />
+                  <ListBlock title="Concentracion de exposicion" items={analysis.concentracion_exposicion || []} />
+                  <ListBlock title="Causas probables" items={analysis.causas_probables || []} />
+                  <ListBlock title="Riesgos residuales" items={analysis.riesgos_residuales || []} />
+                </div>
+              )}
+              {activeTab === 'acciones' && (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <ListBlock title="Acciones de tratamiento" items={analysis.acciones_tratamiento || analysis.acciones_sugeridas || []} />
+                  <ListBlock title="Evidencia requerida" items={analysis.evidencia_requerida || []} />
+                  <ListBlock title="Criterios de cierre" items={analysis.criterios_cierre || []} />
+                  <ListBlock title="Proximos pasos" items={analysis.proximos_pasos || []} />
+                </div>
+              )}
+              {activeTab === 'controles' && (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <ListBlock title="Controles ISO sugeridos" items={analysis.controles_iso_sugeridos || []} />
+                  <ListBlock title="Uso sugerido" items={analysis.uso_sugerido || []} />
+                </div>
+              )}
+              {activeTab === 'web' && (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <ListBlock title={webStatusLabel(webContext?.status)} items={[
+                    ...(webContext?.queries || []),
+                    webContext?.message || webContext?.error || '',
+                  ].filter(Boolean)} />
+                  <ListBlock title="Fuentes externas" items={(webContext?.sources || []).map((source) => `${source.title || 'Fuente'} - ${source.url || ''}`)} />
+                  <ListBlock title="Insights externos" items={webContext?.external_insights || []} />
+                  <ListBlock title="Referencias de control externas" items={webContext?.external_control_references || []} />
+                </div>
+              )}
+              {activeTab === 'metodologia' && (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <ListBlock title="Advertencias metodologicas" items={analysis.advertencias_metodologicas || []} />
+                  <ListBlock title="Revision humana" items={[
+                    'El analisis AI queda como insumo operacional; requiere validacion humana antes de plan de accion o decision formal.',
+                    'No afirma certificacion ni cumplimiento ISO.',
+                    'No calcula P95 de portafolio con correlaciones.',
+                  ]} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -249,13 +407,48 @@ export default function AiAuditorOperationalRiskPanel({
           {historyLoading && <span className="text-xs font-semibold text-slate-500">Cargando...</span>}
         </div>
 
+        <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_160px_160px]">
+          <input
+            type="search"
+            value={historySearch}
+            onChange={(event) => setHistorySearch(event.target.value)}
+            placeholder="Buscar diagnostico, error o modelo"
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          />
+          <select
+            value={historyStatus}
+            onChange={(event) => setHistoryStatus(event.target.value as 'all' | OperationalAiAnalysisJob['status'])}
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="all">Todos</option>
+            <option value="completed">Completados</option>
+            <option value="running">En proceso</option>
+            <option value="pending">Pendientes</option>
+            <option value="timeout">Timeout</option>
+            <option value="failed">Fallidos</option>
+          </select>
+          <select
+            value={historyDate}
+            onChange={(event) => setHistoryDate(event.target.value as 'all' | 'today' | '7d')}
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="all">Todas las fechas</option>
+            <option value="today">Hoy</option>
+            <option value="7d">Ultimos 7 dias</option>
+          </select>
+        </div>
+
         {jobs.length === 0 ? (
           <div className="mt-3 rounded border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
             Sin analisis AI registrados para la simulacion seleccionada.
           </div>
+        ) : filteredJobs.length === 0 ? (
+          <div className="mt-3 rounded border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
+            No hay analisis que coincidan con los filtros.
+          </div>
         ) : (
-          <div className="mt-3 space-y-2">
-            {jobs.slice(0, 8).map((job) => (
+          <div className="mt-3 max-h-96 space-y-2 overflow-y-auto pr-1">
+            {filteredJobs.map((job) => (
               <div key={job.id} className="rounded border border-slate-200 bg-white p-3">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0">
@@ -265,6 +458,7 @@ export default function AiAuditorOperationalRiskPanel({
                       </span>
                       <span className="text-xs text-slate-500">{formatDate(job.completed_at || job.created_at)}</span>
                       {job.ai_model && <span className="text-xs text-slate-500">{job.ai_model}</span>}
+                      {job.request_payload_json?.include_web_context && <span className="text-xs text-slate-500">web</span>}
                     </div>
                     <div className="mt-2 text-sm leading-5 text-slate-700">{analysisPreview(job)}</div>
                   </div>
