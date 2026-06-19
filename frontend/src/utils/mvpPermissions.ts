@@ -202,7 +202,9 @@ export const CLIENT_MVP_NAV_ITEMS: MvpNavItem[] = [
 
 export const COMPLIANCE_FUNCTIONAL_MVP_SUBFLOW_ROUTES = [
   '/diagnostico',
+  '/iso-health',
   '/health',
+  '/administrar-kpis',
   '/controles',
   '/soa',
   '/ciclo-vida',
@@ -273,6 +275,7 @@ export const INTERNAL_CLIENT_HIDDEN_ROUTES = [
   '/ejecucion-iso',
   '/hallazgos',
   '/health',
+  '/iso-health',
   '/ia',
   '/ia-auditor',
   '/auditorias/ia',

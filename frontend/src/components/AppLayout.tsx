@@ -107,10 +107,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           label: t('sidebar.evidence'),
         },
         {
-          module_key: 'kpis',
-          routes: ['/administrar-kpis'],
+          module_key: 'health',
+          routes: ['/iso-health', '/health', '/administrar-kpis'],
           fallback: '/dashboard',
-          label: t('sidebar.kpis'),
+          label: 'Health ISO',
         },
       ],
     };
