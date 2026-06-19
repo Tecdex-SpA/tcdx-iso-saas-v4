@@ -130,9 +130,15 @@ function normalizeAiPayload(body = {}) {
 
   const kpis = body.kpis && typeof body.kpis === 'object' ? body.kpis : {};
   const scope = ['portfolio', 'simulation'].includes(String(body.scope || '')) ? body.scope : 'portfolio';
+  const options = body.options && typeof body.options === 'object' ? body.options : {};
+  const includeWebContext = body.include_web_context === true || options.include_web_context === true;
 
   return {
     scope,
+    include_web_context: includeWebContext,
+    options: {
+      include_web_context: includeWebContext,
+    },
     methodology: {
       exposureExpectedAccumulated: 'SUM(media_operativa_anual)',
       conservativeP95: 'SUM(peor_escenario_p95)',
@@ -179,6 +185,7 @@ function buildRequestId() {
 }
 
 function buildAiEnginePayload({ tenantId, requestId, payload }) {
+  const includeWebContext = payload.include_web_context === true || payload.options?.include_web_context === true;
   return {
     tenant_id: tenantId,
     request_id: requestId,
@@ -202,6 +209,7 @@ function buildAiEnginePayload({ tenantId, requestId, payload }) {
       response_format: 'json',
       require_json: true,
       human_review_required: true,
+      include_web_context: includeWebContext,
     },
     request_metadata: {
       request_id: requestId,
@@ -209,6 +217,7 @@ function buildAiEnginePayload({ tenantId, requestId, payload }) {
       view: 'beta-pert',
       prompt_version: PROMPT_VERSION,
       response_schema: 'operational_beta_pert_ai_analysis_v1',
+      include_web_context: includeWebContext,
     },
   };
 }
@@ -360,6 +369,32 @@ function normalizeList(value, normalizer, limit = 8) {
   return asArray(value).map(normalizer).filter(Boolean).slice(0, limit);
 }
 
+function cloneJsonValue(value, fallback = null) {
+  if (value === undefined || value === null) return fallback;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeGenericList(value, limit = 10) {
+  return asArray(value)
+    .map((item) => {
+      if (typeof item === 'string') return safeText(item, '', 1000);
+      if (item && typeof item === 'object') return cloneJsonValue(item, null);
+      return null;
+    })
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function normalizeGenericObject(value, fallback = null) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? cloneJsonValue(value, fallback)
+    : fallback;
+}
+
 function sourceObjectFromAiResult(aiResult) {
   const candidates = collectObjectCandidates(aiResult);
   return candidates.find((candidate) => candidate && typeof candidate === 'object' && !Array.isArray(candidate) && (
@@ -434,6 +469,10 @@ function normalizeOperationalAiAnalysis(aiResult, payload) {
   return {
     diagnostico_ejecutivo: diagnostico,
     lectura_portafolio: lecturaPortafolio,
+    resumen_ejecutivo: safeText(source.resumen_ejecutivo || diagnostico || lecturaPortafolio, '', 3000),
+    lectura_cuantitativa: normalizeGenericObject(source.lectura_cuantitativa, null),
+    hipotesis_operativas: normalizeStringList(source.hipotesis_operativas || source.operational_hypotheses, 10),
+    causas_probables: normalizeGenericList(source.causas_probables || source.probable_causes, 10),
     riesgos_prioritarios: normalizeList(source.riesgos_prioritarios || source.prioritized_risks || source.key_risks, normalizePrioritizedRisk, 10),
     concentracion_exposicion: normalizeList(source.concentracion_exposicion || source.exposure_concentration, (item) => {
       if (!item || typeof item !== 'object') return null;
@@ -446,7 +485,20 @@ function normalizeOperationalAiAnalysis(aiResult, payload) {
       };
     }, 10),
     acciones_sugeridas: acciones,
+    acciones_tratamiento: normalizeGenericList(source.acciones_tratamiento || source.treatment_actions, 10),
     controles_iso_sugeridos: normalizeList(source.controles_iso_sugeridos || source.iso_controls || source.controls, normalizeIsoControl, 10),
+    evidencia_requerida: normalizeGenericList(source.evidencia_requerida || source.required_evidence, 10),
+    criterios_cierre: normalizeGenericList(source.criterios_cierre || source.closure_criteria, 10),
+    riesgos_residuales: normalizeGenericList(source.riesgos_residuales || source.residual_risks, 10),
+    datos_faltantes: normalizeStringList(source.datos_faltantes || source.missing_data, 10),
+    nivel_confianza: normalizeGenericObject(source.nivel_confianza || source.confidence_level, null),
+    uso_sugerido: normalizeStringList(source.uso_sugerido || source.suggested_use, 10),
+    web_context: normalizeGenericObject(source.web_context, {
+      used: false,
+      status: 'not_requested',
+      sources: [],
+      queries: [],
+    }),
     advertencias_metodologicas: normalizeStringList(
       source.advertencias_metodologicas ||
         source.methodology_warnings ||
@@ -461,6 +513,7 @@ function normalizeOperationalAiAnalysis(aiResult, payload) {
     scope: payload.scope,
     source: safeText(source.source, 'ai-engine-operational-beta-pert', 120),
     generation_mode: safeText(source.generation_mode, 'semantic_plus_llm', 80),
+    human_review_required: source.human_review_required !== false,
     guardable: true,
     ai_engine_used: true,
     request_id: aiResult?.metadata?.request_id || aiResult?.request_id || aiResult?.engine?.request_id || null,
@@ -596,6 +649,10 @@ function normalizeAnalysisToSave(value) {
   return {
     diagnostico_ejecutivo: diagnostico,
     lectura_portafolio: safeText(analysis.lectura_portafolio, '', 3000),
+    resumen_ejecutivo: safeText(analysis.resumen_ejecutivo || diagnostico, '', 3000),
+    lectura_cuantitativa: normalizeGenericObject(analysis.lectura_cuantitativa, null),
+    hipotesis_operativas: normalizeStringList(analysis.hipotesis_operativas, 10),
+    causas_probables: normalizeGenericList(analysis.causas_probables, 10),
     riesgos_prioritarios: normalizeList(analysis.riesgos_prioritarios, normalizePrioritizedRisk, 10),
     concentracion_exposicion: normalizeList(analysis.concentracion_exposicion, (item) => {
       if (!item || typeof item !== 'object') return null;
@@ -608,7 +665,20 @@ function normalizeAnalysisToSave(value) {
       };
     }, 10),
     acciones_sugeridas: acciones,
+    acciones_tratamiento: normalizeGenericList(analysis.acciones_tratamiento, 10),
     controles_iso_sugeridos: normalizeList(analysis.controles_iso_sugeridos, normalizeIsoControl, 10),
+    evidencia_requerida: normalizeGenericList(analysis.evidencia_requerida, 10),
+    criterios_cierre: normalizeGenericList(analysis.criterios_cierre, 10),
+    riesgos_residuales: normalizeGenericList(analysis.riesgos_residuales, 10),
+    datos_faltantes: normalizeStringList(analysis.datos_faltantes, 10),
+    nivel_confianza: normalizeGenericObject(analysis.nivel_confianza, null),
+    uso_sugerido: normalizeStringList(analysis.uso_sugerido, 10),
+    web_context: normalizeGenericObject(analysis.web_context, {
+      used: false,
+      status: 'not_requested',
+      sources: [],
+      queries: [],
+    }),
     advertencias_metodologicas: normalizeStringList(analysis.advertencias_metodologicas, 10),
     proximos_pasos: proximosPasos,
     efectividad_estimada_pct: boundedNumber(analysis.efectividad_estimada_pct, null),
@@ -618,6 +688,7 @@ function normalizeAnalysisToSave(value) {
     scope: safeText(analysis.scope || 'portfolio', 'portfolio', 40),
     source: safeText(analysis.source, 'ai-engine-operational-beta-pert', 120),
     generation_mode: generationMode,
+    human_review_required: analysis.human_review_required !== false,
   };
 }
 

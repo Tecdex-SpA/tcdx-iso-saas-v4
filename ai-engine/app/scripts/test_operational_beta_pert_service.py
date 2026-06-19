@@ -53,7 +53,13 @@ def test_llm_prompt_payload_uses_max_three_risks_and_keeps_selected():
 
     assert len(prompt_payload["risks"]) == 3
     assert prompt_payload["risks"][0]["id"] == "selected-risk"
-    assert set(prompt_payload["required_output"].keys()) == {"diagnostico_ejecutivo", "lectura_portafolio"}
+    assert set(prompt_payload["required_output"].keys()) == {
+        "diagnostico_ejecutivo",
+        "lectura_portafolio",
+        "hipotesis_operativas",
+        "datos_faltantes",
+        "nivel_confianza",
+    }
     assert len(prompt_payload["semantic_summary"]["dominios_operacionales"]) == 3
 
 
@@ -74,6 +80,9 @@ def test_normalize_valid_analysis():
     assert analysis["generation_mode"] == service.GENERATION_MODE
     assert len(analysis["riesgos_prioritarios"]) > 0
     assert len(analysis["controles_iso_sugeridos"]) > 0
+    assert analysis["resumen_ejecutivo"]
+    assert analysis["lectura_cuantitativa"]["advertencia_p95"]
+    assert analysis["web_context"]["status"] == "not_requested"
 
 
 def test_normalize_two_field_llm_analysis_completes_semantic_outputs():
@@ -92,6 +101,13 @@ def test_normalize_two_field_llm_analysis_completes_semantic_outputs():
     assert analysis["controles_iso_sugeridos"]
     assert analysis["efectividad_estimada_pct"] is None
     assert analysis["generation_mode"] == service.GENERATION_MODE
+    assert analysis["acciones_tratamiento"][0]["evidencia_esperada"]
+    assert analysis["evidencia_requerida"]
+    assert analysis["criterios_cierre"]
+    assert analysis["riesgos_residuales"]
+    assert analysis["datos_faltantes"]
+    assert analysis["nivel_confianza"]["nivel"] in {"bajo", "medio", "alto"}
+    assert "plan_de_accion" in analysis["uso_sugerido"]
 
 
 def test_normalize_partial_json_from_markdown():
@@ -250,7 +266,7 @@ def test_analyze_uses_direct_contract_slim_options_and_timeout_cap():
 
     assert result["success"] is True
     assert captured["append_default_json_contract"] is False
-    assert captured["response_contract_instruction"] == "Devuelve JSON directo sin wrapper: diagnostico_ejecutivo y lectura_portafolio."
+    assert captured["response_contract_instruction"] == "Devuelve JSON directo sin wrapper: diagnostico_ejecutivo, lectura_portafolio, hipotesis_operativas, datos_faltantes y nivel_confianza."
     assert captured["generation_options_override"] == service.SLIM_LLM_GENERATION_OPTIONS
     assert captured["enforce_timeout_cap"] is True
     assert captured["timeout"] == service.LLM_TIMEOUT_SECONDS
@@ -270,6 +286,46 @@ def test_timeout_policy_sync_and_async_job():
     assert service.resolve_llm_timeout_seconds(sync_payload) == service.LLM_TIMEOUT_SECONDS
     assert service.is_async_long_running(async_payload) is True
     assert service.resolve_llm_timeout_seconds(async_payload) == service.ASYNC_JOB_TIMEOUT_SECONDS
+
+
+def test_web_context_not_requested_by_default_and_disabled_for_tenant():
+    payload = service.sanitize_beta_pert_payload({
+        "risks": [{"id": "risk-1", "name": "Error en liberacion de version", "standard": "ISO9001", "process": "Cambios TI", "p95": 80}],
+        "kpis": {"conservativeP95": 80},
+    })
+    semantic_context = service.build_semantic_context(payload)
+    assert service.build_operational_web_context({}, payload, semantic_context)["status"] == "not_requested"
+    disabled = service.build_operational_web_context(
+        {"options": {"include_web_context": True, "web_context_disabled_for_tenant": True}},
+        payload,
+        semantic_context,
+    )
+    assert disabled["status"] == "disabled_for_tenant"
+    assert disabled["queries"]
+
+
+def test_web_context_failure_does_not_block_analysis():
+    payload = service.sanitize_beta_pert_payload({
+        "risks": [{"id": "risk-1", "name": "Error en liberacion de version", "standard": "ISO9001", "process": "Cambios TI", "p95": 80}],
+        "kpis": {"conservativeP95": 80},
+    })
+    semantic_context = service.build_semantic_context(payload)
+    original = service.build_external_context
+    try:
+        service.build_external_context = lambda _payload: (_ for _ in ()).throw(RuntimeError("web down"))
+        context = service.build_operational_web_context({"options": {"include_web_context": True}}, payload, semantic_context)
+    finally:
+        service.build_external_context = original
+    assert context["status"] == "failed"
+
+    semantic_context["web_context"] = context
+    analysis = service.normalize_beta_pert_analysis({
+        "diagnostico_ejecutivo": "La exposicion operacional es alta por P95 concentrado.",
+        "lectura_portafolio": "El portafolio mantiene foco en cambios TI.",
+        "ai_model": "qwen-test",
+    }, payload, {"model": "qwen-test"}, semantic_context)
+    assert analysis["web_context"]["status"] == "failed"
+    assert analysis["acciones_tratamiento"]
 
 
 def test_analyze_async_job_uses_long_timeout():
@@ -339,6 +395,8 @@ if __name__ == "__main__":
     test_beta_pert_ollama_generation_options_are_slim()
     test_analyze_uses_direct_contract_slim_options_and_timeout_cap()
     test_timeout_policy_sync_and_async_job()
+    test_web_context_not_requested_by_default_and_disabled_for_tenant()
+    test_web_context_failure_does_not_block_analysis()
     test_analyze_async_job_uses_long_timeout()
     test_reject_documental_readiness()
     print("operational beta pert service tests OK")
