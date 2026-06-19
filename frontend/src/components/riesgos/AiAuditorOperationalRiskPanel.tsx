@@ -56,7 +56,7 @@ function ListBlock({ title, items }: { title: string; items: unknown[] }) {
   const visible = (items || []).map(stringifyItem).filter(Boolean).slice(0, 8);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_6px_18px_rgba(8,25,58,0.04)]">
       <div className="text-sm font-bold text-slate-950">{title}</div>
       {visible.length === 0 ? (
         <div className="mt-2 text-sm text-slate-500">Sin elementos reportados.</div>
@@ -196,20 +196,26 @@ export default function AiAuditorOperationalRiskPanel({
   ];
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="overflow-hidden rounded-lg border border-blue-100 bg-[linear-gradient(135deg,#f0f7ff_0%,#ffffff_46%,#f8fbff_100%)] p-5 shadow-[0_14px_38px_rgba(8,25,58,0.08)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-950">AI Auditor v4</h2>
-          <p className="text-sm leading-6 text-slate-600">
-            Analisis operacional bajo demanda con ai-engine. No se ejecuta automaticamente y requiere revision humana.
-          </p>
+        <div className="flex min-w-0 gap-3">
+          <span className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white text-blue-700 shadow-sm sm:flex">
+            AI
+          </span>
+          <div className="min-w-0">
+            <div className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">AI operacional</div>
+            <h2 className="mt-1 text-lg font-bold text-slate-950">AI Auditor v4</h2>
+            <p className="text-sm leading-6 text-slate-600">
+              Analisis operacional bajo demanda con ai-engine. No se ejecuta automaticamente y requiere revision humana.
+            </p>
+          </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
             onClick={onGenerate}
             disabled={!canGenerate}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? 'Procesando...' : 'Generar analisis AI Auditor'}
           </button>
@@ -217,14 +223,14 @@ export default function AiAuditorOperationalRiskPanel({
             type="button"
             onClick={onSave}
             disabled={!canSave}
-            className="rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Guardando...' : 'Guardar como recomendacion'}
           </button>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mt-4 flex flex-col gap-3 rounded-lg border border-blue-100 bg-white/80 px-4 py-3 text-sm text-slate-700 lg:flex-row lg:items-center lg:justify-between">
         <label className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -243,19 +249,19 @@ export default function AiAuditorOperationalRiskPanel({
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="rounded-lg border border-slate-200 bg-white/85 px-3 py-2 shadow-sm">
           <div className="text-xs font-bold uppercase text-slate-500">Riesgos incluidos</div>
           <div className="mt-1 text-lg font-bold text-slate-950">{payload.risks.length}</div>
         </div>
-        <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="rounded-lg border border-slate-200 bg-white/85 px-3 py-2 shadow-sm">
           <div className="text-xs font-bold uppercase text-slate-500">Asociacion para guardado</div>
           <div className="mt-1 truncate text-sm font-bold text-slate-950">{selectedRisk?.name || 'Seleccione un riesgo'}</div>
         </div>
-        <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="rounded-lg border border-slate-200 bg-white/85 px-3 py-2 shadow-sm">
           <div className="text-xs font-bold uppercase text-slate-500">P95 conservador</div>
           <div className="mt-1 text-sm font-bold text-slate-950">{formatRiskNumber(kpis.conservativeP95)} h</div>
         </div>
-        <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 md:col-span-3">
+        <div className="rounded-lg border border-slate-200 bg-white/85 px-3 py-2 shadow-sm md:col-span-3">
           <div className="text-xs font-bold uppercase text-slate-500">Contexto externo</div>
           <div className="mt-1 text-sm font-bold text-slate-950">
             {includeWebContext && webContextAvailable ? 'Solicitado para el proximo job' : webStatusLabel(webContext?.status)}
@@ -299,12 +305,12 @@ export default function AiAuditorOperationalRiskPanel({
       )}
 
       {!analysis ? (
-        <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600">
+        <div className="mt-4 rounded-lg border border-dashed border-blue-200 bg-white/70 px-4 py-5 text-sm leading-6 text-slate-600">
           Genera un analisis AI cuando necesites lectura adicional. Si ai-engine no esta disponible o el tenant no tiene IA habilitada, la vista mantendra la lectura deterministica sin presentarla como IA.
         </div>
       ) : (
         <div className="mt-4 space-y-4">
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="rounded-lg border border-blue-200 bg-white/80 p-4 shadow-sm">
             <div className="text-sm font-bold text-blue-950">Diagnostico ejecutivo</div>
             <p className="mt-2 text-sm leading-6 text-blue-950">{analysis.resumen_ejecutivo || analysis.diagnostico_ejecutivo}</p>
             {analysis.lectura_portafolio && (
@@ -315,7 +321,7 @@ export default function AiAuditorOperationalRiskPanel({
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white">
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div className="flex gap-1 overflow-x-auto border-b border-slate-200 px-3 py-2">
               {tabs.map((tab) => (
                 <button
@@ -396,7 +402,7 @@ export default function AiAuditorOperationalRiskPanel({
         </div>
       )}
 
-      <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="mt-5 rounded-lg border border-slate-200 bg-white/86 p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-bold text-slate-950">Historial de analisis AI</div>
