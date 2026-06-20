@@ -681,7 +681,7 @@ function AiAuditorDashboardCta({ t }: { t: (key: string) => string }) {
 
 
   return (
-    <section className="mb-6 overflow-hidden rounded-lg border border-blue-100 bg-[linear-gradient(135deg,#eef7ff_0%,#ffffff_55%,#f8fbff_100%)] p-5 text-slate-950 shadow-[0_12px_32px_rgba(8,25,58,0.08)]">
+    <section className="enterprise-ai-panel mb-6 overflow-hidden p-5 text-slate-950">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex min-w-0 gap-4">
           <span className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white text-blue-700 shadow-sm md:flex">
@@ -705,7 +705,7 @@ function AiAuditorDashboardCta({ t }: { t: (key: string) => string }) {
 
         <a
           href="/auditorias?view=ia"
-          className="inline-flex items-center justify-center rounded-lg bg-[#0b5cad] px-5 py-3 text-sm font-black text-white shadow-[0_10px_22px_rgba(11,92,173,0.22)] transition hover:bg-[#0f6fd6]"
+          className="enterprise-button-primary"
         >
           {t('aiAuditor.runAnalysis')}
         </a>
@@ -1510,20 +1510,20 @@ function DashboardPageContent() {
   return (
     <AppLayout>
       <AiAuditorDashboardCta t={t} />
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef4ff_0%,#f5f7fb_42%,#edf2f7_100%)]">
-        <div className="mx-auto max-w-[1720px] space-y-6">
-          <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="space-y-6">
+        <div className="space-y-6">
+          <section className="enterprise-page-header">
             <div>
-              <h1 className="text-[2rem] font-bold tracking-tight text-[#06173a]">
+              <h1 className="enterprise-page-title">
                 {t('dashboard.title')}
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="enterprise-page-subtitle">
                 {t('dashboard.subtitle')}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+              <div className="enterprise-toolbar inline-flex p-1">
                 <button
                   type="button"
                   onClick={() => handleViewChange('executive')}
@@ -1564,7 +1564,7 @@ function DashboardPageContent() {
                 </button>
               </div>
 
-              <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm">
+              <div className="enterprise-button-secondary">
                 <TcdxIcon name="calendar" className="h-4 w-4 text-[#2563eb]" />
                 {latestSyncText}
               </div>
@@ -1573,7 +1573,7 @@ function DashboardPageContent() {
                 type="button"
                 onClick={handleRefreshDashboard}
                 disabled={refreshingExecutive}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                className="enterprise-button-secondary disabled:opacity-60"
               >
                 <TcdxIcon name="refresh" className="h-4 w-4" />
                 {refreshingExecutive ? t('common.refreshing') : t('common.refresh')}
@@ -2786,7 +2786,7 @@ function TopCard({
   };
 
   return (
-    <div className="group relative min-h-[132px] overflow-hidden rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.07)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(8,25,58,0.10)]">
+    <div className="enterprise-kpi-card group relative overflow-hidden">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent" />
       <div className="flex items-start justify-between gap-4">
         <div>

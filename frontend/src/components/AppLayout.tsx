@@ -460,7 +460,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-[#06173a]">
+    <div className="enterprise-shell flex h-[100dvh] overflow-hidden">
       <EnglishVisualTextGuard />
       <EnglishDbDisplayTextGuard />
       {pathname.startsWith('/hallazgos') && <EnglishFindingsTextGuard />}
@@ -484,13 +484,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#f8fbff_0%,#f4f7fb_48%,#eef3f8_100%)]">
+      <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#fafcff_0%,#f5f7fa_48%,#eef3f8_100%)]">
         <div className="sticky top-0 z-30">
           <Header onMenuClick={() => setMobileSidebarOpen(true)} />
         </div>
 
-        <main className="tcdx-premium-main tcdx-scrollbar min-w-0 flex-1 overflow-auto px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5 lg:px-8 lg:py-7">
-          <div className="tcdx-premium-view mx-auto w-full max-w-[1800px]">
+        <main className="enterprise-main tcdx-premium-main tcdx-scrollbar min-w-0 flex-1 overflow-auto px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
+          <div className="enterprise-page tcdx-premium-view w-full">
             {children}
           </div>
         </main>

@@ -915,11 +915,11 @@ export default function AdministrarKpisPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 bg-[#f5f7fb] min-h-screen space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="space-y-6">
+        <div className="enterprise-page-header">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">{t('kpiAdmin.title')}</h1>
-            <p className="mt-2 text-slate-500">
+            <h1 className="enterprise-page-title">{t('kpiAdmin.title')}</h1>
+            <p className="enterprise-page-subtitle">
               {t('kpiAdmin.subtitle')}
             </p>
           </div>
@@ -927,7 +927,7 @@ export default function AdministrarKpisPage() {
           <div className="flex flex-wrap gap-3">
             <a
               href="/iso-health"
-              className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
+              className="enterprise-button-secondary border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
             >
               {t('kpiAdmin.viewHealth')}
             </a>
@@ -937,14 +937,14 @@ export default function AdministrarKpisPage() {
               onClick={recalculateKpis}
               disabled={saving === 'recalculate' || !canRefreshHealth}
               title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
-              className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+              className="enterprise-button-primary disabled:opacity-60"
             >
               {saving === 'recalculate' ? t('dashboardKpi.recalculating') : t('dashboardKpi.recalculateKpis')}
             </button>
 
             <a
               href="/dashboard"
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              className="enterprise-button-secondary"
             >
               {t('kpiAdmin.backToDashboard')}
             </a>
@@ -967,7 +967,7 @@ export default function AdministrarKpisPage() {
         />
 
         {manualPendingKpis.length > 0 && (
-          <section className="rounded-[28px] border border-amber-200 bg-amber-50/70 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+          <section className="enterprise-card border-amber-200 bg-amber-50/70">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold text-slate-900">
@@ -1024,7 +1024,7 @@ export default function AdministrarKpisPage() {
           </section>
         )}
 
-        <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)] space-y-4">
+        <section className="enterprise-card space-y-4">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">{t('kpiAdmin.createCustomKpi')}</h2>
             <p className="text-sm text-slate-500 mt-1">
@@ -1221,7 +1221,7 @@ export default function AdministrarKpisPage() {
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)] space-y-4">
+        <section className="enterprise-card space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">{t('kpiAdmin.kpiList')}</h2>
@@ -1582,9 +1582,9 @@ export default function AdministrarKpisPage() {
 
 function MetricCard({ title, value }: { title: string; value: string | number }) {
   return (
-    <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-      <div className="text-sm text-slate-500">{title}</div>
-      <div className="mt-2 text-5xl font-bold tracking-tight text-slate-900">{value}</div>
+    <div className="enterprise-kpi-card">
+      <div className="text-sm font-semibold text-slate-500">{title}</div>
+      <div className="mt-2 text-4xl font-black tracking-tight text-slate-950">{value}</div>
     </div>
   );
 }

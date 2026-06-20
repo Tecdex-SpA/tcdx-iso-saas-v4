@@ -196,7 +196,7 @@ export default function AiAuditorOperationalRiskPanel({
   ];
 
   return (
-    <section className="overflow-hidden rounded-lg border border-blue-100 bg-[linear-gradient(135deg,#f0f7ff_0%,#ffffff_46%,#f8fbff_100%)] p-5 shadow-[0_14px_38px_rgba(8,25,58,0.08)]">
+    <section className="enterprise-ai-panel overflow-hidden p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 gap-3">
           <span className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white text-blue-700 shadow-sm sm:flex">

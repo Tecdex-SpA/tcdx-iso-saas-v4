@@ -468,7 +468,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const displayResults = search.trim().length >= 2 ? searchResults : [];
 
   return (
-    <div className="tcdx-shell-header px-4 py-3 text-white shadow-[0_8px_28px_rgba(8,25,58,0.18)] backdrop-blur-xl md:px-6">
+    <div className="enterprise-topbar tcdx-shell-header px-4 py-3 text-slate-900 md:px-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-4">
           <button
@@ -482,7 +482,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </svg>
           </button>
 
-          <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/7 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm">
             <img
               src={logo}
               className="h-8 max-w-[104px] object-contain sm:max-w-[128px]"
@@ -506,7 +506,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             />
             <div className="hidden min-w-0 lg:block">
               <div className="truncate text-sm font-semibold tracking-[0.01em] text-white">
-                TCDX Compliance 3.0
+                ISOS-SAAS-TECDEX
               </div>
               <div className="truncate text-[11px] text-white/58">
                 {tenant?.name || t('header.tenantActive')}
@@ -518,7 +518,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
         <div className="flex min-w-0 items-center gap-3">
           <div ref={searchRef} className="relative hidden lg:block">
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/48">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                 <TcdxIcon name="search" className="h-4 w-4" />
               </span>
 
@@ -533,10 +533,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 onFocus={() => setSearchOpen(true)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={t('header.searchPlaceholder')}
-                className="w-[440px] rounded-lg border border-white/10 bg-white/7 py-3 pl-10 pr-16 text-sm text-white placeholder:text-white/42 transition focus:border-white/25 focus:bg-white/11 focus:shadow-[0_0_0_4px_rgba(255,255,255,0.08)]"
+                className="w-[440px] rounded-lg border border-slate-200 bg-white py-3 pl-10 pr-16 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-blue-300 focus:bg-white focus:shadow-[0_0_0_4px_rgba(15,111,219,0.12)]"
               />
 
-              <span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-white/10 bg-white/7 px-2 py-0.5 text-[10px] text-white/58 xl:block">
+              <span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-500 xl:block">
                 ⌘K
               </span>
             </div>
@@ -606,20 +606,20 @@ export default function Header({ onMenuClick }: HeaderProps) {
             )}
           </div>
 
-          <div className="hidden xl:flex items-center gap-2 rounded-lg border border-white/10 bg-white/7 px-3 py-2.5 text-xs text-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white">
+          <div className="hidden xl:flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-700 shadow-sm">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-blue-700 shadow-sm">
               <TcdxIcon name="calendar" className="h-4 w-4" />
             </span>
             <div className="leading-tight">
-              <div className="text-[11px] uppercase tracking-wide text-white/46">{t('header.lastSync')}</div>
-              <div className="font-semibold text-white">{lastSync}</div>
+              <div className="text-[11px] uppercase tracking-wide text-slate-400">{t('header.lastSync')}</div>
+              <div className="font-semibold text-slate-900">{lastSync}</div>
             </div>
           </div>
 
           <div className="relative" ref={notificationsRef}>
             <button
               type="button"
-              className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/7 text-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:bg-white/11 hover:text-white"
+              className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-950"
               title={t('header.notifications')}
               onClick={() => setNotificationsOpen((prev) => !prev)}
             >
@@ -684,24 +684,24 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <div className="relative">
               <button
                 type="button"
-                className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/7 px-2.5 py-1.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:bg-white/11"
+                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left shadow-sm transition hover:bg-slate-50"
                 onClick={() => setOpen(!open)}
               >
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt="avatar"
-                    className="h-10 w-10 rounded-full border border-white/20 object-cover shadow-md"
+                    className="h-10 w-10 rounded-full border border-slate-200 object-cover shadow-md"
                   />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/15 text-sm font-bold text-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-blue-100 bg-blue-700 text-sm font-bold text-white">
                     {displayName.charAt(0).toUpperCase()}
                   </div>
                 )}
 
                 <div className="hidden max-w-[220px] sm:block">
-                  <div className="truncate text-sm font-semibold text-white">{displayName}</div>
-                  <div className="truncate text-xs text-white/62">
+                  <div className="truncate text-sm font-semibold text-slate-950">{displayName}</div>
+                  <div className="truncate text-xs text-slate-500">
                     {tenant?.name || user?.role || t('header.userFallback')}
                   </div>
                 </div>
