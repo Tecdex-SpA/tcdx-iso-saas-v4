@@ -61,7 +61,7 @@ export default function QuantitativeRiskDashboard({
       {cards.map((card) => (
         <div
           key={card.key}
-          className="group relative min-h-[132px] overflow-hidden rounded-lg border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(8,25,58,0.07)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(8,25,58,0.10)]"
+          className="enterprise-kpi-card group relative overflow-hidden"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent" />
           <div className="flex items-center gap-4">

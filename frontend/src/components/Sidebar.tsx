@@ -49,11 +49,11 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
       href={href}
       title={label}
       className={[
-        'group flex w-full items-center rounded-lg text-sm font-medium transition-all duration-200',
-        collapsed ? 'justify-center px-2 py-3' : 'justify-start gap-3 px-3 py-2.5 text-left',
+        'enterprise-sidebar-item group flex w-full items-center rounded-lg text-sm font-semibold transition-all duration-200',
+        collapsed ? 'justify-center px-2 py-3' : 'justify-start gap-3 px-3.5 py-3 text-left',
         active
-          ? 'bg-[linear-gradient(135deg,#0f6fd6_0%,#0b5cad_100%)] text-white shadow-[0_14px_30px_rgba(15,111,214,0.34)] ring-1 ring-white/12'
-          : 'text-white/76 hover:bg-white/10 hover:text-white hover:ring-1 hover:ring-white/8',
+          ? 'bg-[linear-gradient(135deg,#1677ff_0%,#0f6fdb_100%)] text-white shadow-[0_14px_30px_rgba(15,111,219,0.34)] ring-1 ring-white/12'
+          : 'text-white/78 hover:bg-white/11 hover:text-white hover:ring-1 hover:ring-white/10',
       ].join(' ')}
     >
       <span
@@ -354,8 +354,8 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   return (
     <aside
       className={[
-        'tcdx-shell-sidebar relative flex h-screen flex-col border-r border-white/10 text-white shadow-[18px_0_42px_rgba(8,25,58,0.22)] transition-all duration-300',
-        collapsed ? 'w-[88px] px-3 pt-4 pb-5' : 'w-[272px] px-4 pt-4 pb-5',
+        'enterprise-sidebar tcdx-shell-sidebar relative flex h-screen flex-col border-r border-white/10 text-white shadow-[18px_0_42px_rgba(8,25,58,0.22)] transition-all duration-300',
+        collapsed ? 'w-[88px] px-3 pt-4 pb-5' : 'w-[252px] px-4 pt-4 pb-5',
       ].join(' ')}
     >
       <button
@@ -375,12 +375,24 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         </svg>
       </button>
 
-      <div className={`relative z-10 mb-5 flex h-14 items-center ${collapsed ? 'justify-center' : 'justify-start pl-1'}`}>
-        <img
-          src={SERVICE_LOGO_SRC}
-          alt="Logo"
-          className={collapsed ? 'h-10 w-10 object-contain' : 'h-auto w-28 scale-[1.45] object-contain origin-left'}
-        />
+      <div className={`relative z-10 mb-6 flex h-14 items-center ${collapsed ? 'justify-center' : 'justify-start gap-3 pl-1'}`}>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <img
+            src={SERVICE_LOGO_SRC}
+            alt="Logo"
+            className="h-7 w-7 object-contain"
+          />
+        </span>
+        {!collapsed && (
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-black tracking-tight text-white">
+              ISOS-SAAS-TECDEX
+            </div>
+            <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              Enterprise ISO
+            </div>
+          </div>
+        )}
       </div>
 
       <nav className="tcdx-scrollbar relative z-10 flex-1 overflow-y-auto pr-1 text-sm">
@@ -446,13 +458,22 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             <img src={SERVICE_LOGO_SRC} alt="Tecdex" className="h-7 w-7 object-contain" />
           </div>
         ) : (
-          <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/42">
-              Powered by
-            </p>
+          <div className="rounded-lg border border-white/10 bg-white/8 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             <div className="flex items-center gap-3">
-              <img src={POWERED_BY_LOGO_SRC} alt="Tecdex" className="h-12 w-auto object-contain" />
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" />
+                  <path d="M9 12l2 2 4-5" />
+                </svg>
+              </span>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/42">
+                  Sistema
+                </p>
+                <p className="mt-1 truncate text-sm font-bold text-white">v2.4.1</p>
+              </div>
             </div>
+            <img src={POWERED_BY_LOGO_SRC} alt="Tecdex" className="mt-3 h-8 w-auto object-contain opacity-80" />
           </div>
         )}
       </div>

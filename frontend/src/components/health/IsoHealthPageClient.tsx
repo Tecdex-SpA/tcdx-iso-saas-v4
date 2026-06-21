@@ -1540,19 +1540,19 @@ export default function HealthDashboardPage() {
 
   return (
     <AppLayout>
-      <div className="min-h-screen bg-gray-100 p-6">
+      <div className="space-y-6">
         {loading && summaries.length === 0 && loadingSprintHealth ? (
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="enterprise-card">
             <p className="text-gray-600">{t('health.loadingDashboard')}</p>
           </div>
         ) : (
           <>
-            <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="enterprise-page-header">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
+                <h1 className="enterprise-page-title">
                   {t('health.title')}
                 </h1>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="enterprise-page-subtitle">
                   {t('health.subtitle')}
                 </p>
               </div>
@@ -1560,8 +1560,8 @@ export default function HealthDashboardPage() {
               <div className="flex flex-col gap-3 sm:flex-row">
                 {summaries.length > 1 && (
                   <select
-                    value={selectedTenantId}
-                    onChange={(e) => handleTenantChange(e.target.value)}
+                  value={selectedTenantId}
+                  onChange={(e) => handleTenantChange(e.target.value)}
                     className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm"
                   >
                     {summaries.map((tenant) => (
@@ -1576,7 +1576,7 @@ export default function HealthDashboardPage() {
                   onClick={refreshHealth}
                   disabled={refreshing || !canRefreshHealth}
                   title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
-                  className="rounded-xl bg-[#1b2733] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#24384a] disabled:opacity-60"
+                  className="enterprise-button-primary disabled:opacity-60"
                 >
                   {refreshing ? t('health.recalculating') : t('health.recalculateHealth')}
                 </button>
@@ -1584,12 +1584,12 @@ export default function HealthDashboardPage() {
             </div>
 
             {error && (
-              <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {error}
               </div>
             )}
 
-            <div className="mb-6">
+            <div>
               <CompanyProfileImpactPanel
                 moduleCode="health"
                 title="Interpretación de salud según Perfil Empresa"
@@ -1597,7 +1597,7 @@ export default function HealthDashboardPage() {
               />
             </div>
 
-            <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="enterprise-card">
               {loadingSprintHealth ? (
                 <div className="rounded-xl border border-blue-100 bg-blue-50 p-5 text-sm text-blue-900">
                   Cargando salud del sistema...

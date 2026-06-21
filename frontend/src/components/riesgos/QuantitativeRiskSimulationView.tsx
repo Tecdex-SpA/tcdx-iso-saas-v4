@@ -442,7 +442,7 @@ export default function QuantitativeRiskSimulationView({
         onCancelEdit={isEditingSimulation ? onCancelEditing : undefined}
       />
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(8,25,58,0.06)]">
+      <div className="enterprise-card">
         <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">Segmentacion operacional</div>
@@ -509,11 +509,11 @@ export default function QuantitativeRiskSimulationView({
       </div>
 
       {loading ? (
-        <div className="rounded-lg border border-slate-200 bg-white px-5 py-8 text-sm text-slate-500 shadow-[0_10px_30px_rgba(8,25,58,0.06)]">
+        <div className="enterprise-empty-state text-sm text-slate-500">
           Cargando simulaciones operativas...
         </div>
       ) : simulations.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-blue-200 bg-white px-5 py-8 text-sm leading-6 text-slate-600 shadow-[0_10px_30px_rgba(8,25,58,0.05)]">
+        <div className="enterprise-empty-state border-dashed border-blue-200 text-sm leading-6 text-slate-600">
           <div className="text-base font-bold text-slate-950">Sin simulaciones operativas guardadas</div>
           <p className="mt-2">
             Ingrese una simulacion operativa para estimar exposicion esperada, P95 conservador y probabilidad critica.
