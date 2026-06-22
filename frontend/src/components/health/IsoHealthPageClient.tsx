@@ -1780,7 +1780,7 @@ export default function HealthDashboardPage() {
                   <div className="border-b border-gray-200 px-4 py-3">
                     <h3 className="text-sm font-semibold text-gray-900">KPIs mínimos reproducibles</h3>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="max-h-[420px] overflow-auto tcdx-scrollbar">
                     <table className="min-w-[840px] w-full text-sm">
                       <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <tr>
@@ -2598,7 +2598,7 @@ export default function HealthDashboardPage() {
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  <div className="max-h-[520px] overflow-auto tcdx-scrollbar">
                     <table className="w-full min-w-[1550px] text-left text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
@@ -2732,7 +2732,7 @@ export default function HealthDashboardPage() {
                       </p>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    <div className="max-h-[420px] overflow-auto tcdx-scrollbar">
                       <table className="w-full min-w-[1050px] text-left text-sm">
                         <thead>
                           <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
@@ -2875,7 +2875,7 @@ export default function HealthDashboardPage() {
                 </select>
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="max-h-[520px] overflow-auto tcdx-scrollbar">
                 <table className="w-full min-w-[1050px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
@@ -3004,7 +3004,7 @@ export default function HealthDashboardPage() {
                 </p>
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="max-h-[420px] overflow-auto tcdx-scrollbar">
                 <table className="w-full min-w-[1200px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">

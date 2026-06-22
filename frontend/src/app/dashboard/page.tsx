@@ -14,8 +14,6 @@ import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import {
-  EnterpriseAiPanel,
-  EnterpriseButton,
   EnterpriseKpiCard,
   EnterprisePageHeader,
 } from '@/components/ui/enterprise';
@@ -680,43 +678,6 @@ function dashboardRuntimeText(key: string, params?: Record<string, string | numb
   }
 
   return value;
-}
-
-
-function AiAuditorDashboardCta({ t }: { t: (key: string) => string }) {
-
-
-  return (
-    <EnterpriseAiPanel className="mb-6 text-slate-950">
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex min-w-0 gap-4">
-          <span className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white text-blue-700 shadow-sm md:flex">
-            <TcdxIcon name="ai" className="h-9 w-9" />
-          </span>
-          <div className="min-w-0">
-            <div className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">
-              {t('aiAuditor.shortTitle')}
-            </div>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
-              {t('aiAuditor.dashboardCtaTitle')}
-            </h2>
-            <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-              {t('aiAuditor.dashboardCtaDescription')}
-            </p>
-            <p className="mt-2 text-xs font-semibold text-amber-700">
-              {t('aiAuditor.humanReviewNote')}
-            </p>
-          </div>
-        </div>
-
-        <EnterpriseButton
-          href="/auditorias?view=ia"
-        >
-          {t('aiAuditor.runAnalysis')}
-        </EnterpriseButton>
-      </div>
-    </EnterpriseAiPanel>
-  );
 }
 
 
@@ -1514,7 +1475,6 @@ function DashboardPageContent() {
 
   return (
     <AppLayout>
-      <AiAuditorDashboardCta t={t} />
       <div className="space-y-6">
         <div className="space-y-6">
           <EnterprisePageHeader

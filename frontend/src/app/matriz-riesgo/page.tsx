@@ -1420,7 +1420,7 @@ function RiskMatrixPageContent() {
                     </span>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  <div className="max-h-[420px] overflow-auto tcdx-scrollbar">
                     <table className="min-w-full text-sm">
                       <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
                         <tr>

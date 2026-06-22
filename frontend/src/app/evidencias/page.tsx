@@ -7,6 +7,7 @@ import { getUserFromToken } from '@/utils/auth';
 import GoogleDriveSourcesPanel from '@/components/evidences/GoogleDriveSourcesPanel';
 import IntegratedEvidenceApprovalPanel from '@/components/evidences/IntegratedEvidenceApprovalPanel';
 import UnifiedEvidenceLibrary from '@/components/evidences/UnifiedEvidenceLibrary';
+import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { clearAiAuditorDraft, formatAiAuditorDraftEvidenceDescription, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
@@ -465,6 +466,7 @@ function EvidenciasPageContent() {
   const [standards, setStandards] = useState<ScopeStandard[]>([]);
   const [iso, setIso] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [evidenceSearch, setEvidenceSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingStandards, setLoadingStandards] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -1195,12 +1197,28 @@ function EvidenciasPageContent() {
   }, [data]);
 
   const filteredData = useMemo(() => {
-    if (!statusFilter) return data;
+    const search = evidenceSearch.trim().toLowerCase();
 
-    return data.filter(
-      (row) => normalizeEvidenceStatus(row.status) === statusFilter
-    );
-  }, [data, statusFilter]);
+    return data.filter((row) => {
+      if (statusFilter && normalizeEvidenceStatus(row.status) !== statusFilter) return false;
+      if (!search) return true;
+
+      return [
+        row.description,
+        row.file_name,
+        row.iso,
+        row.clause,
+        row.control_description,
+        row.operation_name,
+        row.operation_code,
+        row.action_plan_title,
+        row.evidence_type,
+        row.status,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .some((value) => value.includes(search));
+    });
+  }, [data, evidenceSearch, statusFilter]);
 
   if (!token) {
     return (
@@ -1260,6 +1278,14 @@ function EvidenciasPageContent() {
               <option value="aprobada">{t('statuses.evidence.aprobada')}</option>
               <option value="rechazada">{t('statuses.evidence.rechazada')}</option>
             </select>
+
+            <input
+              type="search"
+              value={evidenceSearch}
+              onChange={(e) => setEvidenceSearch(e.target.value)}
+              placeholder="Buscar evidencia, archivo, control..."
+              className="min-w-[240px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+            />
 
             <button
               type="button"
@@ -1646,12 +1672,13 @@ function EvidenciasPageContent() {
 
         {filteredData.length === 0 ? (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 text-gray-500">
-            {statusFilter
+            {statusFilter || evidenceSearch
               ? t('evidence.noEvidenceForFilter')
               : t('evidence.noEvidenceForScope')}
           </div>
         ) : (
-          filteredData.map((e: EvidenceRow) => {
+          <EnterpriseScrollPanel maxHeight="560px" className="space-y-4 pr-2">
+          {filteredData.map((e: EvidenceRow) => {
             const normalizedStatus = normalizeEvidenceStatus(e.status);
             const acceptancePct = toNumber(e.ai_acceptance_pct);
             const aiRisks = parseArray(e.ai_risks);
@@ -2085,7 +2112,8 @@ function EvidenciasPageContent() {
                 )}
               </div>
             );
-          })
+          })}
+          </EnterpriseScrollPanel>
         )}
       </div>
     </AppLayout>

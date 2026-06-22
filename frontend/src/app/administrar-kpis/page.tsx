@@ -7,6 +7,7 @@ import {
   EnterpriseButton,
   EnterpriseKpiCard,
   EnterprisePageHeader,
+  EnterpriseScrollPanel,
 } from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -1339,7 +1340,7 @@ export default function AdministrarKpisPage() {
           ) : filtered.length === 0 ? (
             <div className="text-slate-500">{t('kpiAdmin.noKpisFound')}</div>
           ) : (
-            <div className="space-y-4">
+            <EnterpriseScrollPanel maxHeight="560px" className="space-y-4 pr-2">
               {filtered.map((item) => {
                 const health = isHealthKpi(item);
                 const latestSnapshots = item.latest_snapshots || [];
@@ -1575,7 +1576,7 @@ export default function AdministrarKpisPage() {
                   </div>
                 );
               })}
-            </div>
+            </EnterpriseScrollPanel>
           )}
         </section>
       </div>

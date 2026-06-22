@@ -7,6 +7,7 @@ export { default as EnterpriseKpiCard } from './EnterpriseKpiCard';
 export { default as EnterprisePage } from './EnterprisePage';
 export { default as EnterprisePageHeader } from './EnterprisePageHeader';
 export { default as EnterpriseSection } from './EnterpriseSection';
+export { default as EnterpriseScrollPanel } from './EnterpriseScrollPanel';
 export { default as EnterpriseStatGrid } from './EnterpriseStatGrid';
 export { default as EnterpriseTableShell } from './EnterpriseTableShell';
 export { default as EnterpriseToolbar } from './EnterpriseToolbar';
