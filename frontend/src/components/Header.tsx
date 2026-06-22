@@ -474,7 +474,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <button
             type="button"
             onClick={onMenuClick}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/7 text-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:bg-white/11 hover:text-white lg:hidden"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 lg:hidden"
             title={t('header.openMenu')}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -482,7 +482,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </svg>
           </button>
 
-          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm">
             <img
               src={logo}
               className="h-8 max-w-[104px] object-contain sm:max-w-[128px]"
@@ -505,10 +505,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
               }}
             />
             <div className="hidden min-w-0 lg:block">
-              <div className="truncate text-sm font-semibold tracking-[0.01em] text-white">
+              <div className="truncate text-sm font-bold tracking-[0.01em] text-slate-950">
                 ISOS-SAAS-TECDEX
               </div>
-              <div className="truncate text-[11px] text-white/58">
+              <div className="truncate text-[11px] font-medium text-slate-500">
                 {tenant?.name || t('header.tenantActive')}
               </div>
             </div>
@@ -532,8 +532,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 }}
                 onFocus={() => setSearchOpen(true)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder={t('header.searchPlaceholder')}
-                className="w-[440px] rounded-lg border border-slate-200 bg-white py-3 pl-10 pr-16 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-blue-300 focus:bg-white focus:shadow-[0_0_0_4px_rgba(15,111,219,0.12)]"
+                placeholder={t('header.searchPlaceholder') || 'Buscar controles, evidencias, riesgos...'}
+                className="w-[440px] rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-16 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-blue-300 focus:bg-white focus:shadow-[0_0_0_4px_rgba(15,111,219,0.12)]"
               />
 
               <span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-500 xl:block">

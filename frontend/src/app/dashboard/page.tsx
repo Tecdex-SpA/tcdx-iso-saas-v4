@@ -13,6 +13,12 @@ import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
+import {
+  EnterpriseAiPanel,
+  EnterpriseButton,
+  EnterpriseKpiCard,
+  EnterprisePageHeader,
+} from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
   PieChart,
@@ -681,7 +687,7 @@ function AiAuditorDashboardCta({ t }: { t: (key: string) => string }) {
 
 
   return (
-    <section className="enterprise-ai-panel mb-6 overflow-hidden p-5 text-slate-950">
+    <EnterpriseAiPanel className="mb-6 text-slate-950">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex min-w-0 gap-4">
           <span className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white text-blue-700 shadow-sm md:flex">
@@ -703,14 +709,13 @@ function AiAuditorDashboardCta({ t }: { t: (key: string) => string }) {
           </div>
         </div>
 
-        <a
+        <EnterpriseButton
           href="/auditorias?view=ia"
-          className="enterprise-button-primary"
         >
           {t('aiAuditor.runAnalysis')}
-        </a>
+        </EnterpriseButton>
       </div>
-    </section>
+    </EnterpriseAiPanel>
   );
 }
 
@@ -1512,17 +1517,11 @@ function DashboardPageContent() {
       <AiAuditorDashboardCta t={t} />
       <div className="space-y-6">
         <div className="space-y-6">
-          <section className="enterprise-page-header">
-            <div>
-              <h1 className="enterprise-page-title">
-                {t('dashboard.title')}
-              </h1>
-              <p className="enterprise-page-subtitle">
-                {t('dashboard.subtitle')}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
+          <EnterprisePageHeader
+            title={t('dashboard.title')}
+            subtitle={t('dashboard.subtitle')}
+            actions={
+              <>
               <div className="enterprise-toolbar inline-flex p-1">
                 <button
                   type="button"
@@ -1578,8 +1577,9 @@ function DashboardPageContent() {
                 <TcdxIcon name="refresh" className="h-4 w-4" />
                 {refreshingExecutive ? t('common.refreshing') : t('common.refresh')}
               </button>
-            </div>
-          </section>
+              </>
+            }
+          />
 
           {errorMessage && activeView === 'executive' && (
             <div className="rounded-[28px] border border-red-200 bg-red-50 p-5 text-red-700 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
@@ -2776,59 +2776,51 @@ function TopCard({
   icon: ReactNode;
   ringValue?: number;
 }) {
-  const accentMap: Record<string, string> = {
-    green: 'bg-gradient-to-br from-green-50 to-emerald-50 text-green-700',
-    red: 'bg-gradient-to-br from-red-50 to-rose-50 text-red-700',
-    amber: 'bg-gradient-to-br from-amber-50 to-yellow-50 text-amber-700',
-    rose: 'bg-gradient-to-br from-rose-50 to-red-50 text-rose-700',
-    indigo: 'bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-700',
-    violet: 'bg-gradient-to-br from-violet-50 to-purple-50 text-violet-700',
+  const toneMap: Record<
+    'green' | 'red' | 'amber' | 'rose' | 'indigo' | 'violet',
+    'success' | 'danger' | 'warning' | 'info'
+  > = {
+    green: 'success',
+    red: 'danger',
+    amber: 'warning',
+    rose: 'danger',
+    indigo: 'info',
+    violet: 'info',
   };
 
-  return (
-    <div className="enterprise-kpi-card group relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent" />
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-bold text-[#06173a]">
-            <span>{title}</span>
-            <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-400">
-              i
-            </span>
-          </div>
-          <div className="mt-4 text-4xl font-bold tracking-tight text-[#06173a]">
-            {value}
-          </div>
-          <div className="mt-2 text-sm font-semibold text-[#2563eb]">{change}</div>
-          <div className="mt-0.5 text-xs text-slate-500">{changeHint}</div>
-        </div>
+  const renderedIcon =
+    typeof ringValue === 'number' ? (
+      <span
+        className="relative flex h-16 w-16 items-center justify-center rounded-full"
+        style={{
+          background: `conic-gradient(#2563eb ${Math.max(
+            0,
+            Math.min(100, ringValue)
+          )}%, #e8eef8 0)`,
+        }}
+      >
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#2563eb] shadow-inner">
+          {icon}
+        </span>
+      </span>
+    ) : (
+      icon
+    );
 
-        {typeof ringValue === 'number' ? (
-          <div
-            className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full"
-            style={{
-              background: `conic-gradient(#2563eb ${Math.max(
-                0,
-                Math.min(100, ringValue)
-              )}%, #e8eef8 0)`,
-            }}
-          >
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#2563eb] shadow-inner">
-              {icon}
-            </div>
-          </div>
-        ) : (
-          <div
-            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg ${
-              accentMap[accent]
-            }`}
-          >
-            {icon}
-          </div>
-        )}
-      </div>
-      <div className="mt-3 text-xs text-slate-500">{subtitle}</div>
-    </div>
+  return (
+    <EnterpriseKpiCard
+      label={title}
+      value={value}
+      icon={renderedIcon}
+      tone={toneMap[accent]}
+      delta={change}
+      meta={
+        <>
+          <span>{changeHint}</span>
+          <span className="mt-2 block">{subtitle}</span>
+        </>
+      }
+    />
   );
 }
 

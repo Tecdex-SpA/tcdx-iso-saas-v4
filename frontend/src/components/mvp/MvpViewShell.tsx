@@ -2,6 +2,12 @@
 
 import type { ReactNode } from 'react';
 import AppLayout from '@/components/AppLayout';
+import {
+  EnterpriseBadge,
+  EnterpriseCard,
+  EnterpriseEmptyState,
+  EnterprisePageHeader,
+} from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
 import {
   canAccessMvpFeature,
@@ -55,31 +61,27 @@ export default function MvpViewShell({
   return (
     <AppLayout>
       <div className="space-y-6">
-        <section className="enterprise-card">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
-                {eyebrow}
-              </p>
-              <h1 className="enterprise-page-title mt-3">
-                {title}
-              </h1>
-              <p className="enterprise-page-subtitle">{description}</p>
-            </div>
-
+        <EnterpriseCard>
+          <EnterprisePageHeader
+            eyebrow={eyebrow}
+            title={title}
+            subtitle={description}
+            className="mb-0"
+            actions={
             <div className="enterprise-muted-panel px-4 py-3 text-sm text-slate-600">
               <div className="font-semibold text-slate-900">Rol activo</div>
               <div className="mt-1">{roleGroup === 'unknown' ? role || 'sin rol' : roleGroup}</div>
             </div>
-          </div>
-        </section>
+            }
+          />
+        </EnterpriseCard>
 
         {notes.length > 0 && (
-          <section className="enterprise-card border-amber-200 bg-amber-50 text-sm leading-6 text-amber-900">
+          <EnterpriseCard className="border-amber-200 bg-amber-50 text-sm leading-6 text-amber-900">
             {notes.map((note) => (
               <p key={note}>{note}</p>
             ))}
-          </section>
+          </EnterpriseCard>
         )}
 
         {children}
@@ -91,14 +93,9 @@ export default function MvpViewShell({
               href={link.href}
               className="enterprise-card group transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
             >
-              <div
-                className={[
-                  'inline-flex rounded-lg border px-3 py-1 text-xs font-semibold',
-                  toneClasses[link.tone || 'blue'],
-                ].join(' ')}
-              >
+              <EnterpriseBadge className={toneClasses[link.tone || 'blue']}>
                 MVP
-              </div>
+              </EnterpriseBadge>
               <h2 className="mt-4 text-lg font-semibold text-slate-950 group-hover:text-blue-700">
                 {link.title}
               </h2>
@@ -107,9 +104,11 @@ export default function MvpViewShell({
           ))}
 
           {visibleLinks.length === 0 && (
-            <div className="enterprise-empty-state text-sm text-slate-600">
-              No hay opciones visibles para este rol dentro de esta vista MVP.
-            </div>
+            <EnterpriseEmptyState
+              title="No hay opciones visibles"
+              description="No hay opciones visibles para este rol dentro de esta vista MVP."
+              className="text-sm text-slate-600"
+            />
           )}
         </section>
       </div>

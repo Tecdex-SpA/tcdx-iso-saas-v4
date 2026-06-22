@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { EnterprisePage } from '@/components/ui/enterprise';
 import EnglishVisualTextGuard from './EnglishVisualTextGuard';
 import EnglishDbDisplayTextGuard from '@/components/EnglishDbDisplayTextGuard';
 import EnglishFindingsTextGuard from './EnglishFindingsTextGuard';
@@ -490,9 +491,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <main className="enterprise-main tcdx-premium-main tcdx-scrollbar min-w-0 flex-1 overflow-auto px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
-          <div className="enterprise-page tcdx-premium-view w-full">
+          <EnterprisePage className="enterprise-page-shell">
             {children}
-          </div>
+          </EnterprisePage>
         </main>
       </div>
     </div>
