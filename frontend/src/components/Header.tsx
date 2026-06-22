@@ -57,19 +57,6 @@ function uniqueStrings(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function getInitials(value?: string | null) {
-  const normalized = String(value || '').trim();
-
-  if (!normalized) return 'TC';
-
-  return normalized
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('');
-}
-
 function buildAssetCandidates(value?: string | null) {
   const raw = String(value || '').trim();
 
@@ -440,7 +427,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
     t('header.tenantActive');
   const tenantSubtext = tenant?.plan_name || tenant?.plan || t('header.tenantActive');
   const hasTenantLogo = Boolean(logo && logo !== SERVICE_LOGO_SRC);
-  const tenantInitials = getInitials(tenantDisplayName);
+  const tenantLogoSource = hasTenantLogo ? logo : SERVICE_LOGO_SRC;
 
   const lastSync = new Date().toLocaleString(locale === 'en' ? 'en-US' : 'es-CL', {
     day: '2-digit',
@@ -504,35 +491,29 @@ export default function Header({ onMenuClick }: HeaderProps) {
           </button>
 
           <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            {hasTenantLogo ? (
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-1 shadow-sm">
-                <img
-                  src={logo}
-                  className="max-h-full max-w-full object-contain"
-                  alt={tenant?.name ? `Logo ${tenant.name}` : t('header.clientLogoAlt')}
-                  onError={() => {
-                    setLogoIndex((prev) => {
-                      const next = prev + 1;
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm">
+              <img
+                src={tenantLogoSource}
+                className="max-h-full max-w-full object-contain"
+                alt={tenant?.name ? `Logo ${tenant.name}` : t('header.clientLogoAlt')}
+                onError={() => {
+                  setLogoIndex((prev) => {
+                    const next = prev + 1;
 
-                      if (next < logoCandidates.length) {
-                        return next;
-                      }
+                    if (next < logoCandidates.length) {
+                      return next;
+                    }
 
-                      if (logo !== SERVICE_LOGO_SRC) {
-                        setLogoCandidates([SERVICE_LOGO_SRC]);
-                        return 0;
-                      }
+                    if (logo !== SERVICE_LOGO_SRC) {
+                      setLogoCandidates([SERVICE_LOGO_SRC]);
+                      return 0;
+                    }
 
-                      return prev;
-                    });
-                  }}
-                />
-              </span>
-            ) : (
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-700 text-sm font-black text-white shadow-sm">
-                {tenantInitials}
-              </span>
-            )}
+                    return prev;
+                  });
+                }}
+              />
+            </span>
 
             <div className="hidden min-w-0 lg:block">
               <div className="max-w-[220px] truncate text-[15px] font-black leading-tight tracking-tight text-slate-950 xl:max-w-[280px]">

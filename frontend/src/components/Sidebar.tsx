@@ -18,6 +18,9 @@ const API_URL =
 const SERVICE_LOGO_SRC =
   process.env.NEXT_PUBLIC_TCDX_LOGO_URL || '/logo.png';
 
+const PLATFORM_WORDMARK_SRC =
+  process.env.NEXT_PUBLIC_TCDX_WORDMARK_URL || SERVICE_LOGO_SRC;
+
 const POWERED_BY_LOGO_SRC =
   process.env.NEXT_PUBLIC_TECDX_POWERED_LOGO_URL || '/tecdex.png';
 
@@ -375,22 +378,22 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         </svg>
       </button>
 
-      <div className={`relative z-10 mb-7 flex min-h-16 items-center border-b border-white/10 pb-5 ${collapsed ? 'justify-center' : 'justify-start gap-3.5 pl-1'}`}>
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_12px_30px_rgba(0,0,0,0.18)]">
-          <img
-            src={SERVICE_LOGO_SRC}
-            alt="Logo"
-            className="h-9 w-9 object-contain"
-          />
-        </span>
-        {!collapsed && (
-          <div className="min-w-0">
-            <div className="truncate text-[16px] font-black leading-tight tracking-tight text-white">
-              ISOS-SAAS-TECDEX
-            </div>
-            <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
-              Compliance 360
-            </div>
+      <div className={`relative z-10 mb-7 flex min-h-20 items-center border-b border-white/10 pb-5 ${collapsed ? 'justify-center' : 'justify-center'}`}>
+        {collapsed ? (
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_12px_30px_rgba(0,0,0,0.18)]">
+            <img
+              src={SERVICE_LOGO_SRC}
+              alt="ISOS-SAAS-TECDEX"
+              className="h-10 w-10 object-cover"
+            />
+          </span>
+        ) : (
+          <div className="flex w-full justify-center rounded-2xl border border-white/10 bg-white/8 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_34px_rgba(0,0,0,0.18)]">
+            <img
+              src={PLATFORM_WORDMARK_SRC}
+              alt="ISOS-SAAS-TECDEX Compliance 360"
+              className="h-[58px] w-full max-w-[178px] object-contain"
+            />
           </div>
         )}
       </div>
