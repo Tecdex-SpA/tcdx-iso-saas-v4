@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
 
@@ -599,23 +600,24 @@ export default function UsuariosPage() {
                 : copy.selectCompanyToList}
             </div>
           ) : (
-            users.map((row) => (
-              <div key={row.id} className="border-b p-4 space-y-3">
-                <div className="grid md:grid-cols-5 gap-3">
-                  <div>
-                    <label className="text-sm text-gray-600 block mb-1">{copy.name}</label>
-                    <input
-                      value={row.name || ''}
-                      onChange={(e) =>
-                        setUsers((prev) =>
-                          prev.map((u) =>
-                            u.id === row.id ? { ...u, name: e.target.value } : u
+            <EnterpriseScrollPanel maxHeight="560px">
+              {users.map((row) => (
+                <div key={row.id} className="border-b p-4 space-y-3">
+                  <div className="grid md:grid-cols-5 gap-3">
+                    <div>
+                      <label className="text-sm text-gray-600 block mb-1">{copy.name}</label>
+                      <input
+                        value={row.name || ''}
+                        onChange={(e) =>
+                          setUsers((prev) =>
+                            prev.map((u) =>
+                              u.id === row.id ? { ...u, name: e.target.value } : u
+                            )
                           )
-                        )
-                      }
-                      className="border p-2 rounded w-full"
-                    />
-                  </div>
+                        }
+                        className="border p-2 rounded w-full"
+                      />
+                    </div>
 
                   <div>
                     <label className="text-sm text-gray-600 block mb-1">{copy.email}</label>
@@ -686,8 +688,9 @@ export default function UsuariosPage() {
                     {savingId === row.id ? copy.saving : copy.saveChanges}
                   </button>
                 </div>
-              </div>
-            ))
+                </div>
+              ))}
+            </EnterpriseScrollPanel>
           )}
         </div>
       </div>

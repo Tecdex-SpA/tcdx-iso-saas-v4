@@ -1335,6 +1335,12 @@ export default function AdministrarKpisPage() {
             </button>
           </div>
 
+          {!loading && (
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              {filtered.length} KPI{filtered.length === 1 ? '' : 's'} en la vista actual
+            </div>
+          )}
+
           {loading ? (
             <div className="text-slate-500">{t('kpiAdmin.loadingKpis')}</div>
           ) : filtered.length === 0 ? (

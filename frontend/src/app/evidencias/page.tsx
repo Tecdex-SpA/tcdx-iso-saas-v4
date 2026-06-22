@@ -1670,6 +1670,12 @@ function EvidenciasPageContent() {
           </div>
         )}
 
+        {!loading && filteredData.length > 0 && (
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            {filteredData.length} evidencia{filteredData.length === 1 ? '' : 's'} en la vista actual
+          </div>
+        )}
+
         {filteredData.length === 0 ? (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 text-gray-500">
             {statusFilter || evidenceSearch
