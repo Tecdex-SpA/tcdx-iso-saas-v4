@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
+import {
+  EnterpriseButton,
+  EnterpriseKpiCard,
+  EnterprisePageHeader,
+} from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -916,40 +921,38 @@ export default function AdministrarKpisPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="enterprise-page-header">
-          <div>
-            <h1 className="enterprise-page-title">{t('kpiAdmin.title')}</h1>
-            <p className="enterprise-page-subtitle">
-              {t('kpiAdmin.subtitle')}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <a
+        <EnterprisePageHeader
+          title={t('kpiAdmin.title')}
+          subtitle={t('kpiAdmin.subtitle')}
+          actions={
+            <>
+            <EnterpriseButton
               href="/iso-health"
-              className="enterprise-button-secondary border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+              variant="secondary"
+              className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
             >
               {t('kpiAdmin.viewHealth')}
-            </a>
+            </EnterpriseButton>
 
-            <button
+            <EnterpriseButton
               type="button"
               onClick={recalculateKpis}
               disabled={saving === 'recalculate' || !canRefreshHealth}
               title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
-              className="enterprise-button-primary disabled:opacity-60"
+              className="disabled:opacity-60"
             >
               {saving === 'recalculate' ? t('dashboardKpi.recalculating') : t('dashboardKpi.recalculateKpis')}
-            </button>
+            </EnterpriseButton>
 
-            <a
+            <EnterpriseButton
               href="/dashboard"
-              className="enterprise-button-secondary"
+              variant="secondary"
             >
               {t('kpiAdmin.backToDashboard')}
-            </a>
-          </div>
-        </div>
+            </EnterpriseButton>
+            </>
+          }
+        />
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
           <MetricCard title={t('kpiAdmin.totalKpis')} value={stats.total} />
@@ -1582,10 +1585,11 @@ export default function AdministrarKpisPage() {
 
 function MetricCard({ title, value }: { title: string; value: string | number }) {
   return (
-    <div className="enterprise-kpi-card">
-      <div className="text-sm font-semibold text-slate-500">{title}</div>
-      <div className="mt-2 text-4xl font-black tracking-tight text-slate-950">{value}</div>
-    </div>
+    <EnterpriseKpiCard
+      label={title}
+      value={value}
+      tone="info"
+    />
   );
 }
 

@@ -52,7 +52,7 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
         'enterprise-sidebar-item group flex w-full items-center rounded-lg text-sm font-semibold transition-all duration-200',
         collapsed ? 'justify-center px-2 py-3' : 'justify-start gap-3 px-3.5 py-3 text-left',
         active
-          ? 'bg-[linear-gradient(135deg,#1677ff_0%,#0f6fdb_100%)] text-white shadow-[0_14px_30px_rgba(15,111,219,0.34)] ring-1 ring-white/12'
+          ? 'bg-[linear-gradient(135deg,#1677ff_0%,#0f6fdb_100%)] text-white shadow-[var(--shadow-sidebar-active)] ring-1 ring-white/12'
           : 'text-white/78 hover:bg-white/11 hover:text-white hover:ring-1 hover:ring-white/10',
       ].join(' ')}
     >
@@ -389,7 +389,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               ISOS-SAAS-TECDEX
             </div>
             <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Enterprise ISO
+              Compliance 360
             </div>
           </div>
         )}

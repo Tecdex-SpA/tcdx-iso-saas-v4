@@ -15,6 +15,10 @@ import OperationalRiskSimulationForm, {
 } from './OperationalRiskSimulationForm';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import {
+  EnterpriseCard,
+  EnterpriseEmptyState,
+} from '@/components/ui/enterprise';
+import {
   DEFAULT_QUANTITATIVE_FILTERS,
   HORIZON_OPTIONS,
   buildQuantitativeRisks,
@@ -442,7 +446,7 @@ export default function QuantitativeRiskSimulationView({
         onCancelEdit={isEditingSimulation ? onCancelEditing : undefined}
       />
 
-      <div className="enterprise-card">
+      <EnterpriseCard>
         <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">Segmentacion operacional</div>
@@ -506,18 +510,17 @@ export default function QuantitativeRiskSimulationView({
             </select>
           </label>
         </div>
-      </div>
+      </EnterpriseCard>
 
       {loading ? (
-        <div className="enterprise-empty-state text-sm text-slate-500">
-          Cargando simulaciones operativas...
-        </div>
+        <EnterpriseEmptyState title="Cargando simulaciones operativas..." className="text-sm text-slate-500" />
       ) : simulations.length === 0 ? (
-        <div className="enterprise-empty-state border-dashed border-blue-200 text-sm leading-6 text-slate-600">
-          <div className="text-base font-bold text-slate-950">Sin simulaciones operativas guardadas</div>
-          <p className="mt-2">
-            Ingrese una simulacion operativa para estimar exposicion esperada, P95 conservador y probabilidad critica.
-          </p>
+        <EnterpriseEmptyState
+          title="Sin simulaciones operativas guardadas"
+          description="Ingrese una simulacion operativa para estimar exposicion esperada, P95 conservador y probabilidad critica."
+          className="border-dashed border-blue-200 text-sm leading-6 text-slate-600"
+          action={
+            <>
           <div className="mt-4 grid gap-3 md:grid-cols-4">
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <div className="font-semibold text-slate-900">Minimo</div>
@@ -545,7 +548,9 @@ export default function QuantitativeRiskSimulationView({
               Actualizar
             </button>
           </div>
-        </div>
+            </>
+          }
+        />
       ) : (
         <>
           <QuantitativeRiskDashboard kpis={kpis} unitSuffix={unitSuffix} />

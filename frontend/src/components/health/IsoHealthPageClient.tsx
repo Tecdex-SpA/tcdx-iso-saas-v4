@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
+import {
+  EnterpriseButton,
+  EnterprisePageHeader,
+} from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
 import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
@@ -1547,17 +1551,11 @@ export default function HealthDashboardPage() {
           </div>
         ) : (
           <>
-            <div className="enterprise-page-header">
-              <div>
-                <h1 className="enterprise-page-title">
-                  {t('health.title')}
-                </h1>
-                <p className="enterprise-page-subtitle">
-                  {t('health.subtitle')}
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row">
+            <EnterprisePageHeader
+              title={t('health.title')}
+              subtitle={t('health.subtitle')}
+              actions={
+                <>
                 {summaries.length > 1 && (
                   <select
                   value={selectedTenantId}
@@ -1572,16 +1570,18 @@ export default function HealthDashboardPage() {
                   </select>
                 )}
 
-                <button
+                <EnterpriseButton
+                  type="button"
                   onClick={refreshHealth}
                   disabled={refreshing || !canRefreshHealth}
                   title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
-                  className="enterprise-button-primary disabled:opacity-60"
+                  className="disabled:opacity-60"
                 >
                   {refreshing ? t('health.recalculating') : t('health.recalculateHealth')}
-                </button>
-              </div>
-            </div>
+                </EnterpriseButton>
+                </>
+              }
+            />
 
             {error && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

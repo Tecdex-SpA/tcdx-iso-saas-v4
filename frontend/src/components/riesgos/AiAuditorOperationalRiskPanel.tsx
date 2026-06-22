@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
+  EnterpriseAiPanel,
+  EnterpriseButton,
+} from '@/components/ui/enterprise';
+import {
   formatRiskNumber,
   getAiAuditorPayload,
   type OperationalAiAnalysis,
@@ -196,7 +200,7 @@ export default function AiAuditorOperationalRiskPanel({
   ];
 
   return (
-    <section className="enterprise-ai-panel overflow-hidden p-5">
+    <EnterpriseAiPanel>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 gap-3">
           <span className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white text-blue-700 shadow-sm sm:flex">
@@ -211,22 +215,23 @@ export default function AiAuditorOperationalRiskPanel({
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <button
+          <EnterpriseButton
             type="button"
             onClick={onGenerate}
             disabled={!canGenerate}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? 'Procesando...' : 'Generar analisis AI Auditor'}
-          </button>
-          <button
+          </EnterpriseButton>
+          <EnterpriseButton
             type="button"
             onClick={onSave}
             disabled={!canSave}
-            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            variant="secondary"
+            className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Guardando...' : 'Guardar como recomendacion'}
-          </button>
+          </EnterpriseButton>
         </div>
       </div>
 
@@ -482,6 +487,6 @@ export default function AiAuditorOperationalRiskPanel({
           </div>
         )}
       </div>
-    </section>
+    </EnterpriseAiPanel>
   );
 }
