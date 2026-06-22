@@ -1099,6 +1099,12 @@ function NoConformidadesPageContent() {
           </div>
         )}
 
+        {data.length > 0 && filteredNonconformities.length > 0 && (
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            {filteredNonconformities.length} no conformidad{filteredNonconformities.length === 1 ? '' : 'es'} en la vista actual
+          </div>
+        )}
+
         {data.length === 0 ? (
           <div className="rounded-[30px] border border-slate-200 bg-white p-6 text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
             No hay no conformidades registradas para esta norma.

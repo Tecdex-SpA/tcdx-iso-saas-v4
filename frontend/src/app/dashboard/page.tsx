@@ -1547,12 +1547,6 @@ function DashboardPageContent() {
             </div>
           )}
 
-          <CompanyProfileImpactPanel
-            moduleCode="dashboard"
-            title="Foco operativo según Perfil Empresa"
-            compact
-          />
-
           {activeView === 'executive' && (
             <>
               {loading && (
@@ -1622,6 +1616,12 @@ function DashboardPageContent() {
                     />
 
                   </div>
+
+                  <CompanyProfileImpactPanel
+                    moduleCode="dashboard"
+                    title="Foco operativo según Perfil Empresa"
+                    compact
+                  />
 
                   <SystemHealthDashboardSection
                     data={systemHealthDashboard}

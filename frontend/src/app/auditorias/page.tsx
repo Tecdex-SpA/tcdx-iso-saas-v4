@@ -7,6 +7,7 @@ import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfi
 import IsoAuditorPreview from '@/components/auditor-iso/IsoAuditorPreview';
 import AuditPreparationPanel from '@/components/auditorias/AuditPreparationPanel';
 import IaAuditorPanel from '@/components/auditorias/IaAuditorPanel';
+import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
@@ -1425,7 +1426,7 @@ function AuditProgramPanel() {
                   {t('audits.empty')}
                 </div>
               ) : (
-                <div className="space-y-5">
+                <EnterpriseScrollPanel maxHeight="620px" className="space-y-5 pr-2">
                   {filteredAudits.map((audit) => {
                     const linkedFindings = findingsByAudit[audit.id] || [];
                     const linkedActions = actionsByAudit[audit.id] || [];
@@ -1727,7 +1728,7 @@ function AuditProgramPanel() {
                       </article>
                     );
                   })}
-                </div>
+                </EnterpriseScrollPanel>
               )}
             </section>
           </div>

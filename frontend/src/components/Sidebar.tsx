@@ -375,20 +375,20 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         </svg>
       </button>
 
-      <div className={`relative z-10 mb-6 flex h-14 items-center ${collapsed ? 'justify-center' : 'justify-start gap-3 pl-1'}`}>
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <div className={`relative z-10 mb-7 flex min-h-16 items-center border-b border-white/10 pb-5 ${collapsed ? 'justify-center' : 'justify-start gap-3.5 pl-1'}`}>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_12px_30px_rgba(0,0,0,0.18)]">
           <img
             src={SERVICE_LOGO_SRC}
             alt="Logo"
-            className="h-7 w-7 object-contain"
+            className="h-9 w-9 object-contain"
           />
         </span>
         {!collapsed && (
           <div className="min-w-0">
-            <div className="truncate text-[15px] font-black tracking-tight text-white">
+            <div className="truncate text-[16px] font-black leading-tight tracking-tight text-white">
               ISOS-SAAS-TECDEX
             </div>
-            <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
+            <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
               Compliance 360
             </div>
           </div>

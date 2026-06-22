@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
+import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
 import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -1275,7 +1276,7 @@ function PlanAccionPageContent() {
             No hay planes de acción para esta norma.
           </div>
         ) : (
-          <div className="space-y-5">
+          <EnterpriseScrollPanel maxHeight="620px" className="space-y-5 pr-2">
             {data.map((row: ActionPlanItem) => {
               const isHighlighted = row.id === highlightPlanId;
               const isExpanded = expandedPlanId === row.id;
@@ -1603,7 +1604,7 @@ function PlanAccionPageContent() {
                 </article>
               );
             })}
-          </div>
+          </EnterpriseScrollPanel>
         )}
       </div>
     </AppLayout>
