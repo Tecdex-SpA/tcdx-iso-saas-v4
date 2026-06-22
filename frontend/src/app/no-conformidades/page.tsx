@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
 import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -350,6 +351,7 @@ function NoConformidadesPageContent() {
   const [actionLoading, setActionLoading] = useState<string>('');
 
   const [iso, setIso] = useState('');
+  const [ncSearch, setNcSearch] = useState('');
   const [user, setUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
   const [scope, setScope] = useState<ScopeResponse>({ standards: [], operations: [] });
@@ -375,6 +377,27 @@ function NoConformidadesPageContent() {
   const operationalCodes = useMemo(() => {
     return new Set(operationalStandards.map((s) => s.code).filter(Boolean));
   }, [operationalStandards]);
+
+  const filteredNonconformities = useMemo(() => {
+    const search = ncSearch.trim().toLowerCase();
+    if (!search) return data;
+
+    return data.filter((nc) => {
+      return [
+        getNcTitle(nc),
+        getNcDescription(nc),
+        getNcIso(nc),
+        nc?.clause,
+        nc?.category,
+        nc?.status,
+        nc?.operation_name,
+        nc?.operation_code,
+        nc?.operation_type,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .some((value) => value.includes(search));
+    });
+  }, [data, ncSearch]);
 
   const postWithAuth = async (url: string, body: any) => {
     const authToken = localStorage.getItem('token');
@@ -1053,6 +1076,16 @@ function NoConformidadesPageContent() {
               </select>
             </FilterCard>
 
+            <FilterCard label="Buscar">
+              <input
+                type="search"
+                value={ncSearch}
+                onChange={(e) => setNcSearch(e.target.value)}
+                placeholder="No conformidad, cláusula, operación..."
+                className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none"
+              />
+            </FilterCard>
+
             <MetricInline label="En progreso" value={enProgreso} />
             <MetricInline label="Pend. aprobación" value={pendientesAprobacion} />
             <MetricInline label="Con acción activa" value={Object.keys(openActionsByNc).length} />
@@ -1070,9 +1103,13 @@ function NoConformidadesPageContent() {
           <div className="rounded-[30px] border border-slate-200 bg-white p-6 text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
             No hay no conformidades registradas para esta norma.
           </div>
+        ) : filteredNonconformities.length === 0 ? (
+          <div className="rounded-[30px] border border-slate-200 bg-white p-6 text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            No hay no conformidades que coincidan con la búsqueda.
+          </div>
         ) : (
-          <div className="space-y-5">
-            {data.map((nc) => {
+          <EnterpriseScrollPanel maxHeight="560px" className="space-y-5 pr-2">
+            {filteredNonconformities.map((nc) => {
               const openLinkedAction = openActionsByNc[nc.id];
               const latestLinkedAction = latestActionsByNc[nc.id];
               const aiDraft = aiDraftsByNcId[nc.id];
@@ -1332,7 +1369,7 @@ function NoConformidadesPageContent() {
                 </article>
               );
             })}
-          </div>
+          </EnterpriseScrollPanel>
         )}
       </div>
     </AppLayout>

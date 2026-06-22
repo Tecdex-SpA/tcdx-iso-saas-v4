@@ -7,6 +7,7 @@ type EnterpriseTableShellProps = {
   subtitle?: ReactNode;
   actions?: ReactNode;
   className?: string;
+  maxHeight?: string;
 };
 
 export default function EnterpriseTableShell({
@@ -15,6 +16,7 @@ export default function EnterpriseTableShell({
   subtitle,
   actions,
   className,
+  maxHeight,
 }: EnterpriseTableShellProps) {
   const hasHeader = title || subtitle || actions;
 
@@ -29,7 +31,7 @@ export default function EnterpriseTableShell({
           {actions && <div className="shrink-0">{actions}</div>}
         </div>
       )}
-      <div className="overflow-x-auto tcdx-scrollbar">{children}</div>
+      <div className="overflow-auto tcdx-scrollbar" style={maxHeight ? { maxHeight } : undefined}>{children}</div>
     </section>
   );
 }
