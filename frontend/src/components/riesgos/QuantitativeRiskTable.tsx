@@ -44,9 +44,9 @@ export default function QuantitativeRiskTable({
         <span className="text-xs font-semibold text-slate-500">{risks.length} registro(s)</span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="max-h-[520px] overflow-auto tcdx-scrollbar">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase text-slate-500 shadow-sm">
             <tr>
               <th className="px-4 py-3">Riesgo</th>
               <th className="px-4 py-3">Norma</th>

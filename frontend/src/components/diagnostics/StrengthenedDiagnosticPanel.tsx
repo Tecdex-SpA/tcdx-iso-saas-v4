@@ -450,6 +450,9 @@ export default function StrengthenedDiagnosticPanel() {
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [controlFilter, setControlFilter] = useState('');
+  const [processFilter, setProcessFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const role = normalizeRole(
     getUserFromToken()?.role ||
       getUserFromToken()?.user_role ||
@@ -459,10 +462,55 @@ export default function StrengthenedDiagnosticPanel() {
 
   const selectedStandardRecord = standards.find((standard) => standardId(standard) === selectedStandard);
   const selectedScopeParams = selectedScope(selectedProcess);
-  const controls = detail?.controls || [];
+  const controls = useMemo(() => detail?.controls || [], [detail?.controls]);
   const actionableControls = controls.filter((control) =>
     ['missing_evidence', 'partially_covered', 'needs_review'].includes(String(control.status || ''))
   );
+
+  const processFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+
+    controls.forEach((control) => {
+      const value = control.process?.id || control.operation?.id || control.process?.name || control.operation?.name || '';
+      if (!value) return;
+      map.set(value, control.process?.name || control.operation?.name || 'Sin proceso');
+    });
+
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [controls]);
+
+  const filteredControls = useMemo(() => {
+    const search = controlFilter.trim().toLowerCase();
+
+    return controls.filter((control) => {
+      const statusOk = !statusFilter || String(control.status || '') === statusFilter;
+      const processOk =
+        !processFilter ||
+        control.process?.id === processFilter ||
+        control.operation?.id === processFilter ||
+        control.process?.name === processFilter ||
+        control.operation?.name === processFilter;
+
+      if (!statusOk || !processOk) return false;
+      if (!search) return true;
+
+      return [
+        control.clause,
+        control.category,
+        control.description,
+        control.process?.name,
+        control.operation?.name,
+        control.tenant_control_id,
+        control.catalog_control_id,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .some((value) => value.includes(search));
+    });
+  }, [controlFilter, controls, processFilter, statusFilter]);
+
+  const hasControlFilters = Boolean(controlFilter || processFilter || statusFilter);
 
   const aiByControl = useMemo(() => {
     const map = new Map<string, AiItem>();
@@ -811,8 +859,77 @@ export default function StrengthenedDiagnosticPanel() {
 
           {controls.length > 0 && (
             <div className="overflow-hidden rounded-lg border border-slate-200">
+              <div className="border-b border-slate-100 bg-slate-50/80 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-950">Controles del diagnóstico</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {filteredControls.length}/{controls.length} control(es) visibles.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[760px]">
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-500">Control</span>
+                      <input
+                        type="search"
+                        value={controlFilter}
+                        onChange={(event) => setControlFilter(event.target.value)}
+                        placeholder="Buscar control, cláusula o descripción"
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-500">Proceso</span>
+                      <select
+                        value={processFilter}
+                        onChange={(event) => setProcessFilter(event.target.value)}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                      >
+                        <option value="">Todos</option>
+                        {processFilterOptions.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-500">Estado</span>
+                      <select
+                        value={statusFilter}
+                        onChange={(event) => setStatusFilter(event.target.value)}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                      >
+                        <option value="">Todos</option>
+                        <option value="covered">{statusLabel('covered')}</option>
+                        <option value="partially_covered">{statusLabel('partially_covered')}</option>
+                        <option value="missing_evidence">{statusLabel('missing_evidence')}</option>
+                        <option value="needs_review">{statusLabel('needs_review')}</option>
+                        <option value="not_applicable">{statusLabel('not_applicable')}</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                {hasControlFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setControlFilter('');
+                      setProcessFilter('');
+                      setStatusFilter('');
+                    }}
+                    className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-[560px] overflow-auto tcdx-scrollbar">
               <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm">
                   <tr>
                     <th className="px-4 py-3">Control</th>
                     <th className="px-4 py-3">Proceso</th>
@@ -822,7 +939,7 @@ export default function StrengthenedDiagnosticPanel() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {controls.map((control) => (
+                  {filteredControls.map((control) => (
                     <tr key={controlId(control)}>
                       <td className="px-4 py-3 align-top">
                         <div className="font-medium text-slate-950">{label(control.clause || control.category, 'Control')}</div>
@@ -844,8 +961,16 @@ export default function StrengthenedDiagnosticPanel() {
                       </td>
                     </tr>
                   ))}
+                  {filteredControls.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
+                        No hay controles que coincidan con los filtros aplicados.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 
