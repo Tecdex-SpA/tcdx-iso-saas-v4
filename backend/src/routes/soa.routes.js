@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const soaIntelligence = require('../services/soaIntelligence.service');
 
 const SOA_STANDARDS = [
   'ISO27001',
@@ -25,6 +26,8 @@ const canManageSoA = (req, tenantId) => {
   if (!ensureTenantAccess(req, tenantId)) return false;
   return MANAGE_ROLES.includes(String(req.user?.role || '').toLowerCase());
 };
+
+const getUserId = (req) => req.user?.id || req.user?.user_id || req.user?.sub || null;
 
 const normalizeIso = (value) => String(value || '').trim();
 
@@ -343,6 +346,154 @@ router.post('/:tenant_id/initialize', auth, async (req, res) => {
     res.status(500).json({ error: 'Error inicializando SoA' });
   } finally {
     client.release();
+  }
+});
+
+// =============================
+// 🧠 SOA INTELLIGENCE
+// recomendaciones separadas del SoA oficial
+// =============================
+router.get('/:tenant_id/intelligence', auth, async (req, res) => {
+  try {
+    const { tenant_id } = req.params;
+    const iso = normalizeIso(req.query.iso);
+
+    if (!ensureTenantAccess(req, tenant_id)) {
+      return res.status(403).json({ error: 'No autorizado para este tenant' });
+    }
+    if (!iso) return res.status(400).json({ error: 'iso es obligatoria' });
+    if (!SOA_STANDARDS.includes(iso)) return res.status(400).json({ error: 'La norma no usa SoA' });
+
+    const result = await soaIntelligence.getSoAIntelligence({ tenantId: tenant_id, iso });
+    res.json(result);
+  } catch (err) {
+    console.error('ERROR GET SOA INTELLIGENCE:', err);
+    res.status(500).json({ error: 'Error obteniendo inteligencia SoA' });
+  }
+});
+
+router.get('/:tenant_id/intelligence/:tenant_control_id', auth, async (req, res) => {
+  try {
+    const { tenant_id, tenant_control_id } = req.params;
+    const iso = normalizeIso(req.query.iso);
+
+    if (!ensureTenantAccess(req, tenant_id)) {
+      return res.status(403).json({ error: 'No autorizado para este tenant' });
+    }
+    if (!iso) return res.status(400).json({ error: 'iso es obligatoria' });
+    if (!SOA_STANDARDS.includes(iso)) return res.status(400).json({ error: 'La norma no usa SoA' });
+
+    const result = await soaIntelligence.getSoAControlContext({ tenantId: tenant_id, iso, tenantControlId: tenant_control_id });
+    if (!result) return res.status(404).json({ error: 'Control SoA no encontrado' });
+    res.json(result);
+  } catch (err) {
+    console.error('ERROR GET SOA CONTROL INTELLIGENCE:', err);
+    res.status(500).json({ error: 'Error obteniendo contexto SoA' });
+  }
+});
+
+router.get('/:tenant_id/assessments', auth, async (req, res) => {
+  try {
+    const { tenant_id } = req.params;
+    const iso = normalizeIso(req.query.iso);
+    if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
+    if (!iso) return res.status(400).json({ error: 'iso es obligatoria' });
+    const result = await soaIntelligence.listAssessments({ tenantId: tenant_id, iso });
+    res.json(result);
+  } catch (err) {
+    console.error('ERROR LIST SOA ASSESSMENTS:', err);
+    res.status(500).json({ error: 'Error listando assessments SoA' });
+  }
+});
+
+router.post('/:tenant_id/assessments/run', auth, async (req, res) => {
+  try {
+    const { tenant_id } = req.params;
+    const iso = normalizeIso(req.query.iso);
+    const tenantControlId = req.body?.tenant_control_id;
+    const useAi = req.body?.use_ai === true;
+
+    if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
+    if (!canManageSoA(req, tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+      return res.status(403).json({ error: 'No autorizado para ejecutar evaluación SoA' });
+    }
+    if (!iso) return res.status(400).json({ error: 'iso es obligatoria' });
+    if (!tenantControlId) return res.status(400).json({ error: 'tenant_control_id es obligatorio' });
+
+    const result = await soaIntelligence.runSystemAssessment({ tenantId: tenant_id, iso, tenantControlId, userId: getUserId(req), useAi });
+    if (!result) return res.status(404).json({ error: 'Control SoA no encontrado' });
+    res.json({ ok: true, assessment: result });
+  } catch (err) {
+    console.error('ERROR RUN SOA ASSESSMENT:', err);
+    res.status(500).json({ error: 'Error ejecutando assessment SoA' });
+  }
+});
+
+router.post('/:tenant_id/assessments/run-batch', auth, async (req, res) => {
+  try {
+    const { tenant_id } = req.params;
+    const iso = normalizeIso(req.query.iso);
+    const limit = Number(req.body?.limit || 50);
+    const useAi = req.body?.use_ai === true;
+
+    if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
+    if (!canManageSoA(req, tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+      return res.status(403).json({ error: 'No autorizado para ejecutar lote SoA' });
+    }
+    if (!iso) return res.status(400).json({ error: 'iso es obligatoria' });
+
+    const result = await soaIntelligence.runSystemAssessmentBatch({ tenantId: tenant_id, iso, limit, userId: getUserId(req), useAi });
+    res.json(result);
+  } catch (err) {
+    console.error('ERROR RUN SOA ASSESSMENT BATCH:', err);
+    res.status(500).json({ error: 'Error ejecutando lote SoA' });
+  }
+});
+
+router.post('/:tenant_id/assessments/:assessment_id/apply', auth, async (req, res) => {
+  try {
+    const { tenant_id, assessment_id } = req.params;
+    if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
+    if (!canManageSoA(req, tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+      return res.status(403).json({ error: 'No autorizado para aplicar sugerencias SoA' });
+    }
+    const result = await soaIntelligence.applyAssessment({ tenantId: tenant_id, assessmentId: assessment_id, userId: getUserId(req) });
+    if (!result) return res.status(404).json({ error: 'Assessment no encontrado' });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('ERROR APPLY SOA ASSESSMENT:', err);
+    const status = err?.code === 'ASSESSMENT_CLOSED' ? 409 : 500;
+    res.status(status).json({ error: err?.code === 'ASSESSMENT_CLOSED' ? err.message : 'Error aplicando assessment SoA' });
+  }
+});
+
+router.post('/:tenant_id/assessments/:assessment_id/reject', auth, async (req, res) => {
+  try {
+    const { tenant_id, assessment_id } = req.params;
+    if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
+    if (!canManageSoA(req, tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+      return res.status(403).json({ error: 'No autorizado para rechazar sugerencias SoA' });
+    }
+    const assessment = await soaIntelligence.rejectAssessment({ tenantId: tenant_id, assessmentId: assessment_id, userId: getUserId(req) });
+    if (!assessment) return res.status(404).json({ error: 'Assessment no encontrado o ya cerrado' });
+    res.json({ ok: true, assessment });
+  } catch (err) {
+    console.error('ERROR REJECT SOA ASSESSMENT:', err);
+    res.status(500).json({ error: 'Error rechazando assessment SoA' });
+  }
+});
+
+router.get('/:tenant_id/change-log', auth, async (req, res) => {
+  try {
+    const { tenant_id } = req.params;
+    const iso = normalizeIso(req.query.iso);
+    if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
+    if (!iso) return res.status(400).json({ error: 'iso es obligatoria' });
+    const result = await soaIntelligence.getChangeLog({ tenantId: tenant_id, iso });
+    res.json(result);
+  } catch (err) {
+    console.error('ERROR GET SOA CHANGE LOG:', err);
+    res.status(500).json({ error: 'Error obteniendo historial SoA' });
   }
 });
 

@@ -263,6 +263,37 @@ class AiEngineClient {
     }
   }
 
+  async assessSoAControl(payload, options = {}) {
+    const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
+    const aiAccess = tenantId ? await isTenantAiFeatureEnabled(tenantId, 'auditor') : { enabled: true };
+    if (!aiAccess.enabled) {
+      return this.buildDisabledByPlan(payload, 'auditor', aiAccess.reason);
+    }
+
+    if (!this.baseUrl || !this.token) {
+      return this.buildFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
+    }
+
+    const timeoutMs = Number.parseInt(
+      String(options.timeoutMs || process.env.AI_SOA_ASSESSMENT_TIMEOUT_MS || process.env.AI_AUDITOR_TIMEOUT_MS || this.auditorTimeout),
+      10
+    ) || this.auditorTimeout;
+
+    try {
+      return await this.postJson('/api/ai/soa/assess-control', payload, { timeoutMs });
+    } catch (error) {
+      if (this.isNetworkError(error)) {
+        try {
+          return await this.postJson('/api/ai/soa/assess-control', payload, { timeoutMs });
+        } catch (retryError) {
+          return this.buildFallback(payload, retryError);
+        }
+      }
+
+      return this.buildFallback(payload, error);
+    }
+  }
+
   async analyzeReport(payload, options = {}) {
     const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
     const aiAccess = tenantId ? await isTenantAiFeatureEnabled(tenantId, 'report_enrichment') : { enabled: true };
