@@ -565,13 +565,13 @@ export default function QuantitativeRiskSimulationView({
         />
       ) : (
         <>
-          <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_360px]">
             <BetaPertRiskMatrix
               risks={filteredRisks}
               selectedRiskId={selectedRisk?.id}
               onSelectRisk={selectRisk}
             />
-            <QuantitativeRiskDashboard kpis={kpis} unitSuffix={unitSuffix} />
+            <QuantitativeRiskDashboard kpis={kpis} unitSuffix={unitSuffix} variant="sidePanel" />
           </div>
 
           <QuantitativeRiskMethodologyNote />
