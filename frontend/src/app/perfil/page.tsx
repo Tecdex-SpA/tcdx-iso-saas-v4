@@ -1,7 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import {
+  EnterpriseButton,
+  EnterpriseCard,
+  EnterprisePageHeader,
+} from '@/components/ui/enterprise';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -13,6 +18,10 @@ export default function PerfilPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarError, setAvatarError] = useState('');
+  const [avatarCacheKey, setAvatarCacheKey] = useState('');
 
   const [profileForm, setProfileForm] = useState({
     full_name: '',
@@ -42,6 +51,7 @@ export default function PerfilPage() {
       }
 
       setUser(json);
+      setAvatarCacheKey(String(Date.now()));
       setProfileForm({
         full_name: json.full_name || json.name || '',
         phone: json.phone || '',
@@ -148,14 +158,52 @@ export default function PerfilPage() {
     }
   };
 
-  const uploadAvatar = async (file: File) => {
-    if (!token) return;
+  const handleAvatarSelection = (file?: File | null) => {
+    setAvatarError('');
+
+    if (!file) {
+      setAvatarFile(null);
+      setAvatarPreviewUrl('');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('Selecciona un archivo de imagen válido.');
+      setAvatarFile(null);
+      setAvatarPreviewUrl('');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('La imagen no debe superar 5 MB.');
+      setAvatarFile(null);
+      setAvatarPreviewUrl('');
+      return;
+    }
+
+    const nextPreview = URL.createObjectURL(file);
+    setAvatarFile(file);
+    setAvatarPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return nextPreview;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    };
+  }, [avatarPreviewUrl]);
+
+  const uploadAvatar = async () => {
+    if (!token || !avatarFile) return;
 
     try {
       setUploadingAvatar(true);
+      setAvatarError('');
 
       const fd = new FormData();
-      fd.append('avatar', file);
+      fd.append('avatar', avatarFile);
 
       const res = await fetch(`${API_URL}/api/user/me/avatar`, {
         method: 'POST',
@@ -168,45 +216,50 @@ export default function PerfilPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error subiendo foto');
+        setAvatarError(json.error || 'Error subiendo foto');
         return;
       }
 
       setUser(json);
-      alert('Foto de perfil actualizada');
+      setAvatarFile(null);
+      setAvatarPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return '';
+      });
+      setAvatarCacheKey(String(Date.now()));
+      window.dispatchEvent(new Event('profile-avatar-updated'));
     } catch (err) {
       console.error('ERROR UPLOAD AVATAR:', err);
-      alert('Error subiendo foto');
+      setAvatarError('Error subiendo foto');
     } finally {
       setUploadingAvatar(false);
     }
   };
 
-  const avatarUrl = user?.avatar
-    ? `${API_URL}/uploads/profiles/${user.avatar}?t=${Date.now()}`
-    : null;
+  const avatarUrl = useMemo(() => {
+    if (avatarPreviewUrl) return avatarPreviewUrl;
+    if (!user?.avatar) return null;
+    return `${API_URL}/uploads/profiles/${user.avatar}${avatarCacheKey ? `?t=${avatarCacheKey}` : ''}`;
+  }, [avatarCacheKey, avatarPreviewUrl, user?.avatar]);
 
   if (loading) {
     return (
       <AppLayout>
-        <div className="p-6">Cargando perfil...</div>
+        <div className="enterprise-card">Cargando perfil...</div>
       </AppLayout>
     );
   }
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-6 bg-[#f3f4f6] min-h-screen">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Mi perfil</h1>
-          <p className="text-gray-500 mt-2">
-            Actualiza tus datos personales, foto y contraseña.
-          </p>
-        </div>
+      <div className="space-y-6">
+        <EnterprisePageHeader
+          title="Mi perfil"
+          subtitle="Actualiza tus datos personales, foto y contraseña."
+        />
 
         <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
-          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-            <h2 className="text-xl font-semibold text-gray-900">Foto de perfil</h2>
+          <EnterpriseCard title="Foto de perfil" subtitle="La imagen se previsualiza antes de guardarla." bodyClassName="space-y-4">
 
             <div className="flex justify-center">
               {avatarUrl ? (
@@ -226,20 +279,45 @@ export default function PerfilPage() {
               type="file"
               accept="image/*"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) uploadAvatar(file);
+                handleAvatarSelection(e.target.files?.[0] || null);
               }}
-              className="w-full"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
             />
 
-            <div className="text-sm text-gray-500">
-              {uploadingAvatar ? 'Subiendo foto...' : 'Puedes subir una imagen de perfil.'}
+            {avatarError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {avatarError}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">
+                {avatarFile ? 'Revisa la previsualización antes de guardar.' : 'Puedes subir JPG, PNG o WebP hasta 5 MB.'}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <EnterpriseButton
+                type="button"
+                onClick={uploadAvatar}
+                disabled={!avatarFile || uploadingAvatar}
+              >
+                {uploadingAvatar ? 'Subiendo...' : 'Guardar foto'}
+              </EnterpriseButton>
+
+              {avatarFile && (
+                <EnterpriseButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => handleAvatarSelection(null)}
+                  disabled={uploadingAvatar}
+                >
+                  Cancelar
+                </EnterpriseButton>
+              )}
             </div>
-          </section>
+          </EnterpriseCard>
 
           <div className="space-y-6">
-            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-              <h2 className="text-xl font-semibold text-gray-900">Datos personales</h2>
+            <EnterpriseCard title="Datos personales" bodyClassName="space-y-4">
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -279,17 +357,16 @@ export default function PerfilPage() {
                 </div>
               </div>
 
-              <button
+              <EnterpriseButton
+                type="button"
                 onClick={saveProfile}
                 disabled={savingProfile}
-                className="bg-blue-600 text-white px-4 py-2 rounded-xl disabled:opacity-50"
               >
                 {savingProfile ? 'Guardando...' : 'Guardar perfil'}
-              </button>
-            </section>
+              </EnterpriseButton>
+            </EnterpriseCard>
 
-            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-              <h2 className="text-xl font-semibold text-gray-900">Cambiar contraseña</h2>
+            <EnterpriseCard title="Cambiar contraseña" bodyClassName="space-y-4">
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -323,14 +400,14 @@ export default function PerfilPage() {
                 </div>
               </div>
 
-              <button
+              <EnterpriseButton
+                type="button"
                 onClick={changePassword}
                 disabled={savingPassword}
-                className="bg-green-600 text-white px-4 py-2 rounded-xl disabled:opacity-50"
               >
                 {savingPassword ? 'Actualizando...' : 'Cambiar contraseña'}
-              </button>
-            </section>
+              </EnterpriseButton>
+            </EnterpriseCard>
           </div>
         </div>
       </div>

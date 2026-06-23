@@ -81,6 +81,24 @@ type StandardItem = {
   is_active?: boolean;
 };
 
+type EffectiveHealthRow = {
+  iso?: string;
+  operation_id?: string | null;
+  operation_code?: string | null;
+  operation_name?: string | null;
+  active_scope_controls?: number | string | null;
+  complies_controls?: number | string | null;
+  controls_with_official_evidence?: number | string | null;
+  controls_without_evidence?: number | string | null;
+  deteriorated_controls?: number | string | null;
+  non_compliant_or_no_data_controls?: number | string | null;
+  overdue_action_plans_count?: number | string | null;
+  avg_effective_health_score?: number | string | null;
+  compliance_percentage?: number | string | null;
+  official_evidence_percentage?: number | string | null;
+  kpi_health_status?: string | null;
+};
+
 function formatNumber(value: any, decimals = 2) {
   if (value === null || value === undefined || value === '') return 'N/A';
   const n = Number(value);
@@ -128,6 +146,137 @@ function getHealthRefreshCount(payload: any): number {
   return Number(payload?.health_recalculated || 0);
 }
 
+function toSafeNumber(value: unknown): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function statusColorFromPercent(value: number | null | undefined): 'green' | 'yellow' | 'red' | 'gray' {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'gray';
+  if (value >= 80) return 'green';
+  if (value >= 60) return 'yellow';
+  return 'red';
+}
+
+function buildHealthFallbackMetrics(rows: EffectiveHealthRow[]) {
+  const activeRows = rows.filter((row) => toSafeNumber(row.active_scope_controls) > 0);
+  const totalActive = activeRows.reduce((acc, row) => acc + toSafeNumber(row.active_scope_controls), 0);
+  const complies = activeRows.reduce((acc, row) => acc + toSafeNumber(row.complies_controls), 0);
+  const officialEvidence = activeRows.reduce((acc, row) => acc + toSafeNumber(row.controls_with_official_evidence), 0);
+  const withoutEvidence = activeRows.reduce((acc, row) => acc + toSafeNumber(row.controls_without_evidence), 0);
+  const deteriorated = activeRows.reduce((acc, row) => {
+    return acc + Math.max(
+      toSafeNumber(row.deteriorated_controls),
+      toSafeNumber(row.non_compliant_or_no_data_controls)
+    );
+  }, 0);
+  const overdue = activeRows.reduce((acc, row) => acc + toSafeNumber(row.overdue_action_plans_count), 0);
+  const weightedTotal = activeRows.reduce((acc, row) => acc + Math.max(1, toSafeNumber(row.active_scope_controls)), 0);
+  const weightedScore = activeRows.reduce((acc, row) => {
+    const score = row.avg_effective_health_score === null || row.avg_effective_health_score === undefined
+      ? null
+      : toSafeNumber(row.avg_effective_health_score);
+    if (score === null) return acc;
+    return acc + score * Math.max(1, toSafeNumber(row.active_scope_controls));
+  }, 0);
+
+  const compliancePct = totalActive > 0 ? Math.round((complies / totalActive) * 10000) / 100 : null;
+  const officialEvidencePct = totalActive > 0 ? Math.round((officialEvidence / totalActive) * 10000) / 100 : null;
+  const avgHealthScore = weightedTotal > 0 ? Math.round((weightedScore / weightedTotal) * 100) / 100 : compliancePct;
+
+  return {
+    rows: activeRows,
+    totalActive,
+    compliancePct,
+    officialEvidencePct,
+    avgHealthScore,
+    withoutEvidence,
+    deteriorated,
+    overdue,
+  };
+}
+
+function hasKpiValue(item: KpiAdminItem) {
+  return item.latest_value !== null && item.latest_value !== undefined && item.latest_value !== '';
+}
+
+function enrichHealthKpis(items: KpiAdminItem[], rows: EffectiveHealthRow[]): KpiAdminItem[] {
+  if (!rows.length) return items;
+
+  const metrics = buildHealthFallbackMetrics(rows);
+  const derived: Record<string, { value: number | null; color: 'green' | 'yellow' | 'red' | 'gray' }> = {
+    'KPI-HLT-001': {
+      value: metrics.avgHealthScore,
+      color: statusColorFromPercent(metrics.avgHealthScore),
+    },
+    'KPI-HLT-002': {
+      value: metrics.compliancePct,
+      color: statusColorFromPercent(metrics.compliancePct),
+    },
+    'KPI-HLT-003': {
+      value: metrics.officialEvidencePct,
+      color: statusColorFromPercent(metrics.officialEvidencePct),
+    },
+    'KPI-HLT-004': {
+      value: metrics.deteriorated,
+      color: metrics.deteriorated > 0 ? 'red' : 'green',
+    },
+    'KPI-HLT-005': {
+      value: metrics.withoutEvidence,
+      color: metrics.withoutEvidence > 0 ? 'yellow' : 'green',
+    },
+    'KPI-HLT-006': {
+      value: metrics.overdue,
+      color: metrics.overdue > 0 ? 'red' : 'green',
+    },
+  };
+
+  return items.map((item) => {
+    if (!isHealthKpi(item) || hasKpiValue(item)) return item;
+
+    const metric = derived[item.code];
+    if (!metric || metric.value === null || metric.value === undefined) return item;
+
+    return {
+      ...item,
+      latest_value: metric.value,
+      latest_status_color: metric.color,
+      latest_snapshots: item.latest_snapshots && item.latest_snapshots.length > 0
+        ? item.latest_snapshots
+        : metrics.rows.slice(0, 8).map((row) => {
+            const code = row.iso || null;
+            const value =
+              item.code === 'KPI-HLT-003'
+                ? (row.official_evidence_percentage ?? metrics.officialEvidencePct)
+                : item.code === 'KPI-HLT-004'
+                ? Math.max(toSafeNumber(row.deteriorated_controls), toSafeNumber(row.non_compliant_or_no_data_controls))
+                : item.code === 'KPI-HLT-005'
+                ? toSafeNumber(row.controls_without_evidence)
+                : item.code === 'KPI-HLT-006'
+                ? toSafeNumber(row.overdue_action_plans_count)
+                : (row.avg_effective_health_score ?? row.compliance_percentage ?? metrics.avgHealthScore);
+
+            const numericValue = Number(value);
+            const snapshotColor =
+              item.code === 'KPI-HLT-004' || item.code === 'KPI-HLT-005' || item.code === 'KPI-HLT-006'
+                ? numericValue > 0
+                  ? item.code === 'KPI-HLT-005'
+                    ? 'yellow'
+                    : 'red'
+                  : 'green'
+                : statusColorFromPercent(numericValue);
+
+            return {
+              standard_code: code,
+              value,
+              status_color: snapshotColor,
+              period_type: 'health_effective',
+            };
+          }),
+    };
+  });
+}
+
 export default function AdministrarKpisPage() {
   const { t } = useTranslation();
   const [token, setToken] = useState<string | null>(null);
@@ -136,8 +285,11 @@ export default function AdministrarKpisPage() {
 
   const [standards, setStandards] = useState<StandardItem[]>([]);
   const [data, setData] = useState<KpiAdminItem[]>([]);
+  const [effectiveHealthRows, setEffectiveHealthRows] = useState<EffectiveHealthRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingStandards, setLoadingStandards] = useState(true);
+  const [loadingHealthFallback, setLoadingHealthFallback] = useState(false);
+  const [healthFallbackError, setHealthFallbackError] = useState('');
   const [saving, setSaving] = useState('');
 
   const [filter, setFilter] = useState('');
@@ -211,6 +363,7 @@ export default function AdministrarKpisPage() {
     if (!token || !user?.tenant_id) return;
     loadStandards(user.tenant_id, token);
     loadData(user.tenant_id, token);
+    loadEffectiveHealthRows(user.tenant_id, token);
   }, [token, user]);
 
   const loadStandards = async (tenantId: string, authToken: string) => {
@@ -270,9 +423,63 @@ export default function AdministrarKpisPage() {
     }
   };
 
+  const loadEffectiveHealthRows = async (tenantId: string, authToken: string) => {
+    try {
+      setLoadingHealthFallback(true);
+      setHealthFallbackError('');
+
+      const endpoints = [
+        `${API_URL}/api/kpi/effective-health-summary/${tenantId}`,
+        `${API_URL}/api/kpis/effective-health-summary/${tenantId}`,
+      ];
+
+      let payload: any = null;
+      let lastError: unknown = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          const res = await fetch(endpoint, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          });
+          const json = await res.json();
+
+          if (!res.ok) {
+            throw new Error(json?.error || json?.message || `Error ${res.status}`);
+          }
+
+          payload = json;
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+
+      if (!payload) {
+        throw lastError || new Error('No fue posible cargar Health ISO efectivo.');
+      }
+
+      const rows = Array.isArray(payload?.active_summary)
+        ? payload.active_summary
+        : Array.isArray(payload?.summary)
+          ? payload.summary.filter((row: EffectiveHealthRow) => toSafeNumber(row.active_scope_controls) > 0)
+          : [];
+
+      setEffectiveHealthRows(rows);
+    } catch (err) {
+      console.error('ERROR LOAD KPI HEALTH FALLBACK:', err);
+      setEffectiveHealthRows([]);
+      setHealthFallbackError('No fue posible cargar valores Health ISO iniciales.');
+    } finally {
+      setLoadingHealthFallback(false);
+    }
+  };
+
   const refresh = async () => {
     if (!token || !user?.tenant_id) return;
-    await loadData(user.tenant_id, token);
+    await Promise.all([
+      loadData(user.tenant_id, token),
+      loadEffectiveHealthRows(user.tenant_id, token),
+    ]);
   };
 
   const availableStandards = useMemo(() => {
@@ -291,8 +498,12 @@ export default function AdministrarKpisPage() {
     return Array.from(map.entries()).map(([code, name]) => ({ code, name }));
   }, [standards, data]);
 
+  const enrichedData = useMemo(() => {
+    return enrichHealthKpis(data, effectiveHealthRows);
+  }, [data, effectiveHealthRows]);
+
   const filtered = useMemo(() => {
-    return data.filter((item) => {
+    return enrichedData.filter((item) => {
       const searchText = filter.trim().toLowerCase();
 
       const searchOk =
@@ -324,7 +535,7 @@ export default function AdministrarKpisPage() {
 
       return searchOk && categoryOk && typeOk && statusOk && originOk && standardOk;
     });
-  }, [data, filter, categoryFilter, typeFilter, statusFilter, originFilter, standardFilter]);
+  }, [enrichedData, filter, categoryFilter, typeFilter, statusFilter, originFilter, standardFilter]);
 
   const toggleStandardCode = (code: string) => {
     setForm((prev) => ({
@@ -897,17 +1108,59 @@ export default function AdministrarKpisPage() {
 
   const stats = useMemo(() => {
     return {
-      total: data.length,
-      enabled: data.filter((item) => item.is_enabled).length,
-      standard: data.filter((item) => item.is_standard && !isHealthKpi(item)).length,
-      custom: data.filter((item) => !item.is_standard).length,
-      health: data.filter((item) => isHealthKpi(item)).length,
+      total: enrichedData.length,
+      enabled: enrichedData.filter((item) => item.is_enabled).length,
+      standard: enrichedData.filter((item) => item.is_standard && !isHealthKpi(item)).length,
+      custom: enrichedData.filter((item) => !item.is_standard).length,
+      health: enrichedData.filter((item) => isHealthKpi(item)).length,
       filtered: filtered.length
     };
-  }, [data, filtered]);
+  }, [enrichedData, filtered]);
+
+  const kpiStatusOverview = useMemo(() => {
+    const counts = {
+      green: 0,
+      yellow: 0,
+      red: 0,
+      gray: 0,
+    };
+
+    enrichedData.forEach((item) => {
+      const color = String(item.latest_status_color || '').toLowerCase();
+      if (color === 'green' || color === 'yellow' || color === 'red') {
+        counts[color as 'green' | 'yellow' | 'red'] += 1;
+      } else {
+        counts.gray += 1;
+      }
+    });
+
+    const measured = counts.green + counts.yellow + counts.red;
+    const score = measured > 0
+      ? Math.round((((counts.green * 1) + (counts.yellow * 0.6) + (counts.red * 0.2)) / measured) * 100)
+      : 0;
+
+    return {
+      ...counts,
+      measured,
+      total: enrichedData.length,
+      score,
+    };
+  }, [enrichedData]);
+
+  const kpiCategoryOverview = useMemo(() => {
+    const counts = new Map<string, number>();
+    enrichedData.forEach((item) => {
+      counts.set(item.category || 'otros', (counts.get(item.category || 'otros') || 0) + 1);
+    });
+
+    return Array.from(counts.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [enrichedData]);
 
   const manualPendingKpis = useMemo(() => {
-    return data
+    return enrichedData
       .filter((item) => item.is_enabled)
       .filter((item) => !isHealthKpi(item))
       .filter((item) => ['manual', 'hibrido'].includes(String(item.kpi_type || '').toLowerCase()))
@@ -917,7 +1170,7 @@ export default function AdministrarKpisPage() {
         return !color || color === 'gray' || value === null || value === undefined || value === '';
       })
       .slice(0, 8);
-  }, [data]);
+  }, [enrichedData]);
 
   return (
     <AppLayout>
@@ -954,6 +1207,80 @@ export default function AdministrarKpisPage() {
             </>
           }
         />
+
+        <section className="enterprise-card space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Estado general de KPI
+              </p>
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+                Distribución operativa y salud de medición
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                Los KPI Health cargan lectura inicial desde Health ISO efectivo cuando aún no existe snapshot administrativo.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-right">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">Score KPI</p>
+              <p className="mt-1 text-3xl font-black text-slate-950">{kpiStatusOverview.score}%</p>
+            </div>
+          </div>
+
+          {healthFallbackError && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {healthFallbackError}
+            </div>
+          )}
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-950">Semáforo de estado</h3>
+                  <p className="text-xs text-slate-500">
+                    {kpiStatusOverview.measured}/{kpiStatusOverview.total} KPI(s) con valor disponible
+                  </p>
+                </div>
+                {loadingHealthFallback && (
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-blue-700">
+                    Cargando Health...
+                  </span>
+                )}
+              </div>
+              <div className="space-y-3">
+                <KpiStatusBar label={t('statuses.kpis.verde')} count={kpiStatusOverview.green} total={kpiStatusOverview.total} color="#16a34a" />
+                <KpiStatusBar label={t('statuses.kpis.amarillo')} count={kpiStatusOverview.yellow} total={kpiStatusOverview.total} color="#f59e0b" />
+                <KpiStatusBar label={t('statuses.kpis.rojo')} count={kpiStatusOverview.red} total={kpiStatusOverview.total} color="#dc2626" />
+                <KpiStatusBar label={t('common.noData')} count={kpiStatusOverview.gray} total={kpiStatusOverview.total} color="#94a3b8" />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-slate-950">Distribución por categoría</h3>
+                <p className="text-xs text-slate-500">Lectura por categoría disponible en el catálogo actual.</p>
+              </div>
+              {kpiCategoryOverview.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+                  Sin KPIs para graficar.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {kpiCategoryOverview.map((item) => (
+                    <KpiStatusBar
+                      key={item.category}
+                      label={item.category}
+                      count={item.count}
+                      total={Math.max(1, kpiStatusOverview.total)}
+                      color="#2563eb"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
           <MetricCard title={t('kpiAdmin.totalKpis')} value={stats.total} />
@@ -1028,15 +1355,20 @@ export default function AdministrarKpisPage() {
           </section>
         )}
 
-        <section className="enterprise-card space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">{t('kpiAdmin.createCustomKpi')}</h2>
-            <p className="text-sm text-slate-500 mt-1">
-              {t('kpiAdmin.createCustomSubtitle')}
-            </p>
-          </div>
+        <details className="enterprise-card group">
+          <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">{t('kpiAdmin.createCustomKpi')}</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                {t('kpiAdmin.createCustomSubtitle')}
+              </p>
+            </div>
+            <span className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition group-open:bg-blue-50 group-open:text-blue-700">
+              Configurar
+            </span>
+          </summary>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             <input
               value={form.code}
               onChange={(e) => setForm({ ...form, code: e.target.value })}
@@ -1223,7 +1555,7 @@ export default function AdministrarKpisPage() {
               {saving === 'create' ? t('health.creating') : t('kpiAdmin.createCustomKpi')}
             </button>
           </div>
-        </section>
+        </details>
 
         <section className="enterprise-card space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1316,7 +1648,7 @@ export default function AdministrarKpisPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
             <div className="text-sm text-slate-600">
               {t('kpiAdmin.showing')} <span className="font-semibold text-slate-900">{filtered.length}</span> {t('kpiAdmin.of')}{' '}
-              <span className="font-semibold text-slate-900">{data.length}</span> KPI(s)
+              <span className="font-semibold text-slate-900">{enrichedData.length}</span> KPI(s)
             </div>
 
             <button
@@ -1597,6 +1929,35 @@ function MetricCard({ title, value }: { title: string; value: string | number })
       value={value}
       tone="info"
     />
+  );
+}
+
+function KpiStatusBar({
+  label,
+  count,
+  total,
+  color,
+}: {
+  label: string;
+  count: number;
+  total: number;
+  color: string;
+}) {
+  const width = total > 0 ? Math.round((count / total) * 100) : 0;
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+        <span className="font-semibold text-slate-700">{label}</span>
+        <span className="font-bold text-slate-950">{count}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-white">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${Math.max(count > 0 ? 4 : 0, width)}%`, background: color }}
+        />
+      </div>
+    </div>
   );
 }
 
