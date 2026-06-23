@@ -1530,8 +1530,8 @@ function ControlesPageContent() {
         )}
 
         {selectedISO && selectedOperationId && (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)] items-start">
-            <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+          <div className="flex flex-col gap-6">
+            <section className="order-2 rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
@@ -1550,7 +1550,7 @@ function ControlesPageContent() {
                 </div>
               )}
 
-              <div className="space-y-4">
+              <div className="max-h-[420px] space-y-4 overflow-y-auto pr-2 tcdx-scrollbar">
                 {Object.entries(groupedAvailable).map(([clause, items]) => {
                   const collapsed = collapsedAvailableClauses[clause] === true;
 
@@ -1618,7 +1618,7 @@ function ControlesPageContent() {
               </div>
             </section>
 
-            <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            <section className="order-1 rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
@@ -1639,7 +1639,7 @@ function ControlesPageContent() {
                 </div>
               )}
 
-              <div className="space-y-5">
+              <div className="max-h-[760px] space-y-5 overflow-y-auto pr-2 tcdx-scrollbar">
                 {Object.entries(groupedEnabled).map(([clause, items]) => {
                   const collapsed = collapsedEnabledClauses[clause] === true;
 
@@ -1659,7 +1659,7 @@ function ControlesPageContent() {
                       </button>
 
                       {!collapsed && (
-                        <div className="space-y-4 p-4">
+                        <div className="space-y-3 p-3">
                           {items.map((item: WorkbenchItem) => {
                             const draft = drafts[item.tenant_control_id] || emptyDraft(item);
                             const saving = actionLoading === `save-${item.tenant_control_id}`;
@@ -1675,7 +1675,7 @@ function ControlesPageContent() {
                               <article
                                 key={item.tenant_control_id}
                                 id={`control-${item.tenant_control_id}`}
-                                className={`rounded-[24px] border p-4 shadow-sm ${healthCardClass(
+                                className={`rounded-[22px] border p-3 shadow-sm ${healthCardClass(
                                   getEffectiveHealthStatus(item)
                                 )} ${
                                   focusedControlId === item.tenant_control_id
@@ -1721,7 +1721,7 @@ function ControlesPageContent() {
                                     </div>
 
                                     <div>
-                                      <h3 className="text-xl font-semibold tracking-tight text-slate-900">
+                                      <h3 className="text-base font-semibold tracking-tight text-slate-900">
                                         {translateClauseLabel(item.clause || 'Sin cláusula', locale)} · {translateControlLabel(item.description, locale)}
                                       </h3>
                                       <div className="mt-1 text-sm text-slate-500">
@@ -1763,7 +1763,7 @@ function ControlesPageContent() {
                                   )}
                                 </div>
 
-                                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                   <FieldBlock label={t('common.status')}>
                                     <select
                                       value={draft.status}
@@ -1885,7 +1885,7 @@ function ControlesPageContent() {
                                   </FieldBlock>
                                 </div>
 
-                                <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                                   <div className="flex flex-wrap gap-2">
                                     <button
                                       onClick={() => void openQuickNonconformity(item)}

@@ -432,20 +432,6 @@ export default function QuantitativeRiskSimulationView({
 
   return (
     <section className="space-y-5">
-      <OperationalRiskSimulationForm
-        form={form}
-        onChange={onFormChange}
-        onSubmit={onSubmitSimulation}
-        loading={formLoading}
-        disabled={!canCreateSimulation}
-        error={error}
-        successMessage={message}
-        mode={isEditingSimulation ? 'edit' : 'create'}
-        editingLabel={editingSimulationLabel}
-        submitLabel={submitLabel || (isEditingSimulation ? 'Guardar como nueva simulacion' : 'Ejecutar y guardar simulacion')}
-        onCancelEdit={isEditingSimulation ? onCancelEditing : undefined}
-      />
-
       <EnterpriseCard>
         <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -454,7 +440,18 @@ export default function QuantitativeRiskSimulationView({
           </div>
           <div className="text-xs text-slate-500">Actualiza KPI, matriz, panel y tabla sin cambiar datos guardados.</div>
         </div>
-        <div className="grid gap-4 lg:grid-cols-4">
+        <div className="grid gap-4 lg:grid-cols-6">
+          <label className="block lg:col-span-2">
+            <span className="text-xs font-bold text-slate-600">Riesgo evaluado</span>
+            <input
+              type="search"
+              value={filters.search}
+              onChange={(event) => updateFilter('search', event.target.value)}
+              placeholder="Buscar por riesgo, codigo o proceso"
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+            />
+          </label>
+
           <label className="block">
             <span className="text-xs font-bold text-slate-600">Norma</span>
             <select
@@ -494,6 +491,21 @@ export default function QuantitativeRiskSimulationView({
               {unitOptions.map((unit) => (
                 <option key={unit} value={unit}>{unit}</option>
               ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-bold text-slate-600">Criticidad</span>
+            <select
+              value={filters.status}
+              onChange={(event) => updateFilter('status', event.target.value)}
+              className={selectClassName()}
+            >
+              <option value="all">Todas</option>
+              <option value="critico">Critica</option>
+              <option value="alto">Alta</option>
+              <option value="medio">Media</option>
+              <option value="bajo">Baja</option>
             </select>
           </label>
 
@@ -553,7 +565,14 @@ export default function QuantitativeRiskSimulationView({
         />
       ) : (
         <>
-          <QuantitativeRiskDashboard kpis={kpis} unitSuffix={unitSuffix} />
+          <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+            <BetaPertRiskMatrix
+              risks={filteredRisks}
+              selectedRiskId={selectedRisk?.id}
+              onSelectRisk={selectRisk}
+            />
+            <QuantitativeRiskDashboard kpis={kpis} unitSuffix={unitSuffix} />
+          </div>
 
           <QuantitativeRiskMethodologyNote />
 
@@ -564,12 +583,7 @@ export default function QuantitativeRiskSimulationView({
             onSelectRisk={selectRisk}
           />
 
-          <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-            <BetaPertRiskMatrix
-              risks={filteredRisks}
-              selectedRiskId={selectedRisk?.id}
-              onSelectRisk={selectRisk}
-            />
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <RiskSimulationDetailPanel
               risk={selectedRisk}
               totalP95={totalP95}
@@ -647,6 +661,20 @@ export default function QuantitativeRiskSimulationView({
           </div>
         </>
       )}
+
+      <OperationalRiskSimulationForm
+        form={form}
+        onChange={onFormChange}
+        onSubmit={onSubmitSimulation}
+        loading={formLoading}
+        disabled={!canCreateSimulation}
+        error={error}
+        successMessage={message}
+        mode={isEditingSimulation ? 'edit' : 'create'}
+        editingLabel={editingSimulationLabel}
+        submitLabel={submitLabel || (isEditingSimulation ? 'Guardar como nueva simulacion' : 'Ejecutar y guardar simulacion')}
+        onCancelEdit={isEditingSimulation ? onCancelEditing : undefined}
+      />
     </section>
   );
 }

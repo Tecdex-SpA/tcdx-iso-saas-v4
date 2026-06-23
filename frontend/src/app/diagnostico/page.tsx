@@ -349,6 +349,9 @@ export default function DiagnosticoPage() {
   const [expressError, setExpressError] = useState('');
   const [expressResult, setExpressResult] = useState<ExpressDiagnosticResult | null>(null);
   const [expressLatest, setExpressLatest] = useState<ExpressDiagnosticResult['assessment'][]>([]);
+  const [controlFilter, setControlFilter] = useState('');
+  const [processFilter, setProcessFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const tenantId = resolveTenantId(user);
   const role = resolveRole(user);
@@ -853,6 +856,53 @@ export default function DiagnosticoPage() {
     (option) => `${option.standard_code}:${option.version_code}` === selectedExpressKey
   );
 
+  const processFilterOptions = useMemo(() => {
+    const options = new Map<string, string>();
+
+    data.forEach((item) => {
+      const key = item.operation_id || item.operation_name || item.operation_code || '';
+      if (!key) return;
+      options.set(
+        key,
+        item.operation_name || item.operation_code || copy.noOperation
+      );
+    });
+
+    return Array.from(options.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [copy.noOperation, data]);
+
+  const filteredDiagnosticData = useMemo(() => {
+    const search = controlFilter.trim().toLowerCase();
+
+    return data.filter((item) => {
+      const statusOk = !statusFilter || String(item.status || 'pendiente') === statusFilter;
+      const processOk =
+        !processFilter ||
+        item.operation_id === processFilter ||
+        item.operation_name === processFilter ||
+        item.operation_code === processFilter;
+
+      if (!statusOk || !processOk) return false;
+      if (!search) return true;
+
+      return [
+        item.clause,
+        item.category,
+        item.description,
+        item.control_id,
+        item.catalog_control_id,
+        item.operation_name,
+        item.operation_code,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .some((value) => value.includes(search));
+    });
+  }, [controlFilter, data, processFilter, statusFilter]);
+
+  const hasDiagnosticFilters = Boolean(controlFilter || processFilter || statusFilter);
+
   const renderPlan = (
     title: string,
     items: ExpressDiagnosticResult['plan_30'] | undefined
@@ -1175,12 +1225,86 @@ export default function DiagnosticoPage() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <div className="border-b border-slate-100 bg-slate-50/70 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-950">Controles evaluados</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {filteredDiagnosticData.length}/{data.length} control(es) visibles. Filtra sin modificar el diagnóstico guardado.
+                </p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[760px]">
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-500">Control</span>
+                  <input
+                    type="search"
+                    value={controlFilter}
+                    onChange={(event) => setControlFilter(event.target.value)}
+                    placeholder="Buscar por cláusula, control o descripción"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-500">Proceso</span>
+                  <select
+                    value={processFilter}
+                    onChange={(event) => setProcessFilter(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                  >
+                    <option value="">Todos</option>
+                    {processFilterOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-500">Estado</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                  >
+                    <option value="">Todos</option>
+                    <option value="pendiente">{diagnosticStatusLabel('pendiente')}</option>
+                    <option value="cumple">{diagnosticStatusLabel('cumple')}</option>
+                    <option value="parcial">{diagnosticStatusLabel('parcial')}</option>
+                    <option value="no cumple">{diagnosticStatusLabel('no cumple')}</option>
+                    <option value="no aplica">{diagnosticStatusLabel('no aplica')}</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            {hasDiagnosticFilters && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setControlFilter('');
+                    setProcessFilter('');
+                    setStatusFilter('');
+                  }}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Limpiar filtros
+                </button>
+              </div>
+            )}
+          </div>
           {data.length === 0 ? (
             <div className="p-6 text-gray-500">
               {copy.noControls}
             </div>
+          ) : filteredDiagnosticData.length === 0 ? (
+            <div className="p-6 text-gray-500">
+              No hay controles que coincidan con los filtros aplicados.
+            </div>
           ) : (
-            data.map((c) => (
+            <div className="max-h-[560px] overflow-y-auto tcdx-scrollbar">
+            {filteredDiagnosticData.map((c) => (
               <div
                 key={c.id}
                 className="border-b p-4 flex justify-between items-center gap-4"
@@ -1251,7 +1375,8 @@ export default function DiagnosticoPage() {
                   <option value="no aplica">{diagnosticStatusLabel('no aplica')}</option>
                 </select>
               </div>
-            ))
+            ))}
+            </div>
           )}
         </div>
       </div>

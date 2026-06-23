@@ -4,17 +4,57 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+
+const PROFILE_UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'profiles');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/profiles/');
+    fs.mkdir(PROFILE_UPLOAD_DIR, { recursive: true }, (err) => {
+      cb(err, PROFILE_UPLOAD_DIR);
+    });
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
+    const safeOriginalName = String(file.originalname || 'avatar')
+      .replace(/[^a-zA-Z0-9._-]/g, '-')
+      .slice(-120);
+    cb(null, `${Date.now()}-${safeOriginalName}`);
   }
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (String(file.mimetype || '').startsWith('image/')) {
+      cb(null, true);
+      return;
+    }
+
+    cb(new Error('INVALID_AVATAR_TYPE'));
+  }
+});
+
+function uploadAvatar(req, res, next) {
+  upload.single('avatar')(req, res, (err) => {
+    if (!err) {
+      next();
+      return;
+    }
+
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'La imagen no debe superar 5 MB' });
+    }
+
+    if (err.message === 'INVALID_AVATAR_TYPE') {
+      return res.status(400).json({ error: 'Selecciona un archivo de imagen válido' });
+    }
+
+    console.error('ERROR AVATAR UPLOAD MIDDLEWARE:', err);
+    return res.status(500).json({ error: 'Error procesando foto de perfil' });
+  });
+}
 
 // =============================
 // PERFIL PROPIO
@@ -152,7 +192,7 @@ router.put('/me/password', auth, async (req, res) => {
 // =============================
 // SUBIR FOTO DE PERFIL
 // =============================
-router.post('/me/avatar', auth, upload.single('avatar'), async (req, res) => {
+router.post('/me/avatar', auth, uploadAvatar, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No se recibió archivo' });

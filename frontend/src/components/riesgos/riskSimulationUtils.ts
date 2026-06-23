@@ -62,9 +62,11 @@ export type QuantitativeRisk = {
 };
 
 export type QuantitativeRiskFilters = {
+  search: string;
   norm: string;
   process: string;
   unit: string;
+  status: string;
   horizon: QuantitativeRiskHorizon;
 };
 
@@ -212,9 +214,11 @@ export const HORIZON_OPTIONS: Array<{ value: QuantitativeRiskHorizon; label: str
 ];
 
 export const DEFAULT_QUANTITATIVE_FILTERS: QuantitativeRiskFilters = {
+  search: '',
   norm: 'all',
   process: 'all',
   unit: 'all',
+  status: 'all',
   horizon: 'anual',
 };
 
@@ -461,11 +465,26 @@ export function buildQuantitativeRisks(
 }
 
 export function filterQuantitativeRisks(risks: QuantitativeRisk[], filters: QuantitativeRiskFilters) {
+  const search = String(filters.search || '').trim().toLowerCase();
+
   return risks.filter((risk) => {
+    const searchMatches =
+      !search ||
+      [
+        risk.code,
+        risk.name,
+        risk.processName,
+        risk.normName,
+        risk.unit,
+        risk.status,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .some((value) => value.includes(search));
     const normMatches = filters.norm === 'all' || risk.normId === filters.norm;
     const processMatches = filters.process === 'all' || risk.processName === filters.process;
     const unitMatches = filters.unit === 'all' || risk.unit === filters.unit;
-    return normMatches && processMatches && unitMatches;
+    const statusMatches = filters.status === 'all' || risk.status === filters.status;
+    return searchMatches && normMatches && processMatches && unitMatches && statusMatches;
   });
 }
 

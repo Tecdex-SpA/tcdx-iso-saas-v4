@@ -1755,7 +1755,8 @@ function RiskMatrixPageContent() {
                 {t('riskMatrix.noControlsForLevel')}
               </div>
             ) : (
-              filtered.map((c) => (
+              <div className="max-h-[560px] space-y-4 overflow-y-auto pr-2 tcdx-scrollbar">
+              {filtered.map((c) => (
                 <div
                   key={c.id}
                   id={`risk-control-${c.id}`}
@@ -1794,7 +1795,8 @@ function RiskMatrixPageContent() {
                     </button>
                   )}
                 </div>
-              ))
+              ))}
+              </div>
             )}
           </div>
         )}
