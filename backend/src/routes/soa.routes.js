@@ -366,7 +366,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
       return res.status(400).json({ error: 'La norma no usa SoA' });
     }
 
-    await bootstrapSoA(client, tenant_id, iso);
+    await bootstrapSoA(pool, tenant_id, iso);
 
     const result = await pool.query(
       `
