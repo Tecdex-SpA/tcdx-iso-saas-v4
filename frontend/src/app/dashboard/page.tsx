@@ -1623,10 +1623,16 @@ function DashboardPageContent() {
                     compact
                   />
 
-                  <SystemHealthDashboardSection
-                    data={systemHealthDashboard}
-                    loading={systemHealthLoading}
-                    error={systemHealthError}
+                  <ExecutiveStatusOverview
+                    complianceValue={executiveComplianceValue}
+                    healthyControls={executiveHealthyControls}
+                    totalControls={executiveTotalControls}
+                    highRisks={highRisks}
+                    mediumRisks={mediumRisks}
+                    activeActionPlans={activeActionPlans}
+                    overdueActionPlans={overdueActionPlans}
+                    openNonconformities={openNcCount}
+                    effectiveStatus={effectiveGlobalStatus}
                   />
 
                   {totalKpis > 0 && (
@@ -1645,18 +1651,20 @@ function DashboardPageContent() {
                     <ActionPlansPanel items={activeActionPlanItems} />
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.05fr_1fr_1.18fr]">
+                  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                     <PriorityRiskPanel rows={priorityRiskRows} />
-                    <AiAuditorPanel
-                      weakControls={noCumple}
-                      raisedRisks={highRisks}
-                      upcomingEvidence={nextAudits.length + activeActionPlans}
-                    />
                     <ExecutiveReportPanel
                       period={latestSyncText}
                       complianceValue={executiveComplianceValue}
                     />
                   </div>
+
+                  <SystemHealthDashboardSection
+                    data={systemHealthDashboard}
+                    loading={systemHealthLoading}
+                    error={systemHealthError}
+                    compact
+                  />
                 </>
               )}
             </>
@@ -2024,11 +2032,13 @@ function SystemHealthDashboardSection({
   loading,
   error,
   expanded = false,
+  compact = false,
 }: {
   data: SystemHealthDashboard | null;
   loading: boolean;
   error: string;
   expanded?: boolean;
+  compact?: boolean;
 }) {
   const alerts = data?.alerts || {};
   const topProcesses = data?.critical_processes || [];
@@ -2052,7 +2062,7 @@ function SystemHealthDashboardSection({
 
         <a
           href="/iso-health"
-          className="inline-flex w-fit rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+          className="inline-flex w-fit rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
         >
           Ver salud completa
         </a>
@@ -2072,7 +2082,7 @@ function SystemHealthDashboardSection({
         </div>
       ) : (
         <>
-          <div className="mt-5 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className={compact ? 'mt-5 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]' : 'mt-5 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]'}>
             <div className="rounded-[26px] border border-slate-200 bg-slate-950 p-5 text-white">
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
                 Health global
@@ -2101,6 +2111,7 @@ function SystemHealthDashboardSection({
             </div>
           </div>
 
+          {!compact && (
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <h3 className="text-sm font-semibold text-slate-950">Salud por norma</h3>
@@ -2146,6 +2157,7 @@ function SystemHealthDashboardSection({
               )}
             </div>
           </div>
+          )}
 
           {data.data_quality_warnings && data.data_quality_warnings.length > 0 && (
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -2156,6 +2168,118 @@ function SystemHealthDashboardSection({
           )}
         </>
       )}
+    </section>
+  );
+}
+
+function ExecutiveStatusOverview({
+  complianceValue,
+  healthyControls,
+  totalControls,
+  highRisks,
+  mediumRisks,
+  activeActionPlans,
+  overdueActionPlans,
+  openNonconformities,
+  effectiveStatus,
+}: {
+  complianceValue: number;
+  healthyControls: number;
+  totalControls: number;
+  highRisks: number;
+  mediumRisks: number;
+  activeActionPlans: number;
+  overdueActionPlans: number;
+  openNonconformities: number;
+  effectiveStatus: string;
+}) {
+  const riskPressure = Math.min(100, highRisks * 18 + mediumRisks * 8);
+  const actionPressure = Math.min(100, activeActionPlans > 0 ? Math.round((overdueActionPlans / activeActionPlans) * 100) : 0);
+  const complianceSafe = Math.max(0, Math.min(100, complianceValue));
+  const healthLabel = mapEffectiveHealthLabel(effectiveStatus);
+
+  const segments = [
+    {
+      label: 'Cumplimiento ISO',
+      value: `${complianceSafe}%`,
+      helper: `${healthyControls}/${totalControls || 0} controles saludables`,
+      width: complianceSafe,
+      color: '#16a34a',
+      bg: 'bg-emerald-50',
+      border: 'border-emerald-100',
+    },
+    {
+      label: 'Presión de riesgo',
+      value: highRisks,
+      helper: `${mediumRisks} riesgos medios`,
+      width: riskPressure,
+      color: riskPressure >= 60 ? '#dc2626' : '#f59e0b',
+      bg: riskPressure >= 60 ? 'bg-red-50' : 'bg-amber-50',
+      border: riskPressure >= 60 ? 'border-red-100' : 'border-amber-100',
+    },
+    {
+      label: 'Acciones vencidas',
+      value: overdueActionPlans,
+      helper: `${activeActionPlans} acciones activas`,
+      width: actionPressure,
+      color: actionPressure >= 40 ? '#dc2626' : '#2563eb',
+      bg: actionPressure >= 40 ? 'bg-red-50' : 'bg-blue-50',
+      border: actionPressure >= 40 ? 'border-red-100' : 'border-blue-100',
+    },
+    {
+      label: 'No conformidades',
+      value: openNonconformities,
+      helper: `Health ISO: ${healthLabel}`,
+      width: Math.min(100, openNonconformities * 16),
+      color: openNonconformities > 0 ? '#f59e0b' : '#16a34a',
+      bg: openNonconformities > 0 ? 'bg-amber-50' : 'bg-emerald-50',
+      border: openNonconformities > 0 ? 'border-amber-100' : 'border-emerald-100',
+    },
+  ];
+
+  return (
+    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+            Estado operacional
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+            Semáforo ejecutivo de cumplimiento, riesgos y acciones
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Vista global para decidir dónde priorizar: controles, riesgo operacional, vencimientos y no conformidades.
+          </p>
+        </div>
+        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getEffectiveHealthTone(effectiveStatus)}`}>
+          {healthLabel}
+        </span>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-4">
+        {segments.map((segment) => (
+          <div key={segment.label} className={`rounded-2xl border ${segment.border} ${segment.bg} p-4`}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  {segment.label}
+                </p>
+                <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+                  {segment.value}
+                </p>
+              </div>
+              <span className="mt-1 h-3 w-3 rounded-full" style={{ background: segment.color }} />
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/80">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.max(4, Math.min(100, segment.width))}%`, background: segment.color }}
+              />
+            </div>
+            <p className="mt-3 text-sm font-medium text-slate-600">{segment.helper}</p>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

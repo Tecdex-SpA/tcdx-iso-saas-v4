@@ -188,6 +188,23 @@ export default function Header({ onMenuClick }: HeaderProps) {
   }, []);
 
   useEffect(() => {
+    const handleProfileAvatarUpdated = () => {
+      const token = tokenRef.current || localStorage.getItem('token');
+      if (!token) return;
+
+      fetch(`${API_URL}/api/user/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => res.json())
+        .then(setUser)
+        .catch(console.error);
+    };
+
+    window.addEventListener('profile-avatar-updated', handleProfileAvatarUpdated);
+    return () => window.removeEventListener('profile-avatar-updated', handleProfileAvatarUpdated);
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
 
@@ -490,8 +507,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </svg>
           </button>
 
-          <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm">
+          <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-1.5 shadow-sm">
               <img
                 src={tenantLogoSource}
                 className="max-h-full max-w-full object-contain"
