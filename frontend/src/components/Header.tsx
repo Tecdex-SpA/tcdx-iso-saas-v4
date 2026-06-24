@@ -507,11 +507,11 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </svg>
           </button>
 
-          <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50 p-0.5 shadow-sm">
               <img
                 src={tenantLogoSource}
-                className="max-h-full max-w-full object-contain"
+                className="h-full w-full object-contain"
                 alt={tenant?.name ? `Logo ${tenant.name}` : t('header.clientLogoAlt')}
                 onError={() => {
                   setLogoIndex((prev) => {
