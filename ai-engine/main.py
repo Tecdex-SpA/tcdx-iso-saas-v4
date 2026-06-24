@@ -17,6 +17,7 @@ from app.routes.ai import router as ai_router
 from app.routes.audit_documents import router as audit_documents_router
 from app.routes.operational_risk_beta_pert import router as operational_risk_beta_pert_router
 from app.routes.senior_auditor_v2 import router as senior_auditor_v2_router
+from app.routes.soa_assessment import router as soa_assessment_router
 from app.core.config import settings
 from app.core.db import test_db_connection
 
@@ -1144,6 +1145,7 @@ app.include_router(ai_router)
 app.include_router(senior_auditor_v2_router)
 app.include_router(operational_risk_beta_pert_router)
 app.include_router(audit_documents_router)
+app.include_router(soa_assessment_router)
 
 
 # =========================================================

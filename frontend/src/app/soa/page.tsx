@@ -24,8 +24,12 @@ export default function SoAPage() {
   const [standards, setStandards] = useState<any[]>([]);
   const [selectedISO, setSelectedISO] = useState('');
   const [data, setData] = useState<any[]>([]);
+  const [intelligence, setIntelligence] = useState<any>(null);
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [changeLog, setChangeLog] = useState<any[]>([]);
   const [loadingStandards, setLoadingStandards] = useState(true);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadingIntelligence, setLoadingIntelligence] = useState(false);
   const [savingId, setSavingId] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<string>('');
   const [preflight, setPreflight] = useState<any>(null);
@@ -136,12 +140,40 @@ export default function SoAPage() {
 
       setData(json || []);
       setSelectedRowId('');
+      await loadIntelligence(tenantId, authToken, iso);
     } catch (err) {
       console.error('ERROR LOAD SOA:', err);
       setData([]);
       setPreflight(null);
     } finally {
       setLoadingData(false);
+    }
+  };
+
+  const loadIntelligence = async (tenantId: string, authToken: string, iso: string) => {
+    try {
+      setLoadingIntelligence(true);
+      const [intelligenceRes, assessmentsRes, changeLogRes] = await Promise.all([
+        fetch(`${API_URL}/api/soa/${tenantId}/intelligence?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
+        fetch(`${API_URL}/api/soa/${tenantId}/assessments?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
+        fetch(`${API_URL}/api/soa/${tenantId}/change-log?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } })
+      ]);
+      const [intelligenceJson, assessmentsJson, changeLogJson] = await Promise.all([
+        intelligenceRes.json(),
+        assessmentsRes.json(),
+        changeLogRes.json()
+      ]);
+      setIntelligence(intelligenceRes.ok ? intelligenceJson : null);
+      setAssessments(assessmentsRes.ok && Array.isArray(assessmentsJson) ? assessmentsJson : []);
+      setChangeLog(changeLogRes.ok && Array.isArray(changeLogJson) ? changeLogJson : []);
+      if (!intelligenceRes.ok) console.error('ERROR LOAD SOA INTELLIGENCE:', intelligenceJson);
+    } catch (err) {
+      console.error('ERROR LOAD SOA INTELLIGENCE:', err);
+      setIntelligence(null);
+      setAssessments([]);
+      setChangeLog([]);
+    } finally {
+      setLoadingIntelligence(false);
     }
   };
 
@@ -386,6 +418,98 @@ export default function SoAPage() {
     }
   };
 
+  const runAssessment = async (tenantControlId: string, useAi = false) => {
+    if (!token || !user?.tenant_id || !selectedISO) return;
+    try {
+      setActionLoading(`${useAi ? 'ai' : 'system'}-${tenantControlId}`);
+      const res = await fetch(`${API_URL}/api/soa/${user.tenant_id}/assessments/run?iso=${encodeURIComponent(selectedISO)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tenant_control_id: tenantControlId, use_ai: useAi })
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error || 'No fue posible ejecutar evaluación SoA');
+        return;
+      }
+      await loadIntelligence(user.tenant_id, token, selectedISO);
+    } catch (err) {
+      console.error('ERROR RUN ASSESSMENT:', err);
+      alert('Error ejecutando evaluación SoA');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const runBatchAssessment = async () => {
+    if (!token || !user?.tenant_id || !selectedISO) return;
+    try {
+      setActionLoading('batch-system');
+      const res = await fetch(`${API_URL}/api/soa/${user.tenant_id}/assessments/run-batch?iso=${encodeURIComponent(selectedISO)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ limit: 50, use_ai: false })
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error || 'No fue posible recalcular sugerencias');
+        return;
+      }
+      await loadIntelligence(user.tenant_id, token, selectedISO);
+    } catch (err) {
+      console.error('ERROR RUN BATCH ASSESSMENT:', err);
+      alert('Error recalculando sugerencias');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const applyAssessment = async (assessmentId: string) => {
+    if (!token || !user?.tenant_id || !selectedISO) return;
+    const confirmed = window.confirm('Esto modificará el SoA oficial de este control y quedará registrado. ¿Deseas continuar?');
+    if (!confirmed) return;
+    try {
+      setActionLoading(`apply-${assessmentId}`);
+      const res = await fetch(`${API_URL}/api/soa/${user.tenant_id}/assessments/${assessmentId}/apply`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error || 'No fue posible aplicar sugerencia');
+        return;
+      }
+      await loadSoA(user.tenant_id, token, selectedISO);
+    } catch (err) {
+      console.error('ERROR APPLY ASSESSMENT:', err);
+      alert('Error aplicando sugerencia');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const rejectAssessment = async (assessmentId: string) => {
+    if (!token || !user?.tenant_id || !selectedISO) return;
+    try {
+      setActionLoading(`reject-${assessmentId}`);
+      const res = await fetch(`${API_URL}/api/soa/${user.tenant_id}/assessments/${assessmentId}/reject`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error || 'No fue posible rechazar sugerencia');
+        return;
+      }
+      await loadIntelligence(user.tenant_id, token, selectedISO);
+    } catch (err) {
+      console.error('ERROR REJECT ASSESSMENT:', err);
+      alert('Error rechazando sugerencia');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
   const metrics = useMemo(() => {
     const total = data.length;
     const applicable = data.filter((r) => r.applicable === true).length;
@@ -471,6 +595,14 @@ export default function SoAPage() {
     if (!selectedRowId) return null;
     return data.find((row) => row.tenant_control_id === selectedRowId) || null;
   }, [data, selectedRowId]);
+
+  const intelligenceByControl = useMemo(() => {
+    const map = new Map<string, any>();
+    (intelligence?.rows || []).forEach((row: any) => map.set(row.tenant_control_id, row));
+    return map;
+  }, [intelligence]);
+
+  const selectedIntelligence = selectedRow ? intelligenceByControl.get(selectedRow.tenant_control_id) : null;
 
   if (loadingStandards) {
     return (
@@ -606,6 +738,112 @@ export default function SoAPage() {
           <MetricCard title="Revisión faltante" value={metrics.reviewMissing} compact />
         </div>
 
+        <section className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Inteligencia SoA</p>
+              <h2 className="mt-1 text-xl font-black text-blue-950">Recomendaciones gobernadas</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-blue-900">
+                El sistema calcula señales y sugerencias separadas del SoA oficial. Ningún cambio se aplica sin aprobación humana autorizada.
+              </p>
+            </div>
+            {!isReadOnly && (
+              <button
+                type="button"
+                onClick={runBatchAssessment}
+                disabled={actionLoading === 'batch-system'}
+                className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-800 disabled:opacity-60"
+              >
+                {actionLoading === 'batch-system' ? 'Recalculando...' : 'Recalcular sugerencias sistema'}
+              </button>
+            )}
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+            <InsightCard title="Con evidencia" value={intelligence?.summary?.controls_with_evidence ?? 0} />
+            <InsightCard title="Hallazgos abiertos" value={intelligence?.summary?.controls_with_open_findings ?? 0} tone="warning" />
+            <InsightCard title="NC abiertas" value={intelligence?.summary?.controls_with_open_nc ?? 0} tone="danger" />
+            <InsightCard title="Riesgo alto" value={intelligence?.summary?.controls_with_high_risk ?? 0} tone="danger" />
+            <InsightCard title="Acciones vencidas" value={intelligence?.summary?.controls_with_overdue_actions ?? 0} tone="warning" />
+            <InsightCard title="Diferencias" value={intelligence?.summary?.official_vs_suggested_differences ?? 0} tone="info" />
+            <InsightCard title="Baja confianza" value={intelligence?.summary?.low_confidence_suggestions ?? 0} tone="neutral" />
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-blue-100 bg-white shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-blue-100 px-4 py-3">
+              <div>
+                <div className="text-sm font-black text-slate-950">Comparación oficial vs sugerido</div>
+                <div className="text-xs text-slate-500">
+                  {loadingIntelligence ? 'Cargando inteligencia...' : `${intelligence?.rows?.length || 0} controles evaluables · ${assessments.length} assessments guardados · ${changeLog.length} cambios registrados`}
+                </div>
+              </div>
+            </div>
+            <div className="max-h-[390px] overflow-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Control</th>
+                    <th className="px-4 py-3">Oficial</th>
+                    <th className="px-4 py-3">Sugerido</th>
+                    <th className="px-4 py-3">Señales</th>
+                    <th className="px-4 py-3">Confianza</th>
+                    <th className="px-4 py-3">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(intelligence?.rows || []).slice(0, 200).map((row: any) => {
+                    const latest = row.latest_assessment;
+                    return (
+                      <tr key={row.tenant_control_id} className="hover:bg-blue-50/60">
+                        <td className="px-4 py-3">
+                          <button type="button" onClick={() => setSelectedRowId(row.tenant_control_id)} className="text-left font-black text-blue-800 hover:text-blue-950">
+                            {translateClauseLabel(row.clause, locale)}
+                          </button>
+                          <div className="mt-1 line-clamp-1 max-w-md text-xs text-slate-500">{translateDisplayText(row.description, locale, 'control')}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusPill value={applicabilityLabel(row.official?.applicable)} />
+                          <div className="mt-1"><StatusPill value={translateStatusLabel(row.official?.implementation_status || 'pendiente', locale)} /></div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusPill value={applicabilityLabel(row.system_suggestion?.suggested_applicable)} />
+                          <div className="mt-1"><StatusPill value={translateStatusLabel(row.system_suggestion?.suggested_implementation_status || 'pendiente', locale)} /></div>
+                        </td>
+                        <td className="px-4 py-3 text-xs leading-5 text-slate-600">
+                          Ev: {row.signals?.evidence?.evidence_count || 0} · Hall: {row.signals?.findings?.open_findings_count || 0} · NC: {row.signals?.nonconformities?.open_nonconformities_count || 0} · Acc: {row.signals?.actions?.overdue_actions_count || 0}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusPill value={`${row.system_suggestion?.confidence_level || 'baja'} ${row.system_suggestion?.confidence_score || 0}%`} />
+                          {latest && <div className="mt-1 text-xs text-slate-500">Último: {latest.status}</div>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            {!isReadOnly && (
+                              <>
+                                <button onClick={() => runAssessment(row.tenant_control_id, false)} disabled={actionLoading === `system-${row.tenant_control_id}`} className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-700 disabled:opacity-50">Sistema</button>
+                                <button onClick={() => runAssessment(row.tenant_control_id, true)} disabled={actionLoading === `ai-${row.tenant_control_id}`} className="rounded-lg border border-blue-300 px-2.5 py-1 text-xs font-bold text-blue-700 disabled:opacity-50">IA</button>
+                                {latest?.status === 'draft' && (
+                                  <>
+                                    <button onClick={() => applyAssessment(latest.id)} disabled={actionLoading === `apply-${latest.id}`} className="rounded-lg bg-blue-700 px-2.5 py-1 text-xs font-bold text-white disabled:opacity-50">Aplicar</button>
+                                    <button onClick={() => rejectAssessment(latest.id)} disabled={actionLoading === `reject-${latest.id}`} className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-700 disabled:opacity-50">Rechazar</button>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!loadingIntelligence && (!intelligence?.rows || intelligence.rows.length === 0) && (
+                    <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">No hay inteligencia SoA disponible para la selección actual.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
             <input
@@ -710,6 +948,27 @@ export default function SoAPage() {
               </div>
 
               <p className="mt-4 text-sm leading-6 text-slate-700">{translateDisplayText(selectedRow.description, locale, 'control')}</p>
+
+              {selectedIntelligence && (
+                <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                  <div className="text-xs font-black uppercase tracking-wide text-blue-700">Contexto inteligente</div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-blue-950">
+                    <div className="rounded-xl bg-white p-3 ring-1 ring-blue-100">Evidencias: <b>{selectedIntelligence.signals?.evidence?.evidence_count || 0}</b></div>
+                    <div className="rounded-xl bg-white p-3 ring-1 ring-blue-100">Riesgos altos: <b>{(selectedIntelligence.signals?.risks?.high_risk_count || 0) + (selectedIntelligence.signals?.risks?.critical_risk_count || 0)}</b></div>
+                    <div className="rounded-xl bg-white p-3 ring-1 ring-blue-100">Hallazgos abiertos: <b>{selectedIntelligence.signals?.findings?.open_findings_count || 0}</b></div>
+                    <div className="rounded-xl bg-white p-3 ring-1 ring-blue-100">Acciones vencidas: <b>{selectedIntelligence.signals?.actions?.overdue_actions_count || 0}</b></div>
+                  </div>
+                  <div className="mt-3 rounded-xl bg-white p-3 text-xs leading-5 text-slate-700 ring-1 ring-blue-100">
+                    <div className="font-black text-slate-950">Sugerencia sistema</div>
+                    <div className="mt-1">{selectedIntelligence.system_suggestion?.suggested_justification || 'Sin explicación disponible.'}</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <StatusPill value={applicabilityLabel(selectedIntelligence.system_suggestion?.suggested_applicable)} />
+                      <StatusPill value={translateStatusLabel(selectedIntelligence.system_suggestion?.suggested_implementation_status || 'pendiente', locale)} />
+                      <StatusPill value={`${selectedIntelligence.system_suggestion?.confidence_level || 'baja'} ${selectedIntelligence.system_suggestion?.confidence_score || 0}%`} />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-5 grid gap-4">
                 <label className="block">
@@ -827,6 +1086,23 @@ function PreflightCard({ title, value, tone = 'neutral' }: any) {
     : tone === 'warning'
     ? 'border-amber-200 bg-amber-50 text-amber-900'
     : 'border-slate-200 bg-white text-slate-900';
+
+  return (
+    <div className={`rounded-2xl border p-4 shadow-sm ${toneClass}`}>
+      <div className="text-xs font-bold uppercase tracking-wide opacity-70">{title}</div>
+      <div className="mt-2 text-2xl font-black">{value}</div>
+    </div>
+  );
+}
+
+function InsightCard({ title, value, tone = 'info' }: any) {
+  const toneClass = tone === 'danger'
+    ? 'border-red-100 bg-red-50 text-red-800'
+    : tone === 'warning'
+    ? 'border-amber-100 bg-amber-50 text-amber-800'
+    : tone === 'neutral'
+    ? 'border-slate-100 bg-slate-50 text-slate-800'
+    : 'border-blue-100 bg-white text-blue-900';
 
   return (
     <div className={`rounded-2xl border p-4 shadow-sm ${toneClass}`}>
