@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -96,7 +96,7 @@ export default function IntegratedEvidenceApprovalPanel({ tenantId }: { tenantId
   const [statusFilter, setStatusFilter] = useState('pendiente');
   const [search, setSearch] = useState('');
 
-  const fetchJson = async (url: string, options: RequestInit = {}) => {
+  const fetchJson = useCallback(async (url: string, options: RequestInit = {}) => {
     const token = getToken();
     const headers = new Headers(options.headers);
 
@@ -120,9 +120,9 @@ export default function IntegratedEvidenceApprovalPanel({ tenantId }: { tenantId
     }
 
     return json;
-  };
+  }, []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!tenantId) return;
 
     try {
@@ -147,11 +147,11 @@ export default function IntegratedEvidenceApprovalPanel({ tenantId }: { tenantId
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchJson, statusFilter, tenantId]);
 
   useEffect(() => {
     load();
-  }, [tenantId, statusFilter]);
+  }, [load]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

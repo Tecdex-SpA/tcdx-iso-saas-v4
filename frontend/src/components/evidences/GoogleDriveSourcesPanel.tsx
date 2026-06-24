@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -235,7 +235,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
     [suggestions]
   );
 
-  const fetchJson = async (url: string, options: RequestInit = {}) => {
+  const fetchJson = useCallback(async (url: string, options: RequestInit = {}) => {
     const token = getToken();
     const headers = new Headers(options.headers);
 
@@ -263,9 +263,9 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
     }
 
     return json;
-  };
+  }, []);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!tenantId) return;
 
     try {
@@ -303,11 +303,11 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchJson, tenantId]);
 
   useEffect(() => {
     refresh();
-  }, [tenantId]);
+  }, [refresh]);
 
   const connectGoogle = async () => {
     try {

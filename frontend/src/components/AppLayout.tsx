@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -133,15 +133,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     };
   }, [t]);
 
-  function isRoute(routes: string[]) {
+  const isRoute = useCallback((routes: string[]) => {
     return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
-  }
+  }, [pathname]);
 
-  function getRequiredModuleForPath() {
+  const getRequiredModuleForPath = useCallback(() => {
     return routeRules.moduleProtected.find((item) => isRoute(item.routes)) || null;
-  }
+  }, [isRoute, routeRules.moduleProtected]);
 
-  async function getModuleAccess(token: string): Promise<ModuleAccessResponse> {
+  const getModuleAccess = useCallback(async (token: string): Promise<ModuleAccessResponse> => {
     const res = await fetch(`${API_URL}/api/me/modules`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -163,9 +163,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     }
 
     return json;
-  }
+  }, [t]);
 
-  async function getPermissions(token: string): Promise<PermissionsResponse> {
+  const getPermissions = useCallback(async (token: string): Promise<PermissionsResponse> => {
     const res = await fetch(`${API_URL}/api/me/permissions`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -187,7 +187,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     }
 
     return json;
-  }
+  }, [t]);
 
   function moduleIsEnabled(
     moduleMap: ModuleAccessResponse['module_map'],
@@ -377,7 +377,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [pathname, routeRules, t]);
+  }, [getModuleAccess, getPermissions, getRequiredModuleForPath, isRoute, pathname, routeRules, t]);
 
   useEffect(() => {
     if (entitlementsLoading) return;

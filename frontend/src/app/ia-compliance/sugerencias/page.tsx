@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
@@ -342,30 +342,7 @@ export default function AiSuggestionsPage() {
 
   const [rows, setRows] = useState<SuggestionRow[]>([]);
 
-  useEffect(() => {
-    if (entitlementsLoading) return;
-
-    if (!canUseSuggestions) {
-      window.location.replace('/dashboard');
-      return;
-    }
-
-    const authToken = localStorage.getItem('token');
-    const u = getUserFromToken();
-
-    setToken(authToken);
-    setUser(u);
-
-    if (!authToken || !u?.tenant_id) {
-      setLoading(false);
-      setError('No se pudo obtener la sesión del usuario.');
-      return;
-    }
-
-    loadSuggestions('');
-  }, [canUseSuggestions, entitlementsLoading]);
-
-  const getWithAuth = async (url: string) => {
+  const getWithAuth = useCallback(async (url: string) => {
     const authToken = localStorage.getItem('token');
 
     if (!authToken) {
@@ -393,7 +370,7 @@ export default function AiSuggestionsPage() {
     }
 
     return json;
-  };
+  }, []);
 
   const postWithAuth = async (url: string, body: any) => {
     const authToken = localStorage.getItem('token');
@@ -428,7 +405,7 @@ export default function AiSuggestionsPage() {
     return json;
   };
 
-  const loadSuggestions = async (forcedType?: string) => {
+  const loadSuggestions = useCallback(async (forcedType?: string) => {
     try {
       setLoading(true);
       setError('');
@@ -455,7 +432,30 @@ export default function AiSuggestionsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getWithAuth, typeFilter]);
+
+  useEffect(() => {
+    if (entitlementsLoading) return;
+
+    if (!canUseSuggestions) {
+      window.location.replace('/dashboard');
+      return;
+    }
+
+    const authToken = localStorage.getItem('token');
+    const u = getUserFromToken();
+
+    setToken(authToken);
+    setUser(u);
+
+    if (!authToken || !u?.tenant_id) {
+      setLoading(false);
+      setError('No se pudo obtener la sesión del usuario.');
+      return;
+    }
+
+    loadSuggestions('');
+  }, [canUseSuggestions, entitlementsLoading, loadSuggestions]);
 
   const applySuggestion = async (
     row: SuggestionRow,
@@ -570,7 +570,7 @@ export default function AiSuggestionsPage() {
     }
   };
 
-  const getPreview = (row: SuggestionRow): PreviewData => {
+  const getPreview = useCallback((row: SuggestionRow): PreviewData => {
     const output = row.output_payload || {};
 
     if (row.suggestion_type === 'finding_analysis') {
@@ -627,7 +627,7 @@ export default function AiSuggestionsPage() {
       title: String(row.title || 'Sugerencia IA'),
       body: 'Sin detalle',
     };
-  };
+  }, []);
 
   const getKeyDetails = (row: SuggestionRow): string[] => {
     const output = row.output_payload || {};
@@ -723,7 +723,7 @@ export default function AiSuggestionsPage() {
 
       return text.includes(term);
     });
-  }, [rows, statusFilter, search]);
+  }, [getPreview, rows, statusFilter, search]);
 
   const metrics = useMemo(() => {
     return {

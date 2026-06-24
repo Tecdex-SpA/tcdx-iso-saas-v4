@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useLanguage } from '@/context/LanguageContext';
 import { getUserFromToken } from '@/utils/auth';
@@ -59,7 +59,7 @@ export default function SoAPage() {
     }
   }, []);
 
-  const loadStandards = async (tenantId: string, authToken: string) => {
+  const loadStandards = useCallback(async (tenantId: string, authToken: string) => {
     try {
       setLoadingStandards(true);
 
@@ -102,9 +102,36 @@ export default function SoAPage() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, []);
 
-  const loadSoA = async (tenantId: string, authToken: string, iso: string) => {
+  const loadIntelligence = useCallback(async (tenantId: string, authToken: string, iso: string) => {
+    try {
+      setLoadingIntelligence(true);
+      const [intelligenceRes, assessmentsRes, changeLogRes] = await Promise.all([
+        fetch(`${API_URL}/api/soa/${tenantId}/intelligence?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
+        fetch(`${API_URL}/api/soa/${tenantId}/assessments?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
+        fetch(`${API_URL}/api/soa/${tenantId}/change-log?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } })
+      ]);
+      const [intelligenceJson, assessmentsJson, changeLogJson] = await Promise.all([
+        intelligenceRes.json(),
+        assessmentsRes.json(),
+        changeLogRes.json()
+      ]);
+      setIntelligence(intelligenceRes.ok ? intelligenceJson : null);
+      setAssessments(assessmentsRes.ok && Array.isArray(assessmentsJson) ? assessmentsJson : []);
+      setChangeLog(changeLogRes.ok && Array.isArray(changeLogJson) ? changeLogJson : []);
+      if (!intelligenceRes.ok) console.error('ERROR LOAD SOA INTELLIGENCE:', intelligenceJson);
+    } catch (err) {
+      console.error('ERROR LOAD SOA INTELLIGENCE:', err);
+      setIntelligence(null);
+      setAssessments([]);
+      setChangeLog([]);
+    } finally {
+      setLoadingIntelligence(false);
+    }
+  }, []);
+
+  const loadSoA = useCallback(async (tenantId: string, authToken: string, iso: string) => {
     try {
       setLoadingData(true);
 
@@ -148,34 +175,7 @@ export default function SoAPage() {
     } finally {
       setLoadingData(false);
     }
-  };
-
-  const loadIntelligence = async (tenantId: string, authToken: string, iso: string) => {
-    try {
-      setLoadingIntelligence(true);
-      const [intelligenceRes, assessmentsRes, changeLogRes] = await Promise.all([
-        fetch(`${API_URL}/api/soa/${tenantId}/intelligence?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
-        fetch(`${API_URL}/api/soa/${tenantId}/assessments?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
-        fetch(`${API_URL}/api/soa/${tenantId}/change-log?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } })
-      ]);
-      const [intelligenceJson, assessmentsJson, changeLogJson] = await Promise.all([
-        intelligenceRes.json(),
-        assessmentsRes.json(),
-        changeLogRes.json()
-      ]);
-      setIntelligence(intelligenceRes.ok ? intelligenceJson : null);
-      setAssessments(assessmentsRes.ok && Array.isArray(assessmentsJson) ? assessmentsJson : []);
-      setChangeLog(changeLogRes.ok && Array.isArray(changeLogJson) ? changeLogJson : []);
-      if (!intelligenceRes.ok) console.error('ERROR LOAD SOA INTELLIGENCE:', intelligenceJson);
-    } catch (err) {
-      console.error('ERROR LOAD SOA INTELLIGENCE:', err);
-      setIntelligence(null);
-      setAssessments([]);
-      setChangeLog([]);
-    } finally {
-      setLoadingIntelligence(false);
-    }
-  };
+  }, [loadIntelligence]);
 
   const initializeSoA = async () => {
     if (!token || !user?.tenant_id || !selectedISO) return;
@@ -208,7 +208,7 @@ export default function SoAPage() {
   useEffect(() => {
     if (!token || !user?.tenant_id) return;
     loadStandards(user.tenant_id, token);
-  }, [token, user]);
+  }, [loadStandards, token, user]);
 
   useEffect(() => {
     if (!token || !user?.tenant_id || !selectedISO) {
@@ -217,7 +217,7 @@ export default function SoAPage() {
     }
 
     loadSoA(user.tenant_id, token, selectedISO);
-  }, [token, user, selectedISO, loadingStandards]);
+  }, [loadSoA, token, user, selectedISO, loadingStandards]);
 
   const changeField = (id: string, field: string, value: any) => {
     setData((prev) =>

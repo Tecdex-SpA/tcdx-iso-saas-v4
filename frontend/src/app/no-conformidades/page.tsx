@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
@@ -378,27 +378,6 @@ function NoConformidadesPageContent() {
     return new Set(operationalStandards.map((s) => s.code).filter(Boolean));
   }, [operationalStandards]);
 
-  const filteredNonconformities = useMemo(() => {
-    const search = ncSearch.trim().toLowerCase();
-    if (!search) return data;
-
-    return data.filter((nc) => {
-      return [
-        getNcTitle(nc),
-        getNcDescription(nc),
-        getNcIso(nc),
-        nc?.clause,
-        nc?.category,
-        nc?.status,
-        nc?.operation_name,
-        nc?.operation_code,
-        nc?.operation_type,
-      ]
-        .map((value) => String(value || '').toLowerCase())
-        .some((value) => value.includes(search));
-    });
-  }, [data, ncSearch]);
-
   const postWithAuth = async (url: string, body: any) => {
     const authToken = localStorage.getItem('token');
 
@@ -432,16 +411,16 @@ function NoConformidadesPageContent() {
     return json;
   };
 
-  const getNcIso = (nc: any) => nc?.iso || nc?.iso_code || iso || '';
+  const getNcIso = useCallback((nc: any) => nc?.iso || nc?.iso_code || iso || '', [iso]);
 
-  const getNcClause = (nc: any) => String(nc?.clause || '').trim();
+  const getNcClause = useCallback((nc: any) => String(nc?.clause || '').trim(), []);
 
-  const getNcCategory = (nc: any) => String(nc?.category || 'General').trim();
+  const getNcCategory = useCallback((nc: any) => String(nc?.category || 'General').trim(), []);
 
-  const getNcControlDescription = (nc: any) =>
-    String(nc?.control_description || '').trim();
+  const getNcControlDescription = useCallback((nc: any) =>
+    String(nc?.control_description || '').trim(), []);
 
-  const getNcTitle = (nc: any) => {
+  const getNcTitle = useCallback((nc: any) => {
     const clause = getNcClause(nc);
     const controlDescription = getNcControlDescription(nc);
     const category = getNcCategory(nc);
@@ -459,15 +438,36 @@ function NoConformidadesPageContent() {
     }
 
     return `No conformidad - ${category}`;
-  };
+  }, [getNcCategory, getNcClause, getNcControlDescription]);
 
-  const getNcDescription = (nc: any) => {
+  const getNcDescription = useCallback((nc: any) => {
     return (
       getNcControlDescription(nc) ||
       getNcCategory(nc) ||
       'No conformidad sin descripción'
     );
-  };
+  }, [getNcCategory, getNcControlDescription]);
+
+  const filteredNonconformities = useMemo(() => {
+    const search = ncSearch.trim().toLowerCase();
+    if (!search) return data;
+
+    return data.filter((nc) => {
+      return [
+        getNcTitle(nc),
+        getNcDescription(nc),
+        getNcIso(nc),
+        nc?.clause,
+        nc?.category,
+        nc?.status,
+        nc?.operation_name,
+        nc?.operation_code,
+        nc?.operation_type,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .some((value) => value.includes(search));
+    });
+  }, [data, getNcDescription, getNcIso, getNcTitle, ncSearch]);
 
   const getNcSeverity = (nc: any) => {
     if (nc?.status === 'abierta') return 'alta';
@@ -601,7 +601,7 @@ function NoConformidadesPageContent() {
     }
   };
 
-  const loadScope = async (tenantIdValue: string, authToken: string) => {
+  const loadScope = useCallback(async (tenantIdValue: string, authToken: string) => {
     try {
       setLoadingStandards(true);
 
@@ -642,9 +642,9 @@ function NoConformidadesPageContent() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, []);
 
-  const loadNC = async (
+  const loadNC = useCallback(async (
     tenantIdValue: string,
     authToken: string,
     selectedIso: string
@@ -690,9 +690,9 @@ function NoConformidadesPageContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [operationalCodes]);
 
-  const loadActions = async (
+  const loadActions = useCallback(async (
     tenantIdValue: string,
     authToken: string,
     selectedIso: string
@@ -738,7 +738,7 @@ function NoConformidadesPageContent() {
     } finally {
       setLoadingActions(false);
     }
-  };
+  }, [operationalCodes]);
 
 
   useEffect(() => {
@@ -783,7 +783,7 @@ function NoConformidadesPageContent() {
     }
 
     loadScope(resolveTenantId(u), authToken);
-  }, []);
+  }, [loadScope]);
 
   useEffect(() => {
     if (!token || !tenantId || !iso) {
@@ -798,7 +798,7 @@ function NoConformidadesPageContent() {
       loadNC(tenantId, token, iso);
       loadActions(tenantId, token, iso);
     }
-  }, [token, tenantId, iso, loadingStandards, operationalCodes]);
+  }, [loadActions, loadNC, token, tenantId, iso, loadingStandards]);
 
   const refreshAll = async () => {
     if (tenantId && token && iso) {

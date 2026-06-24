@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
@@ -762,31 +762,6 @@ function EvidenciasPageContent() {
 
 
   useEffect(() => {
-    const authToken = localStorage.getItem('token');
-    const u = getUserFromToken();
-    const resolvedTenantId = resolveTenantId(u);
-
-    setToken(authToken);
-    setUser(u);
-
-    if (!authToken || !resolvedTenantId) {
-      setLoading(false);
-      setLoadingStandards(false);
-      return;
-    }
-
-    if (tenantControlIdFromUrl || actionPlanIdFromUrl) {
-      setUploadForm((prev) => ({
-        ...prev,
-        description:
-          prev.description || t('evidence.remediationDefaultDescription'),
-      }));
-    }
-
-    loadStandards(resolvedTenantId, authToken);
-  }, [tenantControlIdFromUrl, actionPlanIdFromUrl, t]);
-
-  useEffect(() => {
     if (!token || !canManageEvidenceAssociations) return;
     loadProcessOptions(token);
     loadEvidenceCandidates(token);
@@ -826,13 +801,13 @@ function EvidenciasPageContent() {
     return [];
   };
 
-  const isOperationalStandard = (s: ScopeStandard) =>
+  const isOperationalStandard = useCallback((s: ScopeStandard) =>
     s?.is_active === true &&
     Number(s?.active_operations_count || 0) > 0 &&
     Array.isArray(s?.active_operation_ids) &&
-    s.active_operation_ids.length > 0;
+    s.active_operation_ids.length > 0, []);
 
-  const loadStandards = async (resolvedTenantId: string, authToken: string) => {
+  const loadStandards = useCallback(async (resolvedTenantId: string, authToken: string) => {
     try {
       setLoadingStandards(true);
 
@@ -873,9 +848,34 @@ function EvidenciasPageContent() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, [focusISO, isOperationalStandard]);
 
-  const load = async (resolvedTenantId: string, authToken: string, selectedIso: string) => {
+  useEffect(() => {
+    const authToken = localStorage.getItem('token');
+    const u = getUserFromToken();
+    const resolvedTenantId = resolveTenantId(u);
+
+    setToken(authToken);
+    setUser(u);
+
+    if (!authToken || !resolvedTenantId) {
+      setLoading(false);
+      setLoadingStandards(false);
+      return;
+    }
+
+    if (tenantControlIdFromUrl || actionPlanIdFromUrl) {
+      setUploadForm((prev) => ({
+        ...prev,
+        description:
+          prev.description || t('evidence.remediationDefaultDescription'),
+      }));
+    }
+
+    loadStandards(resolvedTenantId, authToken);
+  }, [actionPlanIdFromUrl, loadStandards, tenantControlIdFromUrl, t]);
+
+  const load = useCallback(async (resolvedTenantId: string, authToken: string, selectedIso: string) => {
     try {
       setLoading(true);
 
@@ -907,7 +907,7 @@ function EvidenciasPageContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [actionPlanIdFromUrl, tenantControlIdFromUrl]);
 
   useEffect(() => {
     if (!token || !tenantId) return;
@@ -916,6 +916,7 @@ function EvidenciasPageContent() {
       load(tenantId, token, iso);
     }
   }, [
+    load,
     token,
     tenantId,
     iso,
@@ -1139,7 +1140,7 @@ function EvidenciasPageContent() {
     return 'bg-red-100 text-red-700 border-red-200';
   };
 
-  const applyFocus = (evidence: EvidenceRow) => {
+  const applyFocus = useCallback((evidence: EvidenceRow) => {
     setFocusedEvidenceId(evidence.id);
     setFocusMessage(
       `Resultado abierto desde búsqueda: evidencia ${evidence.iso || iso || 'Sin norma'} — cláusula ${evidence.clause || 'N/A'}`
@@ -1152,7 +1153,7 @@ function EvidenciasPageContent() {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 250);
-  };
+  }, [iso]);
 
   useEffect(() => {
     if (loadingStandards || !standards.length) return;
@@ -1179,7 +1180,7 @@ function EvidenciasPageContent() {
       }
       applyFocus(match);
     }
-  }, [focusId, data, loading, iso, standards]);
+  }, [applyFocus, focusId, data, loading, iso, standards]);
 
   const metrics = useMemo(() => {
     const normalized = data.map((row) => normalizeEvidenceStatus(row.status));

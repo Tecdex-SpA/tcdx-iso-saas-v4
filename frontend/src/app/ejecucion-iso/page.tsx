@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 
@@ -105,7 +105,7 @@ export default function IsoOperationalExecutionPage() {
     });
   }, [suggestions, standard, priority, targetType]);
 
-  const apiFetch = async (path: string, options: RequestInit = {}) => {
+  const apiFetch = useCallback(async (path: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API_URL}${path}`, {
       ...options,
@@ -120,9 +120,9 @@ export default function IsoOperationalExecutionPage() {
       throw new Error(json?.error || 'Error en Ejecucion ISO');
     }
     return json;
-  };
+  }, []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -142,7 +142,7 @@ export default function IsoOperationalExecutionPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiFetch, status]);
 
   const generate = async (dryRun: boolean) => {
     try {
@@ -215,7 +215,7 @@ export default function IsoOperationalExecutionPage() {
 
   useEffect(() => {
     void load();
-  }, [status]);
+  }, [load]);
 
   return (
     <AppLayout>

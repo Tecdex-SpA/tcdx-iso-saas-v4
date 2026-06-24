@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserRoleFromToken } from '@/utils/auth';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
@@ -488,7 +488,7 @@ export default function ExportesPage() {
     return exportsHistory.slice(0, 5);
   }, [exportsHistory]);
 
-  const loadStandards = async (tenantId: string, reportCode?: string) => {
+  const loadStandards = useCallback(async (tenantId: string, reportCode?: string) => {
     if (!tenantId) {
       setStandards([]);
       setSelectedStandardKey('');
@@ -561,9 +561,9 @@ export default function ExportesPage() {
     } finally {
       setStandardsLoading(false);
     }
-  };
+  }, [locale]);
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     try {
       setHistoryLoading(true);
       setError('');
@@ -602,7 +602,7 @@ export default function ExportesPage() {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, [filterDateFrom, filterDateTo, filterTenant, filterText, filterType, locale, t]);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -667,21 +667,19 @@ export default function ExportesPage() {
     };
 
     loadInitialData();
-  }, [locale]);
+  }, [locale, t]);
 
   useEffect(() => {
     if (!loading) {
       loadHistory();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
+  }, [loadHistory, loading]);
 
   useEffect(() => {
     if (!loading && selectedTenantId) {
       loadStandards(selectedTenantId, selectedReportCode || undefined);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, selectedTenantId, selectedReportCode, locale]);
+  }, [loadStandards, loading, selectedTenantId, selectedReportCode]);
 
   useEffect(() => {
     if (!selectedReportCode && orderedReportTypes.length > 0) {

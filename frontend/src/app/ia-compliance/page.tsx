@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -384,30 +384,7 @@ export default function IaCompliancePage() {
   const [executiveBrief, setExecutiveBrief] = useState<ExecutiveBriefResponse | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
 
-  useEffect(() => {
-    if (entitlementsLoading) return;
-
-    if (!canUseAiCompliance) {
-      window.location.replace('/dashboard');
-      return;
-    }
-
-    const authToken = localStorage.getItem('token');
-    const u = getUserFromToken();
-
-    setToken(authToken);
-    setUser(u);
-
-    if (!authToken || !u?.tenant_id) {
-      setLoading(false);
-      setError(copy.sessionError);
-      return;
-    }
-
-    loadAll();
-  }, [canUseAiCompliance, entitlementsLoading]);
-
-  const getWithAuth = async (url: string) => {
+  const getWithAuth = useCallback(async (url: string) => {
     const authToken = localStorage.getItem('token');
 
     if (!authToken) {
@@ -436,9 +413,9 @@ export default function IaCompliancePage() {
     }
 
     return json;
-  };
+  }, [locale]);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -490,7 +467,30 @@ export default function IaCompliancePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [copy.engineWarning, copy.genericError, getWithAuth]);
+
+  useEffect(() => {
+    if (entitlementsLoading) return;
+
+    if (!canUseAiCompliance) {
+      window.location.replace('/dashboard');
+      return;
+    }
+
+    const authToken = localStorage.getItem('token');
+    const u = getUserFromToken();
+
+    setToken(authToken);
+    setUser(u);
+
+    if (!authToken || !u?.tenant_id) {
+      setLoading(false);
+      setError(copy.sessionError);
+      return;
+    }
+
+    loadAll();
+  }, [canUseAiCompliance, copy.sessionError, entitlementsLoading, loadAll]);
 
   const loadExecutiveBrief = async () => {
     try {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -481,7 +481,7 @@ export default function UnifiedEvidenceLibrary({
     setFolderChildrenMessage('');
   };
 
-  const loadSources = async () => {
+  const loadSources = useCallback(async () => {
     try {
       setSourcesError(null);
       const json = await fetchJson(`${API_URL}/api/evidence-library/sources`, token);
@@ -490,9 +490,9 @@ export default function UnifiedEvidenceLibrary({
       setSourcesError(error);
       setSources([]);
     }
-  };
+  }, [token]);
 
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     setLoading(true);
     try {
       setLibraryError(null);
@@ -524,9 +524,9 @@ export default function UnifiedEvidenceLibrary({
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, token]);
 
-  const loadDetail = async (doc = selected) => {
+  const loadDetail = useCallback(async (doc = selected) => {
     if (!doc) {
       setDetail(null);
       return;
@@ -542,7 +542,7 @@ export default function UnifiedEvidenceLibrary({
       token
     );
     setDetail(json.data || null);
-  };
+  }, [selected, token]);
 
   const openFolder = async (doc = selected) => {
     if (!doc || doc.item_type !== 'folder' || !doc.can_open) return;
@@ -595,12 +595,12 @@ export default function UnifiedEvidenceLibrary({
     }
   };
 
-  const loadTargets = async () => {
+  const loadTargets = useCallback(async () => {
     const params = new URLSearchParams();
     if (targetSearch.trim()) params.set('search', targetSearch.trim());
     const json = await fetchJson(`${API_URL}/api/evidence-library/targets/${targetType}?${params.toString()}`, token);
     setTargetOptions(Array.isArray(json.data) ? json.data : []);
-  };
+  }, [targetSearch, targetType, token]);
 
   const folderProviderPath = (source: SourceCard) => source.source_type === 'zoho_drive' ? 'zoho' : 'google';
   const folderProviderLabel = (source: SourceCard) => source.source_type === 'zoho_drive' ? 'Zoho WorkDrive' : 'Google Drive';
@@ -728,20 +728,20 @@ export default function UnifiedEvidenceLibrary({
 
   useEffect(() => {
     loadSources();
-  }, [token]);
+  }, [loadSources]);
 
   useEffect(() => {
     loadDocuments();
-  }, [token, filters.search, filters.origin, filters.document_type, filters.status, filters.association, filters.semantic_status, filters.version]);
+  }, [loadDocuments]);
 
   useEffect(() => {
     loadDetail().catch((error) => console.error('ERROR LOAD EVIDENCE DETAIL:', error));
-  }, [selectedSourceType, selectedSourceId]);
+  }, [loadDetail, selectedSourceId, selectedSourceType]);
 
   useEffect(() => {
     if (!canManage) return;
     loadTargets().catch((error) => console.error('ERROR LOAD TARGETS:', error));
-  }, [targetType, token]);
+  }, [canManage, loadTargets]);
 
   const associationTotal = (doc: LibraryDocument) =>
     Object.values(doc.association_counts || {}).reduce((sum, value) => sum + Number(value || 0), 0);

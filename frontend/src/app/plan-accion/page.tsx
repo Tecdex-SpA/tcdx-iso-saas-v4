@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
@@ -609,7 +609,7 @@ function PlanAccionPageContent() {
     }
   }, []);
 
-  const loadScope = async (resolvedTenantId: string, authToken: string) => {
+  const loadScope = useCallback(async (resolvedTenantId: string, authToken: string) => {
     try {
       setLoadingStandards(true);
       setErrorMessage('');
@@ -663,9 +663,9 @@ function PlanAccionPageContent() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, [focusISO]);
 
-  const loadPlans = async (
+  const loadPlans = useCallback(async (
     resolvedTenantId: string,
     authToken: string,
     iso: string,
@@ -703,9 +703,9 @@ function PlanAccionPageContent() {
     } finally {
       setLoadingData(false);
     }
-  };
+  }, []);
 
-  const openOrCreatePlanFromControl = async (
+  const openOrCreatePlanFromControl = useCallback(async (
     resolvedTenantId: string,
     authToken: string,
     tenantControlId: string,
@@ -764,12 +764,12 @@ function PlanAccionPageContent() {
     } finally {
       setOpeningFromControl(false);
     }
-  };
+  }, [loadPlans, statusFilter]);
 
   useEffect(() => {
     if (!token || !tenantId) return;
     void loadScope(tenantId, token);
-  }, [token, tenantId]);
+  }, [loadScope, token, tenantId]);
 
   useEffect(() => {
     if (!token || !tenantId || !selectedISO) {
@@ -778,7 +778,7 @@ function PlanAccionPageContent() {
     }
 
     void loadPlans(tenantId, token, selectedISO, statusFilter);
-  }, [token, tenantId, selectedISO, statusFilter, loadingStandards]);
+  }, [loadPlans, token, tenantId, selectedISO, statusFilter, loadingStandards]);
 
   useEffect(() => {
     if (!token || !tenantId || loadingStandards) return;
@@ -801,6 +801,7 @@ function PlanAccionPageContent() {
     focusTenantControlId,
     focusISO,
     selectedISO,
+    openOrCreatePlanFromControl,
   ]);
 
   useEffect(() => {

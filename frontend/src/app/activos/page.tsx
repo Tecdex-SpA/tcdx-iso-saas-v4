@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
@@ -236,7 +236,7 @@ function ActivosPageContent() {
     setFocusMessage('');
   }, [focusId, focusISO]);
 
-  const loadScope = async (tenantIdValue: string, authToken: string) => {
+  const loadScope = useCallback(async (tenantIdValue: string, authToken: string) => {
     try {
       setLoadingStandards(true);
       setErrorMessage('');
@@ -285,9 +285,9 @@ function ActivosPageContent() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, [focusISO, t]);
 
-  const loadAssets = async (tenantIdValue: string, authToken: string) => {
+  const loadAssets = useCallback(async (tenantIdValue: string, authToken: string) => {
     try {
       setLoadingAssets(true);
 
@@ -310,9 +310,9 @@ function ActivosPageContent() {
     } finally {
       setLoadingAssets(false);
     }
-  };
+  }, []);
 
-  const loadRiskSummary = async (tenantIdValue: string, authToken: string) => {
+  const loadRiskSummary = useCallback(async (tenantIdValue: string, authToken: string) => {
     try {
       setLoadingRiskSummary(true);
 
@@ -335,9 +335,9 @@ function ActivosPageContent() {
     } finally {
       setLoadingRiskSummary(false);
     }
-  };
+  }, []);
 
-  const loadRisks = async (assetId: string, authToken?: string | null) => {
+  const loadRisks = useCallback(async (assetId: string, authToken?: string | null) => {
     try {
       const tkn = authToken || token;
       if (!tkn) return;
@@ -363,7 +363,7 @@ function ActivosPageContent() {
     } finally {
       setLoadingRisks(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (!token || !tenantId) {
@@ -375,7 +375,7 @@ function ActivosPageContent() {
     void loadScope(tenantId, token);
     void loadAssets(tenantId, token);
     void loadRiskSummary(tenantId, token);
-  }, [token, tenantId]);
+  }, [loadAssets, loadRiskSummary, loadScope, token, tenantId]);
 
   useEffect(() => {
     if (!selectedAsset) {
@@ -607,7 +607,7 @@ function ActivosPageContent() {
     }
   };
 
-  const applyFocus = async (asset: AssetRow) => {
+  const applyFocus = useCallback(async (asset: AssetRow) => {
     setFocusedAssetId(asset.id);
     setSelectedAsset(asset);
     setFocusMessage(
@@ -625,7 +625,7 @@ function ActivosPageContent() {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 250);
-  };
+  }, [loadRisks, t, token]);
 
   useEffect(() => {
     if (loadingStandards || !operationalStandards.length) return;
@@ -662,7 +662,7 @@ function ActivosPageContent() {
     }
 
     void applyFocus(match);
-  }, [focusId, assets, iso, focusISO, token]);
+  }, [applyFocus, focusId, assets, iso, focusISO]);
 
   if (loadingStandards) {
     return (

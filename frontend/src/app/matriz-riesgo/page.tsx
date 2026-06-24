@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
@@ -515,7 +515,7 @@ function RiskMatrixPageContent() {
     setOperationalRiskMessage('');
   };
 
-  const loadOperationalSimulations = async () => {
+  const loadOperationalSimulations = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return [];
 
@@ -544,7 +544,7 @@ function RiskMatrixPageContent() {
     } finally {
       setLoadingOperationalSimulations(false);
     }
-  };
+  }, []);
 
   const runOperationalRiskSimulation = async () => {
     const token = localStorage.getItem('token');
@@ -661,7 +661,7 @@ function RiskMatrixPageContent() {
     }
   };
 
-  const loadScope = async () => {
+  const loadScope = useCallback(async () => {
     const token = localStorage.getItem('token');
     const user = getUserFromToken();
     const tenantId = resolveTenantId(user);
@@ -716,9 +716,9 @@ function RiskMatrixPageContent() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, [focusISO]);
 
-  const loadMatrixOptions = async () => {
+  const loadMatrixOptions = useCallback(async () => {
     const token = localStorage.getItem('token');
     const user = getUserFromToken();
     const tenantId = resolveTenantId(user);
@@ -756,9 +756,9 @@ function RiskMatrixPageContent() {
     } finally {
       setLoadingMatrix(false);
     }
-  };
+  }, []);
 
-  const loadLatestMatrix = async (option?: IsoRiskMatrixOption | null) => {
+  const loadLatestMatrix = useCallback(async (option?: IsoRiskMatrixOption | null) => {
     const token = localStorage.getItem('token');
     const user = getUserFromToken();
     const tenantId = resolveTenantId(user);
@@ -789,7 +789,7 @@ function RiskMatrixPageContent() {
     } catch (err) {
       console.error('ERROR LOAD LATEST ISO RISK MATRIX:', err);
     }
-  };
+  }, [selectedMatrixOption]);
 
   const generateMatrix = async (dryRun: boolean) => {
     const token = localStorage.getItem('token');
@@ -879,7 +879,7 @@ function RiskMatrixPageContent() {
     }
   };
 
-  const load = async (selectedISO: string) => {
+  const load = useCallback(async (selectedISO: string) => {
     const token = localStorage.getItem('token');
     const user = getUserFromToken();
     const tenantId = resolveTenantId(user);
@@ -944,13 +944,13 @@ function RiskMatrixPageContent() {
     } finally {
       setLoadingControls(false);
     }
-  };
+  }, [activeStandardCodes]);
 
   useEffect(() => {
     void loadScope();
     void loadMatrixOptions();
     void loadOperationalSimulations();
-  }, []);
+  }, [loadMatrixOptions, loadOperationalSimulations, loadScope]);
 
   useEffect(() => {
     if (iso === 'ISO27001' || iso === 'ISO9001') {
@@ -974,7 +974,7 @@ function RiskMatrixPageContent() {
       setMatrixActions([]);
       setMatrixDryRun(true);
     }
-  }, [selectedMatrixOption?.standard_code, selectedMatrixOption?.version_code]);
+  }, [loadLatestMatrix, selectedMatrixOption]);
 
   useEffect(() => {
     if (!iso) return;
@@ -1014,7 +1014,7 @@ function RiskMatrixPageContent() {
     if (!focusId) {
       setSelectedLevel(null);
     }
-  }, [iso, activeStandardCodes]);
+  }, [activeStandardCodes, focusId, iso, load]);
 
   const applyAI = async (tenant_control_id: string) => {
     const token = localStorage.getItem('token');
@@ -1112,15 +1112,15 @@ function RiskMatrixPageContent() {
       : [];
   }, [controls, selectedLevel]);
 
-  const riskLevelLabel = (value?: string | null) => {
+  const riskLevelLabel = useCallback((value?: string | null) => {
     const raw = String(value || '').toUpperCase();
     if (raw === 'CRITICO') return t('statuses.findings.critico') || 'Critico';
     if (raw === 'ALTO') return t('statuses.findings.alto');
     if (raw === 'MEDIO') return t('statuses.findings.medio');
     return t('statuses.findings.bajo');
-  };
+  }, [t]);
 
-  const applyFocus = (control: RiskControlRow) => {
+  const applyFocus = useCallback((control: RiskControlRow) => {
     setFocusedControlId(control.id);
     setSelectedLevel(control.nivel || null);
     setFocusMessage(
@@ -1136,7 +1136,7 @@ function RiskMatrixPageContent() {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 250);
-  };
+  }, [locale, riskLevelLabel, t]);
 
   useEffect(() => {
     if (loadingStandards || !operationalStandards.length) return;
@@ -1157,7 +1157,7 @@ function RiskMatrixPageContent() {
     if (match) {
       applyFocus(match);
     }
-  }, [focusId, controls, loadingControls]);
+  }, [applyFocus, focusId, controls, loadingControls]);
 
   if (loadingStandards) {
     return (

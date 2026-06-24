@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
@@ -326,7 +326,7 @@ export default function CicloVidaPage() {
     }
   }, [canUseObjectives, activeView]);
 
-  async function fetchMe(currentToken: string): Promise<MeResponse | null> {
+  const fetchMe = useCallback(async (currentToken: string): Promise<MeResponse | null> => {
     try {
       const res = await fetch(`${API_URL}/api/me`, {
         headers: {
@@ -339,9 +339,9 @@ export default function CicloVidaPage() {
     } catch {
       return null;
     }
-  }
+  }, []);
 
-  async function loadScope(resolvedTenantId: string) {
+  const loadScope = useCallback(async (resolvedTenantId: string) => {
     const token = getToken();
     if (!token || !resolvedTenantId) return;
 
@@ -363,13 +363,13 @@ export default function CicloVidaPage() {
       operations: Array.isArray(data?.operations) ? data.operations : [],
       standards: Array.isArray(data?.standards) ? data.standards : [],
     });
-  }
+  }, [t]);
 
-  async function loadBoard(
+  const loadBoard = useCallback(async (
     resolvedTenantId: string,
     standardCode?: string,
     operationId?: string
-  ) {
+  ) => {
     const token = getToken();
     if (!token || !resolvedTenantId) return;
 
@@ -402,14 +402,14 @@ export default function CicloVidaPage() {
     }
 
     setBoard(data);
-  }
+  }, [t]);
 
   async function refreshBoard() {
     if (!tenantId) return;
     await loadBoard(tenantId, selectedStandard, selectedOperation);
   }
 
-  async function loadHistory(resolvedTenantId: string) {
+  const loadHistory = useCallback(async (resolvedTenantId: string) => {
     const token = getToken();
     if (!token || !resolvedTenantId) return;
 
@@ -451,7 +451,7 @@ export default function CicloVidaPage() {
     } finally {
       setHistoryLoading(false);
     }
-  }
+  }, [selectedOperation, selectedStandard, t]);
 
   useEffect(() => {
     const run = async () => {
@@ -492,7 +492,7 @@ export default function CicloVidaPage() {
     };
 
     run();
-  }, []);
+  }, [fetchMe, loadBoard, loadScope, t]);
 
   useEffect(() => {
     const run = async () => {
@@ -510,13 +510,12 @@ export default function CicloVidaPage() {
     };
 
     run();
-  }, [selectedStandard, selectedOperation, tenantId]);
+  }, [loadBoard, selectedStandard, selectedOperation, tenantId, t]);
 
   useEffect(() => {
     if (activeView !== 'history' || !tenantId) return;
     void loadHistory(tenantId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, tenantId, selectedStandard, selectedOperation]);
+  }, [activeView, loadHistory, tenantId]);
 
   const activeStandards = useMemo(() => {
     return (scope.standards || []).filter((item) => item?.is_active === true);

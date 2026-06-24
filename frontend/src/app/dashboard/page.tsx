@@ -1226,7 +1226,7 @@ function DashboardPageContent() {
   const openNcCount = numberOrZero(summary?.open_nonconformities);
   const closedNcCount = numberOrZero(summary?.closed_nonconformities);
 
-  const kpiItems = kpiData?.items || [];
+  const kpiItems = useMemo(() => kpiData?.items || [], [kpiData?.items]);
   const kpiSummary = kpiData?.summary;
 
   const healthKpiItems = useMemo(() => {
@@ -1272,7 +1272,7 @@ function DashboardPageContent() {
       { name: t('dashboardKpi.redStatus'), value: kpiSummary?.red || 0, fill: '#ef4444' },
       { name: t('dashboardKpi.noDataStatus'), value: kpiSummary?.gray || 0, fill: '#94a3b8' },
     ];
-  }, [kpiSummary]);
+  }, [kpiSummary, t]);
 
   const kpiCategoryData = useMemo(() => {
     const acc: Record<string, number> = {};

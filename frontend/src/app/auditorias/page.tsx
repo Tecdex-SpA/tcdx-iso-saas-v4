@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
@@ -416,7 +416,7 @@ function AuditProgramPanel() {
     setFocusMessage('');
   }, [focusId, focusISO]);
 
-  const loadScope = async (tenantIdValue: string, tkn: string) => {
+  const loadScope = useCallback(async (tenantIdValue: string, tkn: string) => {
     try {
       setLoadingStandards(true);
       setErrorMessage('');
@@ -467,9 +467,9 @@ function AuditProgramPanel() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, [focusISO, t]);
 
-  const loadAudits = async (tenantIdValue: string, tkn: string) => {
+  const loadAudits = useCallback(async (tenantIdValue: string, tkn: string) => {
     try {
       setLoadingAudits(true);
 
@@ -495,9 +495,9 @@ function AuditProgramPanel() {
     } finally {
       setLoadingAudits(false);
     }
-  };
+  }, [iso]);
 
-  const loadAuditSummary = async (tenantIdValue: string, tkn: string) => {
+  const loadAuditSummary = useCallback(async (tenantIdValue: string, tkn: string) => {
     try {
       setLoadingAuditSummary(true);
 
@@ -527,9 +527,9 @@ function AuditProgramPanel() {
     } finally {
       setLoadingAuditSummary(false);
     }
-  };
+  }, [iso]);
 
-  const loadRelations = async (
+  const loadRelations = useCallback(async (
     tenantIdValue: string,
     tkn: string,
     selectedIso: string
@@ -584,23 +584,22 @@ function AuditProgramPanel() {
     } finally {
       setLoadingRelations(false);
     }
-  };
+  }, [operationalStandardCodes]);
 
   useEffect(() => {
     if (!token || !tenantId) return;
     void loadScope(tenantId, token);
-  }, [token, tenantId]);
+  }, [loadScope, token, tenantId]);
 
   useEffect(() => {
     if (!token || !tenantId || loadingStandards) return;
     void loadAudits(tenantId, token);
-  }, [token, tenantId, iso, loadingStandards]);
+  }, [loadAudits, token, tenantId, loadingStandards]);
 
   useEffect(() => {
     if (!token || !tenantId || loadingStandards) return;
     void loadAuditSummary(tenantId, token);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, tenantId, iso, loadingStandards]);
+  }, [loadAuditSummary, token, tenantId, loadingStandards]);
 
   useEffect(() => {
     if (!token || !tenantId || !iso || loadingStandards) {
@@ -609,7 +608,7 @@ function AuditProgramPanel() {
     }
 
     void loadRelations(tenantId, token, iso);
-  }, [token, tenantId, iso, loadingStandards, operationalStandardCodes]);
+  }, [loadRelations, token, tenantId, iso, loadingStandards]);
 
   const refreshAll = async () => {
     if (!token || !tenantId) return;
@@ -891,7 +890,7 @@ function AuditProgramPanel() {
     }
   };
 
-  const applyFocus = (audit: AuditRow) => {
+  const applyFocus = useCallback((audit: AuditRow) => {
     setFocusedAuditId(audit.id);
     setExpandedAuditId(audit.id);
     setFocusMessage(
@@ -906,7 +905,7 @@ function AuditProgramPanel() {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 250);
-  };
+  }, [t]);
 
   useEffect(() => {
     if (loadingStandards || !operationalStandards.length) return;
@@ -931,7 +930,7 @@ function AuditProgramPanel() {
       }
       applyFocus(match);
     }
-  }, [focusId, audits, loadingAudits, iso]);
+  }, [applyFocus, focusId, audits, loadingAudits, iso]);
 
   const filteredAudits = useMemo(() => {
     const base = iso ? audits.filter((a) => a.iso === iso) : audits;

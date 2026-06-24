@@ -190,8 +190,8 @@ function RecommendedActionDetailModalContent({
 }: ContentProps) {
   const canAct = !readonly && action.status === 'pending';
   const links = relatedLinks(action);
-  const payload = action.payload_json || {};
-  const trace = action.source_trace_json || {};
+  const payload = useMemo(() => action.payload_json || {}, [action.payload_json]);
+  const trace = useMemo(() => action.source_trace_json || {}, [action.source_trace_json]);
   const operationalInsight = useMemo(() => buildOperationalInsight(action, payload, trace), [action, payload, trace]);
   const traceInsight = useMemo(() => buildTraceInsight(action, payload, trace), [action, payload, trace]);
   const [aiInsight, setAiInsight] = useState<AiInsightState>({

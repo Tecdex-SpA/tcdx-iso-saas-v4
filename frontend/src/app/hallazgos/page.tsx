@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
@@ -1734,7 +1734,7 @@ function HallazgosPageContent() {
     }
   };
 
-  const loadScope = async (resolvedTenantId: string, authToken: string) => {
+  const loadScope = useCallback(async (resolvedTenantId: string, authToken: string) => {
     try {
       setLoadingStandards(true);
 
@@ -1783,9 +1783,9 @@ function HallazgosPageContent() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, [focusISO]);
 
-  const loadControls = async (
+  const loadControls = useCallback(async (
     resolvedTenantId: string,
     authToken: string,
     iso: string
@@ -1823,9 +1823,9 @@ function HallazgosPageContent() {
     } finally {
       setLoadingControls(false);
     }
-  };
+  }, [operationalStandardCodes]);
 
-  const loadFindings = async (
+  const loadFindings = useCallback(async (
     resolvedTenantId: string,
     authToken: string,
     iso: string,
@@ -1873,9 +1873,9 @@ function HallazgosPageContent() {
     } finally {
       setLoadingData(false);
     }
-  };
+  }, [operationalStandardCodes]);
 
-  const loadActions = async (
+  const loadActions = useCallback(async (
     resolvedTenantId: string,
     authToken: string,
     iso: string
@@ -1918,9 +1918,9 @@ function HallazgosPageContent() {
     } finally {
       setLoadingActions(false);
     }
-  };
+  }, [operationalStandardCodes]);
 
-  const loadFindingsDirect = async (
+  const loadFindingsDirect = useCallback(async (
     resolvedTenantId: string,
     authToken: string,
     iso: string,
@@ -1952,12 +1952,12 @@ function HallazgosPageContent() {
           operationalStandardCodes.has(row.iso_code || row.control_iso)
         )
       : [];
-  };
+  }, [operationalStandardCodes]);
 
   useEffect(() => {
     if (!token || !tenantId) return;
     void loadScope(tenantId, token);
-  }, [token, tenantId]);
+  }, [loadScope, token, tenantId]);
 
   useEffect(() => {
     if (!token || !tenantId || !selectedISO) {
@@ -1981,6 +1981,9 @@ function HallazgosPageContent() {
     statusFilter,
     typeFilter,
     loadingStandards,
+    loadActions,
+    loadControls,
+    loadFindings,
     operationalStandardCodes,
   ]);
 
@@ -2303,7 +2306,7 @@ function HallazgosPageContent() {
 
   const getCardId = (row: any) => `finding-${row.id}`;
 
-  const applyFocus = (row: any, iso: string) => {
+  const applyFocus = useCallback((row: any, iso: string) => {
     setFocusedFindingId(row.id);
     setFocusResolved(true);
     setFocusMessage(
@@ -2316,7 +2319,7 @@ function HallazgosPageContent() {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 250);
-  };
+  }, [locale]);
 
   useEffect(() => {
     if (!focusISO || !operationalStandards.length) return;
@@ -2334,7 +2337,7 @@ function HallazgosPageContent() {
     if (match) {
       applyFocus(match, selectedISO);
     }
-  }, [focusId, loadingData, data, selectedISO]);
+  }, [applyFocus, focusId, loadingData, data, selectedISO]);
 
   useEffect(() => {
     const findAcrossStandards = async () => {
@@ -2401,6 +2404,7 @@ function HallazgosPageContent() {
     data,
     statusFilter,
     typeFilter,
+    loadFindingsDirect,
   ]);
 
   useEffect(() => {
