@@ -380,7 +380,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       <div className={`relative z-10 mb-7 flex min-h-20 items-center border-b border-white/10 pb-5 ${collapsed ? 'justify-center' : 'justify-center'}`}>
         {collapsed ? (
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/12 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_12px_30px_rgba(0,0,0,0.18)]">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/12 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_12px_30px_rgba(0,0,0,0.18)]">
             <img
               src={SERVICE_LOGO_SRC}
               alt="ISOS-SAAS-TECDEX"
@@ -388,11 +388,11 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             />
           </span>
         ) : (
-          <div className="flex w-full justify-center rounded-[22px] border border-white/12 bg-white/10 px-3 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_34px_rgba(0,0,0,0.18)]">
+          <div className="flex min-h-[124px] w-full items-center justify-center rounded-[22px] border border-white/12 bg-white/10 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_34px_rgba(0,0,0,0.18)]">
             <img
               src={PLATFORM_WORDMARK_SRC}
               alt="ISOS-SAAS-TECDEX Compliance 360"
-              className="h-[76px] w-full max-w-[204px] object-contain"
+              className="h-[112px] w-full max-w-[224px] object-contain"
             />
           </div>
         )}
