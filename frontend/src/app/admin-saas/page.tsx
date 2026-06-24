@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useLanguage } from '@/context/LanguageContext';
 import { translateStandardLabel } from '@/i18n/displayText';
@@ -9,11 +9,44 @@ import { clearTenantEntitlementsCache } from '@/hooks/useTenantEntitlements';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+type JsonObject = Record<string, unknown>;
+
+type AdminApiResponse<TData = unknown> = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  data?: TData;
+  [key: string]: unknown;
+};
+
+function isRecord(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function responseErrorMessage(
+  payload: AdminApiResponse | JsonObject,
+  fallback: string
+) {
+  const error = payload.error;
+  const message = payload.message;
+
+  if (typeof error === 'string' && error.trim()) return error;
+  if (typeof message === 'string' && message.trim()) return message;
+  return fallback;
+}
+
 type TenantRow = {
+  id?: string;
   tenant_id: string;
   tenant_name: string;
+  name?: string;
   rut?: string;
   business?: string;
+  service_status?: string;
   active_standards?: string;
   inactive_standards?: string;
   enabled_modules?: string;
@@ -30,17 +63,36 @@ type TenantRow = {
   ai_auditor_enabled?: boolean;
   ai_monthly_quota?: number | null;
   ai_quota_used?: number;
-  ai_features_json?: any;
+  ai_features_json?: JsonObject | null;
 };
 
 type TenantDetail = {
-  tenant: any;
-  summary: any;
-  contract: any;
-  standards: any[];
-  modules: any[];
-  users: any[];
-  dealers: any[];
+  tenant: {
+    id?: string;
+    tenant_id?: string;
+    name?: string;
+    tenant_name?: string;
+    rut?: string;
+    address?: string;
+    business?: string;
+    branches?: string;
+    service_status?: string;
+    ai_enabled?: boolean;
+    ai_plan?: string;
+    ai_web_enabled?: boolean;
+    ai_report_enabled?: boolean;
+    ai_auditor_enabled?: boolean;
+    ai_monthly_quota?: number | null;
+  };
+  summary?: {
+    last_admin_event_at?: string | null;
+    [key: string]: unknown;
+  };
+  contract?: TenantContract | null;
+  standards: TenantStandardCatalogItem[];
+  modules: TenantModuleCatalogItem[];
+  users: TenantUser[];
+  dealers: TenantDealer[];
 };
 
 
@@ -60,6 +112,8 @@ type ExternalLookupQuota = {
 
 
 type TenantStandardCatalogItem = {
+  code: string;
+  name: string;
   standard_code: string;
   standard_name: string;
   is_contracted: boolean;
@@ -72,6 +126,7 @@ type TenantStandardCatalogItem = {
   updated_at?: string | null;
   catalog_controls_count: number;
   tenant_controls_count: number;
+  tenant_controls?: number;
 };
 
 
@@ -86,7 +141,7 @@ type SaasPriceCatalogItem = {
   unit_price: number | string;
   billing_frequency: string;
   is_active: boolean;
-  metadata?: any;
+  metadata?: JsonObject | null;
   updated_at?: string;
 };
 
@@ -102,7 +157,7 @@ type TenantModuleCatalogItem = {
   enabled_at?: string | null;
   disabled_at?: string | null;
   notes?: string | null;
-  metadata?: any;
+  metadata?: JsonObject | null;
   can_enable?: boolean;
 };
 
@@ -126,7 +181,7 @@ type TenantContract = {
   max_active_standards?: number | string | null;
   max_premium_modules?: number | string | null;
   external_lookup_quota?: number | string | null;
-  metadata?: any;
+  metadata?: JsonObject | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -232,12 +287,85 @@ type Dealer = {
   active_tenants?: number;
 };
 
+type TenantUser = {
+  id: string;
+  email?: string;
+  full_name?: string;
+  role?: string;
+  status?: string;
+};
+
+type TenantDealer = Dealer & {
+  status?: string;
+  dealer_email?: string;
+  dealer_name?: string;
+  relationship_type?: string;
+  can_view_health?: boolean;
+  can_view_contract?: boolean;
+  can_request_changes?: boolean;
+  can_view_sensitive_evidence?: boolean;
+};
+
+type AdminAuditEvent = {
+  id: string;
+  created_at?: string | null;
+  actor_email?: string | null;
+  actor_name?: string | null;
+  actor_role?: string | null;
+  entity_type?: string | null;
+  action?: string | null;
+  action_label?: string | null;
+};
+
+type DealerRequest = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  dealer_email?: string | null;
+  request_type?: string | null;
+  request_status: string;
+  created_at?: string | null;
+};
+
+type GovernanceResponse = {
+  data?: {
+    scope?: {
+      is_platform?: boolean;
+    };
+    permission_map?: Record<string, boolean>;
+    user?: {
+      email?: string;
+      role?: string;
+    };
+    role?: {
+      display_name?: string;
+    };
+  };
+};
+
+type AiSettingsDraft = {
+  ai_enabled: boolean;
+  ai_plan: string;
+  ai_web_enabled: boolean;
+  ai_report_enabled: boolean;
+  ai_auditor_enabled: boolean;
+  ai_monthly_quota: string;
+};
+
+type AiFeatureToggleKey = 'ai_report_enabled' | 'ai_auditor_enabled' | 'ai_web_enabled';
+
+const AI_FEATURE_TOGGLES: Array<{ key: AiFeatureToggleKey; label: string }> = [
+  { key: 'ai_report_enabled', label: 'Reportes' },
+  { key: 'ai_auditor_enabled', label: 'Auditor' },
+  { key: 'ai_web_enabled', label: 'Web' },
+];
+
 
 const IA_EXTERNAL_PACKAGE_SIZE = 100;
 const IA_EXTERNAL_PACKAGE_PRICE = 4990;
 const IA_EXTERNAL_EXTRA_QUERY_PRICE = 100;
 
-function getExternalLookupPackageCount(limit: any) {
+function getExternalLookupPackageCount(limit: unknown) {
   const n = Number(limit || 0);
 
   if (!Number.isFinite(n) || n <= 0) return 0;
@@ -245,18 +373,18 @@ function getExternalLookupPackageCount(limit: any) {
   return Math.ceil(n / IA_EXTERNAL_PACKAGE_SIZE);
 }
 
-function getExternalLookupNormalizedLimit(limit: any) {
+function getExternalLookupNormalizedLimit(limit: unknown) {
   const packages = getExternalLookupPackageCount(limit);
 
   return packages * IA_EXTERNAL_PACKAGE_SIZE;
 }
 
-function getExternalLookupMonthlyPrice(limit: any) {
+function getExternalLookupMonthlyPrice(limit: unknown) {
   return getExternalLookupPackageCount(limit) * IA_EXTERNAL_PACKAGE_PRICE;
 }
 
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
   if (!value) return '-';
 
   const date = new Date(value);
@@ -312,7 +440,7 @@ function badgeColor(value?: string) {
   return 'border-slate-200 bg-slate-50 text-slate-700';
 }
 
-function boolLabel(value: any) {
+function boolLabel(value: unknown) {
   return value === true ? 'Activo' : 'Inactivo';
 }
 
@@ -322,7 +450,7 @@ function SmallCard({
   subtitle,
 }: {
   title: string;
-  value: any;
+  value: ReactNode;
   subtitle?: string;
 }) {
   return (
@@ -355,13 +483,13 @@ export default function AdminSaasPage() {
   const { locale } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
 
-  const [governance, setGovernance] = useState<any>(null);
+  const [governance, setGovernance] = useState<GovernanceResponse | null>(null);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [tenantDetail, setTenantDetail] = useState<TenantDetail | null>(null);
   const [dealers, setDealers] = useState<Dealer[]>([]);
-  const [auditLog, setAuditLog] = useState<any[]>([]);
-  const [dealerRequests, setDealerRequests] = useState<any[]>([]);
+  const [auditLog, setAuditLog] = useState<AdminAuditEvent[]>([]);
+  const [dealerRequests, setDealerRequests] = useState<DealerRequest[]>([]);
   const [externalQuotas, setExternalQuotas] = useState<ExternalLookupQuota[]>([]);
   const [externalLogs, setExternalLogs] = useState<ExternalLookupLog[]>([]);
   const [externalQuotaAudit, setExternalQuotaAudit] = useState<ExternalLookupQuotaAudit[]>([]);
@@ -390,14 +518,7 @@ export default function AdminSaasPage() {
     monthly_limit: string;
     notes: string;
   }>>({});
-  const [aiSettingsDraftByTenant, setAiSettingsDraftByTenant] = useState<Record<string, {
-    ai_enabled: boolean;
-    ai_plan: string;
-    ai_web_enabled: boolean;
-    ai_report_enabled: boolean;
-    ai_auditor_enabled: boolean;
-    ai_monthly_quota: string;
-  }>>({});
+  const [aiSettingsDraftByTenant, setAiSettingsDraftByTenant] = useState<Record<string, AiSettingsDraft>>({});
 
   const [search, setSearch] = useState('');
   const [selectedDealerId, setSelectedDealerId] = useState('');
@@ -437,8 +558,11 @@ export default function AdminSaasPage() {
 
   const canAccess = isPlatform || canViewAdminSaas;
 
-  async function fetchJson(path: string, options: RequestInit = {}) {
-    const authToken = token || localStorage.getItem('token') || '';
+  const fetchJson = useCallback(async function fetchJson<TData = unknown>(
+    path: string,
+    options: RequestInit = {}
+  ): Promise<AdminApiResponse<TData>> {
+    const authToken = localStorage.getItem('token') || '';
 
     const res = await fetch(`${API_URL}${path}`, {
       ...options,
@@ -451,7 +575,7 @@ export default function AdminSaasPage() {
 
     const text = await res.text();
 
-    let json: any = null;
+    let json: unknown = null;
 
     try {
       json = text ? JSON.parse(text) : {};
@@ -459,15 +583,21 @@ export default function AdminSaasPage() {
       throw new Error(`Respuesta inválida del backend en ${path}. HTTP ${res.status}.`);
     }
 
-    if (!res.ok || json.ok === false) {
-      throw new Error(json.error || `Error backend en ${path}`);
+    if (!isRecord(json)) {
+      throw new Error(`Respuesta inválida del backend en ${path}. HTTP ${res.status}.`);
     }
 
-    return json;
-  }
+    const parsed = json as AdminApiResponse<TData>;
 
-  async function loadGovernance(authToken?: string) {
-    const finalToken = authToken || token || localStorage.getItem('token') || '';
+    if (!res.ok || parsed.ok === false) {
+      throw new Error(responseErrorMessage(parsed, `Error backend en ${path}`));
+    }
+
+    return parsed;
+  }, []);
+
+  const loadGovernance = useCallback(async function loadGovernance(authToken?: string) {
+    const finalToken = authToken || localStorage.getItem('token') || '';
 
     const res = await fetch(`${API_URL}/api/me/governance`, {
       headers: {
@@ -476,28 +606,34 @@ export default function AdminSaasPage() {
     });
 
     const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
+    const payload: unknown = text ? JSON.parse(text) : {};
+
+    if (!isRecord(payload)) {
+      throw new Error('Respuesta inválida obteniendo gobernanza');
+    }
+
+    const json = payload as GovernanceResponse & AdminApiResponse;
 
     if (!res.ok || json.ok === false) {
-      throw new Error(json.error || 'Error obteniendo gobernanza');
+      throw new Error(responseErrorMessage(json, 'Error obteniendo gobernanza'));
     }
 
     setGovernance(json);
     return json;
-  }
+  }, []);
 
 
   function getSelectedTenantNameForCriticalAction() {
-    const detail: any = tenantDetail || {};
-    const listItem: any = (tenants as any[]).find(
-      (item: any) =>
-        item?.tenant_id === selectedTenantId ||
-        item?.id === selectedTenantId
+    const detailTenant = tenantDetail?.tenant;
+    const listItem = tenants.find(
+      (item) =>
+        item.tenant_id === selectedTenantId ||
+        item.id === selectedTenantId
     );
 
     return (
-      detail?.tenant_name ||
-      detail?.name ||
+      detailTenant?.tenant_name ||
+      detailTenant?.name ||
       listItem?.tenant_name ||
       listItem?.name ||
       ''
@@ -505,15 +641,15 @@ export default function AdminSaasPage() {
   }
 
   function getSelectedTenantServiceStatus() {
-    const detail: any = tenantDetail || {};
-    const listItem: any = (tenants as any[]).find(
-      (item: any) =>
-        item?.tenant_id === selectedTenantId ||
-        item?.id === selectedTenantId
+    const detailTenant = tenantDetail?.tenant;
+    const listItem = tenants.find(
+      (item) =>
+        item.tenant_id === selectedTenantId ||
+        item.id === selectedTenantId
     );
 
     return String(
-      detail?.service_status ||
+      detailTenant?.service_status ||
         listItem?.service_status ||
         'active'
     );
@@ -559,8 +695,8 @@ export default function AdminSaasPage() {
       await loadTenantDetail(selectedTenantId);
       await loadTenantContract(selectedTenantId);
       await loadPrebilling(selectedTenantId, prebillingMonth);
-    } catch (err: any) {
-      const msg = err.message || 'Error suspendiendo servicio';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error suspendiendo servicio');
       setError(msg);
       alert(msg);
     } finally {
@@ -607,8 +743,8 @@ export default function AdminSaasPage() {
       await loadTenantDetail(selectedTenantId);
       await loadTenantContract(selectedTenantId);
       await loadPrebilling(selectedTenantId, prebillingMonth);
-    } catch (err: any) {
-      const msg = err.message || 'Error reactivando servicio';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error reactivando servicio');
       setError(msg);
       alert(msg);
     } finally {
@@ -673,8 +809,8 @@ export default function AdminSaasPage() {
       setSelectedTenantId('');
       setTenantDetail(null);
       setTenantContract(null);
-    } catch (err: any) {
-      const msg = err.message || 'Error eliminando empresa';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error eliminando empresa');
       setError(msg);
       alert(msg);
     } finally {
@@ -688,7 +824,7 @@ export default function AdminSaasPage() {
       ? `?search=${encodeURIComponent(search.trim())}`
       : '';
 
-    const json = await fetchJson(`/api/admin-saas/tenants${query}`);
+    const json = await fetchJson<TenantRow[]>(`/api/admin-saas/tenants${query}`);
     const rows: TenantRow[] = json.data || [];
 
     setTenants(rows);
@@ -705,7 +841,7 @@ export default function AdminSaasPage() {
   }
 
   async function loadDealers() {
-    const json = await fetchJson('/api/admin-saas/dealers');
+    const json = await fetchJson<Dealer[]>('/api/admin-saas/dealers');
     setDealers(json.data || []);
   }
 
@@ -713,15 +849,15 @@ export default function AdminSaasPage() {
 
 
 
-  async function loadPriceCatalog() {
+  const loadPriceCatalog = useCallback(async function loadPriceCatalog() {
     try {
-      const json = await fetchJson('/api/admin-saas/prebilling/prices');
+      const json = await fetchJson<SaasPriceCatalogItem[]>('/api/admin-saas/prebilling/prices');
       setPriceCatalog(json.data || []);
     } catch (err) {
       console.error('ERROR LOAD PRICE CATALOG:', err);
       setPriceCatalog([]);
     }
-  }
+  }, [fetchJson]);
 
   async function updatePriceCatalogItem(item: SaasPriceCatalogItem) {
     if (!canManageAdminSaas) return;
@@ -730,7 +866,7 @@ export default function AdminSaasPage() {
       setSavingKey(`price-${item.id}`);
       setError('');
 
-      const json = await fetchJson(`/api/admin-saas/prebilling/prices/${item.id}`, {
+      const json = await fetchJson<SaasPriceCatalogItem>(`/api/admin-saas/prebilling/prices/${item.id}`, {
         method: 'PUT',
         body: JSON.stringify({
           item_name: item.item_name,
@@ -741,14 +877,14 @@ export default function AdminSaasPage() {
       });
 
       setPriceCatalog((prev) =>
-        prev.map((row) => (row.id === item.id ? json.data : row))
+        prev.map((row) => (row.id === item.id ? json.data || row : row))
       );
 
       if (selectedTenantId) {
         await loadPrebilling(selectedTenantId, prebillingMonth);
       }
-    } catch (err: any) {
-      setError(err.message || 'Error actualizando precio SaaS');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error actualizando precio SaaS'));
     } finally {
       setSavingKey('');
     }
@@ -756,20 +892,20 @@ export default function AdminSaasPage() {
 
 
 
-  async function loadTenantModulesCatalog(tenantId: string) {
+  const loadTenantModulesCatalog = useCallback(async function loadTenantModulesCatalog(tenantId: string) {
     if (!tenantId) {
       setTenantModulesCatalog(null);
       return;
     }
 
     try {
-      const json = await fetchJson(`/api/admin-saas/tenants/${tenantId}/modules/catalog`);
+      const json = await fetchJson<TenantModulesCatalogResponse>(`/api/admin-saas/tenants/${tenantId}/modules/catalog`);
       setTenantModulesCatalog(json.data || null);
     } catch (err) {
       console.error('ERROR LOAD TENANT MODULES CATALOG:', err);
       setTenantModulesCatalog(null);
     }
-  }
+  }, [fetchJson]);
 
   async function toggleTenantModuleCatalog(moduleKey: string, isEnabled: boolean) {
     if (!selectedTenantId || !canManageAdminSaas) return;
@@ -806,8 +942,8 @@ export default function AdminSaasPage() {
       await loadTenantModulesCatalog(selectedTenantId);
       await loadTenantDetail(selectedTenantId);
       await loadPrebilling(selectedTenantId, prebillingMonth);
-    } catch (err: any) {
-      const msg = err.message || 'Error actualizando módulo del tenant';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error actualizando módulo del tenant');
       setError(msg);
       alert(msg);
     } finally {
@@ -816,14 +952,14 @@ export default function AdminSaasPage() {
   }
 
 
-  async function loadTenantContract(tenantId: string) {
+  const loadTenantContract = useCallback(async function loadTenantContract(tenantId: string) {
     if (!tenantId) {
       setTenantContract(null);
       return;
     }
 
     try {
-      const json = await fetchJson(`/api/admin-saas/tenants/${tenantId}/contract`);
+      const json = await fetchJson<TenantContractResponse>(`/api/admin-saas/tenants/${tenantId}/contract`);
       const data: TenantContractResponse | null = json.data || null;
       const contract = data?.contract || null;
 
@@ -858,7 +994,7 @@ export default function AdminSaasPage() {
         external_lookup_quota: '',
       });
     }
-  }
+  }, [fetchJson]);
 
   async function saveTenantContract() {
     if (!selectedTenantId || !canManageAdminSaas) return;
@@ -873,7 +1009,7 @@ export default function AdminSaasPage() {
       setSavingKey('tenant-contract');
       setError('');
 
-      const json = await fetchJson(`/api/admin-saas/tenants/${selectedTenantId}/contract`, {
+      const json = await fetchJson<TenantContract>(`/api/admin-saas/tenants/${selectedTenantId}/contract`, {
         method: 'PUT',
         body: JSON.stringify({
           plan_key: tenantContractForm.plan_key || 'demo',
@@ -899,8 +1035,8 @@ export default function AdminSaasPage() {
       await loadTenants();
       await loadTenantDetail(selectedTenantId);
       await loadPrebilling(selectedTenantId, prebillingMonth);
-    } catch (err: any) {
-      setError(err.message || 'Error guardando contrato SaaS');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error guardando contrato SaaS'));
     } finally {
       setSavingKey('');
     }
@@ -937,14 +1073,14 @@ export default function AdminSaasPage() {
   };
 
 
-  async function loadStandardsCatalog(tenantId: string) {
+  const loadStandardsCatalog = useCallback(async function loadStandardsCatalog(tenantId: string) {
     if (!tenantId) {
       setStandardsCatalog([]);
       return;
     }
 
     try {
-      const json = await fetchJson(
+      const json = await fetchJson<TenantStandardCatalogItem[]>(
         `/api/admin-saas/tenants/${tenantId}/standards/catalog`
       );
 
@@ -953,7 +1089,7 @@ export default function AdminSaasPage() {
       console.error('ERROR LOAD STANDARDS CATALOG:', err);
       setStandardsCatalog([]);
     }
-  }
+  }, [fetchJson]);
 
   async function contractTenantStandard(
     standardCode: string,
@@ -1000,8 +1136,8 @@ export default function AdminSaasPage() {
       await loadTenants();
       await loadTenantDetail(selectedTenantId);
       await loadPrebilling(selectedTenantId, prebillingMonth);
-    } catch (err: any) {
-      const msg = err.message || 'Error actualizando norma contratada';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error actualizando norma contratada');
       setError(msg);
       alert(msg);
     } finally {
@@ -1026,7 +1162,7 @@ export default function AdminSaasPage() {
       setSavingKey(`standard-init-${standardCode}`);
       setError('');
 
-      const json = await fetchJson(
+      const json = await fetchJson<{ message?: string }>(
         `/api/admin-saas/tenants/${selectedTenantId}/standards/${encodeURIComponent(
           standardCode
         )}/initialize-controls`,
@@ -1047,8 +1183,8 @@ export default function AdminSaasPage() {
       } else {
         alert('Controles inicializados correctamente.');
       }
-    } catch (err: any) {
-      const msg = err.message || 'Error inicializando controles de la norma';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error inicializando controles de la norma');
       setError(msg);
       alert(msg);
     } finally {
@@ -1057,14 +1193,17 @@ export default function AdminSaasPage() {
   }
 
 
-  async function loadPrebilling(tenantId: string, month = prebillingMonth) {
+  const loadPrebilling = useCallback(async function loadPrebilling(
+    tenantId: string,
+    month = prebillingMonth
+  ) {
     if (!tenantId) {
       setPrebilling(null);
       return;
     }
 
     try {
-      const json = await fetchJson(
+      const json = await fetchJson<PrebillingResponse>(
         `/api/admin-saas/tenants/${tenantId}/prebilling/current?month=${encodeURIComponent(month)}`
       );
 
@@ -1073,7 +1212,7 @@ export default function AdminSaasPage() {
       console.error('ERROR LOAD PREBILLING:', err);
       setPrebilling(null);
     }
-  }
+  }, [fetchJson, prebillingMonth]);
 
   async function recalculatePrebilling() {
     if (!selectedTenantId || !canManageAdminSaas) return;
@@ -1088,7 +1227,7 @@ export default function AdminSaasPage() {
       setSavingKey('prebilling-recalculate');
       setError('');
 
-      const json = await fetchJson(
+      const json = await fetchJson<PrebillingResponse>(
         `/api/admin-saas/tenants/${selectedTenantId}/prebilling/recalculate`,
         {
           method: 'POST',
@@ -1099,8 +1238,8 @@ export default function AdminSaasPage() {
       );
 
       setPrebilling(json.data || null);
-    } catch (err: any) {
-      setError(err.message || 'Error recalculando prefacturación');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error recalculando prefacturación'));
     } finally {
       setSavingKey('');
     }
@@ -1121,17 +1260,17 @@ export default function AdminSaasPage() {
       });
 
       await loadPrebilling(selectedTenantId, prebillingMonth);
-    } catch (err: any) {
-      setError(err.message || 'Error actualizando estado de prefactura');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error actualizando estado de prefactura'));
     } finally {
       setSavingKey('');
     }
   }
 
 
-  async function loadExternalQuotas() {
+  const loadExternalQuotas = useCallback(async function loadExternalQuotas() {
     try {
-      const json = await fetchJson('/api/admin-saas/external-lookup/quotas');
+      const json = await fetchJson<ExternalLookupQuota[]>('/api/admin-saas/external-lookup/quotas');
       const rows: ExternalLookupQuota[] = json.data || [];
 
       setExternalQuotas(rows);
@@ -1153,16 +1292,16 @@ export default function AdminSaasPage() {
     } catch (err) {
       console.error('ERROR LOAD EXTERNAL QUOTAS:', err);
     }
-  }
+  }, [fetchJson]);
 
-  async function loadExternalLogs(tenantId: string) {
+  const loadExternalLogs = useCallback(async function loadExternalLogs(tenantId: string) {
     if (!tenantId) {
       setExternalLogs([]);
       return;
     }
 
     try {
-      const json = await fetchJson(
+      const json = await fetchJson<ExternalLookupLog[]>(
         `/api/admin-saas/tenants/${tenantId}/external-lookup/logs?limit=30`
       );
 
@@ -1171,16 +1310,16 @@ export default function AdminSaasPage() {
       console.error('ERROR LOAD EXTERNAL LOGS:', err);
       setExternalLogs([]);
     }
-  }
+  }, [fetchJson]);
 
-  async function loadExternalQuotaAudit(tenantId: string) {
+  const loadExternalQuotaAudit = useCallback(async function loadExternalQuotaAudit(tenantId: string) {
     if (!tenantId) {
       setExternalQuotaAudit([]);
       return;
     }
 
     try {
-      const json = await fetchJson(
+      const json = await fetchJson<ExternalLookupQuotaAudit[]>(
         `/api/admin-saas/tenants/${tenantId}/external-lookup/quota-audit?limit=30`
       );
 
@@ -1189,7 +1328,7 @@ export default function AdminSaasPage() {
       console.error('ERROR LOAD EXTERNAL QUOTA AUDIT:', err);
       setExternalQuotaAudit([]);
     }
-  }
+  }, [fetchJson]);
 
   async function saveExternalQuota() {
     if (!selectedTenantId || !canManageAdminSaas) return;
@@ -1257,15 +1396,15 @@ export default function AdminSaasPage() {
       await loadTenantContract(selectedTenantId);
       await loadTenantModulesCatalog(selectedTenantId);
       await loadPrebilling(selectedTenantId, prebillingMonth);
-    } catch (err: any) {
-      setError(err.message || 'Error guardando cuota de búsqueda externa');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error guardando cuota de búsqueda externa'));
     } finally {
       setSavingKey('');
     }
   }
 
 
-  async function loadTenantDetail(tenantId: string) {
+  const loadTenantDetail = useCallback(async function loadTenantDetail(tenantId: string) {
     if (!tenantId) return;
 
     try {
@@ -1273,9 +1412,9 @@ export default function AdminSaasPage() {
       setError('');
 
       const [detailJson, auditJson, requestsJson] = await Promise.all([
-        fetchJson(`/api/admin-saas/tenants/${tenantId}`),
-        fetchJson(`/api/admin-saas/audit-log?tenant_id=${tenantId}&limit=50`),
-        fetchJson(`/api/admin-saas/dealer/requests?tenant_id=${tenantId}&limit=50`),
+        fetchJson<TenantDetail>(`/api/admin-saas/tenants/${tenantId}`),
+        fetchJson<AdminAuditEvent[]>(`/api/admin-saas/audit-log?tenant_id=${tenantId}&limit=50`),
+        fetchJson<DealerRequest[]>(`/api/admin-saas/dealer/requests?tenant_id=${tenantId}&limit=50`),
       ]);
 
       const detailData = detailJson.data || null;
@@ -1295,14 +1434,14 @@ export default function AdminSaasPage() {
 
       setAuditLog(auditJson.data || []);
       setDealerRequests(requestsJson.data || []);
-    } catch (err: any) {
-      setError(err.message || 'Error cargando empresa');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error cargando empresa'));
     } finally {
       setLoadingTenant(false);
     }
-  }
+  }, [fetchJson]);
 
-  async function boot() {
+  const boot = useCallback(async function boot() {
     try {
       setLoading(true);
       setError('');
@@ -1397,13 +1536,13 @@ export default function AdminSaasPage() {
 
         setLoadingTenant(false);
       }
-    } catch (err: any) {
-      setError(err.message || 'Error cargando Administración SaaS');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error cargando Administración SaaS'));
     } finally {
       setLoading(false);
       setLoadingTenant(false);
     }
-  }
+  }, [loadGovernance]);
 
 async function uploadSelectedTenantLogo(file: File) {
   if (!selectedTenantId || !file) {
@@ -1449,8 +1588,8 @@ async function uploadSelectedTenantLogo(file: File) {
     await loadTenantDetail(selectedTenantId);
 
     alert('Logo actualizado correctamente. Recarga la página si el header no cambia de inmediato.');
-  } catch (err: any) {
-    const msg = err.message || 'Error actualizando logo de empresa';
+  } catch (err: unknown) {
+    const msg = getErrorMessage(err, 'Error actualizando logo de empresa');
     setError(msg);
     alert(msg);
   } finally {
@@ -1525,8 +1664,8 @@ async function uploadSelectedTenantLogo(file: File) {
         await loadExternalLogs(createdTenantId);
         await loadExternalQuotaAudit(createdTenantId);
       }
-    } catch (err: any) {
-      setError(err.message || 'Error creando empresa');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error creando empresa'));
     } finally {
       setSavingKey('');
     }
@@ -1599,8 +1738,8 @@ async function uploadSelectedTenantLogo(file: File) {
       await loadTenantDetail(selectedTenantId);
 
       alert('Empresa actualizada correctamente.');
-    } catch (err: any) {
-      const msg = err.message || 'Error actualizando empresa';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error actualizando empresa');
       setError(msg);
       alert(msg);
     } finally {
@@ -1637,8 +1776,8 @@ async function uploadSelectedTenantLogo(file: File) {
       await loadTenants();
       await loadTenantDetail(selectedTenantId);
       alert('Configuración IA actualizada.');
-    } catch (err: any) {
-      const msg = err.message || 'Error actualizando configuración IA';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error actualizando configuración IA');
       setError(msg);
       alert(msg);
     } finally {
@@ -1681,8 +1820,8 @@ async function uploadSelectedTenantLogo(file: File) {
 
       await loadTenantDetail(selectedTenantId);
       await loadTenants();
-    } catch (err: any) {
-      const msg = err.message || 'Error actualizando módulo del tenant';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Error actualizando módulo del tenant');
       setError(msg);
       alert(msg);
     } finally {
@@ -1727,8 +1866,8 @@ async function uploadSelectedTenantLogo(file: File) {
 
       await loadTenantDetail(selectedTenantId);
       await loadTenants();
-    } catch (err: any) {
-      setError(err.message || 'Error actualizando norma');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error actualizando norma'));
     } finally {
       setSavingKey('');
     }
@@ -1760,8 +1899,8 @@ async function uploadSelectedTenantLogo(file: File) {
 
       await loadTenantDetail(selectedTenantId);
       await loadTenants();
-    } catch (err: any) {
-      setError(err.message || 'Error inicializando controles');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error inicializando controles'));
     } finally {
       setSavingKey('');
     }
@@ -1802,8 +1941,8 @@ async function uploadSelectedTenantLogo(file: File) {
       setSelectedDealerId('');
       await loadTenantDetail(selectedTenantId);
       await loadDealers();
-    } catch (err: any) {
-      setError(err.message || 'Error asignando dealer');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error asignando dealer'));
     } finally {
       setSavingKey('');
     }
@@ -1834,8 +1973,8 @@ async function uploadSelectedTenantLogo(file: File) {
       });
 
       await loadTenantDetail(selectedTenantId);
-    } catch (err: any) {
-      setError(err.message || 'Error revisando solicitud dealer');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error revisando solicitud dealer'));
     } finally {
       setSavingKey('');
     }
@@ -1843,16 +1982,14 @@ async function uploadSelectedTenantLogo(file: File) {
 
   useEffect(() => {
     boot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [boot]);
 
   useEffect(() => {
     if (token && canAccess) {
       void loadExternalQuotas();
       void loadPriceCatalog();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, canAccess]);
+  }, [canAccess, loadExternalQuotas, loadPriceCatalog, token]);
 
   useEffect(() => {
     if (token && canAccess && selectedTenantId) {
@@ -1863,11 +2000,21 @@ async function uploadSelectedTenantLogo(file: File) {
       void loadTenantModulesCatalog(selectedTenantId);
       void loadPrebilling(selectedTenantId, prebillingMonth);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, canAccess, selectedTenantId, prebillingMonth]);
+  }, [
+    canAccess,
+    loadExternalLogs,
+    loadExternalQuotaAudit,
+    loadPrebilling,
+    loadStandardsCatalog,
+    loadTenantContract,
+    loadTenantModulesCatalog,
+    prebillingMonth,
+    selectedTenantId,
+    token,
+  ]);
 
 
-  const formatMoney = (value: any, currency = 'CLP') => {
+  const formatMoney = (value: unknown, currency = 'CLP') => {
     const amount = Number(value || 0);
 
     try {
@@ -2482,15 +2629,11 @@ async function uploadSelectedTenantLogo(file: File) {
                               <option value="premium">premium</option>
                               <option value="enterprise">enterprise</option>
                             </select>
-                            {[
-                              ['ai_report_enabled', 'Reportes'],
-                              ['ai_auditor_enabled', 'Auditor'],
-                              ['ai_web_enabled', 'Web'],
-                            ].map(([key, label]) => (
+                            {AI_FEATURE_TOGGLES.map(({ key, label }) => (
                               <label key={key} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
                                 <input
                                   type="checkbox"
-                                  checked={Boolean((selectedAiDraft as any)[key])}
+                                  checked={selectedAiDraft[key]}
                                   disabled={!canManageAdminSaas || !selectedAiDraft.ai_enabled}
                                   onChange={(e) =>
                                     setAiSettingsDraftByTenant((prev) => ({

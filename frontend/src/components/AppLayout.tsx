@@ -362,11 +362,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           setAccessDeniedMessage('');
           setCheckingAccess(false);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('ERROR VALIDATING APP ACCESS:', error);
 
         if (!cancelled) {
-          setAccessDeniedMessage(error.message || t('app.permissionsError'));
+          setAccessDeniedMessage(
+            error instanceof Error ? error.message : t('app.permissionsError')
+          );
           setCheckingAccess(false);
         }
       }
