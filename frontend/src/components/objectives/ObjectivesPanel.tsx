@@ -222,7 +222,24 @@ function getToken() {
   return localStorage.getItem('token') || '';
 }
 
-function formatPct(value: any) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  const record = isRecord(payload) ? payload : {};
+  return String(record.error || record.detail || fallback);
+}
+
+function isOkFalse(payload: unknown) {
+  return isRecord(payload) && payload.ok === false;
+}
+
+function formatPct(value: unknown) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '0%';
   return `${Math.round(n)}%`;
@@ -248,7 +265,7 @@ function statusClass(status: string) {
   return 'bg-amber-100 text-amber-700 border-amber-200';
 }
 
-function toNumber(value: any) {
+function toNumber(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
@@ -312,15 +329,16 @@ export default function ObjectivesPanel({
         },
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
-      if (!res.ok || json.ok === false) {
-        throw new Error(json.error || copy.loadError);
+      if (!res.ok || isOkFalse(json)) {
+        throw new Error(getApiErrorMessage(json, copy.loadError));
       }
 
-      setItems(Array.isArray(json.data) ? json.data : []);
-    } catch (err: any) {
-      setError(err.message || copy.loadError);
+      const data = isRecord(json) ? json.data : [];
+      setItems(Array.isArray(data) ? data as ObjectiveItem[] : []);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, copy.loadError));
       setItems([]);
     } finally {
       setLoading(false);
@@ -403,12 +421,12 @@ export default function ObjectivesPanel({
         },
       });
 
-      const json = await res.json().catch(() => ({}));
+      const json: unknown = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         return {
           ok: false,
-          message: json.error || json.detail || copy.kpiRecalculateError,
+          message: getApiErrorMessage(json, copy.kpiRecalculateError),
         };
       }
 
@@ -416,10 +434,10 @@ export default function ObjectivesPanel({
         ok: true,
         message: copy.kpiUpdated,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         ok: false,
-        message: err.message || copy.kpiRecalculateException,
+        message: getErrorMessage(err, copy.kpiRecalculateException),
       };
     }
   };
@@ -469,10 +487,10 @@ export default function ObjectivesPanel({
         }
       );
 
-      const json = await res.json().catch(() => ({}));
+      const json: unknown = await res.json().catch(() => ({}));
 
-      if (!res.ok || json.ok === false) {
-        throw new Error(json.error || copy.saveError);
+      if (!res.ok || isOkFalse(json)) {
+        throw new Error(getApiErrorMessage(json, copy.saveError));
       }
 
       const recalcResult = await recalculateKpisAfterObjectiveChange();
@@ -485,9 +503,10 @@ export default function ObjectivesPanel({
       } else {
         alert(copy.savedWithoutKpi(recalcResult.message));
       }
-    } catch (err: any) {
-      setError(err.message || copy.saveError);
-      alert(err.message || copy.saveError);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, copy.saveError);
+      setError(message);
+      alert(message);
     } finally {
       setSaving('');
     }
@@ -507,10 +526,10 @@ export default function ObjectivesPanel({
         },
       });
 
-      const json = await res.json().catch(() => ({}));
+      const json: unknown = await res.json().catch(() => ({}));
 
-      if (!res.ok || json.ok === false) {
-        throw new Error(json.error || copy.deleteError);
+      if (!res.ok || isOkFalse(json)) {
+        throw new Error(getApiErrorMessage(json, copy.deleteError));
       }
 
       const recalcResult = await recalculateKpisAfterObjectiveChange();
@@ -522,8 +541,8 @@ export default function ObjectivesPanel({
       } else {
         alert(copy.cancelledWithoutKpi(recalcResult.message));
       }
-    } catch (err: any) {
-      alert(err.message || copy.deleteError);
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, copy.deleteError));
     } finally {
       setSaving('');
     }
