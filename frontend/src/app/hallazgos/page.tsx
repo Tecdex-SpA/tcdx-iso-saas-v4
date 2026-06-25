@@ -12,6 +12,19 @@ import { translateDisplayText, translateStatusLabel, translateSeverityLabel, tra
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+type UnknownRecord = { [key: string]: unknown };
+
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+  company_id?: string | null;
+  companyId?: string | null;
+  role?: string | null;
+  user_role?: string | null;
+  userRole?: string | null;
+};
+
 type ScopeStandard = {
   code: string;
   name?: string;
@@ -37,34 +50,116 @@ type ScopeResponse = {
   standards: ScopeStandard[];
 };
 
+type FindingControlRow = {
+  tenant_control_id: string;
+  tenant_control_id_moderno?: string | null;
+  controls_id_legacy?: string | null;
+  catalog_control_id?: string | null;
+  iso: string;
+  clause?: string | null;
+  category?: string | null;
+  description?: string | null;
+  tenant_control_status?: string | null;
+  priority?: string | null;
+  applicability?: string | null;
+  operation_id?: string | null;
+  operation_code?: string | null;
+  operation_name?: string | null;
+};
+
+type FindingRow = {
+  id: string;
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  iso_code?: string | null;
+  standard_code?: string | null;
+  iso?: string | null;
+  standard?: string | null;
+  title?: string | null;
+  description?: string | null;
+  finding_type?: string | null;
+  severity?: string | null;
+  status?: string | null;
+  source_type?: string | null;
+  source_id?: string | null;
+  owner?: string | null;
+  detected_by?: string | null;
+  due_date?: string | null;
+  tenant_control_id?: string | null;
+  tenant_control_modern_id?: string | null;
+  control_iso?: string | null;
+  control_clause?: string | null;
+  control_description?: string | null;
+  nonconformity_description?: string | null;
+  nonconformity_status?: string | null;
+  audit_id?: string | null;
+  audit_iso?: string | null;
+  audit_start_date?: string | null;
+  audit_end_date?: string | null;
+  audit_auditor_name?: string | null;
+  audit_auditor_type?: string | null;
+  asset_id?: string | null;
+  asset_name?: string | null;
+  asset_type?: string | null;
+  asset_owner?: string | null;
+  has_action_plan?: boolean;
+  duplicate_prevented?: boolean;
+};
+
+type FindingUpdatePatch = {
+  title?: string | null;
+  description?: string | null;
+  finding_type?: string | null;
+  severity?: string | null;
+  status?: string | null;
+  owner?: string | null;
+  detected_by?: string | null;
+  due_date?: string | null;
+  tenant_control_id?: string | null;
+};
+
+type FindingUpdateBody = {
+  title?: string | null;
+  description?: string | null;
+  finding_type?: string | null;
+  severity?: string | null;
+  status?: string | null;
+  owner?: string | null;
+  detected_by?: string | null;
+  due_date?: string | null;
+  tenant_control_id?: string | null;
+};
+
+type AiActionPlanStep = {
+  step: number;
+  title?: string;
+  owner_role?: string;
+  target_days?: number;
+  description?: string;
+};
+
 type AiFindingAnalysisResponse = {
   ok: boolean;
-  context?: any;
+  context?: unknown;
   ai?: {
-    summary: string;
-    impact: string;
-    priority: string;
-    likely_causes: string[];
-    recommended_actions: string[];
+    summary?: string;
+    impact?: string;
+    priority?: string;
+    likely_causes?: unknown;
+    recommended_actions?: unknown;
     confidence?: string;
   };
 };
 
 type AiActionPlanSuggestionResponse = {
   ok: boolean;
-  context?: any;
+  context?: unknown;
   ai?: {
-    priority: string;
-    objective: string;
-    immediate_actions: string[];
-    action_plan: Array<{
-      step: number;
-      title: string;
-      owner_role: string;
-      target_days: number;
-      description: string;
-    }>;
-    success_criteria: string[];
+    priority?: string;
+    objective?: string;
+    immediate_actions?: unknown;
+    action_plan?: AiActionPlanStep[];
+    success_criteria?: unknown;
     confidence?: string;
   };
 };
@@ -79,9 +174,280 @@ type ActionPlanRow = {
   owner?: string | null;
   due_date?: string | null;
   iso_code?: string | null;
+  control_iso?: string | null;
 };
 
-function resolveTenantId(user: any): string {
+type AiGuidedResult = {
+  hasGuided: boolean;
+  engine: string;
+  scenarioCode: string;
+  scenarioName: string;
+  scenarioScore: string;
+  problemType: string;
+  domainCode: string;
+  domainName: string;
+  contextSummary: string;
+  solutionSummary: string;
+  nextBestAction: string;
+  solutionSteps: string[];
+  expectedDeliverables: string[];
+  minimumContent: string[];
+  invalidEvidence: string[];
+  closureConditions: string[];
+  healthImpact: string;
+  kpiImpact: string;
+  knowledgeSources: UnknownRecord;
+  requiresExternalLookup: unknown;
+  externalLookupReason: string;
+  externalSourceProfile: string;
+  sourceLevel: string;
+  sourceLabel: string;
+  confidence: string;
+  traceId: string;
+};
+
+type ExternalLookupPayload = {
+  tenant_id: string | null;
+  finding_id: string | null;
+  standard_code: string | null;
+  title: string;
+  description: string;
+  scenario_code: string | null;
+  domain_code: string | null;
+  problem_type_code: string | null;
+  force_refresh?: boolean;
+  accept_extra_charge?: boolean;
+};
+
+type ExternalSourceResult = {
+  url?: string;
+  title?: string;
+  description?: string;
+  matched_trusted_domain?: string;
+};
+
+type ExternalLookupResult = {
+  cache_hit?: boolean;
+  trusted_results?: ExternalSourceResult[];
+  trusted_results_count?: number | string;
+  quota?: UnknownRecord | null;
+  usage_guardrails?: { quota?: UnknownRecord | null };
+  external_guidance?: UnknownRecord;
+  result_summary?: string;
+  from_cache?: boolean;
+  cached_created_at?: string;
+  mode?: string;
+  executed_web_search?: boolean;
+  quality_score?: number | string;
+  search_log_id?: string;
+};
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function getRecordValue(source: unknown, key: string): unknown {
+  return isRecord(source) ? source[key] : undefined;
+}
+
+function getRecord(source: unknown, key: string): UnknownRecord {
+  return asRecord(getRecordValue(source, key));
+}
+
+function firstRecord(...values: unknown[]): UnknownRecord {
+  for (const value of values) {
+    const record = asRecord(value);
+    if (Object.keys(record).length > 0) return record;
+  }
+
+  return {};
+}
+
+function getString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (isRecord(error) && typeof error.message === 'string') return error.message;
+  return fallback;
+}
+
+function getApiErrorMessage(value: unknown, fallback: string): string {
+  const record = asRecord(value);
+  return getString(record.error) || getString(record.detail) || fallback;
+}
+
+function isScopeStandard(value: unknown): value is ScopeStandard {
+  return isRecord(value) && typeof value.code === 'string';
+}
+
+function isOperationItem(value: unknown): value is OperationItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.tenant_id === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.operation_type === 'string'
+  );
+}
+
+function isFindingControlRow(value: unknown): value is FindingControlRow {
+  return (
+    isRecord(value) &&
+    typeof value.tenant_control_id === 'string' &&
+    typeof value.iso === 'string'
+  );
+}
+
+function isFindingRow(value: unknown): value is FindingRow {
+  return isRecord(value) && typeof value.id === 'string';
+}
+
+function normalizeScopeResponse(value: unknown): ScopeResponse {
+  const record = asRecord(value);
+
+  return {
+    operations: Array.isArray(record.operations)
+      ? record.operations.filter(isOperationItem)
+      : [],
+    standards: Array.isArray(record.standards)
+      ? record.standards.filter(isScopeStandard)
+      : [],
+  };
+}
+
+function normalizeControlRows(value: unknown): FindingControlRow[] {
+  const record = asRecord(value);
+  const rows = Array.isArray(record.data) ? record.data : [];
+
+  return rows.filter(isFindingControlRow);
+}
+
+function normalizeFindingRows(
+  value: unknown,
+  operationalStandardCodes: Set<string>
+): FindingRow[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(isFindingRow)
+    .filter((row) =>
+      operationalStandardCodes.has(row.iso_code || row.control_iso || '')
+    );
+}
+
+function normalizeAiFindingAnalysisResponse(
+  value: unknown
+): AiFindingAnalysisResponse {
+  const record = asRecord(value);
+  const ai = asRecord(record.ai);
+
+  return {
+    ok: record.ok !== false,
+    context: record.context,
+    ai:
+      Object.keys(ai).length > 0
+        ? {
+            summary: getString(ai.summary),
+            impact: getString(ai.impact),
+            priority: getString(ai.priority),
+            likely_causes: ai.likely_causes,
+            recommended_actions: ai.recommended_actions,
+            confidence: getString(ai.confidence) || undefined,
+          }
+        : undefined,
+  };
+}
+
+function normalizeAiActionPlanStep(value: unknown): AiActionPlanStep | null {
+  const record = asRecord(value);
+  if (Object.keys(record).length === 0) return null;
+
+  const step = Number(record.step);
+  const targetDays = Number(record.target_days);
+
+  return {
+    step: Number.isFinite(step) ? step : 0,
+    title: getString(record.title),
+    owner_role: getString(record.owner_role),
+    target_days: Number.isFinite(targetDays) ? targetDays : undefined,
+    description: getString(record.description),
+  };
+}
+
+function normalizeAiActionPlanSuggestionResponse(
+  value: unknown
+): AiActionPlanSuggestionResponse {
+  const record = asRecord(value);
+  const ai = asRecord(record.ai);
+
+  return {
+    ok: record.ok !== false,
+    context: record.context,
+    ai:
+      Object.keys(ai).length > 0
+        ? {
+            priority: getString(ai.priority),
+            objective: getString(ai.objective),
+            immediate_actions: ai.immediate_actions,
+            action_plan: Array.isArray(ai.action_plan)
+              ? ai.action_plan
+                  .map(normalizeAiActionPlanStep)
+                  .filter((step): step is AiActionPlanStep => step !== null)
+              : [],
+            success_criteria: ai.success_criteria,
+            confidence: getString(ai.confidence) || undefined,
+          }
+        : undefined,
+  };
+}
+
+function normalizeExternalLookupResult(value: unknown): ExternalLookupResult {
+  const record = asRecord(value);
+  const usageGuardrails = asRecord(record.usage_guardrails);
+
+  return {
+    cache_hit: record.cache_hit === true,
+    trusted_results: Array.isArray(record.trusted_results)
+      ? record.trusted_results.filter(isRecord).map((item) => ({
+          url: getString(item.url),
+          title: getString(item.title),
+          description: getString(item.description),
+          matched_trusted_domain: getString(item.matched_trusted_domain),
+        }))
+      : [],
+    trusted_results_count:
+      typeof record.trusted_results_count === 'number' ||
+      typeof record.trusted_results_count === 'string'
+        ? record.trusted_results_count
+        : undefined,
+    quota: isRecord(record.quota) ? record.quota : null,
+    usage_guardrails: {
+      quota: isRecord(usageGuardrails.quota) ? usageGuardrails.quota : null,
+    },
+    external_guidance: asRecord(record.external_guidance),
+    result_summary: getString(record.result_summary),
+    from_cache: record.from_cache === true,
+    cached_created_at: getString(record.cached_created_at),
+    mode: getString(record.mode),
+    executed_web_search: record.executed_web_search === true,
+    quality_score:
+      typeof record.quality_score === 'number' ||
+      typeof record.quality_score === 'string'
+        ? record.quality_score
+        : undefined,
+    search_log_id: getString(record.search_log_id),
+  };
+}
+
+function resolveTenantId(user: AuthUser | null): string {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -125,7 +491,7 @@ function HallazgosPageContent() {
   const aiAuditorDraftMode = searchParams.get('draft');
 
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const [scope, setScope] = useState<ScopeResponse>({
     operations: [],
@@ -136,10 +502,10 @@ function HallazgosPageContent() {
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
-  const [controls, setControls] = useState<any[]>([]);
+  const [controls, setControls] = useState<FindingControlRow[]>([]);
   const [loadingControls, setLoadingControls] = useState(false);
 
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<FindingRow[]>([]);
   const [actions, setActions] = useState<ActionPlanRow[]>([]);
   const [loadingStandards, setLoadingStandards] = useState(true);
   const [loadingData, setLoadingData] = useState(true);
@@ -235,7 +601,7 @@ function HallazgosPageContent() {
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');
-    const u = getUserFromToken();
+    const u = getUserFromToken() as AuthUser | null;
 
     setToken(authToken);
     setUser(u);
@@ -255,7 +621,7 @@ function HallazgosPageContent() {
     setFocusMessage('');
   }, [focusId, focusISO]);
 
-  const postWithAuth = async (url: string, body: any) => {
+  const postWithAuth = async (url: string, body: unknown): Promise<unknown> => {
     const authToken = localStorage.getItem('token');
 
     if (!authToken) {
@@ -274,7 +640,7 @@ function HallazgosPageContent() {
 
     const text = await res.text();
 
-    let json: any = null;
+    let json: unknown = null;
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
@@ -282,23 +648,27 @@ function HallazgosPageContent() {
     }
 
     if (!res.ok) {
-      throw new Error(json?.error || json?.detail || 'Error consultando IA');
+      throw new Error(getApiErrorMessage(json, 'Error consultando IA'));
     }
 
     return json;
   };
 
 
-  const asTextArray = (value: any): string[] => {
+  const asTextArray = (value: unknown): string[] => {
     if (!value) return [];
 
     if (Array.isArray(value)) {
       return value
         .map((item) => {
           if (typeof item === 'string') return item;
-          if (item?.title && item?.description) return `${item.title}: ${item.description}`;
-          if (item?.description) return item.description;
-          if (item?.name) return item.name;
+          if (isRecord(item)) {
+            const title = safeAiText(item.title);
+            const description = safeAiText(item.description);
+            if (title && description) return `${title}: ${description}`;
+            if (description) return description;
+            if (item.name) return safeAiText(item.name);
+          }
           return String(item || '');
         })
         .filter(Boolean);
@@ -314,14 +684,14 @@ function HallazgosPageContent() {
     return [];
   };
 
-  const firstValue = (...values: any[]) => {
+  const firstValue = (...values: unknown[]): unknown => {
     return values.find((value) => {
       if (Array.isArray(value)) return value.length > 0;
       return value !== undefined && value !== null && value !== '';
     });
   };
 
-  const safeAiText = (value: any): string => {
+  const safeAiText = (value: unknown): string => {
     if (value === undefined || value === null || value === '') return '';
 
     if (typeof value === 'string') return value;
@@ -338,15 +708,17 @@ function HallazgosPageContent() {
     }
 
     if (typeof value === 'object') {
-      if (value.title && value.description) {
-        return `${safeAiText(value.title)}: ${safeAiText(value.description)}`;
+      const record = asRecord(value);
+
+      if (record.title && record.description) {
+        return `${safeAiText(record.title)}: ${safeAiText(record.description)}`;
       }
 
-      if (value.description) return safeAiText(value.description);
-      if (value.summary) return safeAiText(value.summary);
-      if (value.name) return safeAiText(value.name);
-      if (value.label) return safeAiText(value.label);
-      if (value.value) return safeAiText(value.value);
+      if (record.description) return safeAiText(record.description);
+      if (record.summary) return safeAiText(record.summary);
+      if (record.name) return safeAiText(record.name);
+      if (record.label) return safeAiText(record.label);
+      if (record.value) return safeAiText(record.value);
 
       try {
         return JSON.stringify(value);
@@ -358,164 +730,180 @@ function HallazgosPageContent() {
     return String(value || '');
   };
 
-  const getGuidedAi = (response: any) => {
-    const ai = response?.ai || response || {};
-    const structured =
-      ai?.structured_guided ||
-      ai?.guided_solution ||
-      ai?.guided ||
-      ai?.solution_guided ||
-      {};
+  const getGuidedAi = (response: unknown): AiGuidedResult => {
+    const responseRecord = asRecord(response);
+    const ai = firstRecord(responseRecord.ai, responseRecord);
+    const structured = firstRecord(
+      ai.structured_guided,
+      ai.guided_solution,
+      ai.guided,
+      ai.solution_guided
+    );
 
-    const solution = structured?.solution || ai?.solution || {};
-    const problem = structured?.problem || ai?.problem || {};
-    const domain = structured?.domain || ai?.domain || {};
-    const scenario = structured?.scenario || ai?.scenario || {};
+    const solution = firstRecord(structured.solution, ai.solution);
+    const problem = firstRecord(structured.problem, ai.problem);
+    const domain = firstRecord(structured.domain, ai.domain);
+    const scenario = firstRecord(structured.scenario, ai.scenario);
     const contextSummary =
-      structured?.context_summary ||
-      ai?.context_summary ||
-      ai?.context?.summary ||
+      structured.context_summary ||
+      ai.context_summary ||
+      getRecord(ai, 'context').summary ||
       '';
+    const knowledgeSources = firstRecord(
+      structured.knowledge_sources,
+      ai.knowledge_sources,
+      responseRecord.knowledge_sources,
+      getRecord(responseRecord, 'structured_guided').knowledge_sources,
+      getRecord(getRecord(responseRecord, 'ai'), 'structured_guided').knowledge_sources
+    );
 
     return {
       hasGuided:
-        Boolean(structured && Object.keys(structured || {}).length > 0) ||
-        Boolean(solution && Object.keys(solution || {}).length > 0),
+        Object.keys(structured).length > 0 ||
+        Object.keys(solution).length > 0,
 
-      engine: safeAiText(firstValue(structured?.engine, ai?.engine)),
+      engine: safeAiText(firstValue(structured.engine, ai.engine)),
 
       scenarioCode: safeAiText(firstValue(
-        scenario?.scenario_code,
-        ai?.scenario_code,
-        response?.scenario_code,
-        structured?.knowledge_sources?.internal_scenario,
-        ai?.knowledge_sources?.internal_scenario
+        scenario.scenario_code,
+        ai.scenario_code,
+        responseRecord.scenario_code,
+        knowledgeSources.internal_scenario
       )),
 
       scenarioName: safeAiText(firstValue(
-        scenario?.scenario_name,
-        scenario?.name
+        scenario.scenario_name,
+        scenario.name
       )),
 
       scenarioScore: safeAiText(firstValue(
-        scenario?.score
+        scenario.score
       )),
 
       problemType: safeAiText(firstValue(
-        problem?.problem_type_code,
-        ai?.problem_type_code,
-        ai?.classification?.problem_type_code
+        problem.problem_type_code,
+        ai.problem_type_code,
+        getRecord(ai, 'classification').problem_type_code
       )),
       domainCode: safeAiText(firstValue(
-        domain?.domain_code,
-        ai?.domain_code,
-        ai?.domain_detection?.domain_code
+        domain.domain_code,
+        ai.domain_code,
+        getRecord(ai, 'domain_detection').domain_code
       )),
-      domainName: safeAiText(firstValue(domain?.domain_name, domain?.name)),
+      domainName: safeAiText(firstValue(domain.domain_name, domain.name)),
       contextSummary: safeAiText(contextSummary),
 
       solutionSummary: safeAiText(firstValue(
-        solution?.solution_summary,
-        structured?.solution_summary,
-        ai?.solution_summary,
-        ai?.summary
+        solution.solution_summary,
+        structured.solution_summary,
+        ai.solution_summary,
+        ai.summary
       )),
 
       nextBestAction: safeAiText(firstValue(
-        solution?.next_best_action,
-        structured?.next_best_action,
-        ai?.next_best_action
+        solution.next_best_action,
+        structured.next_best_action,
+        ai.next_best_action
       )),
 
       solutionSteps: asTextArray(
         firstValue(
-          solution?.solution_steps,
-          structured?.solution_steps,
-          ai?.solution_steps,
-          ai?.recommended_actions
+          solution.solution_steps,
+          structured.solution_steps,
+          ai.solution_steps,
+          ai.recommended_actions
         )
       ),
 
       expectedDeliverables: asTextArray(
         firstValue(
-          solution?.expected_deliverables,
-          structured?.expected_deliverables,
-          ai?.expected_deliverables
+          solution.expected_deliverables,
+          structured.expected_deliverables,
+          ai.expected_deliverables
         )
       ),
 
       minimumContent: asTextArray(
         firstValue(
-          solution?.minimum_content,
-          structured?.minimum_content,
-          ai?.minimum_content
+          solution.minimum_content,
+          structured.minimum_content,
+          ai.minimum_content
         )
       ),
 
       invalidEvidence: asTextArray(
         firstValue(
-          solution?.invalid_evidence,
-          structured?.invalid_evidence,
-          ai?.invalid_evidence
+          solution.invalid_evidence,
+          structured.invalid_evidence,
+          ai.invalid_evidence
         )
       ),
 
       closureConditions: asTextArray(
         firstValue(
-          solution?.closure_conditions,
-          structured?.closure_conditions,
-          ai?.closure_conditions,
-          ai?.success_criteria
+          solution.closure_conditions,
+          structured.closure_conditions,
+          ai.closure_conditions,
+          ai.success_criteria
         )
       ),
 
       healthImpact: safeAiText(firstValue(
-        solution?.health_impact,
-        solution?.health_impact_notes,
-        structured?.health_impact,
-        ai?.health_impact,
-        ai?.health_impact_notes
+        solution.health_impact,
+        solution.health_impact_notes,
+        structured.health_impact,
+        ai.health_impact,
+        ai.health_impact_notes
       )),
 
       kpiImpact: safeAiText(firstValue(
-        solution?.kpi_impact,
-        solution?.kpi_impact_notes,
-        structured?.kpi_impact,
-        ai?.kpi_impact,
-        ai?.kpi_impact_notes
+        solution.kpi_impact,
+        solution.kpi_impact_notes,
+        structured.kpi_impact,
+        ai.kpi_impact,
+        ai.kpi_impact_notes
       )),
 
-      knowledgeSources: firstValue(
-        structured?.knowledge_sources,
-        ai?.knowledge_sources,
-        response?.knowledge_sources,
-        response?.structured_guided?.knowledge_sources,
-        response?.ai?.structured_guided?.knowledge_sources,
-        {}
-      ),
+      knowledgeSources,
 
       requiresExternalLookup: firstValue(
-        structured?.knowledge_sources?.requires_external_lookup,
-        ai?.knowledge_sources?.requires_external_lookup,
-        response?.structured_guided?.knowledge_sources?.requires_external_lookup,
-        response?.ai?.structured_guided?.knowledge_sources?.requires_external_lookup,
-        response?.requires_external_lookup
+        knowledgeSources.requires_external_lookup,
+        responseRecord.requires_external_lookup
       ),
 
       externalLookupReason: safeAiText(firstValue(
-        structured?.knowledge_sources?.external_lookup_reason,
-        ai?.knowledge_sources?.external_lookup_reason,
-        response?.structured_guided?.knowledge_sources?.external_lookup_reason,
-        response?.ai?.structured_guided?.knowledge_sources?.external_lookup_reason,
-        response?.external_lookup_reason
+        knowledgeSources.external_lookup_reason,
+        responseRecord.external_lookup_reason
       )),
 
       externalSourceProfile: safeAiText(firstValue(
-        structured?.knowledge_sources?.external_source_profile,
-        ai?.knowledge_sources?.external_source_profile,
-        response?.structured_guided?.knowledge_sources?.external_source_profile,
-        response?.ai?.structured_guided?.knowledge_sources?.external_source_profile,
-        response?.external_source_profile
+        knowledgeSources.external_source_profile,
+        responseRecord.external_source_profile
+      )),
+
+      sourceLevel: safeAiText(firstValue(
+        knowledgeSources.source_level,
+        knowledgeSources.sourceLevel,
+        ai.source_level,
+        ai.sourceLevel
+      )),
+      sourceLabel: safeAiText(firstValue(
+        knowledgeSources.source_label,
+        knowledgeSources.sourceLabel,
+        ai.source_label,
+        ai.sourceLevel
+      )),
+      confidence: safeAiText(firstValue(
+        knowledgeSources.confidence,
+        knowledgeSources.confidence_hint,
+        ai.confidence,
+        ai.confidence_hint
+      )),
+      traceId: safeAiText(firstValue(
+        knowledgeSources.trace_id,
+        knowledgeSources.traceId,
+        ai.trace_id,
+        ai.traceId
       )),
     };
   };
@@ -564,8 +952,8 @@ function HallazgosPageContent() {
   }: {
     guided: ReturnType<typeof getGuidedAi>;
     rowId: string;
-    row?: any;
-    response?: any;
+    row?: FindingRow;
+    response?: unknown;
   }) => {
     if (!guided?.hasGuided) return null;
 
@@ -644,11 +1032,13 @@ function HallazgosPageContent() {
 
         <AiTraceabilityPanel guided={guided} />
 
-        <AiExternalLookupPanel
-          row={row}
-          guided={guided}
-          response={response}
-        />
+        {row && (
+          <AiExternalLookupPanel
+            row={row}
+            guided={guided}
+            response={response}
+          />
+        )}
 
         <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <summary className="cursor-pointer text-sm font-bold text-slate-700">
@@ -726,15 +1116,18 @@ function HallazgosPageContent() {
     guided,
     response,
   }: {
-    row: any;
+    row: FindingRow;
     guided: ReturnType<typeof getGuidedAi>;
-    response: any;
+    response: unknown;
   }) => {
     const [lookupLoading, setLookupLoading] = useState(false);
     const [lookupError, setLookupError] = useState<string | null>(null);
-    const [lookupResult, setLookupResult] = useState<any | null>(null);
+    const [lookupResult, setLookupResult] = useState<ExternalLookupResult | null>(null);
 
-    const buildExternalLookupPayload = () => ({
+    const buildExternalLookupPayload = (): ExternalLookupPayload => {
+      const responseRecord = asRecord(response);
+
+      return {
       tenant_id: row?.tenant_id || row?.tenantId || null,
       finding_id: row?.id || null,
       standard_code:
@@ -742,16 +1135,17 @@ function HallazgosPageContent() {
         row?.standard_code ||
         row?.iso ||
         row?.standard ||
-        response?.standard_code ||
-        response?.iso_code ||
+        getString(responseRecord.standard_code) ||
+        getString(responseRecord.iso_code) ||
         null,
-      title: row?.title || response?.title || '',
-      description: row?.description || response?.description || '',
-      scenario_code: guided?.scenarioCode || response?.scenario_code || null,
-      domain_code: guided?.domainCode || response?.domain_code || null,
+      title: row?.title || getString(responseRecord.title),
+      description: row?.description || getString(responseRecord.description),
+      scenario_code: guided?.scenarioCode || getString(responseRecord.scenario_code) || null,
+      domain_code: guided?.domainCode || getString(responseRecord.domain_code) || null,
       problem_type_code:
-        guided?.problemType || response?.problem_type_code || null,
-    });
+        guided?.problemType || getString(responseRecord.problem_type_code) || null,
+      };
+    };
 
     useEffect(() => {
       const loadCachedExternalLookup = async () => {
@@ -778,10 +1172,12 @@ function HallazgosPageContent() {
             body: JSON.stringify(buildExternalLookupPayload()),
           });
 
-          const data = await res.json().catch(() => null);
+          const data: unknown = await res.json().catch(() => null);
+          const dataRecord = asRecord(data);
+          const payload = asRecord(dataRecord.data);
 
-          if (res.ok && data?.ok && data?.data?.cache_hit) {
-            setLookupResult(data.data);
+          if (res.ok && dataRecord.ok === true && payload.cache_hit) {
+            setLookupResult(normalizeExternalLookupResult(payload));
           }
         } catch {
           // No interrumpir la vista si no existe caché o falla la precarga.
@@ -831,14 +1227,15 @@ function HallazgosPageContent() {
           body: JSON.stringify(payload),
         });
 
-        const data = await res.json().catch(() => null);
+        const data: unknown = await res.json().catch(() => null);
+        const dataRecord = asRecord(data);
 
         if (
           res.status === 409 &&
-          data?.code === 'EXTERNAL_LOOKUP_EXTRA_CHARGE_REQUIRED'
+          dataRecord.code === 'EXTERNAL_LOOKUP_EXTRA_CHARGE_REQUIRED'
         ) {
           const accept = window.confirm(
-            data?.error ||
+            getString(dataRecord.error) ||
               'Se terminaron las consultas contratadas. Consulta adicional $100. ¿Acepta continuar?'
           );
 
@@ -853,26 +1250,22 @@ function HallazgosPageContent() {
           return;
         }
 
-        if (!res.ok || !data?.ok) {
+        if (!res.ok || dataRecord.ok !== true) {
           throw new Error(
-            data?.error ||
-              data?.detail ||
-              `Error ejecutando búsqueda externa. HTTP ${res.status}`
+            getApiErrorMessage(data, `Error ejecutando búsqueda externa. HTTP ${res.status}`)
           );
         }
 
-        setLookupResult(data.data || data);
-      } catch (error: any) {
-        setLookupError(error?.message || 'Error ejecutando búsqueda externa.');
+        setLookupResult(normalizeExternalLookupResult(dataRecord.data || data));
+      } catch (error) {
+        setLookupError(getErrorMessage(error, 'Error ejecutando búsqueda externa.'));
       } finally {
         setLookupLoading(false);
       }
     };
 
-    const result = lookupResult || {};
-    const trustedResults = Array.isArray(result?.trusted_results)
-      ? result.trusted_results
-      : [];
+    const result = lookupResult;
+    const trustedResults = result?.trusted_results || [];
 
     const quota = result?.quota || result?.usage_guardrails?.quota || null;
     const monthlyLimit = quota?.monthly_limit ?? quota?.monthlyLimit ?? null;
@@ -881,6 +1274,7 @@ function HallazgosPageContent() {
     const quotaAllowed = quota?.allowed;
 
     const externalGuidance = result?.external_guidance || {};
+    const externalGuidanceSummary = safeAiText(externalGuidance.summary);
     const commonRecommendations = asTextArray(externalGuidance?.common_recommendations);
     const howToApply = asTextArray(externalGuidance?.how_to_apply);
     const evidenceToCollect = asTextArray(externalGuidance?.evidence_to_collect);
@@ -1001,13 +1395,13 @@ function HallazgosPageContent() {
               )}
             </div>
 
-            {externalGuidance?.summary && (
+            {externalGuidanceSummary && (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
                 <div className="text-xs font-black uppercase tracking-[0.14em] text-blue-600">
                   Respaldo técnico externo
                 </div>
                 <div className="mt-2 text-sm leading-6 text-blue-900">
-                  {safeAiText(externalGuidance.summary)}
+                  {externalGuidanceSummary}
                 </div>
               </div>
             )}
@@ -1051,7 +1445,7 @@ function HallazgosPageContent() {
 
             {trustedResults.length > 0 ? (
               <div className="space-y-2">
-                {trustedResults.slice(0, 5).map((item: any, index: number) => (
+                {trustedResults.slice(0, 5).map((item, index: number) => (
                   <div
                     key={`${item?.url || 'external'}-${index}`}
                     className="rounded-2xl border border-slate-200 bg-white p-3"
@@ -1103,11 +1497,11 @@ function HallazgosPageContent() {
   }) => {
     if (!guided?.hasGuided) return null;
 
-    const sources: any = guided?.knowledgeSources || {};
-    const supervised = sources?.supervised_feedback || {};
+    const sources = guided?.knowledgeSources || {};
+    const supervised = asRecord(sources?.supervised_feedback);
     const casesFound = supervised?.cases_found ?? 0;
     const caseIds = Array.isArray(supervised?.case_ids)
-      ? supervised.case_ids
+      ? supervised.case_ids.map(safeAiText).filter(Boolean)
       : [];
 
     const internalScenario =
@@ -1134,37 +1528,31 @@ function HallazgosPageContent() {
       sources?.source_profile ||
       '';
 
-    const guidedAny: any = guided || {};
-
     const centralSourceLevel = safeAiText(
       sources?.source_level ||
         sources?.sourceLevel ||
-        guidedAny?.source_level ||
-        guidedAny?.sourceLevel ||
+        guided.sourceLevel ||
         ''
     );
 
     const centralSourceLabel = safeAiText(
       sources?.source_label ||
         sources?.sourceLabel ||
-        guidedAny?.source_label ||
-        guidedAny?.sourceLabel ||
+        guided.sourceLabel ||
         ''
     );
 
     const centralConfidence = safeAiText(
       sources?.confidence ||
         sources?.confidence_hint ||
-        guidedAny?.confidence ||
-        guidedAny?.confidence_hint ||
+        guided.confidence ||
         ''
     );
 
     const centralTraceId = safeAiText(
       sources?.trace_id ||
         sources?.traceId ||
-        guidedAny?.trace_id ||
-        guidedAny?.traceId ||
+        guided.traceId ||
         ''
     );
 
@@ -1403,8 +1791,8 @@ function HallazgosPageContent() {
     response,
     responseType,
   }: {
-    row: any;
-    response: any;
+    row: FindingRow;
+    response: unknown;
     responseType: 'finding_analysis' | 'action_plan_suggestion';
   }) => {
     const [feedbackLoading, setFeedbackLoading] = useState<string | null>(null);
@@ -1416,6 +1804,13 @@ function HallazgosPageContent() {
       rating: 'util' | 'no_util' | 'aplicada' | 'corregida'
     ) => {
       try {
+        const responseRecord = asRecord(response);
+        const responseAi = asRecord(responseRecord.ai);
+        const responseStructured = asRecord(responseRecord.structured_guided);
+        const responseAiStructured = asRecord(responseAi.structured_guided);
+        const responseScenario = asRecord(responseStructured.scenario);
+        const responseAiScenario = asRecord(responseAiStructured.scenario);
+
         setFeedbackLoading(rating);
         setFeedbackMessage(null);
 
@@ -1445,10 +1840,10 @@ function HallazgosPageContent() {
           domain_code: guided?.domainCode || null,
           problem_type_code: guided?.problemType || null,
           scenario_code:
-            response?.scenario_code ||
-            response?.ai?.scenario_code ||
-            response?.structured_guided?.scenario?.scenario_code ||
-            response?.ai?.structured_guided?.scenario?.scenario_code ||
+            getString(responseRecord.scenario_code) ||
+            getString(responseAi.scenario_code) ||
+            getString(responseScenario.scenario_code) ||
+            getString(responseAiScenario.scenario_code) ||
             null,
           user_rating: rating,
           user_comment:
@@ -1498,8 +1893,8 @@ function HallazgosPageContent() {
                 ? 'Feedback guardado: aplicada.'
                 : 'Feedback guardado: requiere corrección.'
         );
-      } catch (error: any) {
-        setFeedbackMessage(error?.message || 'Error guardando feedback IA.');
+      } catch (error) {
+        setFeedbackMessage(getErrorMessage(error, 'Error guardando feedback IA.'));
       } finally {
         setFeedbackLoading(null);
       }
@@ -1581,8 +1976,8 @@ function HallazgosPageContent() {
     title: string;
     sourceEntityType: string | null;
     sourceEntityId: string | null;
-    inputPayload: any;
-    outputPayload: any;
+    inputPayload: unknown;
+    outputPayload: unknown;
     confidence?: string;
   }) => {
     try {
@@ -1601,15 +1996,15 @@ function HallazgosPageContent() {
       });
 
       alert('Borrador IA guardado correctamente');
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR SAVE AI SUGGESTION FINDINGS:', err);
-      setAiError(err.message || 'No fue posible guardar la sugerencia IA.');
+      setAiError(getErrorMessage(err, 'No fue posible guardar la sugerencia IA.'));
     } finally {
       setAiSaveLoadingId('');
     }
   };
 
-  const handleApplyAnalysisToFinding = async (row: any) => {
+  const handleApplyAnalysisToFinding = async (row: FindingRow) => {
     const analysis = aiAnalysisById[row.id];
     const aiData = analysis?.ai || null;
 
@@ -1622,28 +2017,29 @@ function HallazgosPageContent() {
       setAiError('');
       setAiApplyLoadingId(`analysis-${row.id}`);
 
-      const result = await postWithAuth(
+      const result = asRecord(await postWithAuth(
         `${API_URL}/api/ai-compliance/apply/finding-analysis-to-finding`,
         {
           finding_id: row.id,
           ai_result: analysis,
         }
-      );
+      ));
 
-      if (result?.data) {
-        setData((prev) => prev.map((p) => (p.id === row.id ? result.data : p)));
+      const updatedFinding = result.data;
+      if (isFindingRow(updatedFinding)) {
+        setData((prev) => prev.map((p) => (p.id === row.id ? updatedFinding : p)));
       }
 
       alert('Análisis IA aplicado correctamente al hallazgo');
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR APPLY AI ANALYSIS TO FINDING:', err);
-      setAiError(err.message || 'No fue posible aplicar el análisis IA al hallazgo.');
+      setAiError(getErrorMessage(err, 'No fue posible aplicar el análisis IA al hallazgo.'));
     } finally {
       setAiApplyLoadingId('');
     }
   };
 
-  const handleAnalyzeFindingWithAI = async (row: any) => {
+  const handleAnalyzeFindingWithAI = async (row: FindingRow) => {
     try {
       setAiError('');
       setAiLoadingById((prev) => ({ ...prev, [row.id]: 'analysis' }));
@@ -1657,17 +2053,17 @@ function HallazgosPageContent() {
 
       setAiAnalysisById((prev) => ({
         ...prev,
-        [row.id]: result,
+        [row.id]: normalizeAiFindingAnalysisResponse(result),
       }));
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR AI FINDING ANALYSIS:', err);
-      setAiError(err.message || 'No fue posible analizar el hallazgo con IA.');
+      setAiError(getErrorMessage(err, 'No fue posible analizar el hallazgo con IA.'));
     } finally {
       setAiLoadingById((prev) => ({ ...prev, [row.id]: '' }));
     }
   };
 
-  const handleSuggestPlanWithAI = async (row: any) => {
+  const handleSuggestPlanWithAI = async (row: FindingRow) => {
     try {
       setAiError('');
       setAiLoadingById((prev) => ({ ...prev, [row.id]: 'plan' }));
@@ -1681,18 +2077,18 @@ function HallazgosPageContent() {
 
       setAiPlanById((prev) => ({
         ...prev,
-        [row.id]: result,
+        [row.id]: normalizeAiActionPlanSuggestionResponse(result),
       }));
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR AI ACTION PLAN FROM FINDING:', err);
-      setAiError(err.message || 'No fue posible generar el plan sugerido con IA.');
+      setAiError(getErrorMessage(err, 'No fue posible generar el plan sugerido con IA.'));
     } finally {
       setAiLoadingById((prev) => ({ ...prev, [row.id]: '' }));
     }
   };
 
   const handleApplySuggestedPlanToAction = async (
-    row: any,
+    row: FindingRow,
     linkedAction: ActionPlanRow | null
   ) => {
     const suggestedPlan = aiPlanById[row.id];
@@ -1712,23 +2108,23 @@ function HallazgosPageContent() {
       setAiError('');
       setAiApplyLoadingId(`plan-${row.id}`);
 
-      const result = await postWithAuth(
+      const result = asRecord(await postWithAuth(
         `${API_URL}/api/ai-compliance/apply/action-plan-suggestion-to-plan`,
         {
           action_plan_id: linkedAction.id,
           finding_id: row.id,
           ai_result: suggestedPlan,
         }
-      );
+      ));
 
       if (result?.data) {
         await refreshFindings();
       }
 
       alert('Plan IA aplicado correctamente al plan de acción');
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR APPLY AI PLAN TO ACTION:', err);
-      setAiError(err.message || 'No fue posible aplicar el plan IA al plan de acción.');
+      setAiError(getErrorMessage(err, 'No fue posible aplicar el plan IA al plan de acción.'));
     } finally {
       setAiApplyLoadingId('');
     }
@@ -1745,7 +2141,7 @@ function HallazgosPageContent() {
         }
       );
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
         console.error('ERROR LOAD FINDINGS SCOPE:', json);
@@ -1754,10 +2150,7 @@ function HallazgosPageContent() {
         return;
       }
 
-      const nextScope: ScopeResponse = {
-        operations: Array.isArray(json?.operations) ? json.operations : [],
-        standards: Array.isArray(json?.standards) ? json.standards : [],
-      };
+      const nextScope = normalizeScopeResponse(json);
 
       const actives = nextScope.standards.filter(isOperationalStandard);
 
@@ -1808,7 +2201,7 @@ function HallazgosPageContent() {
         }
       );
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
         console.error('ERROR LOAD FINDING CONTROLS:', json);
@@ -1816,7 +2209,7 @@ function HallazgosPageContent() {
         return;
       }
 
-      setControls(Array.isArray(json?.data) ? json.data : []);
+      setControls(normalizeControlRows(json));
     } catch (err) {
       console.error('ERROR LOAD FINDING CONTROLS:', err);
       setControls([]);
@@ -1852,7 +2245,7 @@ function HallazgosPageContent() {
         }
       );
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
         console.error('ERROR LOAD FINDINGS:', json);
@@ -1860,11 +2253,7 @@ function HallazgosPageContent() {
         return;
       }
 
-      const safeRows = Array.isArray(json)
-        ? json.filter((row: any) =>
-            operationalStandardCodes.has(row.iso_code || row.control_iso)
-          )
-        : [];
+      const safeRows = normalizeFindingRows(json, operationalStandardCodes);
 
       setData(safeRows);
     } catch (err) {
@@ -1897,7 +2286,7 @@ function HallazgosPageContent() {
         }
       );
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
         console.error('ERROR LOAD ACTIONS FROM FINDINGS:', json);
@@ -1906,9 +2295,11 @@ function HallazgosPageContent() {
       }
 
       const safeRows = Array.isArray(json)
-        ? json.filter((row: any) =>
-            operationalStandardCodes.has(row.iso_code || row.control_iso)
-          )
+        ? json
+            .filter((row): row is ActionPlanRow => isRecord(row) && typeof row.id === 'string')
+            .filter((row) =>
+              operationalStandardCodes.has(row.iso_code || row.control_iso || '')
+            )
         : [];
 
       setActions(safeRows);
@@ -1941,17 +2332,13 @@ function HallazgosPageContent() {
       }
     );
 
-    const json = await res.json();
+    const json: unknown = await res.json();
 
     if (!res.ok) {
       throw new Error('Error cargando hallazgos');
     }
 
-    return Array.isArray(json)
-      ? json.filter((row: any) =>
-          operationalStandardCodes.has(row.iso_code || row.control_iso)
-        )
-      : [];
+    return normalizeFindingRows(json, operationalStandardCodes);
   }, [operationalStandardCodes]);
 
   useEffect(() => {
@@ -2040,10 +2427,10 @@ function HallazgosPageContent() {
         }),
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando hallazgo');
+        alert(getApiErrorMessage(json, 'Error creando hallazgo'));
         return;
       }
 
@@ -2060,12 +2447,12 @@ function HallazgosPageContent() {
 
       await refreshFindings();
 
-      if (json?.id) {
+      if (isFindingRow(json)) {
         setFocusedFindingId(json.id);
         setFocusResolved(true);
       }
 
-      if (json?.duplicate_prevented) {
+      if (isFindingRow(json) && json.duplicate_prevented) {
         setFocusMessage(
           'Se evitó un doble guardado y se reutilizó el hallazgo ya existente.'
         );
@@ -2081,13 +2468,13 @@ function HallazgosPageContent() {
     }
   };
 
-  const updateFinding = async (row: any, patch: any) => {
+  const updateFinding = async (row: FindingRow, patch: FindingUpdatePatch) => {
     if (!token) return;
 
     try {
       setSavingId(row.id);
 
-      const body: any = {
+      const body: FindingUpdateBody = {
         title: patch.title ?? row.title,
         description: patch.description ?? row.description,
         finding_type: patch.finding_type ?? row.finding_type,
@@ -2111,14 +2498,16 @@ function HallazgosPageContent() {
         body: JSON.stringify(body),
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error actualizando hallazgo');
+        alert(getApiErrorMessage(json, 'Error actualizando hallazgo'));
         return;
       }
 
-      setData((prev) => prev.map((p) => (p.id === row.id ? json : p)));
+      if (isFindingRow(json)) {
+        setData((prev) => prev.map((p) => (p.id === row.id ? json : p)));
+      }
     } catch (err) {
       console.error('ERROR UPDATE FINDING:', err);
       alert('Error actualizando hallazgo');
@@ -2140,17 +2529,17 @@ function HallazgosPageContent() {
       },
     });
 
-    const json = await res.json();
+    const json: unknown = await res.json();
 
     if (!res.ok) {
-      alert(json.error || 'Error eliminando hallazgo');
+      alert(getApiErrorMessage(json, 'Error eliminando hallazgo'));
       return;
     }
 
     setData((prev) => prev.filter((f) => f.id !== id));
   };
 
-  const createAction = async (row: any) => {
+  const createAction = async (row: FindingRow) => {
     if (!token) return;
 
     if (!row.control_description && !row.control_clause && !row.tenant_control_modern_id) {
@@ -2170,15 +2559,15 @@ function HallazgosPageContent() {
         },
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando acción');
+        alert(getApiErrorMessage(json, 'Error creando acción'));
         return;
       }
 
       await refreshFindings();
-      alert(json.already_exists ? 'La acción ya existía' : 'Acción creada correctamente');
+      alert(asRecord(json).already_exists ? 'La acción ya existía' : 'Acción creada correctamente');
     } catch (err) {
       console.error('ERROR CREATE ACTION FROM FINDING:', err);
       alert('Error creando acción');
@@ -2254,7 +2643,7 @@ function HallazgosPageContent() {
     return 'bg-slate-100 text-slate-700';
   };
 
-  const getSourceLabel = (row: any) => {
+  const getSourceLabel = (row: FindingRow) => {
     switch (row.source_type) {
       case 'audit':
         return 'Auditoría';
@@ -2273,7 +2662,7 @@ function HallazgosPageContent() {
     }
   };
 
-  const getSourceDetail = (row: any) => {
+  const getSourceDetail = (row: FindingRow) => {
     if (row.nonconformity_description) {
       return `NC: ${row.nonconformity_description}`;
     }
@@ -2304,9 +2693,9 @@ function HallazgosPageContent() {
     return 'Creación manual';
   };
 
-  const getCardId = (row: any) => `finding-${row.id}`;
+  const getCardId = (row: FindingRow) => `finding-${row.id}`;
 
-  const applyFocus = useCallback((row: any, iso: string) => {
+  const applyFocus = useCallback((row: FindingRow, iso: string) => {
     setFocusedFindingId(row.id);
     setFocusResolved(true);
     setFocusMessage(
@@ -2377,7 +2766,7 @@ function HallazgosPageContent() {
             typeFilter
           );
 
-          const match = rows.find((row: any) => row.id === focusId);
+          const match = rows.find((row) => row.id === focusId);
           if (match) {
             setSelectedISO(iso);
             break;
@@ -2632,7 +3021,7 @@ function HallazgosPageContent() {
                         : t('findings.selectAssociatedControl')}
                     </option>
 
-                    {controls.map((control: any) => (
+                    {controls.map((control) => (
                       <option
                         key={control.tenant_control_id}
                         value={control.tenant_control_id}
@@ -2745,7 +3134,7 @@ function HallazgosPageContent() {
           </div>
         ) : (
           <div className="space-y-5">
-            {data.map((row: any) => {
+            {data.map((row) => {
               const hasValidControl = Boolean(
                 row.control_description ||
                   row.control_clause ||
@@ -2847,7 +3236,7 @@ function HallazgosPageContent() {
                           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                         >
                           <option value="">Selecciona el control asociado</option>
-                          {controls.map((control: any) => (
+                          {controls.map((control) => (
                             <option
                               key={control.tenant_control_id}
                               value={control.tenant_control_id}
@@ -2867,7 +3256,7 @@ function HallazgosPageContent() {
                         </div>
                       ) : (
                         <select
-                          value={row.status}
+                          value={row.status || ''}
                           onChange={(e) =>
                             updateFinding(row, { status: e.target.value })
                           }
@@ -3171,7 +3560,7 @@ function HallazgosPageContent() {
                               </div>
                               <div className="mt-3 space-y-2">
                                 {(suggestedPlanData.action_plan || []).map(
-                                  (step: any, index: number) => (
+                                  (step, index: number) => (
                                     <div
                                       key={`${row.id}-step-${step.step}-${index}`}
                                       className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
