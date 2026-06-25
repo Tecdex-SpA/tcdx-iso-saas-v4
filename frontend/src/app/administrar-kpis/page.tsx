@@ -32,7 +32,7 @@ type LatestSnapshot = {
   period_start?: string | null;
   period_end?: string | null;
   calculated_at?: string | null;
-  breakdown_json?: Record<string, any>;
+  breakdown_json?: Record<string, unknown>;
 };
 
 type KpiAdminItem = {
@@ -71,7 +71,7 @@ type KpiAdminItem = {
     yellow_max?: number | null;
     red_min?: number | null;
     red_max?: number | null;
-    override?: Record<string, any>;
+    override?: Record<string, unknown>;
   };
 };
 
@@ -99,7 +99,40 @@ type EffectiveHealthRow = {
   kpi_health_status?: string | null;
 };
 
-function formatNumber(value: any, decimals = 2) {
+type AuthUser = {
+  tenant_id?: string;
+};
+
+type HealthRefreshRow = {
+  snapshots_inserted?: number | string | null;
+  inserted?: number | string | null;
+};
+
+type HealthRefreshPayload = {
+  health_kpi_refresh?: HealthRefreshRow[];
+  health_recalculated?: number | string | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasTenantId(value: unknown): value is AuthUser {
+  return isRecord(value) && typeof value.tenant_id === 'string';
+}
+
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  const record = isRecord(payload) ? payload : {};
+  return String(record.error || record.message || fallback);
+}
+
+function isStandardItem(value: unknown): value is StandardItem {
+  return isRecord(value)
+    && typeof value.code === 'string'
+    && typeof value.name === 'string';
+}
+
+function formatNumber(value: unknown, decimals = 2) {
   if (value === null || value === undefined || value === '') return 'N/A';
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
@@ -136,14 +169,15 @@ function colorLabel(color: string | null | undefined, t: TFunction) {
   return t('common.noData');
 }
 
-function getHealthRefreshCount(payload: any): number {
-  if (Array.isArray(payload?.health_kpi_refresh)) {
-    return payload.health_kpi_refresh.reduce((acc: number, row: any) => {
+function getHealthRefreshCount(payload: unknown): number {
+  const record = isRecord(payload) ? payload as HealthRefreshPayload : {};
+  if (Array.isArray(record.health_kpi_refresh)) {
+    return record.health_kpi_refresh.reduce((acc: number, row: HealthRefreshRow) => {
       return acc + Number(row?.snapshots_inserted || row?.inserted || 0);
     }, 0);
   }
 
-  return Number(payload?.health_recalculated || 0);
+  return Number(record.health_recalculated || 0);
 }
 
 function toSafeNumber(value: unknown): number {
@@ -280,7 +314,7 @@ function enrichHealthKpis(items: KpiAdminItem[], rows: EffectiveHealthRow[]): Kp
 export default function AdministrarKpisPage() {
   const { t } = useTranslation();
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [canRefreshHealth, setCanRefreshHealth] = useState(false);
 
   const [standards, setStandards] = useState<StandardItem[]>([]);
@@ -326,12 +360,13 @@ export default function AdministrarKpisPage() {
   useEffect(() => {
     const authToken = localStorage.getItem('token');
     const u = getUserFromToken();
+    const authUser = hasTenantId(u) ? u : null;
 
     setToken(authToken);
-    setUser(u);
+    setUser(authUser);
 
     if (authToken) {
-      if (isPlatformRole(u)) {
+      if (isPlatformRole(authUser)) {
         setCanRefreshHealth(true);
       } else {
         fetch(`${API_URL}/api/me/permissions`, {
@@ -347,7 +382,7 @@ export default function AdministrarKpisPage() {
       }
     }
 
-    if (!authToken || !u?.tenant_id) {
+    if (!authToken || !authUser?.tenant_id) {
       setLoading(false);
       setLoadingStandards(false);
     }
@@ -385,7 +420,9 @@ export default function AdministrarKpisPage() {
         return;
       }
 
-      const activeStandards = (json || []).filter((s: any) => s.is_active === true);
+      const activeStandards = Array.isArray(json)
+        ? json.filter((s): s is StandardItem => isStandardItem(s) && s.is_active === true)
+        : [];
       setStandards(activeStandards);
     } catch (err) {
       console.error('ERROR LOAD KPI STANDARDS:', err);
@@ -433,7 +470,7 @@ export default function AdministrarKpisPage() {
         `${API_URL}/api/kpis/effective-health-summary/${tenantId}`,
       ];
 
-      let payload: any = null;
+      let payload: unknown = null;
       let lastError: unknown = null;
 
       for (const endpoint of endpoints) {
@@ -441,10 +478,10 @@ export default function AdministrarKpisPage() {
           const res = await fetch(endpoint, {
             headers: { Authorization: `Bearer ${authToken}` },
           });
-          const json = await res.json();
+          const json: unknown = await res.json();
 
           if (!res.ok) {
-            throw new Error(json?.error || json?.message || `Error ${res.status}`);
+            throw new Error(getApiErrorMessage(json, `Error ${res.status}`));
           }
 
           payload = json;
@@ -458,10 +495,13 @@ export default function AdministrarKpisPage() {
         throw lastError || new Error('No fue posible cargar Health ISO efectivo.');
       }
 
-      const rows = Array.isArray(payload?.active_summary)
-        ? payload.active_summary
-        : Array.isArray(payload?.summary)
-          ? payload.summary.filter((row: EffectiveHealthRow) => toSafeNumber(row.active_scope_controls) > 0)
+      const payloadRecord = isRecord(payload) ? payload : {};
+      const activeSummary = payloadRecord.active_summary;
+      const summary = payloadRecord.summary;
+      const rows = Array.isArray(activeSummary)
+        ? activeSummary as EffectiveHealthRow[]
+        : Array.isArray(summary)
+          ? (summary as EffectiveHealthRow[]).filter((row) => toSafeNumber(row.active_scope_controls) > 0)
           : [];
 
       setEffectiveHealthRows(rows);

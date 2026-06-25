@@ -299,7 +299,7 @@ type RemediationPlanItem = {
   suggested_action_title: string;
   suggested_action_description: string;
   suggested_due_date: string;
-  recommendation_trace_json: any;
+  recommendation_trace_json: unknown;
   calculated_at: string;
 };
 
@@ -486,7 +486,15 @@ type RiskControl = {
   review_score?: string;
 };
 
-function toNumber(value: any): number {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function toNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
@@ -775,15 +783,16 @@ function normalizeHealthApiPath(path: string) {
   return path;
 }
 
-function healthApiErrorMessage(status: number, json: any, fallback: string) {
-  const code = String(json?.code || '').toUpperCase();
+function healthApiErrorMessage(status: number, json: unknown, fallback: string) {
+  const record = isRecord(json) ? json : {};
+  const code = String(record.code || '').toUpperCase();
   if (status === 401 || code === 'NO_TOKEN') {
     return 'Sesión no válida o expirada. Vuelve a iniciar sesión.';
   }
   if (status === 403) {
     return 'No tienes permisos para acceder a este recurso.';
   }
-  return json?.error || json?.message || fallback;
+  return String(record.error || record.message || fallback);
 }
 
 function asArray<T>(value: unknown): T[] {
@@ -1041,7 +1050,7 @@ export default function HealthDashboardPage() {
 
     const text = await res.text();
 
-    let json: any = null;
+    let json: unknown = null;
 
     try {
       json = text ? JSON.parse(text) : {};
@@ -1051,7 +1060,7 @@ export default function HealthDashboardPage() {
       );
     }
 
-    if (!res.ok || json.ok === false) {
+    if (!res.ok || (isRecord(json) && json.ok === false)) {
       throw new Error(healthApiErrorMessage(res.status, json, t('health.errors.serviceQuery')));
     }
 
@@ -1097,8 +1106,8 @@ export default function HealthDashboardPage() {
         setSprintHealthError(sprintError);
       }
       setLastSprintHealthLoadedAt(new Date().toISOString());
-    } catch (err: any) {
-      setSprintHealthError(err.message || 'No fue posible cargar Health/KPIs Sprint 5.');
+    } catch (err: unknown) {
+      setSprintHealthError(getErrorMessage(err, 'No fue posible cargar Health/KPIs Sprint 5.'));
       setSprintHealthSummary(null);
       setSprintHealthDashboard(null);
       setSprintStandards([]);
@@ -1176,8 +1185,8 @@ export default function HealthDashboardPage() {
       if (remediationError) {
         setError(remediationError);
       }
-    } catch (err: any) {
-      setError(err.message || t('health.errors.loadingRemediation'));
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, t('health.errors.loadingRemediation')));
     } finally {
       setLoadingRemediation(false);
     }
@@ -1224,8 +1233,8 @@ export default function HealthDashboardPage() {
       if (auditError) {
         setError(auditError);
       }
-    } catch (err: any) {
-      setError(err.message || t('health.errors.loadingLog'));
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, t('health.errors.loadingLog')));
     } finally {
       setLoadingAudit(false);
     }
@@ -1310,8 +1319,8 @@ export default function HealthDashboardPage() {
           }),
         ]);
       }
-    } catch (err: any) {
-      setError(err.message || t('health.errors.loadingDashboard'));
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, t('health.errors.loadingDashboard')));
     } finally {
       setLoading(false);
     }
@@ -1351,7 +1360,7 @@ export default function HealthDashboardPage() {
       );
 
       const text = await res.text();
-      let json: any = null;
+      let json: unknown = null;
 
       try {
         json = text ? JSON.parse(text) : {};
@@ -1359,13 +1368,13 @@ export default function HealthDashboardPage() {
         throw new Error(t('health.errors.invalidRefreshResponse'));
       }
 
-      if (!res.ok || json.ok === false) {
+      if (!res.ok || (isRecord(json) && json.ok === false)) {
         throw new Error(healthApiErrorMessage(res.status, json, t('health.errors.refresh')));
       }
 
       await loadDashboard(selectedTenantId, token);
-    } catch (err: any) {
-      setError(err.message || t('health.errors.refresh'));
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, t('health.errors.refresh')));
     } finally {
       setRefreshing(false);
     }
@@ -1423,7 +1432,7 @@ export default function HealthDashboardPage() {
       });
 
       const text = await res.text();
-      let json: any = null;
+      let json: unknown = null;
 
       try {
         json = text ? JSON.parse(text) : {};
@@ -1431,12 +1440,13 @@ export default function HealthDashboardPage() {
         throw new Error(t('health.errors.invalidCreatePlanResponse'));
       }
 
-      if (!res.ok || json.ok === false) {
+      if (!res.ok || (isRecord(json) && json.ok === false)) {
         throw new Error(healthApiErrorMessage(res.status, json, t('health.errors.createPlan')));
       }
 
+      const responseRecord = isRecord(json) ? json : {};
       window.alert(
-        json.already_exists
+        responseRecord.already_exists
           ? t('health.planAlreadyExists')
           : t('health.planCreated')
       );
@@ -1451,8 +1461,8 @@ export default function HealthDashboardPage() {
           standardCode: selectedStandardCode,
         }),
       ]);
-    } catch (err: any) {
-      const message = err.message || t('health.errors.createPlan');
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, t('health.errors.createPlan'));
       setError(message);
       window.alert(message);
     } finally {

@@ -25,9 +25,13 @@ type Suggestion = {
   control_clause?: string | null;
   control_category?: string | null;
   control_description?: string | null;
-  source_trace_json?: any;
-  payload_json?: any;
+  source_trace_json?: unknown;
+  payload_json?: unknown;
   created_at?: string;
+};
+
+type SummaryStandard = {
+  standard_code?: string | null;
 };
 
 type Summary = {
@@ -39,18 +43,41 @@ type Summary = {
     critical_count: number;
     high_count: number;
   };
-  by_standard?: any[];
-  by_type?: any[];
-  recent?: any[];
+  by_standard?: SummaryStandard[];
+  by_type?: unknown[];
+  recent?: unknown[];
 };
 
-function resolveTenantId(user: any): string {
+type AuthUser = {
+  tenant_id?: string;
+  tenantId?: string;
+  tenant?: string;
+  company_id?: string;
+  companyId?: string;
+};
+
+type GenerationResult = {
+  dry_run?: boolean;
+  generated_count?: number | string;
+  inserted_count?: number | string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function resolveTenantId(user: unknown): string {
+  const record = isRecord(user) ? user as AuthUser : {};
   return (
-    user?.tenant_id ||
-    user?.tenantId ||
-    user?.tenant ||
-    user?.company_id ||
-    user?.companyId ||
+    record.tenant_id ||
+    record.tenantId ||
+    record.tenant ||
+    record.company_id ||
+    record.companyId ||
     ''
   );
 }
@@ -81,7 +108,7 @@ export default function IsoOperationalExecutionPage() {
   const [generating, setGenerating] = useState(false);
   const [actingId, setActingId] = useState('');
   const [error, setError] = useState('');
-  const [lastGenerate, setLastGenerate] = useState<any>(null);
+  const [lastGenerate, setLastGenerate] = useState<GenerationResult | null>(null);
 
   const tenantId = useMemo(() => resolveTenantId(getUserFromToken()), []);
 
@@ -115,9 +142,10 @@ export default function IsoOperationalExecutionPage() {
         ...(options.headers || {}),
       },
     });
-    const json = await res.json();
+    const json: unknown = await res.json();
+    const record = isRecord(json) ? json : {};
     if (!res.ok) {
-      throw new Error(json?.error || 'Error en Ejecucion ISO');
+      throw new Error(String(record.error || 'Error en Ejecucion ISO'));
     }
     return json;
   }, []);
@@ -130,15 +158,18 @@ export default function IsoOperationalExecutionPage() {
         apiFetch('/api/iso-operational-execution/summary'),
         apiFetch(`/api/iso-operational-execution/suggestions?status=${encodeURIComponent(status)}`),
       ]);
-      setSummary(summaryJson.data || null);
-      setSuggestions(Array.isArray(suggestionsJson.data) ? suggestionsJson.data : []);
+      const summaryData = isRecord(summaryJson) ? summaryJson.data : null;
+      const suggestionsData = isRecord(suggestionsJson) ? suggestionsJson.data : [];
+      const nextSuggestions = Array.isArray(suggestionsData) ? suggestionsData as Suggestion[] : [];
+      setSummary(isRecord(summaryData) ? summaryData as Summary : null);
+      setSuggestions(nextSuggestions);
       setSelected((current) => {
         if (!current) return null;
-        return suggestionsJson.data?.find((item: Suggestion) => item.id === current.id) || null;
+        return nextSuggestions.find((item) => item.id === current.id) || null;
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('ERROR LOAD ISO EXECUTION:', err);
-      setError(err?.message || 'No fue posible cargar Ejecucion ISO');
+      setError(getErrorMessage(err, 'No fue posible cargar Ejecucion ISO'));
     } finally {
       setLoading(false);
     }
@@ -155,13 +186,13 @@ export default function IsoOperationalExecutionPage() {
           standard_code: standard || undefined,
         }),
       });
-      setLastGenerate(json.data || null);
+      setLastGenerate(isRecord(json) && isRecord(json.data) ? json.data as GenerationResult : null);
       if (!dryRun) {
         await load();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('ERROR GENERATE ISO EXECUTION:', err);
-      setError(err?.message || 'No fue posible generar sugerencias');
+      setError(getErrorMessage(err, 'No fue posible generar sugerencias'));
     } finally {
       setGenerating(false);
     }
@@ -179,13 +210,13 @@ export default function IsoOperationalExecutionPage() {
         }),
       });
       if (dryRun) {
-        setLastGenerate(json.data || null);
+        setLastGenerate(isRecord(json) && isRecord(json.data) ? json.data as GenerationResult : null);
       } else {
         await load();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('ERROR APPROVE ISO EXECUTION:', err);
-      setError(err?.message || 'No fue posible aprobar la sugerencia');
+      setError(getErrorMessage(err, 'No fue posible aprobar la sugerencia'));
     } finally {
       setActingId('');
     }
@@ -205,9 +236,9 @@ export default function IsoOperationalExecutionPage() {
         }),
       });
       await load();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('ERROR REJECT ISO EXECUTION:', err);
-      setError(err?.message || 'No fue posible rechazar la sugerencia');
+      setError(getErrorMessage(err, 'No fue posible rechazar la sugerencia'));
     } finally {
       setActingId('');
     }
