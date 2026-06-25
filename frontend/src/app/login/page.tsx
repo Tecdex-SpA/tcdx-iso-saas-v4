@@ -14,6 +14,14 @@ import { useTranslation } from '@/hooks/useTranslation';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function LoginPage() {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
@@ -63,7 +71,7 @@ export default function LoginPage() {
 
       const text = await res.text();
 
-      let data: any = null;
+      let data: unknown = null;
 
       try {
         data = text ? JSON.parse(text) : {};
@@ -71,14 +79,17 @@ export default function LoginPage() {
         throw new Error(t('login.errors.invalidBackendResponse', { status: res.status }));
       }
 
-      if (!res.ok || !data.token) {
-        setError(data.error || data.message || t('login.errors.invalidCredentials'));
+      const record = isRecord(data) ? data : {};
+      const token = typeof record.token === 'string' ? record.token : '';
+
+      if (!res.ok || !token) {
+        setError(String(record.error || record.message || t('login.errors.invalidCredentials')));
         return;
       }
 
-      localStorage.setItem('token', data.token);
+      localStorage.setItem('token', token);
 
-      const payload = decodeJwtPayload(data.token);
+      const payload = decodeJwtPayload(token);
 
       const role =
         payload?.role ||
@@ -89,9 +100,9 @@ export default function LoginPage() {
       const homePath = getHomePathByRole(role);
 
       window.location.href = homePath;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('ERROR LOGIN:', err);
-      setError(err.message || t('login.errors.connection'));
+      setError(getErrorMessage(err, t('login.errors.connection')));
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
@@ -22,8 +23,22 @@ type ReviewRow = {
   notes?: string;
 };
 
-function resolveTenantId(user: any) {
-  return user?.tenant_id || user?.tenantId || user?.tenant || '';
+type AuditSummary = {
+  iso?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function resolveTenantId(user: unknown) {
+  const record = isRecord(user) ? user : {};
+  return String(record.tenant_id || record.tenantId || record.tenant || '');
+}
+
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  const record = isRecord(payload) ? payload : {};
+  return String(record.error || fallback);
 }
 
 function statusClass(value?: string) {
@@ -85,7 +100,7 @@ function AuditExecutionContent() {
   const auditId = params.get('id') || '';
 
   const [token, setToken] = useState('');
-  const [audit, setAudit] = useState<any>(null);
+  const [audit, setAudit] = useState<AuditSummary | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState('');
@@ -112,15 +127,17 @@ function AuditExecutionContent() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
-      if (!res.ok || json?.ok === false) {
-        alert(json.error || t('auditExecution.loadError'));
+      if (!res.ok || (isRecord(json) && json.ok === false)) {
+        alert(getApiErrorMessage(json, t('auditExecution.loadError')));
         return;
       }
 
-      setAudit(json.audit);
-      setRows(Array.isArray(json.data) ? json.data : []);
+      const auditData = isRecord(json) ? json.audit : null;
+      const rowData = isRecord(json) ? json.data : [];
+      setAudit(isRecord(auditData) ? auditData as AuditSummary : null);
+      setRows(Array.isArray(rowData) ? rowData as ReviewRow[] : []);
     } finally {
       setLoading(false);
     }
@@ -160,14 +177,15 @@ function AuditExecutionContent() {
         }),
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
-      if (!res.ok || json?.ok === false) {
-        alert(json.error || t('auditExecution.updateError'));
+      if (!res.ok || (isRecord(json) && json.ok === false)) {
+        alert(getApiErrorMessage(json, t('auditExecution.updateError')));
         return;
       }
 
-      setRows((prev) => prev.map((item) => (item.id === row.id ? json.data : item)));
+      const updatedRow = isRecord(json) && isRecord(json.data) ? json.data as ReviewRow : row;
+      setRows((prev) => prev.map((item) => (item.id === row.id ? updatedRow : item)));
     } finally {
       setSavingId('');
     }
@@ -299,7 +317,7 @@ function AuditExecutionContent() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: any }) {
+function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
       <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</div>

@@ -11,9 +11,31 @@ import {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+type ProfileUser = {
+  full_name?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  job_title?: string;
+  avatar?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toProfileUser(value: unknown): ProfileUser | null {
+  return isRecord(value) ? value as ProfileUser : null;
+}
+
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  const record = isRecord(payload) ? payload : {};
+  return String(record.error || fallback);
+}
+
 export default function PerfilPage() {
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<ProfileUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
@@ -43,19 +65,20 @@ export default function PerfilPage() {
         headers: { Authorization: `Bearer ${authToken}` }
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error cargando perfil');
+        alert(getApiErrorMessage(json, 'Error cargando perfil'));
         return;
       }
 
-      setUser(json);
+      const profile = toProfileUser(json);
+      setUser(profile);
       setAvatarCacheKey(String(Date.now()));
       setProfileForm({
-        full_name: json.full_name || json.name || '',
-        phone: json.phone || '',
-        job_title: json.job_title || ''
+        full_name: profile?.full_name || profile?.name || '',
+        phone: profile?.phone || '',
+        job_title: profile?.job_title || ''
       });
     } catch (err) {
       console.error('ERROR LOAD PROFILE:', err);
@@ -91,14 +114,14 @@ export default function PerfilPage() {
         body: JSON.stringify(profileForm)
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error actualizando perfil');
+        alert(getApiErrorMessage(json, 'Error actualizando perfil'));
         return;
       }
 
-      setUser(json);
+      setUser(toProfileUser(json));
       alert('Perfil actualizado correctamente');
     } catch (err) {
       console.error('ERROR SAVE PROFILE:', err);
@@ -136,10 +159,10 @@ export default function PerfilPage() {
         })
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error cambiando contraseña');
+        alert(getApiErrorMessage(json, 'Error cambiando contraseña'));
         return;
       }
 
@@ -213,14 +236,14 @@ export default function PerfilPage() {
         body: fd
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
-        setAvatarError(json.error || 'Error subiendo foto');
+        setAvatarError(getApiErrorMessage(json, 'Error subiendo foto'));
         return;
       }
 
-      setUser(json);
+      setUser(toProfileUser(json));
       setAvatarFile(null);
       setAvatarPreviewUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);

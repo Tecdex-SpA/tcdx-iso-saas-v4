@@ -47,13 +47,13 @@ type GeneratedDocument = {
   created_at?: string;
   disclaimer?: string;
   content_markdown?: string;
-  source_trace_json?: any;
+  source_trace_json?: unknown;
 };
 
 type GenerateResponse = {
   document?: GeneratedDocument;
   markdown_preview?: string;
-  source_trace?: any;
+  source_trace?: unknown;
 };
 
 const DOCUMENT_TYPES = [
@@ -78,6 +78,10 @@ function tokenHeaders(token: string) {
   return {
     Authorization: `Bearer ${token}`,
   };
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export default function DocumentosPage() {
@@ -196,9 +200,9 @@ export default function DocumentosPage() {
       loadOptions(currentTenantId, authToken),
       loadDocuments(currentTenantId, authToken),
     ])
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error('ERROR LOAD ISO DOCUMENT GENERATOR:', err);
-        setError(err?.message || 'Error cargando generador documental');
+        setError(getErrorMessage(err, 'Error cargando generador documental'));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -269,9 +273,9 @@ export default function DocumentosPage() {
 
       setResult(json?.data || null);
       await loadDocuments(tenantId, token);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('ERROR GENERATE ISO DOCUMENT:', err);
-      setError(err?.message || 'Error generando documento');
+      setError(getErrorMessage(err, 'Error generando documento'));
     } finally {
       setGenerating(false);
     }
