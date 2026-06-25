@@ -25,7 +25,7 @@ import {
 
 type TranslationValue = string | number;
 type TranslationParams = Record<string, TranslationValue>;
-type Dictionary = Record<string, any>;
+type Dictionary = Record<string, unknown>;
 
 type LanguageContextValue = {
   locale: SupportedLocale;
@@ -76,9 +76,9 @@ function resolveClientLocale() {
 }
 
 function getNestedValue(dictionary: Dictionary, key: string) {
-  return key.split('.').reduce<any>((acc, part) => {
-    if (acc && Object.prototype.hasOwnProperty.call(acc, part)) {
-      return acc[part];
+  return key.split('.').reduce<unknown>((acc, part) => {
+    if (acc && typeof acc === 'object' && Object.prototype.hasOwnProperty.call(acc, part)) {
+      return (acc as Record<string, unknown>)[part];
     }
 
     return undefined;

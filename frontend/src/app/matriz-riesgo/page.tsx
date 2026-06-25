@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
@@ -14,6 +14,19 @@ import type { OperationalRiskSimulationRow, QuantitativeRisk } from '@/component
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+  company_id?: string | null;
+  companyId?: string | null;
+  role?: string | null;
+  user_role?: string | null;
+  userRole?: string | null;
+};
+
+type UnknownRecord = { [key: string]: unknown };
+
 type ScopeStandard = {
   code: string;
   name?: string;
@@ -22,8 +35,17 @@ type ScopeStandard = {
   active_operation_ids?: string[];
 };
 
+type OperationItem = {
+  id?: string;
+  tenant_id?: string;
+  code?: string | null;
+  name?: string;
+  operation_type?: string;
+  is_active?: boolean;
+};
+
 type ScopeResponse = {
-  operations: any[];
+  operations: OperationItem[];
   standards: ScopeStandard[];
 };
 
@@ -41,6 +63,18 @@ type RiskControlRow = {
   score?: number;
   nivel?: 'BAJO' | 'MEDIO' | 'ALTO' | 'CRITICO';
 };
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function isRiskControlRow(value: unknown): value is RiskControlRow {
+  return isRecord(value) && typeof value.id === 'string';
+}
 
 type IsoRiskMatrixOption = {
   standard_code: string;
@@ -77,7 +111,7 @@ type IsoRiskMatrixRun = {
   inherent_risk_avg?: number | string;
   residual_risk_avg?: number | string;
   risk_posture?: string;
-  summary_json?: any;
+  summary_json?: Record<string, unknown>;
 };
 
 type IsoRiskMatrixItem = {
@@ -214,7 +248,16 @@ function normalizeOperationalModel(value: unknown, norm: OperationalRiskForm['no
   return norm === 'ISO9001' ? 'ISO9001_COP_SIMPLE' : 'ISO27001_TTIA';
 }
 
-function resolveTenantId(user: any): string {
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return fallback;
+}
+
+function resolveTenantId(user: AuthUser | null): string {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -234,7 +277,7 @@ function isOperationalStandard(s: ScopeStandard) {
   );
 }
 
-function clampRiskAxis(value: any) {
+function clampRiskAxis(value: unknown) {
   const n = Math.round(Number(value || 0));
   if (!Number.isFinite(n)) return 1;
   return Math.max(1, Math.min(5, n));
@@ -255,11 +298,11 @@ function axisLabel(value: number) {
   return 'Muy baja';
 }
 
-function resolveRole(user: any): string {
+function resolveRole(user: AuthUser | null): string {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase().trim();
 }
 
-function canCreateOperationalSimulation(user: any) {
+function canCreateOperationalSimulation(user: AuthUser | null) {
   return [
     'superadmin',
     'super_admin',
@@ -359,7 +402,7 @@ function RiskMatrixPageContent() {
   }, [matrixRun]);
 
   const userCanCreateOperationalSimulation = useMemo(() => {
-    return canCreateOperationalSimulation(getUserFromToken());
+    return canCreateOperationalSimulation(getUserFromToken() as AuthUser | null);
   }, []);
 
   const topMatrixItems = useMemo(() => {
@@ -436,7 +479,7 @@ function RiskMatrixPageContent() {
     return 'bg-emerald-50 text-emerald-800 border-emerald-200';
   };
 
-  const formatNumber = (value: any) => {
+  const formatNumber = (value: unknown) => {
     const n = Number(value || 0);
     return Number.isFinite(n) ? n.toFixed(2).replace('.00', '') : '0';
   };
@@ -515,7 +558,7 @@ function RiskMatrixPageContent() {
     setOperationalRiskMessage('');
   };
 
-  const loadOperationalSimulations = async () => {
+  const loadOperationalSimulations = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return [];
 
@@ -537,14 +580,14 @@ function RiskMatrixPageContent() {
       const rows = Array.isArray(json?.data) ? json.data : [];
       setOperationalSimulations(rows);
       return rows as OperationalRiskSimulation[];
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD OPERATIONAL RISK SIMULATIONS:', err);
-      setOperationalRiskError(err?.message || 'Error cargando simulaciones operativas');
+      setOperationalRiskError(getErrorMessage(err, 'Error cargando simulaciones operativas'));
       return [];
     } finally {
       setLoadingOperationalSimulations(false);
     }
-  };
+  }, []);
 
   const runOperationalRiskSimulation = async () => {
     const token = localStorage.getItem('token');
@@ -621,9 +664,9 @@ function RiskMatrixPageContent() {
           ? 'Simulacion guardada como nueva evaluacion.'
           : 'Simulacion operativa guardada con metricas agregadas.'
       );
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR RUN OPERATIONAL RISK SIMULATION:', err);
-      setOperationalRiskError(err?.message || 'Error ejecutando simulacion operativa');
+      setOperationalRiskError(getErrorMessage(err, 'Error ejecutando simulacion operativa'));
     } finally {
       setRunningOperationalSimulation(false);
     }
@@ -653,17 +696,17 @@ function RiskMatrixPageContent() {
         [simulationId]: json?.data || {},
       }));
       setOperationalRiskMessage('Recomendacion rule-based generada para revision humana.');
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR GENERATE OPERATIONAL RISK RECOMMENDATION:', err);
-      setOperationalRiskError(err?.message || 'Error generando recomendacion operativa');
+      setOperationalRiskError(getErrorMessage(err, 'Error generando recomendacion operativa'));
     } finally {
       setRecommendationLoadingId('');
     }
   };
 
-  const loadScope = async () => {
+  const loadScope = useCallback(async () => {
     const token = localStorage.getItem('token');
-    const user = getUserFromToken();
+    const user = getUserFromToken() as AuthUser | null;
     const tenantId = resolveTenantId(user);
 
     if (!token || !tenantId) {
@@ -716,11 +759,11 @@ function RiskMatrixPageContent() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, [focusISO]);
 
-  const loadMatrixOptions = async () => {
+  const loadMatrixOptions = useCallback(async () => {
     const token = localStorage.getItem('token');
-    const user = getUserFromToken();
+    const user = getUserFromToken() as AuthUser | null;
     const tenantId = resolveTenantId(user);
 
     if (!token || !tenantId) return;
@@ -750,17 +793,17 @@ function RiskMatrixPageContent() {
         const first = recommended || options[0];
         return first ? `${first.standard_code}:${first.version_code}` : '';
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD ISO RISK MATRIX OPTIONS:', err);
-      setMatrixError(err?.message || 'Error cargando matriz automatizada');
+      setMatrixError(getErrorMessage(err, 'Error cargando matriz automatizada'));
     } finally {
       setLoadingMatrix(false);
     }
-  };
+  }, []);
 
-  const loadLatestMatrix = async (option?: IsoRiskMatrixOption | null) => {
+  const loadLatestMatrix = useCallback(async (option?: IsoRiskMatrixOption | null) => {
     const token = localStorage.getItem('token');
-    const user = getUserFromToken();
+    const user = getUserFromToken() as AuthUser | null;
     const tenantId = resolveTenantId(user);
     const target = option || selectedMatrixOption;
 
@@ -789,11 +832,11 @@ function RiskMatrixPageContent() {
     } catch (err) {
       console.error('ERROR LOAD LATEST ISO RISK MATRIX:', err);
     }
-  };
+  }, [selectedMatrixOption]);
 
   const generateMatrix = async (dryRun: boolean) => {
     const token = localStorage.getItem('token');
-    const user = getUserFromToken();
+    const user = getUserFromToken() as AuthUser | null;
     const tenantId = resolveTenantId(user);
     const target = selectedMatrixOption;
 
@@ -837,9 +880,9 @@ function RiskMatrixPageContent() {
       if (!dryRun) {
         await loadMatrixOptions();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR GENERATE ISO RISK MATRIX:', err);
-      setMatrixError(err?.message || 'Error generando matriz de riesgos');
+      setMatrixError(getErrorMessage(err, 'Error generando matriz de riesgos'));
     } finally {
       setGeneratingMatrix(false);
     }
@@ -847,7 +890,7 @@ function RiskMatrixPageContent() {
 
   const reviewRiskItem = async (itemId: string | undefined, status: 'accepted' | 'rejected') => {
     const token = localStorage.getItem('token');
-    const user = getUserFromToken();
+    const user = getUserFromToken() as AuthUser | null;
     const tenantId = resolveTenantId(user);
 
     if (!token || !tenantId || !itemId) return;
@@ -873,15 +916,15 @@ function RiskMatrixPageContent() {
       setMatrixItems((prev) => prev.map((item) => (
         item.id === itemId ? { ...item, status } : item
       )));
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR REVIEW RISK ITEM:', err);
-      setMatrixError(err?.message || 'Error revisando riesgo');
+      setMatrixError(getErrorMessage(err, 'Error revisando riesgo'));
     }
   };
 
-  const load = async (selectedISO: string) => {
+  const load = useCallback(async (selectedISO: string) => {
     const token = localStorage.getItem('token');
-    const user = getUserFromToken();
+    const user = getUserFromToken() as AuthUser | null;
     const tenantId = resolveTenantId(user);
 
     if (!token || !tenantId || !selectedISO) {
@@ -909,14 +952,14 @@ function RiskMatrixPageContent() {
         return;
       }
 
-      const enriched = (Array.isArray(data) ? data : [])
-        .map((c: any) => ({
+      const enriched = (Array.isArray(data) ? data.filter(isRiskControlRow) : [])
+        .map((c) => ({
           ...c,
           iso: c.iso || c.iso_code || c.standard_code || '',
         }))
-        .filter((c: any) => activeStandardCodes.has(c.iso))
-        .filter((c: any) => c.iso === selectedISO)
-        .map((c: any) => {
+        .filter((c) => activeStandardCodes.has(c.iso || ''))
+        .filter((c) => c.iso === selectedISO)
+        .map((c) => {
           let p = 1;
           let i = 1;
 
@@ -935,7 +978,7 @@ function RiskMatrixPageContent() {
 
           return { ...c, likelihood: p, impact: i, score, nivel };
         })
-        .sort((a: any, b: any) => Number(b.score || 0) - Number(a.score || 0));
+        .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
 
       setControls(enriched);
     } catch (err) {
@@ -944,13 +987,13 @@ function RiskMatrixPageContent() {
     } finally {
       setLoadingControls(false);
     }
-  };
+  }, [activeStandardCodes]);
 
   useEffect(() => {
     void loadScope();
     void loadMatrixOptions();
     void loadOperationalSimulations();
-  }, []);
+  }, [loadMatrixOptions, loadOperationalSimulations, loadScope]);
 
   useEffect(() => {
     if (iso === 'ISO27001' || iso === 'ISO9001') {
@@ -974,7 +1017,7 @@ function RiskMatrixPageContent() {
       setMatrixActions([]);
       setMatrixDryRun(true);
     }
-  }, [selectedMatrixOption?.standard_code, selectedMatrixOption?.version_code]);
+  }, [loadLatestMatrix, selectedMatrixOption]);
 
   useEffect(() => {
     if (!iso) return;
@@ -1014,7 +1057,7 @@ function RiskMatrixPageContent() {
     if (!focusId) {
       setSelectedLevel(null);
     }
-  }, [iso, activeStandardCodes]);
+  }, [activeStandardCodes, focusId, iso, load]);
 
   const applyAI = async (tenant_control_id: string) => {
     const token = localStorage.getItem('token');
@@ -1046,7 +1089,7 @@ function RiskMatrixPageContent() {
       });
 
       const text = await response.text();
-      let json: any = null;
+      let json: unknown = null;
 
       try {
         json = text ? JSON.parse(text) : null;
@@ -1054,8 +1097,16 @@ function RiskMatrixPageContent() {
         json = null;
       }
 
-      if (!response.ok || json?.success === false || json?.ok === false) {
-        throw new Error(json?.message || json?.error || `No fue posible crear el borrador IA (HTTP ${response.status}).`);
+      const jsonRecord = asRecord(json);
+
+      if (!response.ok || jsonRecord.success === false || jsonRecord.ok === false) {
+        throw new Error(
+          typeof jsonRecord.message === 'string'
+            ? jsonRecord.message
+            : typeof jsonRecord.error === 'string'
+              ? jsonRecord.error
+              : `No fue posible crear el borrador IA (HTTP ${response.status}).`
+        );
       }
 
       if (iso) {
@@ -1064,8 +1115,8 @@ function RiskMatrixPageContent() {
 
       setAiActionFeedback({
         kind: 'success',
-        message: json?.action_plan_id
-          ? `Borrador IA creado para revision humana. Plan: ${json.action_plan_id}.`
+        message: jsonRecord.action_plan_id
+          ? `Borrador IA creado para revision humana. Plan: ${String(jsonRecord.action_plan_id)}.`
           : 'Borrador IA creado para revision humana.',
       });
     } catch (err) {
@@ -1112,15 +1163,15 @@ function RiskMatrixPageContent() {
       : [];
   }, [controls, selectedLevel]);
 
-  const riskLevelLabel = (value?: string | null) => {
+  const riskLevelLabel = useCallback((value?: string | null) => {
     const raw = String(value || '').toUpperCase();
     if (raw === 'CRITICO') return t('statuses.findings.critico') || 'Critico';
     if (raw === 'ALTO') return t('statuses.findings.alto');
     if (raw === 'MEDIO') return t('statuses.findings.medio');
     return t('statuses.findings.bajo');
-  };
+  }, [t]);
 
-  const applyFocus = (control: RiskControlRow) => {
+  const applyFocus = useCallback((control: RiskControlRow) => {
     setFocusedControlId(control.id);
     setSelectedLevel(control.nivel || null);
     setFocusMessage(
@@ -1136,7 +1187,7 @@ function RiskMatrixPageContent() {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 250);
-  };
+  }, [locale, riskLevelLabel, t]);
 
   useEffect(() => {
     if (loadingStandards || !operationalStandards.length) return;
@@ -1157,7 +1208,7 @@ function RiskMatrixPageContent() {
     if (match) {
       applyFocus(match);
     }
-  }, [focusId, controls, loadingControls]);
+  }, [applyFocus, focusId, controls, loadingControls]);
 
   if (loadingStandards) {
     return (
@@ -1391,9 +1442,9 @@ function RiskMatrixPageContent() {
                   ['Bajos', matrixSummary.low_risks_count || 0, 'bg-emerald-100 text-emerald-800'],
                 ].map(([label, value, className]) => (
                   <div key={String(label)} className="border border-gray-200 rounded-lg p-4">
-                    <div className="text-xs text-gray-500">{label}</div>
-                    <div className={`mt-2 inline-flex min-w-12 justify-center rounded px-3 py-1 text-xl font-bold ${className}`}>
-                      {value}
+                    <div className="text-xs text-gray-500">{String(label)}</div>
+                    <div className={`mt-2 inline-flex min-w-12 justify-center rounded px-3 py-1 text-xl font-bold ${String(className)}`}>
+                      {String(value)}
                     </div>
                   </div>
                 ))}

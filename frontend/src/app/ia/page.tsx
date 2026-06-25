@@ -9,10 +9,46 @@ import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+type AiRiskItem = {
+  clause?: string;
+  status?: string;
+};
+
+type AiRecommendationItem = {
+  clause?: string;
+  level?: string;
+  message?: string;
+};
+
+type AiComplianceData = {
+  summary?: string;
+  riskLevel?: string;
+  riskScore?: string | number;
+  topRisks: AiRiskItem[];
+  recommendations: AiRecommendationItem[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toAiComplianceData(value: unknown): AiComplianceData | null {
+  if (!isRecord(value)) return null;
+  return {
+    summary: typeof value.summary === 'string' ? value.summary : '',
+    riskLevel: typeof value.riskLevel === 'string' ? value.riskLevel : '',
+    riskScore: typeof value.riskScore === 'string' || typeof value.riskScore === 'number'
+      ? value.riskScore
+      : 0,
+    topRisks: Array.isArray(value.topRisks) ? value.topRisks as AiRiskItem[] : [],
+    recommendations: Array.isArray(value.recommendations) ? value.recommendations as AiRecommendationItem[] : [],
+  };
+}
+
 export default function IACompliancePage() {
   const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
   const canUseAiCompliance = !entitlementsLoading && canUseAiFeature('suggestions');
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<AiComplianceData | null>(null);
 
   useEffect(() => {
     if (entitlementsLoading) return;
@@ -30,7 +66,7 @@ export default function IACompliancePage() {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
-        .then(setData);
+        .then((json: unknown) => setData(toAiComplianceData(json)));
     }
   }, [canUseAiCompliance, entitlementsLoading]);
 
@@ -97,7 +133,7 @@ export default function IACompliancePage() {
           <h2 className="mb-4 font-semibold">Controles Críticos / Pendientes</h2>
 
           <div className="space-y-2">
-            {data.topRisks.map((r: any, i: number) => (
+            {data.topRisks.map((r, i) => (
               <div key={i} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 {r.clause} - {r.status}
               </div>
@@ -110,7 +146,7 @@ export default function IACompliancePage() {
           <h2 className="mb-4 font-semibold">Recomendaciones</h2>
 
           <div className="space-y-3">
-            {data.recommendations.map((r: any, i: number) => (
+            {data.recommendations.map((r, i) => (
               <div key={i} className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
 
                 <div className="font-semibold">{r.clause}</div>

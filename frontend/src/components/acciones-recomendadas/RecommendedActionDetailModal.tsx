@@ -48,6 +48,10 @@ function numberValue(value: unknown) {
   return Number.isFinite(n) ? n : null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 function humanList(items: Array<string | null | undefined>) {
   const clean = items.map((item) => String(item || '').trim()).filter(Boolean);
   if (clean.length === 0) return '';
@@ -131,17 +135,20 @@ function buildAiQuestion(action: RecommendedAction, payload: JsonObject, trace: 
   ].join(' ');
 }
 
-function extractAiInsight(json: any): Pick<AiInsightState, 'summary' | 'recommendation' | 'source'> {
-  const answer = json?.answer || json?.data?.answer || json?.ai || json?.data?.ai || json?.data || json;
+function extractAiInsight(json: unknown): Pick<AiInsightState, 'summary' | 'recommendation' | 'source'> {
+  const root = isRecord(json) ? json : {};
+  const data = isRecord(root.data) ? root.data : {};
+  const answer = root.answer || data.answer || root.ai || data.ai || root.data || json;
+  const answerRecord = isRecord(answer) ? answer : {};
   const directText = typeof answer === 'string' ? answer : '';
   const candidates = [
-    answer?.executive_summary,
-    answer?.summary,
-    answer?.answer,
-    answer?.text,
-    answer?.content,
-    answer?.response,
-    json?.answer_text,
+    answerRecord.executive_summary,
+    answerRecord.summary,
+    answerRecord.answer,
+    answerRecord.text,
+    answerRecord.content,
+    answerRecord.response,
+    root.answer_text,
   ].filter((value) => typeof value === 'string' && value.trim());
   const text = directText || String(candidates[0] || '').trim();
   const paragraphs = text
@@ -151,8 +158,8 @@ function extractAiInsight(json: any): Pick<AiInsightState, 'summary' | 'recommen
 
   return {
     summary: paragraphs[0] || text || '',
-    recommendation: paragraphs.slice(1).join(' ') || String(answer?.recommendation || answer?.next_step || '').trim(),
-    source: String(answer?.source || json?.source || json?.search_trace?.source || 'ai-engine'),
+    recommendation: paragraphs.slice(1).join(' ') || String(answerRecord.recommendation || answerRecord.next_step || '').trim(),
+    source: String(answerRecord.source || root.source || (isRecord(root.search_trace) ? root.search_trace.source : '') || 'ai-engine'),
   };
 }
 
@@ -190,8 +197,8 @@ function RecommendedActionDetailModalContent({
 }: ContentProps) {
   const canAct = !readonly && action.status === 'pending';
   const links = relatedLinks(action);
-  const payload = action.payload_json || {};
-  const trace = action.source_trace_json || {};
+  const payload = useMemo(() => action.payload_json || {}, [action.payload_json]);
+  const trace = useMemo(() => action.source_trace_json || {}, [action.source_trace_json]);
   const operationalInsight = useMemo(() => buildOperationalInsight(action, payload, trace), [action, payload, trace]);
   const traceInsight = useMemo(() => buildTraceInsight(action, payload, trace), [action, payload, trace]);
   const [aiInsight, setAiInsight] = useState<AiInsightState>({

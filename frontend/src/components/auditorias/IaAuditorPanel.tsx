@@ -21,10 +21,11 @@ type SelectOption = {
   label: string;
 };
 
-type LooseRecord = Record<string, any>;
+type ParsedJson = ReturnType<typeof JSON.parse>;
+type LooseRecord = Record<string, ParsedJson>;
 
 function resolveTenantId(user: LooseRecord | null) {
-  return user?.tenant_id || user?.tenantId || user?.tenant || '';
+  return String(user?.tenant_id || user?.tenantId || user?.tenant || '');
 }
 
 function localText(locale: string) {

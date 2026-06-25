@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 
@@ -41,11 +42,31 @@ type DealerRequest = {
   request_status: string;
   title: string;
   description?: string;
-  requested_payload?: any;
+  requested_payload?: unknown;
   review_comment?: string;
   created_at?: string;
   reviewed_at?: string;
 };
+
+type DealerRequestPayload = {
+  notes: string | null;
+  source: string;
+  standard_code?: string;
+  module_key?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  const record = isRecord(payload) ? payload : {};
+  return String(record.error || fallback);
+}
 
 function formatDate(value?: string) {
   if (!value) return '-';
@@ -123,7 +144,7 @@ function SmallCard({
   subtitle,
 }: {
   title: string;
-  value: any;
+  value: ReactNode;
   subtitle?: string;
 }) {
   return (
@@ -187,7 +208,7 @@ export default function DealerPortalPage() {
 
     const text = await res.text();
 
-    let json: any = null;
+    let json: unknown = null;
 
     try {
       json = text ? JSON.parse(text) : {};
@@ -195,8 +216,8 @@ export default function DealerPortalPage() {
       throw new Error(`Respuesta inválida del backend en ${path}. HTTP ${res.status}.`);
     }
 
-    if (!res.ok || json.ok === false) {
-      throw new Error(json.error || `Error backend en ${path}`);
+    if (!res.ok || (isRecord(json) && json.ok === false)) {
+      throw new Error(getApiErrorMessage(json, `Error backend en ${path}`));
     }
 
     return json;
@@ -227,19 +248,21 @@ export default function DealerPortalPage() {
       const tenantsText = await tenantsJson.text();
       const requestsText = await requestsJson.text();
 
-      const tenantsParsed = tenantsText ? JSON.parse(tenantsText) : {};
-      const requestsParsed = requestsText ? JSON.parse(requestsText) : {};
+      const tenantsParsed: unknown = tenantsText ? JSON.parse(tenantsText) : {};
+      const requestsParsed: unknown = requestsText ? JSON.parse(requestsText) : {};
 
-      if (!tenantsJson.ok || tenantsParsed.ok === false) {
-        throw new Error(tenantsParsed.error || 'Error cargando clientes asignados');
+      if (!tenantsJson.ok || (isRecord(tenantsParsed) && tenantsParsed.ok === false)) {
+        throw new Error(getApiErrorMessage(tenantsParsed, 'Error cargando clientes asignados'));
       }
 
-      if (!requestsJson.ok || requestsParsed.ok === false) {
-        throw new Error(requestsParsed.error || 'Error cargando solicitudes dealer');
+      if (!requestsJson.ok || (isRecord(requestsParsed) && requestsParsed.ok === false)) {
+        throw new Error(getApiErrorMessage(requestsParsed, 'Error cargando solicitudes dealer'));
       }
 
-      const tenantRows: DealerTenant[] = tenantsParsed.data || [];
-      const requestRows: DealerRequest[] = requestsParsed.data || [];
+      const tenantData = isRecord(tenantsParsed) ? tenantsParsed.data : [];
+      const requestData = isRecord(requestsParsed) ? requestsParsed.data : [];
+      const tenantRows: DealerTenant[] = Array.isArray(tenantData) ? tenantData as DealerTenant[] : [];
+      const requestRows: DealerRequest[] = Array.isArray(requestData) ? requestData as DealerRequest[] : [];
 
       setTenants(tenantRows);
       setRequests(requestRows);
@@ -247,8 +270,8 @@ export default function DealerPortalPage() {
       if (!selectedTenantId && tenantRows.length > 0) {
         setSelectedTenantId(tenantRows[0].tenant_id);
       }
-    } catch (err: any) {
-      setError(err.message || 'Error cargando Portal Dealer');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error cargando Portal Dealer'));
     } finally {
       setLoading(false);
     }
@@ -274,7 +297,7 @@ export default function DealerPortalPage() {
       setSaving(true);
       setError('');
 
-      const requestedPayload: any = {
+      const requestedPayload: DealerRequestPayload = {
         notes: form.notes || null,
         source: 'dealer_portal',
       };
@@ -308,8 +331,8 @@ export default function DealerPortalPage() {
       });
 
       await loadPortal();
-    } catch (err: any) {
-      setError(err.message || 'Error creando solicitud dealer');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error creando solicitud dealer'));
     } finally {
       setSaving(false);
     }

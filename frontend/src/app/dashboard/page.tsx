@@ -109,6 +109,70 @@ type SystemHealthDashboard = {
   data_quality_warnings?: string[];
 };
 
+type UnknownRecord = Record<string, unknown>;
+
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+type ControlDashboardRow = {
+  id?: string | number | null;
+  control_id?: string | number | null;
+  iso?: string | null;
+  iso_code?: string | null;
+  status?: string | null;
+  control_name?: string | null;
+  name?: string | null;
+  title?: string | null;
+  control?: string | null;
+  code?: string | null;
+};
+
+type RiskSummaryRow = {
+  id?: string | number | null;
+  level?: string | null;
+  total?: string | number | null;
+  name?: string | null;
+  label?: string | null;
+  iso?: string | null;
+  iso_code?: string | null;
+};
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (isRecord(error) && typeof error.message === 'string' && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function toStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item || '')).filter(Boolean);
+}
+
+function isControlDashboardRow(value: unknown): value is ControlDashboardRow {
+  return isRecord(value);
+}
+
+function isRiskSummaryRow(value: unknown): value is RiskSummaryRow {
+  return isRecord(value);
+}
+
 function normalizeDashboardView(value?: string | null): DashboardView {
   return value === 'kpi' || value === 'iso' || value === 'executive'
     ? value
@@ -325,7 +389,7 @@ type LatestSnapshot = {
   period_start?: string | null;
   period_end?: string | null;
   calculated_at?: string | null;
-  breakdown_json?: any;
+  breakdown_json?: JsonValue;
 };
 
 type KpiDashboardItem = {
@@ -393,7 +457,7 @@ type DashboardAuditSummary = {
   note?: string;
 };
 
-function numberOrZero(value: any) {
+function numberOrZero(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
@@ -453,14 +517,14 @@ function normalizeActionStatus(value?: string | null) {
   return 'abierto';
 }
 
-async function fetchJson(url: string, token: string) {
+async function fetchJson(url: string, token: string): Promise<unknown> {
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
   const text = await res.text();
 
-  let json: any = null;
+  let json: unknown = null;
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
@@ -468,88 +532,93 @@ async function fetchJson(url: string, token: string) {
   }
 
   if (!res.ok) {
-    throw new Error(json?.error || json?.detail || `Error consultando ${url}`);
+    const errorBody = asRecord(json);
+    throw new Error(
+      String(errorBody.error || errorBody.detail || `Error consultando ${url}`)
+    );
   }
 
   return json;
 }
 
-function normalizeLatestSnapshot(snapshot: any): LatestSnapshot | null {
-  if (!snapshot) return null;
+function normalizeLatestSnapshot(snapshot: unknown): LatestSnapshot | null {
+  if (!isRecord(snapshot)) return null;
+  const raw = snapshot;
 
   return {
-    id: snapshot.id,
-    standard_code: snapshot.standard_code ?? null,
-    value: snapshot.value ?? null,
-    numerator_value: snapshot.numerator_value ?? null,
-    denominator_value: snapshot.denominator_value ?? null,
-    status_color: snapshot.status_color ?? null,
-    period_type: snapshot.period_type ?? null,
-    period_start: snapshot.period_start ?? null,
-    period_end: snapshot.period_end ?? null,
-    calculated_at: snapshot.calculated_at ?? null,
-    breakdown_json: snapshot.breakdown_json ?? null,
+    id: raw.id === undefined || raw.id === null ? undefined : String(raw.id),
+    standard_code: raw.standard_code === undefined || raw.standard_code === null ? null : String(raw.standard_code),
+    value: typeof raw.value === 'number' || typeof raw.value === 'string' ? raw.value : null,
+    numerator_value: typeof raw.numerator_value === 'number' || typeof raw.numerator_value === 'string' ? raw.numerator_value : null,
+    denominator_value: typeof raw.denominator_value === 'number' || typeof raw.denominator_value === 'string' ? raw.denominator_value : null,
+    status_color: raw.status_color === undefined || raw.status_color === null ? null : String(raw.status_color),
+    period_type: raw.period_type === undefined || raw.period_type === null ? null : String(raw.period_type),
+    period_start: raw.period_start === undefined || raw.period_start === null ? null : String(raw.period_start),
+    period_end: raw.period_end === undefined || raw.period_end === null ? null : String(raw.period_end),
+    calculated_at: raw.calculated_at === undefined || raw.calculated_at === null ? null : String(raw.calculated_at),
+    breakdown_json: raw.breakdown_json as JsonValue,
   };
 }
 
-function normalizeKpiDashboardItem(item: any): KpiDashboardItem {
-  const latestSnapshots: LatestSnapshot[] = Array.isArray(item?.latest_snapshots)
-    ? item.latest_snapshots
-        .map((snap: any) => normalizeLatestSnapshot(snap))
-        .filter(Boolean) as LatestSnapshot[]
-    : Array.isArray(item?.standard_snapshots)
-    ? item.standard_snapshots
-        .map((snap: any) => normalizeLatestSnapshot(snap))
-        .filter(Boolean) as LatestSnapshot[]
+function normalizeKpiDashboardItem(item: unknown): KpiDashboardItem {
+  const raw = asRecord(item);
+  const latestSnapshots: LatestSnapshot[] = Array.isArray(raw.latest_snapshots)
+    ? raw.latest_snapshots
+        .map((snap) => normalizeLatestSnapshot(snap))
+        .filter((snap): snap is LatestSnapshot => Boolean(snap))
+    : Array.isArray(raw.standard_snapshots)
+    ? raw.standard_snapshots
+        .map((snap) => normalizeLatestSnapshot(snap))
+        .filter((snap): snap is LatestSnapshot => Boolean(snap))
     : [];
 
   const latestSnapshot =
-    normalizeLatestSnapshot(item?.latest_snapshot) ||
+    normalizeLatestSnapshot(raw.latest_snapshot) ||
     (latestSnapshots.length ? latestSnapshots[0] : null);
 
   return {
-    id: String(item?.id || ''),
-    code: String(item?.code || ''),
-    name: String(item?.name || 'KPI sin nombre'),
-    description: item?.description || undefined,
-    category: item?.category || 'otros',
-    kpi_type: item?.kpi_type || 'automatico',
-    unit: item?.unit || '',
-    frequency: item?.frequency || '',
-    direction: item?.direction || '',
+    id: String(raw.id || ''),
+    code: String(raw.code || ''),
+    name: String(raw.name || 'KPI sin nombre'),
+    description: typeof raw.description === 'string' ? raw.description : undefined,
+    category: String(raw.category || 'otros'),
+    kpi_type: String(raw.kpi_type || 'automatico'),
+    unit: String(raw.unit || ''),
+    frequency: String(raw.frequency || ''),
+    direction: String(raw.direction || ''),
     target_value:
-      item?.target_value === null || item?.target_value === undefined
+      raw.target_value === null || raw.target_value === undefined
         ? null
-        : Number(item.target_value),
-    applicable_standards: Array.isArray(item?.applicable_standards)
-      ? item.applicable_standards
-      : [],
-    is_enabled: Boolean(item?.is_enabled ?? item?.enabled ?? true),
+        : Number(raw.target_value),
+    applicable_standards: toStringList(raw.applicable_standards),
+    is_enabled: Boolean(raw.is_enabled ?? raw.enabled ?? true),
     is_health_kpi: Boolean(
-      item?.is_health_kpi || String(item?.code || '').startsWith('KPI-HLT-')
+      raw.is_health_kpi || String(raw.code || '').startsWith('KPI-HLT-')
     ),
     latest_snapshot: latestSnapshot,
     latest_snapshots: latestSnapshots,
     has_multiple_snapshots: Boolean(
-      item?.has_multiple_snapshots ?? latestSnapshots.length > 1
+      raw.has_multiple_snapshots ?? latestSnapshots.length > 1
     ),
     delta:
-      item?.delta === null || item?.delta === undefined
+      raw.delta === null || raw.delta === undefined
         ? null
-        : Number(item.delta),
+        : Number(raw.delta),
   };
 }
 
-function normalizeKpiDashboardResponse(payload: any): KpiDashboardResponse {
-  const rawItems: any[] = Array.isArray(payload)
+function normalizeKpiDashboardResponse(payload: unknown): KpiDashboardResponse {
+  const raw = asRecord(payload);
+  const rawItems: unknown[] = Array.isArray(payload)
     ? payload
-    : Array.isArray(payload?.items)
-    ? payload.items
+    : Array.isArray(raw.items)
+    ? raw.items
     : [];
 
-  const items: KpiDashboardItem[] = rawItems.map((raw: any) =>
-    normalizeKpiDashboardItem(raw)
+  const items: KpiDashboardItem[] = rawItems.map((item) =>
+    normalizeKpiDashboardItem(item)
   );
+  const summary = asRecord(raw.summary);
 
   const green = items.filter(
     (item: KpiDashboardItem) => item.latest_snapshot?.status_color === 'green'
@@ -568,16 +637,15 @@ function normalizeKpiDashboardResponse(payload: any): KpiDashboardResponse {
     return !color || color === 'gray';
   }).length;
 
-  const finalGreen = Number(payload?.summary?.green ?? green);
-  const finalYellow = Number(payload?.summary?.yellow ?? yellow);
-  const finalRed = Number(payload?.summary?.red ?? red);
-  const finalGray = Number(payload?.summary?.gray ?? gray);
-  const finalTotal = Number(payload?.summary?.total_kpis ?? items.length);
+  const finalGreen = Number(summary.green ?? green);
+  const finalYellow = Number(summary.yellow ?? yellow);
+  const finalRed = Number(summary.red ?? red);
+  const finalGray = Number(summary.gray ?? gray);
+  const finalTotal = Number(summary.total_kpis ?? items.length);
   const measuredKpis = finalGreen + finalYellow + finalRed;
 
   return {
     summary: {
-      ...(payload?.summary || {}),
       total_kpis: finalTotal,
       green: finalGreen,
       yellow: finalYellow,
@@ -586,22 +654,25 @@ function normalizeKpiDashboardResponse(payload: any): KpiDashboardResponse {
       measured_kpis: measuredKpis,
       data_coverage_pct:
         finalTotal > 0 ? Math.round((measuredKpis / finalTotal) * 100) : 0,
-      health_kpis:
-        payload?.summary?.health_kpis ??
-        items.filter((item: KpiDashboardItem) => item.is_health_kpi).length,
+      health_kpis: Number(
+        summary.health_kpis ??
+        items.filter((item: KpiDashboardItem) => item.is_health_kpi).length
+      ),
     },
     items,
   };
 }
 
-function getHealthRefreshCount(json: any) {
-  if (Array.isArray(json?.health_kpi_refresh)) {
-    return json.health_kpi_refresh.reduce((acc: number, row: any) => {
-      return acc + Number(row?.snapshots_inserted || row?.inserted || 0);
+function getHealthRefreshCount(json: unknown) {
+  const data = asRecord(json);
+  if (Array.isArray(data.health_kpi_refresh)) {
+    return data.health_kpi_refresh.reduce((acc: number, row) => {
+      const item = asRecord(row);
+      return acc + Number(item.snapshots_inserted || item.inserted || 0);
     }, 0);
   }
 
-  return Number(json?.health_recalculated || 0);
+  return Number(data.health_recalculated || 0);
 }
 
 function isHealthKpiItem(item?: KpiDashboardItem | null) {
@@ -712,6 +783,17 @@ function formatKpiValue(value: number | string | null | undefined, unit?: string
   return `${rounded}${unit ? ` ${unit}` : ''}`;
 }
 
+type UpcomingAuditsTooltipProps = {
+  active?: boolean;
+  payload?: Array<{
+    payload?: {
+      details?: AuditItem[];
+      value?: number | string;
+    };
+  }>;
+  label?: string | number;
+};
+
 export default function DashboardPage() {
   return (
     <Suspense fallback={<DashboardPageFallback />}>
@@ -785,13 +867,13 @@ function DashboardPageContent() {
     'tenant_admin',
   ].includes(currentRole);
 
-  const [controls, setControls] = useState<any[]>([]);
+  const [controls, setControls] = useState<ControlDashboardRow[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [effectiveHealthRows, setEffectiveHealthRows] = useState<EffectiveIsoHealthRow[]>([]);
   const [systemHealthDashboard, setSystemHealthDashboard] = useState<SystemHealthDashboard | null>(null);
   const [nextAudits, setNextAudits] = useState<AuditItem[]>([]);
   const [auditSummary, setAuditSummary] = useState<DashboardAuditSummary | null>(null);
-  const [riskSummary, setRiskSummary] = useState<any[]>([]);
+  const [riskSummary, setRiskSummary] = useState<RiskSummaryRow[]>([]);
   const [actionPlans, setActionPlans] = useState<ActionPlanItem[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -814,8 +896,10 @@ function DashboardPageContent() {
     try {
       setSystemHealthLoading(true);
       setSystemHealthError('');
-      const json = await fetchJson(`${API_URL}/api/health/dashboard`, token);
-      setSystemHealthDashboard(json?.data || null);
+      const json = asRecord(await fetchJson(`${API_URL}/api/health/dashboard`, token));
+      setSystemHealthDashboard(
+        isRecord(json.data) ? (json.data as SystemHealthDashboard) : null
+      );
     } catch (err) {
       console.error('ERROR SYSTEM HEALTH DASHBOARD:', err);
       setSystemHealthDashboard(null);
@@ -842,7 +926,7 @@ function DashboardPageContent() {
         `${API_URL}/api/kpis/effective-health-summary/${user.tenant_id}`,
       ];
 
-      let json: any = null;
+      let json: unknown = null;
       let lastError: unknown = null;
 
       for (const endpoint of endpoints) {
@@ -858,10 +942,13 @@ function DashboardPageContent() {
         throw lastError || new Error('No fue posible cargar salud ISO efectiva.');
       }
 
-      const rows = Array.isArray(json?.active_summary)
-        ? json.active_summary
-        : Array.isArray(json?.summary)
-          ? json.summary.filter((row: EffectiveIsoHealthRow) => toSafeNumber(row.active_scope_controls) > 0)
+      const data = asRecord(json);
+      const rows = Array.isArray(data.active_summary)
+        ? data.active_summary.filter(isRecord) as EffectiveIsoHealthRow[]
+        : Array.isArray(data.summary)
+          ? (data.summary.filter((row) => {
+              return isRecord(row) && toSafeNumber(row.active_scope_controls) > 0;
+            }) as EffectiveIsoHealthRow[])
           : [];
 
       setEffectiveHealthRows(rows);
@@ -907,15 +994,17 @@ function DashboardPageContent() {
         fetchJson(`${API_URL}/api/action-plans/${user.tenant_id}`, token),
       ]);
 
-      setControls(Array.isArray(controlsData) ? controlsData : []);
-      setSummary(summaryData || null);
-      setNextAudits(Array.isArray(auditsData) ? auditsData : []);
-      setAuditSummary(auditSummaryData?.ok === false ? null : auditSummaryData);
-      setRiskSummary(Array.isArray(riskData) ? riskData : []);
-      setActionPlans(Array.isArray(actionPlansData) ? actionPlansData : []);
-    } catch (err: any) {
+      const auditSummaryRecord = asRecord(auditSummaryData);
+
+      setControls(Array.isArray(controlsData) ? controlsData.filter(isControlDashboardRow) : []);
+      setSummary(isRecord(summaryData) ? (summaryData as DashboardSummary) : null);
+      setNextAudits(Array.isArray(auditsData) ? (auditsData.filter(isRecord) as AuditItem[]) : []);
+      setAuditSummary(auditSummaryRecord.ok === false ? null : (auditSummaryRecord as DashboardAuditSummary));
+      setRiskSummary(Array.isArray(riskData) ? riskData.filter(isRiskSummaryRow) : []);
+      setActionPlans(Array.isArray(actionPlansData) ? (actionPlansData.filter(isRecord) as ActionPlanItem[]) : []);
+    } catch (err) {
       console.error('ERROR DASHBOARD:', err);
-      setErrorMessage(err.message || 'No fue posible cargar el dashboard.');
+      setErrorMessage(getErrorMessage(err, 'No fue posible cargar el dashboard.'));
       setControls([]);
       setSummary(null);
       setNextAudits([]);
@@ -1029,7 +1118,7 @@ function DashboardPageContent() {
   };
 
   const grouped = useMemo(() => {
-    return controls.reduce((acc: Record<string, any[]>, c) => {
+    return controls.reduce((acc: Record<string, ControlDashboardRow[]>, c) => {
       const key = String(c.iso || 'SIN_ISO');
       if (!acc[key]) acc[key] = [];
       acc[key].push(c);
@@ -1154,9 +1243,9 @@ function DashboardPageContent() {
   const isoCards = useMemo(() => {
     return Object.keys(grouped).map((iso) => {
       const list = grouped[iso];
-      const ok = list.filter((c: any) => c.status === 'cumple').length;
-      const partial = list.filter((c: any) => c.status === 'parcial').length;
-      const critical = list.filter((c: any) => c.status === 'no cumple').length;
+      const ok = list.filter((c) => c.status === 'cumple').length;
+      const partial = list.filter((c) => c.status === 'parcial').length;
+      const critical = list.filter((c) => c.status === 'no cumple').length;
       const total = list.length;
       const percent = total > 0 ? Math.round((ok / total) * 100) : 0;
 
@@ -1226,7 +1315,7 @@ function DashboardPageContent() {
   const openNcCount = numberOrZero(summary?.open_nonconformities);
   const closedNcCount = numberOrZero(summary?.closed_nonconformities);
 
-  const kpiItems = kpiData?.items || [];
+  const kpiItems = useMemo(() => kpiData?.items || [], [kpiData?.items]);
   const kpiSummary = kpiData?.summary;
 
   const healthKpiItems = useMemo(() => {
@@ -1272,7 +1361,7 @@ function DashboardPageContent() {
       { name: t('dashboardKpi.redStatus'), value: kpiSummary?.red || 0, fill: '#ef4444' },
       { name: t('dashboardKpi.noDataStatus'), value: kpiSummary?.gray || 0, fill: '#94a3b8' },
     ];
-  }, [kpiSummary]);
+  }, [kpiSummary, t]);
 
   const kpiCategoryData = useMemo(() => {
     const acc: Record<string, number> = {};
@@ -1443,7 +1532,7 @@ function DashboardPageContent() {
       .filter((control) => control.status === 'no cumple' || control.status === 'parcial')
       .slice(0, 4)
       .map((control, index) => ({
-        id: control.id || control.control_id || `control-${index}`,
+        id: String(control.id || control.control_id || `control-${index}`),
         risk:
           control.control_name ||
           control.name ||
@@ -1458,7 +1547,7 @@ function DashboardPageContent() {
     if (fromControls.length > 0) return fromControls;
 
     return riskSummary.slice(0, 4).map((risk, index) => ({
-      id: risk.id || `risk-${index}`,
+      id: String(risk.id || `risk-${index}`),
       risk: risk.name || risk.label || `Riesgo ${risk.level || index + 1}`,
       norm: risk.iso || risk.iso_code || 'Global',
       level: risk.level === 'alto' ? 'Crítico' : risk.level === 'medio' ? 'Alto' : 'Medio',
@@ -1765,7 +1854,7 @@ function DashboardPageContent() {
                     value={kpiSummary?.health_kpis || healthKpiItems.length}
                     subtitle={t('dashboard.healthKpisSubtitle')}
                     accent="indigo"
-                    change={formatKpiValue(healthMainKpi?.latest_snapshot?.value as any, '%')}
+                    change={formatKpiValue(healthMainKpi?.latest_snapshot?.value, '%')}
                     changeHint={t('dashboard.generalHealth')}
                     icon={<TcdxIcon name="heart" className="h-6 w-6" />}
                   />
@@ -1853,7 +1942,7 @@ function DashboardPageContent() {
                                   <Cell key={index} fill={entry.fill} />
                                 ))}
                               </Pie>
-                              <Tooltip formatter={(value: any, name: any) => [value, name]} />
+                              <Tooltip formatter={(value: unknown, name: unknown) => [String(value), String(name)]} />
                             </PieChart>
                           </ResponsiveContainer>
 
@@ -2776,11 +2865,11 @@ function IsoSuggestedActionCard({ action }: { action: IsoSuggestedAction }) {
   );
 }
 
-function UpcomingAuditsTooltip({ active, payload, label }: any) {
+function UpcomingAuditsTooltip({ active, payload, label }: UpcomingAuditsTooltipProps) {
   if (!active || !payload || !payload.length) return null;
 
   const barData = payload[0]?.payload;
-  const details: AuditItem[] = barData?.details || [];
+  const details: AuditItem[] = Array.isArray(barData?.details) ? barData.details : [];
 
   return (
     <div className="max-w-[340px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
@@ -3493,7 +3582,7 @@ function HealthKpiMiniCard({
       </div>
 
       <div className="mt-4 text-4xl font-bold tracking-tight text-slate-900">
-        {formatKpiValue(item?.latest_snapshot?.value as any, item?.unit || '%')}
+        {formatKpiValue(item?.latest_snapshot?.value, item?.unit || '%')}
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
@@ -3512,7 +3601,7 @@ function HealthKpiMiniCard({
                 {snap.standard_code || 'Global'}
               </span>
               <span className="font-bold text-slate-900">
-                {formatKpiValue(snap.value as any, item?.unit || '%')}
+                {formatKpiValue(snap.value, item?.unit || '%')}
               </span>
             </div>
           ))}
@@ -3667,7 +3756,7 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
                   {snap.standard_code || 'Global'}
                 </span>
                 <span className="font-bold text-slate-900">
-                  {formatKpiValue(snap.value as any, item.unit)}
+                  {formatKpiValue(snap.value, item.unit)}
                 </span>
               </div>
             ))}

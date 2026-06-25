@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
@@ -140,6 +140,17 @@ type LifecycleHistoryRow = {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+
+  return fallback;
+}
+
 function getToken(): string {
   if (typeof window === 'undefined') return '';
   return localStorage.getItem('token') || '';
@@ -197,7 +208,7 @@ function formatDateTime(value: string | null | undefined) {
 function prettifyStage(
   code: string | null | undefined,
   stages: StageDef[],
-  t?: (key: string, params?: Record<string, any>) => string
+  t?: (key: string) => string
 ) {
   if (!code) return t ? t('lifecycle.noStage') : 'Sin etapa';
 
@@ -326,7 +337,7 @@ export default function CicloVidaPage() {
     }
   }, [canUseObjectives, activeView]);
 
-  async function fetchMe(currentToken: string): Promise<MeResponse | null> {
+  const fetchMe = useCallback(async (currentToken: string): Promise<MeResponse | null> => {
     try {
       const res = await fetch(`${API_URL}/api/me`, {
         headers: {
@@ -339,9 +350,9 @@ export default function CicloVidaPage() {
     } catch {
       return null;
     }
-  }
+  }, []);
 
-  async function loadScope(resolvedTenantId: string) {
+  const loadScope = useCallback(async (resolvedTenantId: string) => {
     const token = getToken();
     if (!token || !resolvedTenantId) return;
 
@@ -363,13 +374,13 @@ export default function CicloVidaPage() {
       operations: Array.isArray(data?.operations) ? data.operations : [],
       standards: Array.isArray(data?.standards) ? data.standards : [],
     });
-  }
+  }, [t]);
 
-  async function loadBoard(
+  const loadBoard = useCallback(async (
     resolvedTenantId: string,
     standardCode?: string,
     operationId?: string
-  ) {
+  ) => {
     const token = getToken();
     if (!token || !resolvedTenantId) return;
 
@@ -402,14 +413,14 @@ export default function CicloVidaPage() {
     }
 
     setBoard(data);
-  }
+  }, [t]);
 
   async function refreshBoard() {
     if (!tenantId) return;
     await loadBoard(tenantId, selectedStandard, selectedOperation);
   }
 
-  async function loadHistory(resolvedTenantId: string) {
+  const loadHistory = useCallback(async (resolvedTenantId: string) => {
     const token = getToken();
     if (!token || !resolvedTenantId) return;
 
@@ -445,13 +456,13 @@ export default function CicloVidaPage() {
       }
 
       setHistoryRows(Array.isArray(data?.data) ? data.data : []);
-    } catch (err: any) {
-      setError(err?.message || t('lifecycle.errors.loadHistory'));
+    } catch (err) {
+      setError(getErrorMessage(err, t('lifecycle.errors.loadHistory')));
       setHistoryRows([]);
     } finally {
       setHistoryLoading(false);
     }
-  }
+  }, [selectedOperation, selectedStandard, t]);
 
   useEffect(() => {
     const run = async () => {
@@ -484,15 +495,15 @@ export default function CicloVidaPage() {
         setTenantId(resolvedTenantId);
         await loadScope(resolvedTenantId);
         await loadBoard(resolvedTenantId);
-      } catch (err: any) {
-        setError(err?.message || t('lifecycle.errors.loadLifecycle'));
+      } catch (err) {
+        setError(getErrorMessage(err, t('lifecycle.errors.loadLifecycle')));
       } finally {
         setLoading(false);
       }
     };
 
     run();
-  }, []);
+  }, [fetchMe, loadBoard, loadScope, t]);
 
   useEffect(() => {
     const run = async () => {
@@ -502,21 +513,20 @@ export default function CicloVidaPage() {
         setLoading(true);
         setError('');
         await loadBoard(tenantId, selectedStandard, selectedOperation);
-      } catch (err: any) {
-        setError(err?.message || t('lifecycle.errors.loadFilters'));
+      } catch (err) {
+        setError(getErrorMessage(err, t('lifecycle.errors.loadFilters')));
       } finally {
         setLoading(false);
       }
     };
 
     run();
-  }, [selectedStandard, selectedOperation, tenantId]);
+  }, [loadBoard, selectedStandard, selectedOperation, tenantId, t]);
 
   useEffect(() => {
     if (activeView !== 'history' || !tenantId) return;
     void loadHistory(tenantId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, tenantId, selectedStandard, selectedOperation]);
+  }, [activeView, loadHistory, tenantId]);
 
   const activeStandards = useMemo(() => {
     return (scope.standards || []).filter((item) => item?.is_active === true);
@@ -749,8 +759,8 @@ export default function CicloVidaPage() {
         })
       );
       setRequestReason('');
-    } catch (err: any) {
-      setError(err?.message || t('lifecycle.errors.requestMove'));
+    } catch (err) {
+      setError(getErrorMessage(err, t('lifecycle.errors.requestMove')));
     } finally {
       setActionLoading(false);
       setDragging(null);
@@ -808,8 +818,8 @@ export default function CicloVidaPage() {
       );
       setSelectedPendingCard(null);
       setReviewComment('');
-    } catch (err: any) {
-      setError(err?.message || t('lifecycle.errors.reviewRequest'));
+    } catch (err) {
+      setError(getErrorMessage(err, t('lifecycle.errors.reviewRequest')));
     } finally {
       setActionLoading(false);
     }

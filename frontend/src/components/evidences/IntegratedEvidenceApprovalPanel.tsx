@@ -1,8 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return fallback;
+}
 
 type IntegratedEvidence = {
   id: string;
@@ -96,7 +105,7 @@ export default function IntegratedEvidenceApprovalPanel({ tenantId }: { tenantId
   const [statusFilter, setStatusFilter] = useState('pendiente');
   const [search, setSearch] = useState('');
 
-  const fetchJson = async (url: string, options: RequestInit = {}) => {
+  const fetchJson = useCallback(async (url: string, options: RequestInit = {}) => {
     const token = getToken();
     const headers = new Headers(options.headers);
 
@@ -120,9 +129,9 @@ export default function IntegratedEvidenceApprovalPanel({ tenantId }: { tenantId
     }
 
     return json;
-  };
+  }, []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!tenantId) return;
 
     try {
@@ -141,17 +150,17 @@ export default function IntegratedEvidenceApprovalPanel({ tenantId }: { tenantId
       );
 
       setEvidences(Array.isArray(json.evidences) ? json.evidences : []);
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible cargar evidencias integradas.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible cargar evidencias integradas.'));
       setEvidences([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchJson, statusFilter, tenantId]);
 
   useEffect(() => {
     load();
-  }, [tenantId, statusFilter]);
+  }, [load]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -194,8 +203,8 @@ export default function IntegratedEvidenceApprovalPanel({ tenantId }: { tenantId
       );
 
       await load();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible aprobar la evidencia.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible aprobar la evidencia.'));
     } finally {
       setWorkingId('');
     }
@@ -222,8 +231,8 @@ export default function IntegratedEvidenceApprovalPanel({ tenantId }: { tenantId
       setMessage('Evidencia rechazada.');
 
       await load();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible rechazar la evidencia.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible rechazar la evidencia.'));
     } finally {
       setWorkingId('');
     }

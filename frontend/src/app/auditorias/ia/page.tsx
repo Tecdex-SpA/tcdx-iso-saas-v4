@@ -9,7 +9,90 @@ import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
-function resolveTenantId(user: any) {
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+};
+
+type AuditChecklistRow = {
+  result?: string | null;
+};
+
+type AuditRecommendation = {
+  priority?: string;
+  recommended_record?: string;
+  type?: string;
+  title?: string;
+  why?: string;
+  recommended_next_step?: string;
+};
+
+type AuditAnalysisItem = {
+  control_review_id?: string;
+  control_title?: string;
+  control_code?: string;
+  clause?: string;
+  reason?: string;
+  result?: string;
+  evidence_count?: number | string;
+  risk_level?: string;
+  risk_score?: number | string;
+  reasons?: string[];
+};
+
+type AuditAnalysis = {
+  executive_summary?: string;
+  human_approval_note?: string;
+  diagnosis?: {
+    score?: number;
+    readiness_score?: number | string;
+    reviewed_percent?: number | string;
+    conformity_percent?: number | string;
+    evidence_count?: number | string;
+    open_actions_count?: number | string;
+    summary?: string;
+  };
+  critical_controls?: AuditAnalysisItem[];
+  evidence_gaps?: AuditAnalysisItem[];
+  recommended_findings?: AuditRecommendation[];
+  recommended_actions?: AuditRecommendation[];
+  recommended_evidence_requests?: AuditRecommendation[];
+  governance_warnings?: AuditRecommendation[];
+  suggested_next_steps?: string[];
+  duplicated_or_unresolved_findings?: {
+    open_findings?: number;
+    open_nonconformities?: number;
+    overdue_actions?: number;
+    unresolved_count?: number;
+  };
+};
+
+type AuditContextResponse = {
+  audit?: {
+    iso?: string | null;
+    auditor_name?: string | null;
+    status?: string | null;
+  };
+  checklist?: AuditChecklistRow[];
+};
+
+type AuditRunRow = {
+  id: string;
+  standard_code?: string | null;
+  iso?: string | null;
+  created_at: string;
+  summary?: string | null;
+};
+
+type AuditAnalyzeResponse = {
+  analysis?: AuditAnalysis;
+  data?: {
+    suggestions_json?: AuditAnalysis;
+  };
+};
+
+function resolveTenantId(user: AuthUser | null) {
   return user?.tenant_id || user?.tenantId || user?.tenant || '';
 }
 
@@ -27,7 +110,7 @@ function priorityTone(priority?: string) {
   return 'border-slate-200 bg-slate-50 text-slate-700';
 }
 
-function arrayOf(value: any) {
+function arrayOf<T>(value: T[] | null | undefined): T[] {
   return Array.isArray(value) ? value : [];
 }
 
@@ -37,7 +120,7 @@ function RecommendationGroup({
   empty,
 }: {
   title: string;
-  items: any[];
+  items: AuditRecommendation[];
   empty: string;
 }) {
   return (
@@ -47,7 +130,7 @@ function RecommendationGroup({
       </h3>
 
       <div className="mt-4 space-y-3">
-        {items.map((item: any, idx: number) => (
+        {items.map((item, idx) => (
           <div key={idx} className={`rounded-2xl border p-4 ${priorityTone(item.priority)}`}>
             <div className="text-xs font-bold uppercase tracking-[0.12em]">
               {item.priority || 'prioridad'} · {item.recommended_record || item.type || 'sugerencia'}
@@ -94,9 +177,9 @@ function AuditoriasIaContent() {
 
   const [token, setToken] = useState('');
   const [tenantId, setTenantId] = useState('');
-  const [context, setContext] = useState<any>(null);
-  const [result, setResult] = useState<any>(null);
-  const [runs, setRuns] = useState<any[]>([]);
+  const [context, setContext] = useState<AuditContextResponse | null>(null);
+  const [result, setResult] = useState<AuditAnalyzeResponse | null>(null);
+  const [runs, setRuns] = useState<AuditRunRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -196,11 +279,11 @@ function AuditoriasIaContent() {
 
     return {
       total: rows.length,
-      conformes: rows.filter((r: any) => r.result === 'conforme').length,
-      observaciones: rows.filter((r: any) => r.result === 'observacion').length,
-      noConformes: rows.filter((r: any) => r.result === 'no_conforme').length,
-      sinEvidencia: rows.filter((r: any) => r.result === 'sin_evidencia').length,
-      pendientes: rows.filter((r: any) => !r.result || r.result === 'pendiente').length,
+      conformes: rows.filter((r) => r.result === 'conforme').length,
+      observaciones: rows.filter((r) => r.result === 'observacion').length,
+      noConformes: rows.filter((r) => r.result === 'no_conforme').length,
+      sinEvidencia: rows.filter((r) => r.result === 'sin_evidencia').length,
+      pendientes: rows.filter((r) => !r.result || r.result === 'pendiente').length,
     };
   }, [context]);
 
@@ -341,7 +424,7 @@ function AuditoriasIaContent() {
               <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="text-xl font-bold text-slate-900">Brechas de evidencia</h2>
                 <div className="mt-5 space-y-3">
-                  {evidenceGaps.slice(0, 8).map((item: any) => (
+                  {evidenceGaps.slice(0, 8).map((item) => (
                     <div key={item.control_review_id} className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
                       <div className="font-bold">
                         {item.control_title || item.control_code || 'Control sin nombre'}
@@ -392,7 +475,7 @@ function AuditoriasIaContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {criticalControls.map((item: any) => (
+                    {criticalControls.map((item) => (
                       <tr key={item.control_review_id} className="border-b align-top">
                         <td className="px-3 py-3">
                           <div className="font-bold text-slate-900">{item.control_title || item.control_code || 'Control'}</div>
@@ -454,7 +537,7 @@ function AuditoriasIaContent() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: any }) {
+function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</div>

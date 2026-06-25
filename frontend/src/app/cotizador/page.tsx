@@ -44,6 +44,10 @@ type SavedQuote = {
   created_at?: string;
 };
 
+type AuthUser = {
+  role?: string;
+};
+
 const ui = {
   es: {
     loading: 'Cargando cotizador...',
@@ -175,7 +179,20 @@ const ui = {
   },
 } as const;
 
-function money(value: any, locale = 'es') {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  const record = isRecord(payload) ? payload : {};
+  return String(record.error || fallback);
+}
+
+function money(value: unknown, locale = 'es') {
   const n = Number(value || 0);
 
   return new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'es-CL', {
@@ -211,7 +228,7 @@ export default function CotizadorPage() {
   const copy = ui[lang];
 
   const [token, setToken] = useState('');
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [calculation, setCalculation] = useState<QuoteCalculation | null>(null);
@@ -258,10 +275,10 @@ export default function CotizadorPage() {
       },
     });
 
-    const json = await res.json().catch(() => null);
+    const json: unknown = await res.json().catch(() => null);
 
-    if (!res.ok || json?.ok === false) {
-      throw new Error(json?.error || `HTTP error ${res.status}`);
+    if (!res.ok || (isRecord(json) && json.ok === false)) {
+      throw new Error(getApiErrorMessage(json, `HTTP error ${res.status}`));
     }
 
     return json;
@@ -269,7 +286,8 @@ export default function CotizadorPage() {
 
   async function loadQuotes() {
     const json = await fetchJson('/api/quotes');
-    setQuotes(json.data || []);
+    const data = isRecord(json) ? json.data : [];
+    setQuotes(Array.isArray(data) ? data as SavedQuote[] : []);
   }
 
   async function calculateQuote() {
@@ -278,7 +296,7 @@ export default function CotizadorPage() {
       body: JSON.stringify(quotePayload),
     });
 
-    setCalculation(json.data || null);
+    setCalculation(isRecord(json) && isRecord(json.data) ? json.data as QuoteCalculation : null);
   }
 
   async function saveQuote() {
@@ -309,9 +327,10 @@ export default function CotizadorPage() {
 
       setCalculation(null);
 
-      alert(copy.quoteSaved(json.data?.quote_number || ''));
-    } catch (err: any) {
-      alert(err.message || copy.quoteSaveError);
+      const quoteData = isRecord(json) && isRecord(json.data) ? json.data : {};
+      alert(copy.quoteSaved(String(quoteData.quote_number || '')));
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, copy.quoteSaveError));
     } finally {
       setSaving('');
     }
@@ -368,8 +387,8 @@ export default function CotizadorPage() {
       await loadQuotes();
 
       alert(copy.convertSuccess);
-    } catch (err: any) {
-      alert(err.message || copy.convertError);
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, copy.convertError));
     } finally {
       setSaving('');
     }
@@ -385,8 +404,8 @@ export default function CotizadorPage() {
       });
 
       await loadQuotes();
-    } catch (err: any) {
-      alert(err.message || copy.updateStatusError);
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, copy.updateStatusError));
     } finally {
       setSaving('');
     }
@@ -397,7 +416,7 @@ export default function CotizadorPage() {
     const u = getUserFromToken();
 
     setToken(t);
-    setUser(u);
+    setUser(isRecord(u) ? { role: String(u.role || '') } : null);
   }, []);
 
   useEffect(() => {

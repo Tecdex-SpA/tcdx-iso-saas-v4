@@ -14,14 +14,18 @@ export type AiAuditorDraftPayload = {
   reason?: string;
   human_review_required?: boolean;
   can_create_records?: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 const MAX_DRAFT_STORAGE_BYTES = 24000;
 const MAX_TEXT_FIELD_LENGTH = 3000;
 const ALLOWED_DRAFT_TYPES = new Set(['finding', 'action_plan', 'evidence', 'nonconformity']);
 
-function trimText(value: any, maxLength = MAX_TEXT_FIELD_LENGTH) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function trimText(value: unknown, maxLength = MAX_TEXT_FIELD_LENGTH) {
   return String(value || '')
     .replace(/\u0000/g, '')
     .trim()
@@ -51,8 +55,8 @@ function normalizeDraftPayload(payload: AiAuditorDraftPayload): AiAuditorDraftPa
   return normalized;
 }
 
-export function isValidAiAuditorDraft(payload: any): payload is AiAuditorDraftPayload {
-  if (!payload || typeof payload !== 'object') return false;
+export function isValidAiAuditorDraft(payload: unknown): payload is AiAuditorDraftPayload {
+  if (!isRecord(payload)) return false;
   if (payload.source !== 'ai_auditor_senior') return false;
   if (payload.human_review_required !== true) return false;
   if (payload.can_create_records !== false) return false;

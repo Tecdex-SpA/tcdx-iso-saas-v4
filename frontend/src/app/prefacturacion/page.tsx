@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -63,12 +64,23 @@ const ui = {
   },
 } as const;
 
-function resolveTenantId(user: any) {
-  return user?.tenant_id || user?.tenantId || user?.tenant || '';
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function resolveRole(user: any) {
-  return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  const record = isRecord(payload) ? payload : {};
+  return String(record.error || fallback);
+}
+
+function resolveTenantId(user: unknown) {
+  const record = isRecord(user) ? user : {};
+  return String(record.tenant_id || record.tenantId || record.tenant || '');
+}
+
+function resolveRole(user: unknown) {
+  const record = isRecord(user) ? user : {};
+  return String(record.role || record.user_role || record.userRole || '').toLowerCase();
 }
 
 type DealerTenant = {
@@ -79,6 +91,13 @@ type DealerTenant = {
 type TenantOption = {
   tenant_id: string;
   tenant_name?: string;
+};
+
+type PreinvoiceData = {
+  amounts?: Record<string, string | number | null | undefined>;
+  usage?: Record<string, string | number | null | undefined>;
+  settings?: Record<string, string | number | null | undefined>;
+  commercial_note?: string | null;
 };
 
 function isPlatformRole(role: string) {
@@ -92,7 +111,7 @@ function isPlatformRole(role: string) {
   ].includes(role);
 }
 
-function translateCommercialNote(value: any, lang: 'es' | 'en') {
+function translateCommercialNote(value: unknown, lang: 'es' | 'en') {
   const text = String(value || '').trim();
   if (!text || lang !== 'en') return text;
 
@@ -126,7 +145,7 @@ export default function PrefacturacionPage() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<PreinvoiceData | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -159,14 +178,15 @@ export default function PrefacturacionPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        const json = await res.json();
+        const json: unknown = await res.json();
 
-        if (!res.ok || json?.ok === false) {
-          setMessage(json?.error || copy.dealerLoadError);
+        if (!res.ok || (isRecord(json) && json.ok === false)) {
+          setMessage(getApiErrorMessage(json, copy.dealerLoadError));
           return;
         }
 
-        const rows: DealerTenant[] = json?.data || [];
+        const dealerData = isRecord(json) ? json.data : [];
+        const rows: DealerTenant[] = Array.isArray(dealerData) ? dealerData as DealerTenant[] : [];
         setDealerTenants(rows);
 
         if (!tenantId && rows.length > 0) {
@@ -195,17 +215,22 @@ export default function PrefacturacionPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        const json = await res.json();
+        const json: unknown = await res.json();
 
         if (!res.ok || !Array.isArray(json)) {
           setMessage(copy.tenantsLoadError);
           return;
         }
 
-        const rows: TenantOption[] = json.map((tenant: any) => ({
-          tenant_id: tenant.id || tenant.tenant_id,
-          tenant_name: tenant.name || tenant.tenant_name,
-        })).filter((tenant: TenantOption) => tenant.tenant_id);
+        const rows: TenantOption[] = json.map((tenant) => {
+          const record = isRecord(tenant) ? tenant : {};
+          return {
+            tenant_id: String(record.id || record.tenant_id || ''),
+            tenant_name: record.name || record.tenant_name
+              ? String(record.name || record.tenant_name)
+              : undefined,
+          };
+        }).filter((tenant) => tenant.tenant_id);
 
         setTenantOptions(rows);
 
@@ -236,14 +261,15 @@ export default function PrefacturacionPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
-      if (!res.ok || json?.ok === false) {
-        alert(json.error || copy.preinvoiceLoadError);
+      if (!res.ok || (isRecord(json) && json.ok === false)) {
+        alert(getApiErrorMessage(json, copy.preinvoiceLoadError));
         return;
       }
 
-      setData(json.data);
+      const preinvoiceData = isRecord(json) && isRecord(json.data) ? json.data as PreinvoiceData : null;
+      setData(preinvoiceData);
     } finally {
       setLoading(false);
     }
@@ -261,15 +287,15 @@ export default function PrefacturacionPage() {
       body: JSON.stringify({ period }),
     });
 
-    const json = await res.json();
+    const json: unknown = await res.json();
 
-    if (!res.ok || json?.ok === false) {
-      alert(json.error || copy.preinvoiceSaveError);
+    if (!res.ok || (isRecord(json) && json.ok === false)) {
+      alert(getApiErrorMessage(json, copy.preinvoiceSaveError));
       return;
     }
 
     alert(copy.preinvoiceSaved);
-    setData(json.preinvoice);
+    setData(isRecord(json) && isRecord(json.preinvoice) ? json.preinvoice as PreinvoiceData : null);
   };
 
   useEffect(() => {
@@ -391,7 +417,7 @@ export default function PrefacturacionPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: any }) {
+function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</div>

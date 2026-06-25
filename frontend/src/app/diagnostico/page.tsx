@@ -251,7 +251,26 @@ const ui = {
   },
 } as const;
 
-function resolveTenantId(user: any): string {
+type AuthUser = {
+  tenant_id?: string;
+  tenantId?: string;
+  tenant?: string;
+  company_id?: string;
+  companyId?: string;
+  role?: string;
+  user_role?: string;
+  userRole?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toAuthUser(value: unknown): AuthUser | null {
+  return isRecord(value) ? value as AuthUser : null;
+}
+
+function resolveTenantId(user: AuthUser | null): string {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -262,7 +281,7 @@ function resolveTenantId(user: any): string {
   );
 }
 
-function resolveRole(user: any): string {
+function resolveRole(user: AuthUser | null): string {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
 }
 
@@ -332,7 +351,7 @@ export default function DiagnosticoPage() {
   const [actionLoading, setActionLoading] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
   const [scope, setScope] = useState<ScopeResponse>({
@@ -473,7 +492,7 @@ export default function DiagnosticoPage() {
   useEffect(() => {
     try {
       const authToken = localStorage.getItem('token');
-      const u = getUserFromToken();
+      const u = toAuthUser(getUserFromToken());
 
       if (!authToken || !resolveTenantId(u)) {
         setLoading(false);

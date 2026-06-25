@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -25,6 +25,28 @@ function isStrongPassword(password: string) {
 type TenantItem = {
   id: string;
   name: string;
+};
+
+type UnknownRecord = Record<string, unknown>;
+
+type AuthUser = {
+  role?: string;
+  tenant_id?: string;
+  tenantId?: string;
+  tenant?: string;
+  company_id?: string;
+  companyId?: string;
+};
+
+type EditableUser = {
+  id: string;
+  name?: string;
+  email?: string;
+  role: string;
+  tenant_id?: string;
+  tenant_name?: string;
+  created_at?: string;
+  newPassword: string;
 };
 
 type RoleOption = {
@@ -135,11 +157,20 @@ const ui = {
   },
 } as const;
 
-function normalizeRole(role: any) {
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringField(record: UnknownRecord, key: string) {
+  const value = record[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function normalizeRole(role: unknown) {
   return String(role || '').toLowerCase().trim();
 }
 
-function isSuperAdminRole(role: any) {
+function isSuperAdminRole(role: unknown) {
   const normalized = normalizeRole(role);
 
   return [
@@ -152,7 +183,7 @@ function isSuperAdminRole(role: any) {
   ].includes(normalized);
 }
 
-function isAdminRole(role: any) {
+function isAdminRole(role: unknown) {
   const normalized = normalizeRole(role);
 
   return [
@@ -161,7 +192,48 @@ function isAdminRole(role: any) {
   ].includes(normalized);
 }
 
-function resolveTenantId(user: any) {
+function normalizeAuthUser(value: unknown): AuthUser | null {
+  if (!isRecord(value)) return null;
+
+  return {
+    role: stringField(value, 'role'),
+    tenant_id: stringField(value, 'tenant_id'),
+    tenantId: stringField(value, 'tenantId'),
+    tenant: stringField(value, 'tenant'),
+    company_id: stringField(value, 'company_id'),
+    companyId: stringField(value, 'companyId'),
+  };
+}
+
+function normalizeTenantItem(value: unknown): TenantItem | null {
+  if (!isRecord(value)) return null;
+
+  const id = stringField(value, 'tenant_id') || stringField(value, 'id');
+  const name = stringField(value, 'tenant_name') || stringField(value, 'name');
+
+  if (!id || !name) return null;
+  return { id, name };
+}
+
+function normalizeEditableUser(value: unknown): EditableUser | null {
+  if (!isRecord(value)) return null;
+
+  const id = stringField(value, 'id');
+  if (!id) return null;
+
+  return {
+    id,
+    name: stringField(value, 'name'),
+    email: stringField(value, 'email'),
+    role: stringField(value, 'role') || 'viewer',
+    tenant_id: stringField(value, 'tenant_id'),
+    tenant_name: stringField(value, 'tenant_name'),
+    created_at: stringField(value, 'created_at'),
+    newPassword: '',
+  };
+}
+
+function resolveTenantId(user: AuthUser | null) {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -189,7 +261,7 @@ function getRoleOptions(copy: typeof ui.es | typeof ui.en, isSuperAdmin: boolean
   ];
 }
 
-function getRoleLabel(role: any, copy: typeof ui.es | typeof ui.en) {
+function getRoleLabel(role: unknown, copy: typeof ui.es | typeof ui.en) {
   const normalized = normalizeRole(role);
   const options = getRoleOptions(copy, true);
 
@@ -202,9 +274,9 @@ export default function UsuariosPage() {
   const copy = ui[lang];
 
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<EditableUser[]>([]);
   const [tenants, setTenants] = useState<TenantItem[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState('');
 
@@ -230,7 +302,7 @@ export default function UsuariosPage() {
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');
-    const u = getUserFromToken();
+    const u = normalizeAuthUser(getUserFromToken());
 
     setToken(authToken);
     setUser(u);
@@ -240,26 +312,26 @@ export default function UsuariosPage() {
     }
   }, []);
 
-  const loadTenants = async (authToken: string) => {
+  const loadTenants = useCallback(async (authToken: string) => {
     try {
       const res = await fetch(`${API_URL}/api/admin-saas/tenants`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
+      const parsed = isRecord(json) ? json : {};
 
-      if (!res.ok || json?.ok === false) {
-        console.error('ERROR LOAD TENANTS:', json);
+      if (!res.ok || parsed.ok === false) {
+        console.error('ERROR LOAD TENANTS:', parsed);
         setTenants([]);
         return [];
       }
 
-      const rows = Array.isArray(json?.data) ? json.data : [];
+      const rows = Array.isArray(parsed.data) ? parsed.data : [];
 
-      const normalized = rows.map((tenant: any) => ({
-        id: tenant.tenant_id || tenant.id,
-        name: tenant.tenant_name || tenant.name,
-      }));
+      const normalized = rows
+        .map(normalizeTenantItem)
+        .filter((tenant): tenant is TenantItem => tenant !== null);
 
       setTenants(normalized);
       return normalized;
@@ -268,16 +340,20 @@ export default function UsuariosPage() {
       setTenants([]);
       return [];
     }
-  };
+  }, []);
 
-  const loadUsers = async (authToken: string, tenantId: string) => {
+  const loadUsers = useCallback(async (
+    authToken: string,
+    tenantId: string,
+    canQueryTenant: boolean
+  ) => {
     try {
       if (!tenantId) {
         setUsers([]);
         return;
       }
 
-      const url = isSuperAdmin
+      const url = canQueryTenant
         ? `${API_URL}/api/users?tenant_id=${encodeURIComponent(tenantId)}`
         : `${API_URL}/api/users`;
 
@@ -285,7 +361,7 @@ export default function UsuariosPage() {
         headers: { Authorization: `Bearer ${authToken}` },
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
         console.error('ERROR LOAD USERS:', json);
@@ -293,17 +369,17 @@ export default function UsuariosPage() {
         return;
       }
 
+      const rows = Array.isArray(json) ? json : [];
       setUsers(
-        (json || []).map((u: any) => ({
-          ...u,
-          newPassword: '',
-        }))
+        rows
+          .map(normalizeEditableUser)
+          .filter((u): u is EditableUser => u !== null)
       );
     } catch (err) {
       console.error('ERROR LOAD USERS:', err);
       setUsers([]);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!token || !user) return;
@@ -315,13 +391,13 @@ export default function UsuariosPage() {
         if (isSuperAdmin) {
           const tenantRows = await loadTenants(token);
 
-          if (!selectedTenantId && tenantRows.length > 0) {
-            setSelectedTenantId(tenantRows[0].id);
-          }
+          setSelectedTenantId((currentTenantId) =>
+            currentTenantId || tenantRows[0]?.id || ''
+          );
         } else {
           const tenantId = resolveTenantId(user);
           setSelectedTenantId(tenantId);
-          await loadUsers(token, tenantId);
+          await loadUsers(token, tenantId, isSuperAdmin);
         }
       } finally {
         setLoading(false);
@@ -329,15 +405,13 @@ export default function UsuariosPage() {
     };
 
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, user?.role]);
+  }, [isSuperAdmin, loadTenants, loadUsers, token, user]);
 
   useEffect(() => {
     if (!token || !selectedTenantId) return;
 
-    void loadUsers(token, selectedTenantId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, selectedTenantId]);
+    void loadUsers(token, selectedTenantId, isSuperAdmin);
+  }, [isSuperAdmin, loadUsers, selectedTenantId, token]);
 
   const createUser = async () => {
     if (!token) return;
@@ -379,10 +453,11 @@ export default function UsuariosPage() {
       }),
     });
 
-    const json = await res.json();
+    const json: unknown = await res.json();
+    const parsed = isRecord(json) ? json : {};
 
     if (!res.ok) {
-      alert(json.error || copy.createError);
+      alert(typeof parsed.error === 'string' ? parsed.error : copy.createError);
       return;
     }
 
@@ -393,11 +468,11 @@ export default function UsuariosPage() {
       role: 'auditor',
     });
 
-    await loadUsers(token, targetTenantId);
+    await loadUsers(token, targetTenantId, isSuperAdmin);
     alert(copy.createSuccess);
   };
 
-  const updateUser = async (row: any) => {
+  const updateUser = async (row: EditableUser) => {
     if (!token) return;
 
     if (!isSuperAdmin && ['superadmin', 'dealer'].includes(row.role)) {
@@ -426,10 +501,11 @@ export default function UsuariosPage() {
         }),
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
+      const parsed = isRecord(json) ? json : {};
 
       if (!res.ok) {
-        alert(json.error || copy.updateError);
+        alert(typeof parsed.error === 'string' ? parsed.error : copy.updateError);
         return;
       }
 
@@ -437,7 +513,8 @@ export default function UsuariosPage() {
         prev.map((u) =>
           u.id === row.id
             ? {
-                ...json,
+                ...row,
+                ...(normalizeEditableUser(json) || {}),
                 newPassword: '',
                 tenant_name: row.tenant_name,
               }

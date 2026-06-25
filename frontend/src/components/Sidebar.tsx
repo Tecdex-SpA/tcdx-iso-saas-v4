@@ -46,6 +46,10 @@ type ModuleMap = Record<
   }
 >;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
   return (
     <a
@@ -72,8 +76,9 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
   );
 }
 
-function resolveRole(user: any): string {
-  return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
+function resolveRole(user: unknown): string {
+  if (!isRecord(user)) return '';
+  return String(user.role || user.user_role || user.userRole || '').toLowerCase();
 }
 
 function MvpIcon({ href, className }: { href: string; className: string }) {

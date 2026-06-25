@@ -40,6 +40,32 @@ type NotificationItem = {
   is_read?: boolean;
 };
 
+type UnknownRecord = Record<string, unknown>;
+
+type HeaderUser = {
+  id?: string | null;
+  userId?: string | null;
+  tenant_id?: string | null;
+  avatar?: string | null;
+  full_name?: string | null;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+};
+
+type TenantInfo = {
+  name?: string | null;
+  company_name?: string | null;
+  legal_name?: string | null;
+  plan_name?: string | null;
+  plan?: string | null;
+  logo_public_url?: string | null;
+  report_logo_url?: string | null;
+  logo_url?: string | null;
+  brand_logo_url?: string | null;
+  logo?: string | null;
+};
+
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -55,6 +81,47 @@ function encodeAssetPath(value: string) {
 
 function uniqueStrings(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringField(record: UnknownRecord, key: string): string | null {
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function normalizeHeaderUser(value: unknown): HeaderUser | null {
+  if (!isRecord(value)) return null;
+
+  return {
+    id: stringField(value, 'id'),
+    userId: stringField(value, 'userId'),
+    tenant_id: stringField(value, 'tenant_id'),
+    avatar: stringField(value, 'avatar'),
+    full_name: stringField(value, 'full_name'),
+    name: stringField(value, 'name'),
+    email: stringField(value, 'email'),
+    role: stringField(value, 'role'),
+  };
+}
+
+function normalizeTenant(value: unknown): TenantInfo | null {
+  if (!isRecord(value)) return null;
+
+  return {
+    name: stringField(value, 'name'),
+    company_name: stringField(value, 'company_name'),
+    legal_name: stringField(value, 'legal_name'),
+    plan_name: stringField(value, 'plan_name'),
+    plan: stringField(value, 'plan'),
+    logo_public_url: stringField(value, 'logo_public_url'),
+    report_logo_url: stringField(value, 'report_logo_url'),
+    logo_url: stringField(value, 'logo_url'),
+    brand_logo_url: stringField(value, 'brand_logo_url'),
+    logo: stringField(value, 'logo'),
+  };
 }
 
 function buildAssetCandidates(value?: string | null) {
@@ -88,11 +155,12 @@ function buildAssetCandidates(value?: string | null) {
   ]);
 }
 
-function unwrapTenantPayload(payload: any) {
-  return payload?.data || payload?.tenant || payload?.item || payload;
+function unwrapTenantPayload(payload: unknown): TenantInfo | null {
+  if (!isRecord(payload)) return null;
+  return normalizeTenant(payload.data || payload.tenant || payload.item || payload);
 }
 
-function buildTenantLogoCandidates(tenant: any) {
+function buildTenantLogoCandidates(tenant: TenantInfo | null) {
   const candidates = [
     ...buildAssetCandidates(tenant?.logo_public_url),
     ...buildAssetCandidates(tenant?.report_logo_url),
@@ -110,8 +178,8 @@ type HeaderProps = {
 
 export default function Header({ onMenuClick }: HeaderProps) {
   const { locale, t } = useTranslation();
-  const [user, setUser] = useState<any>(null);
-  const [tenant, setTenant] = useState<any>(null);
+  const [user, setUser] = useState<HeaderUser | null>(null);
+  const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [logoCandidates, setLogoCandidates] = useState<string[]>([SERVICE_LOGO_SRC]);
   const [logoIndex, setLogoIndex] = useState(0);
   const logo = logoCandidates[logoIndex] || SERVICE_LOGO_SRC;
@@ -140,7 +208,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const userIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const data = getUserFromToken();
+    const data = normalizeHeaderUser(getUserFromToken());
     const token = localStorage.getItem('token');
 
     tokenRef.current = token;
@@ -152,7 +220,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => res.json())
-        .then(setUser)
+        .then((payload) => setUser(normalizeHeaderUser(payload)))
         .catch(console.error);
     }
 
@@ -196,7 +264,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => res.json())
-        .then(setUser)
+        .then((payload) => setUser(normalizeHeaderUser(payload)))
         .catch(console.error);
     };
 
@@ -281,8 +349,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
         const json = await res.json();
         setSearchResults(Array.isArray(json) ? json : []);
         setActiveIndex(-1);
-      } catch (err: any) {
-        if (err?.name !== 'AbortError') {
+      } catch (err: unknown) {
+        if (!(err instanceof Error) || err.name !== 'AbortError') {
           console.error(err);
           setSearchResults([]);
         }

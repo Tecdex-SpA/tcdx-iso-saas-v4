@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
@@ -38,6 +38,39 @@ type OperationItem = {
 type ScopeResponse = {
   operations: OperationItem[];
   standards: ScopeStandard[];
+};
+
+type UnknownRecord = Record<string, unknown>;
+
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+  company_id?: string | null;
+  companyId?: string | null;
+  role?: string | null;
+  user_role?: string | null;
+  userRole?: string | null;
+};
+
+type AiOrchestrationJson = UnknownRecord & {
+  search_trace?: unknown;
+  source_level?: unknown;
+  source_label?: unknown;
+  confidence?: unknown;
+  confidence_score?: unknown;
+  trace?: unknown;
+};
+
+type AiEnhancedAnswerJson = UnknownRecord & {
+  source_level?: unknown;
+  source_label?: unknown;
+  confidence?: unknown;
+  confidence_score?: unknown;
+  executive_summary?: unknown;
+  recommendation?: unknown;
+  suggested_evidence?: unknown;
+  next_steps?: unknown;
 };
 
 type ActionPlanEvidence = {
@@ -87,8 +120,8 @@ type ActionPlanItem = {
   ai_source_label?: string | null;
   ai_confidence?: string | null;
   ai_confidence_score?: number | string | null;
-  ai_orchestration_json?: any;
-  ai_enhanced_answer_json?: any;
+  ai_orchestration_json?: AiOrchestrationJson | null;
+  ai_enhanced_answer_json?: AiEnhancedAnswerJson | null;
 
   approval_requested_at?: string | null;
   approval_reviewed_at?: string | null;
@@ -137,7 +170,25 @@ type ActionPlanItem = {
   completed_at?: string | null;
 };
 
-function resolveTenantId(user: any): string {
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (isRecord(error) && typeof error.message === 'string' && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function resolveTenantId(user: AuthUser | null): string {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -236,56 +287,61 @@ function formatDateTime(value?: string | null) {
 }
 
 
-function aiSafeText(value: any, fallback = '') {
+function aiSafeText(value: unknown, fallback = '') {
   return String(value ?? fallback ?? '').trim();
 }
 
+function aiTextList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => aiSafeText(item)).filter(Boolean);
+}
+
 function getActionPlanAiTrace(row: ActionPlanItem) {
-  const orchestration = row.ai_orchestration_json || {};
-  const answer = row.ai_enhanced_answer_json || {};
-  const searchTrace = orchestration?.search_trace || {};
+  const orchestration = asRecord(row.ai_orchestration_json);
+  const answer = asRecord(row.ai_enhanced_answer_json);
+  const searchTrace = asRecord(orchestration.search_trace);
+  const traceRecord = asRecord(orchestration.trace);
 
   const sourceLevel = aiSafeText(
     row.ai_source_level ||
-      orchestration?.source_level ||
-      answer?.source_level ||
+      orchestration.source_level ||
+      answer.source_level ||
       ''
   );
 
   const sourceLabel = aiSafeText(
     row.ai_source_label ||
-      orchestration?.source_label ||
-      answer?.source_label ||
+      orchestration.source_label ||
+      answer.source_label ||
       ''
   );
 
   const confidence = aiSafeText(
     row.ai_confidence ||
-      orchestration?.confidence ||
-      answer?.confidence ||
+      orchestration.confidence ||
+      answer.confidence ||
       ''
   );
 
-  const confidenceScore =
+  const confidenceScore = aiSafeText(
     row.ai_confidence_score ||
-    orchestration?.confidence_score ||
-    answer?.confidence_score ||
-    null;
+      orchestration.confidence_score ||
+      answer.confidence_score ||
+      ''
+  );
 
   const traceId = aiSafeText(
     row.ai_trace_id ||
-      orchestration?.trace?.id ||
+      traceRecord.id ||
       ''
   );
 
-  const sourceOrder = Array.isArray(searchTrace?.source_order)
-    ? searchTrace.source_order
-    : [];
+  const sourceOrder = aiTextList(searchTrace.source_order);
 
-  const tenantHits = Number(searchTrace?.tenant_hits ?? 0);
-  const knowledgeHits = Number(searchTrace?.knowledge_hits ?? 0);
-  const benchmarkHits = Number(searchTrace?.benchmark_hits ?? 0);
-  const externalHits = Number(searchTrace?.external_hits ?? 0);
+  const tenantHits = Number(searchTrace.tenant_hits ?? 0);
+  const knowledgeHits = Number(searchTrace.knowledge_hits ?? 0);
+  const benchmarkHits = Number(searchTrace.benchmark_hits ?? 0);
+  const externalHits = Number(searchTrace.external_hits ?? 0);
 
   const hasTrace =
     Boolean(traceId) ||
@@ -310,14 +366,10 @@ function getActionPlanAiTrace(row: ActionPlanItem) {
     knowledgeHits,
     benchmarkHits,
     externalHits,
-    executiveSummary: aiSafeText(answer?.executive_summary || ''),
-    recommendation: aiSafeText(answer?.recommendation || ''),
-    suggestedEvidence: Array.isArray(answer?.suggested_evidence)
-      ? answer.suggested_evidence
-      : [],
-    nextSteps: Array.isArray(answer?.next_steps)
-      ? answer.next_steps
-      : [],
+    executiveSummary: aiSafeText(answer.executive_summary || ''),
+    recommendation: aiSafeText(answer.recommendation || ''),
+    suggestedEvidence: aiTextList(answer.suggested_evidence),
+    nextSteps: aiTextList(answer.next_steps),
   };
 }
 
@@ -515,7 +567,7 @@ function PlanAccionPageContent() {
   const aiAuditorDraftMode = searchParams.get('draft');
 
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const [scope, setScope] = useState<ScopeResponse>({
     operations: [],
@@ -609,7 +661,7 @@ function PlanAccionPageContent() {
     }
   }, []);
 
-  const loadScope = async (resolvedTenantId: string, authToken: string) => {
+  const loadScope = useCallback(async (resolvedTenantId: string, authToken: string) => {
     try {
       setLoadingStandards(true);
       setErrorMessage('');
@@ -655,17 +707,17 @@ function PlanAccionPageContent() {
       } else {
         setSelectedISO('');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD ACTION PLAN SCOPE:', err);
       setScope({ operations: [], standards: [] });
       setSelectedISO('');
-      setErrorMessage(err?.message || 'Error cargando normas operativas.');
+      setErrorMessage(getErrorMessage(err, 'Error cargando normas operativas.'));
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, [focusISO]);
 
-  const loadPlans = async (
+  const loadPlans = useCallback(async (
     resolvedTenantId: string,
     authToken: string,
     iso: string,
@@ -696,16 +748,16 @@ function PlanAccionPageContent() {
       }
 
       setData(Array.isArray(json) ? json : []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD ACTION PLANS:', err);
       setData([]);
-      setErrorMessage(err?.message || 'Error cargando planes de acción.');
+      setErrorMessage(getErrorMessage(err, 'Error cargando planes de acción.'));
     } finally {
       setLoadingData(false);
     }
-  };
+  }, []);
 
-  const openOrCreatePlanFromControl = async (
+  const openOrCreatePlanFromControl = useCallback(async (
     resolvedTenantId: string,
     authToken: string,
     tenantControlId: string,
@@ -756,20 +808,20 @@ function PlanAccionPageContent() {
           await loadPlans(resolvedTenantId, authToken, isoCode, statusFilter);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR QUICK ACTION PLAN:', err);
       setErrorMessage(
-        err?.message || 'Error abriendo plan de acción desde control.'
+        getErrorMessage(err, 'Error abriendo plan de acción desde control.')
       );
     } finally {
       setOpeningFromControl(false);
     }
-  };
+  }, [loadPlans, statusFilter]);
 
   useEffect(() => {
     if (!token || !tenantId) return;
     void loadScope(tenantId, token);
-  }, [token, tenantId]);
+  }, [loadScope, token, tenantId]);
 
   useEffect(() => {
     if (!token || !tenantId || !selectedISO) {
@@ -778,7 +830,7 @@ function PlanAccionPageContent() {
     }
 
     void loadPlans(tenantId, token, selectedISO, statusFilter);
-  }, [token, tenantId, selectedISO, statusFilter, loadingStandards]);
+  }, [loadPlans, token, tenantId, selectedISO, statusFilter, loadingStandards]);
 
   useEffect(() => {
     if (!token || !tenantId || loadingStandards) return;
@@ -801,6 +853,7 @@ function PlanAccionPageContent() {
     focusTenantControlId,
     focusISO,
     selectedISO,
+    openOrCreatePlanFromControl,
   ]);
 
   useEffect(() => {

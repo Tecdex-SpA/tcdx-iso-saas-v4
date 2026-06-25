@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useLanguage } from '@/context/LanguageContext';
 import { getUserFromToken } from '@/utils/auth';
@@ -16,23 +16,151 @@ const SOA_STANDARDS = [
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+type AuthUser = {
+  tenant_id?: string | null;
+  role?: string | null;
+};
+
+type SoAStandard = {
+  code: string;
+  name?: string | null;
+  is_active?: boolean;
+  tenant_controls?: number | string | null;
+};
+
+type SoARow = {
+  tenant_control_id: string;
+  tenant_id?: string | null;
+  iso?: string | null;
+  clause?: string | null;
+  category?: string | null;
+  description?: string | null;
+  diagnostic_status?: string | null;
+  applicable?: boolean | null;
+  implementation_status?: string | null;
+  justification?: string | null;
+  notes?: string | null;
+  owner?: string | null;
+  review_date?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type SoAField = keyof Pick<
+  SoARow,
+  'applicable' | 'implementation_status' | 'justification' | 'notes' | 'owner' | 'review_date'
+>;
+
+type SoAIntelligenceSignals = {
+  evidence?: { evidence_count?: number | string | null };
+  findings?: { open_findings_count?: number | string | null };
+  nonconformities?: { open_nonconformities_count?: number | string | null };
+  risks?: {
+    high_risk_count?: number | string | null;
+    critical_risk_count?: number | string | null;
+  };
+  actions?: { overdue_actions_count?: number | string | null };
+};
+
+type SoAIntelligenceSuggestion = {
+  suggested_applicable?: boolean | null;
+  suggested_implementation_status?: string | null;
+  suggested_justification?: string | null;
+  confidence_level?: string | null;
+  confidence_score?: number | string | null;
+};
+
+type SoAAssessment = {
+  id: string;
+  status?: string | null;
+};
+
+type SoAIntelligenceRow = {
+  tenant_control_id: string;
+  clause?: string | null;
+  description?: string | null;
+  official?: {
+    applicable?: boolean | null;
+    implementation_status?: string | null;
+  };
+  system_suggestion?: SoAIntelligenceSuggestion;
+  signals?: SoAIntelligenceSignals;
+  latest_assessment?: SoAAssessment | null;
+};
+
+type SoAIntelligence = {
+  summary?: {
+    controls_with_evidence?: number | string | null;
+    controls_with_open_findings?: number | string | null;
+    controls_with_open_nc?: number | string | null;
+    controls_with_high_risk?: number | string | null;
+    controls_with_overdue_actions?: number | string | null;
+    official_vs_suggested_differences?: number | string | null;
+    low_confidence_suggestions?: number | string | null;
+  };
+  rows?: SoAIntelligenceRow[];
+};
+
+type SoAChangeLogRow = {
+  id?: string;
+  tenant_control_id?: string | null;
+  created_at?: string | null;
+};
+
+type SoAPreflight = {
+  standard_active?: boolean;
+  active_operations_count?: number | string | null;
+  tenant_controls_count?: number | string | null;
+  legacy_controls_count?: number | string | null;
+  soa_rows_count?: number | string | null;
+  can_initialize_soa?: boolean;
+  blocking_reason?: string | null;
+};
+
+function getTenantId(user: AuthUser | null) {
+  return user?.tenant_id || '';
+}
+
+function isSoAStandard(value: unknown): value is SoAStandard {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'code' in value &&
+    typeof (value as { code?: unknown }).code === 'string'
+  );
+}
+
+function isSoARow(value: unknown): value is SoARow {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'tenant_control_id' in value &&
+    typeof (value as { tenant_control_id?: unknown }).tenant_control_id === 'string'
+  );
+}
+
+function toNumber(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export default function SoAPage() {
   const { locale } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
-  const [standards, setStandards] = useState<any[]>([]);
+  const [standards, setStandards] = useState<SoAStandard[]>([]);
   const [selectedISO, setSelectedISO] = useState('');
-  const [data, setData] = useState<any[]>([]);
-  const [intelligence, setIntelligence] = useState<any>(null);
-  const [assessments, setAssessments] = useState<any[]>([]);
-  const [changeLog, setChangeLog] = useState<any[]>([]);
+  const [data, setData] = useState<SoARow[]>([]);
+  const [intelligence, setIntelligence] = useState<SoAIntelligence | null>(null);
+  const [assessments, setAssessments] = useState<SoAAssessment[]>([]);
+  const [changeLog, setChangeLog] = useState<SoAChangeLogRow[]>([]);
   const [loadingStandards, setLoadingStandards] = useState(true);
   const [loadingData, setLoadingData] = useState(true);
   const [loadingIntelligence, setLoadingIntelligence] = useState(false);
   const [savingId, setSavingId] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<string>('');
-  const [preflight, setPreflight] = useState<any>(null);
+  const [preflight, setPreflight] = useState<SoAPreflight | null>(null);
   const [initializing, setInitializing] = useState(false);
   const [selectedRowId, setSelectedRowId] = useState('');
   const [filters, setFilters] = useState({
@@ -48,18 +176,18 @@ export default function SoAPage() {
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');
-    const u = getUserFromToken();
+    const u = getUserFromToken() as AuthUser | null;
 
     setToken(authToken);
     setUser(u);
 
-    if (!authToken || !u?.tenant_id) {
+    if (!authToken || !getTenantId(u)) {
       setLoadingStandards(false);
       setLoadingData(false);
     }
   }, []);
 
-  const loadStandards = async (tenantId: string, authToken: string) => {
+  const loadStandards = useCallback(async (tenantId: string, authToken: string) => {
     try {
       setLoadingStandards(true);
 
@@ -79,8 +207,8 @@ export default function SoAPage() {
         return;
       }
 
-      const activeStandards = (json || []).filter(
-        (s: any) =>
+      const activeStandards = (Array.isArray(json) ? json.filter(isSoAStandard) : []).filter(
+        (s) =>
           (s.is_active || Number(s.tenant_controls) > 0) &&
           SOA_STANDARDS.includes(s.code)
       );
@@ -89,7 +217,7 @@ export default function SoAPage() {
 
       if (activeStandards.length > 0) {
         setSelectedISO((prev) => {
-          const exists = activeStandards.some((s: any) => s.code === prev);
+          const exists = activeStandards.some((s) => s.code === prev);
           return exists ? prev : activeStandards[0].code;
         });
       } else {
@@ -102,9 +230,36 @@ export default function SoAPage() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, []);
 
-  const loadSoA = async (tenantId: string, authToken: string, iso: string) => {
+  const loadIntelligence = useCallback(async (tenantId: string, authToken: string, iso: string) => {
+    try {
+      setLoadingIntelligence(true);
+      const [intelligenceRes, assessmentsRes, changeLogRes] = await Promise.all([
+        fetch(`${API_URL}/api/soa/${tenantId}/intelligence?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
+        fetch(`${API_URL}/api/soa/${tenantId}/assessments?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
+        fetch(`${API_URL}/api/soa/${tenantId}/change-log?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } })
+      ]);
+      const [intelligenceJson, assessmentsJson, changeLogJson] = await Promise.all([
+        intelligenceRes.json(),
+        assessmentsRes.json(),
+        changeLogRes.json()
+      ]);
+      setIntelligence(intelligenceRes.ok ? intelligenceJson : null);
+      setAssessments(assessmentsRes.ok && Array.isArray(assessmentsJson) ? assessmentsJson : []);
+      setChangeLog(changeLogRes.ok && Array.isArray(changeLogJson) ? changeLogJson : []);
+      if (!intelligenceRes.ok) console.error('ERROR LOAD SOA INTELLIGENCE:', intelligenceJson);
+    } catch (err) {
+      console.error('ERROR LOAD SOA INTELLIGENCE:', err);
+      setIntelligence(null);
+      setAssessments([]);
+      setChangeLog([]);
+    } finally {
+      setLoadingIntelligence(false);
+    }
+  }, []);
+
+  const loadSoA = useCallback(async (tenantId: string, authToken: string, iso: string) => {
     try {
       setLoadingData(true);
 
@@ -138,7 +293,7 @@ export default function SoAPage() {
         return;
       }
 
-      setData(json || []);
+      setData(Array.isArray(json) ? json.filter(isSoARow) : []);
       setSelectedRowId('');
       await loadIntelligence(tenantId, authToken, iso);
     } catch (err) {
@@ -148,34 +303,7 @@ export default function SoAPage() {
     } finally {
       setLoadingData(false);
     }
-  };
-
-  const loadIntelligence = async (tenantId: string, authToken: string, iso: string) => {
-    try {
-      setLoadingIntelligence(true);
-      const [intelligenceRes, assessmentsRes, changeLogRes] = await Promise.all([
-        fetch(`${API_URL}/api/soa/${tenantId}/intelligence?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
-        fetch(`${API_URL}/api/soa/${tenantId}/assessments?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } }),
-        fetch(`${API_URL}/api/soa/${tenantId}/change-log?iso=${encodeURIComponent(iso)}`, { headers: { Authorization: `Bearer ${authToken}` } })
-      ]);
-      const [intelligenceJson, assessmentsJson, changeLogJson] = await Promise.all([
-        intelligenceRes.json(),
-        assessmentsRes.json(),
-        changeLogRes.json()
-      ]);
-      setIntelligence(intelligenceRes.ok ? intelligenceJson : null);
-      setAssessments(assessmentsRes.ok && Array.isArray(assessmentsJson) ? assessmentsJson : []);
-      setChangeLog(changeLogRes.ok && Array.isArray(changeLogJson) ? changeLogJson : []);
-      if (!intelligenceRes.ok) console.error('ERROR LOAD SOA INTELLIGENCE:', intelligenceJson);
-    } catch (err) {
-      console.error('ERROR LOAD SOA INTELLIGENCE:', err);
-      setIntelligence(null);
-      setAssessments([]);
-      setChangeLog([]);
-    } finally {
-      setLoadingIntelligence(false);
-    }
-  };
+  }, [loadIntelligence]);
 
   const initializeSoA = async () => {
     if (!token || !user?.tenant_id || !selectedISO) return;
@@ -208,7 +336,7 @@ export default function SoAPage() {
   useEffect(() => {
     if (!token || !user?.tenant_id) return;
     loadStandards(user.tenant_id, token);
-  }, [token, user]);
+  }, [loadStandards, token, user]);
 
   useEffect(() => {
     if (!token || !user?.tenant_id || !selectedISO) {
@@ -217,9 +345,9 @@ export default function SoAPage() {
     }
 
     loadSoA(user.tenant_id, token, selectedISO);
-  }, [token, user, selectedISO, loadingStandards]);
+  }, [loadSoA, token, user, selectedISO, loadingStandards]);
 
-  const changeField = (id: string, field: string, value: any) => {
+  const changeField = (id: string, field: SoAField, value: SoARow[SoAField]) => {
     setData((prev) =>
       prev.map((row) => {
         if (row.tenant_control_id !== id) return row;
@@ -240,7 +368,7 @@ export default function SoAPage() {
     );
   };
 
-  const saveRow = async (row: any) => {
+  const saveRow = async (row: SoARow) => {
     if (!token) return;
 
     try {
@@ -286,7 +414,7 @@ export default function SoAPage() {
     }
   };
 
-  const createFinding = async (row: any) => {
+  const createFinding = async (row: SoARow) => {
     if (!token || !user?.tenant_id) return;
 
     const title = window.prompt(
@@ -353,7 +481,7 @@ export default function SoAPage() {
     }
   };
 
-  const createActionPlan = async (row: any) => {
+  const createActionPlan = async (row: SoARow) => {
     if (!token || !user?.tenant_id) return;
 
     const title = window.prompt(
@@ -554,11 +682,23 @@ export default function SoAPage() {
   }, [data]);
 
   const categoryOptions = useMemo(() => {
-    return Array.from(new Set(data.map((row) => row.category).filter(Boolean))).sort();
+    return Array.from(
+      new Set(
+        data
+          .map((row) => row.category)
+          .filter((value): value is string => typeof value === 'string' && Boolean(value))
+      )
+    ).sort();
   }, [data]);
 
   const ownerOptions = useMemo(() => {
-    return Array.from(new Set(data.map((row) => row.owner).filter(Boolean))).sort();
+    return Array.from(
+      new Set(
+        data
+          .map((row) => row.owner)
+          .filter((value): value is string => typeof value === 'string' && Boolean(value))
+      )
+    ).sort();
   }, [data]);
 
   const filteredData = useMemo(() => {
@@ -597,8 +737,8 @@ export default function SoAPage() {
   }, [data, selectedRowId]);
 
   const intelligenceByControl = useMemo(() => {
-    const map = new Map<string, any>();
-    (intelligence?.rows || []).forEach((row: any) => map.set(row.tenant_control_id, row));
+    const map = new Map<string, SoAIntelligenceRow>();
+    (intelligence?.rows || []).forEach((row) => map.set(row.tenant_control_id, row));
     return map;
   }, [intelligence]);
 
@@ -664,7 +804,7 @@ export default function SoAPage() {
               onChange={(e) => setSelectedISO(e.target.value)}
               className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm"
             >
-              {standards.map((s: any) => (
+              {standards.map((s) => (
                 <option key={s.code} value={s.code}>
                   {s.code} - {s.name}
                 </option>
@@ -690,7 +830,7 @@ export default function SoAPage() {
             <PreflightCard title="Operaciones activas" value={preflight.active_operations_count ?? 0} />
             <PreflightCard title="Controles tenant" value={preflight.tenant_controls_count ?? 0} />
             <PreflightCard title="Controles legacy" value={preflight.legacy_controls_count ?? 0} />
-            <PreflightCard title="Filas SoA" value={preflight.soa_rows_count ?? 0} tone={(preflight.soa_rows_count || 0) > 0 ? 'success' : 'warning'} />
+            <PreflightCard title="Filas SoA" value={preflight.soa_rows_count ?? 0} tone={toNumber(preflight.soa_rows_count) > 0 ? 'success' : 'warning'} />
           </div>
         )}
 
@@ -791,7 +931,7 @@ export default function SoAPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {(intelligence?.rows || []).slice(0, 200).map((row: any) => {
+                  {(intelligence?.rows || []).slice(0, 200).map((row) => {
                     const latest = row.latest_assessment;
                     return (
                       <tr key={row.tenant_control_id} className="hover:bg-blue-50/60">
@@ -909,7 +1049,7 @@ export default function SoAPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredData.map((row: any) => (
+                  {filteredData.map((row) => (
                     <tr
                       key={row.tenant_control_id}
                       onClick={() => setSelectedRowId(row.tenant_control_id)}
@@ -954,7 +1094,7 @@ export default function SoAPage() {
                   <div className="text-xs font-black uppercase tracking-wide text-blue-700">Contexto inteligente</div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-blue-950">
                     <div className="rounded-xl bg-white p-3 ring-1 ring-blue-100">Evidencias: <b>{selectedIntelligence.signals?.evidence?.evidence_count || 0}</b></div>
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-blue-100">Riesgos altos: <b>{(selectedIntelligence.signals?.risks?.high_risk_count || 0) + (selectedIntelligence.signals?.risks?.critical_risk_count || 0)}</b></div>
+                    <div className="rounded-xl bg-white p-3 ring-1 ring-blue-100">Riesgos altos: <b>{toNumber(selectedIntelligence.signals?.risks?.high_risk_count) + toNumber(selectedIntelligence.signals?.risks?.critical_risk_count)}</b></div>
                     <div className="rounded-xl bg-white p-3 ring-1 ring-blue-100">Hallazgos abiertos: <b>{selectedIntelligence.signals?.findings?.open_findings_count || 0}</b></div>
                     <div className="rounded-xl bg-white p-3 ring-1 ring-blue-100">Acciones vencidas: <b>{selectedIntelligence.signals?.actions?.overdue_actions_count || 0}</b></div>
                   </div>
@@ -1070,7 +1210,17 @@ export default function SoAPage() {
   );
 }
 
-function MetricCard({ title, value, subtitle, compact = false }: any) {
+function MetricCard({
+  title,
+  value,
+  subtitle,
+  compact = false,
+}: {
+  title: string;
+  value: ReactNode;
+  subtitle?: ReactNode;
+  compact?: boolean;
+}) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{title}</div>
@@ -1080,7 +1230,15 @@ function MetricCard({ title, value, subtitle, compact = false }: any) {
   );
 }
 
-function PreflightCard({ title, value, tone = 'neutral' }: any) {
+function PreflightCard({
+  title,
+  value,
+  tone = 'neutral',
+}: {
+  title: string;
+  value: ReactNode;
+  tone?: 'success' | 'warning' | 'neutral';
+}) {
   const toneClass = tone === 'success'
     ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
     : tone === 'warning'
@@ -1095,7 +1253,15 @@ function PreflightCard({ title, value, tone = 'neutral' }: any) {
   );
 }
 
-function InsightCard({ title, value, tone = 'info' }: any) {
+function InsightCard({
+  title,
+  value,
+  tone = 'info',
+}: {
+  title: string;
+  value: ReactNode;
+  tone?: 'danger' | 'warning' | 'neutral' | 'info';
+}) {
   const toneClass = tone === 'danger'
     ? 'border-red-100 bg-red-50 text-red-800'
     : tone === 'warning'
@@ -1118,7 +1284,7 @@ function applicabilityLabel(value: boolean | null | undefined) {
   return 'Pendiente';
 }
 
-function StatusPill({ value }: any) {
+function StatusPill({ value }: { value: ReactNode }) {
   const normalized = String(value || '').toLowerCase();
   const tone = normalized.includes('no implementado') || normalized.includes('venc')
     ? 'bg-red-50 text-red-700 ring-red-100'

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
@@ -12,16 +12,29 @@ import { translateDisplayText, translateStatusLabel, translatePriorityLabel, tra
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+type UnknownRecord = { [key: string]: unknown };
+
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+  company_id?: string | null;
+  companyId?: string | null;
+  role?: string | null;
+  user_role?: string | null;
+  userRole?: string | null;
+};
+
 type AiNcDraftResponse = {
   ok: boolean;
-  context?: any;
+  context?: unknown;
   ai?: {
-    draft_title: string;
-    statement: string;
-    objective_evidence: string;
-    risk_statement: string;
-    immediate_correction: string;
-    corrective_action: string;
+    draft_title?: string;
+    statement?: string;
+    objective_evidence?: string;
+    risk_statement?: string;
+    immediate_correction?: string;
+    corrective_action?: string;
     confidence?: string;
   };
 };
@@ -42,6 +55,7 @@ type ActionPlanRow = {
   latest_progress_percent?: number;
   created_at?: string | null;
   updated_at?: string | null;
+  control_iso?: string | null;
 };
 
 type ScopeStandard = {
@@ -52,12 +66,168 @@ type ScopeStandard = {
   active_operation_ids?: string[];
 };
 
-type ScopeResponse = {
-  standards: ScopeStandard[];
-  operations: any[];
+type OperationItem = {
+  id?: string;
+  tenant_id?: string;
+  code?: string | null;
+  name?: string;
+  description?: string | null;
+  operation_type?: string;
+  is_active?: boolean;
+  is_default?: boolean;
+  sort_order?: number;
 };
 
-function resolveTenantId(user: any): string {
+type ScopeResponse = {
+  standards: ScopeStandard[];
+  operations: OperationItem[];
+};
+
+type NonconformityRow = {
+  id: string;
+  tenant_id?: string | null;
+  control_id?: string | null;
+  tenant_control_id?: string | null;
+  operation_id?: string | null;
+  operation_name?: string | null;
+  operation_code?: string | null;
+  operation_type?: string | null;
+  control_description?: string | null;
+  iso?: string | null;
+  iso_code?: string | null;
+  clause?: string | null;
+  category?: string | null;
+  status?: string | null;
+  detected_at?: string | null;
+  resolved_at?: string | null;
+};
+
+type AiOrchestrationTraceResult = {
+  hasTrace: boolean;
+  sourceLevel: string;
+  sourceLabel: string;
+  confidence: string;
+  traceId: string;
+  sourceOrder: string[];
+  tenantHits: number;
+  knowledgeHits: number;
+  benchmarkHits: number;
+  externalHits: number;
+};
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function getRecord(source: unknown, key: string): UnknownRecord {
+  const record = asRecord(source);
+  return asRecord(record[key]);
+}
+
+function getString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (isRecord(error) && typeof error.message === 'string') return error.message;
+  return fallback;
+}
+
+function getApiErrorMessage(value: unknown, fallback: string): string {
+  const record = asRecord(value);
+  return getString(record.error) || getString(record.detail) || fallback;
+}
+
+function aiSafeText(value: unknown, fallback = '') {
+  return String(value ?? fallback ?? '').trim();
+}
+
+function asTextArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => aiSafeText(item)).filter(Boolean);
+}
+
+function isScopeStandard(value: unknown): value is ScopeStandard {
+  return isRecord(value) && typeof value.code === 'string';
+}
+
+function isOperationItem(value: unknown): value is OperationItem {
+  return isRecord(value);
+}
+
+function normalizeScopeResponse(value: unknown): ScopeResponse {
+  const record = asRecord(value);
+
+  return {
+    standards: Array.isArray(record.standards)
+      ? record.standards.filter(isScopeStandard)
+      : [],
+    operations: Array.isArray(record.operations)
+      ? record.operations.filter(isOperationItem)
+      : [],
+  };
+}
+
+function isNonconformityRow(value: unknown): value is NonconformityRow {
+  return isRecord(value) && typeof value.id === 'string';
+}
+
+function normalizeNonconformities(
+  value: unknown,
+  operationalCodes: Set<string>
+): NonconformityRow[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(isNonconformityRow)
+    .filter((row) => operationalCodes.has(row.iso || row.iso_code || ''));
+}
+
+function isActionPlanRow(value: unknown): value is ActionPlanRow {
+  return isRecord(value) && typeof value.id === 'string';
+}
+
+function normalizeActionPlanRows(
+  value: unknown,
+  operationalCodes: Set<string>
+): ActionPlanRow[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(isActionPlanRow)
+    .filter((row) => operationalCodes.has(row.iso_code || row.control_iso || ''));
+}
+
+function normalizeAiNcDraftResponse(value: unknown): AiNcDraftResponse {
+  const record = asRecord(value);
+  const ai = asRecord(record.ai);
+
+  return {
+    ok: record.ok !== false,
+    context: record.context,
+    ai:
+      Object.keys(ai).length > 0
+        ? {
+            draft_title: getString(ai.draft_title),
+            statement: getString(ai.statement),
+            objective_evidence: getString(ai.objective_evidence),
+            risk_statement: getString(ai.risk_statement),
+            immediate_correction: getString(ai.immediate_correction),
+            corrective_action: getString(ai.corrective_action),
+            confidence: getString(ai.confidence) || undefined,
+          }
+        : undefined,
+  };
+}
+
+function resolveTenantId(user: AuthUser | null): string {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -68,7 +238,7 @@ function resolveTenantId(user: any): string {
   );
 }
 
-function resolveRole(user: any): string {
+function resolveRole(user: AuthUser | null): string {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
 }
 
@@ -144,68 +314,69 @@ function rankActionStatus(value: string | null | undefined) {
 }
 
 
-function aiSafeText(value: any, fallback = '') {
-  return String(value ?? fallback ?? '').trim();
-}
-
-function getAiOrchestrationTrace(result: any) {
-  const ai = result?.ai || {};
-  const enhanced = result?.enhanced || {};
-  const structured = ai?.structured_guided || {};
+function getAiOrchestrationTrace(result: unknown): AiOrchestrationTraceResult {
+  const resultRecord = asRecord(result);
+  const ai = asRecord(resultRecord.ai);
+  const enhanced = asRecord(resultRecord.enhanced);
+  const enhancedAnswer = asRecord(enhanced.answer);
+  const enhancedTrace = asRecord(enhanced.trace);
+  const structured = asRecord(ai.structured_guided);
   const knowledgeSources =
-    structured?.knowledge_sources ||
-    ai?.enhanced_answer?.knowledge_sources ||
-    {};
+    Object.keys(asRecord(structured.knowledge_sources)).length > 0
+      ? asRecord(structured.knowledge_sources)
+      : getRecord(getRecord(ai, 'enhanced_answer'), 'knowledge_sources');
 
-  const enhancedOrchestration = ai?.enhanced_orchestration || {};
+  const enhancedOrchestration = asRecord(ai.enhanced_orchestration);
+  const enhancedOrchestrationTrace = asRecord(enhancedOrchestration.trace);
 
   const sourceLevel = aiSafeText(
-    ai?.enhanced_source_level ||
-      enhanced?.answer?.source_level ||
-      enhancedOrchestration?.source_level ||
-      knowledgeSources?.source_level ||
+    ai.enhanced_source_level ||
+      enhancedAnswer.source_level ||
+      enhancedOrchestration.source_level ||
+      knowledgeSources.source_level ||
       ''
   );
 
   const sourceLabel = aiSafeText(
-    ai?.enhanced_source_label ||
-      enhanced?.answer?.source_label ||
-      enhancedOrchestration?.source_label ||
-      knowledgeSources?.source_label ||
+    ai.enhanced_source_label ||
+      enhancedAnswer.source_label ||
+      enhancedOrchestration.source_label ||
+      knowledgeSources.source_label ||
       ''
   );
 
   const confidence = aiSafeText(
-    ai?.enhanced_confidence ||
-      enhanced?.answer?.confidence ||
-      enhancedOrchestration?.confidence ||
-      knowledgeSources?.confidence ||
+    ai.enhanced_confidence ||
+      enhancedAnswer.confidence ||
+      enhancedOrchestration.confidence ||
+      knowledgeSources.confidence ||
       ''
   );
 
   const traceId = aiSafeText(
-    ai?.enhanced_trace_id ||
-      enhanced?.trace?.id ||
-      enhancedOrchestration?.trace?.id ||
-      structured?.trace_id ||
-      knowledgeSources?.trace_id ||
+    ai.enhanced_trace_id ||
+      enhancedTrace.id ||
+      enhancedOrchestrationTrace.id ||
+      structured.trace_id ||
+      knowledgeSources.trace_id ||
       ''
   );
 
   const searchTrace =
-    enhanced?.search_trace ||
-    enhancedOrchestration?.search_trace ||
-    knowledgeSources ||
-    {};
+    Object.keys(asRecord(enhanced.search_trace)).length > 0
+      ? asRecord(enhanced.search_trace)
+      : Object.keys(asRecord(enhancedOrchestration.search_trace)).length > 0
+        ? asRecord(enhancedOrchestration.search_trace)
+        : knowledgeSources;
 
-  const sourceOrder = Array.isArray(searchTrace?.source_order)
-    ? searchTrace.source_order
+  const sourceOrder = Array.isArray(searchTrace.source_order)
+    ? asTextArray(searchTrace.source_order)
     : [];
 
-  const tenantHits = Number(searchTrace?.tenant_hits ?? 0);
-  const knowledgeHits = Number(searchTrace?.knowledge_hits ?? 0);
-  const benchmarkHits = Number(searchTrace?.benchmark_hits ?? 0);
-  const externalHits = Number(searchTrace?.external_hits ?? 0);
+  const tenantHits = Number(searchTrace.tenant_hits ?? 0);
+  const knowledgeHits = Number(searchTrace.knowledge_hits ?? 0);
+  const benchmarkHits = Number(searchTrace.benchmark_hits ?? 0);
+  const externalHits = Number(searchTrace.external_hits ?? 0);
 
   const hasTrace =
     Boolean(sourceLevel) ||
@@ -232,7 +403,7 @@ function getAiOrchestrationTrace(result: any) {
   };
 }
 
-function AiOrchestrationTrace({ result }: { result?: any }) {
+function AiOrchestrationTrace({ result }: { result?: unknown }) {
   const trace = getAiOrchestrationTrace(result);
 
   if (!trace.hasTrace) return null;
@@ -252,7 +423,7 @@ function AiOrchestrationTrace({ result }: { result?: any }) {
     'Motor IA TCDX';
 
   const sourceOrderText = trace.sourceOrder.length
-    ? trace.sourceOrder.map((item: string) => sourceLabels[item] || item).join(' → ')
+    ? trace.sourceOrder.map((item) => sourceLabels[item] || item).join(' → ')
     : 'No informada';
 
   const sourceClass =
@@ -343,7 +514,7 @@ function NoConformidadesPageContent() {
   const aiAuditorDraftKey = searchParams.get('draft_key');
   const aiAuditorDraftSource = searchParams.get('source');
   const aiAuditorDraftMode = searchParams.get('draft');
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<NonconformityRow[]>([]);
   const [actions, setActions] = useState<ActionPlanRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingStandards, setLoadingStandards] = useState(true);
@@ -352,7 +523,7 @@ function NoConformidadesPageContent() {
 
   const [iso, setIso] = useState('');
   const [ncSearch, setNcSearch] = useState('');
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [scope, setScope] = useState<ScopeResponse>({ standards: [], operations: [] });
 
@@ -378,6 +549,76 @@ function NoConformidadesPageContent() {
     return new Set(operationalStandards.map((s) => s.code).filter(Boolean));
   }, [operationalStandards]);
 
+  const postWithAuth = async (url: string, body: unknown): Promise<unknown> => {
+    const authToken = localStorage.getItem('token');
+
+    if (!authToken) {
+      window.location.href = '/login';
+      throw new Error('Sesión no disponible');
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const text = await res.text();
+
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      throw new Error(`Respuesta inválida desde ${url}`);
+    }
+
+    if (!res.ok) {
+      throw new Error(getApiErrorMessage(json, 'Error consultando IA'));
+    }
+
+    return json;
+  };
+
+  const getNcIso = useCallback((nc: NonconformityRow) => nc?.iso || nc?.iso_code || iso || '', [iso]);
+
+  const getNcClause = useCallback((nc: NonconformityRow) => String(nc?.clause || '').trim(), []);
+
+  const getNcCategory = useCallback((nc: NonconformityRow) => String(nc?.category || 'General').trim(), []);
+
+  const getNcControlDescription = useCallback((nc: NonconformityRow) =>
+    String(nc?.control_description || '').trim(), []);
+
+  const getNcTitle = useCallback((nc: NonconformityRow) => {
+    const clause = getNcClause(nc);
+    const controlDescription = getNcControlDescription(nc);
+    const category = getNcCategory(nc);
+
+    if (clause && controlDescription) {
+      return `No conformidad cláusula ${clause} - ${controlDescription}`;
+    }
+
+    if (controlDescription) {
+      return `No conformidad - ${controlDescription}`;
+    }
+
+    if (clause) {
+      return `No conformidad cláusula ${clause}`;
+    }
+
+    return `No conformidad - ${category}`;
+  }, [getNcCategory, getNcClause, getNcControlDescription]);
+
+  const getNcDescription = useCallback((nc: NonconformityRow) => {
+    return (
+      getNcControlDescription(nc) ||
+      getNcCategory(nc) ||
+      'No conformidad sin descripción'
+    );
+  }, [getNcCategory, getNcControlDescription]);
+
   const filteredNonconformities = useMemo(() => {
     const search = ncSearch.trim().toLowerCase();
     if (!search) return data;
@@ -397,85 +638,15 @@ function NoConformidadesPageContent() {
         .map((value) => String(value || '').toLowerCase())
         .some((value) => value.includes(search));
     });
-  }, [data, ncSearch]);
+  }, [data, getNcDescription, getNcIso, getNcTitle, ncSearch]);
 
-  const postWithAuth = async (url: string, body: any) => {
-    const authToken = localStorage.getItem('token');
-
-    if (!authToken) {
-      window.location.href = '/login';
-      throw new Error('Sesión no disponible');
-    }
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    const text = await res.text();
-
-    let json: any = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      throw new Error(`Respuesta inválida desde ${url}`);
-    }
-
-    if (!res.ok) {
-      throw new Error(json?.error || json?.detail || 'Error consultando IA');
-    }
-
-    return json;
-  };
-
-  const getNcIso = (nc: any) => nc?.iso || nc?.iso_code || iso || '';
-
-  const getNcClause = (nc: any) => String(nc?.clause || '').trim();
-
-  const getNcCategory = (nc: any) => String(nc?.category || 'General').trim();
-
-  const getNcControlDescription = (nc: any) =>
-    String(nc?.control_description || '').trim();
-
-  const getNcTitle = (nc: any) => {
-    const clause = getNcClause(nc);
-    const controlDescription = getNcControlDescription(nc);
-    const category = getNcCategory(nc);
-
-    if (clause && controlDescription) {
-      return `No conformidad cláusula ${clause} - ${controlDescription}`;
-    }
-
-    if (controlDescription) {
-      return `No conformidad - ${controlDescription}`;
-    }
-
-    if (clause) {
-      return `No conformidad cláusula ${clause}`;
-    }
-
-    return `No conformidad - ${category}`;
-  };
-
-  const getNcDescription = (nc: any) => {
-    return (
-      getNcControlDescription(nc) ||
-      getNcCategory(nc) ||
-      'No conformidad sin descripción'
-    );
-  };
-
-  const getNcSeverity = (nc: any) => {
+  const getNcSeverity = (nc: NonconformityRow) => {
     if (nc?.status === 'abierta') return 'alta';
     if (nc?.status === 'en progreso') return 'media';
     return 'media';
   };
 
-  const buildAiDraftFallbackInput = (nc: any) => {
+  const buildAiDraftFallbackInput = (nc: NonconformityRow) => {
     return {
       nonconformity_id: nc.id,
       iso_code: getNcIso(nc),
@@ -485,7 +656,7 @@ function NoConformidadesPageContent() {
     };
   };
 
-  const buildApplyActionPayload = (nc: any, aiResult?: AiNcDraftResponse | null) => {
+  const buildApplyActionPayload = (nc: NonconformityRow, aiResult?: AiNcDraftResponse | null) => {
     return {
       nonconformity_id: nc.id,
       iso_code: getNcIso(nc),
@@ -514,7 +685,7 @@ function NoConformidadesPageContent() {
     nc,
     result,
   }: {
-    nc: any;
+    nc: NonconformityRow;
     result: AiNcDraftResponse;
   }) => {
     try {
@@ -535,15 +706,15 @@ function NoConformidadesPageContent() {
       });
 
       alert('Borrador IA guardado correctamente');
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR SAVE AI NC DRAFT:', err);
-      setAiError(err.message || 'No fue posible guardar el borrador IA.');
+      setAiError(getErrorMessage(err, 'No fue posible guardar el borrador IA.'));
     } finally {
       setAiSaveLoadingId('');
     }
   };
 
-  const createActionPlanFromAiDraft = async (nc: any) => {
+  const createActionPlanFromAiDraft = async (nc: NonconformityRow) => {
     const draft = aiDraftsByNcId[nc.id];
     const aiData = draft?.ai || null;
 
@@ -556,27 +727,27 @@ function NoConformidadesPageContent() {
       setAiError('');
       setAiApplyLoadingId(nc.id);
 
-      const result = await postWithAuth(
+      const result = asRecord(await postWithAuth(
         `${API_URL}/api/ai-compliance/apply/nonconformity-draft-to-action-plan`,
         buildApplyActionPayload(nc, draft)
-      );
+      ));
 
       if (result?.data) {
         await refreshAll();
       }
 
       alert('Plan de acción generado o reutilizado correctamente desde IA');
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR APPLY AI NC DRAFT TO ACTION PLAN:', err);
       setAiError(
-        err.message || 'No fue posible crear una acción desde el borrador IA.'
+        getErrorMessage(err, 'No fue posible crear una acción desde el borrador IA.')
       );
     } finally {
       setAiApplyLoadingId('');
     }
   };
 
-  const generateNcDraftWithAI = async (nc: any) => {
+  const generateNcDraftWithAI = async (nc: NonconformityRow) => {
     try {
       setAiError('');
       setAiDraftLoadingId(nc.id);
@@ -590,18 +761,18 @@ function NoConformidadesPageContent() {
 
       setAiDraftsByNcId((prev) => ({
         ...prev,
-        [nc.id]: result,
+        [nc.id]: normalizeAiNcDraftResponse(result),
       }));
       setExpandedNcId(nc.id);
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR AI NC DRAFT:', err);
-      setAiError(err.message || 'No fue posible redactar la no conformidad con IA.');
+      setAiError(getErrorMessage(err, 'No fue posible redactar la no conformidad con IA.'));
     } finally {
       setAiDraftLoadingId('');
     }
   };
 
-  const loadScope = async (tenantIdValue: string, authToken: string) => {
+  const loadScope = useCallback(async (tenantIdValue: string, authToken: string) => {
     try {
       setLoadingStandards(true);
 
@@ -609,7 +780,7 @@ function NoConformidadesPageContent() {
         headers: { Authorization: `Bearer ${authToken}` },
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
         console.error('ERROR LOAD NC SCOPE:', json);
@@ -618,10 +789,7 @@ function NoConformidadesPageContent() {
         return;
       }
 
-      const nextScope: ScopeResponse = {
-        standards: Array.isArray(json?.standards) ? json.standards : [],
-        operations: Array.isArray(json?.operations) ? json.operations : [],
-      };
+      const nextScope = normalizeScopeResponse(json);
 
       const activeStandards = nextScope.standards.filter(isOperationalStandard);
 
@@ -642,9 +810,9 @@ function NoConformidadesPageContent() {
     } finally {
       setLoadingStandards(false);
     }
-  };
+  }, []);
 
-  const loadNC = async (
+  const loadNC = useCallback(async (
     tenantIdValue: string,
     authToken: string,
     selectedIso: string
@@ -671,7 +839,7 @@ function NoConformidadesPageContent() {
         }
       );
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
         console.error('ERROR LOAD NC:', json);
@@ -679,9 +847,7 @@ function NoConformidadesPageContent() {
         return;
       }
 
-      const safeRows = Array.isArray(json)
-        ? json.filter((row: any) => operationalCodes.has(row.iso || row.iso_code))
-        : [];
+      const safeRows = normalizeNonconformities(json, operationalCodes);
 
       setData(safeRows);
     } catch (err) {
@@ -690,9 +856,9 @@ function NoConformidadesPageContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [operationalCodes]);
 
-  const loadActions = async (
+  const loadActions = useCallback(async (
     tenantIdValue: string,
     authToken: string,
     selectedIso: string
@@ -719,7 +885,7 @@ function NoConformidadesPageContent() {
         }
       );
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
       if (!res.ok) {
         console.error('ERROR LOAD ACTIONS:', json);
@@ -727,9 +893,7 @@ function NoConformidadesPageContent() {
         return;
       }
 
-      const safeRows = Array.isArray(json)
-        ? json.filter((row: any) => operationalCodes.has(row.iso_code || row.control_iso))
-        : [];
+      const safeRows = normalizeActionPlanRows(json, operationalCodes);
 
       setActions(safeRows);
     } catch (err) {
@@ -738,7 +902,7 @@ function NoConformidadesPageContent() {
     } finally {
       setLoadingActions(false);
     }
-  };
+  }, [operationalCodes]);
 
 
   useEffect(() => {
@@ -770,7 +934,7 @@ function NoConformidadesPageContent() {
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');
-    const u = getUserFromToken();
+    const u = getUserFromToken() as AuthUser | null;
 
     setUser(u);
     setToken(authToken);
@@ -783,7 +947,7 @@ function NoConformidadesPageContent() {
     }
 
     loadScope(resolveTenantId(u), authToken);
-  }, []);
+  }, [loadScope]);
 
   useEffect(() => {
     if (!token || !tenantId || !iso) {
@@ -798,7 +962,7 @@ function NoConformidadesPageContent() {
       loadNC(tenantId, token, iso);
       loadActions(tenantId, token, iso);
     }
-  }, [token, tenantId, iso, loadingStandards, operationalCodes]);
+  }, [loadActions, loadNC, token, tenantId, iso, loadingStandards]);
 
   const refreshAll = async () => {
     if (tenantId && token && iso) {
@@ -821,17 +985,17 @@ function NoConformidadesPageContent() {
       body: JSON.stringify({ status }),
     });
 
-    const json = await res.json();
+    const json: unknown = await res.json();
 
     if (!res.ok) {
-      alert(json.error || 'Error actualizando no conformidad');
+      alert(getApiErrorMessage(json, 'Error actualizando no conformidad'));
       return;
     }
 
     await refreshAll();
   };
 
-  const createActionFromNC = async (nc: any) => {
+  const createActionFromNC = async (nc: NonconformityRow) => {
     if (!token || !tenantId) return;
 
     const ncIso = getNcIso(nc);
@@ -850,19 +1014,19 @@ function NoConformidadesPageContent() {
       setAiError('');
       setActionLoading(nc.id);
 
-      const result = await postWithAuth(
+      const result = asRecord(await postWithAuth(
         `${API_URL}/api/ai-compliance/apply/nonconformity-draft-to-action-plan`,
         buildApplyActionPayload(nc)
-      );
+      ));
 
       if (result?.data) {
         await refreshAll();
       }
 
       alert('Plan de acción generado o reutilizado correctamente');
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR CREATE ACTION FROM NC:', err);
-      setAiError(err.message || 'Error creando plan de acción');
+      setAiError(getErrorMessage(err, 'Error creando plan de acción'));
     } finally {
       setActionLoading('');
     }
@@ -1134,7 +1298,7 @@ function NoConformidadesPageContent() {
                       <div className="flex flex-wrap items-center gap-2">
                         <Tag tone="slate">{translateStandardLabel(getNcIso(nc), locale)}</Tag>
                         <Tag tone="amber">{translateClauseLabel(nc.clause || 'Sin cláusula', locale)}</Tag>
-                        <StatusChip status={nc.status} locale={locale} />
+                        <StatusChip status={nc.status || ''} locale={locale} />
                         {openLinkedAction && <Tag tone="emerald">Con acción activa</Tag>}
                       </div>
 
@@ -1229,7 +1393,7 @@ function NoConformidadesPageContent() {
                       </div>
                     ) : (
                       <select
-                        value={nc.status}
+                        value={nc.status || ''}
                         onChange={(e) => update(nc.id, e.target.value)}
                         className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none"
                       >
