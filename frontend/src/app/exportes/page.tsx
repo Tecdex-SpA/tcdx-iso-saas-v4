@@ -29,6 +29,22 @@ type Client = {
   logo_url?: string | null;
 };
 
+type StandardMetrics = {
+  catalog_coverage_pct?: number;
+  tenant_control_coverage_pct?: number;
+  operational_coverage_pct?: number;
+  evidence_coverage_pct?: number;
+  health_coverage_pct?: number;
+  tenant_controls_count?: number;
+  evidence_count?: number;
+  expected_evidence_count?: number;
+  health_records_count?: number;
+  avg_health_score?: number;
+  assessments_count?: number;
+  risk_runs_count?: number;
+  [key: string]: number | string | boolean | null | undefined;
+};
+
 type StandardOption = {
   tenant_id: string;
   standard_code: string;
@@ -49,22 +65,35 @@ type StandardOption = {
   evidence_focus?: string | null;
   report_title?: string | null;
   chart_priority?: string[];
-  metrics?: {
-    catalog_coverage_pct?: number;
-    tenant_control_coverage_pct?: number;
-    operational_coverage_pct?: number;
-    evidence_coverage_pct?: number;
-    health_coverage_pct?: number;
-    tenant_controls_count?: number;
-    evidence_count?: number;
-    expected_evidence_count?: number;
-    health_records_count?: number;
-    avg_health_score?: number;
-    assessments_count?: number;
-    risk_runs_count?: number;
-    [key: string]: any;
-  };
+  metrics?: StandardMetrics;
   warnings?: string[];
+};
+
+type ReportGenerationPayload = {
+  report_type_code: string;
+  locale: string;
+  period: string;
+  model_mode: 'balanced' | 'fast';
+  depth: 'balanced' | 'standard';
+  quality: 'premium' | 'standard';
+  use_llm: boolean;
+  use_rag: boolean;
+  use_web: boolean;
+  use_drive: boolean;
+  tenant_id?: string;
+  standard_code?: string;
+  version_code?: string;
+  metadata: {
+    source: 'frontend_exportes';
+    generated_from: '/exportes';
+    locale: string;
+    ai_visibility_allowed: boolean;
+    standard_code?: string;
+    version_code?: string;
+    standard_label?: string;
+    coverage_status?: string;
+    coverage_label?: string;
+  };
 };
 
 type ReportExport = {
@@ -98,6 +127,17 @@ function buildLocaleHeaders(token: string, locale: string) {
     Authorization: `Bearer ${token}`,
     'x-tcdx-locale': locale,
   };
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+
+  return fallback;
 }
 
 function appendLocaleParam(params: URLSearchParams, locale: string) {
@@ -553,11 +593,11 @@ export default function ExportesPage() {
       } else {
         setSelectedStandardKey('');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD REPORT STANDARDS:', err);
       setStandards([]);
       setSelectedStandardKey('');
-      setError(err.message || 'Error obteniendo normas ISO disponibles');
+      setError(getErrorMessage(err, 'Error obteniendo normas ISO disponibles'));
     } finally {
       setStandardsLoading(false);
     }
@@ -596,9 +636,9 @@ export default function ExportesPage() {
       }
 
       setExportsHistory((json?.data || []).map((item: ReportExport) => localizeExportHistoryItem(item, t)));
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD REPORT HISTORY:', err);
-      setError(err.message || t('exports.loadHistoryError'));
+      setError(getErrorMessage(err, t('exports.loadHistoryError')));
     } finally {
       setHistoryLoading(false);
     }
@@ -658,9 +698,9 @@ export default function ExportesPage() {
         if (!loadedReports.some((report: ReportType) => report.can_generate)) {
           setActiveTab('premium');
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('ERROR LOAD EXPORTES:', err);
-        setError(err.message || t('exports.loadExportsError'));
+        setError(getErrorMessage(err, t('exports.loadExportsError')));
       } finally {
         setLoading(false);
       }
@@ -739,7 +779,7 @@ export default function ExportesPage() {
         return;
       }
 
-      const payload: any = {
+      const payload: ReportGenerationPayload = {
         report_type_code: reportTypeCode,
         locale,
         period,
@@ -817,10 +857,10 @@ export default function ExportesPage() {
       if (fileUrl) {
         await openAuthenticatedReport(fileUrl, token);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR GENERATE REPORT:', err);
       setReportJobMessage('');
-      setError(err.message || t('exports.generateError'));
+      setError(getErrorMessage(err, t('exports.generateError')));
     } finally {
       setGeneratingCode(null);
     }

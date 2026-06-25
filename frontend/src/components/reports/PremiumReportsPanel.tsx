@@ -55,6 +55,93 @@ type ExportHistoryEntry = {
   objectUrl?: string;
 };
 
+type UnknownRecord = Record<string, unknown>;
+
+type JwtPayload = {
+  role?: string;
+  user_role?: string;
+  userRole?: string;
+  tenant_id?: string;
+  tenantId?: string;
+  company_id?: string;
+  user_id?: string;
+  userId?: string;
+  sub?: string;
+  email?: string;
+  name?: string;
+  user_name?: string;
+};
+
+type ReportSource = {
+  ref_id?: string;
+  source_id?: string;
+  source_type?: string;
+  title?: string;
+  status?: string;
+  used_for?: string;
+  visibility?: string;
+  provider?: string;
+  reference_table?: string;
+  reference_type?: string;
+  internal_reference?: string;
+};
+
+type ReportSection = {
+  code?: string;
+  title?: string;
+  data?: unknown;
+};
+
+type ReportPreview = {
+  template_code?: string;
+  status?: string;
+  tenant?: {
+    name?: string;
+  };
+  filters?: UnknownRecord;
+  generated_at?: string;
+  requires_human_review?: boolean;
+  warnings?: string[];
+  sections?: ReportSection[];
+  sources?: ReportSource[];
+};
+
+type NarrativeFinding = {
+  title?: string;
+  description?: string;
+  severity?: string;
+  source_refs?: unknown;
+};
+
+type ReportNarrative = {
+  template_code?: string;
+  tenant?: unknown;
+  filters?: unknown;
+  sources?: ReportSource[];
+  warnings?: string[];
+  fallback_used?: boolean;
+  narrative?: {
+    executive_summary?: string;
+    key_findings?: NarrativeFinding[];
+    limitations?: string[];
+    disclaimer?: string;
+  };
+};
+
+type ScopeRecommendationItem = {
+  name?: string;
+  scope_item_type?: string;
+  priority?: string;
+  confidence?: string;
+  reason?: string;
+  risk_if_excluded?: string;
+  evidence_needed?: string[];
+};
+
+type ScopeRecommendation = {
+  recommendations?: ScopeRecommendationItem[];
+};
+
 const DEFAULT_SECTIONS = [
   'summary',
   'health',
@@ -94,16 +181,36 @@ function filenameFromDisposition(disposition: string | null, fallback: string) {
   return match ? decodeURIComponent(match[1]) : fallback;
 }
 
-function readError(json: any, fallback: string) {
-  return json?.error || json?.message || json?.detail || fallback;
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseJwtPayload() {
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (isRecord(error) && typeof error.message === 'string' && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function readError(json: unknown, fallback: string) {
+  const data = asRecord(json);
+  return String(data.error || data.message || data.detail || fallback);
+}
+
+function parseJwtPayload(): JwtPayload | null {
   if (typeof window === 'undefined') return null;
   const token = localStorage.getItem('token');
   if (!token) return null;
   try {
-    return JSON.parse(atob(token.split('.')[1] || ''));
+    const parsed: unknown = JSON.parse(atob(token.split('.')[1] || ''));
+    return isRecord(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -133,22 +240,26 @@ function canViewTechnicalDetail(role: string) {
   return ['admin', 'admin_cumplimiento', 'compliance_admin', 'auditor', 'auditor_iso', 'superadmin'].includes(role);
 }
 
-function toArray(value: any) {
+function toArray(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
-  if (value && typeof value === 'object') return Object.values(value);
+  if (isRecord(value)) return Object.values(value);
   return [];
 }
 
-function asText(value: any, fallback = '-') {
+function toRecordArray(value: unknown): UnknownRecord[] {
+  return toArray(value).filter(isRecord);
+}
+
+function asText(value: unknown, fallback = '-') {
   if (value === null || value === undefined || value === '') return fallback;
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : fallback;
   if (typeof value === 'boolean') return value ? 'Si' : 'No';
   if (Array.isArray(value)) return value.filter(Boolean).join(', ') || fallback;
-  if (typeof value === 'object') return fallback;
+  if (isRecord(value)) return fallback;
   return String(value);
 }
 
-function sourceRefList(value: any) {
+function sourceRefList(value: unknown) {
   return Array.isArray(value) ? value.filter(Boolean).join(', ') : '';
 }
 
@@ -169,37 +280,38 @@ function safeJsonForStorage(entry: ExportHistoryEntry) {
   return safe;
 }
 
-function sanitizeTechnicalData(value: any, depth = 0): any {
+function sanitizeTechnicalData(value: unknown, depth = 0): unknown {
   if (depth > 3) return '[detalle omitido]';
   if (Array.isArray(value)) return value.slice(0, 20).map((item) => sanitizeTechnicalData(item, depth + 1));
-  if (!value || typeof value !== 'object') return value;
-  return Object.entries(value).reduce((acc: Record<string, any>, [key, item]) => {
+  if (!isRecord(value)) return value;
+  return Object.entries(value).reduce((acc: Record<string, unknown>, [key, item]) => {
     if (SENSITIVE_KEY_RE.test(key)) return acc;
     acc[key] = sanitizeTechnicalData(item, depth + 1);
     return acc;
   }, {});
 }
 
-function visibleEntries(value: any, max = 8) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+function visibleEntries(value: unknown, max = 8): [string, unknown][] {
+  if (!isRecord(value)) return [];
   return Object.entries(value)
     .filter(([key, item]) => !SENSITIVE_KEY_RE.test(key) && item !== null && item !== undefined && item !== '')
     .slice(0, max);
 }
 
-function sectionData(preview: any, code: string) {
-  return toArray(preview?.sections).find((section: any) => section?.code === code)?.data || null;
+function sectionData(preview: ReportPreview | null, code: string) {
+  return (preview?.sections || []).find((section) => section.code === code)?.data || null;
 }
 
-function findList(data: any, keys: string[]) {
-  if (Array.isArray(data)) return data;
+function findList(data: unknown, keys: string[]): UnknownRecord[] {
+  if (Array.isArray(data)) return data.filter(isRecord);
+  const record = asRecord(data);
   for (const key of keys) {
-    if (Array.isArray(data?.[key])) return data[key];
+    if (Array.isArray(record[key])) return toRecordArray(record[key]);
   }
   return [];
 }
 
-function statusBadgeClass(status: any) {
+function statusBadgeClass(status: unknown) {
   const value = String(status || '').toLowerCase();
   if (/(high|critical|critico|crítico|overdue|vencid|missing|abiert|open|red|alto)/.test(value)) {
     return 'border-red-200 bg-red-50 text-red-700';
@@ -233,9 +345,9 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [templateLoading, setTemplateLoading] = useState(true);
   const [requestState, setRequestState] = useState<RequestState>({ loading: false, error: '' });
-  const [preview, setPreview] = useState<any>(null);
-  const [narrative, setNarrative] = useState<any>(null);
-  const [scopeRecommendation, setScopeRecommendation] = useState<any>(null);
+  const [preview, setPreview] = useState<ReportPreview | null>(null);
+  const [narrative, setNarrative] = useState<ReportNarrative | null>(null);
+  const [scopeRecommendation, setScopeRecommendation] = useState<ScopeRecommendation | null>(null);
   const [periodFrom, setPeriodFrom] = useState('');
   const [periodTo, setPeriodTo] = useState('');
   const [processId, setProcessId] = useState('');
@@ -292,8 +404,8 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
         const loaded = Array.isArray(json.data) ? json.data : [];
         setTemplates(loaded);
         setSelectedTemplate((current) => current || loaded[0]?.code || '');
-      } catch (error: any) {
-        setRequestState({ loading: false, error: error.message || 'No fue posible cargar plantillas premium.' });
+      } catch (error) {
+        setRequestState({ loading: false, error: getErrorMessage(error, 'No fue posible cargar plantillas premium.') });
       } finally {
         setTemplateLoading(false);
       }
@@ -347,8 +459,8 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
         throw new Error(readError(json, 'No fue posible generar preview.'));
       }
       setPreview(json.data);
-    } catch (error: any) {
-      setRequestState({ loading: false, error: error.message || 'No fue posible generar preview.' });
+    } catch (error) {
+      setRequestState({ loading: false, error: getErrorMessage(error, 'No fue posible generar preview.') });
       return;
     }
     setRequestState({ loading: false, error: '' });
@@ -373,7 +485,7 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
         throw new Error(readError(json, 'No fue posible generar narrativa.'));
       }
       setNarrative(json.data);
-      setPreview((current: any) => current || {
+      setPreview((current) => current || {
         template_code: json.data.template_code,
         tenant: json.data.tenant,
         filters: json.data.filters,
@@ -381,8 +493,8 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
         warnings: json.data.warnings,
         sections: [],
       });
-    } catch (error: any) {
-      setRequestState({ loading: false, error: error.message || 'No fue posible generar narrativa.' });
+    } catch (error) {
+      setRequestState({ loading: false, error: getErrorMessage(error, 'No fue posible generar narrativa.') });
       return;
     }
     setRequestState({ loading: false, error: '' });
@@ -440,8 +552,8 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
       };
       updateHistory([entry, ...exportHistory].slice(0, 20));
       setExportSuccess(`${format.toUpperCase()} generado y agregado al historial premium.`);
-    } catch (error: any) {
-      setRequestState({ loading: false, error: error.message || 'No fue posible exportar el reporte.' });
+    } catch (error) {
+      setRequestState({ loading: false, error: getErrorMessage(error, 'No fue posible exportar el reporte.') });
     } finally {
       setExporting('');
     }
@@ -472,8 +584,8 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
         throw new Error(readError(json, 'No fue posible generar recomendación de alcance.'));
       }
       setScopeRecommendation(json.data);
-    } catch (error: any) {
-      setRequestState({ loading: false, error: error.message || 'No fue posible generar recomendación de alcance.' });
+    } catch (error) {
+      setRequestState({ loading: false, error: getErrorMessage(error, 'No fue posible generar recomendación de alcance.') });
     } finally {
       setScopeLoading(false);
     }
@@ -688,7 +800,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Badge({ value }: { value: any }) {
+function Badge({ value }: { value: unknown }) {
   return (
     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusBadgeClass(value)}`}>
       {asText(value)}
@@ -696,7 +808,7 @@ function Badge({ value }: { value: any }) {
   );
 }
 
-function PreviewPanel({ preview, userRole }: { preview: any; userRole: string }) {
+function PreviewPanel({ preview, userRole }: { preview: ReportPreview | null; userRole: string }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <h3 className="text-lg font-bold text-slate-900">Preview estructurado</h3>
@@ -707,7 +819,7 @@ function PreviewPanel({ preview, userRole }: { preview: any; userRole: string })
           </div>
           <PreviewSummary preview={preview} />
           <MetricCards preview={preview} />
-          {toArray(preview.sections).slice(0, 12).map((section: any) => (
+          {(preview.sections || []).slice(0, 12).map((section) => (
             <ReportPreviewSection
               key={section.code || section.title}
               section={section}
@@ -734,7 +846,7 @@ function PreviewPanel({ preview, userRole }: { preview: any; userRole: string })
   );
 }
 
-function PreviewSummary({ preview }: { preview: any }) {
+function PreviewSummary({ preview }: { preview: ReportPreview }) {
   const filters = preview.filters || {};
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -748,19 +860,24 @@ function PreviewSummary({ preview }: { preview: any }) {
   );
 }
 
-function MetricCards({ preview }: { preview: any }) {
+function MetricCards({ preview }: { preview: ReportPreview }) {
   const health = sectionData(preview, 'health');
   const gaps = sectionData(preview, 'gaps');
   const risks = sectionData(preview, 'risks');
   const evidence = sectionData(preview, 'evidence');
   const controls = sectionData(preview, 'controls');
+  const healthSummary = asRecord(asRecord(health).summary);
+  const controlsTotals = asRecord(asRecord(controls).totals);
+  const gapsTotals = asRecord(asRecord(gaps).totals);
+  const risksTotals = asRecord(asRecord(risks).totals);
+  const evidenceTotals = asRecord(asRecord(evidence).totals);
   const metrics = [
-    { label: 'Health global', value: health?.summary?.global_score ?? health?.summary?.score ?? '-' },
-    { label: 'Estado health', value: health?.summary?.label || health?.summary?.status || '-' },
-    { label: 'Controles aplicables', value: controls?.totals?.applicable ?? '-' },
-    { label: 'Brechas abiertas', value: gaps?.totals?.open ?? '-' },
-    { label: 'Riesgos altos', value: risks?.totals?.high_or_critical ?? '-' },
-    { label: 'Evidencias activas', value: evidence?.totals?.active ?? '-' },
+    { label: 'Health global', value: healthSummary.global_score ?? healthSummary.score ?? '-' },
+    { label: 'Estado health', value: healthSummary.label || healthSummary.status || '-' },
+    { label: 'Controles aplicables', value: controlsTotals.applicable ?? '-' },
+    { label: 'Brechas abiertas', value: gapsTotals.open ?? '-' },
+    { label: 'Riesgos altos', value: risksTotals.high_or_critical ?? '-' },
+    { label: 'Evidencias activas', value: evidenceTotals.active ?? '-' },
   ];
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -774,7 +891,7 @@ function MetricCards({ preview }: { preview: any }) {
   );
 }
 
-function ReportPreviewSection({ section, userRole }: { section: any; userRole: string }) {
+function ReportPreviewSection({ section, userRole }: { section: ReportSection; userRole: string }) {
   const code = String(section?.code || '').toLowerCase();
   const title = section?.title || humanizeKey(code);
   const data = section?.data;
@@ -811,19 +928,20 @@ function ReportPreviewSection({ section, userRole }: { section: any; userRole: s
   );
 }
 
-function SummarySection({ data }: { data: any }) {
+function SummarySection({ data }: { data: unknown }) {
+  const record = asRecord(data);
   return (
     <div className="space-y-3">
       <p className="text-sm leading-6 text-slate-600">
-        {asText(data?.recommendation_management || data?.executive_summary || data?.summary || data?.disclaimer, 'Resumen estructurado generado desde datos internos del reporte.')}
+        {asText(record.recommendation_management || record.executive_summary || record.summary || record.disclaimer, 'Resumen estructurado generado desde datos internos del reporte.')}
       </p>
       <GenericKeyValuePanel data={data} />
     </div>
   );
 }
 
-function HealthSection({ data }: { data: any }) {
-  const summary = data?.summary || {};
+function HealthSection({ data }: { data: unknown }) {
+  const summary = asRecord(asRecord(data).summary);
   const dimensions = findList(data, ['dimensions', 'by_dimension', 'health_by_dimension', 'by_standard', 'by_process']);
   return (
     <div className="space-y-3">
@@ -852,7 +970,7 @@ function HealthSection({ data }: { data: any }) {
   );
 }
 
-function KpiTable({ data }: { data: any }) {
+function KpiTable({ data }: { data: unknown }) {
   const rows = findList(data, ['kpis', 'items', 'rows', 'metrics']);
   if (!rows.length) return <GenericKeyValuePanel data={data} />;
   return (
@@ -870,7 +988,7 @@ function KpiTable({ data }: { data: any }) {
   );
 }
 
-function GapsSection({ data }: { data: any }) {
+function GapsSection({ data }: { data: unknown }) {
   const rows = findList(data, ['gaps', 'items', 'findings', 'rows']);
   if (!rows.length) return <GenericKeyValuePanel data={data} />;
   return (
@@ -889,7 +1007,7 @@ function GapsSection({ data }: { data: any }) {
   );
 }
 
-function ActionsSection({ data }: { data: any }) {
+function ActionsSection({ data }: { data: unknown }) {
   const rows = findList(data, ['actions', 'items', 'action_plans', 'rows']);
   if (!rows.length) return <GenericKeyValuePanel data={data} />;
   return (
@@ -906,7 +1024,7 @@ function ActionsSection({ data }: { data: any }) {
   );
 }
 
-function RisksSection({ data }: { data: any }) {
+function RisksSection({ data }: { data: unknown }) {
   const rows = findList(data, ['risks', 'items', 'rows']);
   if (!rows.length) return <GenericKeyValuePanel data={data} />;
   return (
@@ -924,7 +1042,7 @@ function RisksSection({ data }: { data: any }) {
   );
 }
 
-function EvidenceSection({ data }: { data: any }) {
+function EvidenceSection({ data }: { data: unknown }) {
   const rows = findList(data, ['evidence', 'active', 'missing', 'items', 'rows']);
   if (!rows.length) return <GenericKeyValuePanel data={data} />;
   return (
@@ -942,7 +1060,7 @@ function EvidenceSection({ data }: { data: any }) {
   );
 }
 
-function ControlsSection({ data }: { data: any }) {
+function ControlsSection({ data }: { data: unknown }) {
   const rows = findList(data, ['controls', 'items', 'rows']);
   if (!rows.length) return <GenericKeyValuePanel data={data} />;
   return (
@@ -959,12 +1077,12 @@ function ControlsSection({ data }: { data: any }) {
   );
 }
 
-function SimpleListSection({ data, keys, titleKey }: { data: any; keys: string[]; titleKey: string }) {
+function SimpleListSection({ data, keys, titleKey }: { data: unknown; keys: string[]; titleKey: string }) {
   const rows = findList(data, keys);
   if (!rows.length) return <GenericKeyValuePanel data={data} />;
   return (
     <div className="space-y-3">
-      {rows.slice(0, 10).map((item: any, index: number) => (
+      {rows.slice(0, 10).map((item, index) => (
         <div key={`${asText(item?.[titleKey])}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="font-bold text-slate-900">{asText(item?.[titleKey] || item?.name || item?.title, 'Registro')}</div>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -980,7 +1098,7 @@ function SimpleListSection({ data, keys, titleKey }: { data: any; keys: string[]
   );
 }
 
-function SimpleTable({ columns, rows }: { columns: string[][]; rows: any[] }) {
+function SimpleTable({ columns, rows }: { columns: string[][]; rows: UnknownRecord[] }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="overflow-x-auto">
@@ -994,7 +1112,7 @@ function SimpleTable({ columns, rows }: { columns: string[][]; rows: any[] }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.slice(0, 12).map((row, index) => (
-              <tr key={row?.id || row?.code || row?.title || index} className="align-top">
+              <tr key={asText(row.id || row.code || row.title, String(index))} className="align-top">
                 {columns.map(([key]) => (
                   <td key={key} className="max-w-[260px] px-3 py-3 text-slate-700">
                     {/(status|severity|priority|level|residual)/i.test(key)
@@ -1016,7 +1134,7 @@ function SimpleTable({ columns, rows }: { columns: string[][]; rows: any[] }) {
   );
 }
 
-function ListBlock({ title, items }: { title: string; items: any[] }) {
+function ListBlock({ title, items }: { title: string; items: unknown[] }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{title}</div>
@@ -1029,7 +1147,7 @@ function ListBlock({ title, items }: { title: string; items: any[] }) {
   );
 }
 
-function GenericKeyValuePanel({ data }: { data: any }) {
+function GenericKeyValuePanel({ data }: { data: unknown }) {
   const entries = visibleEntries(data, 8);
   if (!entries.length) {
     return <div className="text-sm text-slate-500">Sin datos estructurados para esta sección.</div>;
@@ -1040,7 +1158,7 @@ function GenericKeyValuePanel({ data }: { data: any }) {
         <div key={key} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
           <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{humanizeKey(key)}</div>
           <div className="mt-1 font-semibold text-slate-700">
-            {typeof value === 'object' ? `${toArray(value).length || Object.keys(value || {}).length} registros` : asText(value)}
+            {isRecord(value) || Array.isArray(value) ? `${toArray(value).length || (isRecord(value) ? Object.keys(value).length : 0)} registros` : asText(value)}
           </div>
         </div>
       ))}
@@ -1048,7 +1166,7 @@ function GenericKeyValuePanel({ data }: { data: any }) {
   );
 }
 
-function NarrativePanel({ narrative }: { narrative: any }) {
+function NarrativePanel({ narrative }: { narrative: ReportNarrative | null }) {
   const data = narrative?.narrative;
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1062,7 +1180,7 @@ function NarrativePanel({ narrative }: { narrative: any }) {
           )}
           <p className="text-sm leading-6 text-slate-600">{data.executive_summary}</p>
           <div className="space-y-3">
-            {(data.key_findings || []).slice(0, 6).map((item: any, index: number) => (
+            {(data.key_findings || []).slice(0, 6).map((item, index) => (
               <div key={`${item.title}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="font-bold text-slate-900">{item.title}</div>
                 <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
@@ -1086,7 +1204,7 @@ function NarrativePanel({ narrative }: { narrative: any }) {
   );
 }
 
-function SourcesPanel({ preview, narrative }: { preview: any; narrative: any }) {
+function SourcesPanel({ preview, narrative }: { preview: ReportPreview | null; narrative: ReportNarrative | null }) {
   const sources = preview?.sources || narrative?.sources || [];
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1109,7 +1227,7 @@ function SourcesPanel({ preview, narrative }: { preview: any; narrative: any }) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {sources.slice(0, 80).map((source: any, index: number) => (
+                {sources.slice(0, 80).map((source, index) => (
                   <tr key={`${source.source_id}-${index}`} className="align-top">
                     <td className="px-4 py-3 font-mono text-xs text-slate-600">{source.ref_id || `source_${index + 1}`}</td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-600">{source.source_id || '-'}</td>
@@ -1149,7 +1267,7 @@ function ScopeRecommendationPanel({
   scopeStandard: string;
   setScopeStandard: (value: string) => void;
   scopeLoading: boolean;
-  scopeRecommendation: any;
+  scopeRecommendation: ScopeRecommendation | null;
   generateScopeRecommendation: () => void;
 }) {
   return (
@@ -1185,7 +1303,7 @@ function ScopeRecommendationPanel({
 
       {scopeRecommendation ? (
         <div className="mt-5 space-y-3">
-          {(scopeRecommendation.recommendations || []).slice(0, 8).map((item: any, index: number) => (
+          {(scopeRecommendation.recommendations || []).slice(0, 8).map((item, index) => (
             <div key={`${item.name}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
