@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
@@ -96,7 +96,18 @@ type AuditSummaryResponse = {
   note?: string;
 };
 
-function resolveTenantId(user: any): string {
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+  company_id?: string | null;
+  companyId?: string | null;
+  role?: string | null;
+  user_role?: string | null;
+  userRole?: string | null;
+};
+
+function resolveTenantId(user: AuthUser | null): string {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -107,7 +118,7 @@ function resolveTenantId(user: any): string {
   );
 }
 
-function resolveRole(user: any): string {
+function resolveRole(user: AuthUser | null): string {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
 }
 
@@ -363,7 +374,7 @@ function AuditProgramPanel() {
   });
 
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const focusAppliedRef = useRef(false);
 
@@ -1802,7 +1813,7 @@ function MetricCard({
   );
 }
 
-function InfoBox({ label, value }: { label: string; value: any }) {
+function InfoBox({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-[22px] border border-slate-100 bg-slate-50 p-3">
       <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>

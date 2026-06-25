@@ -17,9 +17,29 @@ type ScopeStandard = {
   active_operation_ids?: string[];
 };
 
+type OperationItem = {
+  id: string;
+  tenant_id?: string;
+  code?: string | null;
+  name: string;
+  description?: string | null;
+  operation_type?: string;
+  is_active?: boolean;
+  is_default?: boolean;
+  sort_order?: number;
+};
+
 type ScopeResponse = {
-  operations: any[];
+  operations: OperationItem[];
   standards: ScopeStandard[];
+};
+
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+  company_id?: string | null;
+  companyId?: string | null;
 };
 
 type AssetRow = {
@@ -48,7 +68,7 @@ type RiskSummaryRow = {
   total: string | number;
 };
 
-function resolveTenantId(user: any): string {
+function resolveTenantId(user: AuthUser | null): string {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -124,7 +144,7 @@ function ActivosPageContent() {
   const [risks, setRisks] = useState<RiskRow[]>([]);
   const [riskSummary, setRiskSummary] = useState<RiskSummaryRow[]>([]);
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const [scope, setScope] = useState<ScopeResponse>({ operations: [], standards: [] });
   const [loadingStandards, setLoadingStandards] = useState(true);

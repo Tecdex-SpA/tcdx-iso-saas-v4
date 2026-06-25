@@ -140,6 +140,17 @@ type LifecycleHistoryRow = {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+
+  return fallback;
+}
+
 function getToken(): string {
   if (typeof window === 'undefined') return '';
   return localStorage.getItem('token') || '';
@@ -197,7 +208,7 @@ function formatDateTime(value: string | null | undefined) {
 function prettifyStage(
   code: string | null | undefined,
   stages: StageDef[],
-  t?: (key: string, params?: Record<string, any>) => string
+  t?: (key: string) => string
 ) {
   if (!code) return t ? t('lifecycle.noStage') : 'Sin etapa';
 
@@ -445,8 +456,8 @@ export default function CicloVidaPage() {
       }
 
       setHistoryRows(Array.isArray(data?.data) ? data.data : []);
-    } catch (err: any) {
-      setError(err?.message || t('lifecycle.errors.loadHistory'));
+    } catch (err) {
+      setError(getErrorMessage(err, t('lifecycle.errors.loadHistory')));
       setHistoryRows([]);
     } finally {
       setHistoryLoading(false);
@@ -484,8 +495,8 @@ export default function CicloVidaPage() {
         setTenantId(resolvedTenantId);
         await loadScope(resolvedTenantId);
         await loadBoard(resolvedTenantId);
-      } catch (err: any) {
-        setError(err?.message || t('lifecycle.errors.loadLifecycle'));
+      } catch (err) {
+        setError(getErrorMessage(err, t('lifecycle.errors.loadLifecycle')));
       } finally {
         setLoading(false);
       }
@@ -502,8 +513,8 @@ export default function CicloVidaPage() {
         setLoading(true);
         setError('');
         await loadBoard(tenantId, selectedStandard, selectedOperation);
-      } catch (err: any) {
-        setError(err?.message || t('lifecycle.errors.loadFilters'));
+      } catch (err) {
+        setError(getErrorMessage(err, t('lifecycle.errors.loadFilters')));
       } finally {
         setLoading(false);
       }
@@ -748,8 +759,8 @@ export default function CicloVidaPage() {
         })
       );
       setRequestReason('');
-    } catch (err: any) {
-      setError(err?.message || t('lifecycle.errors.requestMove'));
+    } catch (err) {
+      setError(getErrorMessage(err, t('lifecycle.errors.requestMove')));
     } finally {
       setActionLoading(false);
       setDragging(null);
@@ -807,8 +818,8 @@ export default function CicloVidaPage() {
       );
       setSelectedPendingCard(null);
       setReviewComment('');
-    } catch (err: any) {
-      setError(err?.message || t('lifecycle.errors.reviewRequest'));
+    } catch (err) {
+      setError(getErrorMessage(err, t('lifecycle.errors.reviewRequest')));
     } finally {
       setActionLoading(false);
     }
