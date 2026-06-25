@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+type UnknownRecord = { [key: string]: unknown };
 
 type SourceCard = {
   source_type: string;
@@ -24,7 +26,7 @@ type SourceCard = {
 type ApiError = Error & {
   code?: string;
   status?: number;
-  details?: Record<string, any>;
+  details?: UnknownRecord;
 };
 
 type SourceAction = {
@@ -35,7 +37,7 @@ type SourceAction = {
   kind?: 'api' | 'oauth' | 'link' | 'info' | 'upload_files' | 'upload_zip' | 'google_folder_selector' | 'zoho_folder_selector' | 'zoho_folder_url' | 'disconnect_provider';
   enabled?: boolean;
   reason?: string | null;
-  body?: Record<string, any> | null;
+  body?: UnknownRecord | null;
 };
 
 type GoogleFolder = {
@@ -91,7 +93,7 @@ type LibraryDocument = {
   active_version?: string | null;
   is_active_version?: boolean;
   has_previous_versions?: boolean;
-  profile?: any;
+  profile?: unknown;
 };
 
 type Association = {
@@ -176,6 +178,25 @@ const fallbackSources: SourceCard[] = [
     { key: 'upload_zip', label: 'Subir ZIP', kind: 'upload_zip', enabled: true, path: '/api/evidence-library/manual-upload/zip', method: 'POST' },
   ] },
 ];
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (isRecord(error) && typeof error.message === 'string') return error.message;
+  return fallback;
+}
+
+function toApiError(error: unknown, fallback: string): ApiError {
+  if (error instanceof Error) return error as ApiError;
+  return new Error(getErrorMessage(error, fallback)) as ApiError;
+}
 
 function formatDate(value?: string | null) {
   if (!value) return '-';
@@ -424,6 +445,7 @@ export default function UnifiedEvidenceLibrary({
   const selectedCanOpen = Boolean(selected && !selectedIsExcluded && selected.can_open === true);
   const selectedCanExclude = Boolean(selected && canManage && !selectedIsExcluded && selected.source_type === 'document_index' && selected.can_exclude !== false);
   const selectedCanRestore = Boolean(selected && canManage && selectedIsExcluded && selected.source_type === 'document_index' && selected.can_restore !== false);
+  const selectedProfile = asRecord(detail?.document?.profile);
   const visibleSources = sources.length ? sources : fallbackSources;
   const currentFolder = folderNavigationStack[folderNavigationStack.length - 1]?.folder || null;
   const hasActiveFilters = Boolean(
@@ -486,8 +508,8 @@ export default function UnifiedEvidenceLibrary({
       setSourcesError(null);
       const json = await fetchJson(`${API_URL}/api/evidence-library/sources`, token);
       setSources(Array.isArray(json.data) ? json.data : []);
-    } catch (error: any) {
-      setSourcesError(error);
+    } catch (error) {
+      setSourcesError(toApiError(error, 'No fue posible cargar fuentes.'));
       setSources([]);
     }
   }, [token]);
@@ -512,8 +534,8 @@ export default function UnifiedEvidenceLibrary({
         if (prev && rows.some((row: LibraryDocument) => row.id === prev.id)) return prev;
         return rows[0] || null;
       });
-    } catch (error: any) {
-      setLibraryError(error);
+    } catch (error) {
+      setLibraryError(toApiError(error, 'No fue posible cargar documentos.'));
       setFolderNavigationStack([]);
       setFolderContextMessage('');
       setFolderChildren([]);
@@ -586,10 +608,16 @@ export default function UnifiedEvidenceLibrary({
       setFolderChildrenFor('');
       setFolderChildrenMessage('');
       setFolderContextMessage(rows.length === 0 ? 'Esta carpeta no tiene documentos o subcarpetas visibles.' : '');
-    } catch (error: any) {
+    } catch (error) {
       setFolderChildren([]);
       setFolderChildrenFor(doc.id);
-      setFolderChildrenMessage(error?.details?.message || error.message || 'No fue posible abrir la carpeta.');
+      const apiError = toApiError(error, 'No fue posible abrir la carpeta.');
+      const details = apiError.details || {};
+      setFolderChildrenMessage(
+        (typeof details.message === 'string' ? details.message : '') ||
+          apiError.message ||
+          'No fue posible abrir la carpeta.'
+      );
     } finally {
       setFolderChildrenLoading(false);
     }
@@ -629,16 +657,17 @@ export default function UnifiedEvidenceLibrary({
       if (rows.length === 0) {
         setGoogleFolderMessage(details?.message || 'Esta carpeta no contiene subcarpetas visibles.');
       }
-    } catch (error: any) {
+    } catch (error) {
       setGoogleFolders([]);
       setGoogleFolderHadError(true);
-      const details = error?.details;
-      const hint = details?.hint ? ` ${details.hint}` : '';
-      const provider = details?.provider_status ? ` Estado proveedor: ${details.provider_status}.` : '';
-      const providerCode = details?.provider_code ? ` Código: ${details.provider_code}.` : '';
-      const providerMessage = details?.provider_message ? ` Mensaje proveedor: ${details.provider_message}.` : '';
-      const stage = details?.stage ? ` Etapa: ${details.stage}.` : '';
-      setGoogleFolderMessage(`${error.message || `No fue posible listar carpetas de ${folderProviderLabel(source)}.`}${stage}${provider}${providerCode}${providerMessage}${hint}`);
+      const apiError = toApiError(error, `No fue posible listar carpetas de ${folderProviderLabel(source)}.`);
+      const details = apiError.details || {};
+      const hint = typeof details.hint === 'string' ? ` ${details.hint}` : '';
+      const provider = typeof details.provider_status === 'string' ? ` Estado proveedor: ${details.provider_status}.` : '';
+      const providerCode = typeof details.provider_code === 'string' ? ` Código: ${details.provider_code}.` : '';
+      const providerMessage = typeof details.provider_message === 'string' ? ` Mensaje proveedor: ${details.provider_message}.` : '';
+      const stage = typeof details.stage === 'string' ? ` Etapa: ${details.stage}.` : '';
+      setGoogleFolderMessage(`${apiError.message || `No fue posible listar carpetas de ${folderProviderLabel(source)}.`}${stage}${provider}${providerCode}${providerMessage}${hint}`);
     } finally {
       setWorking('');
     }
@@ -676,8 +705,8 @@ export default function UnifiedEvidenceLibrary({
       setGoogleFolderSelectorOpen(false);
       setGoogleFolderMessage('');
       await loadSources();
-    } catch (error: any) {
-      setGoogleFolderMessage(error.message || 'No fue posible seleccionar la carpeta.');
+    } catch (error) {
+      setGoogleFolderMessage(getErrorMessage(error, 'No fue posible seleccionar la carpeta.'));
     } finally {
       setWorking('');
     }
@@ -714,13 +743,14 @@ export default function UnifiedEvidenceLibrary({
       setZohoUrlOpen(false);
       await loadSources();
       await loadDocuments();
-    } catch (error: any) {
-      const details = error?.details;
-      const provider = details?.provider_status ? ` Estado proveedor: ${details.provider_status}.` : '';
-      const providerCode = details?.provider_code ? ` Código: ${details.provider_code}.` : '';
-      const stage = details?.stage ? ` Etapa: ${details.stage}.` : '';
-      const hint = details?.hint ? ` ${details.hint}` : '';
-      setZohoUrlMessage(`${error.message || 'No fue posible seleccionar la carpeta desde la URL.'}${stage}${provider}${providerCode}${hint}`);
+    } catch (error) {
+      const apiError = toApiError(error, 'No fue posible seleccionar la carpeta desde la URL.');
+      const details = apiError.details || {};
+      const provider = typeof details.provider_status === 'string' ? ` Estado proveedor: ${details.provider_status}.` : '';
+      const providerCode = typeof details.provider_code === 'string' ? ` Código: ${details.provider_code}.` : '';
+      const stage = typeof details.stage === 'string' ? ` Etapa: ${details.stage}.` : '';
+      const hint = typeof details.hint === 'string' ? ` ${details.hint}` : '';
+      setZohoUrlMessage(`${apiError.message || 'No fue posible seleccionar la carpeta desde la URL.'}${stage}${provider}${providerCode}${hint}`);
     } finally {
       setWorking('');
     }
@@ -776,8 +806,8 @@ export default function UnifiedEvidenceLibrary({
       });
       await loadDocuments();
       await loadDetail(selected);
-    } catch (error: any) {
-      alert(error.message || 'No fue posible analizar el documento.');
+    } catch (error) {
+      alert(getErrorMessage(error, 'No fue posible analizar el documento.'));
     } finally {
       setWorking('');
     }
@@ -812,8 +842,8 @@ export default function UnifiedEvidenceLibrary({
       setAssociationForm((prev) => ({ ...prev, target_id: '', notes: '' }));
       await loadDocuments();
       await loadDetail(selected);
-    } catch (error: any) {
-      alert(error.message || 'No fue posible guardar la asociacion.');
+    } catch (error) {
+      alert(getErrorMessage(error, 'No fue posible guardar la asociacion.'));
     } finally {
       setWorking('');
     }
@@ -854,8 +884,8 @@ export default function UnifiedEvidenceLibrary({
       setManualUploadMessage(`Elemento excluido del índice. Afectados: ${excluded.affected_count || 1}.${warnings}`);
       await loadDocuments();
       await loadSources();
-    } catch (error: any) {
-      alert(error.message || 'No fue posible excluir el elemento del índice.');
+    } catch (error) {
+      alert(getErrorMessage(error, 'No fue posible excluir el elemento del índice.'));
     } finally {
       setWorking('');
     }
@@ -887,8 +917,8 @@ export default function UnifiedEvidenceLibrary({
       setManualUploadMessage(`Elemento restaurado al índice. Restaurados: ${json.restored_count || 0}.${warnings}`);
       await loadDocuments();
       await loadSources();
-    } catch (error: any) {
-      alert(error.message || 'No fue posible restaurar el elemento al índice.');
+    } catch (error) {
+      alert(getErrorMessage(error, 'No fue posible restaurar el elemento al índice.'));
     } finally {
       setWorking('');
     }
@@ -939,8 +969,8 @@ export default function UnifiedEvidenceLibrary({
         setManualUploadMessage(`${json.message || `${providerLabel} desconectado.`}${warning}`);
         await loadSources();
         await loadDocuments();
-      } catch (error: any) {
-        setManualUploadMessage(error.message || `No fue posible desconectar ${providerLabel}.`);
+      } catch (error) {
+        setManualUploadMessage(getErrorMessage(error, `No fue posible desconectar ${providerLabel}.`));
       } finally {
         setWorking('');
       }
@@ -973,8 +1003,8 @@ export default function UnifiedEvidenceLibrary({
         ? `Sincronización completada. Archivos vistos: ${json.files_seen || 0}. Indexados: ${json.files_indexed || 0}. Carpetas: ${json.folders_seen || 0}. Errores: ${json.files_errors || 0}.`
         : null;
       alert(json.message || summary || 'Acción de fuente ejecutada.');
-    } catch (error: any) {
-      alert(error.message || 'No fue posible ejecutar la acción de fuente.');
+    } catch (error) {
+      alert(getErrorMessage(error, 'No fue posible ejecutar la acción de fuente.'));
     } finally {
       setWorking('');
     }
@@ -1007,15 +1037,15 @@ export default function UnifiedEvidenceLibrary({
       const json = await fetchMultipart(`${API_URL}${endpoint}`, token, formData);
       const summary = json.data?.summary || {};
       const errors = Array.isArray(summary.errors) && summary.errors.length
-        ? ` Omitidos: ${summary.errors.map((item: any) => `${item.filename}: ${item.reason}`).join('; ')}`
+        ? ` Omitidos: ${summary.errors.map((item: UnknownRecord) => `${String(item.filename || '')}: ${String(item.reason || '')}`).join('; ')}`
         : '';
       setManualUploadMessage(`${summary.indexed || 0} archivos indexados. ${summary.folders_indexed || 0} carpetas indexadas. ${summary.skipped || 0} omitidos.${errors}`);
       setManualUploadFiles([]);
       setManualUploadOpen(false);
       await loadSources();
       await loadDocuments();
-    } catch (error: any) {
-      setManualUploadMessage(error.message || 'No fue posible cargar documentos.');
+    } catch (error) {
+      setManualUploadMessage(getErrorMessage(error, 'No fue posible cargar documentos.'));
     } finally {
       setWorking('');
     }
@@ -1032,8 +1062,8 @@ export default function UnifiedEvidenceLibrary({
       );
       await loadDetail();
       await loadDocuments();
-    } catch (error: any) {
-      alert(error.message || 'No fue posible actualizar la asociacion.');
+    } catch (error) {
+      alert(getErrorMessage(error, 'No fue posible actualizar la asociacion.'));
     } finally {
       setWorking('');
     }
@@ -1049,8 +1079,8 @@ export default function UnifiedEvidenceLibrary({
       });
       await loadDetail();
       await loadDocuments();
-    } catch (error: any) {
-      alert(error.message || 'No fue posible revisar la sugerencia.');
+    } catch (error) {
+      alert(getErrorMessage(error, 'No fue posible revisar la sugerencia.'));
     } finally {
       setWorking('');
     }
@@ -1654,9 +1684,9 @@ export default function UnifiedEvidenceLibrary({
                   <div className="space-y-3 text-sm">
                     <Info label="Tipo de elemento" value={itemTypeLabel(selected.item_type)} />
                     {selectedIsExcluded && <Info label="Estado del índice" value="Excluido" />}
-                    <Info label="Tipo sugerido" value={typeLabel(detail?.document?.profile?.document_type || selected.document_type)} />
-                    <Info label="Estado semantico" value={detail?.document?.profile?.semantic_status || selected.semantic_status || 'not_processed'} />
-                    <Info label="Score de utilidad" value={detail?.document?.profile?.usefulness_score ? `${detail.document.profile.usefulness_score}%` : selected.usefulness_score ? `${selected.usefulness_score}%` : '-'} />
+                    <Info label="Tipo sugerido" value={typeLabel(String(selectedProfile.document_type || selected.document_type || ''))} />
+                    <Info label="Estado semantico" value={String(selectedProfile.semantic_status || selected.semantic_status || 'not_processed')} />
+                    <Info label="Score de utilidad" value={selectedProfile.usefulness_score ? `${selectedProfile.usefulness_score}%` : selected.usefulness_score ? `${selected.usefulness_score}%` : '-'} />
                     <Info label="Ultima indexacion" value={formatDate(selected.last_indexed_at)} />
                     {selectedCanOpen && (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -1853,7 +1883,7 @@ export default function UnifiedEvidenceLibrary({
   );
 }
 
-function Info({ label, value }: { label: string; value: any }) {
+function Info({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
       <div className="text-xs uppercase text-slate-400">{label}</div>

@@ -4,6 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return fallback;
+}
+
 type Integration = {
   id: string;
   provider: string;
@@ -60,9 +69,9 @@ type DocumentAnalysis = {
   summary?: string | null;
   confidence_score?: number | string | null;
   evidence_quality?: string | null;
-  missing_elements?: any;
-  recommended_actions?: any;
-  analysis_json?: any;
+  missing_elements?: unknown;
+  recommended_actions?: unknown;
+  analysis_json?: unknown;
   created_at?: string | null;
 };
 
@@ -123,7 +132,7 @@ function pct(value?: number | string | null) {
   return `${Math.round(n * 100)}%`;
 }
 
-function asArray(value: any): string[] {
+function asArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((item) => String(item));
   if (typeof value === 'string' && value.trim()) {
     try {
@@ -298,8 +307,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
         ...(approvedSuggestionsJson.suggestions || []),
         ...(supersededSuggestionsJson.suggestions || []),
       ]);
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible cargar fuentes documentales.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible cargar fuentes documentales.'));
     } finally {
       setLoading(false);
     }
@@ -318,8 +327,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       });
       if (!json.auth_url) throw new Error('Google no devolvió URL de autorización.');
       window.location.href = json.auth_url;
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible iniciar Google Drive.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible iniciar Google Drive.'));
     } finally {
       setWorking('');
     }
@@ -331,8 +340,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       const json = await fetchJson(`${API_URL}/api/document-integrations/zoho/oauth/start`);
       if (!json.auth_url) throw new Error('Zoho no devolvió URL de autorización.');
       window.location.href = json.auth_url;
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible iniciar Zoho WorkDrive.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible iniciar Zoho WorkDrive.'));
     } finally {
       setWorking('');
     }
@@ -356,8 +365,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       setMountedSharePath('');
       setSourceName('');
       await refresh();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible crear la fuente mounted_share.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible crear la fuente mounted_share.'));
     } finally {
       setWorking('');
     }
@@ -376,8 +385,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       setPairingExpiresAt(json.expires_at || '');
       setMessage('Código de vinculación generado. Se muestra una sola vez.');
       await refresh();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible generar código de vinculación.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible generar código de vinculación.'));
     } finally {
       setWorking('');
     }
@@ -391,8 +400,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
         `${API_URL}/api/document-integrations/google/folders?tenant_id=${tenantId}&integration_id=${googleIntegration.id}&parent_id=${encodeURIComponent(parent.id)}`
       );
       setFolders(json.folders || []);
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible listar carpetas.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible listar carpetas.'));
     } finally {
       setWorking('');
     }
@@ -437,8 +446,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       setMessage(`Fuente documental creada: ${folder.name}`);
       setFolderOpen(false);
       await refresh();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible crear la fuente documental.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible crear la fuente documental.'));
     } finally {
       setWorking('');
     }
@@ -452,8 +461,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       });
       setMessage(`Sincronización finalizada: ${source.source_name}`);
       await refresh();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible sincronizar la fuente.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible sincronizar la fuente.'));
     } finally {
       setWorking('');
     }
@@ -468,8 +477,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       });
       setMessage(`Fuente desconectada: ${source.source_name}. Las evidencias históricas se conservan.`);
       await refresh();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible desconectar la fuente.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible desconectar la fuente.'));
     } finally {
       setWorking('');
     }
@@ -481,8 +490,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       setSelectedAnalysisDocument(doc);
       const json = await fetchJson(`${API_URL}/api/document-integrations/documents/${doc.id}/analysis?tenant_id=${tenantId}`);
       setDocumentAnalyses(json.analyses || []);
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible cargar análisis del documento.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible cargar análisis del documento.'));
     } finally {
       setWorking('');
     }
@@ -504,8 +513,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
           : `Análisis generado para: ${doc.file_name}. No se crearon sugerencias nuevas.`
       );
       await refresh();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible analizar el documento.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible analizar el documento.'));
     } finally {
       setWorking('');
     }
@@ -527,8 +536,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       );
 
       await refresh();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible revisar la sugerencia.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible revisar la sugerencia.'));
     } finally {
       setWorking('');
     }
@@ -550,8 +559,8 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
       }
 
       await refresh();
-    } catch (err: any) {
-      setMessage(err.message || 'No fue posible crear evidencia desde la sugerencia.');
+    } catch (err) {
+      setMessage(getErrorMessage(err, 'No fue posible crear evidencia desde la sugerencia.'));
     } finally {
       setWorking('');
     }

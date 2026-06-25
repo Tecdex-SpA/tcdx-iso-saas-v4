@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
@@ -18,6 +18,25 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
 const AI_RECOMMENDATION_THRESHOLD = 80;
+
+type UnknownRecord = { [key: string]: unknown };
+
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+  company_id?: string | null;
+  companyId?: string | null;
+  role?: string | null;
+};
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
 
 async function openAuthorizedFile(url: string, token: string | null) {
   if (!token) {
@@ -89,9 +108,9 @@ type EvidenceRow = {
   recommended_control_id?: string | null;
   ai_headline?: string | null;
   ai_narrative?: string | null;
-  ai_risks?: any;
-  ai_next_steps?: any;
-  ai_entities?: any;
+  ai_risks?: unknown;
+  ai_next_steps?: unknown;
+  ai_entities?: unknown;
   control_fit?: string | null;
   gap_summary?: string | null;
   appears_expired?: boolean | null;
@@ -111,8 +130,8 @@ type EvidenceRow = {
   ai_source_label?: string | null;
   ai_confidence?: string | null;
   ai_confidence_score?: number | string | null;
-  ai_orchestration_json?: any;
-  ai_enhanced_answer_json?: any;
+  ai_orchestration_json?: unknown;
+  ai_enhanced_answer_json?: unknown;
 };
 
 type ScopeStandard = {
@@ -129,7 +148,7 @@ type ScopeResponse = {
     mapping_must_be_active: boolean;
     operation_must_be_active: boolean;
   };
-  operations?: any[];
+  operations?: OperationOption[];
   standards?: ScopeStandard[];
 };
 
@@ -166,56 +185,57 @@ type EvidenceCandidate = {
 };
 
 
-function aiTraceText(value: any, fallback = '') {
+function aiTraceText(value: unknown, fallback = '') {
   return String(value ?? fallback ?? '').trim();
 }
 
 function getEvidenceAiTrace(row: EvidenceRow) {
-  const orchestration = row.ai_orchestration_json || {};
-  const answer = row.ai_enhanced_answer_json || {};
-  const searchTrace = orchestration?.search_trace || {};
+  const orchestration = asRecord(row.ai_orchestration_json);
+  const answer = asRecord(row.ai_enhanced_answer_json);
+  const traceRecord = asRecord(orchestration.trace);
+  const searchTrace = asRecord(orchestration.search_trace);
 
   const sourceLevel = aiTraceText(
     row.ai_source_level ||
-      orchestration?.source_level ||
-      answer?.source_level ||
+      orchestration.source_level ||
+      answer.source_level ||
       ''
   );
 
   const sourceLabel = aiTraceText(
     row.ai_source_label ||
-      orchestration?.source_label ||
-      answer?.source_label ||
+      orchestration.source_label ||
+      answer.source_label ||
       ''
   );
 
   const confidence = aiTraceText(
     row.ai_confidence ||
-      orchestration?.confidence ||
-      answer?.confidence ||
+      orchestration.confidence ||
+      answer.confidence ||
       ''
   );
 
   const confidenceScore =
     row.ai_confidence_score ||
-    orchestration?.confidence_score ||
-    answer?.confidence_score ||
+    orchestration.confidence_score ||
+    answer.confidence_score ||
     null;
 
   const traceId = aiTraceText(
     row.ai_trace_id ||
-      orchestration?.trace?.id ||
+      traceRecord.id ||
       ''
   );
 
-  const sourceOrder = Array.isArray(searchTrace?.source_order)
-    ? searchTrace.source_order
+  const sourceOrder = Array.isArray(searchTrace.source_order)
+    ? searchTrace.source_order.map((item) => aiTraceText(item)).filter(Boolean)
     : [];
 
-  const tenantHits = Number(searchTrace?.tenant_hits ?? 0);
-  const knowledgeHits = Number(searchTrace?.knowledge_hits ?? 0);
-  const benchmarkHits = Number(searchTrace?.benchmark_hits ?? 0);
-  const externalHits = Number(searchTrace?.external_hits ?? 0);
+  const tenantHits = Number(searchTrace.tenant_hits ?? 0);
+  const knowledgeHits = Number(searchTrace.knowledge_hits ?? 0);
+  const benchmarkHits = Number(searchTrace.benchmark_hits ?? 0);
+  const externalHits = Number(searchTrace.external_hits ?? 0);
 
   const hasTrace =
     Boolean(traceId) ||
@@ -240,13 +260,13 @@ function getEvidenceAiTrace(row: EvidenceRow) {
     knowledgeHits,
     benchmarkHits,
     externalHits,
-    executiveSummary: aiTraceText(answer?.executive_summary || ''),
-    recommendation: aiTraceText(answer?.recommendation || ''),
-    suggestedEvidence: Array.isArray(answer?.suggested_evidence)
-      ? answer.suggested_evidence
+    executiveSummary: aiTraceText(answer.executive_summary || ''),
+    recommendation: aiTraceText(answer.recommendation || ''),
+    suggestedEvidence: Array.isArray(answer.suggested_evidence)
+      ? answer.suggested_evidence.map((item) => aiTraceText(item)).filter(Boolean)
       : [],
-    nextSteps: Array.isArray(answer?.next_steps)
-      ? answer.next_steps
+    nextSteps: Array.isArray(answer.next_steps)
+      ? answer.next_steps.map((item) => aiTraceText(item)).filter(Boolean)
       : [],
   };
 }
@@ -272,7 +292,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
     t('evidence.ai.engine');
 
   const sourceOrderText = trace.sourceOrder.length
-    ? trace.sourceOrder.map((item: string) => sourceLabels[item] || item).join(' → ')
+    ? trace.sourceOrder.map((item) => sourceLabels[item] || item).join(' → ')
     : t('evidence.ai.notReported');
 
   const sourceClass =
@@ -381,7 +401,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
                 </div>
 
                 <ul className="space-y-2 text-sm text-slate-700">
-                  {trace.suggestedEvidence.slice(0, 8).map((item: string, index: number) => (
+                  {trace.suggestedEvidence.slice(0, 8).map((item, index: number) => (
                     <li
                       key={`${item}-${index}`}
                       className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
@@ -400,7 +420,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
                 </div>
 
                 <ul className="space-y-2 text-sm text-slate-700">
-                  {trace.nextSteps.slice(0, 8).map((item: string, index: number) => (
+                  {trace.nextSteps.slice(0, 8).map((item, index: number) => (
                     <li
                       key={`${item}-${index}`}
                       className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
@@ -419,7 +439,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
 }
 
 
-function resolveTenantId(user: any): string {
+function resolveTenantId(user: AuthUser | null): string {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -474,7 +494,7 @@ function EvidenciasPageContent() {
   const [healthRefreshing, setHealthRefreshing] = useState(false);
 
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const [focusedEvidenceId, setFocusedEvidenceId] = useState('');
   const [aiAuditorDraft, setAiAuditorDraft] = useState<AiAuditorDraftPayload | null>(null);
@@ -781,14 +801,14 @@ function EvidenciasPageContent() {
     return 'pendiente';
   };
 
-  const toNumber = (value: any) => {
+  const toNumber = (value: unknown) => {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
   };
 
-  const toPercent = (value: any) => `${Math.round(toNumber(value))}%`;
+  const toPercent = (value: unknown) => `${Math.round(toNumber(value))}%`;
 
-  const parseArray = (value: any): string[] => {
+  const parseArray = (value: unknown): string[] => {
     if (Array.isArray(value)) return value.map((item) => String(item));
     if (typeof value === 'string' && value.trim()) {
       try {
@@ -852,7 +872,7 @@ function EvidenciasPageContent() {
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');
-    const u = getUserFromToken();
+    const u = getUserFromToken() as AuthUser | null;
     const resolvedTenantId = resolveTenantId(u);
 
     setToken(authToken);
@@ -2136,7 +2156,7 @@ function MetricCard({ title, value }: { title: string; value: number }) {
   );
 }
 
-function InfoBox({ label, value }: { label: string; value: any }) {
+function InfoBox({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
       <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
@@ -2193,10 +2213,14 @@ function ListCard({
   );
 }
 
-function formatDate(value: any) {
+function formatDate(value: unknown) {
   if (!value) return '-';
 
-  const date = new Date(value);
+  const dateValue =
+    value instanceof Date || typeof value === 'string' || typeof value === 'number'
+      ? value
+      : String(value);
+  const date = new Date(dateValue);
 
   if (Number.isNaN(date.getTime())) {
     return String(value).slice(0, 10);
@@ -2209,10 +2233,14 @@ function formatDate(value: any) {
   });
 }
 
-function formatDateTime(value: any) {
+function formatDateTime(value: unknown) {
   if (!value) return '-';
 
-  const date = new Date(value);
+  const dateValue =
+    value instanceof Date || typeof value === 'string' || typeof value === 'number'
+      ? value
+      : String(value);
+  const date = new Date(dateValue);
 
   if (Number.isNaN(date.getTime())) {
     return String(value);
