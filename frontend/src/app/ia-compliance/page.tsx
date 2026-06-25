@@ -169,6 +169,43 @@ type EngineHealthResponse = {
   };
 };
 
+type UnknownRecord = Record<string, unknown>;
+
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+  company_id?: string | null;
+  companyId?: string | null;
+};
+
+type StructuredComplianceItem = {
+  title?: string;
+  description?: string;
+  severity?: string;
+  iso?: string;
+  clause?: string;
+};
+
+type StructuredSourceTrace = {
+  source?: string;
+  reference?: string;
+};
+
+type StructuredComplianceResult = {
+  executive_summary?: string;
+  diagnosis?: string;
+  confidence?: number | string;
+  gaps?: StructuredComplianceItem[];
+  recommended_actions?: StructuredComplianceItem[];
+  auditor_questions?: string[];
+  source_trace?: StructuredSourceTrace[];
+  limitations?: string[];
+  evidence_assessment?: {
+    missing_evidence?: string[];
+  };
+};
+
 type HealthSummaryResponse = {
   ok: boolean;
   context?: {
@@ -188,56 +225,74 @@ type HealthSummaryResponse = {
     suggestions?: string[];
     confidence?: string;
     source?: string;
-    structured_result?: any;
-    source_trace?: any[];
+    structured_result?: StructuredComplianceResult;
+    source_trace?: StructuredSourceTrace[];
     limitations?: string[];
-    engine?: any;
+    engine?: UnknownRecord;
   };
   answer?: string;
-  structured_result?: any;
-  source_trace?: any[];
+  structured_result?: StructuredComplianceResult;
+  source_trace?: StructuredSourceTrace[];
   confidence?: number;
   limitations?: string[];
-  engine?: any;
+  engine?: UnknownRecord;
 };
 
 type ExecutiveBriefResponse = {
   ok: boolean;
-  context?: any;
+  context?: UnknownRecord;
   ai?: {
     headline: string;
     executive_summary: string;
     top_priorities: string[];
     management_actions: string[];
     confidence?: string;
-    structured_result?: any;
-    source_trace?: any[];
+    structured_result?: StructuredComplianceResult;
+    source_trace?: StructuredSourceTrace[];
     limitations?: string[];
-    engine?: any;
+    engine?: UnknownRecord;
   };
   answer?: string;
-  structured_result?: any;
-  source_trace?: any[];
+  structured_result?: StructuredComplianceResult;
+  source_trace?: StructuredSourceTrace[];
   confidence?: number;
   limitations?: string[];
-  engine?: any;
+  engine?: UnknownRecord;
 };
 
-function severityTone(value: any) {
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (isRecord(error) && typeof error.message === 'string' && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function severityTone(value: unknown) {
   const normalized = String(value || '').toLowerCase();
   if (['alta', 'high', 'critical', 'critica', 'crítica'].includes(normalized)) return 'border-red-200 bg-red-50 text-red-700';
   if (['media', 'medium'].includes(normalized)) return 'border-amber-200 bg-amber-50 text-amber-700';
   return 'border-emerald-200 bg-emerald-50 text-emerald-700';
 }
 
-function confidenceTone(value: any) {
+function confidenceTone(value: unknown) {
   const numeric = Number(value || 0);
   if (numeric >= 0.7) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   if (numeric >= 0.4) return 'border-amber-200 bg-amber-50 text-amber-700';
   return 'border-red-200 bg-red-50 text-red-700';
 }
 
-function sourceTone(value: any) {
+function sourceTone(value: unknown) {
   const normalized = String(value || '').toLowerCase();
   if (normalized === 'internal_db') return 'border-indigo-200 bg-indigo-50 text-indigo-700';
   if (normalized === 'rag') return 'border-violet-200 bg-violet-50 text-violet-700';
@@ -250,10 +305,10 @@ function StructuredCompliancePanel({
   result,
   copy,
 }: {
-  result: any;
+  result: StructuredComplianceResult | null;
   copy: IaComplianceCopy;
 }) {
-  if (!result || typeof result !== 'object') return null;
+  if (!result) return null;
 
   const gaps = Array.isArray(result.gaps) ? result.gaps : [];
   const actions = Array.isArray(result.recommended_actions) ? result.recommended_actions : [];
@@ -292,7 +347,7 @@ function StructuredCompliancePanel({
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="text-sm font-bold text-slate-900">{copy.gaps}</div>
             <div className="mt-3 space-y-3">
-              {gaps.slice(0, 4).map((gap: any, index: number) => (
+              {gaps.slice(0, 4).map((gap, index) => (
                 <div key={index} className="rounded-xl bg-white p-3 ring-1 ring-slate-100">
                   <div className="flex flex-wrap gap-2">
                     <span className={`rounded-full border px-2 py-1 text-[11px] font-bold ${severityTone(gap.severity)}`}>{gap.severity || '-'}</span>
@@ -310,7 +365,7 @@ function StructuredCompliancePanel({
           <div className="rounded-xl border border-violet-100 bg-violet-50 p-4">
             <div className="text-sm font-bold text-violet-950">{copy.recommendedActions}</div>
             <div className="mt-3 space-y-3">
-              {actions.slice(0, 4).map((action: any, index: number) => (
+              {actions.slice(0, 4).map((action, index) => (
                 <div key={index} className="rounded-xl bg-white p-3 ring-1 ring-violet-100">
                   <div className="text-sm font-bold text-slate-900">{action.title}</div>
                   <p className="mt-1 text-sm leading-6 text-slate-600">{action.description}</p>
@@ -335,7 +390,7 @@ function StructuredCompliancePanel({
 
       {sources.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {sources.slice(0, 8).map((source: any, index: number) => (
+          {sources.slice(0, 8).map((source, index) => (
             <span key={index} className={`rounded-full border px-3 py-1 text-xs font-bold ${sourceTone(source.source)}`}>
               {source.source}: {source.reference}
             </span>
@@ -346,7 +401,7 @@ function StructuredCompliancePanel({
   );
 }
 
-function SmallList({ title, items }: { title: string; items: any[] }) {
+function SmallList({ title, items }: { title: string; items: unknown[] }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="text-sm font-bold text-slate-900">{title}</div>
@@ -364,7 +419,7 @@ type SuggestionRow = {
   status: string;
   confidence: string | null;
   created_at: string;
-  output_payload: Record<string, any> | null;
+  output_payload: Record<string, unknown> | null;
 };
 
 export default function IaCompliancePage() {
@@ -373,7 +428,7 @@ export default function IaCompliancePage() {
   const canUseAiCompliance = !entitlementsLoading && canUseAiFeature('suggestions');
   const copy: IaComplianceCopy = locale === 'en' ? IA_COMPLIANCE_COPY.en : IA_COMPLIANCE_COPY.es;
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [briefLoading, setBriefLoading] = useState(false);
@@ -384,7 +439,7 @@ export default function IaCompliancePage() {
   const [executiveBrief, setExecutiveBrief] = useState<ExecutiveBriefResponse | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
 
-  const getWithAuth = useCallback(async (url: string) => {
+  const getWithAuth = useCallback(async <T,>(url: string): Promise<T> => {
     const authToken = localStorage.getItem('token');
 
     if (!authToken) {
@@ -401,7 +456,7 @@ export default function IaCompliancePage() {
 
     const text = await res.text();
 
-    let json: any = null;
+    let json: unknown = null;
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
@@ -409,10 +464,11 @@ export default function IaCompliancePage() {
     }
 
     if (!res.ok) {
-      throw new Error(json?.error || json?.detail || 'Error consultando IA Compliance');
+      const errorBody = asRecord(json);
+      throw new Error(String(errorBody.error || errorBody.detail || 'Error consultando IA Compliance'));
     }
 
-    return json;
+    return json as T;
   }, [locale]);
 
   const loadAll = useCallback(async () => {
@@ -421,9 +477,9 @@ export default function IaCompliancePage() {
       setError('');
 
       const [engineResult, healthResult, draftsResult] = await Promise.allSettled([
-        getWithAuth(`${API_URL}/api/ai-compliance/engine-health`),
-        getWithAuth(`${API_URL}/api/ai-compliance/health-summary`),
-        getWithAuth(`${API_URL}/api/ai-compliance/suggestions`),
+        getWithAuth<EngineHealthResponse>(`${API_URL}/api/ai-compliance/engine-health`),
+        getWithAuth<HealthSummaryResponse>(`${API_URL}/api/ai-compliance/health-summary`),
+        getWithAuth<{ data?: SuggestionRow[] }>(`${API_URL}/api/ai-compliance/suggestions`),
       ]);
 
       if (engineResult.status === 'fulfilled') {
@@ -461,9 +517,9 @@ export default function IaCompliancePage() {
       if (engineResult.status === 'rejected') {
         setError(copy.engineWarning);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD IA COMPLIANCE DASHBOARD:', err);
-      setError(err.message || copy.genericError);
+      setError(getErrorMessage(err, copy.genericError));
     } finally {
       setLoading(false);
     }
@@ -497,14 +553,14 @@ export default function IaCompliancePage() {
       setBriefLoading(true);
       setError('');
 
-      const brief = await getWithAuth(
+      const brief = await getWithAuth<ExecutiveBriefResponse>(
         `${API_URL}/api/ai-compliance/executive-brief?period=current`
       );
 
       setExecutiveBrief(brief);
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD EXECUTIVE BRIEF IA COMPLIANCE:', err);
-      setError(err.message || copy.executiveBriefError);
+      setError(getErrorMessage(err, copy.executiveBriefError));
     } finally {
       setBriefLoading(false);
     }

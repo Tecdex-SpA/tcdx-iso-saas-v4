@@ -11,6 +11,31 @@ import { translateDisplayText, translateClauseLabel, translateControlLabel, tran
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+type UnknownRecord = Record<string, unknown>;
+
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+  company_id?: string | null;
+  companyId?: string | null;
+  role?: string | null;
+};
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (isRecord(error) && typeof error.message === 'string' && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 async function openAuthorizedFile(url: string, token: string | null) {
   if (!token) {
     alert('Sesión no disponible. Inicia sesión nuevamente.');
@@ -174,8 +199,10 @@ type EvidenceItem = {
   description?: string | null;
   file_name?: string | null;
   file_path?: string | null;
+  file_url?: string | null;
   web_view_url?: string | null;
-  metadata?: Record<string, any> | null;
+  evidence_type?: string | null;
+  metadata?: UnknownRecord | string | null;
   status?: string | null;
   validated?: boolean;
   reviewed_at?: string | null;
@@ -188,6 +215,7 @@ type EvidenceItem = {
   category?: string | null;
   control_description?: string | null;
   ai_acceptance_pct?: number | string | null;
+  suggestion_confidence_score?: number | string | null;
   validity_result?: string | null;
   contribution_level?: string | null;
   action_plan_id?: string | null;
@@ -195,7 +223,7 @@ type EvidenceItem = {
   linked_to_this_plan?: boolean;
 };
 
-function resolveTenantId(user: any): string {
+function resolveTenantId(user: AuthUser | null): string {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -221,19 +249,19 @@ function emptyDraft(item: WorkbenchItem): DraftItem {
 }
 
 
-function getEvidenceMetadataForDisplay(evidence: any): Record<string, any> {
+function getEvidenceMetadataForDisplay(evidence: EvidenceItem): UnknownRecord {
   const metadata = evidence?.metadata;
 
   if (!metadata) return {};
 
-  if (typeof metadata === 'object' && !Array.isArray(metadata)) {
+  if (isRecord(metadata)) {
     return metadata;
   }
 
   if (typeof metadata === 'string') {
     try {
-      const parsed = JSON.parse(metadata);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      const parsed: unknown = JSON.parse(metadata);
+      return isRecord(parsed) ? parsed : {};
     } catch {
       return {};
     }
@@ -242,7 +270,7 @@ function getEvidenceMetadataForDisplay(evidence: any): Record<string, any> {
   return {};
 }
 
-function getIntegratedEvidenceUrl(evidence: any): string {
+function getIntegratedEvidenceUrl(evidence: EvidenceItem): string {
   const metadata = getEvidenceMetadataForDisplay(evidence);
 
   return String(
@@ -253,7 +281,7 @@ function getIntegratedEvidenceUrl(evidence: any): string {
   ).trim();
 }
 
-function isIntegratedEvidence(evidence: any): boolean {
+function isIntegratedEvidence(evidence: EvidenceItem): boolean {
   const metadata = getEvidenceMetadataForDisplay(evidence);
 
   return (
@@ -326,8 +354,8 @@ function healthCardClass(status?: string | null) {
 
 
 
-function isOfficialIntegratedEvidence(evidence: any): boolean {
-  const metadata = evidence?.metadata || {};
+function isOfficialIntegratedEvidence(evidence: EvidenceItem): boolean {
+  const metadata = getEvidenceMetadataForDisplay(evidence);
   return (
     isIntegratedEvidence(evidence) &&
     (
@@ -338,14 +366,15 @@ function isOfficialIntegratedEvidence(evidence: any): boolean {
   );
 }
 
-function getIntegratedEvidenceCompliancePct(evidence: any): number | null {
+function getIntegratedEvidenceCompliancePct(evidence: EvidenceItem): number | null {
+  const metadata = getEvidenceMetadataForDisplay(evidence);
   const direct = Number(evidence?.ai_acceptance_pct)
   if (Number.isFinite(direct) && direct > 0) return Math.round(direct)
 
   const confidence = Number(
     evidence?.suggestion_confidence_score ||
-    evidence?.metadata?.suggestion_confidence_score ||
-    evidence?.metadata?.confidence_score
+    metadata.suggestion_confidence_score ||
+    metadata.confidence_score
   )
 
   if (Number.isFinite(confidence) && confidence > 0) {
@@ -436,7 +465,7 @@ function ControlesPageContent() {
   const focusOperationId = searchParams.get('operation_id') || '';
 
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const [scope, setScope] = useState<ScopeResponse>({ operations: [], standards: [] });
 
@@ -536,10 +565,10 @@ function ControlesPageContent() {
         operations: Array.isArray(json?.operations) ? json.operations : [],
         standards: Array.isArray(json?.standards) ? json.standards : [],
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD CONTROLS SCOPE:', err);
       setScope({ operations: [], standards: [] });
-      setErrorMessage(err?.message || 'Error cargando alcance');
+      setErrorMessage(getErrorMessage(err, 'Error cargando alcance'));
     } finally {
       setLoadingScope(false);
     }
@@ -637,10 +666,10 @@ function ControlesPageContent() {
       }
 
       setCatalog(json);
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD CONTROL CATALOG:', err);
       setCatalog(null);
-      setErrorMessage(err?.message || 'Error cargando catálogo');
+      setErrorMessage(getErrorMessage(err, 'Error cargando catálogo'));
     } finally {
       setLoadingCatalog(false);
     }
@@ -675,10 +704,10 @@ function ControlesPageContent() {
       }
 
       setWorkbench(json);
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD CONTROL WORKBENCH:', err);
       setWorkbench(null);
-      setErrorMessage(err?.message || 'Error cargando workbench');
+      setErrorMessage(getErrorMessage(err, 'Error cargando workbench'));
     } finally {
       setLoadingWorkbench(false);
     }
@@ -1055,7 +1084,7 @@ function ControlesPageContent() {
 
   const markIntegratedEvidenceAsOfficial = async (
     item: WorkbenchItem,
-    evidence: any
+    evidence: EvidenceItem
   ) => {
     const pct = getIntegratedEvidenceCompliancePct(evidence) || 100
 
@@ -1102,9 +1131,9 @@ function ControlesPageContent() {
       await loadWorkbench(tenantId, token || '', selectedISO, selectedOperationId);
       await loadEvidencesForControl(item.tenant_control_id);
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR MARK INTEGRATED EVIDENCE OFFICIAL:', err)
-      setErrorMessage(err?.message || 'Error estableciendo evidencia oficial')
+      setErrorMessage(getErrorMessage(err, 'Error estableciendo evidencia oficial'))
     } finally {
       setActionLoading('')
     }
@@ -2086,16 +2115,16 @@ function ControlesPageContent() {
 
                                               <div className="mt-2 grid gap-2 text-xs text-blue-800 md:grid-cols-2 xl:grid-cols-4">
                                                 <span>
-                                                  Norma: <b>{getEvidenceMetadataForDisplay(evidence).suggested_standard_code || '—'}</b>
+                                                  Norma: <b>{String(getEvidenceMetadataForDisplay(evidence).suggested_standard_code || '—')}</b>
                                                 </span>
                                                 <span>
-                                                  Control: <b>{getEvidenceMetadataForDisplay(evidence).suggested_control_ref || '—'}</b>
+                                                  Control: <b>{String(getEvidenceMetadataForDisplay(evidence).suggested_control_ref || '—')}</b>
                                                 </span>
                                                 <span>
-                                                  Fuente: <b>{getEvidenceMetadataForDisplay(evidence).source_name || '—'}</b>
+                                                  Fuente: <b>{String(getEvidenceMetadataForDisplay(evidence).source_name || '—')}</b>
                                                 </span>
                                                 <span>
-                                                  Carpeta: <b>{getEvidenceMetadataForDisplay(evidence).folder_path || '—'}</b>
+                                                  Carpeta: <b>{String(getEvidenceMetadataForDisplay(evidence).folder_path || '—')}</b>
                                                 </span>
                                               </div>
 
@@ -2105,7 +2134,7 @@ function ControlesPageContent() {
                                             </div>
                                           )}
 
-                                          {(evidence.file_path || evidence.web_view_url || evidence.metadata?.web_view_url) && (
+                                          {(evidence.file_path || getIntegratedEvidenceUrl(evidence)) && (
                                             <div className="flex flex-wrap gap-2">
                                               {evidence.file_path && (
                                                 <button

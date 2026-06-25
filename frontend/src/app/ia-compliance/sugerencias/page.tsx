@@ -8,6 +8,14 @@ import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+type UnknownRecord = Record<string, unknown>;
+
+type AuthUser = {
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  tenant?: string | null;
+};
+
 type SuggestionRow = {
   id: string;
   tenant_id: string;
@@ -16,8 +24,8 @@ type SuggestionRow = {
   source_entity_type: string | null;
   source_entity_id: string | null;
   title: string | null;
-  input_payload: Record<string, any> | null;
-  output_payload: Record<string, any> | null;
+  input_payload: UnknownRecord | null;
+  output_payload: UnknownRecord | null;
   confidence: string | null;
   status: string;
   created_by: string | null;
@@ -33,7 +41,25 @@ type PreviewData = {
 };
 
 
-function aiTraceText(value: any, fallback = '') {
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+
+  if (isRecord(error) && typeof error.message === 'string' && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function aiTraceText(value: unknown, fallback = '') {
   return String(value ?? fallback ?? '').trim();
 }
 
@@ -96,16 +122,16 @@ function buildOriginSummary(row: SuggestionRow) {
 
 function getSuggestionAiTrace(row: SuggestionRow) {
   const output = row.output_payload || {};
-  const structuredResult = output.structured_result || output.enhanced_answer?.structured_result || {};
-  const enhanced = output.enhanced_orchestration || output.enhanced || {};
-  const enhancedAnswer = output.enhanced_answer || enhanced.answer || {};
-  const structured = output.structured_guided || {};
-  const knowledgeSources = structured.knowledge_sources || {};
+  const enhancedAnswerRecord = asRecord(output.enhanced_answer);
+  const structuredResult = asRecord(output.structured_result || enhancedAnswerRecord.structured_result);
+  const enhanced = asRecord(output.enhanced_orchestration || output.enhanced);
+  const enhancedAnswer = asRecord(output.enhanced_answer || enhanced.answer);
+  const structured = asRecord(output.structured_guided);
+  const knowledgeSources = asRecord(structured.knowledge_sources);
   const searchTrace =
-    enhanced.search_trace ||
+    asRecord(enhanced.search_trace) ||
     knowledgeSources ||
-    output.search_trace ||
-    {};
+    asRecord(output.search_trace);
 
   const sourceLevel = aiTraceText(
     output.enhanced_source_level ||
@@ -144,14 +170,14 @@ function getSuggestionAiTrace(row: SuggestionRow) {
 
   const traceId = aiTraceText(
     output.enhanced_trace_id ||
-      enhanced.trace?.id ||
+      asRecord(enhanced.trace).id ||
       structured.trace_id ||
       knowledgeSources.trace_id ||
       ''
   );
 
   const sourceOrder = Array.isArray(searchTrace.source_order)
-    ? searchTrace.source_order
+    ? searchTrace.source_order.map((item) => aiTraceText(item)).filter(Boolean)
     : [];
 
   const tenantHits = Number(searchTrace.tenant_hits ?? 0);
@@ -187,11 +213,12 @@ function getSuggestionAiTrace(row: SuggestionRow) {
 
 function StructuredSuggestionResult({ row }: { row: SuggestionRow }) {
   const output = row.output_payload || {};
-  const structured = output.structured_result || output.enhanced_answer?.structured_result || null;
-  if (!structured || typeof structured !== 'object') return null;
+  const enhancedAnswer = asRecord(output.enhanced_answer);
+  const structured = asRecord(output.structured_result || enhancedAnswer.structured_result);
+  if (Object.keys(structured).length === 0) return null;
 
-  const gaps = Array.isArray(structured.gaps) ? structured.gaps : [];
-  const actions = Array.isArray(structured.recommended_actions) ? structured.recommended_actions : [];
+  const gaps = Array.isArray(structured.gaps) ? structured.gaps.filter(isRecord) : [];
+  const actions = Array.isArray(structured.recommended_actions) ? structured.recommended_actions.filter(isRecord) : [];
   const limitations = Array.isArray(structured.limitations) ? structured.limitations : [];
 
   return (
@@ -202,7 +229,7 @@ function StructuredSuggestionResult({ row }: { row: SuggestionRow }) {
             Resultado estructurado AI v2
           </div>
           <p className="mt-2 text-sm leading-6 text-indigo-950">
-            {structured.executive_summary || structured.diagnosis || 'Sin resumen estructurado.'}
+            {aiTraceText(structured.executive_summary || structured.diagnosis, 'Sin resumen estructurado.')}
           </p>
         </div>
         <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-indigo-700 ring-1 ring-indigo-100">
@@ -213,10 +240,10 @@ function StructuredSuggestionResult({ row }: { row: SuggestionRow }) {
       {(gaps.length > 0 || actions.length > 0 || limitations.length > 0) && (
         <div className="mt-4 grid gap-3 lg:grid-cols-3">
           {gaps.length > 0 && (
-            <MiniStructuredList title="Brechas" items={gaps.slice(0, 3).map((item: any) => item.title || item.description)} />
+            <MiniStructuredList title="Brechas" items={gaps.slice(0, 3).map((item) => item.title || item.description)} />
           )}
           {actions.length > 0 && (
-            <MiniStructuredList title="Acciones" items={actions.slice(0, 3).map((item: any) => item.title || item.description)} />
+            <MiniStructuredList title="Acciones" items={actions.slice(0, 3).map((item) => item.title || item.description)} />
           )}
           {limitations.length > 0 && (
             <MiniStructuredList title="Limitaciones" items={limitations.slice(0, 3)} />
@@ -227,7 +254,7 @@ function StructuredSuggestionResult({ row }: { row: SuggestionRow }) {
   );
 }
 
-function MiniStructuredList({ title, items }: { title: string; items: any[] }) {
+function MiniStructuredList({ title, items }: { title: string; items: unknown[] }) {
   return (
     <div className="rounded-xl bg-white p-3 ring-1 ring-indigo-100">
       <div className="text-sm font-bold text-slate-900">{title}</div>
@@ -330,7 +357,7 @@ export default function AiSuggestionsPage() {
   const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
   const canUseSuggestions = !entitlementsLoading && canUseAiFeature('suggestions');
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState('');
@@ -342,7 +369,7 @@ export default function AiSuggestionsPage() {
 
   const [rows, setRows] = useState<SuggestionRow[]>([]);
 
-  const getWithAuth = useCallback(async (url: string) => {
+  const getWithAuth = useCallback(async <T,>(url: string): Promise<T> => {
     const authToken = localStorage.getItem('token');
 
     if (!authToken) {
@@ -358,7 +385,7 @@ export default function AiSuggestionsPage() {
 
     const text = await res.text();
 
-    let json: any = null;
+    let json: unknown = null;
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
@@ -366,13 +393,14 @@ export default function AiSuggestionsPage() {
     }
 
     if (!res.ok) {
-      throw new Error(json?.error || json?.detail || 'Error consultando sugerencias IA');
+      const errorBody = asRecord(json);
+      throw new Error(String(errorBody.error || errorBody.detail || 'Error consultando sugerencias IA'));
     }
 
-    return json;
+    return json as T;
   }, []);
 
-  const postWithAuth = async (url: string, body: any) => {
+  const postWithAuth = async <T,>(url: string, body: unknown): Promise<T> => {
     const authToken = localStorage.getItem('token');
 
     if (!authToken) {
@@ -391,7 +419,7 @@ export default function AiSuggestionsPage() {
 
     const text = await res.text();
 
-    let json: any = null;
+    let json: unknown = null;
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
@@ -399,10 +427,11 @@ export default function AiSuggestionsPage() {
     }
 
     if (!res.ok) {
-      throw new Error(json?.error || json?.detail || 'Error aplicando sugerencia IA');
+      const errorBody = asRecord(json);
+      throw new Error(String(errorBody.error || errorBody.detail || 'Error aplicando sugerencia IA'));
     }
 
-    return json;
+    return json as T;
   };
 
   const loadSuggestions = useCallback(async (forcedType?: string) => {
@@ -418,17 +447,17 @@ export default function AiSuggestionsPage() {
         params.append('suggestion_type', effectiveType);
       }
 
-      const json = await getWithAuth(
+      const json = await getWithAuth<{ data?: SuggestionRow[] }>(
         `${API_URL}/api/ai-compliance/suggestions${
           params.toString() ? `?${params.toString()}` : ''
         }`
       );
 
       setRows(Array.isArray(json?.data) ? json.data : []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR LOAD AI SUGGESTIONS:', err);
       setRows([]);
-      setError(err.message || 'No fue posible cargar las sugerencias IA.');
+      setError(getErrorMessage(err, 'No fue posible cargar las sugerencias IA.'));
     } finally {
       setLoading(false);
     }
@@ -465,7 +494,10 @@ export default function AiSuggestionsPage() {
       setSavingId(`${row.id}-${applyMode}`);
       setError('');
 
-      const result = await postWithAuth(
+      const result = await postWithAuth<{
+        data?: Partial<SuggestionRow>;
+        applied_artifact?: unknown;
+      }>(
         `${API_URL}/api/ai-compliance/suggestions/${row.id}/apply`,
         {
           apply_mode: applyMode,
@@ -486,9 +518,9 @@ export default function AiSuggestionsPage() {
       } else {
         alert('Sugerencia marcada como aplicada.');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('ERROR APPLY AI SUGGESTION:', err);
-      setError(err.message || 'No fue posible aplicar la sugerencia IA.');
+      setError(getErrorMessage(err, 'No fue posible aplicar la sugerencia IA.'));
     } finally {
       setSavingId('');
     }
