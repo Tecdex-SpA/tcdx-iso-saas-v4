@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import {
   decodeJwtPayload,
   getHomePathByRole,
@@ -121,7 +122,7 @@ export default function LoginPage() {
         <div className="absolute bottom-0 left-0 right-0 h-40 bg-[linear-gradient(180deg,transparent_0%,rgba(16,185,129,0.08)_100%)]" />
         <div className="relative z-10 flex min-h-screen w-full flex-col justify-between p-10">
         <div>
-          <img src="/logo.png" className="mb-10 w-56" alt="TCDX Compliance" />
+          <Image src="/logo.png" width={224} height={80} className="mb-10 w-56" alt="TCDX Compliance" priority />
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-100/80">
             <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.8)]" />
             Plataforma SaaS B2B ISO
@@ -189,7 +190,7 @@ export default function LoginPage() {
 
           <div className="mb-8 text-center">
             <div className="mb-5 flex justify-center md:hidden">
-              <img src="/logo.png" className="h-16 w-auto object-contain" alt="TCDX Compliance" />
+              <Image src="/logo.png" width={224} height={64} className="h-16 w-auto object-contain" alt="TCDX Compliance" priority />
             </div>
 
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import AppLayout from '@/components/AppLayout';
 import { getUserRoleFromToken } from '@/utils/auth';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
@@ -1039,9 +1040,12 @@ export default function ExportesPage() {
           <div className="rounded-3xl border border-slate-200 bg-[#0B2F4F] p-5 text-white shadow-sm">
             <div className="flex items-start gap-4">
               {selectedClient?.logo_url ? (
-                <img
+                <Image
                   src={getAbsoluteFileUrl(selectedClient.logo_url)}
                   alt={selectedClient.name}
+                  width={56}
+                  height={56}
+                  unoptimized
                   className="h-14 w-14 rounded-2xl border border-white/10 bg-white/10 object-cover"
                 />
               ) : (
