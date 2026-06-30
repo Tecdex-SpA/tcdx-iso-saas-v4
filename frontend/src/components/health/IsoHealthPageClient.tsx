@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getUserFromToken } from '@/utils/auth';
-import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
