@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -386,17 +387,23 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       <div className={`relative z-10 mb-7 flex min-h-20 items-center border-b border-white/10 pb-5 ${collapsed ? 'justify-center' : 'justify-center'}`}>
         {collapsed ? (
           <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/12 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_12px_30px_rgba(0,0,0,0.18)]">
-            <img
+            <Image
               src={SERVICE_LOGO_SRC}
               alt="ISOS-SAAS-TECDEX"
+              width={64}
+              height={64}
+              unoptimized
               className="h-full w-full object-contain"
             />
           </span>
         ) : (
           <div className="flex min-h-[124px] w-full items-center justify-center rounded-[22px] border border-white/12 bg-white/10 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_34px_rgba(0,0,0,0.18)]">
-            <img
+            <Image
               src={PLATFORM_WORDMARK_SRC}
               alt="ISOS-SAAS-TECDEX Compliance 360"
+              width={224}
+              height={112}
+              unoptimized
               className="h-[112px] w-full max-w-[224px] object-contain"
             />
           </div>
@@ -463,7 +470,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       <div className={['relative z-10 mt-4 border-t border-white/10 pt-4', collapsed ? 'flex justify-center' : ''].join(' ')}>
         {collapsed ? (
           <div title={t('sidebar.poweredBy')} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/8 ring-1 ring-white/10">
-            <img src={SERVICE_LOGO_SRC} alt="Tecdex" className="h-7 w-7 object-contain" />
+            <Image src={SERVICE_LOGO_SRC} alt="Tecdex" width={28} height={28} unoptimized className="h-7 w-7 object-contain" />
           </div>
         ) : (
           <div className="rounded-lg border border-white/10 bg-white/8 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
@@ -481,7 +488,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 <p className="mt-1 truncate text-sm font-bold text-white">v2.4.1</p>
               </div>
             </div>
-            <img src={POWERED_BY_LOGO_SRC} alt="Tecdex" className="mt-3 h-8 w-auto object-contain opacity-80" />
+            <Image src={POWERED_BY_LOGO_SRC} alt="Tecdex" width={112} height={32} unoptimized className="mt-3 h-8 w-auto object-contain opacity-80" />
           </div>
         )}
       </div>

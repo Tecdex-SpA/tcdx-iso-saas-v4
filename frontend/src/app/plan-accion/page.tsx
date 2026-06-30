@@ -6,10 +6,10 @@ import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
-import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
+import { formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
-import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getComplianceStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
+import { getPriorityLabel, getComplianceStatusLabel, getEvidenceStatusLabel, getActionPlanStatusLabel, getCategoryLabel } from '@/i18n/statusLabels';
 import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
@@ -256,10 +256,6 @@ function getApprovalDisplayLabel(value: string | null | undefined, t: (key: stri
 
   const translated = t(key);
   return translated !== key ? translated : String(value || '');
-}
-
-function getApprovalStatusLabel(value: string | null | undefined, t: (key: string) => string) {
-  return getActionPlanStatusLabel(normalizeApproval(value), t);
 }
 
 function formatDate(value?: string | null) {
@@ -586,9 +582,6 @@ function PlanAccionPageContent() {
   const [openingFromControl, setOpeningFromControl] = useState(false);
   const [highlightPlanId, setHighlightPlanId] = useState('');
   const [expandedPlanId, setExpandedPlanId] = useState('');
-  const [aiAuditorDraft, setAiAuditorDraft] = useState<AiAuditorDraftPayload | null>(null);
-  const [aiAuditorDraftMessage, setAiAuditorDraftMessage] = useState('');
-
   const alreadyTriggeredQuickOpen = useRef(false);
 
   const [form, setForm] = useState({
@@ -614,13 +607,7 @@ function PlanAccionPageContent() {
 
     const draft = readAiAuditorDraftFromSession(aiAuditorDraftKey);
 
-    if (!draft) {
-      setAiAuditorDraftMessage('No fue posible leer el borrador preparado por IA Auditor Senior.');
-      return;
-    }
-
-    setAiAuditorDraft(draft);
-    setAiAuditorDraftMessage('Borrador preparado por IA Auditor Senior. Revísalo antes de guardar.');
+    if (!draft) return;
 
     setForm((prev) => ({
       ...prev,
@@ -634,19 +621,6 @@ function PlanAccionPageContent() {
       setSelectedISO(draftISO);
     }
   }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey, canUseAiAuditor, entitlementsLoading]);
-
-  const discardAiAuditorDraft = () => {
-    clearAiAuditorDraft(aiAuditorDraftKey);
-    setAiAuditorDraft(null);
-    setAiAuditorDraftMessage('');
-    setForm((prev) => ({
-      ...prev,
-      title: '',
-      description: '',
-      priority: 'media',
-    }));
-  };
-
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');
@@ -1026,28 +1000,6 @@ function PlanAccionPageContent() {
     if (value === 'alta') return 'text-red-600';
     if (value === 'media') return 'text-amber-600';
     return 'text-emerald-600';
-  };
-
-  const statusBadge = (value?: string | null) => {
-    const normalized = normalizeStatus(value);
-
-    if (normalized === 'abierto') {
-      return 'bg-slate-100 text-slate-700 border border-slate-200';
-    }
-
-    if (normalized === 'en progreso') {
-      return 'bg-blue-100 text-blue-700 border border-blue-200';
-    }
-
-    if (normalized === 'bloqueado') {
-      return 'bg-amber-100 text-amber-700 border border-amber-200';
-    }
-
-    if (normalized === 'completado') {
-      return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
-    }
-
-    return 'bg-rose-100 text-rose-700 border border-rose-200';
   };
 
   const approvalBadge = (value?: string | null) => {

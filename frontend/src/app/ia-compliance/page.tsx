@@ -171,14 +171,6 @@ type EngineHealthResponse = {
 
 type UnknownRecord = Record<string, unknown>;
 
-type AuthUser = {
-  tenant_id?: string | null;
-  tenantId?: string | null;
-  tenant?: string | null;
-  company_id?: string | null;
-  companyId?: string | null;
-};
-
 type StructuredComplianceItem = {
   title?: string;
   description?: string;
@@ -427,9 +419,6 @@ export default function IaCompliancePage() {
   const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
   const canUseAiCompliance = !entitlementsLoading && canUseAiFeature('suggestions');
   const copy: IaComplianceCopy = locale === 'en' ? IA_COMPLIANCE_COPY.en : IA_COMPLIANCE_COPY.es;
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
-
   const [loading, setLoading] = useState(true);
   const [briefLoading, setBriefLoading] = useState(false);
   const [error, setError] = useState('');
@@ -535,9 +524,6 @@ export default function IaCompliancePage() {
 
     const authToken = localStorage.getItem('token');
     const u = getUserFromToken();
-
-    setToken(authToken);
-    setUser(u);
 
     if (!authToken || !u?.tenant_id) {
       setLoading(false);

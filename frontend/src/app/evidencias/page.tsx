@@ -11,7 +11,6 @@ import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { clearAiAuditorDraft, formatAiAuditorDraftEvidenceDescription, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
-import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStatusLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =

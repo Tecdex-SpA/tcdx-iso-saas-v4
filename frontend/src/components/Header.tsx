@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import { getUserFromToken } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -577,8 +578,11 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
           <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
             <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50 p-0.5 shadow-sm">
-              <img
+              <Image
                 src={tenantLogoSource}
+                width={56}
+                height={56}
+                unoptimized
                 className="h-full w-full object-contain"
                 alt={tenant?.name ? `Logo ${tenant.name}` : t('header.clientLogoAlt')}
                 onError={() => {
@@ -784,9 +788,12 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 onClick={() => setOpen(!open)}
               >
                 {avatarUrl ? (
-                  <img
+                  <Image
                     src={avatarUrl}
                     alt="avatar"
+                    width={40}
+                    height={40}
+                    unoptimized
                     className="h-10 w-10 rounded-full border border-slate-200 object-cover shadow-md"
                   />
                 ) : (
@@ -807,9 +814,12 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 <div className="absolute right-0 z-50 mt-3 w-[min(20rem,calc(100vw-1.5rem))] rounded-lg border border-slate-200 bg-white p-4 text-black shadow-2xl">
                   <div className="flex items-center gap-3 mb-3">
                     {avatarUrl ? (
-                      <img
+                      <Image
                         src={avatarUrl}
                         alt="avatar"
+                        width={56}
+                        height={56}
+                        unoptimized
                         className="h-14 w-14 rounded-full border border-slate-200 object-cover"
                       />
                     ) : (

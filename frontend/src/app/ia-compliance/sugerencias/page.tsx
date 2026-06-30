@@ -10,12 +10,6 @@ const API_URL =
 
 type UnknownRecord = Record<string, unknown>;
 
-type AuthUser = {
-  tenant_id?: string | null;
-  tenantId?: string | null;
-  tenant?: string | null;
-};
-
 type SuggestionRow = {
   id: string;
   tenant_id: string;
@@ -356,9 +350,6 @@ function SuggestionAiTraceCard({ row }: { row: SuggestionRow }) {
 export default function AiSuggestionsPage() {
   const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
   const canUseSuggestions = !entitlementsLoading && canUseAiFeature('suggestions');
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
-
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState('');
   const [error, setError] = useState('');
@@ -473,9 +464,6 @@ export default function AiSuggestionsPage() {
 
     const authToken = localStorage.getItem('token');
     const u = getUserFromToken();
-
-    setToken(authToken);
-    setUser(u);
 
     if (!authToken || !u?.tenant_id) {
       setLoading(false);

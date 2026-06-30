@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import AppLayout from '@/components/AppLayout';
 import {
   EnterpriseButton,
@@ -286,9 +287,12 @@ export default function PerfilPage() {
 
             <div className="flex justify-center">
               {avatarUrl ? (
-                <img
+                <Image
                   src={avatarUrl}
                   alt="Foto de perfil"
+                  width={144}
+                  height={144}
+                  unoptimized
                   className="w-36 h-36 rounded-full object-cover border border-gray-200"
                 />
               ) : (

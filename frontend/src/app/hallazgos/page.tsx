@@ -4,9 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
-import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
+import { formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
-import { getStatusLabel, getPriorityLabel, getSeverityLabel, getHealthStatusLabel, getRiskLevelLabel, getAuditStatusLabel, getEvidenceStatusLabel, getFindingStatusLabel, getActionPlanStatusLabel, getNotificationLevelLabel, getKpiColorLabel, getCategoryLabel } from '@/i18n/statusLabels';
 import { translateDisplayText, translateStatusLabel, translateSeverityLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
@@ -513,9 +512,6 @@ function HallazgosPageContent() {
   const [savingId, setSavingId] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<string>('');
   const [creatingFinding, setCreatingFinding] = useState(false);
-  const [aiAuditorDraft, setAiAuditorDraft] = useState<AiAuditorDraftPayload | null>(null);
-  const [aiAuditorDraftMessage, setAiAuditorDraftMessage] = useState('');
-
   const [focusedFindingId, setFocusedFindingId] = useState<string>('');
   const [focusMessage, setFocusMessage] = useState('');
   const [autoFindingFocus, setAutoFindingFocus] = useState(false);
@@ -563,13 +559,7 @@ function HallazgosPageContent() {
 
     const draft = readAiAuditorDraftFromSession(aiAuditorDraftKey);
 
-    if (!draft) {
-      setAiAuditorDraftMessage('No fue posible leer el borrador preparado por IA Auditor Senior.');
-      return;
-    }
-
-    setAiAuditorDraft(draft);
-    setAiAuditorDraftMessage('Borrador preparado por IA Auditor Senior. Revísalo antes de guardar.');
+    if (!draft) return;
 
     setForm((prev) => ({
       ...prev,
@@ -584,20 +574,6 @@ function HallazgosPageContent() {
       setSelectedISO(draftISO);
     }
   }, [aiAuditorDraftSource, aiAuditorDraftMode, aiAuditorDraftKey]);
-
-  const discardAiAuditorDraft = () => {
-    clearAiAuditorDraft(aiAuditorDraftKey);
-    setAiAuditorDraft(null);
-    setAiAuditorDraftMessage('');
-    setForm((prev) => ({
-      ...prev,
-      title: '',
-      description: '',
-      severity: 'media',
-      tenant_control_id: '',
-    }));
-  };
-
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');
@@ -946,12 +922,10 @@ function HallazgosPageContent() {
 
   const AiGuidedPanel = ({
     guided,
-    rowId,
     row,
     response,
   }: {
     guided: ReturnType<typeof getGuidedAi>;
-    rowId: string;
     row?: FindingRow;
     response?: unknown;
   }) => {
@@ -2619,19 +2593,6 @@ function HallazgosPageContent() {
     return map;
   }, [actions]);
 
-  const typeColor = (value: string) => {
-    if (value === 'no conformidad') return 'text-red-600';
-    if (value === 'observacion') return 'text-amber-600';
-    if (value === 'oportunidad de mejora') return 'text-blue-600';
-    return 'text-emerald-600';
-  };
-
-  const severityColor = (value: string) => {
-    if (value === 'alta') return 'text-red-600';
-    if (value === 'media') return 'text-amber-600';
-    return 'text-emerald-600';
-  };
-
   const actionStatusColor = (value?: string | null) => {
     const normalized = String(value || '').toLowerCase();
 
@@ -3439,7 +3400,6 @@ function HallazgosPageContent() {
 
                           <AiGuidedPanel
                             guided={getGuidedAi(analysis)}
-                            rowId={row.id}
                             row={row}
                             response={analysis}
                           />
@@ -3533,7 +3493,6 @@ function HallazgosPageContent() {
 
                           <AiGuidedPanel
                             guided={getGuidedAi(suggestedPlan)}
-                            rowId={`${row.id}-plan`}
                             row={row}
                             response={suggestedPlan}
                           />
