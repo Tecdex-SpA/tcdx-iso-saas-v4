@@ -12,7 +12,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
-import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
+import TcdxIcon from '@/components/icons/TcdxIcon';
 import {
   EnterpriseKpiCard,
   EnterprisePageHeader,
@@ -37,15 +37,6 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
 type DashboardView = 'executive' | 'kpi' | 'iso';
-
-type IsoSuggestedAction = {
-  title: string;
-  description: string;
-  severity: 'critico' | 'alto' | 'medio';
-  source: string;
-  href: string;
-  cta: string;
-};
 
 type EffectiveIsoHealthRow = {
   tenant_id?: string;
@@ -240,122 +231,6 @@ function resolveGlobalEffectiveStatus(rows: EffectiveIsoHealthRow[]): string {
       ? row.kpi_health_status || status
       : status;
   }, rows[0]?.kpi_health_status || 'sin_datos');
-}
-
-function getEffectiveCompliancePercent(row: EffectiveIsoHealthRow): number | null {
-  if (row.compliance_percentage !== null && row.compliance_percentage !== undefined) {
-    return toSafeNumber(row.compliance_percentage);
-  }
-
-  const activeControls = toSafeNumber(row.active_scope_controls);
-  if (activeControls <= 0) return null;
-
-  return Math.round((toSafeNumber(row.complies_controls) / activeControls) * 10000) / 100;
-}
-
-function getEffectiveOfficialEvidencePercent(row: EffectiveIsoHealthRow): number | null {
-  if (row.official_evidence_percentage !== null && row.official_evidence_percentage !== undefined) {
-    return toSafeNumber(row.official_evidence_percentage);
-  }
-
-  const activeControls = toSafeNumber(row.active_scope_controls);
-  if (activeControls <= 0) return null;
-
-  return Math.round((toSafeNumber(row.controls_with_official_evidence) / activeControls) * 10000) / 100;
-}
-
-function formatIsoPercent(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return 'Sin alcance';
-  }
-
-  return `${Number(value).toFixed(Number(value) % 1 === 0 ? 0 : 2)}%`;
-}
-
-function formatIsoScore(value: number | string | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return 'Sin dato';
-  }
-
-  return Number(value).toFixed(Number(value) % 1 === 0 ? 0 : 2);
-}
-
-function buildIsoSuggestedActions(rows: EffectiveIsoHealthRow[]): IsoSuggestedAction[] {
-  const actions: IsoSuggestedAction[] = [];
-
-  rows.forEach((row) => {
-    const iso = row.iso || 'ISO';
-    const operation = row.operation_name || row.operation_code || 'Operación activa';
-    const isoParam = encodeURIComponent(iso);
-    const withoutEvidence = toSafeNumber(row.controls_without_evidence);
-    const overduePlans = toSafeNumber(row.overdue_action_plans_count);
-    const compliance = getEffectiveCompliancePercent(row);
-    const officialEvidence = getEffectiveOfficialEvidencePercent(row);
-    const status = String(row.kpi_health_status || '').toLowerCase();
-    const source = 'public.v_iso_effective_kpi_summary';
-
-    if (withoutEvidence > 0) {
-      actions.push({
-        title: `Regularizar evidencia oficial en ${iso} / ${operation}`,
-        description: `${withoutEvidence} controles activos no tienen evidencia asociada en el alcance operativo.`,
-        severity: withoutEvidence >= 20 || status === 'critico' ? 'critico' : 'alto',
-        source,
-        href: `/evidencias?iso=${isoParam}`,
-        cta: 'Revisar evidencias',
-      });
-    }
-
-    if (overduePlans > 0) {
-      actions.push({
-        title: `Resolver planes vencidos en ${iso}`,
-        description: `${overduePlans} plan(es) vencido(s) afectan la lectura efectiva de salud.`,
-        severity: 'critico',
-        source,
-        href: `/plan-accion?iso=${isoParam}`,
-        cta: 'Abrir planes',
-      });
-    }
-
-    if (compliance !== null && compliance < 60) {
-      actions.push({
-        title: `Priorizar cierre de brechas en ${iso} / ${operation}`,
-        description: `Cumplimiento efectivo actual: ${formatIsoPercent(compliance)} sobre controles activos en alcance.`,
-        severity: compliance < 25 ? 'critico' : 'alto',
-        source,
-        href: `/controles?iso=${isoParam}`,
-        cta: 'Ver controles',
-      });
-    }
-
-    if (officialEvidence !== null && officialEvidence < 50) {
-      actions.push({
-        title: `Elevar evidencia oficial en ${iso}`,
-        description: `Evidencia oficial efectiva: ${formatIsoPercent(officialEvidence)}. Prioriza respaldos aprobados y trazables.`,
-        severity: officialEvidence < 20 ? 'alto' : 'medio',
-        source,
-        href: `/evidencias?iso=${isoParam}`,
-        cta: 'Completar evidencia',
-      });
-    }
-  });
-
-  if (rows.some((row) => String(row.kpi_health_status || '').toLowerCase() === 'critico')) {
-    actions.push({
-      title: 'Ejecutar revisión IA Auditor sobre normas críticas',
-      description: 'Usa el estado efectivo para enfocar la revisión automática en las operaciones con mayor deterioro.',
-      severity: 'alto',
-      source: 'public.v_iso_effective_kpi_summary',
-      href: '/auditorias?view=ia',
-      cta: 'Abrir IA Auditor',
-    });
-  }
-
-  return actions
-    .sort((a, b) => {
-      const rank = { critico: 3, alto: 2, medio: 1 };
-      return rank[b.severity] - rank[a.severity];
-    })
-    .slice(0, 6);
 }
 
 type AuditItem = {
@@ -705,53 +580,6 @@ function getKpiStatusClass(color?: string | null) {
 
 
 
-function dashboardRuntimeText(key: string, params?: Record<string, string | number>) {
-  const lang =
-    typeof document !== 'undefined' && document.documentElement.lang === 'en'
-      ? 'en'
-      : 'es';
-
-  const labels: Record<string, { es: string; en: string }> = {
-    'dashboard.iaAuditorTitle': {
-      es: 'IA Auditor',
-      en: 'AI Auditor',
-    },
-    'dashboard.iaAuditorBeta': {
-      es: 'Beta',
-      en: 'Beta',
-    },
-    'dashboard.iaAuditorIntro': {
-      es: 'Tu asistente inteligente analizó los datos y detectó focos para fortalecer tu sistema de gestión.',
-      en: 'Your intelligent assistant analyzed the data and detected focus areas to strengthen your management system.',
-    },
-    'dashboard.iaAuditorLowEffectiveness': {
-      es: 'Detectó {{count}} controles con baja efectividad.',
-      en: 'Detected {{count}} controls with low effectiveness.',
-    },
-    'dashboard.iaAuditorCriticalRisks': {
-      es: '{{count}} riesgos se mantienen en nivel crítico.',
-      en: '{{count}} risks remain at a critical level.',
-    },
-    'dashboard.iaAuditorUpcomingActions': {
-      es: 'Hay {{count}} acciones o evidencias próximas.',
-      en: 'There are {{count}} upcoming actions or evidence items.',
-    },
-    'dashboard.iaAuditorReviewSuggestions': {
-      es: 'Revisar sugerencias',
-      en: 'Review suggestions',
-    },
-  };
-
-  let value = labels[key]?.[lang] || key;
-
-  for (const [paramKey, paramValue] of Object.entries(params || {})) {
-    value = value.replaceAll(`{{${paramKey}}}`, String(paramValue));
-  }
-
-  return value;
-}
-
-
 function getRuntimePeriodLabel() {
   if (typeof document !== 'undefined' && document.documentElement.lang === 'en') {
     return 'Period';
@@ -783,17 +611,6 @@ function formatKpiValue(value: number | string | null | undefined, unit?: string
   return `${rounded}${unit ? ` ${unit}` : ''}`;
 }
 
-type UpcomingAuditsTooltipProps = {
-  active?: boolean;
-  payload?: Array<{
-    payload?: {
-      details?: AuditItem[];
-      value?: number | string;
-    };
-  }>;
-  label?: string | number;
-};
-
 export default function DashboardPage() {
   return (
     <Suspense fallback={<DashboardPageFallback />}>
@@ -818,13 +635,6 @@ function DashboardPageContent() {
   function getKpiCategoryLabel(category?: string | null) {
     const normalized = String(category || 'otros').toLowerCase();
     const key = `dashboardKpi.categories.${normalized}`;
-    const translated = t(key);
-    return translated && translated !== key ? translated : normalized;
-  }
-
-  function getKpiStatusBadgeLabel(color?: string | null) {
-    const normalized = String(color || 'gray').toLowerCase();
-    const key = `dashboardKpi.statusBadge.${normalized}`;
     const translated = t(key);
     return translated && translated !== key ? translated : normalized;
   }
@@ -1127,12 +937,7 @@ function DashboardPageContent() {
   }, [controls]);
 
   const cumple = controls.filter((c) => c.status === 'cumple').length;
-  const parcial = controls.filter((c) => c.status === 'parcial').length;
-  const noCumple = controls.filter((c) => c.status === 'no cumple').length;
   const totalControls = controls.length;
-
-  const contractedControls = totalControls;
-  const activeNorms = Object.keys(grouped).length;
 
   const highRisks = numberOrZero(
     riskSummary.find((r) => r.level === 'alto')?.total
@@ -1140,22 +945,11 @@ function DashboardPageContent() {
   const mediumRisks = numberOrZero(
     riskSummary.find((r) => r.level === 'medio')?.total
   );
-  const lowRisks = numberOrZero(
-    riskSummary.find((r) => r.level === 'bajo')?.total
-  );
 
   const complianceValue =
     totalControls > 0
       ? Math.round((cumple / totalControls) * 100)
       : numberOrZero(summary?.porcentaje);
-
-  const donutData = [
-    { name: 'Cumplido', value: cumple },
-    { name: 'En proceso', value: parcial },
-    { name: 'No cumplido', value: noCumple },
-  ];
-
-  const donutColors = ['#16a34a', '#f59e0b', '#ef4444'];
 
   const activeActionPlans = actionPlans.filter((p) => {
     const normalized = normalizeActionStatus(p.status);
@@ -1179,67 +973,6 @@ function DashboardPageContent() {
     }).length;
   }, [actionPlans]);
 
-  const upcomingAuditBars = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const buckets = {
-      next7: [] as AuditItem[],
-      next14: [] as AuditItem[],
-      next30: [] as AuditItem[],
-      after30: [] as AuditItem[],
-    };
-
-    nextAudits.forEach((audit) => {
-      if (!audit?.start_date) return;
-
-      const auditDate = new Date(audit.start_date);
-      auditDate.setHours(0, 0, 0, 0);
-
-      const diffMs = auditDate.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-      if (diffDays < 0) return;
-
-      if (diffDays <= 7) {
-        buckets.next7.push(audit);
-      } else if (diffDays <= 14) {
-        buckets.next14.push(audit);
-      } else if (diffDays <= 30) {
-        buckets.next30.push(audit);
-      } else {
-        buckets.after30.push(audit);
-      }
-    });
-
-    return [
-      {
-        name: 'Próx. 7 días',
-        value: buckets.next7.length,
-        details: buckets.next7,
-        fill: '#dbeafe',
-      },
-      {
-        name: '8 a 14 días',
-        value: buckets.next14.length,
-        details: buckets.next14,
-        fill: '#fde68a',
-      },
-      {
-        name: '15 a 30 días',
-        value: buckets.next30.length,
-        details: buckets.next30,
-        fill: '#f59e0b',
-      },
-      {
-        name: '> 30 días',
-        value: buckets.after30.length,
-        details: buckets.after30,
-        fill: '#cbd5e1',
-      },
-    ];
-  }, [nextAudits]);
-
   const isoCards = useMemo(() => {
     return Object.keys(grouped).map((iso) => {
       const list = grouped[iso];
@@ -1260,28 +993,6 @@ function DashboardPageContent() {
     });
   }, [grouped]);
 
-  const globalRiskValue =
-    contractedControls > 0
-      ? Math.round(((noCumple * 1 + parcial * 0.5) / contractedControls) * 100)
-      : numberOrZero(summary?.riesgo);
-
-  const globalRiskLabel =
-    summary?.nivel_riesgo ||
-    (globalRiskValue >= 50 ? 'Alto' : globalRiskValue >= 20 ? 'Medio' : 'Bajo');
-
-  const riesgoColor = (nivel: string) => {
-    if (nivel === 'Alto') return 'text-red-600';
-    if (nivel === 'Medio') return 'text-amber-600';
-    return 'text-emerald-600';
-  };
-
-  const completionPct =
-    totalControls > 0 ? Math.round((cumple / totalControls) * 100) : 0;
-  const progressPct =
-    totalControls > 0 ? Math.round((parcial / totalControls) * 100) : 0;
-  const failPct =
-    totalControls > 0 ? Math.round((noCumple / totalControls) * 100) : 0;
-
   const latestSyncText = useMemo(() => {
     const now = new Date();
     return `${t('common.today')}, ${now.toLocaleTimeString(locale === 'en' ? 'en-US' : 'es-CL', {
@@ -1290,30 +1001,7 @@ function DashboardPageContent() {
     })}`;
   }, [locale, t]);
 
-  const complianceTrend = useMemo(() => {
-    const start = Math.max(40, complianceValue - 12);
-    const mid1 = Math.max(42, complianceValue - 8);
-    const mid2 = Math.max(44, complianceValue - 6);
-    const mid3 = Math.max(46, complianceValue - 4);
-    const mid4 = Math.max(48, complianceValue - 2);
-
-    return [
-      { name: 'S1', value: start },
-      { name: 'S2', value: mid1 },
-      { name: 'S3', value: mid2 },
-      { name: 'S4', value: mid3 },
-      { name: 'S5', value: mid4 },
-      { name: 'S6', value: complianceValue },
-    ];
-  }, [complianceValue]);
-
-  const openFindingsCount = Math.max(
-    noCumple,
-    numberOrZero(summary?.open_findings)
-  );
-
   const openNcCount = numberOrZero(summary?.open_nonconformities);
-  const closedNcCount = numberOrZero(summary?.closed_nonconformities);
 
   const kpiItems = useMemo(() => kpiData?.items || [], [kpiData?.items]);
   const kpiSummary = kpiData?.summary;
@@ -1413,84 +1101,14 @@ function DashboardPageContent() {
     );
   }, [effectiveActiveRows]);
 
-  const effectiveControlsWithoutEvidence = useMemo(() => {
-    return effectiveActiveRows.reduce(
-      (acc, row) => acc + toSafeNumber(row.controls_without_evidence),
-      0
-    );
-  }, [effectiveActiveRows]);
-
-  const effectiveOverduePlans = useMemo(() => {
-    return effectiveActiveRows.reduce(
-      (acc, row) => acc + toSafeNumber(row.overdue_action_plans_count),
-      0
-    );
-  }, [effectiveActiveRows]);
-
-  const effectiveOfficialEvidenceControls = useMemo(() => {
-    return effectiveActiveRows.reduce(
-      (acc, row) => acc + toSafeNumber(row.controls_with_official_evidence),
-      0
-    );
-  }, [effectiveActiveRows]);
-
   const effectiveCompliancePercent =
     effectiveTotalActiveControls > 0
       ? Math.round((effectiveCompliesControls / effectiveTotalActiveControls) * 100)
       : 0;
 
-  const effectiveOfficialEvidencePercent =
-    effectiveTotalActiveControls > 0
-      ? Math.round((effectiveOfficialEvidenceControls / effectiveTotalActiveControls) * 100)
-      : 0;
-
-  const effectiveAverageHealthScore = useMemo(() => {
-    const rowsWithScore = effectiveActiveRows.filter(
-      (row) => row.avg_effective_health_score !== null && row.avg_effective_health_score !== undefined
-    );
-
-    const totalWeight = rowsWithScore.reduce(
-      (acc, row) => acc + Math.max(1, toSafeNumber(row.active_scope_controls)),
-      0
-    );
-
-    if (totalWeight <= 0) return null;
-
-    const weighted = rowsWithScore.reduce((acc, row) => {
-      return acc + toSafeNumber(row.avg_effective_health_score) * Math.max(1, toSafeNumber(row.active_scope_controls));
-    }, 0);
-
-    return Math.round((weighted / totalWeight) * 100) / 100;
-  }, [effectiveActiveRows]);
-
   const effectiveGlobalStatus = useMemo(
     () => resolveGlobalEffectiveStatus(effectiveActiveRows),
     [effectiveActiveRows]
-  );
-
-  const effectivePriorityRows = useMemo(() => {
-    return [...effectiveActiveRows].sort((a, b) => {
-      const statusDiff = getEffectiveStatusRank(b.kpi_health_status) - getEffectiveStatusRank(a.kpi_health_status);
-      if (statusDiff !== 0) return statusDiff;
-
-      const overdueDiff = toSafeNumber(b.overdue_action_plans_count) - toSafeNumber(a.overdue_action_plans_count);
-      if (overdueDiff !== 0) return overdueDiff;
-
-      const complianceDiff =
-        toSafeNumber(getEffectiveCompliancePercent(a)) - toSafeNumber(getEffectiveCompliancePercent(b));
-      if (complianceDiff !== 0) return complianceDiff;
-
-      const evidenceDiff =
-        toSafeNumber(getEffectiveOfficialEvidencePercent(a)) - toSafeNumber(getEffectiveOfficialEvidencePercent(b));
-      if (evidenceDiff !== 0) return evidenceDiff;
-
-      return toSafeNumber(b.controls_without_evidence) - toSafeNumber(a.controls_without_evidence);
-    });
-  }, [effectiveActiveRows]);
-
-  const isoSuggestedActions = useMemo(
-    () => buildIsoSuggestedActions(effectivePriorityRows),
-    [effectivePriorityRows]
   );
 
   const executiveComplianceValue =
@@ -2373,132 +1991,6 @@ function ExecutiveStatusOverview({
   );
 }
 
-function EffectiveIsoHealthSection({
-  rows,
-  loading,
-  totalActiveControls,
-  compliesControls,
-  controlsWithoutEvidence,
-  overduePlans,
-  compliancePercent,
-  officialEvidencePercent,
-}: {
-  rows: EffectiveIsoHealthRow[];
-  loading: boolean;
-  totalActiveControls: number;
-  compliesControls: number;
-  controlsWithoutEvidence: number;
-  overduePlans: number;
-  compliancePercent: number;
-  officialEvidencePercent: number;
-}) {
-  return (
-    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-            Salud ISO efectiva
-          </p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
-            Cumplimiento por norma y operación activa
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Fuente: public.v_iso_effective_kpi_summary. Excluye controles fuera de alcance y prioriza evidencia oficial.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 text-right">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-xs text-slate-500">Cumplimiento efectivo</p>
-            <p className="text-2xl font-bold text-slate-900">{compliancePercent}%</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-xs text-slate-500">Evidencia oficial</p>
-            <p className="text-2xl font-bold text-slate-900">{officialEvidencePercent}%</p>
-          </div>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-          Cargando salud ISO efectiva...
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-          No hay datos de salud ISO efectiva disponibles para el alcance activo.
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs text-slate-500">Controles activos</p>
-              <p className="mt-1 text-xl font-bold text-slate-900">{totalActiveControls}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs text-slate-500">Cumplen</p>
-              <p className="mt-1 text-xl font-bold text-emerald-700">{compliesControls}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs text-slate-500">Sin evidencia</p>
-              <p className="mt-1 text-xl font-bold text-amber-700">{controlsWithoutEvidence}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs text-slate-500">Planes vencidos</p>
-              <p className="mt-1 text-xl font-bold text-red-600">{overduePlans}</p>
-            </div>
-          </div>
-
-          <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="min-w-[920px] w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 text-left">Norma / operación</th>
-                  <th className="px-4 py-3 text-right">Cumplimiento</th>
-                  <th className="px-4 py-3 text-right">Evidencia oficial</th>
-                  <th className="px-4 py-3 text-right">Sin evidencia</th>
-                  <th className="px-4 py-3 text-right">Promedio salud</th>
-                  <th className="px-4 py-3 text-right">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {rows.map((row) => (
-                  <tr key={`${row.iso}-${row.operation_id || row.operation_code || row.operation_name}`}>
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-slate-900">{row.iso}</p>
-                      <p className="text-xs text-slate-500">
-                        {row.operation_name || 'Operación'} · {row.operation_code || 'N/A'}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                      {toSafeNumber(row.compliance_percentage)}%
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-700">
-                      {toSafeNumber(row.official_evidence_percentage)}%
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-700">
-                      {toSafeNumber(row.controls_without_evidence)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-700">
-                      {toSafeNumber(row.avg_effective_health_score)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end">
-                        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getEffectiveHealthTone(row.kpi_health_status)}`}>
-                          {mapEffectiveHealthLabel(row.kpi_health_status)}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
 function ExecutiveKpiPulse({
   score,
   coverage,
@@ -2541,391 +2033,11 @@ function ExecutiveKpiPulse({
   );
 }
 
-function IsoControlCenterView({
-  rows,
-  priorityRows,
-  suggestedActions,
-  loading,
-  totalActiveControls,
-  compliesControls,
-  controlsWithoutEvidence,
-  overduePlans,
-  compliancePercent,
-  officialEvidencePercent,
-  averageHealthScore,
-  globalStatus,
-}: {
-  rows: EffectiveIsoHealthRow[];
-  priorityRows: EffectiveIsoHealthRow[];
-  suggestedActions: IsoSuggestedAction[];
-  loading: boolean;
-  totalActiveControls: number;
-  compliesControls: number;
-  controlsWithoutEvidence: number;
-  overduePlans: number;
-  compliancePercent: number;
-  officialEvidencePercent: number;
-  averageHealthScore: number | null;
-  globalStatus: string;
-}) {
-  const nonCompliantOrNoData = rows.reduce(
-    (acc, row) => acc + toSafeNumber(row.non_compliant_or_no_data_controls),
-    0
-  );
-
-  return (
-    <div className="space-y-5">
-      <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-        <div className="grid gap-0 xl:grid-cols-[minmax(0,1.4fr)_390px]">
-          <div className="p-6 lg:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Salud del sistema
-            </p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
-              Priorización táctica basada en salud ISO efectiva
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Consolida controles activos en alcance operacional, evidencia oficial, hallazgos,
-              no conformidades y planes vencidos. Los datos fuera de alcance no deterioran los KPIs activos.
-            </p>
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <a href="/controles" className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                Ir a controles
-              </a>
-              <a href="/evidencias" className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
-                Revisar evidencias
-              </a>
-              <a href="/plan-accion" className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
-                Planes de acción
-              </a>
-              <a href="/auditorias?view=ia" className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100">
-                IA Auditor
-              </a>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200 bg-slate-950 p-6 text-white xl:border-l xl:border-t-0">
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Estado global efectivo</div>
-            <div className="mt-4 flex flex-wrap items-end gap-3">
-              <span className="text-5xl font-bold tracking-tight">{formatIsoScore(averageHealthScore)}</span>
-              <span className={`mb-1 rounded-full border px-3 py-1 text-xs font-semibold ${getEffectiveHealthTone(globalStatus)}`}>
-                {mapEffectiveHealthLabel(globalStatus)}
-              </span>
-            </div>
-            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/12">
-              <div
-                className="h-full rounded-full bg-blue-400"
-                style={{ width: `${Math.max(4, Math.min(100, Number(averageHealthScore || 0)))}%` }}
-              />
-            </div>
-            <div className="mt-5 grid grid-cols-2 gap-3 text-xs">
-              <DarkIsoMetric label="Operaciones evaluadas" value={rows.length} />
-              <DarkIsoMetric label="Controles activos" value={totalActiveControls} />
-              <DarkIsoMetric label="Cumplimiento" value={`${compliancePercent}%`} />
-              <DarkIsoMetric label="Evidencia oficial" value={`${officialEvidencePercent}%`} />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {loading ? (
-        <section className="rounded-[30px] border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-          Cargando salud del sistema...
-        </section>
-      ) : rows.length === 0 ? (
-        <section className="rounded-[30px] border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-          No hay normas u operaciones activas con salud ISO efectiva para priorizar.
-        </section>
-      ) : (
-        <>
-          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-6">
-            <IsoMetricCard label="Normas/operaciones activas" value={rows.length} helper="active_summary" tone="indigo" />
-            <IsoMetricCard label="Controles en alcance" value={totalActiveControls} helper="No incluye fuera de alcance" tone="indigo" />
-            <IsoMetricCard label="Cumplimiento efectivo" value={`${compliancePercent}%`} helper={`${compliesControls} cumplen`} tone="green" />
-            <IsoMetricCard label="Evidencia oficial" value={`${officialEvidencePercent}%`} helper="Respaldos oficiales" tone="green" />
-            <IsoMetricCard label="Sin evidencia" value={controlsWithoutEvidence} helper="Acción documental" tone="amber" />
-            <IsoMetricCard label="Planes vencidos" value={overduePlans} helper="Impacto operativo" tone="red" />
-          </section>
-
-          <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-            <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="text-2xl font-semibold tracking-tight text-slate-950">Matriz efectiva por norma y operación</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Lectura operacional desde public.v_iso_effective_kpi_summary.
-                </p>
-              </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                {nonCompliantOrNoData} no cumplen o sin datos
-              </span>
-            </div>
-
-            <div className="overflow-x-auto rounded-2xl border border-slate-200">
-              <table className="min-w-[1120px] w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 text-left">ISO / operación</th>
-                    <th className="px-4 py-3 text-right">Activos</th>
-                    <th className="px-4 py-3 text-right">Cumple</th>
-                    <th className="px-4 py-3 text-right">Parcial</th>
-                    <th className="px-4 py-3 text-right">Sin datos / no cumple</th>
-                    <th className="px-4 py-3 text-right">Evidencia oficial</th>
-                    <th className="px-4 py-3 text-right">Sin evidencia</th>
-                    <th className="px-4 py-3 text-right">Planes vencidos</th>
-                    <th className="px-4 py-3 text-right">Salud</th>
-                    <th className="px-4 py-3 text-right">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {rows.map((row) => (
-                    <IsoControlRow key={`${row.iso}-${row.operation_id || row.operation_code || row.operation_name}`} row={row} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-            <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-              <div className="mb-5">
-                <h3 className="text-2xl font-semibold tracking-tight text-slate-950">Ranking de prioridades</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Ordenado por criticidad, planes vencidos, cumplimiento, evidencia oficial y controles sin evidencia.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {priorityRows.slice(0, 5).map((row, index) => (
-                  <div key={`${row.iso}-${row.operation_id || index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-950">
-                          {index + 1}. {row.iso} / {row.operation_name || row.operation_code || 'Operación'}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {toSafeNumber(row.controls_without_evidence)} sin evidencia · {toSafeNumber(row.overdue_action_plans_count)} planes vencidos
-                        </div>
-                      </div>
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getEffectiveHealthTone(row.kpi_health_status)}`}>
-                        {mapEffectiveHealthLabel(row.kpi_health_status)}
-                      </span>
-                    </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                      <PriorityMiniMetric label="Cumplimiento" value={formatIsoPercent(getEffectiveCompliancePercent(row))} />
-                      <PriorityMiniMetric label="Evidencia oficial" value={formatIsoPercent(getEffectiveOfficialEvidencePercent(row))} />
-                      <PriorityMiniMetric label="Salud" value={formatIsoScore(row.avg_effective_health_score)} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-              <div className="mb-5">
-                <h3 className="text-2xl font-semibold tracking-tight text-slate-950">Acciones sugeridas</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Reglas tácticas generadas en frontend desde los KPIs efectivos, sin IA.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {suggestedActions.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                    Sin acciones sugeridas críticas para el alcance activo.
-                  </div>
-                ) : (
-                  suggestedActions.map((action) => (
-                    <IsoSuggestedActionCard key={`${action.title}-${action.href}`} action={action} />
-                  ))
-                )}
-              </div>
-            </section>
-          </div>
-
-          <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <div>
-                <h3 className="text-xl font-semibold text-slate-950">Explicabilidad del cálculo</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Esta vista usa controles activos en alcance operacional, evidencia oficial y aprobada,
-                  hallazgos abiertos, no conformidades abiertas, planes abiertos y planes vencidos. Las normas
-                  u operaciones sin alcance activo no se mezclan con el cumplimiento operativo.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <a href="/auditorias" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-700 hover:bg-white">Auditorías</a>
-                <a href="/exportes" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-700 hover:bg-white">Exportes</a>
-                <a href="/hallazgos" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-700 hover:bg-white">Hallazgos</a>
-                <a href="/no-conformidades" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-700 hover:bg-white">No conformidades</a>
-              </div>
-            </div>
-          </section>
-        </>
-      )}
-    </div>
-  );
-}
-
-function IsoControlRow({ row }: { row: EffectiveIsoHealthRow }) {
-  return (
-    <tr>
-      <td className="px-4 py-3">
-        <p className="font-semibold text-slate-900">{row.iso}</p>
-        <p className="text-xs text-slate-500">{row.operation_name || 'Operación'} · {row.operation_code || 'N/A'}</p>
-      </td>
-      <td className="px-4 py-3 text-right text-slate-700">{toSafeNumber(row.active_scope_controls)}</td>
-      <td className="px-4 py-3 text-right font-semibold text-emerald-700">{toSafeNumber(row.complies_controls)}</td>
-      <td className="px-4 py-3 text-right text-amber-700">{toSafeNumber(row.partial_controls)}</td>
-      <td className="px-4 py-3 text-right text-slate-700">{toSafeNumber(row.non_compliant_or_no_data_controls)}</td>
-      <td className="px-4 py-3 text-right text-slate-700">{formatIsoPercent(getEffectiveOfficialEvidencePercent(row))}</td>
-      <td className="px-4 py-3 text-right text-slate-700">{toSafeNumber(row.controls_without_evidence)}</td>
-      <td className="px-4 py-3 text-right text-red-600">{toSafeNumber(row.overdue_action_plans_count)}</td>
-      <td className="px-4 py-3 text-right text-slate-700">{formatIsoScore(row.avg_effective_health_score)}</td>
-      <td className="px-4 py-3">
-        <div className="flex justify-end">
-          <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getEffectiveHealthTone(row.kpi_health_status)}`}>
-            {mapEffectiveHealthLabel(row.kpi_health_status)}
-          </span>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-function IsoMetricCard({
-  label,
-  value,
-  helper,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  helper: string;
-  tone: 'green' | 'amber' | 'red' | 'indigo';
-}) {
-  const toneMap = {
-    green: 'text-emerald-700 bg-emerald-50 border-emerald-100',
-    amber: 'text-amber-700 bg-amber-50 border-amber-100',
-    red: 'text-red-700 bg-red-50 border-red-100',
-    indigo: 'text-blue-700 bg-blue-50 border-blue-100',
-  };
-
-  return (
-    <div className={`rounded-2xl border p-4 shadow-sm ${toneMap[tone]}`}>
-      <div className="text-xs font-semibold uppercase tracking-wide opacity-70">{label}</div>
-      <div className="mt-2 text-3xl font-bold tracking-tight">{value}</div>
-      <div className="mt-1 text-xs font-medium opacity-75">{helper}</div>
-    </div>
-  );
-}
-
-function DarkIsoMetric({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-      <div className="text-white/55">{label}</div>
-      <div className="mt-1 text-lg font-bold text-white">{value}</div>
-    </div>
-  );
-}
-
 function PriorityMiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
       <div className="text-[11px] text-slate-500">{label}</div>
       <div className="mt-1 font-semibold text-slate-900">{value}</div>
-    </div>
-  );
-}
-
-function IsoSuggestedActionCard({ action }: { action: IsoSuggestedAction }) {
-  const severityClass =
-    action.severity === 'critico'
-      ? 'border-red-200 bg-red-50 text-red-700'
-      : action.severity === 'alto'
-      ? 'border-amber-200 bg-amber-50 text-amber-700'
-      : 'border-blue-200 bg-blue-50 text-blue-700';
-
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="font-semibold text-slate-950">{action.title}</div>
-          <p className="mt-1 text-sm leading-5 text-slate-600">{action.description}</p>
-          <p className="mt-2 text-xs text-slate-500">Fuente: {action.source}</p>
-        </div>
-        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${severityClass}`}>
-          {action.severity}
-        </span>
-      </div>
-      <a href={action.href} className="mt-4 inline-flex rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800">
-        {action.cta}
-      </a>
-    </div>
-  );
-}
-
-function UpcomingAuditsTooltip({ active, payload, label }: UpcomingAuditsTooltipProps) {
-  if (!active || !payload || !payload.length) return null;
-
-  const barData = payload[0]?.payload;
-  const details: AuditItem[] = Array.isArray(barData?.details) ? barData.details : [];
-
-  return (
-    <div className="max-w-[340px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
-      <div className="mb-2 font-semibold text-slate-900">{label}</div>
-      <div className="mb-3 text-sm text-slate-600">
-        Total eventos: <b>{barData?.value || 0}</b>
-      </div>
-
-      {details.length === 0 ? (
-        <div className="text-sm text-slate-500">Sin eventos en este rango.</div>
-      ) : (
-        <div className="max-h-56 space-y-2 overflow-auto">
-          {details.map((audit, idx) => (
-            <div
-              key={idx}
-              className="border-t border-slate-100 pt-2 text-sm first:border-t-0 first:pt-0"
-            >
-              <div className="font-medium text-slate-900">
-                {audit.iso || 'Sin ISO'}
-              </div>
-              <div className="text-slate-600">Fecha: {audit.start_date || '-'}</div>
-              <div className="text-slate-600">Auditor: {audit.auditor_name || 'Sin asignar'}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HeroMetric({
-  label,
-  value,
-  tone,
-  hint,
-}: {
-  label: string;
-  value: string | number;
-  tone: 'green' | 'amber' | 'red' | 'rose' | 'indigo';
-  hint: string;
-}) {
-  const toneMap: Record<string, string> = {
-    green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200',
-    red: 'bg-red-50 text-red-700 border-red-200',
-    rose: 'bg-rose-50 text-rose-700 border-rose-200',
-    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  };
-
-  return (
-    <div className={`rounded-2xl border p-4 ${toneMap[tone]}`}>
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
-        {label}
-      </div>
-      <div className="mt-2 text-3xl font-bold tracking-tight">{value}</div>
-      <div className="mt-1 text-xs font-medium opacity-80">{hint}</div>
     </div>
   );
 }
@@ -3238,65 +2350,6 @@ function PriorityRiskPanel({
   );
 }
 
-function AiAuditorPanel({
-  weakControls,
-  raisedRisks,
-  upcomingEvidence,
-}: {
-  weakControls: number;
-  raisedRisks: number;
-  upcomingEvidence: number;
-}) {
-  return (
-    <section className="relative overflow-hidden rounded-lg border border-[#0f2d5c] bg-[radial-gradient(circle_at_78%_30%,rgba(37,99,235,0.35),transparent_28%),linear-gradient(135deg,#06173a_0%,#071f4a_54%,#020917_100%)] p-5 text-white shadow-[0_16px_36px_rgba(2,8,23,0.24)]">
-      <div className="relative z-10 flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#2563eb] text-white">
-          <TcdxIcon name="ai" className="h-6 w-6" />
-        </span>
-        <div className="text-xl font-bold">{dashboardRuntimeText('dashboard.iaAuditorTitle')}</div>
-        <span className="rounded-md bg-white/12 px-2 py-1 text-xs font-bold text-blue-100">{dashboardRuntimeText('dashboard.iaAuditorBeta')}</span>
-      </div>
-
-      <div className="relative z-10 mt-5 grid gap-5 md:grid-cols-[minmax(0,1fr)_150px]">
-        <div>
-          <p className="text-sm leading-6 text-white/80">
-            {dashboardRuntimeText('dashboard.iaAuditorIntro')}
-          </p>
-          <div className="mt-4 space-y-2 text-sm text-white/86">
-            <div className="flex items-center gap-2">
-              <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
-              {dashboardRuntimeText('dashboard.iaAuditorLowEffectiveness', { count: weakControls })}
-            </div>
-            <div className="flex items-center gap-2">
-              <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
-              {dashboardRuntimeText('dashboard.iaAuditorCriticalRisks', { count: raisedRisks })}
-            </div>
-            <div className="flex items-center gap-2">
-              <TcdxIcon name="check" className="h-4 w-4 text-blue-200" />
-              {dashboardRuntimeText('dashboard.iaAuditorUpcomingActions', { count: upcomingEvidence })}
-            </div>
-          </div>
-
-          <a
-            href="/ia-compliance/sugerencias"
-            className="mt-5 inline-flex items-center gap-3 rounded-lg bg-[#f97316] px-5 py-3 text-sm font-bold text-white shadow-[0_10px_24px_rgba(249,115,22,0.35)] transition hover:bg-[#ea580c]"
-          >
-            {dashboardRuntimeText('dashboard.iaAuditorReviewSuggestions')}
-            <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
-          </a>
-        </div>
-
-        <div className="hidden items-center justify-center md:flex">
-          <div className="relative flex h-32 w-32 items-center justify-center rounded-[26px] border border-blue-300/25 bg-blue-400/10 shadow-[0_0_34px_rgba(59,130,246,0.45)]">
-            <div className="absolute inset-5 rounded-2xl border border-blue-300/25" />
-            <TcdxIcon name="ai" className="relative z-10 h-16 w-16 text-sky-200" />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function ExecutiveReportPanel({
   period,
   complianceValue,
@@ -3354,82 +2407,6 @@ function ExecutiveReportPanel({
   );
 }
 
-function MiniCard({
-  title,
-  mainValue,
-  mainLabel,
-  sideValue,
-  sideLabel,
-  tone,
-  footer,
-  href,
-}: {
-  title: string;
-  mainValue: string | number;
-  mainLabel: string;
-  sideValue: string | number;
-  sideLabel: string;
-  tone: 'violet' | 'amber' | 'red' | 'indigo' | 'rose';
-  footer: string;
-  href: string;
-}) {
-  const toneMap: Record<string, string> = {
-    violet: 'bg-violet-100 text-violet-700',
-    amber: 'bg-amber-100 text-amber-700',
-    red: 'bg-red-100 text-red-700',
-    indigo: 'bg-indigo-100 text-indigo-700',
-    rose: 'bg-rose-100 text-rose-700',
-  };
-
-  const icons: Record<string, TcdxIconName> = {
-    violet: 'finding',
-    amber: 'plan',
-    red: 'alert',
-    indigo: 'audit',
-    rose: 'heart',
-  };
-
-  return (
-    <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition duration-300 hover:shadow-[0_18px_44px_rgba(15,23,42,0.08)]">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 text-xl font-semibold text-slate-900">
-          <span
-            className={`flex h-10 w-10 items-center justify-center rounded-xl ${toneMap[tone]}`}
-          >
-            <TcdxIcon name={icons[tone]} className="h-5 w-5" />
-          </span>
-          <span>{title}</span>
-        </div>
-
-        <a href={href} className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:text-indigo-700">
-          <span>Ver</span>
-          <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
-        </a>
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <div>
-          <div className="text-5xl font-bold tracking-tight text-slate-900">
-            {mainValue}
-          </div>
-          <div className="mt-1 text-sm text-slate-500">{mainLabel}</div>
-        </div>
-
-        <div>
-          <div className="text-5xl font-bold tracking-tight text-slate-900">
-            {sideValue}
-          </div>
-          <div className="mt-1 text-sm text-slate-500">{sideLabel}</div>
-        </div>
-      </div>
-
-      <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
-        {footer}
-      </div>
-    </div>
-  );
-}
-
 function LegendRow({
   label,
   value,
@@ -3469,74 +2446,6 @@ function StatChip({
     <div className="rounded-2xl border border-slate-100 bg-white p-3">
       <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
       <div className={`mt-1 text-2xl font-bold ${color}`}>{value}</div>
-    </div>
-  );
-}
-
-function BottomMetric({
-  label,
-  value,
-  className = 'text-slate-900',
-}: {
-  label: string;
-  value: string | number;
-  className?: string;
-}) {
-  return (
-    <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-5">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className={`mt-2 text-4xl font-bold tracking-tight ${className}`}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function QuickActionButton({
-  href,
-  label,
-}: {
-  href: string;
-  label: string;
-}) {
-  return (
-    <a
-      href={href}
-      className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/8 px-4 py-4 text-base font-medium text-white transition hover:bg-white/12"
-    >
-      <span>{label}</span>
-      <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90 text-white/60" />
-    </a>
-  );
-}
-
-function ActionPlanRowCard({ item }: { item: ActionPlanItem }) {
-  const normalized = normalizeActionStatus(item.status);
-
-  const tone =
-    normalized === 'bloqueado'
-      ? 'border-red-200 bg-red-50'
-      : normalized === 'en progreso'
-      ? 'border-blue-200 bg-blue-50'
-      : 'border-amber-200 bg-amber-50';
-
-  return (
-    <div className={`rounded-[22px] border p-4 ${tone}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="font-semibold text-slate-900">{item.title || 'Sin título'}</div>
-          <div className="mt-1 text-sm text-slate-600">
-            {item.iso_code || 'Sin ISO'} · {item.owner || 'Sin responsable'}
-          </div>
-        </div>
-
-        <div className="text-right">
-          <div className="text-sm font-semibold text-slate-800">{item.status || 'abierto'}</div>
-          <div className="mt-1 text-xs text-slate-500">
-            Vence: {formatDateCL(item.due_date)}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
