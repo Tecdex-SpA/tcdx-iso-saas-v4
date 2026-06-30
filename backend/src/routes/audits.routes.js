@@ -2,10 +2,13 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
-const multer = require('multer');
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const {
+  createDiskUpload,
+  safeUploadError,
+} = require('../utils/secureUpload');
+const { safeErrorLog } = require('../utils/safeLogger');
 
 function getUserTenantId(user) {
   return (
@@ -152,47 +155,31 @@ function normalizeStatus(value) {
 const auditReportDir = path.join(__dirname, '..', '..', 'uploads', 'audit-reports');
 fs.mkdirSync(auditReportDir, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, auditReportDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(String(file.originalname || '')).toLowerCase();
-    cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
+const upload = createDiskUpload({
+  destination: auditReportDir,
+  allowedTypes: {
+    '.doc': ['application/msword'],
+    '.docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    '.pdf': ['application/pdf'],
   },
-});
-
-const upload = multer({
-  storage,
-  limits: {
-    fileSize: Number(process.env.AUDIT_REPORT_UPLOAD_MAX_BYTES || 25 * 1024 * 1024),
-  },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(String(file.originalname || '')).toLowerCase();
-    const mime = String(file.mimetype || '').toLowerCase();
-    const allowedExtensions = new Set(['.pdf', '.doc', '.docx']);
-    const allowedMimes = new Set([
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ]);
-
-    if (allowedExtensions.has(ext) && allowedMimes.has(mime)) {
-      return cb(null, true);
-    }
-
-    return cb(new Error('Tipo de informe no permitido'));
-  },
+  fileSize: Number(process.env.AUDIT_REPORT_UPLOAD_MAX_BYTES || 25 * 1024 * 1024),
+  files: 1,
+  fields: 10,
+  code: 'AUDIT_REPORT_TYPE_NOT_ALLOWED',
+  message: 'Tipo de informe no permitido',
 });
 
 function auditReportUpload(req, res, next) {
   upload.single('file')(req, res, (err) => {
     if (!err) return next();
 
-    const isSizeError = err.code === 'LIMIT_FILE_SIZE';
-    return res.status(400).json({
-      error: isSizeError
-        ? 'El informe excede el tamaño máximo permitido'
-        : 'Tipo de informe no permitido',
+    const payload = safeUploadError(err, {
+      code: 'AUDIT_REPORT_UPLOAD_ERROR',
+      sizeCode: 'AUDIT_REPORT_TOO_LARGE',
+      sizeMessage: 'El informe excede el tamaño máximo permitido',
+      message: 'Tipo de informe no permitido',
     });
+    return res.status(payload.status).json(payload);
   });
 }
 
@@ -274,7 +261,7 @@ router.post('/', auth, async (req, res) => {
 
     return res.json(result.rows[0]);
   } catch (err) {
-    console.error('ERROR CREATE AUDIT:', err);
+    safeErrorLog('ERROR CREATE AUDIT:', err, req);
     return res.status(500).json({
       error: 'Error creando auditoría',
     });
@@ -328,7 +315,7 @@ router.put('/start/:id', auth, async (req, res) => {
 
     return res.json({ success: true });
   } catch (err) {
-    console.error('ERROR START AUDIT:', err);
+    safeErrorLog('ERROR START AUDIT:', err, req);
     return res.status(500).json({
       error: 'Error iniciando auditoría',
     });
@@ -383,7 +370,7 @@ router.post('/upload/:id', auth, auditReportUpload, async (req, res) => {
       report_file: req.file.filename,
     });
   } catch (err) {
-    console.error('ERROR UPLOAD AUDIT REPORT:', err);
+    safeErrorLog('ERROR UPLOAD AUDIT REPORT:', err, req);
     return res.status(500).json({
       error: 'Error subiendo informe',
     });
@@ -437,7 +424,7 @@ router.put('/complete/:id', auth, async (req, res) => {
 
     return res.json({ success: true });
   } catch (err) {
-    console.error('ERROR COMPLETE AUDIT:', err);
+    safeErrorLog('ERROR COMPLETE AUDIT:', err, req);
     return res.status(500).json({
       error: 'Error completando auditoría',
     });
@@ -478,7 +465,7 @@ router.get('/report/:id', auth, async (req, res) => {
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
     return res.sendFile(filePath);
   } catch (err) {
-    console.error('ERROR DOWNLOAD AUDIT REPORT:', err);
+    safeErrorLog('ERROR DOWNLOAD AUDIT REPORT:', err, req);
     return res.status(500).json({
       error: 'Error descargando informe',
     });
@@ -682,7 +669,7 @@ router.get('/summary/:tenant_id', auth, async (req, res) => {
         'Las auditorías en ejecución son trazabilidad operativa y no deterioran KPI hasta existir resultado formal.',
     });
   } catch (err) {
-    console.error('ERROR GET AUDIT SUMMARY:', err);
+    safeErrorLog('ERROR GET AUDIT SUMMARY:', err, req);
 
     return res.status(500).json({
       ok: false,
@@ -738,7 +725,7 @@ router.get('/next-all/:tenant_id', auth, async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     if (!String(err.message || '').includes('normalize_status_for_audits')) {
-      console.error('ERROR NEXT ALL AUDITS:', err);
+      safeErrorLog('ERROR NEXT ALL AUDITS:', err, req);
     }
 
     try {
@@ -772,7 +759,7 @@ router.get('/next-all/:tenant_id', auth, async (req, res) => {
 
       return res.json(result.rows);
     } catch (innerErr) {
-      console.error('ERROR NEXT ALL AUDITS:', innerErr);
+      safeErrorLog('ERROR NEXT ALL AUDITS:', innerErr, req);
       return res.status(500).json({
         error: 'Error próximas auditorías',
       });
@@ -825,7 +812,7 @@ router.get('/next/:tenant_id', auth, async (req, res) => {
 
     return res.json(result.rows[0] || null);
   } catch (err) {
-    console.error('ERROR NEXT AUDIT:', err);
+    safeErrorLog('ERROR NEXT AUDIT:', err, req);
     return res.status(500).json({
       error: 'Error próxima auditoría',
     });
@@ -892,7 +879,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
 
     return res.json(result.rows);
   } catch (err) {
-    console.error('ERROR GET AUDITS:', err);
+    safeErrorLog('ERROR GET AUDITS:', err, req);
     return res.status(500).json({
       error: 'Error obteniendo auditorías',
     });

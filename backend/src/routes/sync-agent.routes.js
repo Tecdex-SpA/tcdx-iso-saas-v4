@@ -2,18 +2,53 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const multer = require('multer');
 const pool = require('../config/db');
 const { hashSecret, randomSecret } = require('../utils/cryptoSecret.util');
+const {
+  createMemoryUpload,
+  safeUploadError,
+} = require('../utils/secureUpload');
 
 const router = express.Router();
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: Number(process.env.AGENT_UPLOAD_MAX_BYTES || 50 * 1024 * 1024) },
+const upload = createMemoryUpload({
+  allowedTypes: {
+    '.csv': ['text/csv', 'application/csv', 'application/vnd.ms-excel', 'text/plain'],
+    '.docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    '.jpeg': ['image/jpeg'],
+    '.jpg': ['image/jpeg'],
+    '.md': ['text/markdown', 'text/plain'],
+    '.pdf': ['application/pdf'],
+    '.png': ['image/png'],
+    '.txt': ['text/plain'],
+    '.xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  },
+  fileSize: Number(process.env.AGENT_UPLOAD_MAX_BYTES || 50 * 1024 * 1024),
+  files: 1,
+  fields: 10,
+  code: 'AGENT_UPLOAD_TYPE_NOT_ALLOWED',
+  message: 'Tipo de archivo no soportado',
 });
 
 const ALLOWED_EXTENSIONS = new Set(['pdf', 'docx', 'xlsx', 'csv', 'txt', 'md', 'png', 'jpg', 'jpeg']);
 const AGENT_STORAGE_ROOT = path.resolve(__dirname, '..', '..', 'uploads', 'document-sources');
+
+function agentDocumentUpload(req, res, next) {
+  upload.single('file')(req, res, (error) => {
+    if (!error) return next();
+
+    const payload = safeUploadError(error, {
+      code: 'AGENT_UPLOAD_ERROR',
+      sizeCode: 'AGENT_UPLOAD_TOO_LARGE',
+      sizeMessage: 'El archivo excede el tamaño máximo permitido',
+      message: 'Tipo de archivo no soportado',
+    });
+    return res.status(payload.status).json({
+      ok: false,
+      code: payload.code,
+      error: payload.error,
+    });
+  });
+}
 
 function getBearerToken(req) {
   const header = String(req.headers.authorization || '');
@@ -347,7 +382,7 @@ router.post('/documents/index', authenticateAgent, async (req, res) => {
   }
 });
 
-router.post('/documents/upload', authenticateAgent, upload.single('file'), async (req, res) => {
+router.post('/documents/upload', authenticateAgent, agentDocumentUpload, async (req, res) => {
   const relativePath = safeRelativePath(req.body?.relative_path || req.file?.originalname);
   if (!req.file || !relativePath) {
     return res.status(400).json({ ok: false, code: 'INVALID_AGENT_UPLOAD', error: 'Archivo o ruta relativa inválida' });

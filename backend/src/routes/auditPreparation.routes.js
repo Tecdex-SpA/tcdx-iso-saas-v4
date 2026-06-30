@@ -1,60 +1,41 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
-const crypto = require('crypto');
 const auditPreparationController = require('../controllers/auditPreparation.controller');
 const { ensureUploadDir } = require('../services/auditPreparation.service');
+const {
+  ZIP_MIME_TYPES,
+  createDiskUpload,
+  safeUploadError,
+} = require('../utils/secureUpload');
 
 const router = express.Router();
 
 const zipUploadDir = ensureUploadDir();
 const maxZipBytes = Number(process.env.AUDIT_PREPARATION_ZIP_MAX_BYTES || 50 * 1024 * 1024);
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, zipUploadDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(String(file.originalname || '')).toLowerCase();
-    cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
-  },
-});
-
-function zipFileFilter(_req, file, cb) {
-  const ext = path.extname(String(file.originalname || '')).toLowerCase();
-  const mimeType = String(file.mimetype || '').toLowerCase();
-  const allowedMimeTypes = new Set([
-    'application/zip',
-    'application/x-zip-compressed',
-    'application/x-zip',
-    'application/octet-stream',
-    'multipart/x-zip',
-  ]);
-
-  if (ext !== '.zip' || (mimeType && !allowedMimeTypes.has(mimeType))) {
-    const error = new Error('Solo se permiten archivos ZIP para preparación documental');
-    error.code = 'AUDIT_PREPARATION_ZIP_TYPE_NOT_ALLOWED';
-    return cb(error);
-  }
-
-  return cb(null, true);
-}
-
-const upload = multer({
-  storage,
-  limits: { fileSize: maxZipBytes },
-  fileFilter: zipFileFilter,
+const upload = createDiskUpload({
+  destination: zipUploadDir,
+  allowedTypes: ZIP_MIME_TYPES,
+  fileSize: maxZipBytes,
+  files: 1,
+  fields: 10,
+  code: 'AUDIT_PREPARATION_ZIP_TYPE_NOT_ALLOWED',
+  message: 'Solo se permiten archivos ZIP para preparación documental',
 });
 
 function zipUpload(req, res, next) {
   upload.single('file')(req, res, (error) => {
     if (!error) return next();
 
-    const isSizeError = error.code === 'LIMIT_FILE_SIZE';
-    return res.status(400).json({
+    const payload = safeUploadError(error, {
+      code: 'AUDIT_PREPARATION_ZIP_UPLOAD_ERROR',
+      sizeCode: 'AUDIT_PREPARATION_ZIP_TOO_LARGE',
+      sizeMessage: 'El ZIP excede el tamaño máximo permitido',
+      message: 'Solo se permiten archivos ZIP para preparación documental',
+    });
+    return res.status(payload.status).json({
       ok: false,
-      code: isSizeError ? 'AUDIT_PREPARATION_ZIP_TOO_LARGE' : (error.code || 'AUDIT_PREPARATION_ZIP_UPLOAD_ERROR'),
-      error: isSizeError
-        ? 'El ZIP excede el tamaño máximo permitido'
-        : 'Solo se permiten archivos ZIP para preparación documental',
+      code: payload.code,
+      error: payload.error,
     });
   });
 }

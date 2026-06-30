@@ -3,7 +3,14 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const roleAuth = require('../middleware/roleAuth');
-const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+const {
+  IMAGE_MIME_TYPES,
+  createDiskUpload,
+  safeUploadError,
+} = require('../utils/secureUpload');
+const { safeErrorLog } = require('../utils/safeLogger');
 
 function normalizeRole(user) {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
@@ -31,17 +38,32 @@ function isPlatform(user) {
   ].includes(normalizeRole(user));
 }
 
-// 🔥 STORAGE SEGURO
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/logos/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
+const logoUploadDir = path.join(__dirname, '..', '..', 'uploads', 'logos');
+fs.mkdirSync(logoUploadDir, { recursive: true });
+
+const upload = createDiskUpload({
+  destination: logoUploadDir,
+  allowedTypes: IMAGE_MIME_TYPES,
+  fileSize: 5 * 1024 * 1024,
+  files: 1,
+  fields: 20,
+  code: 'TENANT_LOGO_TYPE_NOT_ALLOWED',
+  message: 'Selecciona una imagen válida para el logo',
 });
 
-const upload = multer({ storage });
+function tenantLogoUpload(req, res, next) {
+  upload.single('logo')(req, res, (error) => {
+    if (!error) return next();
+
+    const payload = safeUploadError(error, {
+      code: 'TENANT_LOGO_UPLOAD_ERROR',
+      sizeCode: 'TENANT_LOGO_TOO_LARGE',
+      sizeMessage: 'El logo no debe superar 5 MB',
+      message: 'Selecciona una imagen válida para el logo',
+    });
+    return res.status(payload.status).json({ error: payload.error, code: payload.code });
+  });
+}
 
 function buildTenantLogoPublicUrl(tenant) {
   if (!tenant) return null;
@@ -89,7 +111,7 @@ router.get('/', auth, async (req, res) => {
     const result = await pool.query(`SELECT * FROM tenants ORDER BY name`);
     res.json(result.rows.map(decorateTenantLogo));
   } catch (err) {
-    console.error(err);
+    safeErrorLog('ERROR GET TENANTS:', err, req);
     res.status(500).json({ error: 'Error obteniendo empresas' });
   }
 });
@@ -112,7 +134,7 @@ router.get('/:id', auth, async (req, res) => {
     res.json(decorateTenantLogo(result.rows[0] || null));
 
   } catch (err) {
-    console.error(err);
+    safeErrorLog('ERROR GET TENANT:', err, req);
     res.status(500).json({ error: 'Error obteniendo empresa' });
   }
 });
@@ -121,7 +143,7 @@ router.get('/:id', auth, async (req, res) => {
 // =============================
 // CREAR
 // =============================
-router.post('/', auth, upload.single('logo'), async (req, res) => {
+router.post('/', auth, tenantLogoUpload, async (req, res) => {
   try {
     const { name, rut, address, business, branches } = req.body;
 
@@ -148,7 +170,7 @@ router.post('/', auth, upload.single('logo'), async (req, res) => {
     res.json(result.rows[0]);
 
   } catch (err) {
-    console.error("TENANT ERROR:", err);
+    safeErrorLog('TENANT ERROR:', err, req);
     res.status(500).json({ error: 'Error creando empresa' });
   }
 });

@@ -2,10 +2,14 @@ const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
 const auth = require('../middleware/auth')
-const multer = require('multer')
-const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
+const {
+  DOCUMENT_MIME_TYPES,
+  createDiskUpload,
+  safeUploadError
+} = require('../utils/secureUpload')
+const { safeErrorLog } = require('../utils/safeLogger')
 const {
   enqueueEvidenceAiJob,
   cancelActiveJobsForEvidence,
@@ -83,60 +87,27 @@ const canProcessAiJobs = (req) => {
 const evidenceUploadDir = path.join(__dirname, '..', '..', 'uploads', 'evidences')
 fs.mkdirSync(evidenceUploadDir, { recursive: true })
 
-const allowedEvidenceTypes = {
-  '.pdf': ['application/pdf'],
-  '.doc': ['application/msword'],
-  '.docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-  '.xls': ['application/vnd.ms-excel'],
-  '.xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-  '.csv': ['text/csv', 'application/csv', 'application/vnd.ms-excel', 'text/plain'],
-  '.png': ['image/png'],
-  '.jpg': ['image/jpeg'],
-  '.jpeg': ['image/jpeg'],
-  '.txt': ['text/plain']
-}
-
-function evidenceFileFilter(_req, file, cb) {
-  const ext = path.extname(String(file.originalname || '')).toLowerCase()
-  const allowedMimeTypes = allowedEvidenceTypes[ext]
-  const mimeType = String(file.mimetype || '').toLowerCase()
-
-  if (!allowedMimeTypes || !allowedMimeTypes.includes(mimeType)) {
-    const err = new Error('Tipo de archivo no permitido para evidencia')
-    err.code = 'EVIDENCE_FILE_TYPE_NOT_ALLOWED'
-    return cb(err)
-  }
-
-  return cb(null, true)
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, evidenceUploadDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(String(file.originalname || '')).toLowerCase()
-    cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`)
-  }
-})
-
-const upload = multer({
-  storage,
-  limits: {
-    fileSize: Number(process.env.EVIDENCE_UPLOAD_MAX_BYTES || 25 * 1024 * 1024)
-  },
-  fileFilter: evidenceFileFilter
+const upload = createDiskUpload({
+  destination: evidenceUploadDir,
+  allowedTypes: DOCUMENT_MIME_TYPES,
+  fileSize: Number(process.env.EVIDENCE_UPLOAD_MAX_BYTES || 25 * 1024 * 1024),
+  files: 1,
+  fields: 20,
+  code: 'EVIDENCE_FILE_TYPE_NOT_ALLOWED',
+  message: 'Tipo de archivo no permitido para evidencia'
 })
 
 function evidenceUpload(req, res, next) {
   upload.single('file')(req, res, (err) => {
     if (!err) return next()
 
-    const isSizeError = err.code === 'LIMIT_FILE_SIZE'
-    return res.status(400).json({
-      code: isSizeError ? 'EVIDENCE_FILE_TOO_LARGE' : (err.code || 'EVIDENCE_UPLOAD_ERROR'),
-      error: isSizeError
-        ? 'La evidencia excede el tamaño máximo permitido'
-        : 'Tipo de archivo no permitido para evidencia'
+    const payload = safeUploadError(err, {
+      code: 'EVIDENCE_UPLOAD_ERROR',
+      sizeCode: 'EVIDENCE_FILE_TOO_LARGE',
+      sizeMessage: 'La evidencia excede el tamaño máximo permitido',
+      message: 'Tipo de archivo no permitido para evidencia'
     })
+    return res.status(payload.status).json(payload)
   })
 }
 
@@ -871,7 +842,7 @@ router.post('/upload', auth, evidenceUpload, async (req, res) => {
     })
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('UPLOAD ERROR:', err)
+    safeErrorLog('UPLOAD ERROR:', err, req)
     return res.status(500).json({
       error: 'Error subiendo evidencia'
     })
@@ -938,7 +909,7 @@ router.put('/validate/:id', auth, async (req, res) => {
     })
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('ERROR VALIDATE EVIDENCE:', err)
+    safeErrorLog('ERROR VALIDATE EVIDENCE:', err, req)
     return res.status(500).json({ error: 'Error validando evidencia' })
   } finally {
     client.release()
@@ -996,7 +967,7 @@ router.post('/reprocess-ai/:id', auth, async (req, res) => {
     })
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('ERROR REPROCESS EVIDENCE AI:', err)
+    safeErrorLog('ERROR REPROCESS EVIDENCE AI:', err, req)
     return res.status(500).json({
       error: 'Error reprocesando evidencia en IA'
     })
@@ -1026,7 +997,7 @@ router.post('/jobs/process-next', auth, async (req, res) => {
       processed
     })
   } catch (err) {
-    console.error('ERROR PROCESS EVIDENCE AI JOBS:', err)
+    safeErrorLog('ERROR PROCESS EVIDENCE AI JOBS:', err, req)
     return res.status(500).json({
       error: 'Error procesando jobs IA'
     })
@@ -1059,7 +1030,7 @@ router.get('/jobs/:tenant_id', auth, async (req, res) => {
 
     return res.json(result.rows)
   } catch (err) {
-    console.error('ERROR LIST EVIDENCE AI JOBS:', err)
+    safeErrorLog('ERROR LIST EVIDENCE AI JOBS:', err, req)
     return res.status(500).json({
       error: 'Error listando jobs IA'
     })
@@ -1155,7 +1126,7 @@ router.put('/approve/:id', auth, async (req, res) => {
     })
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('ERROR APPROVE EVIDENCE:', err)
+    safeErrorLog('ERROR APPROVE EVIDENCE:', err, req)
     return res.status(500).json({ error: 'Error revisando evidencia' })
   } finally {
     client.release()
@@ -1204,7 +1175,7 @@ router.get('/file/:id', auth, async (req, res) => {
 
     return res.sendFile(resolvedPath)
   } catch (err) {
-    console.error('ERROR DOWNLOAD EVIDENCE FILE:', err)
+    safeErrorLog('ERROR DOWNLOAD EVIDENCE FILE:', err, req)
     return res.status(500).json({ error: 'Error descargando evidencia' })
   }
 })
@@ -1345,7 +1316,7 @@ router.post('/:id/mark-official', auth, async (req, res) => {
     });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('ERROR MARK EVIDENCE OFFICIAL:', err);
+    safeErrorLog('ERROR MARK EVIDENCE OFFICIAL:', err, req);
     return res.status(500).json({
       error: 'No fue posible marcar la evidencia como oficial'
     });
@@ -1414,7 +1385,7 @@ router.post('/:id/ai-review', auth, async (req, res) => {
       evidence_id: evidenceId
     })
   } catch (err) {
-    console.error('ERROR EVIDENCE AI REVIEW:', err)
+    safeErrorLog('ERROR EVIDENCE AI REVIEW:', err, req)
     return res.status(500).json({ ok: false, error: 'Error ejecutando revisión IA de evidencia' })
   }
 })
@@ -1700,7 +1671,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
     return res.json(result.rows)
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('GET ERROR:', err)
+    safeErrorLog('GET ERROR:', err, req)
     return res.status(500).json({
       error: 'Error listando evidencias'
     })

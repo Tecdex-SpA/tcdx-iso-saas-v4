@@ -1,27 +1,44 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../config/db');
-const auth = require('../middleware/auth');
-const multer = require('multer');
+const pool = require('../../config/db');
+const auth = require('../../middleware/auth');
+const {
+  DOCUMENT_MIME_TYPES,
+  createDiskUpload,
+  safeUploadError,
+} = require('../../utils/secureUpload');
 
 // =============================
 // 📁 CONFIG STORAGE
 // =============================
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
+const upload = createDiskUpload({
+  destination: 'uploads/',
+  allowedTypes: DOCUMENT_MIME_TYPES,
+  fileSize: Number(process.env.EVIDENCE_UPLOAD_MAX_BYTES || 25 * 1024 * 1024),
+  files: 1,
+  fields: 20,
+  code: 'EVIDENCE_FILE_TYPE_NOT_ALLOWED',
+  message: 'Tipo de archivo no permitido para evidencia',
 });
 
-const upload = multer({ storage });
+function evidenceUpload(req, res, next) {
+  upload.single('file')(req, res, (error) => {
+    if (!error) return next();
+
+    const payload = safeUploadError(error, {
+      code: 'EVIDENCE_UPLOAD_ERROR',
+      sizeCode: 'EVIDENCE_FILE_TOO_LARGE',
+      sizeMessage: 'La evidencia excede el tamaño máximo permitido',
+      message: 'Tipo de archivo no permitido para evidencia',
+    });
+    return res.status(payload.status).json({ error: payload.error, code: payload.code });
+  });
+}
 
 // =============================
 // 📥 SUBIR PDF REAL
 // =============================
-router.post('/upload', auth, upload.single('file'), async (req, res) => {
+router.post('/upload', auth, evidenceUpload, async (req, res) => {
   try {
     const { tenant_id, control_id, description } = req.body;
 

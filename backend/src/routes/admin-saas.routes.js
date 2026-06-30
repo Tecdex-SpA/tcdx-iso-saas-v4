@@ -4,33 +4,46 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const fs = require('fs');
 const path = require('path');
-const multer = require('multer');
 const { errorDetail } = require('../utils/errorResponse');
 const { normalizeAiSettingsPayload } = require('../services/tenantAiSettings.service');
+const {
+  IMAGE_MIME_TYPES,
+  createDiskUpload,
+  safeUploadError,
+} = require('../utils/secureUpload');
+const { safeErrorLog, safeWarnLog } = require('../utils/safeLogger');
 
 
 const logoUploadDir = path.join(__dirname, '..', '..', 'uploads', 'logos');
 fs.mkdirSync(logoUploadDir, { recursive: true });
 
-const logoStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, logoUploadDir);
-  },
-  filename: (req, file, cb) => {
-    const safeName = String(file.originalname || 'logo')
-      .replace(/[^a-zA-Z0-9._-]/g, '_')
-      .slice(-120);
-
-    cb(null, `${Date.now()}-${safeName}`);
-  },
+const uploadLogo = createDiskUpload({
+  destination: logoUploadDir,
+  allowedTypes: IMAGE_MIME_TYPES,
+  fileSize: 5 * 1024 * 1024,
+  files: 1,
+  fields: 30,
+  code: 'TENANT_LOGO_TYPE_NOT_ALLOWED',
+  message: 'Selecciona una imagen válida para el logo',
 });
 
-const uploadLogo = multer({
-  storage: logoStorage,
-  limits: {
-    fileSize: 5 * 1024 * 1024,
-  },
-});
+function tenantLogoUpload(req, res, next) {
+  uploadLogo.single('logo')(req, res, (error) => {
+    if (!error) return next();
+
+    const payload = safeUploadError(error, {
+      code: 'TENANT_LOGO_UPLOAD_ERROR',
+      sizeCode: 'TENANT_LOGO_TOO_LARGE',
+      sizeMessage: 'El logo no debe superar 5 MB',
+      message: 'Selecciona una imagen válida para el logo',
+    });
+    return res.status(payload.status).json({
+      ok: false,
+      code: payload.code,
+      error: payload.error,
+    });
+  });
+}
 
 function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null;
@@ -608,7 +621,7 @@ router.get('/overview', auth, async (req, res) => {
       standards: standardsResult.rows,
     });
   } catch (error) {
-    console.error('ERROR GET ADMIN SAAS OVERVIEW:', error);
+    safeErrorLog('ERROR GET ADMIN SAAS OVERVIEW:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo overview de Administración SaaS',
@@ -670,7 +683,7 @@ router.get('/dealer/tenants', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET DEALER TENANTS:', error);
+    safeErrorLog('ERROR GET DEALER TENANTS:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo empresas del dealer',
@@ -825,7 +838,7 @@ router.get('/tenants', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET TENANTS ADMIN SAAS:', error);
+    safeErrorLog('ERROR GET TENANTS ADMIN SAAS:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo empresas',
@@ -840,7 +853,7 @@ router.get('/tenants', auth, async (req, res) => {
 // Crear empresa desde Administración SaaS.
 // Versión blindada: confirma persistencia real luego del COMMIT.
 // =====================================================
-router.post('/tenants', auth, uploadLogo.single('logo'), async (req, res) => {
+router.post('/tenants', auth, tenantLogoUpload, async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -947,7 +960,7 @@ router.post('/tenants', auth, uploadLogo.single('logo'), async (req, res) => {
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event tenant.created:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event tenant.created:', auditError, req);
     }
 
     await client.query('COMMIT');
@@ -966,7 +979,8 @@ router.post('/tenants', auth, uploadLogo.single('logo'), async (req, res) => {
 
     if (!verifiedTenant) {
       console.error('TENANT CREATE PERSISTENCE MISMATCH:', {
-        inserted: insertedTenant,
+        request_id: req.requestId || null,
+        tenant_id: insertedTenant.id || null,
       });
 
       return res.status(500).json({
@@ -990,7 +1004,7 @@ router.post('/tenants', auth, uploadLogo.single('logo'), async (req, res) => {
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR CREATE TENANT ADMIN SAAS:', error);
+    safeErrorLog('ERROR CREATE TENANT ADMIN SAAS:', error, req);
 
     if (error.code === '23505') {
       return res.status(409).json({
@@ -1014,7 +1028,7 @@ router.post('/tenants', auth, uploadLogo.single('logo'), async (req, res) => {
 // PUT /api/admin-saas/tenants/:tenant_id/logo
 // Actualizar logo de empresa existente
 // =====================================================
-router.put('/tenants/:tenant_id/logo', auth, uploadLogo.single('logo'), async (req, res) => {
+router.put('/tenants/:tenant_id/logo', auth, tenantLogoUpload, async (req, res) => {
   try {
     const { tenant_id } = req.params;
 
@@ -1088,7 +1102,7 @@ router.put('/tenants/:tenant_id/logo', auth, uploadLogo.single('logo'), async (r
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event tenant.logo.updated:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event tenant.logo.updated:', auditError, req);
     }
 
     return res.json({
@@ -1101,7 +1115,7 @@ router.put('/tenants/:tenant_id/logo', auth, uploadLogo.single('logo'), async (r
       },
     });
   } catch (error) {
-    console.error('ERROR UPDATE TENANT LOGO:', error);
+    safeErrorLog('ERROR UPDATE TENANT LOGO:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -1233,7 +1247,7 @@ router.put('/tenants/:tenant_id', auth, async (req, res) => {
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event tenant.updated:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event tenant.updated:', auditError, req);
     }
 
     return res.json({
@@ -1245,7 +1259,7 @@ router.put('/tenants/:tenant_id', auth, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('ERROR UPDATE TENANT ADMIN SAAS:', error);
+    safeErrorLog('ERROR UPDATE TENANT ADMIN SAAS:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -1320,7 +1334,7 @@ router.put('/tenants/:tenant_id/ai-settings', auth, async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    console.error('ERROR UPDATE TENANT AI SETTINGS:', error);
+    safeErrorLog('ERROR UPDATE TENANT AI SETTINGS:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando configuración IA',
@@ -1366,7 +1380,7 @@ router.get('/tenants/:tenant_id', auth, async (req, res) => {
       data: detail,
     });
   } catch (error) {
-    console.error('ERROR GET TENANT DETAIL:', error);
+    safeErrorLog('ERROR GET TENANT DETAIL:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo detalle de empresa',
@@ -1412,7 +1426,7 @@ router.get('/dealers', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET ADMIN SAAS DEALERS:', error);
+    safeErrorLog('ERROR GET ADMIN SAAS DEALERS:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo dealers',
@@ -1470,7 +1484,7 @@ router.get('/audit-log', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET ADMIN SAAS AUDIT LOG:', error);
+    safeErrorLog('ERROR GET ADMIN SAAS AUDIT LOG:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo bitácora administrativa',
@@ -1528,7 +1542,7 @@ router.get('/dealer/requests', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET ADMIN SAAS DEALER REQUESTS:', error);
+    safeErrorLog('ERROR GET ADMIN SAAS DEALER REQUESTS:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo solicitudes dealer',
@@ -1567,7 +1581,7 @@ router.get('/modules', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET SAAS MODULES:', error);
+    safeErrorLog('ERROR GET SAAS MODULES:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo módulos SaaS',
@@ -1745,7 +1759,7 @@ router.put('/tenants/:tenant_id/modules/:module_key', auth, async (req, res) => 
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event tenant_module:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event tenant_module:', auditError, req);
     }
 
     await client.query('COMMIT');
@@ -1759,7 +1773,7 @@ router.put('/tenants/:tenant_id/modules/:module_key', auth, async (req, res) => 
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR UPDATE TENANT MODULE:', error);
+    safeErrorLog('ERROR UPDATE TENANT MODULE:', error, req);
 
     const msg = String(error.message || '');
 
@@ -1909,7 +1923,7 @@ router.put('/tenants/:tenant_id/standards/:standard_code', auth, async (req, res
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('ERROR UPDATE TENANT STANDARD:', error);
+    safeErrorLog('ERROR UPDATE TENANT STANDARD:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando norma del tenant',
@@ -2271,7 +2285,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event initialize-controls:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event initialize-controls:', auditError, req);
     }
 
     await client.query('COMMIT');
@@ -2297,7 +2311,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR INITIALIZE TENANT STANDARD CONTROLS FIXED:', error);
+    safeErrorLog('ERROR INITIALIZE TENANT STANDARD CONTROLS FIXED:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -2490,7 +2504,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event initialize-controls:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event initialize-controls:', auditError, req);
     }
 
     await client.query('COMMIT');
@@ -2515,7 +2529,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR INITIALIZE TENANT STANDARD CONTROLS:', error);
+    safeErrorLog('ERROR INITIALIZE TENANT STANDARD CONTROLS:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -2573,7 +2587,7 @@ router.post('/tenants/:tenant_id/refresh-health', auth, async (req, res) => {
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('ERROR REFRESH TENANT HEALTH:', error);
+    safeErrorLog('ERROR REFRESH TENANT HEALTH:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error refrescando health del tenant',
@@ -2640,7 +2654,7 @@ router.get('/external-lookup/quotas', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET EXTERNAL LOOKUP QUOTAS:', error);
+    safeErrorLog('ERROR GET EXTERNAL LOOKUP QUOTAS:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo cuotas de búsqueda externa',
@@ -2764,10 +2778,12 @@ router.put('/tenants/:tenant_id/external-lookup/quota', auth, async (req, res) =
 
     if (!verified || Number(verified.monthly_limit) !== cleanLimit) {
       console.error('QUOTA PERSISTENCE MISMATCH:', {
+        request_id: req.requestId || null,
         tenant_id,
         expected: cleanLimit,
-        write_returned: writeResult.rows[0],
-        verified,
+        write_returned_id: writeResult.rows[0]?.id || null,
+        verified_id: verified?.id || null,
+        verified_monthly_limit: verified?.monthly_limit ?? null,
       });
 
       return res.status(500).json({
@@ -2794,7 +2810,7 @@ router.put('/tenants/:tenant_id/external-lookup/quota', auth, async (req, res) =
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR UPDATE EXTERNAL LOOKUP QUOTA:', error);
+    safeErrorLog('ERROR UPDATE EXTERNAL LOOKUP QUOTA:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -2856,7 +2872,7 @@ router.get('/tenants/:tenant_id/external-lookup/logs', auth, async (req, res) =>
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET EXTERNAL LOOKUP LOGS:', error);
+    safeErrorLog('ERROR GET EXTERNAL LOOKUP LOGS:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo logs de búsqueda externa',
@@ -2920,7 +2936,7 @@ router.get('/tenants/:tenant_id/external-lookup/quota-audit', auth, async (req, 
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET EXTERNAL LOOKUP QUOTA AUDIT:', error);
+    safeErrorLog('ERROR GET EXTERNAL LOOKUP QUOTA AUDIT:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo auditoría de cuota externa',
@@ -3388,7 +3404,7 @@ router.get('/prebilling/prices', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET SAAS PRICE CATALOG:', error);
+    safeErrorLog('ERROR GET SAAS PRICE CATALOG:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo catálogo de precios SaaS',
@@ -3466,7 +3482,7 @@ router.get('/tenants/:tenant_id/prebilling/current', auth, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('ERROR GET CURRENT PREBILLING:', error);
+    safeErrorLog('ERROR GET CURRENT PREBILLING:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo prefacturación mensual',
@@ -3512,7 +3528,7 @@ router.post('/tenants/:tenant_id/prebilling/recalculate', auth, async (req, res)
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR RECALCULATE PREBILLING:', error);
+    safeErrorLog('ERROR RECALCULATE PREBILLING:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error recalculando prefacturación mensual',
@@ -3576,7 +3592,7 @@ router.put('/prebilling/:prebilling_id/status', auth, async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    console.error('ERROR UPDATE PREBILLING STATUS:', error);
+    safeErrorLog('ERROR UPDATE PREBILLING STATUS:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando estado de prefactura',
@@ -3687,7 +3703,7 @@ router.get('/tenants/:tenant_id/standards/catalog', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET TENANT STANDARDS CATALOG:', error);
+    safeErrorLog('ERROR GET TENANT STANDARDS CATALOG:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error obteniendo catálogo de normas contratables',
@@ -3933,7 +3949,7 @@ router.put('/tenants/:tenant_id/standards/:standard_code/contract', auth, async 
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR CONTRACT TENANT STANDARD:', error);
+    safeErrorLog('ERROR CONTRACT TENANT STANDARD:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -4104,7 +4120,7 @@ router.put('/tenants/:tenant_id/standards/:standard_code/contract', auth, async 
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event tenant_standard:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event tenant_standard:', auditError, req);
     }
 
     await client.query('COMMIT');
@@ -4118,7 +4134,7 @@ router.put('/tenants/:tenant_id/standards/:standard_code/contract', auth, async 
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR CONTRACT TENANT STANDARD:', error);
+    safeErrorLog('ERROR CONTRACT TENANT STANDARD:', error, req);
     return res.status(500).json({
       ok: false,
       error: 'Error actualizando norma contratada',
@@ -4187,7 +4203,7 @@ router.get('/tenants/:tenant_id/contract', auth, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('ERROR GET TENANT CONTRACT:', error);
+    safeErrorLog('ERROR GET TENANT CONTRACT:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -4447,7 +4463,7 @@ router.put('/tenants/:tenant_id/contract', auth, async (req, res) => {
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event tenant_contract:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event tenant_contract:', auditError, req);
     }
 
     await client.query('COMMIT');
@@ -4471,7 +4487,7 @@ router.put('/tenants/:tenant_id/contract', auth, async (req, res) => {
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR UPSERT TENANT CONTRACT:', error);
+    safeErrorLog('ERROR UPSERT TENANT CONTRACT:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -4586,7 +4602,7 @@ router.put('/prebilling/prices/:price_id', auth, async (req, res) => {
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event price_catalog:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event price_catalog:', auditError, req);
     }
 
     return res.json({
@@ -4594,7 +4610,7 @@ router.put('/prebilling/prices/:price_id', auth, async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    console.error('ERROR UPDATE SAAS PRICE CATALOG:', error);
+    safeErrorLog('ERROR UPDATE SAAS PRICE CATALOG:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -4682,7 +4698,7 @@ router.get('/dealer/my-tenants', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET DEALER MY TENANTS:', error);
+    safeErrorLog('ERROR GET DEALER MY TENANTS:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -4754,7 +4770,7 @@ router.get('/dealer/requests', auth, async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error('ERROR GET DEALER REQUESTS:', error);
+    safeErrorLog('ERROR GET DEALER REQUESTS:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -4846,7 +4862,7 @@ router.get('/tenants/:tenant_id/modules/catalog', auth, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('ERROR GET TENANT MODULES CATALOG:', error);
+    safeErrorLog('ERROR GET TENANT MODULES CATALOG:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -5012,7 +5028,7 @@ router.put('/tenants/:tenant_id/modules/:module_key/contract-toggle', auth, asyn
         ]
       );
     } catch (auditError) {
-      console.warn('WARN log_admin_audit_event tenant_module:', auditError.message);
+      safeWarnLog('WARN log_admin_audit_event tenant_module:', auditError, req);
     }
 
     await client.query('COMMIT');
@@ -5026,7 +5042,7 @@ router.put('/tenants/:tenant_id/modules/:module_key/contract-toggle', auth, asyn
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error('ERROR CONTRACT TOGGLE TENANT MODULE:', error);
+    safeErrorLog('ERROR CONTRACT TOGGLE TENANT MODULE:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -5181,7 +5197,7 @@ router.post('/tenants/:tenant_id/suspend-service', auth, async (req, res) => {
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch {}
 
-    console.error('ERROR SUSPEND TENANT SERVICE:', error);
+    safeErrorLog('ERROR SUSPEND TENANT SERVICE:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -5301,7 +5317,7 @@ router.post('/tenants/:tenant_id/reactivate-service', auth, async (req, res) => 
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch {}
 
-    console.error('ERROR REACTIVATE TENANT SERVICE:', error);
+    safeErrorLog('ERROR REACTIVATE TENANT SERVICE:', error, req);
 
     return res.status(500).json({
       ok: false,
@@ -5426,7 +5442,7 @@ router.delete('/tenants/:tenant_id', auth, async (req, res) => {
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch {}
 
-    console.error('ERROR SOFT DELETE TENANT:', error);
+    safeErrorLog('ERROR SOFT DELETE TENANT:', error, req);
 
     return res.status(500).json({
       ok: false,
