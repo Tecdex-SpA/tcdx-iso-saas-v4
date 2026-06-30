@@ -9,6 +9,7 @@ const {
   validatePasswordStrength,
   getPasswordPolicyMessage,
 } = require('../utils/passwordPolicy');
+const { safeErrorLog } = require('../utils/safeLogger');
 
 // =============================
 // 📝 REGISTRO
@@ -46,7 +47,7 @@ const register = async (email, password, tenant_id = null, role = 'user') => {
     return result.rows[0];
 
   } catch (err) {
-    console.error('REGISTER SERVICE ERROR:', err);
+    safeErrorLog('REGISTER SERVICE ERROR:', err);
     throw err;
   }
 };
@@ -99,7 +100,7 @@ const login = async (email, password) => {
     return token;
 
   } catch (err) {
-    console.error('LOGIN SERVICE ERROR:', err);
+    safeErrorLog('LOGIN SERVICE ERROR:', err);
     throw err;
   }
 };

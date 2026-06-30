@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const multer = require('multer');
 const {
   listSources,
   listDocuments,
@@ -18,14 +17,30 @@ const {
   analyzeSemanticEvidence,
   reviewSuggestion,
 } = require('../services/evidenceLibrary.service');
+const {
+  DOCUMENT_MIME_TYPES,
+  ZIP_MIME_TYPES,
+  createMemoryUpload,
+  safeUploadError,
+} = require('../utils/secureUpload');
 
 const router = express.Router();
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILE_BYTES || 50 * 1024 * 1024),
-    files: Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILES || 50),
-  },
+const maxManualFiles = Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILES || 50);
+const manualFilesUpload = createMemoryUpload({
+  allowedTypes: DOCUMENT_MIME_TYPES,
+  fileSize: Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILE_BYTES || 50 * 1024 * 1024),
+  files: maxManualFiles,
+  fields: 20,
+  code: 'EVIDENCE_LIBRARY_FILE_TYPE_NOT_ALLOWED',
+  message: 'Tipo de archivo no permitido para carga manual',
+});
+const manualZipUpload = createMemoryUpload({
+  allowedTypes: ZIP_MIME_TYPES,
+  fileSize: Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_ZIP_BYTES || 100 * 1024 * 1024),
+  files: 1,
+  fields: 20,
+  code: 'EVIDENCE_LIBRARY_ZIP_TYPE_NOT_ALLOWED',
+  message: 'Solo se permiten archivos ZIP para carga manual',
 });
 
 function sendError(res, error) {
@@ -41,6 +56,34 @@ function sendError(res, error) {
   return res.status(status >= 400 && status < 600 ? status : 500).json(payload);
 }
 
+function uploadManualFiles(req, res, next) {
+  manualFilesUpload.array('files', maxManualFiles)(req, res, (error) => {
+    if (!error) return next();
+
+    const payload = safeUploadError(error, {
+      code: 'EVIDENCE_LIBRARY_UPLOAD_ERROR',
+      sizeCode: 'EVIDENCE_LIBRARY_FILE_TOO_LARGE',
+      sizeMessage: 'El archivo excede el tamaño máximo permitido',
+      message: 'Tipo de archivo no permitido para carga manual',
+    });
+    return res.status(payload.status).json({ ok: false, code: payload.code, error: payload.error });
+  });
+}
+
+function uploadManualZip(req, res, next) {
+  manualZipUpload.single('zip')(req, res, (error) => {
+    if (!error) return next();
+
+    const payload = safeUploadError(error, {
+      code: 'EVIDENCE_LIBRARY_ZIP_UPLOAD_ERROR',
+      sizeCode: 'EVIDENCE_LIBRARY_ZIP_TOO_LARGE',
+      sizeMessage: 'El ZIP excede el tamaño máximo permitido',
+      message: 'Solo se permiten archivos ZIP para carga manual',
+    });
+    return res.status(payload.status).json({ ok: false, code: payload.code, error: payload.error });
+  });
+}
+
 router.get('/sources', async (req, res) => {
   try {
     const data = await listSources({ user: req.user });
@@ -50,7 +93,7 @@ router.get('/sources', async (req, res) => {
   }
 });
 
-router.post('/manual-upload/files', upload.array('files', Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILES || 50)), async (req, res) => {
+router.post('/manual-upload/files', uploadManualFiles, async (req, res) => {
   try {
     const data = await manualUploadFiles({
       user: req.user,
@@ -63,7 +106,7 @@ router.post('/manual-upload/files', upload.array('files', Number(process.env.EVI
   }
 });
 
-router.post('/manual-upload/zip', upload.single('zip'), async (req, res) => {
+router.post('/manual-upload/zip', uploadManualZip, async (req, res) => {
   try {
     const data = await manualUploadZip({
       user: req.user,

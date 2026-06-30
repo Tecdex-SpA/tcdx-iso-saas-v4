@@ -3,37 +3,30 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
-const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const {
+  IMAGE_MIME_TYPES,
+  createDiskUpload,
+  safeUploadError,
+} = require('../utils/secureUpload');
+const {
+  validatePasswordStrength,
+  getPasswordPolicyMessage,
+} = require('../utils/passwordPolicy');
+const { safeErrorLog } = require('../utils/safeLogger');
 
 const PROFILE_UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'profiles');
+fs.mkdirSync(PROFILE_UPLOAD_DIR, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    fs.mkdir(PROFILE_UPLOAD_DIR, { recursive: true }, (err) => {
-      cb(err, PROFILE_UPLOAD_DIR);
-    });
-  },
-  filename: (req, file, cb) => {
-    const safeOriginalName = String(file.originalname || 'avatar')
-      .replace(/[^a-zA-Z0-9._-]/g, '-')
-      .slice(-120);
-    cb(null, `${Date.now()}-${safeOriginalName}`);
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (String(file.mimetype || '').startsWith('image/')) {
-      cb(null, true);
-      return;
-    }
-
-    cb(new Error('INVALID_AVATAR_TYPE'));
-  }
+const upload = createDiskUpload({
+  destination: PROFILE_UPLOAD_DIR,
+  allowedTypes: IMAGE_MIME_TYPES,
+  fileSize: 5 * 1024 * 1024,
+  files: 1,
+  fields: 5,
+  code: 'INVALID_AVATAR_TYPE',
+  message: 'Selecciona un archivo de imagen válido',
 });
 
 function uploadAvatar(req, res, next) {
@@ -43,16 +36,11 @@ function uploadAvatar(req, res, next) {
       return;
     }
 
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: 'La imagen no debe superar 5 MB' });
-    }
-
-    if (err.message === 'INVALID_AVATAR_TYPE') {
-      return res.status(400).json({ error: 'Selecciona un archivo de imagen válido' });
-    }
-
-    console.error('ERROR AVATAR UPLOAD MIDDLEWARE:', err);
-    return res.status(500).json({ error: 'Error procesando foto de perfil' });
+    const payload = safeUploadError(err, {
+      sizeMessage: 'La imagen no debe superar 5 MB',
+      message: 'Selecciona un archivo de imagen válido',
+    });
+    return res.status(payload.status).json({ error: payload.error, code: payload.code });
   });
 }
 
@@ -87,7 +75,7 @@ router.get('/me', auth, async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('ERROR GET ME:', err);
+    safeErrorLog('ERROR GET ME:', err, req);
     res.status(500).json({ error: 'Error servidor' });
   }
 });
@@ -130,7 +118,7 @@ router.put('/me', auth, async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('ERROR UPDATE ME:', err);
+    safeErrorLog('ERROR UPDATE ME:', err, req);
     res.status(500).json({ error: 'Error actualizando perfil' });
   }
 });
@@ -146,8 +134,8 @@ router.put('/me/password', auth, async (req, res) => {
       return res.status(400).json({ error: 'Debes ingresar contraseña actual y nueva contraseña' });
     }
 
-    if (String(new_password).length < 6) {
-      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+    if (!validatePasswordStrength(new_password).valid) {
+      return res.status(400).json({ error: getPasswordPolicyMessage() });
     }
 
     const current = await pool.query(
@@ -184,7 +172,7 @@ router.put('/me/password', auth, async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('ERROR CHANGE PASSWORD:', err);
+    safeErrorLog('ERROR CHANGE PASSWORD:', err, req);
     res.status(500).json({ error: 'Error cambiando contraseña' });
   }
 });
@@ -220,7 +208,7 @@ router.post('/me/avatar', auth, uploadAvatar, async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('ERROR UPLOAD AVATAR:', err);
+    safeErrorLog('ERROR UPLOAD AVATAR:', err, req);
     res.status(500).json({ error: 'Error subiendo foto' });
   }
 });
@@ -261,7 +249,7 @@ router.get('/:id', auth, async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('ERROR BACKEND:', err);
+    safeErrorLog('ERROR BACKEND:', err, req);
     res.status(500).json({ error: 'Error servidor' });
   }
 });
