@@ -7,6 +7,7 @@ const authService = require('../services/auth.service');
 const { resolveLocale } = require('../utils/locale');
 const { sendError } = require('../utils/errorResponse');
 const { ERROR_CODES } = require('../utils/errorCodes');
+const { safeErrorLog } = require('../utils/safeLogger');
 
 function normalizeRole(role) {
   return String(role || '').trim().toLowerCase();
@@ -98,7 +99,7 @@ router.post('/register', async (req, res) => {
 
     return res.json(user);
   } catch (err) {
-    console.error('REGISTER ERROR:', err);
+    safeErrorLog('REGISTER ERROR:', err, req);
     const locale = resolveLocale(req);
     res.set('x-tcdx-locale', locale);
     return sendError(res, {
@@ -144,7 +145,7 @@ router.post('/login', async (req, res) => {
 
     return res.json(buildSessionFromToken(token));
   } catch (err) {
-    console.error('LOGIN ERROR:', err);
+    safeErrorLog('LOGIN ERROR:', err, req);
     const locale = resolveLocale(req);
     res.set('x-tcdx-locale', locale);
     return sendError(res, {
@@ -167,7 +168,7 @@ router.get('/validate', auth, async (req, res) => {
       ...buildSessionFromToken(token),
     });
   } catch (err) {
-    console.error('VALIDATE ERROR:', err);
+    safeErrorLog('VALIDATE ERROR:', err, req);
     const locale = resolveLocale(req);
     res.set('x-tcdx-locale', locale);
     return sendError(res, {
