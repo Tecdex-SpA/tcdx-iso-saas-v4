@@ -292,13 +292,6 @@ function isIntegratedEvidence(evidence: EvidenceItem): boolean {
   );
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('es-CL');
-}
-
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
   const d = new Date(value);
@@ -427,11 +420,6 @@ function getEvidenceQualityClass(value?: string | null): string {
 
   return 'border-slate-200 bg-slate-50 text-slate-600';
 }
-
-function getEffectiveComplianceBucket(item: WorkbenchItem): string {
-  return String(item.compliance_bucket || '').toLowerCase();
-}
-
 
 export default function ControlesPage() {
   return (

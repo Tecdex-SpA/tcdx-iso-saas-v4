@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { getUserFromToken } from '@/utils/auth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -48,14 +47,6 @@ type Summary = {
   recent?: unknown[];
 };
 
-type AuthUser = {
-  tenant_id?: string;
-  tenantId?: string;
-  tenant?: string;
-  company_id?: string;
-  companyId?: string;
-};
-
 type GenerationResult = {
   dry_run?: boolean;
   generated_count?: number | string;
@@ -68,18 +59,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
-}
-
-function resolveTenantId(user: unknown): string {
-  const record = isRecord(user) ? user as AuthUser : {};
-  return (
-    record.tenant_id ||
-    record.tenantId ||
-    record.tenant ||
-    record.company_id ||
-    record.companyId ||
-    ''
-  );
 }
 
 function badgeClass(value?: string | null) {
@@ -109,8 +88,6 @@ export default function IsoOperationalExecutionPage() {
   const [actingId, setActingId] = useState('');
   const [error, setError] = useState('');
   const [lastGenerate, setLastGenerate] = useState<GenerationResult | null>(null);
-
-  const tenantId = useMemo(() => resolveTenantId(getUserFromToken()), []);
 
   const standards = useMemo(() => {
     const values = new Set<string>();

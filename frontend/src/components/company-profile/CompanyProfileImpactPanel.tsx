@@ -79,7 +79,6 @@ function Badge({ children }: { children: string }) {
 export default function CompanyProfileImpactPanel({
   moduleCode,
   title,
-  compact = false,
 }: {
   moduleCode: 'dashboard' | 'health' | 'controls' | 'kpis' | 'audits' | 'action-plans' | 'reports';
   title?: string;
