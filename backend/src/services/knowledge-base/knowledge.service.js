@@ -147,9 +147,18 @@ async function getRecommendedActions(filters = {}) {
   return repository.getChildRows('knowledge_recommended_actions', items.map((item) => item.item_key));
 }
 
+async function getCommonGaps(filters = {}) {
+  const items = await searchKnowledge(filters, { limit: filters.limit || 20 });
+  return repository.getChildRows('knowledge_common_gaps', items.map((item) => item.item_key));
+}
+
 async function getRuleHints(filters = {}) {
   const items = await searchKnowledge(filters, { limit: filters.limit || 20 });
   return repository.getChildRows('knowledge_rule_hints', items.map((item) => item.item_key));
+}
+
+async function getKnowledgeRules(filters = {}) {
+  return repository.listRules(filters);
 }
 
 function entityFromDatasetRow(entityType, row) {
@@ -220,8 +229,10 @@ module.exports = {
   buildKnowledgeContextForTenantDataset,
   calculateKnowledgeCoverage,
   getAuditQuestions,
+  getCommonGaps,
   getEvidenceExpectations,
   getKnowledgeForControl,
+  getKnowledgeRules,
   getRecommendedActions,
   getRuleHints,
   matchKnowledgeToTenantEntity,
