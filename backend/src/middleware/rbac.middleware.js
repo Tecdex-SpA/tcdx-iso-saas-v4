@@ -144,6 +144,16 @@ const API_RULES = [
     write: [],
   },
   {
+    prefix: '/api/knowledge-base',
+    read: TENANT_READ_ROLES,
+    write: [],
+  },
+  {
+    prefix: '/api/intelligence',
+    read: TENANT_READ_ROLES,
+    write: [],
+  },
+  {
     prefix: '/api/iso-control-mapping',
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,

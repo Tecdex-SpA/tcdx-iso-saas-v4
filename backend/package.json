@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/app.js",
     "check": "node -c src/app.js",
-    "test": "npm run check && node src/services/operationalRiskMonteCarlo.service.test.js && node src/services/operationalRiskAiJobs.service.test.js"
+    "test": "npm run check && node src/services/operationalRiskMonteCarlo.service.test.js && node src/services/operationalRiskAiJobs.service.test.js && node src/services/knowledge-base/knowledge.service.test.js && node src/services/intelligence/intelligence.service.test.js"
   },
   "keywords": [],
   "author": "",

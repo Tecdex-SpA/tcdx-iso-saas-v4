@@ -101,6 +101,7 @@ const PATH_TENANT_PATTERNS = [
   { pattern: /^\/api\/soa\/([^/?]+)\/?$/i, methods: ['GET', 'HEAD'] },
   { pattern: /^\/api\/(?:kpi|kpis)\/(?:recalculate|dashboard|effective-health-summary|catalog|admin)\/([^/?]+)\/?$/i },
   { pattern: /^\/api\/search\/(?:global|history)\/([^/?]+)\/?$/i, methods: ['GET', 'HEAD'] },
+  { pattern: /^\/api\/intelligence\/brief\/([^/?]+)\/?$/i, methods: ['GET', 'HEAD'] },
   { pattern: /^\/api\/files\/tenant\/([^/?]+)(?:\/.*)?$/i, methods: ['GET', 'HEAD'] },
   { pattern: /^\/api\/iso-risk-matrix\/([^/?]+)(?:\/.*)?$/i },
   { pattern: /^\/api\/billing\/preinvoice\/([^/?]+)(?:\/materialize)?\/?$/i },

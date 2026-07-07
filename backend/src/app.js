@@ -72,6 +72,8 @@ const tenantOperationsRoutes = require('./routes/tenant-operations.routes');
 const tenantProcessLinksRoutes = require('./routes/tenant-process-links.routes');
 const tenantFilesRoutes = require('./routes/tenant-files.routes');
 const syncAgentRoutes = require('./routes/sync-agent.routes');
+const knowledgeBaseRoutes = require('./routes/knowledge-base.routes');
+const intelligenceRoutes = require('./routes/intelligence.routes');
 const { aiLocaleResponseGuard } = require('./middleware/aiLocaleResponseGuard');
 
 const app = express();
@@ -332,6 +334,8 @@ app.use('/api/iso-auditor', isoAuditorRoutes);
 app.use('/api/iso-scope', isoScopeRoutes);
 app.use('/api/ai-compliance/tenant-search', aiTenantSearchRoutes);
 app.use('/api/lifecycle', lifecycleRoutes);
+app.use('/api/knowledge-base', knowledgeBaseRoutes);
+app.use('/api/intelligence', intelligenceRoutes);
 
 
 /* KPI: compatibilidad con ambas rutas */

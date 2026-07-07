@@ -1,0 +1,31 @@
+{
+  "seed_version": "v2",
+  "source_file": "base_conocimiento_iso_grc_ia_tcdx_1000_registros.md",
+  "generated_at": "2026-07-07T18:41:12.517Z",
+  "total_records": 1000,
+  "warnings": [],
+  "by_family": {
+    "ISO_9001": 288,
+    "ISO_27001": 420,
+    "NIST_CSF": 132,
+    "NIST_AI_RMF": 80,
+    "AUDIT": 60,
+    "RISK": 20
+  },
+  "by_standard": {
+    "ISO 9001:2015 + AMD 1:2024": 288,
+    "ISO 27001:2022": 420,
+    "NIST CSF 2.0": 132,
+    "NIST AI RMF 1.0 / PLAYBOOK": 80,
+    "ISO 19011 / TECDEX DERIVED METHODOLOGY": 60,
+    "ISO 31000 / TECDEX DERIVED METHODOLOGY": 20
+  },
+  "by_severity": {
+    "alta": 519,
+    "media": 481
+  },
+  "by_license": {
+    "derived_summary": 1000
+  },
+  "source_sha256": "944195abd5ea7ae94ab97c25594226acce5c898baf898fc8ea2a9dff261eab3b"
+}
