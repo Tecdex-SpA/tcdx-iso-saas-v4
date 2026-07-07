@@ -3,11 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
+import IntelligenceEmptyState from '@/components/intelligence/IntelligenceEmptyState';
+import IntelligenceErrorState from '@/components/intelligence/IntelligenceErrorState';
+import MetricExplanationPanel from '@/components/intelligence/MetricExplanationPanel';
 import {
   EnterpriseButton,
   EnterprisePageHeader,
 } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
+import useIntelligenceBrief from '@/hooks/useIntelligenceBrief';
 import { getUserFromToken } from '@/utils/auth';
 
 const API_URL =
@@ -916,6 +920,7 @@ function CauseMiniCard({
 
 export default function HealthDashboardPage() {
   const { t } = useTranslation();
+  const intelligence = useIntelligenceBrief();
   const [token, setToken] = useState<string | null>(null);
   const [canRefreshHealth, setCanRefreshHealth] = useState(false);
 
@@ -1605,6 +1610,23 @@ export default function HealthDashboardPage() {
                 compact
               />
             </div>
+
+            {intelligence.loading ? (
+              <div className="h-44 animate-pulse rounded-lg border border-slate-200 bg-white" />
+            ) : intelligence.data ? (
+              <MetricExplanationPanel
+                brief={intelligence.data}
+                metric="health_score"
+                title="Explicación inteligente de Health ISO"
+              />
+            ) : intelligence.status === 'error' || intelligence.status === 'timeout' || intelligence.status === 'forbidden' ? (
+              <IntelligenceErrorState status={intelligence.status} error={intelligence.error} onRetry={intelligence.refresh} />
+            ) : (
+              <IntelligenceEmptyState
+                title="Sin explicación inteligente de Health"
+                description="Health ISO continúa disponible; la explicación KB/reglas aparecerá al existir cobertura suficiente."
+              />
+            )}
 
             <section className="enterprise-card">
               {loadingSprintHealth ? (

@@ -2,8 +2,14 @@
 
 import MvpViewShell from '@/components/mvp/MvpViewShell';
 import StrengthenedDiagnosticPanel from '@/components/diagnostics/StrengthenedDiagnosticPanel';
+import AuditReadinessCard from '@/components/intelligence/AuditReadinessCard';
+import IntelligenceEmptyState from '@/components/intelligence/IntelligenceEmptyState';
+import IntelligenceErrorState from '@/components/intelligence/IntelligenceErrorState';
+import useIntelligenceBrief from '@/hooks/useIntelligenceBrief';
 
 export default function CumplimientoAuditoriaPage() {
+  const intelligence = useIntelligenceBrief();
+
   return (
     <MvpViewShell
       eyebrow="Vista consolidada Sprint 1"
@@ -72,6 +78,24 @@ export default function CumplimientoAuditoriaPage() {
         },
       ]}
     >
+      {intelligence.loading ? (
+        <div className="mb-6 h-48 animate-pulse rounded-lg border border-slate-200 bg-white" />
+      ) : intelligence.data ? (
+        <div className="mb-6">
+          <AuditReadinessCard brief={intelligence.data} />
+        </div>
+      ) : intelligence.status === 'error' || intelligence.status === 'timeout' || intelligence.status === 'forbidden' ? (
+        <div className="mb-6">
+          <IntelligenceErrorState status={intelligence.status} error={intelligence.error} onRetry={intelligence.refresh} />
+        </div>
+      ) : (
+        <div className="mb-6">
+          <IntelligenceEmptyState
+            title="Sin readiness inteligente"
+            description="El diagnóstico sigue disponible; la preparación auditora inteligente se mostrará cuando existan datos y fundamento suficientes."
+          />
+        </div>
+      )}
       <StrengthenedDiagnosticPanel />
     </MvpViewShell>
   );

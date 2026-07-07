@@ -3,10 +3,17 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import DataQualityWarnings from '@/components/intelligence/DataQualityWarnings';
+import IntelligenceConfidenceBadge from '@/components/intelligence/IntelligenceConfidenceBadge';
+import IntelligenceErrorState from '@/components/intelligence/IntelligenceErrorState';
+import KnowledgeBasisDrawer from '@/components/intelligence/KnowledgeBasisDrawer';
+import NextBestActionsPanel from '@/components/intelligence/NextBestActionsPanel';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
+import useIntelligenceBrief from '@/hooks/useIntelligenceBrief';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText, translateStatusLabel } from '@/i18n/displayText';
+import { asArray, cleanText, collectKnowledgeBasis, formatScore } from '@/components/intelligence/utils';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -416,6 +423,7 @@ type SuggestionRow = {
 
 export default function IaCompliancePage() {
   const { locale } = useTranslation();
+  const intelligence = useIntelligenceBrief();
   const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
   const canUseAiCompliance = !entitlementsLoading && canUseAiFeature('suggestions');
   const copy: IaComplianceCopy = locale === 'en' ? IA_COMPLIANCE_COPY.en : IA_COMPLIANCE_COPY.es;
@@ -427,6 +435,7 @@ export default function IaCompliancePage() {
   const [healthSummary, setHealthSummary] = useState<HealthSummaryResponse | null>(null);
   const [executiveBrief, setExecutiveBrief] = useState<ExecutiveBriefResponse | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
+  const [knowledgeDrawerOpen, setKnowledgeDrawerOpen] = useState(false);
 
   const getWithAuth = useCallback(async <T,>(url: string): Promise<T> => {
     const authToken = localStorage.getItem('token');
@@ -559,6 +568,8 @@ export default function IaCompliancePage() {
   const executiveData = executiveBrief?.ai || null;
   const healthStructured = healthSummary?.structured_result || healthAi?.structured_result || null;
   const executiveStructured = executiveBrief?.structured_result || executiveData?.structured_result || null;
+  const intelligenceBasis = collectKnowledgeBasis(intelligence.data);
+  const intelligenceRisks = asArray<Record<string, unknown>>(intelligence.data?.main_risks).slice(0, 3);
 
   const suggestionMetrics = useMemo(() => {
     return {
@@ -749,6 +760,73 @@ export default function IaCompliancePage() {
                 tone="blue"
               />
             </div>
+
+            {intelligence.loading ? (
+              <div className="h-48 animate-pulse rounded-2xl border border-slate-200 bg-white" />
+            ) : intelligence.data ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+                      Contexto usado por IA
+                    </div>
+                    <h2 className="mt-1 text-xl font-bold text-slate-900">
+                      Estado tenant y fundamento operativo
+                    </h2>
+                    <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+                      La vista combina estado confirmado del tenant, reglas Intelligence, riesgos, acciones, warnings y KB resumida. No incluye base completa ni texto normativo extenso.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <IntelligenceConfidenceBadge brief={intelligence.data} compact />
+                    <button
+                      type="button"
+                      onClick={() => setKnowledgeDrawerOpen(true)}
+                      className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                    >
+                      Ver fundamento
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <InfoCard title="Score Intelligence" value={formatScore(intelligence.data.overall?.score)} tone="blue" />
+                  <InfoCard title="Audit readiness" value={formatScore(intelligence.data.audit_readiness?.score)} tone="amber" />
+                  <InfoCard title="Knowledge basis" value={String(intelligenceBasis.length)} tone="slate" />
+                </div>
+
+                <div className="mt-5 grid gap-5 xl:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-sm font-bold text-slate-900">Riesgos usados como contexto</div>
+                    {intelligenceRisks.length ? (
+                      <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                        {intelligenceRisks.map((risk, index) => (
+                          <li key={index}>{cleanText(risk.title || risk.description || risk.rule_key)}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-3 text-sm text-slate-500">Sin riesgos críticos priorizados.</p>
+                    )}
+                  </div>
+                  <div>
+                    <div className="mb-3 text-sm font-bold text-slate-900">Acciones recomendadas</div>
+                    <NextBestActionsPanel brief={intelligence.data} maxItems={3} />
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <DataQualityWarnings brief={intelligence.data} maxItems={4} />
+                </div>
+
+                <KnowledgeBasisDrawer
+                  open={knowledgeDrawerOpen}
+                  items={intelligenceBasis}
+                  onClose={() => setKnowledgeDrawerOpen(false)}
+                />
+              </div>
+            ) : intelligence.status === 'error' || intelligence.status === 'timeout' || intelligence.status === 'forbidden' ? (
+              <IntelligenceErrorState status={intelligence.status} error={intelligence.error} onRetry={intelligence.refresh} />
+            ) : null}
 
             <div className="grid gap-6 xl:grid-cols-3">
               <div className="xl:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

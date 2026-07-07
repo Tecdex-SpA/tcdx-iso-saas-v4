@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import ExecutiveIntelligenceBrief from '@/components/intelligence/ExecutiveIntelligenceBrief';
+import useIntelligenceBrief from '@/hooks/useIntelligenceBrief';
 import { getStoredValidToken } from '@/utils/auth';
 import DashboardV2Header from './DashboardV2Header';
 import DashboardV2Panel from './DashboardV2Panel';
@@ -135,6 +137,7 @@ function emptyData(): DashboardV2Response {
 }
 
 export default function DashboardV2() {
+  const intelligence = useIntelligenceBrief();
   const [token, setToken] = useState<string | null>(null);
   const [data, setData] = useState<DashboardV2Response>(emptyData());
   const [activeTab, setActiveTab] = useState('resumen');
@@ -407,6 +410,14 @@ export default function DashboardV2() {
             </ul>
           </div>
         )}
+
+        <ExecutiveIntelligenceBrief
+          brief={intelligence.data}
+          loading={intelligence.loading}
+          error={intelligence.error}
+          status={intelligence.status}
+          onRefresh={intelligence.refresh}
+        />
 
         <DashboardV2Tabs tabs={data.tabs} activeTab={activeTab} onChange={setActiveTab} />
 

@@ -1,6 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import ExecutiveIntelligenceBrief from '@/components/intelligence/ExecutiveIntelligenceBrief';
+import useIntelligenceBrief from '@/hooks/useIntelligenceBrief';
+import {
+  asArray as intelligenceArray,
+  collectKnowledgeBasis,
+  dataQualityWarnings,
+  executiveSummary,
+} from '@/components/intelligence/utils';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -341,6 +349,7 @@ function saveLocalHistory(key: string, entries: ExportHistoryEntry[]) {
 }
 
 export default function PremiumReportsPanel({ locale, selectedStandard }: PremiumReportsPanelProps) {
+  const intelligence = useIntelligenceBrief();
   const [templates, setTemplates] = useState<PremiumTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [templateLoading, setTemplateLoading] = useState(true);
@@ -366,6 +375,22 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
   const exportHistoryRef = useRef<ExportHistoryEntry[]>([]);
 
   const executiveRole = isExecutiveRole(userRole);
+  const intelligenceReportPayload = useMemo(() => {
+    if (!intelligence.data) return null;
+    return {
+      executive_summary: executiveSummary(intelligence.data),
+      overall_state: intelligence.data.overall?.state || null,
+      overall_score: intelligence.data.overall?.score ?? null,
+      audit_readiness: intelligence.data.audit_readiness || null,
+      main_gaps: intelligenceArray(intelligence.data.findings).slice(0, 5).map((item) => sanitizeTechnicalData(item, 1)),
+      main_risks: intelligenceArray(intelligence.data.main_risks).slice(0, 5).map((item) => sanitizeTechnicalData(item, 1)),
+      priority_actions: intelligenceArray(intelligence.data.next_best_actions).slice(0, 5).map((item) => sanitizeTechnicalData(item, 1)),
+      confidence: intelligence.data.confidence || null,
+      data_limitations: dataQualityWarnings(intelligence.data),
+      knowledge_basis_annex: collectKnowledgeBasis(intelligence.data, 10),
+      fallback_reason: intelligence.data.metadata?.fallback_reason || null,
+    };
+  }, [intelligence.data]);
 
   useEffect(() => {
     setUserRole(getUserRole());
@@ -431,6 +456,9 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
     narrative_style: narrativeStyle,
     language: locale === 'en' ? 'en' : 'es',
     max_source_items: 30,
+    include_intelligence_brief: true,
+    intelligence_payload_ready: Boolean(intelligenceReportPayload),
+    intelligence_brief: intelligenceReportPayload,
   });
 
   const updateHistory = (nextEntries: ExportHistoryEntry[]) => {
@@ -600,6 +628,23 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
 
   return (
     <section className="space-y-5">
+      <ExecutiveIntelligenceBrief
+        brief={intelligence.data}
+        loading={intelligence.loading}
+        error={intelligence.error}
+        status={intelligence.status}
+        onRefresh={intelligence.refresh}
+      />
+
+      {intelligenceReportPayload && (
+        <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-sm text-blue-900">
+          <div className="font-bold">Payload inteligente preparado para reportes</div>
+          <p className="mt-2 leading-6">
+            Incluye resumen ejecutivo, estado general, readiness, brechas, riesgos, acciones, confianza, limitaciones y anexo KB sanitizado. PDF/ZIP actual puede ignorar campos no soportados sin romper generación.
+          </p>
+        </div>
+      )}
+
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
