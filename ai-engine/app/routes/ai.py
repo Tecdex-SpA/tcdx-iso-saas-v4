@@ -217,6 +217,75 @@ def _as_list(value: Any, limit: int = 8) -> List[Any]:
     return []
 
 
+def _intelligence_knowledge_items(context: Dict[str, Any], limit: int = 12) -> List[Dict[str, Any]]:
+    items = context.get("knowledge_context")
+    if isinstance(items, dict):
+        items = items.get("knowledge_items_used") or items.get("filtered_items") or []
+    if not isinstance(items, list):
+        items = []
+    compacted: List[Dict[str, Any]] = []
+    for item in items[:limit]:
+        if not isinstance(item, dict):
+            continue
+        compacted.append({
+            "item_key": item.get("item_key") or item.get("source_record_id") or item.get("record_id"),
+            "standard_family": item.get("standard_family"),
+            "standard_code": item.get("standard_code"),
+            "clause_or_control": item.get("clause_or_control"),
+            "domain": item.get("domain"),
+            "license_class": item.get("license_class") or "derived_summary",
+        })
+    return compacted
+
+
+def _intelligence_fallback_contract(context: Dict[str, Any], reason: str = "deterministic") -> Dict[str, Any]:
+    tenant = context.get("tenant_summary") if isinstance(context.get("tenant_summary"), dict) else {}
+    scores = context.get("scores") if isinstance(context.get("scores"), dict) else {}
+    findings = context.get("findings") if isinstance(context.get("findings"), list) else []
+    actions = context.get("next_best_actions") if isinstance(context.get("next_best_actions"), list) else []
+    knowledge_basis = _intelligence_knowledge_items(context, limit=8)
+    readiness = scores.get("audit_readiness")
+    tenant_name = tenant.get("name") or "el tenant"
+    top_finding = findings[0] if findings and isinstance(findings[0], dict) else {}
+    top_action = actions[0] if actions and isinstance(actions[0], dict) else {}
+    score_text = f"readiness {readiness}" if readiness is not None else "readiness no informado"
+    return {
+        "executive_summary": f"Con datos tenant-scoped de {tenant_name}, el estado se resume como {score_text}. La narrativa prioriza hallazgos, evidencia, acciones y fundamento KB filtrado.",
+        "technical_summary": f"Principal senal tecnica: {top_finding.get('rule_key') or top_finding.get('title') or 'sin hallazgo critico confirmado'}; severidad {top_finding.get('severity') or 'no informada'}.",
+        "audit_summary": f"Se usaron {len(knowledge_basis)} referencias knowledge_basis derivadas y datos internos confirmados. No se emite certificacion automatica.",
+        "assumptions": ["La respuesta se basa solo en contexto curado enviado por backend y no usa busqueda web."],
+        "limitations": [f"Modo deterministico/fallback: {reason}"],
+        "recommendations": [{
+            "title": top_action.get("title") or "Revisar brechas y evidencia prioritaria",
+            "action_basis": top_action.get("action_basis") or "Rules Engine + Scoring + Knowledge Base filtrada.",
+        }],
+        "knowledge_basis": knowledge_basis,
+        "confidence": "media" if knowledge_basis else "baja",
+        "should_escalate_to_human": True,
+        "fallback": True,
+        "fallback_reason": reason,
+    }
+
+
+def _normalize_intelligence_contract(data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    base = _intelligence_fallback_contract(context, reason="llm_contract_repair")
+    if not isinstance(data, dict):
+        return base
+    result = {**base, **data}
+    for field in ("assumptions", "limitations", "recommendations", "knowledge_basis"):
+        result[field] = _as_list(result.get(field), 12)
+    for field in ("executive_summary", "technical_summary", "audit_summary"):
+        result[field] = _safe_text(result.get(field), base[field])
+    if result.get("confidence") not in {"alta", "media", "baja"}:
+        result["confidence"] = base["confidence"]
+    if _intelligence_knowledge_items(context, limit=1) and not result["knowledge_basis"]:
+        result["confidence"] = "baja"
+        result["should_escalate_to_human"] = True
+        result["limitations"].append("Salida IA degradada: faltaba knowledge_basis aplicable.")
+    result["should_escalate_to_human"] = bool(result.get("should_escalate_to_human"))
+    return result
+
+
 def _parse_jsonish(value: Any) -> Dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -664,6 +733,91 @@ def _deterministic_contract(result: Dict[str, Any], *, endpoint: str, request_id
     result["engine"] = {**trace}
     result["ok"] = result.get("ok", True)
     return result
+
+
+@router.post("/intelligence/narrative")
+async def intelligence_narrative(
+    request: Request,
+    x_ai_token: Optional[str] = Header(default=None),
+    x_request_id: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    validate_internal_token(x_ai_token)
+    started_at = time.perf_counter()
+    payload = await request.json()
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload invalido")
+    context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+    request_id = x_request_id or str(payload.get("request_id") or "")
+    metadata = get_llm_metadata(depth="standard", model_mode="balanced")
+    fallback = _intelligence_fallback_contract(context, reason="llm_unavailable")
+    llm_used = False
+    llm_error = ""
+
+    if is_llm_available() and not _truthy(os.getenv("AI_DISABLED"), False):
+        try:
+            data = call_llm_json(
+                prompt=json.dumps({
+                    "instruction": "Devuelve exclusivamente JSON valido con narrativa ejecutiva, tecnica y auditora. No inventes datos. Usa solo el contexto curado.",
+                    "context": context,
+                    "output_contract": context.get("output_contract"),
+                }, ensure_ascii=False),
+                system_prompt=(
+                    "Eres una capa de sintesis GRC/ISO multi-tenant. "
+                    "Los datos tenant-scoped, reglas, scoring y knowledge_basis son la fuente de verdad. "
+                    "No prometas certificacion ni auditoria automatica. No uses busqueda web."
+                ),
+                temperature=0.2,
+                timeout=int(os.getenv("INTELLIGENCE_AI_TIMEOUT_SECONDS", "45") or "45"),
+                depth="standard",
+                local_compact=True,
+                model_mode="balanced",
+                response_contract_instruction=(
+                    "JSON obligatorio: executive_summary, technical_summary, audit_summary, "
+                    "assumptions[], limitations[], recommendations[], knowledge_basis[], "
+                    "confidence alta|media|baja, should_escalate_to_human boolean."
+                ),
+            )
+            normalized = _normalize_llm_data(data)
+            structured = _normalize_intelligence_contract(normalized, context)
+            structured["fallback"] = False
+            structured["fallback_reason"] = None
+            llm_used = True
+        except Exception as exc:
+            llm_error = str(exc)[:240]
+            structured = fallback
+    else:
+        structured = fallback
+
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    engine = {
+        "ai_engine_used": True,
+        "used_llm": llm_used,
+        "llm_used": llm_used,
+        "deterministic_mode": not llm_used,
+        "fallback_used": not llm_used,
+        "ai_enrichment_failed": bool(llm_error),
+        "model": metadata.get("model") if llm_used else "deterministic_intelligence_narrative",
+        "selected_model": metadata.get("model") if llm_used else "deterministic_intelligence_narrative",
+        "llm_provider": metadata.get("provider"),
+        "used_rag": True,
+        "used_web": False,
+        "used_drive": False,
+        "tenant_filter_enforced": True,
+        "filtered_by_tenant_id": True,
+        "knowledge_items_count": len(_intelligence_knowledge_items(context, limit=40)),
+        "duration_ms": duration_ms,
+        "request_id": request_id,
+        "error_message": llm_error or None,
+    }
+    return {
+        "ok": True,
+        "structured_result": structured,
+        **structured,
+        "engine": engine,
+        "trace": engine,
+        "metrics": engine,
+        "model": engine["model"],
+    }
 
 
 @router.post("/suggest/health-summary")

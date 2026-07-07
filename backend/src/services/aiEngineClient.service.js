@@ -210,6 +210,25 @@ class AiEngineClient {
     }
   }
 
+  async generateIntelligenceNarrative(payload, options = {}) {
+    const tenantId = payload?.context?.tenant_summary?.tenant_id || payload?.context?.tenant_id || payload?.tenant_id || '';
+    const aiAccess = tenantId ? await isTenantAiFeatureEnabled(tenantId, 'auditor') : { enabled: true };
+    if (!aiAccess.enabled) {
+      return this.buildDisabledByPlan(payload, 'auditor', aiAccess.reason);
+    }
+
+    if (!this.baseUrl || !this.token) {
+      return this.buildFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
+    }
+
+    const timeoutMs = Number.parseInt(
+      String(options.timeoutMs || process.env.INTELLIGENCE_AI_TIMEOUT_MS || 45000),
+      10
+    ) || 45000;
+
+    return this.postJson('/api/ai/intelligence/narrative', payload, { timeoutMs });
+  }
+
   async analyzeOperationalBetaPert(payload, options = {}) {
     const tenantId = payload?.tenant_id || payload?.context?.tenant?.tenant_id || '';
     const aiAccess = tenantId ? await isTenantAiFeatureEnabled(tenantId, 'auditor') : { enabled: true };

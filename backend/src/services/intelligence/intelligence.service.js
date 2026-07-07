@@ -19,6 +19,7 @@ const { buildConfidenceProfile } = require('./intelligence.confidence');
 const { calculateEvidenceStrength } = require('./intelligence.evidence-strength');
 const { explainCoreMetrics } = require('./intelligence.explainability');
 const { runRules } = require('./intelligence.rules');
+const { generateNarratives } = require('./intelligence.ai-orchestrator');
 const scoring = require('./intelligence.scoring');
 
 function countRows(dataset, field) {
@@ -195,7 +196,7 @@ async function getTenantIntelligenceDataset({ tenantId, user }) {
   return rawDataset;
 }
 
-async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es' }) {
+async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es', enableAiNarrative = true, requestId = null }) {
   const rawDataset = await getTenantIntelligenceDataset({ tenantId, user });
   const normalizedDataset = normalizeTenantDataset(rawDataset);
   const enriched = await enrichDatasetWithKnowledge(normalizedDataset);
@@ -225,10 +226,16 @@ async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es' }) {
   const nextBestActions = buildNextBestActions(enriched, findings);
   const narrative = buildFallbackNarrative(enriched);
 
-  return {
+  const baseBrief = {
     ok: true,
     version: INTELLIGENCE_BRIEF_VERSION,
     tenant_id: tenantId,
+    tenant: {
+      tenant_id: tenantId,
+      name: enriched.tenant?.name || null,
+      active_standards: enriched.tenant_standards,
+    },
+    tenant_standards: enriched.tenant_standards,
     locale,
     generated_at: new Date().toISOString(),
     confidence: confidenceProfile,
@@ -252,6 +259,8 @@ async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es' }) {
       rules_version: 'intelligence_rules_v1',
       scoring_version: 'intelligence_scoring_v1',
       knowledge_seed_version: knowledgeContext.seed_version,
+      ai_used: false,
+      fallback_reason: enableAiNarrative ? 'ai_not_started' : 'ai_narrative_disabled_by_caller',
     },
     brief: {
       confirmed_data: narrative.confirmed_data,
@@ -261,6 +270,52 @@ async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es' }) {
       limitations: narrative.limitations,
     },
     source_trace: normalizedDataset.source_trace,
+  };
+
+  if (!enableAiNarrative) {
+    return baseBrief;
+  }
+
+  const narratives = await generateNarratives(baseBrief, {
+    narrativeType: 'intelligence_brief',
+    user,
+    requestId,
+  });
+  const aiStructured = narratives.structured || {};
+
+  return {
+    ...baseBrief,
+    narratives,
+    knowledge_basis: aiStructured.knowledge_basis || knowledgeContext.knowledge_items_used || [],
+    metadata: {
+      ...baseBrief.metadata,
+      ai_used: aiStructured.fallback !== true,
+      fallback_reason: aiStructured.fallback ? aiStructured.fallback_reason || 'AI_FALLBACK' : null,
+      ai_confidence: aiStructured.confidence || null,
+      ai_should_escalate_to_human: aiStructured.should_escalate_to_human === true,
+      knowledge_items_count: Array.isArray(aiStructured.knowledge_basis)
+        ? aiStructured.knowledge_basis.length
+        : Array.isArray(knowledgeContext.knowledge_items_used)
+          ? knowledgeContext.knowledge_items_used.length
+          : 0,
+    },
+    brief: {
+      ...baseBrief.brief,
+      ai_inferences: aiStructured.fallback
+        ? []
+        : [
+            aiStructured.executive_summary,
+            aiStructured.technical_summary,
+            aiStructured.audit_summary,
+          ].filter(Boolean),
+      recommendations: Array.isArray(aiStructured.recommendations) && aiStructured.recommendations.length
+        ? aiStructured.recommendations
+        : baseBrief.brief.recommendations,
+      limitations: Array.from(new Set([
+        ...baseBrief.brief.limitations,
+        ...(Array.isArray(aiStructured.limitations) ? aiStructured.limitations : []),
+      ])),
+    },
   };
 }
 

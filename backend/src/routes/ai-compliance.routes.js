@@ -201,6 +201,10 @@ const aiContextBuilder = require('../services/aiContextBuilder.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
 const { createAiTimer, resolveAiMode } = require('../services/aiRuntimeMetrics.service');
 const { isTenantAiFeatureEnabled } = require('../services/tenantAiSettings.service');
+const intelligenceService = require('../services/intelligence/intelligence.service');
+const {
+  buildReducedIntelligenceBriefForAiCompliance,
+} = require('../services/intelligence/intelligence.prompt-builder');
 
 const AI_ENGINE_URL = String(process.env.AI_ENGINE_URL || '').replace(/\/+$/, '');
 
@@ -1156,6 +1160,43 @@ function buildAiComplianceV2Payload({ tenantId, context, body = {}, question = '
   };
 }
 
+async function attachReducedIntelligenceContext({ tenantId, context, question, user }) {
+  try {
+    const intelligenceBrief = await intelligenceService.buildTenantIntelligenceBrief({
+      tenantId,
+      user,
+      enableAiNarrative: false,
+    });
+    const reduced = buildReducedIntelligenceBriefForAiCompliance(intelligenceBrief, {
+      question,
+      knowledgeLimit: 20,
+    });
+    return {
+      ...context,
+      intelligence_brief: reduced,
+      intelligence_context_metadata: {
+        included: true,
+        reduced: true,
+        knowledge_items_count: reduced.metadata?.knowledge_items_count || 0,
+        full_knowledge_base_included: false,
+      },
+    };
+  } catch (error) {
+    return {
+      ...context,
+      intelligence_context_metadata: {
+        included: false,
+        reduced: true,
+        error_code: error?.code || error?.name || 'INTELLIGENCE_CONTEXT_UNAVAILABLE',
+      },
+      limitations: [
+        ...(Array.isArray(context.limitations) ? context.limitations : []),
+        'No fue posible adjuntar Intelligence Brief reducido para IA Compliance.',
+      ],
+    };
+  }
+}
+
 function mapStructuredActionsToSuggestions(structuredResult) {
   const actions = Array.isArray(structuredResult?.recommended_actions)
     ? structuredResult.recommended_actions
@@ -1225,7 +1266,7 @@ function buildFastLegacyAiResponse({ type, summary, suggestions = [], confidence
   };
 }
 
-async function runAiComplianceV2Analysis({ tenantId, body = {}, question = '', taskType = null }) {
+async function runAiComplianceV2Analysis({ tenantId, body = {}, question = '', taskType = null, user = null }) {
   const standardCode = body.standard_code || body.iso_code || body.iso || null;
   const operationId = body.operation_id || null;
   const context = await buildAiComplianceV2Context({
@@ -1234,9 +1275,15 @@ async function runAiComplianceV2Analysis({ tenantId, body = {}, question = '', t
     standardCode,
     operationId,
   });
-  const payload = buildAiComplianceV2Payload({
+  const contextualized = await attachReducedIntelligenceContext({
     tenantId,
     context,
+    question,
+    user,
+  });
+  const payload = buildAiComplianceV2Payload({
+    tenantId,
+    context: contextualized,
     body,
     question,
     taskType,
@@ -1244,7 +1291,7 @@ async function runAiComplianceV2Analysis({ tenantId, body = {}, question = '', t
   const aiResult = await aiEngineClient.analyzeWithSeniorAuditor(payload);
   return {
     payload,
-    context,
+    context: contextualized,
     aiResult,
     legacy: buildLegacyAiComplianceView(aiResult),
   };
@@ -1981,6 +2028,7 @@ router.get('/health-summary', auth, async (req, res) => {
         },
         question: 'Analiza el estado de cumplimiento, brechas críticas y acciones prioritarias del tenant.',
         taskType: 'standard_gap_analysis',
+        user: req.user,
       });
 
     const seniorAuditor = complianceV2.aiResult;
@@ -2103,6 +2151,7 @@ router.post('/analyze', auth, async (req, res) => {
         : req.body?.evidence_id
           ? 'evidence_review'
           : req.body?.task_type || 'standard_gap_analysis',
+      user: req.user,
     });
     const metrics = timer.finish({
       mode: resolveAiMode(complianceV2.payload?.options, complianceV2.aiResult?.engine || {}),
@@ -2509,6 +2558,7 @@ router.get('/executive-brief', auth, async (req, res) => {
         },
         question: `Genera un resumen ejecutivo de cumplimiento para ${aiPayload.period}, priorizando brechas y acciones gerenciales.`,
         taskType: 'standard_gap_analysis',
+        user: req.user,
       });
 
     const seniorAuditor = complianceV2.aiResult;

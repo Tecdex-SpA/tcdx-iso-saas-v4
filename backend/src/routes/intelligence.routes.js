@@ -23,6 +23,7 @@ router.get('/brief/:tenantId', async (req, res) => {
       tenantId: req.params.tenantId,
       user: req.user,
       locale: req.query.locale || 'es',
+      requestId: req.headers['x-request-id'] || req.query.request_id || null,
     });
     return res.json(data);
   } catch (error) {

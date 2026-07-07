@@ -27,6 +27,11 @@ const { enforceTenantRequestScope } = require('../../middleware/tenantScope.midd
 
 const intelligenceRepository = require('./intelligence.repository');
 const knowledgeService = require('../knowledge-base/knowledge.service');
+const aiEngineClient = require('../aiEngineClient.service');
+const {
+  buildPromptContext,
+  buildReducedIntelligenceBriefForAiCompliance,
+} = require('./intelligence.prompt-builder');
 
 function createMockResponse() {
   return {
@@ -222,6 +227,24 @@ async function buildBriefForDataset(dataset, { hasKnowledge = true } = {}) {
   });
 }
 
+function validAiOutput(overrides = {}) {
+  return {
+    executive_summary: 'Resumen ejecutivo IA basado en datos confirmados.',
+    technical_summary: 'Resumen tecnico IA con reglas y scoring.',
+    audit_summary: 'Resumen auditor IA con fundamento KB.',
+    assumptions: ['Se usa solo contexto curado tenant-scoped.'],
+    limitations: ['No reemplaza auditoria humana.'],
+    recommendations: [{
+      title: 'Cerrar brecha prioritaria',
+      action_basis: 'knowledge_basis: KB-0001 + Rules Engine',
+    }],
+    knowledge_basis: [kbBasis],
+    confidence: 'media',
+    should_escalate_to_human: false,
+    ...overrides,
+  };
+}
+
 async function runPhase2PipelineTests() {
   const lowEvidenceBrief = await buildBriefForDataset(baseTenantDataset({
     priority_controls: [{
@@ -323,11 +346,134 @@ async function runPhase2PipelineTests() {
   assert.ok(noKbBrief.metric_explanations.find((item) => item.metric === 'knowledge_coverage'));
 }
 
+async function runPhase3AiOrchestratorTests() {
+  const originalAiDisabled = process.env.AI_DISABLED;
+  const originalEnabled = process.env.INTELLIGENCE_AI_ENABLED;
+  const originalGenerate = aiEngineClient.generateIntelligenceNarrative;
+
+  try {
+    const dataset = baseTenantDataset({
+      priority_controls: [{
+        id: 'control-ai-1',
+        standard_code: 'ISO 9001:2015 + Amd 1:2024',
+        clause_or_control: '4',
+        domain: 'Contexto de la organización',
+        title: 'Control contexto IA',
+        status: 'activo',
+        evidence_count: 0,
+      }],
+      recent_findings: [{
+        id: 'finding-ai-1',
+        title: 'Hallazgo abierto sin evidencia suficiente',
+        severity: 'alta',
+        standard_code: 'ISO 9001:2015 + Amd 1:2024',
+        domain: 'Contexto de la organización',
+      }],
+    });
+
+    process.env.AI_DISABLED = 'true';
+    let brief = await buildBriefForDataset(dataset);
+    assert.equal(brief.metadata.ai_used, false);
+    assert.equal(brief.metadata.fallback_reason, 'AI_DISABLED');
+    assert.ok(brief.narratives.executive.what_happens);
+
+    process.env.AI_DISABLED = 'false';
+    process.env.INTELLIGENCE_AI_ENABLED = 'true';
+    aiEngineClient.generateIntelligenceNarrative = async () => {
+      const error = new Error('timeout');
+      error.code = 'AI_ENGINE_TIMEOUT';
+      throw error;
+    };
+    brief = await buildBriefForDataset(dataset);
+    assert.equal(brief.metadata.ai_used, false);
+    assert.equal(brief.metadata.fallback_reason, 'AI_ENGINE_TIMEOUT');
+
+    aiEngineClient.generateIntelligenceNarrative = async () => ({ unexpected: true });
+    brief = await buildBriefForDataset(dataset);
+    assert.equal(brief.metadata.ai_used, false);
+    assert.equal(brief.metadata.fallback_reason, 'AI_INVALID_OUTPUT');
+
+    aiEngineClient.generateIntelligenceNarrative = async () => validAiOutput({ knowledge_basis: [] });
+    brief = await buildBriefForDataset(dataset);
+    assert.equal(brief.metadata.ai_used, true);
+    assert.equal(brief.narratives.structured.confidence, 'baja');
+    assert.equal(brief.narratives.structured.degraded_reason, 'missing_knowledge_basis');
+
+    aiEngineClient.generateIntelligenceNarrative = async () => validAiOutput();
+    brief = await buildBriefForDataset(dataset);
+    assert.equal(brief.metadata.ai_used, true);
+    assert.equal(brief.metadata.fallback_reason, null);
+    assert.ok(brief.knowledge_basis.length > 0);
+  } finally {
+    if (originalAiDisabled === undefined) delete process.env.AI_DISABLED;
+    else process.env.AI_DISABLED = originalAiDisabled;
+    if (originalEnabled === undefined) delete process.env.INTELLIGENCE_AI_ENABLED;
+    else process.env.INTELLIGENCE_AI_ENABLED = originalEnabled;
+    aiEngineClient.generateIntelligenceNarrative = originalGenerate;
+  }
+}
+
+function runPhase3PromptGuardrailTests() {
+  const manyKnowledgeItems = Array.from({ length: 1000 }, (_, index) => ({
+    item_key: `KB-${String(index + 1).padStart(4, '0')}`,
+    standard_code: 'ISO 9001:2015 + Amd 1:2024',
+    standard_family: 'ISO_9001',
+    clause_or_control: '4',
+    domain: 'Contexto de la organización',
+    item_type: 'governance_guidance',
+    title: `Registro tecnico ${index + 1}`,
+    intent_summary: 'Resumen derivado breve.',
+    license_class: 'derived_summary',
+  }));
+  const longLicensedLikeText = 'ISO requisito '.repeat(300);
+  const prompt = buildPromptContext({
+    tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    tenant: { name: 'Tenant Demo', active_standards: ['ISO 9001:2015 + Amd 1:2024'] },
+    scoring: { audit_readiness: 45, overall: 50 },
+    findings: [{
+      title: longLicensedLikeText,
+      severity: 'alta',
+      standard_code: 'ISO 9001:2015 + Amd 1:2024',
+      knowledge_basis: manyKnowledgeItems,
+    }],
+    next_best_actions: [{
+      title: 'Accion con secreto',
+      action_basis: 'usar token sk-test_abcdefghijklmnopqrstuvwxyz123456',
+      knowledge_basis: manyKnowledgeItems,
+    }],
+    knowledge_context: {
+      knowledge_items_used: manyKnowledgeItems,
+    },
+    data_quality: { warnings: ['warning'] },
+  }, { question: 'contexto organizacion ISO 9001', knowledgeLimit: 40 });
+
+  assert.equal(prompt.knowledge_context.length, 40);
+  const serialized = JSON.stringify(prompt);
+  assert.equal(serialized.includes('sk-test_abcdefghijklmnopqrstuvwxyz123456'), false);
+  assert.equal(serialized.includes('Registro tecnico 1000'), false);
+  assert.ok(serialized.length < 60000);
+
+  const reduced = buildReducedIntelligenceBriefForAiCompliance({
+    tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    tenant: { name: 'Tenant Demo', active_standards: ['ISO 9001:2015 + Amd 1:2024'] },
+    scoring: { audit_readiness: 45, overall: 50 },
+    findings: [{ title: 'Hallazgo', severity: 'alta', knowledge_basis: manyKnowledgeItems }],
+    next_best_actions: [{ title: 'Accion', action_basis: 'Rules Engine', knowledge_basis: manyKnowledgeItems }],
+    knowledge_context: { knowledge_items_used: manyKnowledgeItems },
+    data_quality: { warnings: ['warning'] },
+  }, { question: 'hallazgo', knowledgeLimit: 20 });
+
+  assert.ok(reduced.knowledge_context.length <= 20);
+  assert.equal(reduced.metadata.full_knowledge_base_included, false);
+}
+
 async function runTests() {
   await runAuthNoTokenTest();
   runTenantMismatchTest();
   await runBriefFallbackTest();
   await runPhase2PipelineTests();
+  await runPhase3AiOrchestratorTests();
+  runPhase3PromptGuardrailTests();
   console.log('intelligence.service tests OK');
 }
 
