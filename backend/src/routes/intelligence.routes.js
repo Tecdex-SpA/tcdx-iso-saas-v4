@@ -24,6 +24,7 @@ router.get('/brief/:tenantId', async (req, res) => {
       user: req.user,
       locale: req.query.locale || 'es',
       requestId: req.headers['x-request-id'] || req.query.request_id || null,
+      bypassCache: req.query.refresh === '1' || req.query.bypass_cache === '1',
     });
     return res.json(data);
   } catch (error) {

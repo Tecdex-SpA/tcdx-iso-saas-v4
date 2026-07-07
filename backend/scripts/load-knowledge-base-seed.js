@@ -3,6 +3,10 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const REPO_ROOT = path.resolve(__dirname, '..', '..');
+
+require('dotenv').config({ path: path.join(REPO_ROOT, 'backend/.env'), quiet: true });
+
 const pool = require('../src/config/db');
 const {
   assertAllowedLicense,
@@ -13,7 +17,6 @@ const {
   KNOWLEDGE_SOURCE_FILE,
 } = require('../src/services/knowledge-base/knowledge.types');
 
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const DEFAULT_JSONL_INPUT = path.join(REPO_ROOT, 'database/seeds/knowledge/knowledge_base_seed_v2.jsonl');
 const DEFAULT_SUMMARY_INPUT = path.join(REPO_ROOT, 'database/seeds/knowledge/knowledge_base_seed_v2.summary.json');
 const REQUIRED_BUNDLE_FIELDS = [
@@ -412,6 +415,17 @@ function readSummary(summaryInput) {
     : {};
 }
 
+function assertDbConfigForDefaultPool(db) {
+  if (db !== pool) return;
+  const required = ['DB_NAME', 'DB_USER'];
+  const missing = required.filter((key) => !normalizeText(process.env[key]));
+  if (missing.length) {
+    const error = new Error(`Variables DB requeridas no configuradas para cargar Knowledge Base: ${missing.join(', ')}`);
+    error.code = 'DB_CONFIG_MISSING';
+    throw error;
+  }
+}
+
 function buildDryRunSummary({ bundles, summary, jsonlInput, skipMappings }) {
   return {
     ok: true,
@@ -463,6 +477,7 @@ async function loadKnowledgeBaseSeed({
     return dryRunSummary;
   }
 
+  assertDbConfigForDefaultPool(db);
   const client = await db.connect();
   let runId = null;
   let insertedItems = 0;

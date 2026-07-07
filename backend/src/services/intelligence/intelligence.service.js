@@ -22,6 +22,105 @@ const { runRules } = require('./intelligence.rules');
 const { generateNarratives } = require('./intelligence.ai-orchestrator');
 const scoring = require('./intelligence.scoring');
 
+const INTELLIGENCE_CACHE_TTL_MS = Math.max(60000, Number(process.env.INTELLIGENCE_BRIEF_CACHE_TTL_MS || 5 * 60 * 1000));
+const INTELLIGENCE_CACHE_MAX_ENTRIES = Math.max(10, Number(process.env.INTELLIGENCE_BRIEF_CACHE_MAX_ENTRIES || 250));
+const briefCache = new Map();
+
+function getUserId(user) {
+  return user?.user_id || user?.userId || user?.id || null;
+}
+
+function cacheKey({ tenantId, locale, enableAiNarrative }) {
+  return `${tenantId}:${locale || 'es'}:${enableAiNarrative === false ? 'no-ai' : 'ai'}`;
+}
+
+function getCachedBrief(key) {
+  const entry = briefCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    briefCache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function setCachedBrief(key, value) {
+  if (briefCache.size >= INTELLIGENCE_CACHE_MAX_ENTRIES) {
+    const firstKey = briefCache.keys().next().value;
+    if (firstKey) briefCache.delete(firstKey);
+  }
+  briefCache.set(key, {
+    expiresAt: Date.now() + INTELLIGENCE_CACHE_TTL_MS,
+    value,
+  });
+}
+
+function cloneBrief(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function logIntelligenceEvent(event) {
+  try {
+    console.log('INTELLIGENCE_BRIEF_EVENT', JSON.stringify(event));
+  } catch (error) {
+    console.log('INTELLIGENCE_BRIEF_EVENT', JSON.stringify({
+      error_code: 'INTELLIGENCE_EVENT_SERIALIZATION_FAILED',
+    }));
+  }
+}
+
+function finalizeBriefResponse(response, {
+  key,
+  startedAt,
+  requestId,
+  user,
+  tenantId,
+  bypassCache = false,
+  cacheStatus = 'miss',
+  shouldCache = true,
+} = {}) {
+  const latencyMs = Date.now() - startedAt;
+  const metadata = {
+    ...(response.metadata || {}),
+    request_id: requestId,
+    intelligence_version: response.version,
+    latency_ms: latencyMs,
+    cache_status: cacheStatus,
+  };
+
+  if (typeof metadata.fallback_used !== 'boolean') {
+    metadata.fallback_used = metadata.ai_used === false && Boolean(metadata.fallback_reason);
+  }
+
+  const finalized = {
+    ...response,
+    metadata,
+  };
+
+  if (shouldCache && !bypassCache && key) {
+    setCachedBrief(key, cloneBrief(finalized));
+  }
+
+  logIntelligenceEvent({
+    request_id: requestId,
+    tenant_id: tenantId,
+    user_id: getUserId(user),
+    intelligence_version: finalized.version,
+    knowledge_seed_version: finalized.knowledge_context?.seed_version || metadata.knowledge_seed_version || null,
+    rules_version: metadata.rules_version || null,
+    ai_used: metadata.ai_used === true,
+    fallback_used: metadata.fallback_used === true,
+    latency_ms: latencyMs,
+    cache_status: cacheStatus,
+    confidence: finalized.confidence?.level || finalized.confidence || null,
+    knowledge_coverage_score: finalized.knowledge_context?.coverage_score ?? null,
+    error_code: null,
+  });
+
+  return finalized;
+}
+
+
 function countRows(dataset, field) {
   const value = dataset?.[field];
   return Array.isArray(value) ? value.length : 0;
@@ -196,7 +295,34 @@ async function getTenantIntelligenceDataset({ tenantId, user }) {
   return rawDataset;
 }
 
-async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es', enableAiNarrative = true, requestId = null }) {
+async function buildTenantIntelligenceBrief({
+  tenantId,
+  user,
+  locale = 'es',
+  enableAiNarrative = true,
+  requestId = null,
+  bypassCache = false,
+} = {}) {
+  const startedAt = Date.now();
+  const key = cacheKey({ tenantId, locale, enableAiNarrative });
+
+  if (!bypassCache) {
+    const cached = getCachedBrief(key);
+    if (cached) {
+      const response = cloneBrief(cached);
+      return finalizeBriefResponse(response, {
+        key,
+        startedAt,
+        requestId,
+        user,
+        tenantId,
+        bypassCache,
+        cacheStatus: 'hit',
+        shouldCache: false,
+      });
+    }
+  }
+
   const rawDataset = await getTenantIntelligenceDataset({ tenantId, user });
   const normalizedDataset = normalizeTenantDataset(rawDataset);
   const enriched = await enrichDatasetWithKnowledge(normalizedDataset);
@@ -256,11 +382,16 @@ async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es', ena
     },
     scoring: scores,
     metadata: {
+      request_id: requestId,
       rules_version: 'intelligence_rules_v1',
       scoring_version: 'intelligence_scoring_v1',
       knowledge_seed_version: knowledgeContext.seed_version,
+      intelligence_version: INTELLIGENCE_BRIEF_VERSION,
       ai_used: false,
+      fallback_used: false,
       fallback_reason: enableAiNarrative ? 'ai_not_started' : 'ai_narrative_disabled_by_caller',
+      latency_ms: Date.now() - startedAt,
+      cache_status: bypassCache ? 'bypass' : 'miss',
     },
     brief: {
       confirmed_data: narrative.confirmed_data,
@@ -273,7 +404,15 @@ async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es', ena
   };
 
   if (!enableAiNarrative) {
-    return baseBrief;
+    return finalizeBriefResponse(baseBrief, {
+      key,
+      startedAt,
+      requestId,
+      user,
+      tenantId,
+      bypassCache,
+      cacheStatus: bypassCache ? 'bypass' : 'miss',
+    });
   }
 
   const narratives = await generateNarratives(baseBrief, {
@@ -283,13 +422,14 @@ async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es', ena
   });
   const aiStructured = narratives.structured || {};
 
-  return {
+  const finalBrief = {
     ...baseBrief,
     narratives,
     knowledge_basis: aiStructured.knowledge_basis || knowledgeContext.knowledge_items_used || [],
     metadata: {
       ...baseBrief.metadata,
       ai_used: aiStructured.fallback !== true,
+      fallback_used: aiStructured.fallback === true,
       fallback_reason: aiStructured.fallback ? aiStructured.fallback_reason || 'AI_FALLBACK' : null,
       ai_confidence: aiStructured.confidence || null,
       ai_should_escalate_to_human: aiStructured.should_escalate_to_human === true,
@@ -317,6 +457,16 @@ async function buildTenantIntelligenceBrief({ tenantId, user, locale = 'es', ena
       ])),
     },
   };
+
+  return finalizeBriefResponse(finalBrief, {
+    key,
+    startedAt,
+    requestId,
+    user,
+    tenantId,
+    bypassCache,
+    cacheStatus: bypassCache ? 'bypass' : 'miss',
+  });
 }
 
 module.exports = {
@@ -326,4 +476,5 @@ module.exports = {
   enrichDatasetWithKnowledge,
   getTenantIntelligenceDataset,
   normalizeTenantDataset,
+  _clearIntelligenceBriefCache: () => briefCache.clear(),
 };

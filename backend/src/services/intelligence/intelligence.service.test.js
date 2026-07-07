@@ -23,6 +23,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
 };
 
 const auth = require('../../middleware/auth');
+const { enforceApiAccess } = require('../../middleware/rbac.middleware');
 const { enforceTenantRequestScope } = require('../../middleware/tenantScope.middleware');
 
 const intelligenceRepository = require('./intelligence.repository');
@@ -80,6 +81,34 @@ function runTenantMismatchTest() {
   assert.equal(nextCalled, false);
   assert.equal(res.statusCode, 403);
   assert.equal(res.payload.code, 'TENANT_SCOPE_MISMATCH');
+}
+
+
+function runRbacReadAccessTest() {
+  const cases = [
+    { role: 'viewer', expected: true },
+    { role: 'dealer', expected: false },
+    { role: 'platform_admin', expected: true },
+  ];
+  for (const testCase of cases) {
+    const req = {
+      method: 'GET',
+      originalUrl: '/api/intelligence/brief/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: {
+        role: testCase.role,
+        tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      },
+    };
+    const res = createMockResponse();
+    let nextCalled = false;
+    enforceApiAccess(req, res, () => {
+      nextCalled = true;
+    });
+    assert.equal(nextCalled, testCase.expected, `RBAC ${testCase.role}`);
+    if (!testCase.expected) {
+      assert.equal(res.statusCode, 403);
+    }
+  }
 }
 
 async function runBriefFallbackTest() {
@@ -221,6 +250,7 @@ async function buildBriefForDataset(dataset, { hasKnowledge = true } = {}) {
   intelligenceRepository.getTenantIntelligenceDataset = async () => dataset;
   delete require.cache[require.resolve('./intelligence.service')];
   const intelligence = require('./intelligence.service');
+  intelligence._clearIntelligenceBriefCache();
   return intelligence.buildTenantIntelligenceBrief({
     tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
@@ -467,13 +497,66 @@ function runPhase3PromptGuardrailTests() {
   assert.equal(reduced.metadata.full_knowledge_base_included, false);
 }
 
+
+async function runCacheAndObservabilityTest() {
+  installKnowledgeStubs({ hasKnowledge: true });
+  let datasetCalls = 0;
+  intelligenceRepository.getTenantIntelligenceDataset = async () => {
+    datasetCalls += 1;
+    return baseTenantDataset({
+      priority_controls: [{
+        id: 'control-cache',
+        title: 'Control cache',
+        status: 'activo',
+        evidence_count: 0,
+      }],
+    });
+  };
+
+  delete require.cache[require.resolve('./intelligence.service')];
+  const intelligence = require('./intelligence.service');
+  intelligence._clearIntelligenceBriefCache();
+  const user = { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', user_id: 'user-1' };
+
+  const first = await intelligence.buildTenantIntelligenceBrief({
+    tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    user,
+    requestId: 'req-1',
+    enableAiNarrative: false,
+  });
+  const second = await intelligence.buildTenantIntelligenceBrief({
+    tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    user,
+    requestId: 'req-2',
+    enableAiNarrative: false,
+  });
+  const bypass = await intelligence.buildTenantIntelligenceBrief({
+    tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    user,
+    requestId: 'req-3',
+    bypassCache: true,
+    enableAiNarrative: false,
+  });
+
+  assert.equal(first.metadata.cache_status, 'miss');
+  assert.equal(second.metadata.cache_status, 'hit');
+  assert.equal(bypass.metadata.cache_status, 'bypass');
+  assert.equal(datasetCalls, 2);
+  assert.equal(second.metadata.request_id, 'req-2');
+  assert.equal(typeof first.metadata.latency_ms, 'number');
+  assert.equal(first.metadata.ai_used, false);
+  assert.equal(first.metadata.fallback_used, false);
+}
+
 async function runTests() {
   await runAuthNoTokenTest();
   runTenantMismatchTest();
+  runRbacReadAccessTest();
   await runBriefFallbackTest();
   await runPhase2PipelineTests();
   await runPhase3AiOrchestratorTests();
   runPhase3PromptGuardrailTests();
+  await runCacheAndObservabilityTest();
   console.log('intelligence.service tests OK');
 }
 
