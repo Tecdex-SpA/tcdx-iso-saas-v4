@@ -155,6 +155,9 @@ export default function useIntelligenceBrief({
       setStatus(aborted ? 'timeout' : statusCode === 401 || statusCode === 403 ? 'forbidden' : 'error');
     } finally {
       window.clearTimeout(timeout);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+      }
     }
   }, [enabled, timeoutMs]);
 

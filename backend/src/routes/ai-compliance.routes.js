@@ -815,6 +815,23 @@ function enrichAiResponseWithOrchestrator(aiResponse, enhancedResult) {
 // - No escribe DB ni crea registros.
 // =========================================================
 
+const AI_ENGINE_HEALTH_PATH = '/health';
+const AI_ENGINE_HEALTH_TIMEOUT_MS = Number.parseInt(
+  process.env.AI_ENGINE_HEALTH_TIMEOUT_MS || '1800',
+  10
+) || 1800;
+const AI_ENGINE_HEALTH_TOTAL_BUDGET_MS = Number.parseInt(
+  process.env.AI_ENGINE_HEALTH_TOTAL_BUDGET_MS || '2800',
+  10
+) || 2800;
+
+function resolveWithTimeout(promise, timeoutMs, fallbackValue) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs)),
+  ]);
+}
+
 async function checkLocalBackendDbConnection() {
   try {
     await pool.query('SELECT 1');
@@ -825,13 +842,12 @@ async function checkLocalBackendDbConnection() {
   }
 }
 
-async function probeAiEngineHealthEndpoint(path, method = 'GET') {
+async function probeAiEngineHealthEndpoint(path = AI_ENGINE_HEALTH_PATH) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
+  const timeout = setTimeout(() => controller.abort(), AI_ENGINE_HEALTH_TIMEOUT_MS);
 
   try {
     const headers = {
-      'Content-Type': 'application/json',
       'x-tcdx-locale': 'es',
     };
 
@@ -841,9 +857,8 @@ async function probeAiEngineHealthEndpoint(path, method = 'GET') {
     }
 
     const response = await fetch(`${getAiEngineUrl()}${path}`, {
-      method,
+      method: 'GET',
       headers,
-      body: method === 'POST' ? JSON.stringify({ ping: true, locale: 'es' }) : undefined,
       signal: controller.signal,
     });
 
@@ -861,7 +876,7 @@ async function probeAiEngineHealthEndpoint(path, method = 'GET') {
         ok: false,
         status: response.status,
         path,
-        method,
+        method: 'GET',
         error: data?.detail || data?.error || `HTTP ${response.status}`,
       };
     }
@@ -870,14 +885,14 @@ async function probeAiEngineHealthEndpoint(path, method = 'GET') {
       ok: true,
       status: response.status,
       path,
-      method,
+      method: 'GET',
       data,
     };
   } catch (error) {
     return {
       ok: false,
       path,
-      method,
+      method: 'GET',
       error: error?.name === 'AbortError' ? 'timeout' : (error?.message || 'AI Engine unavailable'),
     };
   } finally {
@@ -886,48 +901,40 @@ async function probeAiEngineHealthEndpoint(path, method = 'GET') {
 }
 
 async function getRobustAiComplianceEngineHealth() {
-  const localDbOk = await checkLocalBackendDbConnection();
+  const startedAt = Date.now();
+  const [localDbOk, result] = await Promise.all([
+    resolveWithTimeout(checkLocalBackendDbConnection(), AI_ENGINE_HEALTH_TOTAL_BUDGET_MS, false),
+    probeAiEngineHealthEndpoint(AI_ENGINE_HEALTH_PATH),
+  ]);
 
-  const probes = [
-    ['/health', 'GET'],
-    ['/api/health', 'GET'],
-    ['/api/ai/health', 'GET'],
-    ['/health', 'POST'],
-    ['/api/health', 'POST'],
-    ['/api/ai/health', 'POST'],
-  ];
+  const attempts = [result];
 
-  const attempts = [];
+  if (result.ok) {
+    const engineData = result.data || {};
 
-  for (const [path, method] of probes) {
-    const result = await probeAiEngineHealthEndpoint(path, method);
-    attempts.push(result);
-
-    if (result.ok) {
-      const engineData = result.data || {};
-
-      return {
+    return {
+      ok: true,
+      data: {
         ok: true,
-        data: {
-          ok: true,
-          service: engineData.service || engineData.name || 'ai-engine',
-          env: engineData.env || engineData.environment || process.env.NODE_ENV || 'production',
-          db_connection:
-            engineData.db_connection ??
-            engineData.database_ok ??
-            engineData.db_ok ??
-            localDbOk,
-          backend_db_connection: localDbOk,
-          engine_url: AI_ENGINE_URL || null,
-          health_path: result.path,
-          health_method: result.method,
-          degraded: false,
-        },
-        diagnostics: {
-          attempts,
-        },
-      };
-    }
+        service: engineData.service || engineData.name || 'ai-engine',
+        env: engineData.env || engineData.environment || process.env.NODE_ENV || 'production',
+        db_connection:
+          engineData.db_connection ??
+          engineData.database_ok ??
+          engineData.db_ok ??
+          localDbOk,
+        backend_db_connection: localDbOk,
+        engine_url: AI_ENGINE_URL || null,
+        health_path: result.path,
+        health_method: result.method,
+        degraded: false,
+        elapsed_ms: Date.now() - startedAt,
+      },
+      diagnostics: {
+        attempts,
+        total_budget_ms: AI_ENGINE_HEALTH_TOTAL_BUDGET_MS,
+      },
+    };
   }
 
   return {
@@ -939,11 +946,15 @@ async function getRobustAiComplianceEngineHealth() {
       db_connection: false,
       backend_db_connection: localDbOk,
       engine_url: AI_ENGINE_URL || null,
+      health_path: AI_ENGINE_HEALTH_PATH,
+      health_method: 'GET',
       degraded: true,
       error: attempts.find((item) => item.error)?.error || 'AI Engine unavailable',
+      elapsed_ms: Date.now() - startedAt,
     },
     diagnostics: {
       attempts,
+      total_budget_ms: AI_ENGINE_HEALTH_TOTAL_BUDGET_MS,
     },
   };
 }
@@ -1920,52 +1931,6 @@ router.get('/engine-health', auth, async (req, res) => {
         degraded: true,
         error: error.message || 'AI Engine unavailable',
       },
-    });
-  }
-});
-
-router.get('/engine-health', auth, async (_req, res) => {
-  try {
-    const healthRes = await fetch(`${getAiEngineUrl()}/health/deep`, {
-      headers: {
-        'X-AI-Token': getAiInternalToken(),
-      },
-    });
-    const text = await healthRes.text();
-
-    let json = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      return res.status(502).json({
-        ok: false,
-        error: 'Respuesta inválida desde AI Engine /health',
-        raw: text,
-      });
-    }
-
-    if (!healthRes.ok || json?.ok === false) {
-      return res.status(502).json({
-        ok: false,
-        error: json?.detail || json?.error || 'AI Engine health profundo falló',
-      });
-    }
-
-    return res.json({
-      ok: true,
-      locale,
-      data: {
-        ...json,
-        db_connection: Boolean(json?.db_connection ?? json?.db_ok),
-      },
-    });
-  } catch (error) {
-    console.error('ERROR AI ENGINE HEALTH:', error);
-
-    return res.status(500).json({
-      ok: false,
-      error: 'No fue posible conectar con AI Engine',
-      ...errorDetail(error),
     });
   }
 });

@@ -18,6 +18,9 @@ import { asArray, cleanText, collectKnowledgeBasis, formatScore } from '@/compon
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+const IA_COMPLIANCE_REQUEST_TIMEOUT_MS = 22000;
+const IA_COMPLIANCE_UPDATE_BANNER_MAX_MS = 30000;
+
 const IA_COMPLIANCE_COPY = {
   es: {
     title: 'IA Compliance',
@@ -29,6 +32,8 @@ const IA_COMPLIANCE_COPY = {
     generating: 'Generando...',
     loading: 'Actualizando IA Compliance...',
     loadingContext: 'Estamos actualizando señales internas y lectura asistida en segundo plano. Puedes revisar el contenido disponible mientras termina.',
+    updateStillRunning: 'La actualización sigue en segundo plano. Se mantiene la última lectura disponible para continuidad operativa.',
+    updateTimeout: 'La actualización tardó más de lo habitual. Se mantiene la lectura operativa disponible.',
     sessionError: 'No se pudo obtener la sesión del usuario.',
     genericError: 'No fue posible cargar IA Compliance.',
     engineWarning: 'No fue posible conectar con AI Engine. Se muestran datos internos disponibles.',
@@ -71,6 +76,7 @@ const IA_COMPLIANCE_COPY = {
     noSavedSuggestions: 'Aún no hay sugerencias guardadas.',
     ok: 'OK',
     error: 'Error',
+    degraded: 'Degradado',
     draft: 'draft',
     findingAnalysis: 'Análisis de hallazgo',
     suggestedPlan: 'Plan sugerido',
@@ -103,6 +109,8 @@ const IA_COMPLIANCE_COPY = {
     generating: 'Generating...',
     loading: 'Updating AI Compliance...',
     loadingContext: 'Internal signals and assisted reading are updating in the background. You can review the available content while it finishes.',
+    updateStillRunning: 'The update is still running in the background. The latest available reading remains visible for operational continuity.',
+    updateTimeout: 'The update took longer than usual. The available operational reading remains visible.',
     sessionError: 'Could not obtain the user session.',
     genericError: 'AI Compliance could not be loaded.',
     engineWarning: 'AI Engine could not be reached. Available internal data is shown.',
@@ -145,6 +153,7 @@ const IA_COMPLIANCE_COPY = {
     noSavedSuggestions: 'There are no saved suggestions yet.',
     ok: 'OK',
     error: 'Error',
+    degraded: 'Degraded',
     draft: 'draft',
     findingAnalysis: 'Finding analysis',
     suggestedPlan: 'Suggested plan',
@@ -179,6 +188,7 @@ type EngineHealthResponse = {
     service?: string;
     env?: string;
     db_connection?: boolean;
+    degraded?: boolean;
   };
 };
 
@@ -444,6 +454,8 @@ export default function IaCompliancePage() {
   const [loading, setLoading] = useState(true);
   const [briefLoading, setBriefLoading] = useState(false);
   const [error, setError] = useState('');
+  const [updateNotice, setUpdateNotice] = useState('');
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
 
   const [engineHealth, setEngineHealth] = useState<EngineHealthResponse | null>(null);
   const [healthSummary, setHealthSummary] = useState<HealthSummaryResponse | null>(null);
@@ -451,7 +463,10 @@ export default function IaCompliancePage() {
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
   const [knowledgeDrawerOpen, setKnowledgeDrawerOpen] = useState(false);
 
-  const getWithAuth = useCallback(async <T,>(url: string): Promise<T> => {
+  const getWithAuth = useCallback(async <T,>(
+    url: string,
+    options: { timeoutMs?: number } = {}
+  ): Promise<T> => {
     const authToken = localStorage.getItem('token');
 
     if (!authToken) {
@@ -459,34 +474,50 @@ export default function IaCompliancePage() {
       throw new Error('Sesión no disponible');
     }
 
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        'x-tcdx-locale': locale,
-      },
-    });
+    const controller = new AbortController();
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      options.timeoutMs ?? IA_COMPLIANCE_REQUEST_TIMEOUT_MS
+    );
 
-    const text = await res.text();
-
-    let json: unknown = null;
     try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      throw new Error(`Respuesta inválida desde ${url}`);
-    }
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'x-tcdx-locale': locale,
+        },
+        signal: controller.signal,
+      });
 
-    if (!res.ok) {
-      const errorBody = asRecord(json);
-      throw new Error(String(errorBody.error || errorBody.detail || 'Error consultando IA Compliance'));
-    }
+      const text = await res.text();
 
-    return json as T;
-  }, [locale]);
+      let json: unknown = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error('Respuesta inválida desde IA Compliance.');
+      }
+
+      if (!res.ok) {
+        const errorBody = asRecord(json);
+        throw new Error(String(errorBody.error || errorBody.detail || 'Error consultando IA Compliance'));
+      }
+
+      return json as T;
+    } catch (err) {
+      const aborted = err instanceof DOMException && err.name === 'AbortError';
+      if (aborted) throw new Error(copy.updateTimeout);
+      throw err;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }, [copy.updateTimeout, locale]);
 
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
+      setUpdateNotice('');
 
       const [engineResult, healthResult, draftsResult] = await Promise.allSettled([
         getWithAuth<EngineHealthResponse>(`${API_URL}/api/ai-compliance/engine-health`),
@@ -514,8 +545,6 @@ export default function IaCompliancePage() {
 
       if (draftsResult.status === 'fulfilled') {
         setSuggestions(Array.isArray(draftsResult.value?.data) ? draftsResult.value.data.slice(0, 6) : []);
-      } else {
-        setSuggestions([]);
       }
 
       if (
@@ -536,6 +565,24 @@ export default function IaCompliancePage() {
       setLoading(false);
     }
   }, [copy.engineWarning, copy.genericError, getWithAuth]);
+
+  const updating = loading || entitlementsLoading;
+
+  useEffect(() => {
+    if (!updating) {
+      setShowUpdateBanner(false);
+      setUpdateNotice('');
+      return;
+    }
+
+    setShowUpdateBanner(true);
+    const timeout = window.setTimeout(() => {
+      setShowUpdateBanner(false);
+      setUpdateNotice(copy.updateStillRunning);
+    }, IA_COMPLIANCE_UPDATE_BANNER_MAX_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [copy.updateStillRunning, updating]);
 
   useEffect(() => {
     if (entitlementsLoading) return;
@@ -578,6 +625,8 @@ export default function IaCompliancePage() {
   const engineStatusKnown = Boolean(engineHealth?.data);
   const engineOk = Boolean(engineHealth?.data?.ok);
   const engineDbOk = Boolean(engineHealth?.data?.db_connection);
+  const engineDegraded = engineStatusKnown && (engineHealth?.data?.degraded === true || !engineOk);
+  const engineDbDegraded = engineStatusKnown && !engineDbOk;
   const healthContext = healthSummary?.context || null;
   const healthAi = healthSummary?.ai || null;
   const executiveData = executiveBrief?.ai || null;
@@ -751,7 +800,13 @@ export default function IaCompliancePage() {
           </div>
         )}
 
-        {(loading || entitlementsLoading) && (
+        {updateNotice && !showUpdateBanner && (
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm leading-6 text-blue-800">
+            {updateNotice}
+          </div>
+        )}
+
+        {showUpdateBanner && (
           <IaComplianceLoadingState title={copy.loading} description={copy.loadingContext} />
         )}
 
@@ -759,13 +814,13 @@ export default function IaCompliancePage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
               <MetricCard
                 title={copy.engine}
-                value={engineStatusKnown ? (engineOk ? copy.ok : copy.error) : '...'}
-                tone={engineStatusKnown ? (engineOk ? 'green' : 'red') : 'blue'}
+                value={engineStatusKnown ? (engineOk ? copy.ok : copy.degraded) : '...'}
+                tone={engineStatusKnown ? (engineDegraded ? 'amber' : 'green') : 'blue'}
               />
               <MetricCard
                 title={copy.engineDb}
-                value={engineStatusKnown ? (engineDbOk ? copy.ok : copy.error) : '...'}
-                tone={engineStatusKnown ? (engineDbOk ? 'green' : 'red') : 'blue'}
+                value={engineStatusKnown ? (engineDbOk ? copy.ok : copy.degraded) : '...'}
+                tone={engineStatusKnown ? (engineDbDegraded ? 'amber' : 'green') : 'blue'}
               />
               <MetricCard
                 title={copy.activeControls}
