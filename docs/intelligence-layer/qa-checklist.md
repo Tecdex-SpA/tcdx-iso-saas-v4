@@ -35,7 +35,7 @@
 | Observabilidad | OK unitario | metadata + log estructurado | bajo | integrar log central |
 | Prompt guardrails | OK unitario/doc | tests verifican limite KB, redaccion de secretos y no inclusion de KB completa; `prompting-and-guardrails.md` documenta politica | bajo | ampliar fuzz test |
 | UI muestra fundamento | OK runtime parcial | frontend usa `useIntelligenceBrief`; endpoint runtime entrega `knowledge_context`, `narratives` y acciones | bajo | QA visual por pantalla |
-| Reportes Premium/PDF/ZIP | PARCIAL NO BLOQUEANTE | frontend envia `intelligence_brief` sanitizado y `knowledge_basis_annex`; backend reportes filtra/ignora campos y no rompe export | medio | incorporar render real del brief en preview/PDF/ZIP |
+| Reportes Premium/PDF/ZIP | OK codigo | preview/narrative/export renderizan `intelligence_brief`; ZIP incluye `intelligence_brief.json` y `knowledge_basis_annex.json` | bajo | validar UAT publica post-deploy |
 | Backend runtime | OK runtime | `tecdex-backend.service` activo en `192.168.2.41`; `/api/intelligence/brief` responde OK | bajo | monitorear logs |
 | Frontend runtime | OK runtime | `nginx` activo en `192.168.2.43`; `curl -I` a localhost e IP devuelve HTTP 200 | bajo | `nginx -t` requiere sudo |
 | Cache refresh runtime | OK runtime | `refresh=1` devuelve `cache_status=bypass`; llamada posterior `miss`; tercera llamada `hit` en 3 ms | bajo | ajustar TTL si escala |
@@ -56,4 +56,4 @@
 2. Invalidacion automatica de cache por cambios tenant/KB.
 3. Mejorar hardware/modelo/cola async para AI Engine; runtime actual degrada por `AI_ENGINE_TIMEOUT`.
 4. Persistir metricas de observabilidad en storage central si se requiere auditoria operativa.
-5. Completar render real de `intelligence_brief` en preview/PDF/ZIP; hoy el frontend lo prepara y el backend no rompe al ignorarlo.
+5. Mantener UAT publica de Reportes Premium cada vez que se despliegue una version que toque preview, narrativa, PDF o ZIP.

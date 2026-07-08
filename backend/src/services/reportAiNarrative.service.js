@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const aiEngineClient = require('./aiEngineClient.service');
 const reportBuilder = require('./reportBuilder.service');
 const reportTemplates = require('./reportTemplates.service');
+const reportIntelligenceBrief = require('./reportIntelligenceBrief.service');
 
 const DISCLAIMER = 'Este análisis es asistido por IA y requiere revisión humana. No constituye certificación ni aprobación automática.';
 const FALLBACK_MESSAGE = 'No fue posible generar narrativa IA. Se muestra narrativa determinística basada en datos del reporte.';
@@ -442,10 +443,13 @@ function buildDeterministicNarrative(preview, sources) {
   return {
     executive_summary: [
       FALLBACK_MESSAGE,
+      preview.intelligence_brief?.executive_summary
+        ? `Intelligence Brief: ${preview.intelligence_brief.executive_summary}`
+        : null,
       `Reporte ${preview.template_code} generado como narrativa preliminar sobre el preview autorizado.`,
       healthScore !== undefined && healthScore !== null ? `Health global: ${healthScore}.` : 'Health global no disponible en el alcance solicitado.',
       `Brechas abiertas: ${gapTotals.open ?? 0}; riesgos altos/críticos: ${riskTotals.high_or_critical ?? 0}; acciones abiertas: ${actionTotals.open ?? 0}; evidencias faltantes: ${evidenceTotals.missing ?? 0}.`,
-    ].join(' '),
+    ].filter(Boolean).join(' '),
     key_findings: fallbackFindings(preview, sources),
     health_interpretation: healthScore !== undefined && healthScore !== null
       ? `El health debe interpretarse como indicador operativo, no como aprobación. Revise drivers, KPIs y procesos con menor score antes de presentar conclusiones.`
@@ -600,6 +604,7 @@ async function buildNarrative({ user, payload = {}, requestedTenantId = null } =
     ...asArray(preview.warnings),
     ...(styleWarning ? [styleWarning] : []),
   ]));
+  const intelligenceBrief = reportIntelligenceBrief.normalizeIntelligenceBrief({ payload, preview });
 
   try {
     const aiPayload = buildSafeAiPayload({
@@ -639,6 +644,7 @@ async function buildNarrative({ user, payload = {}, requestedTenantId = null } =
       template_focus: TEMPLATE_FOCUS[preview.template_code] || [],
     },
     narrative,
+    intelligence_brief: intelligenceBrief,
     sources,
     source_map: sourceMap,
     warnings: warnings.slice(0, 25),

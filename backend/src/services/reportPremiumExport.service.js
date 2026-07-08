@@ -106,6 +106,9 @@ function filterPayloadForPreview(payload = {}) {
     'narrative_style',
     'language',
     'max_source_items',
+    'include_intelligence_brief',
+    'intelligence_payload_ready',
+    'intelligence_brief',
   ];
   return allowed.reduce((acc, key) => {
     if (payload[key] !== undefined) acc[key] = payload[key];
@@ -173,6 +176,29 @@ function renderSection(section) {
       <div class="section">
         <h2>${escapeHtml(section.title)}</h2>
         ${renderList(data, (item) => `<div class="item"><strong>${escapeHtml(item.code || '')}</strong> ${escapeHtml(item.name || '')}: ${escapeHtml(item.value ?? '-')} ${escapeHtml(item.unit || '')}</div>`)}
+      </div>
+    `;
+  }
+  if (section.code === 'intelligence_brief') {
+    const signals = asArray(data.key_signals);
+    const actions = asArray(data.recommended_actions);
+    const knowledge = asArray(data.knowledge_basis);
+    return `
+      <div class="section">
+        <h2>${escapeHtml(section.title || 'Intelligence Brief / Análisis asistido')}</h2>
+        <div class="callout">
+          <strong>Revisión humana obligatoria:</strong> ${escapeHtml(data.disclaimer || 'Este análisis es un apoyo para gestión y preparación de auditoría. Requiere revisión humana.')}
+        </div>
+        <p>${escapeHtml(data.executive_summary || 'Sin resumen asistido disponible para el alcance seleccionado.')}</p>
+        <p class="muted">
+          Estado: ${escapeHtml(data.overall_state || '-')} · Score: ${escapeHtml(data.overall_score ?? '-')} · Generado: ${escapeHtml(formatDate(data.generated_at))}
+        </p>
+        <h3>Riesgos, brechas o señales relevantes</h3>
+        ${renderList(signals, (item) => `<div class="item"><strong>${escapeHtml(item.title || 'Señal relevante')}</strong><br>${escapeHtml(item.description || '')}<br><span>${escapeHtml(item.priority || item.confidence || '')}</span></div>`, 'Sin señales relevantes informadas.')}
+        <h3>Acciones recomendadas</h3>
+        ${renderList(actions, (item) => `<div class="item"><strong>${escapeHtml(item.title || 'Acción recomendada')}</strong><br>${escapeHtml(item.description || '')}<br><span>${escapeHtml(item.priority || '')} · revisión humana requerida</span></div>`, 'Sin acciones recomendadas informadas.')}
+        <h3>Base de conocimiento / fuentes internas</h3>
+        ${renderList(knowledge, (item) => `<div class="item"><strong>${escapeHtml(item.ref_id || item.title || 'Fundamento')}</strong><br>${escapeHtml(item.title || '')}<br><span>${escapeHtml(item.source_type || '')}</span><br>${escapeHtml(item.basis || '')}</div>`, 'Sin anexo de knowledge basis disponible.')}
       </div>
     `;
   }
@@ -463,6 +489,7 @@ async function buildExportBundle({ user, payload = {}, requestedTenantId = null,
     export_type: format,
     requires_human_review: true,
     review_confirmed: true,
+    intelligence_brief_included: Boolean(preview.intelligence_brief),
     generated_at: new Date().toISOString(),
     generated_by: preview.generated_by,
     disclaimer: DISCLAIMER,
@@ -502,6 +529,10 @@ async function buildExportBundle({ user, payload = {}, requestedTenantId = null,
       { name: 'report_preview.json', data: JSON.stringify(preview, null, 2) },
       { name: 'report_sources.json', data: JSON.stringify(sourcePayload, null, 2) },
       ...(narrative ? [{ name: 'report_narrative.json', data: JSON.stringify(narrative, null, 2) }] : []),
+      ...(preview.intelligence_brief ? [
+        { name: 'intelligence_brief.json', data: JSON.stringify(preview.intelligence_brief, null, 2) },
+        { name: 'knowledge_basis_annex.json', data: JSON.stringify(preview.intelligence_brief.knowledge_basis || [], null, 2) },
+      ] : []),
       { name: 'metadata.json', data: JSON.stringify(metadata, null, 2) },
     ]);
     return {

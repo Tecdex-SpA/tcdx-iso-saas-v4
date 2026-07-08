@@ -18,7 +18,7 @@
 | Observabilidad | OK unitario/runtime | `INTELLIGENCE_BRIEF_EVENT` registrado en journal con cache/confidence/coverage | medio | conectar a logging central |
 | Prompt guardrails | OK unitario/doc | tests cubren limite KB, secretos, salida IA invalida y knowledge_basis ausente | bajo | ampliar fuzz test |
 | UI Intelligence | OK runtime | frontend consume `useIntelligenceBrief`; VM frontend HTTP 200 | bajo | QA visual por pantalla |
-| Reportes PDF/ZIP | PARCIAL NO BLOQUEANTE | frontend envia `intelligence_brief` sanitizado; backend lo ignora/filtra sin romper preview/narrative/export | medio | renderizar anexo Intelligence en PDF/ZIP |
+| Reportes PDF/ZIP | OK codigo | preview/narrative/export renderizan `intelligence_brief`; ZIP incluye `intelligence_brief.json` y `knowledge_basis_annex.json` | bajo | validar UAT publica post-deploy |
 | AI Engine HW/SLA | DEUDA OPERATIVA | runtime devolvio fallback por `AI_ENGINE_TIMEOUT` y brief no rompio | medio | mejorar timeout/modelo/cola async |
 | Validaciones backend | OK | `npm run check && npm test` | bajo | mantener CI |
 | Validaciones frontend | OK | `npm run lint`, `npm run check` | bajo | mantener CI |
@@ -28,7 +28,7 @@
 
 Decision: APTO PARA RELEASE CONTROLADO.
 
-La Intelligence Layer queda cerrada funcionalmente para liberacion controlada: codigo, tests unitarios, build frontend, Knowledge Base cargada en PostgreSQL runtime, endpoint `brief`, cache, observabilidad, guardrails y fallback IA fueron validados. Quedan mejoras futuras no bloqueantes: cache distribuido, invalidacion automatica, hardware/modelo IA, metricas persistidas y render real de `intelligence_brief` en PDF/ZIP.
+La Intelligence Layer queda cerrada funcionalmente para liberacion controlada: codigo, tests unitarios, build frontend, Knowledge Base cargada en PostgreSQL runtime, endpoint `brief`, cache, observabilidad, guardrails, fallback IA y render real de `intelligence_brief` en Reportes Premium fueron validados a nivel de codigo. Quedan mejoras operativas fuera del flujo visible: cache distribuido, invalidacion automatica, hardware/modelo IA y metricas persistidas.
 
 ## Evidencia runtime 2026-07-07
 
@@ -46,4 +46,4 @@ La Intelligence Layer queda cerrada funcionalmente para liberacion controlada: c
 2. Invalidacion automatica de cache por cambios tenant/KB.
 3. Mejorar hardware/modelo/cola async para AI Engine; runtime actual degrada por `AI_ENGINE_TIMEOUT`.
 4. Persistir metricas de observabilidad en storage central si se requiere auditoria operativa.
-5. Completar render real de `intelligence_brief` en preview/PDF/ZIP; hoy el frontend lo prepara y el backend no rompe al ignorarlo.
+5. Mantener UAT publica de Reportes Premium cada vez que se despliegue una version que toque preview, narrativa, PDF o ZIP.

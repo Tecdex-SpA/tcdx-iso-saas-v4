@@ -5,6 +5,7 @@ const healthService = require('./health.service');
 const diagnosticService = require('./diagnostic.service');
 const reportTemplates = require('./reportTemplates.service');
 const reportSources = require('./reportSources.service');
+const reportIntelligenceBrief = require('./reportIntelligenceBrief.service');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXECUTIVE_ROLES = new Set(['ejecutivo_cliente', 'viewer', 'cliente', 'client', 'read_only', 'readonly', 'solo_lectura', 'ejecutivo']);
@@ -699,6 +700,17 @@ async function buildPreview({ user, payload = {}, requestedTenantId = null } = {
     })
     : [];
 
+  const previewBase = { sections, sources, warnings };
+  const intelligenceBrief = reportIntelligenceBrief.normalizeIntelligenceBrief({ payload, preview: previewBase });
+  if (intelligenceBrief) {
+    const summaryIndex = sections.findIndex((item) => item.code === 'summary');
+    sections.splice(
+      summaryIndex >= 0 ? summaryIndex + 1 : 0,
+      0,
+      section('intelligence_brief', 'Intelligence Brief / Análisis asistido', intelligenceBrief)
+    );
+  }
+
   return {
     report_id: null,
     template_code: template.code,
@@ -712,6 +724,7 @@ async function buildPreview({ user, payload = {}, requestedTenantId = null } = {
       logo_url: executive ? null : tenant.logo_url || null,
     },
     filters,
+    intelligence_brief: intelligenceBrief,
     sections,
     sources: executive
       ? sources.filter((item) => ['executive', 'operational'].includes(item.visibility)).slice(0, 60)

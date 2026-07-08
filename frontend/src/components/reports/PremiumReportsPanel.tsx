@@ -107,6 +107,7 @@ type ReportPreview = {
     name?: string;
   };
   filters?: UnknownRecord;
+  intelligence_brief?: UnknownRecord | null;
   generated_at?: string;
   requires_human_review?: boolean;
   warnings?: string[];
@@ -128,6 +129,7 @@ type ReportNarrative = {
   sources?: ReportSource[];
   warnings?: string[];
   fallback_used?: boolean;
+  intelligence_brief?: UnknownRecord | null;
   narrative?: {
     executive_summary?: string;
     key_findings?: NarrativeFinding[];
@@ -638,9 +640,9 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
 
       {intelligenceReportPayload && (
         <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-sm text-blue-900">
-          <div className="font-bold">Payload inteligente preparado para reportes</div>
+          <div className="font-bold">Intelligence Brief incluido en reportes premium</div>
           <p className="mt-2 leading-6">
-            Incluye resumen ejecutivo, estado general, readiness, brechas, riesgos, acciones, confianza, limitaciones y anexo KB sanitizado. PDF/ZIP actual puede ignorar campos no soportados sin romper generación.
+            El preview, la narrativa, el PDF y el ZIP incorporan resumen asistido, señales relevantes, acciones recomendadas y anexo KB sanitizado. Todo uso requiere revisión humana.
           </p>
         </div>
       )}
@@ -949,6 +951,7 @@ function ReportPreviewSection({ section, userRole }: { section: ReportSection; u
       {code === 'summary' && <SummarySection data={data} />}
       {code === 'health' && <HealthSection data={data} />}
       {code === 'kpis' && <KpiTable data={data} />}
+      {code === 'intelligence_brief' && <IntelligenceBriefSection data={data} />}
       {code === 'gaps' && <GapsSection data={data} />}
       {code === 'actions' && <ActionsSection data={data} />}
       {code === 'risks' && <RisksSection data={data} />}
@@ -956,7 +959,7 @@ function ReportPreviewSection({ section, userRole }: { section: ReportSection; u
       {code === 'controls' && <ControlsSection data={data} />}
       {code === 'audit' && <SimpleListSection data={data} keys={['audits', 'findings', 'nonconformities']} titleKey="title" />}
       {code === 'lifecycle' && <SimpleListSection data={data} keys={['transitions', 'stages', 'items']} titleKey="standard_code" />}
-      {!['summary', 'health', 'kpis', 'gaps', 'actions', 'risks', 'evidence', 'controls', 'audit', 'lifecycle'].includes(code) && (
+      {!['summary', 'health', 'kpis', 'intelligence_brief', 'gaps', 'actions', 'risks', 'evidence', 'controls', 'audit', 'lifecycle'].includes(code) && (
         <GenericKeyValuePanel data={data} />
       )}
       {canViewTechnicalDetail(userRole) && (
@@ -969,6 +972,70 @@ function ReportPreviewSection({ section, userRole }: { section: ReportSection; u
           </pre>
         </details>
       )}
+    </div>
+  );
+}
+
+function IntelligenceBriefSection({ data }: { data: unknown }) {
+  const record = asRecord(data);
+  const signals = findList(record, ['key_signals', 'signals', 'findings']);
+  const actions = findList(record, ['recommended_actions', 'actions', 'next_best_actions']);
+  const knowledge = findList(record, ['knowledge_basis', 'knowledge_basis_annex', 'sources']);
+  const limitations = toArray(record.limitations);
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-blue-100 bg-white p-4">
+        <div className="text-xs font-bold uppercase tracking-[0.14em] text-blue-500">Resumen asistido</div>
+        <p className="mt-2 text-sm leading-6 text-slate-700">
+          {asText(record.executive_summary, 'Sin resumen asistido disponible para este alcance.')}
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <InfoCard label="Estado" value={asText(record.overall_state || '-')} />
+          <InfoCard label="Score" value={asText(record.overall_score ?? '-')} />
+          <InfoCard label="Revisión humana" value={record.requires_human_review === false ? 'No informada' : 'Obligatoria'} />
+        </div>
+      </div>
+
+      {signals.length > 0 && (
+        <SimpleTable
+          columns={[
+            ['title', 'Señal'],
+            ['priority', 'Prioridad'],
+            ['confidence', 'Confianza'],
+            ['description', 'Descripción'],
+          ]}
+          rows={signals}
+        />
+      )}
+
+      {actions.length > 0 && (
+        <SimpleTable
+          columns={[
+            ['title', 'Acción recomendada'],
+            ['priority', 'Prioridad'],
+            ['description', 'Descripción'],
+          ]}
+          rows={actions}
+        />
+      )}
+
+      {knowledge.length > 0 && (
+        <SimpleTable
+          columns={[
+            ['ref_id', 'Ref'],
+            ['title', 'Base interna'],
+            ['source_type', 'Tipo'],
+            ['basis', 'Fundamento'],
+          ]}
+          rows={knowledge}
+        />
+      )}
+
+      {limitations.length > 0 && <ListBlock title="Limitaciones" items={limitations} />}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+        {asText(record.disclaimer, 'Este análisis es un apoyo para gestión y preparación de auditoría. Requiere revisión humana.')}
+      </div>
     </div>
   );
 }
