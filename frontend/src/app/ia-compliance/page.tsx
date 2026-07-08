@@ -22,11 +22,13 @@ const IA_COMPLIANCE_COPY = {
   es: {
     title: 'IA Compliance',
     subtitle: 'Asistente de análisis para cumplimiento, remediación y seguimiento ejecutivo. No certifica cumplimiento ni reemplaza revisión humana.',
-    refresh: 'Actualizar',
+    refresh: 'Actualizar datos',
+    refreshAnalysis: 'Actualizar análisis',
+    refreshingAnalysis: 'Actualizando análisis...',
     executiveBrief: 'Resumen ejecutivo IA',
     generating: 'Generando...',
-    loading: 'Cargando IA Compliance...',
-    loadingContext: 'Analizando contexto de cumplimiento, señales internas y sugerencias recientes. Puedes esperar unos segundos mientras se prepara la lectura.',
+    loading: 'Actualizando IA Compliance...',
+    loadingContext: 'Estamos actualizando señales internas y lectura asistida en segundo plano. Puedes revisar el contenido disponible mientras termina.',
     sessionError: 'No se pudo obtener la sesión del usuario.',
     genericError: 'No fue posible cargar IA Compliance.',
     engineWarning: 'No fue posible conectar con AI Engine. Se muestran datos internos disponibles.',
@@ -94,11 +96,13 @@ const IA_COMPLIANCE_COPY = {
   en: {
     title: 'AI Compliance',
     subtitle: 'Analysis assistant for compliance, remediation, and executive follow-up. It does not certify compliance or replace human review.',
-    refresh: 'Refresh',
+    refresh: 'Refresh data',
+    refreshAnalysis: 'Refresh analysis',
+    refreshingAnalysis: 'Refreshing analysis...',
     executiveBrief: 'AI executive brief',
     generating: 'Generating...',
-    loading: 'Loading AI Compliance...',
-    loadingContext: 'Analyzing compliance context, internal signals, and recent suggestions. Please wait a few seconds while the reading is prepared.',
+    loading: 'Updating AI Compliance...',
+    loadingContext: 'Internal signals and assisted reading are updating in the background. You can review the available content while it finishes.',
     sessionError: 'Could not obtain the user session.',
     genericError: 'AI Compliance could not be loaded.',
     engineWarning: 'AI Engine could not be reached. Available internal data is shown.',
@@ -571,6 +575,7 @@ export default function IaCompliancePage() {
     }
   };
 
+  const engineStatusKnown = Boolean(engineHealth?.data);
   const engineOk = Boolean(engineHealth?.data?.ok);
   const engineDbOk = Boolean(engineHealth?.data?.db_connection);
   const healthContext = healthSummary?.context || null;
@@ -724,6 +729,14 @@ export default function IaCompliancePage() {
 
             <button
               type="button"
+              onClick={() => intelligence.refresh({ bypassCache: true })}
+              className="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 whitespace-nowrap shadow-sm hover:bg-blue-100"
+            >
+              {intelligence.loading ? copy.refreshingAnalysis : copy.refreshAnalysis}
+            </button>
+
+            <button
+              type="button"
               onClick={loadExecutiveBrief}
               className="inline-flex items-center justify-center rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white whitespace-nowrap shadow-sm hover:bg-violet-700"
             >
@@ -738,20 +751,21 @@ export default function IaCompliancePage() {
           </div>
         )}
 
-        {loading ? (
+        {(loading || entitlementsLoading) && (
           <IaComplianceLoadingState title={copy.loading} description={copy.loadingContext} />
-        ) : (
-          <>
+        )}
+
+        <>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
               <MetricCard
                 title={copy.engine}
-                value={engineOk ? copy.ok : copy.error}
-                tone={engineOk ? 'green' : 'red'}
+                value={engineStatusKnown ? (engineOk ? copy.ok : copy.error) : '...'}
+                tone={engineStatusKnown ? (engineOk ? 'green' : 'red') : 'blue'}
               />
               <MetricCard
                 title={copy.engineDb}
-                value={engineDbOk ? copy.ok : copy.error}
-                tone={engineDbOk ? 'green' : 'red'}
+                value={engineStatusKnown ? (engineDbOk ? copy.ok : copy.error) : '...'}
+                tone={engineStatusKnown ? (engineDbOk ? 'green' : 'red') : 'blue'}
               />
               <MetricCard
                 title={copy.activeControls}
@@ -769,9 +783,7 @@ export default function IaCompliancePage() {
               />
             </div>
 
-            {intelligence.loading ? (
-              <div className="h-48 animate-pulse rounded-2xl border border-slate-200 bg-white" />
-            ) : intelligence.data ? (
+            {intelligence.data ? (
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -787,6 +799,11 @@ export default function IaCompliancePage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <IntelligenceConfidenceBadge brief={intelligence.data} compact />
+                    {intelligence.loading && (
+                      <span className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
+                        {copy.refreshingAnalysis}
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => setKnowledgeDrawerOpen(true)}
@@ -831,6 +848,20 @@ export default function IaCompliancePage() {
                   items={intelligenceBasis}
                   onClose={() => setKnowledgeDrawerOpen(false)}
                 />
+              </div>
+            ) : intelligence.loading ? (
+              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+                  Intelligence Layer
+                </div>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">
+                  {locale === 'en' ? 'Preparing assisted reading' : 'Preparando lectura asistida'}
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                  {locale === 'en'
+                    ? 'The operational view is already available. The assisted analysis is updating in the background.'
+                    : 'La vista operativa ya está disponible. El análisis asistido se actualiza en segundo plano.'}
+                </p>
               </div>
             ) : intelligence.status === 'error' || intelligence.status === 'timeout' || intelligence.status === 'forbidden' ? (
               <IntelligenceErrorState status={intelligence.status} error={intelligence.error} onRetry={intelligence.refresh} />
@@ -1058,8 +1089,7 @@ export default function IaCompliancePage() {
                 </div>
               )}
             </div>
-          </>
-        )}
+        </>
       </div>
     </AppLayout>
   );
@@ -1129,38 +1159,15 @@ function IaComplianceLoadingState({
   description: string;
 }) {
   return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
-              Intelligence Layer
-            </div>
-            <h2 className="mt-2 text-xl font-bold text-slate-900">{title}</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              {description}
-            </p>
-          </div>
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
+    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm text-blue-900">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="font-bold">{title}</div>
+          <p className="mt-1 max-w-4xl leading-6">
+            {description}
+          </p>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, index) => (
-          <div key={index} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="h-3 w-24 animate-pulse rounded bg-slate-200" />
-            <div className="mt-5 h-8 w-16 animate-pulse rounded bg-slate-200" />
-          </div>
-        ))}
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="h-4 w-48 animate-pulse rounded bg-slate-200" />
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
-          <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
-          <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
-        </div>
+        <div className="h-6 w-6 shrink-0 animate-spin rounded-full border-2 border-blue-200 border-t-blue-700" />
       </div>
     </div>
   );

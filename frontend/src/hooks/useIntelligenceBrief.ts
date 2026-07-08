@@ -11,6 +11,10 @@ type UseIntelligenceBriefOptions = {
   timeoutMs?: number;
 };
 
+type RefreshOptions = {
+  bypassCache?: boolean;
+};
+
 type UseIntelligenceBriefResult = {
   tenantId: string | null;
   data: IntelligenceBrief | null;
@@ -20,8 +24,33 @@ type UseIntelligenceBriefResult = {
   partial: boolean;
   timeout: boolean;
   empty: boolean;
-  refresh: () => Promise<void>;
+  refresh: (options?: RefreshOptions) => Promise<void>;
 };
+
+function briefCacheKey(tenantId: string) {
+  return `tcdx:intelligence-brief:last:${tenantId}:es`;
+}
+
+function readSessionBrief(tenantId: string): IntelligenceBrief | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(briefCacheKey(tenantId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as IntelligenceBrief;
+    return parsed?.tenant_id && String(parsed.tenant_id) !== tenantId ? null : parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionBrief(tenantId: string, brief: IntelligenceBrief) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(briefCacheKey(tenantId), JSON.stringify(brief));
+  } catch {
+    // Cache is best effort only; the network response remains the source of truth.
+  }
+}
 
 function readApiError(payload: unknown, fallback: string) {
   if (payload && typeof payload === 'object') {
@@ -41,7 +70,7 @@ export default function useIntelligenceBrief({
   const [error, setError] = useState('');
   const requestRef = useRef<AbortController | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options: RefreshOptions = {}) => {
     if (!enabled) {
       setStatus('idle');
       return;
@@ -65,11 +94,17 @@ export default function useIntelligenceBrief({
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const cached = readSessionBrief(safeTenantId);
+      if (cached && !options.bypassCache) {
+        setData((current) => current || cached);
+      }
       setStatus('loading');
       setError('');
       const baseUrl = getApiBaseUrl();
+      const query = new URLSearchParams({ locale: 'es' });
+      if (options.bypassCache) query.set('refresh', '1');
       const response = await fetch(
-        `${baseUrl}/api/intelligence/brief/${encodeURIComponent(safeTenantId)}?locale=es`,
+        `${baseUrl}/api/intelligence/brief/${encodeURIComponent(safeTenantId)}?${query.toString()}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -97,6 +132,7 @@ export default function useIntelligenceBrief({
       }
 
       setData(brief);
+      writeSessionBrief(safeTenantId, brief);
       if (!hasUsefulBrief(brief)) {
         setStatus('empty');
       } else if (brief.metadata?.fallback_reason || brief.metadata?.ai_used === false || brief.data_quality?.confidence === 'low') {
@@ -109,10 +145,9 @@ export default function useIntelligenceBrief({
       const statusCode = typeof (err as { status?: unknown })?.status === 'number'
         ? Number((err as { status?: unknown }).status)
         : 0;
-      setData(null);
       setError(
         aborted
-          ? 'Timeout consultando Intelligence Layer. Se mantiene la operación sin lectura inteligente.'
+          ? 'El análisis asistido está tardando más de lo habitual. Se mantiene la lectura operativa disponible.'
           : err instanceof Error
             ? err.message
             : 'No fue posible cargar Intelligence Layer.'
