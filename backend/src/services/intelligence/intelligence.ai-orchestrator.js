@@ -8,6 +8,8 @@ const { buildAiMessages, buildPromptContext } = require('./intelligence.prompt-b
 const { buildNarrativeSet } = require('./intelligence.narrative');
 const { recordIntelligenceAiTrace } = require('./intelligence.audit-log');
 
+const DEFAULT_INTELLIGENCE_AI_TIMEOUT_MS = 12000;
+
 function aiDisabled() {
   return String(process.env.AI_DISABLED || '').toLowerCase() === 'true' ||
     String(process.env.INTELLIGENCE_AI_ENABLED || 'true').toLowerCase() === 'false';
@@ -21,19 +23,25 @@ function promptSize(value) {
   return Buffer.byteLength(JSON.stringify(value || {}), 'utf8');
 }
 
+function resolveIntelligenceAiTimeoutMs(value = null) {
+  const parsed = Number.parseInt(String(value || process.env.INTELLIGENCE_AI_TIMEOUT_MS || ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_INTELLIGENCE_AI_TIMEOUT_MS;
+}
+
 async function invokeAi(promptContext, { requestId = null, timeoutMs = null } = {}) {
+  const resolvedTimeoutMs = resolveIntelligenceAiTimeoutMs(timeoutMs);
   if (typeof aiEngineClient.generateIntelligenceNarrative === 'function') {
     return aiEngineClient.generateIntelligenceNarrative({
       messages: buildAiMessages(promptContext),
       context: promptContext,
       request_id: requestId,
-    }, { timeoutMs });
+    }, { timeoutMs: resolvedTimeoutMs });
   }
   return aiEngineClient.postJson('/api/ai/intelligence/narrative', {
     messages: buildAiMessages(promptContext),
     context: promptContext,
     request_id: requestId,
-  }, { timeoutMs: timeoutMs || 45000 });
+  }, { timeoutMs: resolvedTimeoutMs });
 }
 
 async function generateStructuredNarrative(context = {}, {

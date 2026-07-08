@@ -409,7 +409,9 @@ async function runPhase3AiOrchestratorTests() {
 
     process.env.AI_DISABLED = 'false';
     process.env.INTELLIGENCE_AI_ENABLED = 'true';
-    aiEngineClient.generateIntelligenceNarrative = async () => {
+    let timeoutOptions = null;
+    aiEngineClient.generateIntelligenceNarrative = async (_payload, options) => {
+      timeoutOptions = options;
       const error = new Error('timeout');
       error.code = 'AI_ENGINE_TIMEOUT';
       throw error;
@@ -417,6 +419,7 @@ async function runPhase3AiOrchestratorTests() {
     brief = await buildBriefForDataset(dataset);
     assert.equal(brief.metadata.ai_used, false);
     assert.equal(brief.metadata.fallback_reason, 'AI_ENGINE_TIMEOUT');
+    assert.equal(timeoutOptions.timeoutMs, 12000);
 
     aiEngineClient.generateIntelligenceNarrative = async () => ({ unexpected: true });
     brief = await buildBriefForDataset(dataset);
