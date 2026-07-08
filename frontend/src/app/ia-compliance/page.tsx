@@ -26,6 +26,7 @@ const IA_COMPLIANCE_COPY = {
     executiveBrief: 'Resumen ejecutivo IA',
     generating: 'Generando...',
     loading: 'Cargando IA Compliance...',
+    loadingContext: 'Analizando contexto de cumplimiento, señales internas y sugerencias recientes. Puedes esperar unos segundos mientras se prepara la lectura.',
     sessionError: 'No se pudo obtener la sesión del usuario.',
     genericError: 'No fue posible cargar IA Compliance.',
     engineWarning: 'No fue posible conectar con AI Engine. Se muestran datos internos disponibles.',
@@ -97,6 +98,7 @@ const IA_COMPLIANCE_COPY = {
     executiveBrief: 'AI executive brief',
     generating: 'Generating...',
     loading: 'Loading AI Compliance...',
+    loadingContext: 'Analyzing compliance context, internal signals, and recent suggestions. Please wait a few seconds while the reading is prepared.',
     sessionError: 'Could not obtain the user session.',
     genericError: 'AI Compliance could not be loaded.',
     engineWarning: 'AI Engine could not be reached. Available internal data is shown.',
@@ -268,13 +270,21 @@ function asRecord(value: unknown): UnknownRecord {
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error && error.message) return getUserSafeIaError(error.message, fallback);
 
   if (isRecord(error) && typeof error.message === 'string' && error.message) {
-    return error.message;
+    return getUserSafeIaError(error.message, fallback);
   }
 
   return fallback;
+}
+
+function getUserSafeIaError(message: string, fallback: string) {
+  if (/jwt|bearer|token|decode|payload|authorization/i.test(message)) {
+    return 'Tu sesión expiró. Ingresa nuevamente.';
+  }
+
+  return message || fallback;
 }
 
 function severityTone(value: unknown) {
@@ -729,9 +739,7 @@ export default function IaCompliancePage() {
         )}
 
         {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-slate-500">
-            {copy.loading}
-          </div>
+          <IaComplianceLoadingState title={copy.loading} description={copy.loadingContext} />
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -1109,6 +1117,51 @@ function InfoCard({
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="text-sm text-slate-500">{title}</div>
       <div className={`mt-2 text-2xl font-bold ${toneClass}`}>{value}</div>
+    </div>
+  );
+}
+
+function IaComplianceLoadingState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+              Intelligence Layer
+            </div>
+            <h2 className="mt-2 text-xl font-bold text-slate-900">{title}</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              {description}
+            </p>
+          </div>
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="h-3 w-24 animate-pulse rounded bg-slate-200" />
+            <div className="mt-5 h-8 w-16 animate-pulse rounded bg-slate-200" />
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="h-4 w-48 animate-pulse rounded bg-slate-200" />
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
+          <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
+          <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
+        </div>
+      </div>
     </div>
   );
 }

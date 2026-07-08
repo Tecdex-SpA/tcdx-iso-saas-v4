@@ -240,6 +240,7 @@
   "exports": {
     "title": "Premium Executive Reports",
     "brand": "TCDX by Tecdex",
+    "reportTypesLabel": "Report types",
     "reportTypes": {
       "executive_summary": {
         "name": "Executive Report",
@@ -285,6 +286,8 @@
     "generateReport": "Generate Report",
     "generateNow": "Generate Now",
     "generating": "Generating...",
+    "preparingDownload": "Generating PDF. The download will start when it is ready.",
+    "downloadStarted": "PDF generated. If the download does not open automatically, check the report history.",
     "selectReportHint": "Select a report type to view its summary.",
     "recentDistribution": "Recent Distribution",
     "noRecentReports": "No reports have been generated yet.",
@@ -1096,7 +1099,7 @@
       "serviceQuery": "Error querying service",
       "loadingRemediation": "Error loading remediation plan",
       "loadingLog": "Error loading audit log",
-      "missingToken": "Token not found. Please sign in again.",
+      "missingToken": "Your session expired. Please sign in again.",
       "loadingDashboard": "Unexpected error loading dashboard",
       "invalidRefreshResponse": "Invalid backend response while recalculating health.",
       "refresh": "Error recalculating health",
@@ -1211,7 +1214,7 @@
       "loadHistory": "Unable to load history",
       "loadLifecycle": "Error loading lifecycle",
       "loadFilters": "Error loading filters",
-      "noToken": "No active token",
+      "noToken": "Your session expired. Please sign in again.",
       "tenantResolve": "Unable to resolve tenant_id",
       "readOnlyMove": "Your role is read-only and cannot request stage changes.",
       "requestMove": "Unable to request the stage change",

@@ -240,6 +240,7 @@
   "exports": {
     "title": "Exportes ejecutivos premium",
     "brand": "TCDX by Tecdex",
+    "reportTypesLabel": "Tipos de reporte",
     "reportTypes": {
       "executive_summary": {
         "name": "Informe para Gerencia",
@@ -285,6 +286,8 @@
     "generateReport": "Generar informe",
     "generateNow": "Generar ahora",
     "generating": "Generando...",
+    "preparingDownload": "Generando PDF. La descarga comenzará cuando esté listo.",
+    "downloadStarted": "PDF generado. Si la descarga no se abre automáticamente, revisa el historial de informes.",
     "selectReportHint": "Selecciona un tipo de informe para ver su resumen.",
     "recentDistribution": "Distribución reciente",
     "noRecentReports": "Aún no hay informes generados.",
@@ -1096,7 +1099,7 @@
       "serviceQuery": "Error consultando servicio",
       "loadingRemediation": "Error cargando plan de remediación",
       "loadingLog": "Error cargando bitácora",
-      "missingToken": "Token no encontrado. Inicia sesión nuevamente.",
+      "missingToken": "Tu sesión expiró. Ingresa nuevamente.",
       "loadingDashboard": "Error inesperado cargando dashboard",
       "invalidRefreshResponse": "Respuesta inválida del backend al recalcular salud.",
       "refresh": "Error recalculando salud",
@@ -1211,7 +1214,7 @@
       "loadHistory": "No fue posible cargar historial",
       "loadLifecycle": "Error cargando ciclo de vida",
       "loadFilters": "Error cargando filtros",
-      "noToken": "No hay token activo",
+      "noToken": "Tu sesión expiró. Ingresa nuevamente.",
       "tenantResolve": "No fue posible resolver el tenant_id",
       "readOnlyMove": "Tu rol es solo lectura y no puede solicitar cambios de etapa.",
       "requestMove": "No fue posible solicitar el cambio de etapa",

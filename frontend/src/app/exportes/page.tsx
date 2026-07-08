@@ -131,14 +131,22 @@ function buildLocaleHeaders(token: string, locale: string) {
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error && error.message) return getUserSafeReportError(error.message, fallback);
 
   if (typeof error === 'object' && error !== null && 'message' in error) {
     const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message) return message;
+    if (typeof message === 'string' && message) return getUserSafeReportError(message, fallback);
   }
 
   return fallback;
+}
+
+function getUserSafeReportError(message: string, fallback: string) {
+  if (/jwt|bearer|token|decode|payload|authorization/i.test(message)) {
+    return 'Tu sesión expiró. Ingresa nuevamente.';
+  }
+
+  return message || fallback;
 }
 
 function appendLocaleParam(params: URLSearchParams, locale: string) {
@@ -181,6 +189,19 @@ async function readDownloadError(res: Response, fallback: string) {
   return fallback;
 }
 
+function getDownloadFileName(res: Response, fallback: string) {
+  const contentDisposition = res.headers.get('content-disposition') || '';
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  const quotedMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  const rawName = utf8Match?.[1] || quotedMatch?.[1] || fallback;
+
+  try {
+    return decodeURIComponent(rawName).replace(/[\\/]/g, '-');
+  } catch {
+    return fallback;
+  }
+}
+
 async function openAuthenticatedReport(fileUrl: string, token: string) {
   const res = await fetch(getAbsoluteFileUrl(fileUrl), {
     headers: buildLocaleHeadersForReport(token),
@@ -192,8 +213,14 @@ async function openAuthenticatedReport(fileUrl: string, token: string) {
     throw new Error(await readDownloadError(res, 'No fue posible descargar el reporte.'));
   }
 
-  const blobUrl = URL.createObjectURL(await res.blob());
-  window.open(blobUrl, '_blank', 'noopener,noreferrer');
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = getDownloadFileName(res, 'tcdx-reporte-premium.pdf');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
   window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
 
@@ -771,7 +798,7 @@ export default function ExportesPage() {
       setGeneratingCode(reportTypeCode);
       setError('');
       setSuccessMessage('');
-      setReportJobMessage('Reporte en generación. Puedes seguir usando la plataforma. Te avisaremos cuando esté disponible para descarga.');
+      setReportJobMessage(t('exports.preparingDownload'));
 
       const token = localStorage.getItem('token');
 
@@ -844,11 +871,10 @@ export default function ExportesPage() {
       }
 
       if (res.status === 202 && json?.job_id) {
-        setReportJobMessage(json?.message || 'Reporte en generación. Puedes seguir usando la plataforma.');
+        setReportJobMessage(json?.message || t('exports.preparingDownload'));
         json = await pollReportJob(json.job_id, token);
       }
 
-      setSuccessMessage(t('exports.generatedSuccessfully'));
       setReportJobMessage('');
       setActiveTab('history');
       await loadHistory();
@@ -857,6 +883,9 @@ export default function ExportesPage() {
 
       if (fileUrl) {
         await openAuthenticatedReport(fileUrl, token);
+        setSuccessMessage(t('exports.downloadStarted'));
+      } else {
+        setSuccessMessage(t('exports.generatedSuccessfully'));
       }
     } catch (err) {
       console.error('ERROR GENERATE REPORT:', err);
@@ -914,7 +943,7 @@ export default function ExportesPage() {
 
             <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[440px] xl:max-w-[480px]">
               <HeroMiniStat
-                label={t('exports.reportTypes')}
+                label={t('exports.reportTypesLabel')}
                 value={typeCount}
                 helper={t('exports.availableByProfile')}
               />

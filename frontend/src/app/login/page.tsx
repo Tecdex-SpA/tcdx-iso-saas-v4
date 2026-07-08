@@ -20,7 +20,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+  const message = error instanceof Error ? error.message : fallback;
+  return getUserSafeLoginError(message, fallback);
+}
+
+function getUserSafeLoginError(message: string, fallback: string) {
+  if (/jwt|bearer|token|decode|payload|authorization/i.test(message)) {
+    return fallback;
+  }
+
+  return message || fallback;
 }
 
 export default function LoginPage() {
@@ -84,7 +93,10 @@ export default function LoginPage() {
       const token = typeof record.token === 'string' ? record.token : '';
 
       if (!res.ok || !token) {
-        setError(String(record.error || record.message || t('login.errors.invalidCredentials')));
+        setError(getUserSafeLoginError(
+          String(record.error || record.message || ''),
+          t('login.errors.invalidCredentials')
+        ));
         return;
       }
 
@@ -171,7 +183,7 @@ export default function LoginPage() {
             <div className="mt-1">Multinorma</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3">
-            <div className="text-lg font-bold text-white">JWT</div>
+            <div className="text-lg font-bold text-white">B2B</div>
             <div className="mt-1">Multiempresa</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3">
