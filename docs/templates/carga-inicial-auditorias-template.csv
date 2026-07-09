@@ -1,0 +1,2 @@
+tenant_name,audit_title,standard_code,scope,lead_auditor_email,start_date,end_date,status,objectives,notes
+TENANT_EJEMPLO,Auditoria interna ejemplo,ISO27001,Alcance general inicial,auditor-ejemplo@empresa.cl,YYYY-MM-DD,YYYY-MM-DD,planned,Validar preparacion inicial,No prometer certificacion automatica

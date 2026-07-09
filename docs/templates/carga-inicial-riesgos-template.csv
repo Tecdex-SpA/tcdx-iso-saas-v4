@@ -1,0 +1,2 @@
+tenant_name,risk_title,risk_description,process,owner_email,inherent_impact,inherent_likelihood,residual_impact,residual_likelihood,treatment_plan,due_date,notes
+TENANT_EJEMPLO,Riesgo ejemplo,Descripcion breve sin datos sensibles,Proceso ejemplo,owner-ejemplo@empresa.cl,3,3,2,2,Plan de tratamiento ejemplo,YYYY-MM-DD,Requiere validacion cliente

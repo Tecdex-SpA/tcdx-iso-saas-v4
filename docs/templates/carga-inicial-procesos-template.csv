@@ -1,0 +1,2 @@
+tenant_name,process_name,process_code,process_type,description,owner_email,status,notes
+TENANT_EJEMPLO,Proceso ejemplo,PROC-EJEMPLO,proceso,Descripcion breve sin datos sensibles,owner-ejemplo@empresa.cl,active,Validar alcance con cliente

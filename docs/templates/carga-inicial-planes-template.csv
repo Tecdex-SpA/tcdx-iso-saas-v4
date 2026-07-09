@@ -1,0 +1,2 @@
+tenant_name,action_title,description,source_type,source_reference,owner_email,priority,due_date,status,acceptance_criteria,notes
+TENANT_EJEMPLO,Accion ejemplo,Descripcion breve sin datos sensibles,risk,Riesgo ejemplo,owner-ejemplo@empresa.cl,media,YYYY-MM-DD,pending,Criterio verificable aprobado por cliente,No usar datos reales

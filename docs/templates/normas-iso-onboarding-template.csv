@@ -1,0 +1,3 @@
+tenant_name,standard_code,scope,applicability_notes,initial_status,owner_email,notes
+TENANT_EJEMPLO,ISO27001,Alcance general inicial,Aplicabilidad inicial sujeta a revision,active,admin-ejemplo@empresa.cl,Validar tenant_standards
+TENANT_EJEMPLO,ISO9001,Alcance general inicial,Aplicabilidad inicial sujeta a revision,pending,admin-ejemplo@empresa.cl,Activar solo si contratado

@@ -1,0 +1,4 @@
+tenant_name,full_name,email,role,job_title,area,status,send_invite,notes
+TENANT_EJEMPLO,Admin Ejemplo,admin-ejemplo@empresa.cl,admin,Responsable Cumplimiento,Cumplimiento,active,true,No incluir contrasena
+TENANT_EJEMPLO,Viewer Ejemplo,viewer-ejemplo@empresa.cl,viewer,Gerencia,Direccion,active,true,Acceso lectura
+TENANT_EJEMPLO,Auditor Ejemplo,auditor-ejemplo@empresa.cl,auditor,Auditor Interno,Auditoria,active,true,Validar si aplica

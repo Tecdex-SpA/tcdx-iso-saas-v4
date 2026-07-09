@@ -1,0 +1,2 @@
+tenant_name,evidence_title,description,standard_code,clause_or_control,process,owner_email,evidence_type,source,file_reference,status,notes
+TENANT_EJEMPLO,Evidencia ejemplo,Descripcion breve sin contenido sensible,ISO27001,A.5.1,Proceso ejemplo,owner-ejemplo@empresa.cl,documento,cliente,referencia-interna-no-archivo,pending,No adjuntar secretos

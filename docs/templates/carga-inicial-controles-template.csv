@@ -1,0 +1,2 @@
+tenant_name,control_title,description,standard_code,clause_or_control,process,owner_email,applicability_status,initial_maturity,status,notes
+TENANT_EJEMPLO,Control ejemplo,Descripcion breve sin datos sensibles,ISO27001,A.5.1,Proceso ejemplo,owner-ejemplo@empresa.cl,applicable,inicial,active,Validar aplicabilidad antes de cargar

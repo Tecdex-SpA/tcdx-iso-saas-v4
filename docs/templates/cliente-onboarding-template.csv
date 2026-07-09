@@ -1,0 +1,2 @@
+tenant_name,legal_name,commercial_name,tax_id,country,industry,primary_contact_name,primary_contact_email,billing_contact_email,standards,initial_admin_email,go_live_target_date,data_classification,notes
+TENANT_EJEMPLO,Empresa Ejemplo SpA,Empresa Ejemplo,RUT-EJEMPLO,CL,Servicios,Nombre Contacto,cliente-ejemplo@empresa.cl,facturacion-ejemplo@empresa.cl,ISO 27001;ISO 9001,admin-ejemplo@empresa.cl,YYYY-MM-DD,interno,Sin datos sensibles reales
