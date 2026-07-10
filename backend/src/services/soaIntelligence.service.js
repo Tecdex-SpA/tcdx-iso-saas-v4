@@ -1,7 +1,8 @@
 const pool = require('../config/db');
 const aiEngineClient = require('./aiEngineClient.service');
+const { isoQueryAliases, normalizeIsoCode } = require('../utils/isoStandards');
 
-const IMPLEMENTATION_STATUSES = ['pendiente', 'implementado', 'parcial', 'no implementado', 'no aplica'];
+const IMPLEMENTATION_STATUSES = ['pendiente', 'implementado', 'parcial', 'no aplica'];
 
 const toNumber = (value) => Number(value || 0);
 const boolText = (value) => (value === null || value === undefined ? null : String(value));
@@ -32,7 +33,9 @@ function evaluateSoARules(context) {
   const health = signals.health || {};
 
   const evidenceCount = toNumber(evidence.evidence_count);
-  const approvedEvidenceCount = toNumber(evidence.official_evidence_count || evidence.approved_evidence_count);
+  const validEvidenceCount = toNumber(evidence.valid_evidence_count || evidence.official_evidence_count || evidence.approved_evidence_count);
+  const rejectedEvidenceCount = toNumber(evidence.rejected_evidence_count);
+  const expiredEvidenceCount = toNumber(evidence.expired_evidence_count || evidence.expired_or_stale_count);
   const openFindings = toNumber(findings.open_findings_count);
   const highFindings = toNumber(findings.high_findings_count) + toNumber(findings.critical_findings_count);
   const openNc = toNumber(nonconformities.open_nonconformities_count);
@@ -57,16 +60,16 @@ function evaluateSoARules(context) {
     reasons.push('El SoA oficial marca el control como no aplicable. Se conserva esa decisión como sugerencia hasta revisión humana.');
   } else {
     suggestedApplicable = true;
-    if (approvedEvidenceCount > 0 && openFindings === 0 && openNc === 0 && overdueActions === 0 && healthGreen) {
+    if (validEvidenceCount > 0 && openFindings === 0 && openNc === 0 && overdueActions === 0 && highRisk === 0 && healthGreen) {
       suggestedImplementationStatus = 'implementado';
       confidence = 82;
-      reasons.push('Hay evidencia aprobada y no se observan hallazgos, no conformidades ni acciones vencidas asociadas.');
-    } else if (evidenceCount > 0) {
+      reasons.push('Hay evidencia valida y no se observan hallazgos, no conformidades, riesgos altos ni acciones vencidas asociadas.');
+    } else if (evidenceCount > 0 || rejectedEvidenceCount > 0 || expiredEvidenceCount > 0) {
       suggestedImplementationStatus = 'parcial';
       confidence = 64;
-      reasons.push('Existe evidencia, pero hay señales pendientes o insuficientes para concluir implementación completa.');
+      reasons.push('Existe evidencia, pero no toda es valida o hay señales pendientes para concluir implementacion completa.');
     } else if (highFindings > 0 || majorNc > 0 || highRisk > 0) {
-      suggestedImplementationStatus = 'no implementado';
+      suggestedImplementationStatus = 'pendiente';
       confidence = 58;
       reasons.push('No hay evidencia suficiente y existen señales de riesgo, hallazgos o no conformidades relevantes.');
     } else {
@@ -76,9 +79,17 @@ function evaluateSoARules(context) {
     }
   }
 
-  if (evidenceCount === 0) {
+  if (validEvidenceCount === 0) {
     confidence -= 8;
     recommendedActions.push(buildRecommendedAction('update_evidence', 'media', 'Registrar o vincular evidencia del control'));
+  }
+  if (rejectedEvidenceCount > 0) {
+    confidence -= 6;
+    recommendedActions.push(buildRecommendedAction('replace_rejected_evidence', 'alta', 'Reemplazar evidencia rechazada asociada'));
+  }
+  if (expiredEvidenceCount > 0) {
+    confidence -= 6;
+    recommendedActions.push(buildRecommendedAction('refresh_expired_evidence', 'alta', 'Actualizar evidencia vencida asociada'));
   }
   if (ownerMissing) {
     confidence -= 5;
@@ -100,6 +111,10 @@ function evaluateSoARules(context) {
     confidence -= 6;
     recommendedActions.push(buildRecommendedAction('treat_high_risk', 'alta', 'Revisar tratamiento de riesgos altos asociados'));
   }
+  if (official.applicable === false && highRisk > 0) {
+    confidence -= 10;
+    reasons.push('Existen riesgos altos o criticos asociados a un control marcado como no aplicable; requiere revision humana.');
+  }
   if (official.applicable === false && !String(official.justification || '').trim()) {
     recommendedActions.push(buildRecommendedAction('justify_exclusion', 'alta', 'Documentar justificación de no aplicabilidad'));
   }
@@ -114,7 +129,9 @@ function evaluateSoARules(context) {
     suggested_justification: reasons.join(' '),
     rule_results: {
       evidence_present: evidenceCount > 0,
-      official_evidence_present: approvedEvidenceCount > 0,
+      official_evidence_present: validEvidenceCount > 0,
+      rejected_evidence: rejectedEvidenceCount > 0,
+      expired_evidence: expiredEvidenceCount > 0,
       open_findings: openFindings > 0,
       open_nonconformities: openNc > 0,
       high_risk: highRisk > 0,
@@ -128,6 +145,8 @@ function evaluateSoARules(context) {
 }
 
 async function loadRows(tenantId, iso) {
+  const canonicalIso = normalizeIsoCode(iso);
+  const isoAliases = isoQueryAliases(canonicalIso);
   const result = await pool.query(
     `
     SELECT
@@ -154,11 +173,11 @@ async function loadRows(tenantId, iso) {
       ON tc.tenant_id = c.tenant_id
      AND tc.control_id = c.catalog_control_id
     WHERE c.tenant_id = $1
-      AND c.iso_code = $2
+      AND c.iso_code = ANY($2::text[])
     GROUP BY c.id, cc.category, cc.description, cs.tenant_control_id
     ORDER BY c.clause, c.created_at
     `,
-    [tenantId, iso]
+    [tenantId, isoAliases]
   );
   return result.rows;
 }
@@ -170,12 +189,28 @@ function keyMap(rows, key = 'tenant_control_id') {
 }
 
 async function loadSignalMaps(tenantId, iso) {
+  const canonicalIso = normalizeIsoCode(iso);
+  const isoAliases = isoQueryAliases(canonicalIso);
   const [evidence, findings, nonconformities, actions, risks, health, audits, kpis, latestAssessments] = await Promise.all([
     pool.query(
       `
       SELECT c.id AS tenant_control_id,
         COUNT(DISTINCT e.id)::int AS evidence_count,
-        COUNT(DISTINCT e.id) FILTER (WHERE e.validated = TRUE OR lower(COALESCE(e.status, '')) IN ('aprobada','aprobado','approved','validada'))::int AS official_evidence_count,
+        COUNT(DISTINCT e.id) FILTER (
+          WHERE (
+            e.validated = TRUE
+            OR lower(COALESCE(e.status, '')) IN ('aprobada','aprobado','approved','validada','validated')
+          )
+          AND lower(COALESCE(e.status, '')) NOT IN ('rechazada','rechazado','rejected')
+          AND (e.expires_at IS NULL OR e.expires_at >= CURRENT_DATE)
+        )::int AS valid_evidence_count,
+        COUNT(DISTINCT e.id) FILTER (
+          WHERE lower(COALESCE(e.status, '')) IN ('rechazada','rechazado','rejected')
+        )::int AS rejected_evidence_count,
+        COUNT(DISTINCT e.id) FILTER (
+          WHERE e.expires_at IS NOT NULL AND e.expires_at < CURRENT_DATE
+        )::int AS expired_evidence_count,
+        COUNT(DISTINCT e.id) FILTER (WHERE e.validated = TRUE OR lower(COALESCE(e.status, '')) IN ('aprobada','aprobado','approved','validada','validated'))::int AS official_evidence_count,
         COUNT(DISTINCT e.id) FILTER (WHERE e.created_at >= NOW() - INTERVAL '90 days')::int AS recent_evidence_count,
         MAX(e.created_at) AS last_evidence_date,
         COUNT(DISTINCT e.id) FILTER (WHERE e.expires_at IS NOT NULL AND e.expires_at < CURRENT_DATE)::int AS expired_or_stale_count,
@@ -185,10 +220,10 @@ async function loadSignalMaps(tenantId, iso) {
       FROM controls c
       LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
       LEFT JOIN evidences e ON e.tenant_id = c.tenant_id AND (e.tenant_control_id = tc.id OR e.control_id = c.id)
-      WHERE c.tenant_id = $1 AND c.iso_code = $2
+      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
       GROUP BY c.id
       `,
-      [tenantId, iso]
+      [tenantId, isoAliases]
     ),
     pool.query(
       `
@@ -199,11 +234,11 @@ async function loadSignalMaps(tenantId, iso) {
         COUNT(DISTINCT f.id) FILTER (WHERE lower(COALESCE(f.severity, '')) = 'critica')::int AS critical_findings_count,
         'tenant_control_id' AS relation
       FROM controls c
-      LEFT JOIN findings f ON f.tenant_id = c.tenant_id AND f.iso_code = c.iso_code AND f.tenant_control_id = c.id
-      WHERE c.tenant_id = $1 AND c.iso_code = $2
+      LEFT JOIN findings f ON f.tenant_id = c.tenant_id AND (f.iso_code = c.iso_code OR f.iso_code = ANY($2::text[])) AND f.tenant_control_id = c.id
+      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
       GROUP BY c.id
       `,
-      [tenantId, iso]
+      [tenantId, isoAliases]
     ),
     pool.query(
       `
@@ -216,10 +251,10 @@ async function loadSignalMaps(tenantId, iso) {
       FROM controls c
       LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
       LEFT JOIN tenant_nonconformities nc ON nc.tenant_id = c.tenant_id AND (nc.control_id = c.id OR nc.control_id = tc.id)
-      WHERE c.tenant_id = $1 AND c.iso_code = $2
+      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
       GROUP BY c.id
       `,
-      [tenantId, iso]
+      [tenantId, isoAliases]
     ),
     pool.query(
       `
@@ -231,11 +266,11 @@ async function loadSignalMaps(tenantId, iso) {
         'tenant_controls' AS relation
       FROM controls c
       LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
-      LEFT JOIN action_plans ap ON ap.tenant_id = c.tenant_id AND ap.iso_code = c.iso_code AND ap.tenant_control_id = tc.id
-      WHERE c.tenant_id = $1 AND c.iso_code = $2
+      LEFT JOIN action_plans ap ON ap.tenant_id = c.tenant_id AND (ap.iso_code = c.iso_code OR ap.iso_code = ANY($2::text[])) AND ap.tenant_control_id = tc.id
+      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
       GROUP BY c.id
       `,
-      [tenantId, iso]
+      [tenantId, isoAliases]
     ),
     pool.query(
       `
@@ -248,11 +283,11 @@ async function loadSignalMaps(tenantId, iso) {
         'catalog_control_id/tenant_control_id' AS relation
       FROM controls c
       LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
-      LEFT JOIN iso_risk_matrix_items ri ON ri.tenant_id = c.tenant_id AND ri.standard_code = c.iso_code AND (ri.catalog_control_id = c.catalog_control_id OR ri.tenant_control_id = tc.id)
-      WHERE c.tenant_id = $1 AND c.iso_code = $2
+      LEFT JOIN iso_risk_matrix_items ri ON ri.tenant_id = c.tenant_id AND (ri.standard_code = c.iso_code OR ri.standard_code = ANY($2::text[])) AND (ri.catalog_control_id = c.catalog_control_id OR ri.tenant_control_id = tc.id)
+      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
       GROUP BY c.id
       `,
-      [tenantId, iso]
+      [tenantId, isoAliases]
     ),
     pool.query(
       `
@@ -267,11 +302,11 @@ async function loadSignalMaps(tenantId, iso) {
         'control_health_scores' AS relation
       FROM controls c
       LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
-      LEFT JOIN control_health_scores chs ON chs.tenant_id = c.tenant_id AND chs.standard_code = c.iso_code AND (chs.tenant_control_id = tc.id OR chs.catalog_control_id = c.catalog_control_id)
-      WHERE c.tenant_id = $1 AND c.iso_code = $2
+      LEFT JOIN control_health_scores chs ON chs.tenant_id = c.tenant_id AND (chs.standard_code = c.iso_code OR chs.standard_code = ANY($2::text[])) AND (chs.tenant_control_id = tc.id OR chs.catalog_control_id = c.catalog_control_id)
+      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
       GROUP BY c.id
       `,
-      [tenantId, iso]
+      [tenantId, isoAliases]
     ),
     pool.query(
       `
@@ -279,9 +314,9 @@ async function loadSignalMaps(tenantId, iso) {
         MAX(COALESCE(a.end_date, a.start_date)) AS last_audit_date,
         COUNT(*) FILTER (WHERE lower(COALESCE(a.audit_result, '')) LIKE '%observ%')::int AS audit_observations_count
       FROM audits a
-      WHERE a.tenant_id = $1 AND a.iso = $2
+      WHERE a.tenant_id = $1 AND a.iso = ANY($2::text[])
       `,
-      [tenantId, iso]
+      [tenantId, isoAliases]
     ),
     pool.query(
       `
@@ -289,19 +324,19 @@ async function loadSignalMaps(tenantId, iso) {
         COUNT(*) FILTER (WHERE status_color::text IN ('red','yellow'))::int AS bad_kpi_count,
         ROUND(AVG(value), 2) AS avg_value
       FROM v_latest_health_kpi_snapshots
-      WHERE tenant_id = $1 AND standard_code = $2
+      WHERE tenant_id = $1 AND standard_code = ANY($2::text[])
       `,
-      [tenantId, iso]
+      [tenantId, isoAliases]
     ),
     pool.query(
       `
       SELECT DISTINCT ON (tenant_control_id)
         *
       FROM control_soa_assessments
-      WHERE tenant_id = $1 AND iso_code = $2
+      WHERE tenant_id = $1 AND iso_code = ANY($2::text[])
       ORDER BY tenant_control_id, created_at DESC
       `,
-      [tenantId, iso]
+      [tenantId, isoAliases]
     ),
   ]);
 
@@ -364,7 +399,7 @@ function buildIntelligenceSummary(rows) {
     const signals = row.signals || {};
     const suggestion = row.system_suggestion || {};
     acc.total_controls += 1;
-    if (toNumber(signals.evidence?.evidence_count) > 0) acc.controls_with_evidence += 1;
+    if (toNumber(signals.evidence?.valid_evidence_count || signals.evidence?.official_evidence_count) > 0) acc.controls_with_evidence += 1;
     if (toNumber(signals.findings?.open_findings_count) > 0) acc.controls_with_open_findings += 1;
     if (toNumber(signals.nonconformities?.open_nonconformities_count) > 0) acc.controls_with_open_nc += 1;
     if ((toNumber(signals.risks?.high_risk_count) + toNumber(signals.risks?.critical_risk_count) + toNumber(signals.risks?.residual_high_count)) > 0) acc.controls_with_high_risk += 1;
@@ -518,7 +553,26 @@ async function runSystemAssessment({ tenantId, iso, tenantControlId, userId = nu
 
 async function runSystemAssessmentBatch({ tenantId, iso, limit = 50, userId = null, useAi = false }) {
   const rows = await loadRows(tenantId, iso);
-  const capped = rows.slice(0, Math.max(1, Math.min(Number(limit) || 50, 100)));
+  const maps = await loadSignalMaps(tenantId, iso);
+  const scoredRows = rows
+    .map((row) => {
+      const context = buildContext(row, maps);
+      const signals = context.signals || {};
+      const score =
+        toNumber(signals.risks?.critical_risk_count) * 50 +
+        toNumber(signals.risks?.high_risk_count) * 35 +
+        toNumber(signals.risks?.residual_high_count) * 30 +
+        toNumber(signals.nonconformities?.open_nonconformities_count) * 25 +
+        toNumber(signals.findings?.open_findings_count) * 15 +
+        toNumber(signals.actions?.overdue_actions_count) * 12 +
+        toNumber(signals.evidence?.rejected_evidence_count) * 10 +
+        toNumber(signals.evidence?.expired_evidence_count) * 8 +
+        (row.applicable === false && !String(row.justification || '').trim() ? 20 : 0) +
+        (row.applicable === true && normalizeImplementationStatus(row.implementation_status) === 'implementado' && toNumber(signals.evidence?.valid_evidence_count) === 0 ? 18 : 0);
+      return { row, score };
+    })
+    .sort((a, b) => b.score - a.score || String(a.row.clause || '').localeCompare(String(b.row.clause || '')));
+  const capped = scoredRows.slice(0, Math.max(1, Math.min(Number(limit) || 50, 100))).map((item) => item.row);
   const created = [];
   for (const row of capped) {
     const assessment = await runSystemAssessment({ tenantId, iso, tenantControlId: row.tenant_control_id, userId, useAi });
@@ -528,17 +582,18 @@ async function runSystemAssessmentBatch({ tenantId, iso, limit = 50, userId = nu
 }
 
 async function listAssessments({ tenantId, iso }) {
+  const isoAliases = isoQueryAliases(iso);
   const result = await pool.query(
     `
     SELECT a.*, c.clause, COALESCE(cc.category, 'General') AS category, COALESCE(cc.description, 'Control ' || c.clause) AS description
     FROM control_soa_assessments a
     JOIN controls c ON c.id = a.tenant_control_id AND c.tenant_id = a.tenant_id
     LEFT JOIN controls_catalog cc ON cc.id = c.catalog_control_id
-    WHERE a.tenant_id = $1 AND a.iso_code = $2
+    WHERE a.tenant_id = $1 AND a.iso_code = ANY($2::text[])
     ORDER BY a.created_at DESC
     LIMIT 500
     `,
-    [tenantId, iso]
+    [tenantId, isoAliases]
   );
   return result.rows;
 }
@@ -639,17 +694,18 @@ async function rejectAssessment({ tenantId, assessmentId, userId }) {
 }
 
 async function getChangeLog({ tenantId, iso }) {
+  const isoAliases = isoQueryAliases(iso);
   const result = await pool.query(
     `
     SELECT l.*, c.clause, COALESCE(cc.category, 'General') AS category
     FROM control_soa_change_log l
     JOIN controls c ON c.id = l.tenant_control_id AND c.tenant_id = l.tenant_id
     LEFT JOIN controls_catalog cc ON cc.id = c.catalog_control_id
-    WHERE l.tenant_id = $1 AND c.iso_code = $2
+    WHERE l.tenant_id = $1 AND c.iso_code = ANY($2::text[])
     ORDER BY l.changed_at DESC
     LIMIT 500
     `,
-    [tenantId, iso]
+    [tenantId, isoAliases]
   );
   return result.rows;
 }

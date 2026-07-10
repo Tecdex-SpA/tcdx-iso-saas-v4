@@ -8,6 +8,9 @@ import { translateDisplayText, translateClauseLabel, translateStatusLabel } from
 
 const SOA_STANDARDS = [
   'ISO27001',
+  'ISO27701',
+  'ISO27017',
+  'ISO27018',
   'ISO/IEC27701',
   'ISO/IEC27017',
   'ISO/IEC27018'
@@ -30,6 +33,8 @@ type SoAStandard = {
 
 type SoARow = {
   tenant_control_id: string;
+  controls_id_legacy?: string | null;
+  modern_tenant_control_id?: string | null;
   tenant_id?: string | null;
   iso?: string | null;
   clause?: string | null;
@@ -44,6 +49,15 @@ type SoARow = {
   review_date?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  evidence_count?: number | string | null;
+  valid_evidence_count?: number | string | null;
+  expired_evidence_count?: number | string | null;
+  rejected_evidence_count?: number | string | null;
+  open_findings_count?: number | string | null;
+  open_nonconformities_count?: number | string | null;
+  high_or_critical_risk_count?: number | string | null;
+  overdue_actions_count?: number | string | null;
+  inconsistencies?: string[];
 };
 
 type SoAField = keyof Pick<
@@ -117,6 +131,39 @@ type SoAPreflight = {
   blocking_reason?: string | null;
 };
 
+type SoAMetrics = {
+  total_controls?: number | string | null;
+  decision_count?: number | string | null;
+  applicable_count?: number | string | null;
+  not_applicable_count?: number | string | null;
+  not_applicable_justified_count?: number | string | null;
+  pending_applicability_count?: number | string | null;
+  implemented_applicable_count?: number | string | null;
+  partial_applicable_count?: number | string | null;
+  pending_applicable_count?: number | string | null;
+  implementation_coverage_pct?: number | string | null;
+  applicability_coverage_pct?: number | string | null;
+  na_justification_coverage_pct?: number | string | null;
+  controls_with_valid_evidence_count?: number | string | null;
+  controls_with_expired_evidence_count?: number | string | null;
+  controls_with_rejected_evidence_count?: number | string | null;
+  evidence_validity_pct?: number | string | null;
+  controls_with_open_findings_count?: number | string | null;
+  controls_with_open_nonconformities_count?: number | string | null;
+  controls_with_high_or_critical_risk_count?: number | string | null;
+  controls_with_overdue_actions_count?: number | string | null;
+  inconsistency_count?: number | string | null;
+};
+
+type SoAResponse = {
+  rows?: unknown[];
+  metrics?: SoAMetrics | null;
+  requires_initialization?: boolean;
+  message?: string | null;
+  preflight?: SoAPreflight | null;
+  inconsistencies?: unknown[];
+};
+
 function getTenantId(user: AuthUser | null) {
   return user?.tenant_id || '';
 }
@@ -144,6 +191,15 @@ function toNumber(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function normalizeStandardCode(value: unknown) {
+  const compact = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (compact.includes('27001')) return 'ISO27001';
+  if (compact.includes('27701')) return 'ISO27701';
+  if (compact.includes('27017')) return 'ISO27017';
+  if (compact.includes('27018')) return 'ISO27018';
+  return String(value || '').trim();
+}
+
 export default function SoAPage() {
   const { locale } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
@@ -155,6 +211,9 @@ export default function SoAPage() {
   const [intelligence, setIntelligence] = useState<SoAIntelligence | null>(null);
   const [assessments, setAssessments] = useState<SoAAssessment[]>([]);
   const [changeLog, setChangeLog] = useState<SoAChangeLogRow[]>([]);
+  const [backendMetrics, setBackendMetrics] = useState<SoAMetrics | null>(null);
+  const [requiresInitialization, setRequiresInitialization] = useState(false);
+  const [soaMessage, setSoaMessage] = useState<string>('');
   const [loadingStandards, setLoadingStandards] = useState(true);
   const [loadingData, setLoadingData] = useState(true);
   const [loadingIntelligence, setLoadingIntelligence] = useState(false);
@@ -210,7 +269,7 @@ export default function SoAPage() {
       const activeStandards = (Array.isArray(json) ? json.filter(isSoAStandard) : []).filter(
         (s) =>
           (s.is_active || Number(s.tenant_controls) > 0) &&
-          SOA_STANDARDS.includes(s.code)
+          SOA_STANDARDS.includes(normalizeStandardCode(s.code))
       );
 
       setStandards(activeStandards);
@@ -290,15 +349,33 @@ export default function SoAPage() {
       if (!res.ok) {
         console.error('ERROR LOAD SOA:', json);
         setData([]);
+        setBackendMetrics(null);
+        setRequiresInitialization(false);
+        setSoaMessage(json?.error || '');
         return;
       }
 
-      setData(Array.isArray(json) ? json.filter(isSoARow) : []);
+      if (Array.isArray(json)) {
+        setData(json.filter(isSoARow));
+        setBackendMetrics(null);
+        setRequiresInitialization(false);
+        setSoaMessage('');
+      } else {
+        const payload = json as SoAResponse;
+        setData(Array.isArray(payload.rows) ? payload.rows.filter(isSoARow) : []);
+        setBackendMetrics(payload.metrics || null);
+        setRequiresInitialization(Boolean(payload.requires_initialization));
+        setSoaMessage(typeof payload.message === 'string' ? payload.message : '');
+        if (payload.preflight) setPreflight(payload.preflight);
+      }
       setSelectedRowId('');
       await loadIntelligence(tenantId, authToken, iso);
     } catch (err) {
       console.error('ERROR LOAD SOA:', err);
       setData([]);
+      setBackendMetrics(null);
+      setRequiresInitialization(false);
+      setSoaMessage('');
       setPreflight(null);
     } finally {
       setLoadingData(false);
@@ -406,6 +483,10 @@ export default function SoAPage() {
         )
       );
       setSelectedRowId(row.tenant_control_id);
+      if (user?.tenant_id && selectedISO) {
+        await loadSoA(user.tenant_id, token, selectedISO);
+        setSelectedRowId(row.tenant_control_id);
+      }
     } catch (err) {
       console.error('ERROR SAVE SOA:', err);
       alert('Error guardando SoA');
@@ -433,10 +514,7 @@ export default function SoAPage() {
     let findingType = 'observacion';
     let severity = 'media';
 
-    if (row.applicable === true && row.implementation_status === 'no implementado') {
-      findingType = 'no conformidad';
-      severity = 'alta';
-    } else if (row.applicable === true && row.implementation_status === 'parcial') {
+    if (row.applicable === true && row.implementation_status === 'parcial') {
       findingType = 'observacion';
       severity = 'media';
     } else if (row.applicable === false) {
@@ -473,6 +551,7 @@ export default function SoAPage() {
       }
 
       alert('Hallazgo creado correctamente');
+      await loadIntelligence(user.tenant_id, token, selectedISO);
     } catch (err) {
       console.error('ERROR CREATE SOA FINDING:', err);
       alert('Error creando hallazgo');
@@ -501,9 +580,7 @@ export default function SoAPage() {
       window.prompt('Responsable del plan de acción', row.owner || '') || row.owner || '';
 
     let priority = 'media';
-    if (row.applicable === true && row.implementation_status === 'no implementado') {
-      priority = 'alta';
-    } else if (row.applicable === true && row.implementation_status === 'parcial') {
+    if (row.applicable === true && row.implementation_status === 'parcial') {
       priority = 'media';
     } else if (row.applicable === false) {
       priority = 'baja';
@@ -511,6 +588,7 @@ export default function SoAPage() {
 
     try {
       setActionLoading(`action-${row.tenant_control_id}`);
+      const actionTenantControlId = row.modern_tenant_control_id || row.tenant_control_id;
 
       const res = await fetch(`${API_URL}/api/action-plans`, {
         method: 'POST',
@@ -526,7 +604,8 @@ export default function SoAPage() {
           priority,
           owner,
           source_type: 'control',
-          tenant_control_id: row.tenant_control_id
+          source_id: actionTenantControlId,
+          tenant_control_id: actionTenantControlId
         })
       });
 
@@ -538,6 +617,7 @@ export default function SoAPage() {
       }
 
       alert('Plan de acción creado correctamente');
+      await loadIntelligence(user.tenant_id, token, selectedISO);
     } catch (err) {
       console.error('ERROR CREATE SOA ACTION PLAN:', err);
       alert('Error creando plan de acción');
@@ -639,21 +719,53 @@ export default function SoAPage() {
   };
 
   const metrics = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const reviewMissing = data.filter((r) => !r.review_date).length;
+    const reviewOverdue = data.filter((r) => r.review_date && String(r.review_date).slice(0, 10) < today).length;
+    const missingOwner = data.filter((r) => r.applicable === true && !String(r.owner || '').trim()).length;
+
+    if (backendMetrics) {
+      const notApplicable = toNumber(backendMetrics.not_applicable_count);
+      const notApplicableJustified = toNumber(backendMetrics.not_applicable_justified_count);
+      return {
+        total: toNumber(backendMetrics.total_controls),
+        applicability_defined: toNumber(backendMetrics.decision_count),
+        applicable: toNumber(backendMetrics.applicable_count),
+        notApplicable,
+        implemented: toNumber(backendMetrics.implemented_applicable_count),
+        partial: toNumber(backendMetrics.partial_applicable_count),
+        notImplemented: 0,
+        pending: toNumber(backendMetrics.pending_applicable_count) + toNumber(backendMetrics.pending_applicability_count),
+        missingJustification: Math.max(notApplicable - notApplicableJustified, 0),
+        missingOwner,
+        reviewMissing,
+        reviewOverdue,
+        soaCompletionPercent: toNumber(backendMetrics.applicability_coverage_pct),
+        implementationPercent: toNumber(backendMetrics.implementation_coverage_pct),
+        exclusionJustificationPercent: toNumber(backendMetrics.na_justification_coverage_pct),
+        evidenceValidityPercent: toNumber(backendMetrics.evidence_validity_pct),
+        validEvidence: toNumber(backendMetrics.controls_with_valid_evidence_count),
+        expiredEvidence: toNumber(backendMetrics.controls_with_expired_evidence_count),
+        rejectedEvidence: toNumber(backendMetrics.controls_with_rejected_evidence_count),
+        inconsistencyCount: toNumber(backendMetrics.inconsistency_count),
+        openFindings: toNumber(backendMetrics.controls_with_open_findings_count),
+        openNc: toNumber(backendMetrics.controls_with_open_nonconformities_count),
+        highRisk: toNumber(backendMetrics.controls_with_high_or_critical_risk_count),
+        overdueActions: toNumber(backendMetrics.controls_with_overdue_actions_count)
+      };
+    }
+
     const total = data.length;
     const applicable = data.filter((r) => r.applicable === true).length;
     const notApplicable = data.filter((r) => r.applicable === false).length;
     const applicabilityDefined = applicable + notApplicable;
     const implemented = data.filter((r) => r.implementation_status === 'implementado').length;
     const partial = data.filter((r) => r.implementation_status === 'parcial').length;
-    const notImplemented = data.filter((r) => r.implementation_status === 'no implementado').length;
+    const notImplemented = 0;
     const pending = data.filter((r) => r.implementation_status === 'pendiente').length;
     const applicableRows = data.filter((r) => r.applicable === true);
     const notApplicableRows = data.filter((r) => r.applicable === false);
     const missingJustification = notApplicableRows.filter((r) => !String(r.justification || '').trim()).length;
-    const missingOwner = data.filter((r) => !String(r.owner || '').trim()).length;
-    const today = new Date().toISOString().slice(0, 10);
-    const reviewMissing = data.filter((r) => !r.review_date).length;
-    const reviewOverdue = data.filter((r) => r.review_date && String(r.review_date).slice(0, 10) < today).length;
     const implementedApplicable = applicableRows.filter((r) => r.implementation_status === 'implementado').length;
     const justifiedExclusions = notApplicableRows.length - missingJustification;
 
@@ -677,9 +789,18 @@ export default function SoAPage() {
       reviewOverdue,
       soaCompletionPercent: percent(applicabilityDefined, total),
       implementationPercent: percent(implementedApplicable, applicableRows.length),
-      exclusionJustificationPercent: percent(justifiedExclusions, notApplicableRows.length)
+      exclusionJustificationPercent: percent(justifiedExclusions, notApplicableRows.length),
+      evidenceValidityPercent: 0,
+      validEvidence: data.filter((r) => toNumber(r.valid_evidence_count) > 0).length,
+      expiredEvidence: data.filter((r) => toNumber(r.expired_evidence_count) > 0).length,
+      rejectedEvidence: data.filter((r) => toNumber(r.rejected_evidence_count) > 0).length,
+      inconsistencyCount: data.filter((r) => (r.inconsistencies || []).length > 0).length,
+      openFindings: data.filter((r) => toNumber(r.open_findings_count) > 0).length,
+      openNc: data.filter((r) => toNumber(r.open_nonconformities_count) > 0).length,
+      highRisk: data.filter((r) => toNumber(r.high_or_critical_risk_count) > 0).length,
+      overdueActions: data.filter((r) => toNumber(r.overdue_actions_count) > 0).length
     };
-  }, [data]);
+  }, [backendMetrics, data]);
 
   const categoryOptions = useMemo(() => {
     return Array.from(
@@ -727,6 +848,7 @@ export default function SoAPage() {
       if (filters.issue === 'missing_owner' && String(row.owner || '').trim()) return false;
       if (filters.issue === 'review_missing' && row.review_date) return false;
       if (filters.issue === 'review_overdue' && !(row.review_date && String(row.review_date).slice(0, 10) < today)) return false;
+      if (filters.issue === 'inconsistent' && !(row.inconsistencies || []).length) return false;
       return true;
     });
   }, [data, filters]);
@@ -811,7 +933,7 @@ export default function SoAPage() {
               ))}
             </select>
 
-            {preflight?.can_initialize_soa && !isReadOnly && (
+            {(requiresInitialization || preflight?.can_initialize_soa) && !isReadOnly && (
               <button
                 type="button"
                 onClick={initializeSoA}
@@ -841,11 +963,11 @@ export default function SoAPage() {
           </div>
         )}
 
-        {data.length === 0 && preflight?.can_initialize_soa && (
+        {data.length === 0 && (requiresInitialization || preflight?.can_initialize_soa) && (
           <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6">
             <h2 className="text-xl font-black text-blue-950">SoA pendiente de inicialización</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-blue-900">
-              {selectedISO} está activa y tiene {preflight.tenant_controls_count} controles disponibles desde tenant_controls, pero aún no existen filas SoA materializadas.
+              {soaMessage || `${selectedISO} está activa y tiene ${preflight?.tenant_controls_count || 0} controles disponibles desde tenant_controls, pero aún no existen filas SoA materializadas.`}
             </p>
             {!isReadOnly && (
               <button
@@ -864,7 +986,7 @@ export default function SoAPage() {
           <MetricCard title="Cobertura aplicabilidad" value={`${metrics.soaCompletionPercent}%`} subtitle={`${metrics.applicability_defined} de ${metrics.total} definidos`} />
           <MetricCard title="Implementación aplicables" value={`${metrics.implementationPercent}%`} subtitle={`${metrics.implemented} implementados`} />
           <MetricCard title="Exclusiones justificadas" value={`${metrics.exclusionJustificationPercent}%`} subtitle={`${metrics.missingJustification} sin justificación`} />
-          <MetricCard title="Revisión / ownership" value={metrics.missingOwner + metrics.reviewOverdue} subtitle="Sin responsable o vencidos" />
+          <MetricCard title="Inconsistencias" value={metrics.inconsistencyCount} subtitle={`${metrics.validEvidence} con evidencia válida · ${metrics.evidenceValidityPercent}%`} />
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
@@ -873,10 +995,22 @@ export default function SoAPage() {
           <MetricCard title="No aplican" value={metrics.notApplicable} compact />
           <MetricCard title="Implementados" value={metrics.implemented} compact />
           <MetricCard title="Parciales" value={metrics.partial} compact />
-          <MetricCard title="No implementados" value={metrics.notImplemented} compact />
           <MetricCard title="Pendientes" value={metrics.pending} compact />
+          <MetricCard title="Ev. vencida/rechazada" value={metrics.expiredEvidence + metrics.rejectedEvidence} compact />
           <MetricCard title="Revisión faltante" value={metrics.reviewMissing} compact />
         </div>
+
+        {metrics.inconsistencyCount > 0 && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+            <div className="font-black">Inconsistencias SOA detectadas: {metrics.inconsistencyCount}</div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <span>Hallazgos abiertos: <b>{metrics.openFindings}</b></span>
+              <span>NC abiertas: <b>{metrics.openNc}</b></span>
+              <span>Riesgo alto/crítico: <b>{metrics.highRisk}</b></span>
+              <span>Acciones vencidas: <b>{metrics.overdueActions}</b></span>
+            </div>
+          </div>
+        )}
 
         <section className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1007,7 +1141,6 @@ export default function SoAPage() {
               <option value="pendiente">Pendiente</option>
               <option value="implementado">Implementado</option>
               <option value="parcial">Parcial</option>
-              <option value="no implementado">No implementado</option>
               <option value="no aplica">No aplica</option>
             </select>
             <select value={filters.owner} onChange={(e) => setFilters((prev) => ({ ...prev, owner: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
@@ -1016,6 +1149,7 @@ export default function SoAPage() {
             </select>
             <select value={filters.issue} onChange={(e) => setFilters((prev) => ({ ...prev, issue: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
               <option value="all">Sin alertas</option>
+              <option value="inconsistent">Inconsistente</option>
               <option value="missing_justification">Sin justificación</option>
               <option value="missing_owner">Sin responsable</option>
               <option value="review_missing">Sin revisión</option>
@@ -1058,6 +1192,9 @@ export default function SoAPage() {
                       <td className="px-4 py-3">
                         <div className="font-black text-slate-950">{translateClauseLabel(row.clause, locale)}</div>
                         <div className="mt-1 line-clamp-2 max-w-xl text-xs leading-5 text-slate-600">{translateDisplayText(row.description, locale, 'control')}</div>
+                        {(row.inconsistencies || []).length > 0 && (
+                          <div className="mt-2"><StatusPill value={`${row.inconsistencies?.length || 0} inconsistencia(s)`} /></div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{translateDisplayText(row.category || 'General', locale, 'category')}</td>
                       <td className="px-4 py-3"><StatusPill value={applicabilityLabel(row.applicable)} /></td>
@@ -1088,6 +1225,17 @@ export default function SoAPage() {
               </div>
 
               <p className="mt-4 text-sm leading-6 text-slate-700">{translateDisplayText(selectedRow.description, locale, 'control')}</p>
+
+              {(selectedRow.inconsistencies || []).length > 0 && (
+                <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-xs leading-5 text-amber-950">
+                  <div className="font-black">Inconsistencias</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(selectedRow.inconsistencies || []).map((code) => (
+                      <StatusPill key={code} value={code} />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {selectedIntelligence && (
                 <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
@@ -1139,7 +1287,6 @@ export default function SoAPage() {
                     <option value="pendiente">Pendiente</option>
                     <option value="implementado">Implementado</option>
                     <option value="parcial">Parcial</option>
-                    <option value="no implementado">No implementado</option>
                     <option value="no aplica">No aplica</option>
                   </select>
                 </label>
