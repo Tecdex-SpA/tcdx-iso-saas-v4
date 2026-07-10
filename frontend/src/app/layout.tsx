@@ -1,9 +1,14 @@
+import type { Metadata } from 'next';
 import './globals.css';
 import { LanguageProvider } from '@/context/LanguageContext';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'TCDX Compliance | ISO SaaS',
   description: 'Gobierno ISO, auditorías, evidencias, riesgos e IA senior.',
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    shortcut: ['/favicon.svg'],
+  },
 };
 
 export default function RootLayout({
