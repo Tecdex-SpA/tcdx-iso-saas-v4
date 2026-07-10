@@ -155,6 +155,7 @@ main() {
   check_tenant_path "assets" "/api/assets/"
   check_tenant_path "assets-risk-summary" "/api/assets/risk-summary/"
   check_tenant_path "tenant-standards" "/api/tenant-standards/"
+  check_tenant_path "soa-read-only" "/api/soa/" "?iso=ISO27001" "200,204,404,409"
   check_tenant_path "policy" "/api/policy/" "/ISO27001" "200,404"
   check_tenant_path "kpi-dashboard" "/api/kpis/dashboard/" "" "200,204,404"
   check_tenant_path "lifecycle-summary" "/api/lifecycle/summary/" "" "200,204"
@@ -165,9 +166,6 @@ main() {
   record SKIP \
     "tenant-standards-scope" \
     "GET ejecuta ensureDefaultOperation; omitido para evitar escrituras implicitas"
-  record SKIP \
-    "soa" \
-    "GET ejecuta bootstrapSoA; omitido para evitar escrituras implicitas"
   record SKIP \
     "lifecycle-board" \
     "GET ejecuta rebuildLifecycle; omitido para evitar escrituras implicitas"

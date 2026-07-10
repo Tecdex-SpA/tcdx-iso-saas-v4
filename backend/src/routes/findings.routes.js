@@ -4,6 +4,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
+const { normalizeIsoCode } = require('../utils/isoStandards');
 
 function getUserTenantId(user) {
   return (
@@ -216,7 +217,7 @@ const resolveFindingControl = async (client, tenantId, rawControlId, isoCode = n
   if (byTenantControl.rowCount > 0) {
     const row = byTenantControl.rows[0];
 
-    if (isoCode && String(row.iso) !== String(isoCode)) {
+    if (isoCode && normalizeIsoCode(row.iso) !== normalizeIsoCode(isoCode)) {
       return { ...row, iso_mismatch: true };
     }
 
@@ -261,7 +262,7 @@ const resolveFindingControl = async (client, tenantId, rawControlId, isoCode = n
   if (byLegacyControl.rowCount > 0) {
     const row = byLegacyControl.rows[0];
 
-    if (isoCode && String(row.iso) !== String(isoCode)) {
+    if (isoCode && normalizeIsoCode(row.iso) !== normalizeIsoCode(isoCode)) {
       return { ...row, iso_mismatch: true };
     }
 
@@ -311,7 +312,7 @@ const resolveFindingControl = async (client, tenantId, rawControlId, isoCode = n
   if (byCatalogControl.rowCount > 0) {
     const row = byCatalogControl.rows[0];
 
-    if (isoCode && String(row.iso) !== String(isoCode)) {
+    if (isoCode && normalizeIsoCode(row.iso) !== normalizeIsoCode(isoCode)) {
       return { ...row, iso_mismatch: true };
     }
 

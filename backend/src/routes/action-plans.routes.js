@@ -4,6 +4,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
+const { resolveSoAControlReference } = require('../utils/soaControlResolver');
 
 function getUserTenantId(user) {
   return (
@@ -1165,33 +1166,33 @@ router.post('/', auth, async (req, res) => {
     }
 
     if (tenant_control_id) {
-      const linked = await getLinkedRecord('tenant_controls', tenant_control_id);
-      if (
-        linked.rowCount === 0 ||
-        String(linked.rows[0].tenant_id) !== String(tenant_id)
-      ) {
+      const resolvedControl = await resolveSoAControlReference(
+        client,
+        tenant_id,
+        tenant_control_id,
+        iso_code
+      );
+
+      if (!resolvedControl) {
         return res
           .status(400)
-          .json({ error: 'tenant_control_id inválido para este tenant' });
+          .json({ error: 'No se pudo resolver el control asociado al plan de acción para este tenant' });
       }
 
-      if (!iso_code) {
-        const controlResult = await client.query(
-          `
-          SELECT cc.iso
-          FROM tenant_controls tc
-          JOIN controls_catalog cc
-            ON tc.control_id = cc.id
-          WHERE tc.id = $1
-          LIMIT 1
-          `,
-          [tenant_control_id]
-        );
-
-        if (controlResult.rowCount > 0) {
-          iso_code = controlResult.rows[0].iso;
-        }
+      if (resolvedControl.iso_mismatch) {
+        return res
+          .status(400)
+          .json({ error: 'El control asociado no pertenece a la norma ISO seleccionada' });
       }
+
+      if (!resolvedControl.tenant_control_id_moderno) {
+        return res
+          .status(400)
+          .json({ error: 'El control no tiene tenant_controls.id resoluble para este tenant' });
+      }
+
+      tenant_control_id = resolvedControl.tenant_control_id_moderno;
+      if (!iso_code) iso_code = resolvedControl.iso;
     }
 
     if (finding_id) {
