@@ -4,6 +4,10 @@ const { isoQueryAliases, normalizeIsoCode } = require('../utils/isoStandards');
 const { validateSoAState } = require('../utils/soaValidation');
 
 const IMPLEMENTATION_STATUSES = ['pendiente', 'implementado', 'parcial', 'no aplica'];
+const SOA_AI_ASSESSMENT_TIMEOUT_MS = Math.min(
+  Math.max(Number.parseInt(process.env.AI_SOA_ASSESSMENT_TIMEOUT_MS || '12000', 10) || 12000, 1000),
+  15000
+);
 
 const toNumber = (value) => Number(value || 0);
 const boolText = (value) => (value === null || value === undefined ? null : String(value));
@@ -527,26 +531,99 @@ function mergeAiSuggestion(systemSuggestion, aiResult) {
   };
 }
 
-async function runSystemAssessment({ tenantId, iso, tenantControlId, userId = null, useAi = false }) {
+function normalizeAiFallbackReason(aiResult, error = null, defaultReason = 'AI_ENGINE_TIMEOUT') {
+  const errorType = String(
+    error?.code ||
+      aiResult?.engine?.error_type ||
+      aiResult?.code ||
+      aiResult?.error_type ||
+      ''
+  );
+  const message = String(error?.message || aiResult?.engine?.error_message || aiResult?.error || '').toLowerCase();
+  if (errorType === 'AI_ENGINE_TIMEOUT' || errorType === 'AI_AUDITOR_TIMEOUT' || message.includes('timeout')) {
+    return 'AI_ENGINE_TIMEOUT';
+  }
+  return defaultReason;
+}
+
+function buildSoAAiFallbackResult({ systemSuggestion, aiResult = {}, error = null, reason = null, timeoutMs = SOA_AI_ASSESSMENT_TIMEOUT_MS }) {
+  const fallbackReason = reason || normalizeAiFallbackReason(aiResult, error, 'SOA_AI_TIMEOUT');
+  return {
+    suggestion: {
+      ...systemSuggestion,
+      rule_results: {
+        ...(systemSuggestion.rule_results || {}),
+        ai_used: false,
+        fallback_used: true,
+        fallback_reason: fallbackReason,
+        human_review_required: true,
+      },
+    },
+    aiResult: {
+      ...(aiResult || {}),
+      ok: false,
+      ai_used: false,
+      fallback_used: true,
+      fallback_reason: fallbackReason,
+      human_review_required: true,
+      engine: {
+        ...(aiResult?.engine || {}),
+        ai_engine_used: false,
+        fallback_used: true,
+        error_type: fallbackReason,
+        timeout_ms: aiResult?.engine?.timeout_ms || error?.timeout_ms || timeoutMs,
+      },
+    },
+  };
+}
+
+async function runSystemAssessment({ tenantId, iso, tenantControlId, userId = null, useAi = false, forceAiFallbackReason = null }) {
   const context = await getSoAControlContext({ tenantId, iso, tenantControlId });
   if (!context) return null;
   const systemSuggestion = context.system_suggestion || evaluateSoARules(context);
   let source = 'system';
   let aiResult = {};
   let finalSuggestion = systemSuggestion;
-  if (useAi) {
-    aiResult = await aiEngineClient.assessSoAControl({
-      tenant_id: tenantId,
-      iso,
-      control: context.control,
-      official_soa: context.official_soa,
-      signals: context.signals,
-      system_suggestion: systemSuggestion,
-      request_metadata: { source: 'soa_intelligence' },
-    });
-    if (aiResult?.ok !== false && !aiResult?.engine?.fallback_used) {
-      finalSuggestion = mergeAiSuggestion(systemSuggestion, aiResult);
-      source = 'hybrid';
+  if (useAi || forceAiFallbackReason) {
+    if (forceAiFallbackReason) {
+      const fallback = buildSoAAiFallbackResult({
+        systemSuggestion,
+        reason: forceAiFallbackReason,
+      });
+      finalSuggestion = fallback.suggestion;
+      aiResult = fallback.aiResult;
+    } else {
+      try {
+        aiResult = await aiEngineClient.assessSoAControl({
+          tenant_id: tenantId,
+          iso,
+          control: context.control,
+          official_soa: context.official_soa,
+          signals: context.signals,
+          system_suggestion: systemSuggestion,
+          request_metadata: { source: 'soa_intelligence' },
+        }, { timeoutMs: SOA_AI_ASSESSMENT_TIMEOUT_MS });
+        if (aiResult?.ok !== false && !aiResult?.engine?.fallback_used) {
+          finalSuggestion = mergeAiSuggestion(systemSuggestion, aiResult);
+          source = 'hybrid';
+        } else {
+          const fallback = buildSoAAiFallbackResult({
+            systemSuggestion,
+            aiResult,
+            reason: normalizeAiFallbackReason(aiResult, null, 'SOA_AI_TIMEOUT'),
+          });
+          finalSuggestion = fallback.suggestion;
+          aiResult = fallback.aiResult;
+        }
+      } catch (error) {
+        const fallback = buildSoAAiFallbackResult({
+          systemSuggestion,
+          error,
+          reason: normalizeAiFallbackReason(null, error, 'SOA_AI_TIMEOUT'),
+        });
+        finalSuggestion = fallback.suggestion;
+        aiResult = fallback.aiResult;
+      }
     }
   }
   return saveAssessment({ tenantId, iso, context, suggestion: finalSuggestion, source, aiResult, userId });
@@ -575,11 +652,28 @@ async function runSystemAssessmentBatch({ tenantId, iso, limit = 50, userId = nu
     .sort((a, b) => b.score - a.score || String(a.row.clause || '').localeCompare(String(b.row.clause || '')));
   const capped = scoredRows.slice(0, Math.max(1, Math.min(Number(limit) || 50, 100))).map((item) => item.row);
   const created = [];
+  const batchFallbackReason = useAi ? 'SOA_AI_TIMEOUT' : null;
   for (const row of capped) {
-    const assessment = await runSystemAssessment({ tenantId, iso, tenantControlId: row.tenant_control_id, userId, useAi });
+    const assessment = await runSystemAssessment({
+      tenantId,
+      iso,
+      tenantControlId: row.tenant_control_id,
+      userId,
+      useAi: useAi && !batchFallbackReason,
+      forceAiFallbackReason: batchFallbackReason,
+    });
     if (assessment) created.push(assessment);
   }
-  return { ok: true, tenant_id: tenantId, iso, requested: capped.length, created_count: created.length, assessments: created };
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    iso,
+    requested: capped.length,
+    created_count: created.length,
+    ai_fallback_forced: Boolean(batchFallbackReason),
+    fallback_reason: batchFallbackReason,
+    assessments: created,
+  };
 }
 
 async function listAssessments({ tenantId, iso }) {

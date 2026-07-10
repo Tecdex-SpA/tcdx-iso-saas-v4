@@ -293,22 +293,15 @@ class AiEngineClient {
       return this.buildFallback(payload, new Error('AI_ENGINE_URL o AI_INTERNAL_TOKEN no configurado'));
     }
 
-    const timeoutMs = Number.parseInt(
+    const configuredTimeoutMs = Number.parseInt(
       String(options.timeoutMs || process.env.AI_SOA_ASSESSMENT_TIMEOUT_MS || process.env.AI_AUDITOR_TIMEOUT_MS || this.auditorTimeout),
       10
     ) || this.auditorTimeout;
+    const timeoutMs = Math.min(Math.max(configuredTimeoutMs, 1000), 15000);
 
     try {
       return await this.postJson('/api/ai/soa/assess-control', payload, { timeoutMs });
     } catch (error) {
-      if (this.isNetworkError(error)) {
-        try {
-          return await this.postJson('/api/ai/soa/assess-control', payload, { timeoutMs });
-        } catch (retryError) {
-          return this.buildFallback(payload, retryError);
-        }
-      }
-
       return this.buildFallback(payload, error);
     }
   }
