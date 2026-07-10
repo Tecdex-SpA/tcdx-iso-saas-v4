@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const aiEngineClient = require('./aiEngineClient.service');
 const { isoQueryAliases, normalizeIsoCode } = require('../utils/isoStandards');
+const { validateSoAState } = require('../utils/soaValidation');
 
 const IMPLEMENTATION_STATUSES = ['pendiente', 'implementado', 'parcial', 'no aplica'];
 
@@ -604,12 +605,11 @@ async function applyAssessment({ tenantId, assessmentId, userId }) {
     await client.query('BEGIN');
     const assessmentResult = await client.query(
       `
-      SELECT a.*, cs.applicable, cs.implementation_status, cs.justification
+      SELECT a.*
       FROM control_soa_assessments a
       JOIN controls c ON c.id = a.tenant_control_id AND c.tenant_id = a.tenant_id
-      LEFT JOIN control_soa cs ON cs.tenant_control_id = a.tenant_control_id
       WHERE a.id = $1 AND a.tenant_id = $2
-      FOR UPDATE
+      FOR UPDATE OF a
       `,
       [assessmentId, tenantId]
     );
@@ -627,7 +627,31 @@ async function applyAssessment({ tenantId, assessmentId, userId }) {
 
     const nextApplicable = assessment.suggested_applicable;
     const nextStatus = normalizeImplementationStatus(assessment.suggested_implementation_status);
-    const nextJustification = assessment.suggested_justification || assessment.justification || null;
+    const nextJustification = assessment.suggested_justification || null;
+    const validation = validateSoAState({
+      applicable: nextApplicable,
+      implementation_status: nextStatus,
+      justification: nextJustification,
+    });
+
+    if (!validation.ok) {
+      await client.query('ROLLBACK');
+      const error = new Error(`Assessment SoA invalido: ${validation.errors.join('; ')}`);
+      error.code = 'ASSESSMENT_INVALID_SUGGESTION';
+      error.status = 400;
+      throw error;
+    }
+
+    const currentResult = await client.query(
+      `
+      SELECT applicable, implementation_status, justification
+      FROM control_soa
+      WHERE tenant_control_id = $1
+      FOR UPDATE
+      `,
+      [assessment.tenant_control_id]
+    );
+    const currentSoA = currentResult.rows[0] || {};
 
     await client.query(
       `
@@ -644,9 +668,9 @@ async function applyAssessment({ tenantId, assessmentId, userId }) {
     );
 
     const changes = [
-      ['applicable', boolText(assessment.applicable), boolText(nextApplicable)],
-      ['implementation_status', assessment.implementation_status || 'pendiente', nextStatus],
-      ['justification', assessment.justification || null, nextJustification],
+      ['applicable', boolText(currentSoA.applicable), boolText(nextApplicable)],
+      ['implementation_status', currentSoA.implementation_status || 'pendiente', nextStatus],
+      ['justification', currentSoA.justification || null, nextJustification],
     ].filter(([, oldValue, newValue]) => String(oldValue || '') !== String(newValue || ''));
 
     for (const [field, oldValue, newValue] of changes) {

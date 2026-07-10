@@ -655,8 +655,11 @@ router.post('/:tenant_id/assessments/:assessment_id/apply', auth, async (req, re
     res.json({ ok: true, ...result });
   } catch (err) {
     console.error('ERROR APPLY SOA ASSESSMENT:', err);
-    const status = err?.code === 'ASSESSMENT_CLOSED' ? 409 : 500;
-    res.status(status).json({ error: err?.code === 'ASSESSMENT_CLOSED' ? err.message : 'Error aplicando assessment SoA' });
+    const expectedErrors = new Set(['ASSESSMENT_CLOSED', 'ASSESSMENT_INVALID_SUGGESTION']);
+    const status = Number(err?.status) || (err?.code === 'ASSESSMENT_CLOSED' ? 409 : expectedErrors.has(err?.code) ? 400 : 500);
+    res.status(status).json({
+      error: expectedErrors.has(err?.code) ? err.message : 'Error aplicando assessment SoA'
+    });
   }
 });
 
