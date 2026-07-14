@@ -1,9 +1,12 @@
 import base64
+import concurrent.futures
 import json
 import logging
 import os
 import re
+import time
 import unicodedata
+import warnings as warning_module
 import zipfile
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
@@ -16,9 +19,11 @@ from app.services.llm_client import call_llm_json, is_llm_available
 logger = logging.getLogger(__name__)
 
 MAX_INLINE_FILE_BYTES = int(os.getenv("AI_CONVIVENCIA_MAX_FILE_BYTES", str(30 * 1024 * 1024)))
-MAX_PDF_PAGES = int(os.getenv("AI_CONVIVENCIA_MAX_PDF_PAGES", "250"))
-MAX_RAW_TEXT_CHARS = int(os.getenv("AI_CONVIVENCIA_MAX_RAW_TEXT_CHARS", "260000"))
-MAX_LLM_CONTEXT_CHARS = int(os.getenv("AI_CONVIVENCIA_MAX_LLM_CONTEXT_CHARS", "60000"))
+MAX_PDF_PAGES = int(os.getenv("CONVIVENCIA_MANUAL_MAX_PAGES", "120"))
+MAX_RAW_TEXT_CHARS = int(os.getenv("CONVIVENCIA_MANUAL_MAX_CHARS", "80000"))
+MAX_LLM_CONTEXT_CHARS = int(os.getenv("CONVIVENCIA_MANUAL_MAX_LLM_CONTEXT_CHARS", "60000"))
+LLM_TIMEOUT_SECONDS = int(os.getenv("CONVIVENCIA_MANUAL_LLM_TIMEOUT_SECONDS", "15"))
+TOTAL_TIMEOUT_SECONDS = int(os.getenv("CONVIVENCIA_MANUAL_TOTAL_TIMEOUT_SECONDS", "45"))
 
 
 @dataclass
@@ -322,7 +327,26 @@ def _decode_text_bytes(content: bytes) -> str:
     return ""
 
 
-def _extract_pdf_text(content: bytes) -> ExtractedManualText:
+def _elapsed_seconds(started_at: Optional[float]) -> float:
+    return time.monotonic() - started_at if started_at else 0.0
+
+
+def _manual_signal_count(text: str) -> int:
+    text_norm = _norm(text)
+    groups = [
+        ["reglamento interno", "rice", "manual de convivencia"],
+        ["vision", "visión", "mision", "misión", "enfoque de convivencia"],
+        ["buen trato", "disciplina", "responsabilidad", "solidaridad", "tolerancia"],
+        ["faltas leves", "faltas graves", "faltas gravisimas", "faltas gravísimas"],
+        ["medidas disciplinarias", "medidas formativas", "medidas reparatorias", "medidas cautelares"],
+        ["procedimiento", "debido proceso", "descargos", "reconsideracion", "reconsideración"],
+        ["protocolos", "abuso sexual", "vulneracion de derechos", "bullying", "alcohol", "drogas"],
+        ["aula segura", "afectacion grave", "afectación grave"],
+    ]
+    return sum(1 for terms in groups if any(_norm(term) in text_norm for term in terms))
+
+
+def _extract_pdf_text(content: bytes, started_at: Optional[float] = None) -> ExtractedManualText:
     if not content.startswith(b"%PDF-"):
         return ExtractedManualText("", 0, None, False, "failed", ["El archivo no parece ser PDF válido."], file_type="pdf", error_reason="invalid_pdf")
     try:
@@ -338,12 +362,26 @@ def _extract_pdf_text(content: bytes) -> ExtractedManualText:
         with NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
             tmp.write(content)
             tmp.flush()
-            reader = PdfReader(tmp.name)
+            pypdf_logger = logging.getLogger("pypdf")
+            previous_pypdf_level = pypdf_logger.level
+            try:
+                pypdf_logger.setLevel(logging.ERROR)
+                with warning_module.catch_warnings():
+                    warning_module.simplefilter("ignore")
+                    reader = PdfReader(tmp.name)
+            finally:
+                pypdf_logger.setLevel(previous_pypdf_level)
             total_pages = len(reader.pages)
             for page in reader.pages[:MAX_PDF_PAGES]:
+                if started_at and _elapsed_seconds(started_at) >= max(1, TOTAL_TIMEOUT_SECONDS - 3):
+                    truncated = True
+                    warnings.append("Extracción PDF truncada por límite total de tiempo del endpoint.")
+                    break
                 pages_processed += 1
                 try:
-                    page_text = page.extract_text() or ""
+                    with warning_module.catch_warnings():
+                        warning_module.simplefilter("ignore")
+                        page_text = page.extract_text() or ""
                 except Exception as exc:
                     warnings.append(f"No se pudo extraer texto de una página: {exc}")
                     page_text = ""
@@ -352,6 +390,12 @@ def _extract_pdf_text(content: bytes) -> ExtractedManualText:
                 if sum(len(part) for part in pages) >= MAX_RAW_TEXT_CHARS:
                     truncated = True
                     break
+                if pages_processed >= 10 and pages_processed % 5 == 0:
+                    current_text = "\n".join(pages)
+                    if len(current_text) >= 12000 and _manual_signal_count(current_text) >= 5:
+                        truncated = total_pages > pages_processed
+                        warnings.append(f"Documento PDF priorizado: {pages_processed}/{total_pages} páginas procesadas con estructura suficiente.")
+                        break
             if total_pages > pages_processed:
                 truncated = True
                 warnings.append(f"Documento PDF truncado: {pages_processed}/{total_pages} páginas procesadas.")
@@ -407,7 +451,7 @@ def _extract_docx_text(content: bytes) -> ExtractedManualText:
     return ExtractedManualText(text, len(text), None, truncated, status, warnings, parser="docx-xml", file_type="docx", error_reason=error_reason)
 
 
-def extract_manual_text(payload: Dict[str, Any]) -> ExtractedManualText:
+def extract_manual_text(payload: Dict[str, Any], started_at: Optional[float] = None) -> ExtractedManualText:
     normalized = extract_convivencia_input(payload)
     if normalized.raw_text:
         truncated = len(normalized.raw_text) > MAX_RAW_TEXT_CHARS
@@ -438,7 +482,7 @@ def extract_manual_text(payload: Dict[str, Any]) -> ExtractedManualText:
     content = content or b""
     file_type = _infer_file_type_from_content(normalized.file_name, normalized.mime_type, content)
     if file_type == "pdf":
-        return _with_input_metadata(_extract_pdf_text(content), normalized)
+        return _with_input_metadata(_extract_pdf_text(content, started_at=started_at), normalized)
     if file_type == "docx":
         return _with_input_metadata(_extract_docx_text(content), normalized)
     if file_type == "txt":
@@ -572,6 +616,17 @@ def build_default_parameters(payload: Dict[str, Any], extracted: ExtractedManual
     }
     procedure_detected = {key: _contains(text_norm, terms) for key, terms in procedure_terms.items()}
     procedure_excerpt = _section(text, ["procedimiento", "debido proceso"], ["protocolos anexos", "anexos", "plan de gestión"], 4200)
+    due_process_steps = [
+        {"code": "notificacion", "name": "notificación", "detected": procedure_detected["notification"]},
+        {"code": "descargos", "name": "descargos", "detected": procedure_detected["descargos"]},
+        {"code": "prueba", "name": "prueba", "detected": _contains(text_norm, ["prueba", "medios de prueba", "antecedentes"])},
+        {"code": "resolucion", "name": "resolución", "detected": procedure_detected["resolution"]},
+        {"code": "reconsideracion_apelacion", "name": "reconsideración/apelación", "detected": procedure_detected["reconsideration"]},
+    ]
+    deadlines = []
+    business_days_rule = _first_match(text, [r"((?:\d+\s+)?d[ií]as\s+h[aá]biles[^\n.;]{0,120})"])
+    if business_days_rule:
+        deadlines.append({"type": "business_days", "text": business_days_rule})
 
     attenuating = _line_items_from_section(_section(text, ["atenuantes", "circunstancias atenuantes"], ["agravantes", "protocolos", "medidas"], 2200), "Atenuantes detectadas")
     aggravating = _line_items_from_section(_section(text, ["agravantes", "circunstancias agravantes"], ["protocolos", "medidas", "anexos"], 2200), "Agravantes detectadas")
@@ -625,11 +680,14 @@ def build_default_parameters(payload: Dict[str, Any], extracted: ExtractedManual
             "principles": [name for name, terms in [
                 ("notificación", procedure_terms["notification"]),
                 ("descargos", procedure_terms["descargos"]),
+                ("prueba", ["prueba", "medios de prueba", "antecedentes"]),
                 ("resolución fundada", procedure_terms["resolution"]),
                 ("reconsideración", procedure_terms["reconsideration"]),
             ] if _contains(text_norm, terms)],
             "notifications": _extract_notifications(text_norm),
-            "businessDaysRule": _first_match(text, [r"((?:\d+\s+)?d[ií]as\s+h[aá]biles[^\n.;]{0,120})"]),
+            "businessDaysRule": business_days_rule,
+            "steps": due_process_steps,
+            "deadlines": deadlines,
         },
         "attenuatingFactors": attenuating,
         "aggravatingFactors": aggravating,
@@ -802,34 +860,60 @@ Texto extraído/priorizado:
 """.strip()
 
 
-def maybe_enrich_with_llm(parameters: Dict[str, Any], payload: Dict[str, Any], extracted: ExtractedManualText) -> Tuple[Dict[str, Any], List[str], bool]:
-    warnings: List[str] = []
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _convivencia_llm_enabled() -> bool:
     if os.getenv("AI_DISABLED", "").lower() in {"1", "true", "yes", "on"}:
-        return parameters, warnings, False
-    if os.getenv("AI_CONVIVENCIA_USE_LLM", "true").lower() in {"0", "false", "no", "off"}:
-        return parameters, warnings, False
+        return False
+    return _env_bool("CONVIVENCIA_MANUAL_LLM_ENABLED", False)
+
+
+def maybe_enrich_with_llm(parameters: Dict[str, Any], payload: Dict[str, Any], extracted: ExtractedManualText) -> Tuple[Dict[str, Any], List[str], bool, bool]:
+    warnings: List[str] = []
+    if not _convivencia_llm_enabled():
+        warnings.append("LLM no usado; extracción determinística endpoint-specific generada para revisión humana.")
+        return parameters, warnings, False, False
     if not is_llm_available():
         warnings.append("LLM no configurado; extracción estructurada generada por heurísticas determinísticas.")
-        return parameters, warnings, False
+        return parameters, warnings, False, False
     context, context_truncated = _select_context_for_llm(extracted.text)
     if context_truncated:
         warnings.append("Texto largo priorizado por secciones relevantes antes de llamar al modelo.")
-    try:
-        data = call_llm_json(
+
+    def _call() -> Dict[str, Any]:
+        return call_llm_json(
             prompt=_build_llm_prompt(context, payload),
             system_prompt="Eres un extractor JSON para TCDX Convivir. Devuelve solo JSON válido.",
             temperature=0.0,
-            timeout=180,
-            depth="deep",
-            model_mode=os.getenv("AI_CONVIVENCIA_MODEL_MODE", "deep"),
+            timeout=LLM_TIMEOUT_SECONDS,
+            depth="standard",
+            model_mode=os.getenv("CONVIVENCIA_MANUAL_LLM_MODEL_MODE", "fast"),
             response_contract_instruction='Devuelve exclusivamente JSON válido con top-level "parameters".',
             append_default_json_contract=False,
-            generation_options_override={"num_predict": 4096, "num_ctx": 16384},
+            generation_options_override={"num_predict": 1200, "num_ctx": 8192},
+            enforce_timeout_cap=True,
         )
-        return _merge_parameters(parameters, data), warnings, True
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(_call)
+    try:
+        data = future.result(timeout=max(1, LLM_TIMEOUT_SECONDS))
+        executor.shutdown(wait=False, cancel_futures=True)
+        return _merge_parameters(parameters, data), warnings, True, False
+    except concurrent.futures.TimeoutError:
+        future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+        warnings.append("LLM superó el timeout del endpoint; se devolvió extracción determinística.")
+        return parameters, warnings, False, True
     except Exception as exc:
+        executor.shutdown(wait=False, cancel_futures=True)
         warnings.append(f"LLM no pudo enriquecer extracción; se usó extracción determinística: {exc}")
-        return parameters, warnings, False
+        return parameters, warnings, False, False
 
 
 def validate_parameters(parameters: Dict[str, Any]) -> Tuple[bool, List[str], int]:
@@ -910,8 +994,13 @@ def _accepted_shapes() -> List[str]:
     return [
         "evidence.file_content_base64",
         "evidence.contentBase64",
+        "evidence.base64",
         "evidence.raw_text",
+        "evidence.text",
         "file.contentBase64",
+        "document.contentBase64",
+        "document.raw_text",
+        "document.text",
         "file_content_base64",
         "raw_text",
     ]
@@ -938,18 +1027,12 @@ def _document_text_error_message(extracted: ExtractedManualText) -> str:
     return "No se pudo extraer texto suficiente desde el documento de convivencia."
 
 
-def _debug_shape(extracted: ExtractedManualText, response: Dict[str, Any]) -> None:
+def _debug_shape(extracted: ExtractedManualText, response: Dict[str, Any], perf: Optional[Dict[str, Any]] = None) -> None:
     if os.getenv("AI_ENGINE_DEBUG_SHAPE", "false").lower() not in {"1", "true", "yes", "on"}:
         return
-    params = _as_dict(response.get("parameters"))
-    misconduct = _as_dict(params.get("misconductTypes"))
-    measures = _as_dict(params.get("measures"))
     extraction = _as_dict(response.get("extraction"))
     shape = {
-        "top_level_keys": extracted.received_top_level_keys or [],
-        "evidence_keys": extracted.received_evidence_keys or [],
-        "file_keys": extracted.received_file_keys or [],
-        "document_keys": extracted.received_document_keys or [],
+        "endpoint": "convivencia_manual_extract",
         "source_shape": extracted.source_shape,
         "mime_type": extracted.mime_type,
         "file_name": extracted.file_name,
@@ -957,22 +1040,32 @@ def _debug_shape(extracted: ExtractedManualText, response: Dict[str, Any]) -> No
         "raw_text_length": extraction.get("raw_text_length"),
         "pages_processed": extraction.get("pages_processed"),
         "truncated": extraction.get("truncated"),
-        "has_parameters": bool(params),
-        "misconduct_count": sum(len(v) for v in misconduct.values() if isinstance(v, list)),
-        "measures_count": sum(len(v) for v in measures.values() if isinstance(v, list)),
-        "protocols_count": len(params.get("protocols") or []),
+        "deterministic_family_count": (perf or {}).get("deterministic_family_count", 0),
+        "llm_enabled": (perf or {}).get("llm_enabled", False),
+        "llm_used": (perf or {}).get("llm_used", False),
+        "llm_timed_out": (perf or {}).get("llm_timed_out", False),
+        "elapsed_ms": (perf or {}).get("elapsed_ms", 0),
+        "final_status": response.get("status"),
     }
-    logger.info("convivencia_manual_extract_shape=%s", json.dumps(shape, ensure_ascii=False))
+    logger.info("convivencia_manual_extract=%s", json.dumps(shape, ensure_ascii=False))
 
 
 def extract_convivencia_manual_parameters(payload: Dict[str, Any]) -> Dict[str, Any]:
-    extracted = extract_manual_text(payload)
+    started_at = time.monotonic()
+    extracted = extract_manual_text(payload, started_at=started_at)
     extraction_shape = {
         "raw_text_length": extracted.raw_text_length,
         "pages_processed": extracted.pages_processed,
         "truncated": extracted.truncated,
         "extraction_status": extracted.extraction_status,
         "source_shape": extracted.source_shape,
+    }
+    perf = {
+        "deterministic_family_count": 0,
+        "llm_enabled": _convivencia_llm_enabled(),
+        "llm_used": False,
+        "llm_timed_out": False,
+        "elapsed_ms": 0,
     }
     if extracted.extraction_status == "failed" or extracted.raw_text_length < 80:
         response = {
@@ -984,13 +1077,37 @@ def extract_convivencia_manual_parameters(payload: Dict[str, Any]) -> Dict[str, 
         }
         if extracted.error_reason == "missing_content":
             response.update(_received_shape(extracted))
-        _debug_shape(extracted, response)
+        perf["elapsed_ms"] = int(_elapsed_seconds(started_at) * 1000)
+        _debug_shape(extracted, response, perf)
         return response
 
     parameters = build_default_parameters(payload, extracted)
-    parameters, llm_warnings, llm_used = maybe_enrich_with_llm(parameters, payload, extracted)
-    is_valid, validation_warnings, families = validate_parameters(parameters)
-    combined_warnings = [*extracted.warnings, *llm_warnings, *validation_warnings]
+    deterministic_valid, deterministic_warnings, deterministic_families = validate_parameters(parameters)
+    perf["deterministic_family_count"] = deterministic_families
+
+    llm_warnings: List[str] = []
+    llm_used = False
+    llm_timed_out = False
+    validation_warnings = deterministic_warnings
+    families = deterministic_families
+    is_valid = deterministic_valid
+
+    if deterministic_valid:
+        parameters, llm_warnings, llm_used, llm_timed_out = maybe_enrich_with_llm(parameters, payload, extracted)
+        perf["llm_used"] = llm_used
+        perf["llm_timed_out"] = llm_timed_out
+        is_valid, validation_warnings, families = validate_parameters(parameters)
+    else:
+        llm_warnings.append("LLM no usado para convertir una extracción determinística insuficiente en éxito automático.")
+
+    combined_warnings = [
+        "Extracción determinística; revisar y validar antes de guardar.",
+        *extracted.warnings,
+        *llm_warnings,
+        *validation_warnings,
+    ]
+    if extracted.truncated:
+        combined_warnings.append("Documento truncado por límites de páginas, caracteres o tiempo.")
     parameters["warnings"] = list(dict.fromkeys([*_as_list(parameters.get("warnings")), *combined_warnings]))
 
     if not is_valid:
@@ -1001,7 +1118,8 @@ def extract_convivencia_manual_parameters(payload: Dict[str, Any]) -> Dict[str, 
             "extraction": extraction_shape,
             "warnings": parameters["warnings"],
         }
-        _debug_shape(extracted, response)
+        perf["elapsed_ms"] = int(_elapsed_seconds(started_at) * 1000)
+        _debug_shape(extracted, response, perf)
         return response
 
     response = {
@@ -1011,7 +1129,8 @@ def extract_convivencia_manual_parameters(payload: Dict[str, Any]) -> Dict[str, 
         "warnings": parameters["warnings"],
         "extraction": extraction_shape,
     }
-    _debug_shape(extracted, response)
+    perf["elapsed_ms"] = int(_elapsed_seconds(started_at) * 1000)
+    _debug_shape(extracted, response, perf)
     return response
 
 

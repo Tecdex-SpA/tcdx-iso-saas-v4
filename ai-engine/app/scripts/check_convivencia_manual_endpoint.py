@@ -1,12 +1,14 @@
 import base64
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict
 
 
 os.environ.setdefault("AI_INTERNAL_TOKEN", "test-token-for-convivencia-checks-only")
 os.environ.setdefault("AI_DISABLED", "true")
+os.environ.setdefault("CONVIVENCIA_MANUAL_LLM_ENABLED", "false")
 
 AI_ENGINE_ROOT = Path(__file__).resolve().parents[2]
 if str(AI_ENGINE_ROOT) not in sys.path:
@@ -118,6 +120,8 @@ def _assert_ok_convivencia_response(response, label: str) -> None:
     _assert(body.get("status") == "ok", f"{label} debe devolver status ok")
     params = body.get("parameters") or {}
     _assert("parameters" in body and isinstance(params, dict), f"{label} debe incluir parameters")
+    _assert("confidence" in body, f"{label} debe incluir confidence")
+    _assert(isinstance(body.get("warnings"), list), f"{label} debe incluir warnings array")
     _assert(params.get("source", {}).get("requiresHumanReview") is True, f"{label}: requiresHumanReview debe ser true")
     _assert(
         params.get("aulaSegura", {}).get("automaticApplicationAllowed") is False,
@@ -126,6 +130,15 @@ def _assert_ok_convivencia_response(response, label: str) -> None:
     _assert(len(params.get("misconductTypes", {}).get("leve", [])) >= 1, f"{label}: debe clasificar faltas leves")
     _assert(len(params.get("measures", {}).get("disciplinary", [])) >= 1, f"{label}: debe clasificar medidas disciplinarias")
     _assert(len(params.get("protocols", [])) >= 4, f"{label}: debe detectar protocolos anexos")
+    _assert(isinstance(params.get("systemBehavior"), dict), f"{label}: debe incluir systemBehavior")
+    _assert(
+        params.get("systemBehavior", {}).get("mustSuggestNotApply") is True,
+        f"{label}: mustSuggestNotApply debe ser true",
+    )
+    _assert(
+        params.get("systemBehavior", {}).get("mustNotClaimLegalCompliance") is True,
+        f"{label}: mustNotClaimLegalCompliance debe ser true",
+    )
     _assert("raw_text" not in body.get("extraction", {}), f"{label}: no debe devolver documento completo en extraction")
 
 
@@ -180,7 +193,10 @@ def run() -> None:
     _assert(executive.status_code == 200, "/api/ai/suggest/executive-brief debe responder 200")
     _assert(isinstance(executive.json(), dict), "executive-brief debe devolver JSON")
 
+    started = time.monotonic()
     ok_response = _post_json(client, "/api/convivencia/manual/extract-parameters", _synthetic_rice_payload())
+    elapsed = time.monotonic() - started
+    _assert(elapsed < 10, f"fixture text/plain/base64 debe responder bajo 10s; demoró {elapsed:.2f}s")
     _assert_ok_convivencia_response(ok_response, "evidence.file_content_base64 text/plain/base64")
 
     evidence_raw_text_payload = _synthetic_rice_payload()

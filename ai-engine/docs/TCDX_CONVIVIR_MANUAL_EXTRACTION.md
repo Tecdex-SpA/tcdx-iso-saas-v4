@@ -32,15 +32,19 @@ AI_INTERNAL_TOKEN=<token interno compartido>
 AI_ENGINE_DEBUG_SHAPE=false
 ```
 
-`AI_ENGINE_DEBUG_SHAPE=true` activa logs seguros de forma de respuesta: keys top-level, `raw_text_length`, `pages_processed`, `truncated`, `has_parameters` y conteos de faltas, medidas y protocolos. No registra token, base64 ni texto completo del documento.
+`AI_ENGINE_DEBUG_SHAPE=true` activa logs seguros de performance: `endpoint`, `source_shape`, `mime_type`, `file_name`, `base64_length`, `raw_text_length`, `pages_processed`, `truncated`, `deterministic_family_count`, `llm_enabled`, `llm_used`, `llm_timed_out`, `elapsed_ms` y `final_status`. No registra token, base64 ni texto completo del documento.
 
 Variables opcionales de límite:
 
 - `AI_CONVIVENCIA_MAX_FILE_BYTES`: default 30 MB.
-- `AI_CONVIVENCIA_MAX_PDF_PAGES`: default 250 páginas.
-- `AI_CONVIVENCIA_MAX_RAW_TEXT_CHARS`: default 260000 caracteres.
-- `AI_CONVIVENCIA_MAX_LLM_CONTEXT_CHARS`: default 60000 caracteres.
-- `AI_CONVIVENCIA_USE_LLM`: default `true`.
+- `CONVIVENCIA_MANUAL_LLM_ENABLED`: default `false`.
+- `CONVIVENCIA_MANUAL_LLM_TIMEOUT_SECONDS`: default 15 segundos.
+- `CONVIVENCIA_MANUAL_TOTAL_TIMEOUT_SECONDS`: default 45 segundos.
+- `CONVIVENCIA_MANUAL_MAX_PAGES`: default 120 páginas.
+- `CONVIVENCIA_MANUAL_MAX_CHARS`: default 80000 caracteres.
+- `CONVIVENCIA_MANUAL_MAX_LLM_CONTEXT_CHARS`: default 60000 caracteres.
+
+El LLM queda deshabilitado por defecto para este endpoint para evitar bloqueos operativos. La extracción base es determinística: primero decodifica y extrae texto, luego clasifica familias estructurales por encabezados, secciones y palabras clave. Si se habilita `CONVIVENCIA_MANUAL_LLM_ENABLED=true`, el LLM solo actúa como enriquecimiento opcional; si falla o supera `CONVIVENCIA_MANUAL_LLM_TIMEOUT_SECONDS`, el endpoint devuelve la extracción determinística con warning.
 
 ## Payload compatible
 
@@ -151,8 +155,9 @@ PDF:
 - Decodifica `file_content_base64`.
 - Valida cabecera `%PDF-`.
 - Extrae texto con `pypdf`.
-- Procesa hasta `AI_CONVIVENCIA_MAX_PDF_PAGES` páginas.
+- Procesa hasta `CONVIVENCIA_MANUAL_MAX_PAGES` páginas.
 - Marca `truncated=true` si supera páginas o caracteres permitidos.
+- Puede detenerse antes si ya encontró suficientes secciones estructurales para una extracción base revisable.
 
 DOCX:
 
@@ -168,7 +173,7 @@ Texto plano:
 
 ## Documentos largos
 
-El extractor procesa el texto extraído completo hasta los límites configurados. Para llamadas LLM, prioriza ventanas por secciones relevantes:
+El extractor procesa el texto extraído hasta los límites configurados por `CONVIVENCIA_MANUAL_MAX_PAGES`, `CONVIVENCIA_MANUAL_MAX_CHARS` y `CONVIVENCIA_MANUAL_TOTAL_TIMEOUT_SECONDS`. Para llamadas LLM opcionales, prioriza ventanas por secciones relevantes:
 
 - visión/misión;
 - convivencia;
@@ -181,6 +186,8 @@ El extractor procesa el texto extraído completo hasta los límites configurados
 - Aula Segura.
 
 Si el texto excede el contexto del modelo, no declara éxito por haber leído solo 1-2 páginas: valida familias estructurales mínimas antes de responder `ok`.
+
+El endpoint responde `ok` solo si detecta al menos cuatro familias estructurales entre fuente/establecimiento, visión/misión/enfoque, principios, faltas, medidas, procedimientos/debido proceso, protocolos y Aula Segura. La respuesta siempre conserva revisión humana obligatoria, no declara cumplimiento legal automático y no aplica medidas automáticamente.
 
 ## Clasificación
 
