@@ -1,11 +1,16 @@
 import base64
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict
 
 
 os.environ.setdefault("AI_INTERNAL_TOKEN", "test-token-for-convivencia-checks-only")
 os.environ.setdefault("AI_DISABLED", "true")
+
+AI_ENGINE_ROOT = Path(__file__).resolve().parents[2]
+if str(AI_ENGINE_ROOT) not in sys.path:
+    sys.path.insert(0, str(AI_ENGINE_ROOT))
 
 from fastapi.testclient import TestClient  # noqa: E402
 from main import app  # noqa: E402
@@ -22,13 +27,46 @@ def _post_json(client: TestClient, path: str, payload: Dict[str, Any], token: st
     return client.post(path, json=payload, headers={"x-ai-token": token, "x-internal-token": token})
 
 
+def _post_json_with_header(client: TestClient, path: str, payload: Dict[str, Any], header_name: str, token: str = TOKEN):
+    return client.post(path, json=payload, headers={header_name: token})
+
+
 def _assert(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
 
 
 def _synthetic_rice_payload() -> Dict[str, Any]:
-    text = """
+    text = _synthetic_rice_text()
+    return {
+        "job_type": "extract_convivencia_manual_parameters",
+        "payload_version": 1,
+        "request_meta": {
+            "tenantId": "tenant-check",
+            "establishmentId": "establishment-check",
+            "language": "es-CL",
+            "product": "tcdx-convivir",
+        },
+        "evidence": {
+            "file_name": "rice-sintetico.txt",
+            "file_mime_type": "text/plain",
+            "file_size_bytes": len(text.encode("utf-8")),
+            "file_content_base64": _b64(text),
+            "file_content_encoding": "base64",
+            "description": "Fixture sintético no sensible para check Convivir.",
+        },
+        "control": {"code": "manual_convivencia", "title": "Manual de convivencia escolar"},
+        "operation": {
+            "purpose": "extract_parameters",
+            "expected_output": "structured_convivencia_parameters_json",
+            "do_not_summarize": True,
+            "requires_human_review": True,
+        },
+    }
+
+
+def _synthetic_rice_text() -> str:
+    return """
 Reglamento Interno 2026 RICE Colegio SOCHIDES Renca
 Fundación Educacional María Isabel Órdenes Hidalgo
 Visión: formar estudiantes responsables y solidarios.
@@ -72,31 +110,23 @@ reclamos apoderados, cámaras, NEE, celulares.
 Aula Segura y afectación grave requieren decisión humana y debido proceso.
 Confidencialidad de datos del estudiante.
 """
-    return {
-        "job_type": "extract_convivencia_manual_parameters",
-        "payload_version": 1,
-        "request_meta": {
-            "tenantId": "tenant-check",
-            "establishmentId": "establishment-check",
-            "language": "es-CL",
-            "product": "tcdx-convivir",
-        },
-        "evidence": {
-            "file_name": "rice-sintetico.txt",
-            "file_mime_type": "text/plain",
-            "file_size_bytes": len(text.encode("utf-8")),
-            "file_content_base64": _b64(text),
-            "file_content_encoding": "base64",
-            "description": "Fixture sintético no sensible para check Convivir.",
-        },
-        "control": {"code": "manual_convivencia", "title": "Manual de convivencia escolar"},
-        "operation": {
-            "purpose": "extract_parameters",
-            "expected_output": "structured_convivencia_parameters_json",
-            "do_not_summarize": True,
-            "requires_human_review": True,
-        },
-    }
+
+
+def _assert_ok_convivencia_response(response, label: str) -> None:
+    _assert(response.status_code == 200, f"{label} debe responder 200")
+    body = response.json()
+    _assert(body.get("status") == "ok", f"{label} debe devolver status ok")
+    params = body.get("parameters") or {}
+    _assert("parameters" in body and isinstance(params, dict), f"{label} debe incluir parameters")
+    _assert(params.get("source", {}).get("requiresHumanReview") is True, f"{label}: requiresHumanReview debe ser true")
+    _assert(
+        params.get("aulaSegura", {}).get("automaticApplicationAllowed") is False,
+        f"{label}: automaticApplicationAllowed debe ser false",
+    )
+    _assert(len(params.get("misconductTypes", {}).get("leve", [])) >= 1, f"{label}: debe clasificar faltas leves")
+    _assert(len(params.get("measures", {}).get("disciplinary", [])) >= 1, f"{label}: debe clasificar medidas disciplinarias")
+    _assert(len(params.get("protocols", [])) >= 4, f"{label}: debe detectar protocolos anexos")
+    _assert("raw_text" not in body.get("extraction", {}), f"{label}: no debe devolver documento completo en extraction")
 
 
 def run() -> None:
@@ -108,6 +138,22 @@ def run() -> None:
 
     no_auth = client.post("/api/convivencia/manual/extract-parameters", json=_synthetic_rice_payload())
     _assert(no_auth.status_code == 401, "endpoint Convivir debe exigir token")
+
+    ai_token_response = _post_json_with_header(
+        client,
+        "/api/convivencia/manual/extract-parameters",
+        _synthetic_rice_payload(),
+        "x-ai-token",
+    )
+    _assert_ok_convivencia_response(ai_token_response, "auth con x-ai-token")
+
+    internal_token_response = _post_json_with_header(
+        client,
+        "/api/convivencia/manual/extract-parameters",
+        _synthetic_rice_payload(),
+        "x-internal-token",
+    )
+    _assert_ok_convivencia_response(internal_token_response, "auth con x-internal-token")
 
     legacy = _post_json(client, "/api/evidences/process", {
         "job_type": "analyze_evidence",
@@ -135,17 +181,40 @@ def run() -> None:
     _assert(isinstance(executive.json(), dict), "executive-brief debe devolver JSON")
 
     ok_response = _post_json(client, "/api/convivencia/manual/extract-parameters", _synthetic_rice_payload())
-    _assert(ok_response.status_code == 200, "endpoint Convivir debe aceptar fixture sintético")
-    ok_body = ok_response.json()
-    _assert(ok_body.get("status") == "ok", "endpoint Convivir debe devolver status ok")
-    params = ok_body.get("parameters") or {}
-    _assert("parameters" in ok_body and isinstance(params, dict), "respuesta debe incluir parameters")
-    _assert(params.get("source", {}).get("requiresHumanReview") is True, "requiresHumanReview debe ser true")
-    _assert(params.get("aulaSegura", {}).get("automaticApplicationAllowed") is False, "automaticApplicationAllowed debe ser false")
-    _assert(len(params.get("misconductTypes", {}).get("leve", [])) >= 1, "debe clasificar faltas leves")
-    _assert(len(params.get("measures", {}).get("disciplinary", [])) >= 1, "debe clasificar medidas disciplinarias")
-    _assert(len(params.get("protocols", [])) >= 4, "debe detectar protocolos anexos")
-    _assert("raw_text" not in ok_body.get("extraction", {}), "no debe devolver documento completo en extraction")
+    _assert_ok_convivencia_response(ok_response, "evidence.file_content_base64 text/plain/base64")
+
+    evidence_raw_text_payload = _synthetic_rice_payload()
+    evidence_raw_text_payload["evidence"] = {
+        "file_name": "rice-sintetico.txt",
+        "file_mime_type": "text/plain",
+        "raw_text": _synthetic_rice_text(),
+    }
+    evidence_raw_text_response = _post_json(
+        client,
+        "/api/convivencia/manual/extract-parameters",
+        evidence_raw_text_payload,
+    )
+    _assert_ok_convivencia_response(evidence_raw_text_response, "evidence.raw_text")
+
+    top_level_raw_text_payload = _synthetic_rice_payload()
+    top_level_raw_text_payload.pop("evidence", None)
+    top_level_raw_text_payload["file_name"] = "rice-sintetico.txt"
+    top_level_raw_text_payload["file_mime_type"] = "text/plain"
+    top_level_raw_text_payload["raw_text"] = _synthetic_rice_text()
+    top_level_raw_text_response = _post_json(
+        client,
+        "/api/convivencia/manual/extract-parameters",
+        top_level_raw_text_payload,
+    )
+    _assert_ok_convivencia_response(top_level_raw_text_response, "top-level raw_text")
+
+    empty_response = _post_json(client, "/api/convivencia/manual/extract-parameters", {})
+    _assert(empty_response.status_code == 422, "payload vacío debe devolver 422")
+    empty_body = empty_response.json()
+    _assert(empty_body.get("error") == "document_text_not_extracted", "payload vacío debe informar document_text_not_extracted")
+    _assert(isinstance(empty_body.get("accepted_shapes"), list), "payload vacío debe incluir accepted_shapes")
+    _assert(isinstance(empty_body.get("received_top_level_keys"), list), "payload vacío debe incluir received_top_level_keys")
+    _assert(isinstance(empty_body.get("received_evidence_keys"), list), "payload vacío debe incluir received_evidence_keys")
 
     invalid_pdf = _synthetic_rice_payload()
     invalid_pdf["evidence"].update({

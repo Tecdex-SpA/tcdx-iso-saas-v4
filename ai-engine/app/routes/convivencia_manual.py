@@ -1,30 +1,14 @@
 import os
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Body, Header, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.services.convivencia_manual_extractor import extract_convivencia_manual_parameters
 
 
 router = APIRouter(prefix="/api/convivencia/manual", tags=["TCDX Convivir"])
-
-
-class ConvivenciaManualExtractionRequest(BaseModel):
-    job_type: Optional[str] = Field(default="extract_convivencia_manual_parameters")
-    payload_version: Optional[int] = Field(default=1)
-    request_meta: Dict[str, Any] = Field(default_factory=dict)
-    evidence: Dict[str, Any] = Field(default_factory=dict)
-    control: Dict[str, Any] = Field(default_factory=dict)
-    operation: Dict[str, Any] = Field(default_factory=dict)
-    extraction_schema: Dict[str, Any] = Field(default_factory=dict)
-    classification_rules: Dict[str, Any] = Field(default_factory=dict)
-    safety_rules: Dict[str, Any] = Field(default_factory=dict)
-
-    class Config:
-        extra = "allow"
 
 
 def _configured_token() -> str:
@@ -42,12 +26,12 @@ def _require_internal_token(x_ai_token: Optional[str], x_internal_token: Optiona
 
 @router.post("/extract-parameters")
 def extract_parameters(
-    payload: ConvivenciaManualExtractionRequest,
+    payload: Dict[str, Any] = Body(default={}),
     x_ai_token: Optional[str] = Header(default=None, alias="x-ai-token"),
     x_internal_token: Optional[str] = Header(default=None, alias="x-internal-token"),
 ):
     _require_internal_token(x_ai_token=x_ai_token, x_internal_token=x_internal_token)
-    result = extract_convivencia_manual_parameters(payload.model_dump())
+    result = extract_convivencia_manual_parameters(payload)
     if result.get("status") == "error":
         return JSONResponse(status_code=422, content=result)
     return result

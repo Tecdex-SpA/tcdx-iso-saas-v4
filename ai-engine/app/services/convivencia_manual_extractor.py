@@ -31,6 +31,30 @@ class ExtractedManualText:
     warnings: List[str]
     parser: Optional[str] = None
     file_type: str = "unknown"
+    error_reason: Optional[str] = None
+    source_shape: str = ""
+    file_name: str = ""
+    mime_type: str = ""
+    base64_length: int = 0
+    received_top_level_keys: Optional[List[str]] = None
+    received_evidence_keys: Optional[List[str]] = None
+    received_file_keys: Optional[List[str]] = None
+    received_document_keys: Optional[List[str]] = None
+
+
+@dataclass
+class ConvivenciaInput:
+    file_name: str
+    mime_type: str
+    size_bytes: Optional[int]
+    base64_content: str
+    raw_text: str
+    file_content_encoding: str
+    source_shape: str
+    received_top_level_keys: List[str]
+    received_evidence_keys: List[str]
+    received_file_keys: List[str]
+    received_document_keys: List[str]
 
 
 PROTOCOL_CATALOG = [
@@ -69,6 +93,37 @@ def _as_dict(value: Any) -> Dict[str, Any]:
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _safe_keys(value: Any) -> List[str]:
+    if not isinstance(value, dict):
+        return []
+    return sorted(str(key) for key in value.keys())
+
+
+def _first_text(container: Dict[str, Any], names: List[str]) -> Tuple[str, str]:
+    for name in names:
+        if name in container:
+            value = _text(container.get(name))
+            if value:
+                return value, name
+    return "", ""
+
+
+def _first_size(container: Dict[str, Any], names: List[str]) -> Tuple[Optional[int], str]:
+    for name in names:
+        if name not in container:
+            continue
+        value = container.get(name)
+        if value in (None, ""):
+            continue
+        try:
+            parsed = int(value)
+            if parsed >= 0:
+                return parsed, name
+        except Exception:
+            continue
+    return None, ""
 
 
 def _strip_accents(value: str) -> str:
@@ -113,15 +168,121 @@ def _infer_file_type(file_name: str, mime_type: str) -> str:
     return "unknown"
 
 
-def _decode_inline_file(evidence: Dict[str, Any]) -> Tuple[Optional[bytes], Optional[Dict[str, Any]]]:
-    encoded = _text(evidence.get("file_content_base64"))
-    encoding = _text(evidence.get("file_content_encoding")).lower()
+def _infer_file_type_from_content(file_name: str, mime_type: str, content: bytes) -> str:
+    file_type = _infer_file_type(file_name, mime_type)
+    if file_type != "unknown":
+        return file_type
+    if content.startswith(b"%PDF-"):
+        return "pdf"
+    if content.startswith(b"PK"):
+        return "docx"
+    if mime_type.lower() in {"application/octet-stream", ""}:
+        decoded = _decode_text_bytes(content)
+        if decoded and "\x00" not in decoded[:2000]:
+            return "txt"
+    return "unknown"
+
+
+def extract_convivencia_input(payload: Dict[str, Any]) -> ConvivenciaInput:
+    payload = payload if isinstance(payload, dict) else {}
+    evidence = _as_dict(payload.get("evidence"))
+    file_payload = _as_dict(payload.get("file"))
+    document = _as_dict(payload.get("document"))
+
+    containers = [
+        ("top_level", payload),
+        ("evidence", evidence),
+        ("file", file_payload),
+        ("document", document),
+    ]
+
+    raw_text_names = ["raw_text", "text", "rawText", "document_text", "documentText"]
+    base64_names = ["file_content_base64", "contentBase64", "content_base64", "base64"]
+    name_names = ["file_name", "filename", "fileName", "name"]
+    mime_names = ["file_mime_type", "mimeType", "mime_type", "contentType", "type"]
+    size_names = ["file_size_bytes", "sizeBytes", "size_bytes", "size"]
+    encoding_names = ["file_content_encoding", "contentEncoding", "content_encoding", "encoding"]
+
+    raw_text = ""
+    raw_source = ""
+    for label, container in containers:
+        raw_text, matched = _first_text(container, raw_text_names)
+        if raw_text:
+            raw_source = f"{label}.{matched}"
+            break
+
+    base64_content = ""
+    base64_source = ""
+    for label, container in containers:
+        base64_content, matched = _first_text(container, base64_names)
+        if base64_content:
+            base64_source = f"{label}.{matched}"
+            break
+
+    file_name = ""
+    name_source = ""
+    for label, container in containers:
+        file_name, matched = _first_text(container, name_names)
+        if file_name:
+            name_source = f"{label}.{matched}"
+            break
+
+    mime_type = ""
+    for _, container in containers:
+        mime_type, _ = _first_text(container, mime_names)
+        if mime_type:
+            break
+
+    size_bytes: Optional[int] = None
+    for _, container in containers:
+        size_bytes, _ = _first_size(container, size_names)
+        if size_bytes is not None:
+            break
+
+    file_content_encoding = ""
+    for _, container in containers:
+        file_content_encoding, _ = _first_text(container, encoding_names)
+        if file_content_encoding:
+            break
+
+    source_shape = raw_source or base64_source or name_source or "none"
+    return ConvivenciaInput(
+        file_name=file_name,
+        mime_type=mime_type,
+        size_bytes=size_bytes,
+        base64_content=base64_content,
+        raw_text=raw_text,
+        file_content_encoding=file_content_encoding,
+        source_shape=source_shape,
+        received_top_level_keys=_safe_keys(payload),
+        received_evidence_keys=_safe_keys(evidence),
+        received_file_keys=_safe_keys(file_payload),
+        received_document_keys=_safe_keys(document),
+    )
+
+
+def _with_input_metadata(extracted: ExtractedManualText, normalized: ConvivenciaInput) -> ExtractedManualText:
+    extracted.source_shape = normalized.source_shape
+    extracted.file_name = normalized.file_name
+    extracted.mime_type = normalized.mime_type
+    extracted.base64_length = len(normalized.base64_content or "")
+    extracted.received_top_level_keys = normalized.received_top_level_keys
+    extracted.received_evidence_keys = normalized.received_evidence_keys
+    extracted.received_file_keys = normalized.received_file_keys
+    extracted.received_document_keys = normalized.received_document_keys
+    return extracted
+
+
+def _decode_inline_file(normalized: ConvivenciaInput) -> Tuple[Optional[bytes], Optional[Dict[str, Any]]]:
+    encoded = normalized.base64_content
+    encoding = _text(normalized.file_content_encoding).lower()
     if not encoded:
         return None, {
             "status": "error",
             "error": "missing_file_content",
-            "message": "No se recibió file_content_base64 para extraer parámetros.",
+            "message": "No se recibió contenido de documento en un campo compatible.",
             "warnings": ["El endpoint Convivir requiere contenido inline en base64 o texto bruto explícito."],
+            "error_reason": "missing_content",
         }
     if encoding not in ("", "base64"):
         return None, {
@@ -129,6 +290,7 @@ def _decode_inline_file(evidence: Dict[str, Any]) -> Tuple[Optional[bytes], Opti
             "error": "unsupported_file_encoding",
             "message": f"Codificación no soportada: {encoding}",
             "warnings": [],
+            "error_reason": "unsupported_file_encoding",
         }
     try:
         content = base64.b64decode(encoded, validate=True)
@@ -138,6 +300,7 @@ def _decode_inline_file(evidence: Dict[str, Any]) -> Tuple[Optional[bytes], Opti
             "error": "invalid_base64",
             "message": "file_content_base64 no es base64 válido.",
             "warnings": [],
+            "error_reason": "invalid_base64",
         }
     if len(content) > MAX_INLINE_FILE_BYTES:
         return None, {
@@ -145,6 +308,7 @@ def _decode_inline_file(evidence: Dict[str, Any]) -> Tuple[Optional[bytes], Opti
             "error": "file_too_large",
             "message": "El archivo excede el tamaño máximo permitido para extracción Convivir.",
             "warnings": [f"Límite actual: {MAX_INLINE_FILE_BYTES} bytes."],
+            "error_reason": "file_too_large",
         }
     return content, None
 
@@ -160,11 +324,11 @@ def _decode_text_bytes(content: bytes) -> str:
 
 def _extract_pdf_text(content: bytes) -> ExtractedManualText:
     if not content.startswith(b"%PDF-"):
-        return ExtractedManualText("", 0, None, False, "failed", ["El archivo no parece ser PDF válido."], file_type="pdf")
+        return ExtractedManualText("", 0, None, False, "failed", ["El archivo no parece ser PDF válido."], file_type="pdf", error_reason="invalid_pdf")
     try:
         from pypdf import PdfReader  # type: ignore
     except Exception:
-        return ExtractedManualText("", 0, None, False, "failed", ["pypdf no está instalado."], file_type="pdf")
+        return ExtractedManualText("", 0, None, False, "failed", ["pypdf no está instalado."], file_type="pdf", error_reason="pdf_parser_unavailable")
 
     warnings: List[str] = []
     pages: List[str] = []
@@ -192,28 +356,29 @@ def _extract_pdf_text(content: bytes) -> ExtractedManualText:
                 truncated = True
                 warnings.append(f"Documento PDF truncado: {pages_processed}/{total_pages} páginas procesadas.")
     except Exception as exc:
-        return ExtractedManualText("", 0, pages_processed or None, False, "failed", [str(exc)], parser="pypdf", file_type="pdf")
+        return ExtractedManualText("", 0, pages_processed or None, False, "failed", [str(exc)], parser="pypdf", file_type="pdf", error_reason="pdf_parse_failed")
 
     text = "\n".join(pages).strip()
     if len(text) > MAX_RAW_TEXT_CHARS:
         text = text[:MAX_RAW_TEXT_CHARS]
         truncated = True
     status = "partial" if text and truncated else ("ok" if text else "failed")
-    return ExtractedManualText(text, len(text), pages_processed, truncated, status, warnings, parser="pypdf", file_type="pdf")
+    error_reason = "pdf_text_insufficient" if not text else None
+    return ExtractedManualText(text, len(text), pages_processed, truncated, status, warnings, parser="pypdf", file_type="pdf", error_reason=error_reason)
 
 
 def _extract_docx_text(content: bytes) -> ExtractedManualText:
     if not content.startswith(b"PK"):
-        return ExtractedManualText("", 0, None, False, "failed", ["El archivo no parece ser DOCX/ZIP válido."], file_type="docx")
+        return ExtractedManualText("", 0, None, False, "failed", ["El archivo no parece ser DOCX/ZIP válido."], file_type="docx", error_reason="invalid_docx")
     warnings: List[str] = []
     try:
         from io import BytesIO
         with zipfile.ZipFile(BytesIO(content)) as archive:
             if "word/document.xml" not in archive.namelist():
-                return ExtractedManualText("", 0, None, False, "failed", ["DOCX sin word/document.xml."], file_type="docx")
+                return ExtractedManualText("", 0, None, False, "failed", ["DOCX sin word/document.xml."], file_type="docx", error_reason="invalid_docx")
             xml = archive.read("word/document.xml")
     except Exception as exc:
-        return ExtractedManualText("", 0, None, False, "failed", [f"No se pudo abrir DOCX: {exc}"], file_type="docx")
+        return ExtractedManualText("", 0, None, False, "failed", [f"No se pudo abrir DOCX: {exc}"], file_type="docx", error_reason="docx_parse_failed")
 
     try:
         root = ElementTree.fromstring(xml)
@@ -231,23 +396,23 @@ def _extract_docx_text(content: bytes) -> ExtractedManualText:
                 paragraphs.append(line)
         text = "\n".join(paragraphs)
     except Exception as exc:
-        return ExtractedManualText("", 0, None, False, "failed", [f"No se pudo parsear document.xml: {exc}"], file_type="docx")
+        return ExtractedManualText("", 0, None, False, "failed", [f"No se pudo parsear document.xml: {exc}"], file_type="docx", error_reason="docx_parse_failed")
 
     truncated = len(text) > MAX_RAW_TEXT_CHARS
     if truncated:
         text = text[:MAX_RAW_TEXT_CHARS]
         warnings.append("Texto DOCX truncado por límite de contexto.")
     status = "partial" if text and truncated else ("ok" if text else "failed")
-    return ExtractedManualText(text, len(text), None, truncated, status, warnings, parser="docx-xml", file_type="docx")
+    error_reason = "docx_text_insufficient" if not text else None
+    return ExtractedManualText(text, len(text), None, truncated, status, warnings, parser="docx-xml", file_type="docx", error_reason=error_reason)
 
 
 def extract_manual_text(payload: Dict[str, Any]) -> ExtractedManualText:
-    evidence = _as_dict(payload.get("evidence"))
-    raw = _text(evidence.get("raw_text") or evidence.get("text") or payload.get("raw_text") or payload.get("text"))
-    if raw:
-        truncated = len(raw) > MAX_RAW_TEXT_CHARS
-        text = raw[:MAX_RAW_TEXT_CHARS] if truncated else raw
-        return ExtractedManualText(
+    normalized = extract_convivencia_input(payload)
+    if normalized.raw_text:
+        truncated = len(normalized.raw_text) > MAX_RAW_TEXT_CHARS
+        text = normalized.raw_text[:MAX_RAW_TEXT_CHARS] if truncated else normalized.raw_text
+        return _with_input_metadata(ExtractedManualText(
             text=text,
             raw_text_length=len(text),
             pages_processed=None,
@@ -256,27 +421,35 @@ def extract_manual_text(payload: Dict[str, Any]) -> ExtractedManualText:
             warnings=["Extracción generada desde texto bruto; requiere revisión reforzada."],
             parser="inline_text",
             file_type="txt",
-        )
+        ), normalized)
 
-    file_name = _text(evidence.get("file_name"))
-    mime_type = _text(evidence.get("file_mime_type"))
-    file_type = _infer_file_type(file_name, mime_type)
-    content, error = _decode_inline_file(evidence)
+    content, error = _decode_inline_file(normalized)
     if error:
-        return ExtractedManualText("", 0, None, False, "failed", error.get("warnings") or [error.get("message", "Error de archivo")], file_type=file_type)
+        return _with_input_metadata(ExtractedManualText(
+            "",
+            0,
+            None,
+            False,
+            "failed",
+            error.get("warnings") or [error.get("message", "Error de archivo")],
+            file_type=_infer_file_type(normalized.file_name, normalized.mime_type),
+            error_reason=error.get("error_reason") or error.get("error"),
+        ), normalized)
     content = content or b""
+    file_type = _infer_file_type_from_content(normalized.file_name, normalized.mime_type, content)
     if file_type == "pdf":
-        return _extract_pdf_text(content)
+        return _with_input_metadata(_extract_pdf_text(content), normalized)
     if file_type == "docx":
-        return _extract_docx_text(content)
+        return _with_input_metadata(_extract_docx_text(content), normalized)
     if file_type == "txt":
         text = _decode_text_bytes(content)
         truncated = len(text) > MAX_RAW_TEXT_CHARS
         if truncated:
             text = text[:MAX_RAW_TEXT_CHARS]
         status = "partial" if text and truncated else ("ok" if text else "failed")
-        return ExtractedManualText(text, len(text), None, truncated, status, [], parser="plain-text", file_type="txt")
-    return ExtractedManualText("", 0, None, False, "failed", ["Tipo de archivo no soportado para extracción Convivir."], file_type=file_type)
+        error_reason = "file_text_insufficient" if not text else None
+        return _with_input_metadata(ExtractedManualText(text, len(text), None, truncated, status, [], parser="plain-text", file_type="txt", error_reason=error_reason), normalized)
+    return _with_input_metadata(ExtractedManualText("", 0, None, False, "failed", ["Tipo de archivo no soportado para extracción Convivir."], file_type=file_type, error_reason="unsupported_file_type"), normalized)
 
 
 def _section(text: str, start_terms: List[str], stop_terms: List[str], limit: int = 2400) -> str:
@@ -404,7 +577,7 @@ def build_default_parameters(payload: Dict[str, Any], extracted: ExtractedManual
     aggravating = _line_items_from_section(_section(text, ["agravantes", "circunstancias agravantes"], ["protocolos", "medidas", "anexos"], 2200), "Agravantes detectadas")
 
     aula_detected = _contains(text_norm, ["aula segura", "afectacion grave", "afectación grave"])
-    source_file = _text(evidence.get("file_name"))
+    source_file = extracted.file_name or _text(evidence.get("file_name"))
 
     return {
         "source": {
@@ -575,7 +748,7 @@ def _select_context_for_llm(text: str) -> Tuple[str, bool]:
 
 def _build_llm_prompt(context_text: str, payload: Dict[str, Any]) -> str:
     meta = _as_dict(payload.get("request_meta"))
-    evidence = _as_dict(payload.get("evidence"))
+    normalized = extract_convivencia_input(payload)
     return f"""
 Actúa como extractor estructurado de Reglamentos Internos, RICE y Manuales de Convivencia Escolar chilenos para TCDX Convivir.
 
@@ -622,7 +795,7 @@ Reglas:
 Metadata segura:
 - tenantId: {meta.get("tenantId") or ""}
 - establishmentId: {meta.get("establishmentId") or ""}
-- sourceFile: {evidence.get("file_name") or ""}
+- sourceFile: {normalized.file_name or ""}
 
 Texto extraído/priorizado:
 {context_text}
@@ -733,7 +906,39 @@ def _confidence(families: int, extracted: ExtractedManualText, llm_used: bool) -
     return round(max(0.0, min(score, 0.95)), 2)
 
 
-def _debug_shape(response: Dict[str, Any]) -> None:
+def _accepted_shapes() -> List[str]:
+    return [
+        "evidence.file_content_base64",
+        "evidence.contentBase64",
+        "evidence.raw_text",
+        "file.contentBase64",
+        "file_content_base64",
+        "raw_text",
+    ]
+
+
+def _received_shape(extracted: ExtractedManualText) -> Dict[str, Any]:
+    return {
+        "accepted_shapes": _accepted_shapes(),
+        "received_top_level_keys": extracted.received_top_level_keys or [],
+        "received_evidence_keys": extracted.received_evidence_keys or [],
+    }
+
+
+def _document_text_error_message(extracted: ExtractedManualText) -> str:
+    reason = extracted.error_reason or ""
+    if reason == "missing_content":
+        return "No se recibió contenido de documento en un campo compatible."
+    if reason == "pdf_text_insufficient":
+        return "El PDF fue recibido, pero el texto extraído fue insuficiente. Puede ser escaneado o contener imágenes."
+    if extracted.file_type == "pdf" and extracted.base64_length > 0:
+        return "El PDF fue recibido, pero el texto extraído fue insuficiente. Puede ser escaneado o contener imágenes."
+    if extracted.base64_length > 0:
+        return "Se recibió el archivo, pero no se pudo extraer texto suficiente."
+    return "No se pudo extraer texto suficiente desde el documento de convivencia."
+
+
+def _debug_shape(extracted: ExtractedManualText, response: Dict[str, Any]) -> None:
     if os.getenv("AI_ENGINE_DEBUG_SHAPE", "false").lower() not in {"1", "true", "yes", "on"}:
         return
     params = _as_dict(response.get("parameters"))
@@ -741,7 +946,14 @@ def _debug_shape(response: Dict[str, Any]) -> None:
     measures = _as_dict(params.get("measures"))
     extraction = _as_dict(response.get("extraction"))
     shape = {
-        "top_level_keys": list(response.keys()),
+        "top_level_keys": extracted.received_top_level_keys or [],
+        "evidence_keys": extracted.received_evidence_keys or [],
+        "file_keys": extracted.received_file_keys or [],
+        "document_keys": extracted.received_document_keys or [],
+        "source_shape": extracted.source_shape,
+        "mime_type": extracted.mime_type,
+        "file_name": extracted.file_name,
+        "base64_length": extracted.base64_length,
         "raw_text_length": extraction.get("raw_text_length"),
         "pages_processed": extraction.get("pages_processed"),
         "truncated": extraction.get("truncated"),
@@ -760,16 +972,19 @@ def extract_convivencia_manual_parameters(payload: Dict[str, Any]) -> Dict[str, 
         "pages_processed": extracted.pages_processed,
         "truncated": extracted.truncated,
         "extraction_status": extracted.extraction_status,
+        "source_shape": extracted.source_shape,
     }
     if extracted.extraction_status == "failed" or extracted.raw_text_length < 80:
         response = {
             "status": "error",
             "error": "document_text_not_extracted",
-            "message": "No se pudo extraer texto suficiente desde el documento de convivencia.",
+            "message": _document_text_error_message(extracted),
             "extraction": extraction_shape,
             "warnings": extracted.warnings,
         }
-        _debug_shape(response)
+        if extracted.error_reason == "missing_content":
+            response.update(_received_shape(extracted))
+        _debug_shape(extracted, response)
         return response
 
     parameters = build_default_parameters(payload, extracted)
@@ -786,7 +1001,7 @@ def extract_convivencia_manual_parameters(payload: Dict[str, Any]) -> Dict[str, 
             "extraction": extraction_shape,
             "warnings": parameters["warnings"],
         }
-        _debug_shape(response)
+        _debug_shape(extracted, response)
         return response
 
     response = {
@@ -796,7 +1011,7 @@ def extract_convivencia_manual_parameters(payload: Dict[str, Any]) -> Dict[str, 
         "warnings": parameters["warnings"],
         "extraction": extraction_shape,
     }
-    _debug_shape(response)
+    _debug_shape(extracted, response)
     return response
 
 
