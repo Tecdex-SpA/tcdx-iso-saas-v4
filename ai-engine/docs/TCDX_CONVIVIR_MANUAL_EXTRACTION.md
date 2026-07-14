@@ -103,6 +103,11 @@ La respuesta exitosa siempre incluye `status: "ok"`, `parameters`, `confidence`,
 - `attenuatingFactors`
 - `aggravatingFactors`
 - `protocols`
+- `misconductMeasureMatrix`
+- `derivationRules`
+- `communicationRules`
+- `evidenceRules`
+- `extractionQuality`
 - `aulaSegura`
 - `systemBehavior`
 - `warnings`
@@ -115,6 +120,8 @@ Reglas de seguridad aplicadas por el AI Engine:
 - `aulaSegura.requiresDueProcess=true`
 - `systemBehavior.mustSuggestNotApply=true`
 - `systemBehavior.mustNotClaimLegalCompliance=true`
+- faltas, medidas, derivaciones, protocolos, comunicaciones y evidencias incluyen `humanReviewRequired=true`
+- medidas y matriz falta-medida incluyen `automaticApplicationAllowed=false`
 
 El endpoint no devuelve `raw_text` completo en la respuesta. Solo informa la forma de extracción:
 
@@ -198,6 +205,31 @@ Faltas:
 - `gravisima`
 - `apoderado`
 
+Cada falta se normaliza como objeto operacional:
+
+```json
+{
+  "code": "GRAVE-001",
+  "name": "...",
+  "description": "...",
+  "severity": "grave",
+  "category": "violence_or_aggression",
+  "actors": ["student"],
+  "sourceSection": "Faltas graves",
+  "sourceText": "...",
+  "keywords": ["agresión"],
+  "suggestedMeasures": ["MED-FORM-001"],
+  "requiresGuardianNotification": true,
+  "requiresCaseOpening": true,
+  "requiresDerivation": false,
+  "requiresEvidence": true,
+  "aulaSeguraRisk": false,
+  "humanReviewRequired": true
+}
+```
+
+Los códigos son estables por severidad y orden (`LEVE-001`, `GRAVE-001`, `GRAVISIMA-001`, `APODERADO-001`). Si el manual trae numeración original se conserva en `originalIndex`. Riesgos como armas, drogas, agresión sexual, lesiones graves, incendio, amenaza grave o afectación grave se marcan como `aulaSeguraRisk=true` sin habilitar aplicación automática.
+
 Medidas:
 
 - `disciplinary`
@@ -207,9 +239,99 @@ Medidas:
 - `guardianMeasures`
 - `protectiveOrCautionary`
 
+Cada medida se normaliza como objeto:
+
+```json
+{
+  "code": "MED-DISC-001",
+  "name": "...",
+  "description": "...",
+  "type": "disciplinary",
+  "sourceSection": "Medidas disciplinarias",
+  "sourceText": "...",
+  "applicableTo": [],
+  "compatibleSeverities": ["leve", "grave", "gravisima"],
+  "requiresGuardianNotification": false,
+  "requiresEvidence": true,
+  "requiresDueProcess": true,
+  "automaticApplicationAllowed": false,
+  "humanReviewRequired": true
+}
+```
+
+Suspensión, condicionalidad, expulsión y cancelación de matrícula se marcan con `requiresDueProcess=true`. Medidas formativas/pedagógicas, reparatorias, apoyo/acompañamiento y cautelares/protectoras se extraen en familias separadas.
+
 Protocolos:
 
-Detecta protocolos anexos como debido proceso, maltrato/abuso sexual infantil, vulneración de derechos, violencia escolar, bullying, alcohol/drogas, embarazo/maternidad/paternidad, identidad de género, accidentes escolares, seguridad escolar, DEC, derivación, reclamos de apoderados, cámaras, NEE y celulares.
+Detecta protocolos anexos como debido proceso, maltrato/abuso sexual infantil, vulneración de derechos, violencia escolar, bullying, alcohol/drogas, embarazo/maternidad/paternidad, identidad de género, accidentes escolares, seguridad escolar, DEC, derivación, reclamos de apoderados, cámaras, NEE y celulares. Los protocolos se devuelven con código, categoría, disparadores, roles responsables, etapas, plazos, evidencias, canales de comunicación, autoridades externas y `sourceText` breve.
+
+Categorías soportadas:
+
+- `due_process`
+- `abuse_or_sexual_aggression`
+- `rights_violation`
+- `bullying_or_violence`
+- `drugs_alcohol`
+- `pregnancy_parenthood`
+- `gender_identity`
+- `accident_safety`
+- `emergency`
+- `digital_violence`
+- `inclusion_nee`
+- `dec`
+- `complaints`
+- `cameras`
+- `devices`
+- `other`
+
+## Familias Operacionales
+
+`misconductMeasureMatrix` asocia faltas con medidas sugeridas, nunca automáticas:
+
+```json
+{
+  "misconductCode": "GRAVE-001",
+  "suggestedMeasureCodes": ["MED-FORM-001", "MED-SUP-001"],
+  "rationale": "Sugerencia base para falta grave...",
+  "requiresHumanValidation": true,
+  "automaticApplicationAllowed": false
+}
+```
+
+`derivationRules` detecta derivaciones a convivencia, orientación, dupla psicosocial, psicología, inspectoría general, dirección, CESFAM, OPD/OLN, Tribunal de Familia, Carabineros, PDI, Fiscalía, redes de apoyo y especialistas externos.
+
+`communicationRules` detecta correo electrónico, teléfono, carta certificada, página web, redes sociales, entrevista/citación presencial y notificación escrita.
+
+`evidenceRules` detecta acta, entrevista, registro escrito, hoja de vida, evidencia documental, medios verificadores, correo electrónico, denuncia y certificados médicos cuando aparezcan.
+
+`procedures.operational` y `operationalProcedures` entregan estructuras con etapas como notificación, descargos, prueba, resolución, reconsideración/apelación, consulta a Consejo de Profesores, decisión de Dirección y denuncia dentro de 24 horas cuando corresponda.
+
+`extractionQuality` resume cobertura:
+
+```json
+{
+  "familiesDetected": ["misconductLeve", "protocols"],
+  "counts": {
+    "misconductLeve": 0,
+    "misconductGrave": 0,
+    "misconductGravisima": 0,
+    "misconductApoderado": 0,
+    "measuresDisciplinary": 0,
+    "measuresFormative": 0,
+    "measuresSupport": 0,
+    "measuresReparatory": 0,
+    "protocols": 0,
+    "derivationRules": 0,
+    "procedures": 0
+  },
+  "coverageWarnings": [],
+  "requiresHumanReview": true
+}
+```
+
+## Segmentación
+
+La extracción determinística segmenta encabezados con numeración, mayúsculas, variantes con/sin tilde, tablas convertidas a texto, viñetas y listas numeradas. Reconoce bloques de faltas, medidas, derivaciones, procedimientos, debido proceso, condicionalidad, expulsión/cancelación, Aula Segura, atenuantes, agravantes, protocolos/anexos, comunicaciones, confidencialidad, plan de gestión y encargado/a de convivencia.
 
 ## Compatibilidad
 

@@ -91,6 +91,52 @@ PRINCIPLES = [
     "Resolución pacífica de controversias y conflictos",
 ]
 
+SECTION_PATTERNS = [
+    ("faltas_leves", "Faltas leves", [r"faltas?\s+leves?"]),
+    ("faltas_graves", "Faltas graves", [r"faltas?\s+graves?"]),
+    ("faltas_gravisimas", "Faltas gravísimas", [r"faltas?\s+gravisimas?", r"faltas?\s+grav[ií]simas?"]),
+    ("faltas_apoderados", "Faltas de apoderados", [r"faltas?.{0,40}(apoderad\w*|padres?|madres?)"]),
+    ("medidas_disciplinarias", "Medidas disciplinarias", [r"medidas?\s+disciplinarias?", r"\bsanciones?\b"]),
+    ("medidas_formativas", "Medidas formativas/pedagógicas", [r"medidas?\s+formativas?", r"medidas?\s+pedagogicas?", r"medidas?\s+pedag[oó]gicas?"]),
+    ("medidas_apoyo", "Medidas de apoyo y acompañamiento", [r"medidas?.{0,30}apoyo", r"acompanamiento", r"acompa[nñ]amiento"]),
+    ("medidas_reparatorias", "Medidas reparatorias", [r"medidas?\s+reparatorias?", r"reparaci[oó]n", r"reparatorias?"]),
+    ("medidas_cautelares", "Medidas cautelares/protectoras", [r"medidas?\s+cautelares?", r"medidas?\s+protectoras?", r"protecci[oó]n"]),
+    ("medidas_apoderados", "Medidas respecto de apoderados", [r"medidas?.{0,40}(apoderad\w*|padres?|madres?)"]),
+    ("derivaciones", "Derivaciones", [r"derivaciones?", r"redes?\s+de\s+apoyo"]),
+    ("procedimiento_general", "Procedimiento general", [r"procedimiento\s+general", r"\bprocedimiento\b"]),
+    ("debido_proceso", "Debido proceso", [r"debido\s+proceso"]),
+    ("condicionalidad", "Condicionalidad", [r"condicionalidad"]),
+    ("expulsion_cancelacion", "Expulsión / cancelación de matrícula", [r"expulsi[oó]n", r"cancelaci[oó]n\s+de\s+matr[ií]cula"]),
+    ("aula_segura", "Aula Segura", [r"aula\s+segura", r"afectaci[oó]n\s+grave"]),
+    ("atenuantes", "Atenuantes", [r"atenuantes?", r"circunstancias?\s+atenuantes?"]),
+    ("agravantes", "Agravantes", [r"agravantes?", r"circunstancias?\s+agravantes?"]),
+    ("protocolos", "Protocolos", [r"protocolos?", r"anexos?"]),
+    ("comunicaciones", "Comunicaciones", [r"comunicaciones?", r"notificaciones?", r"medios?\s+de\s+comunicaci[oó]n"]),
+    ("confidencialidad", "Confidencialidad", [r"confidencialidad", r"datos\s+personales"]),
+    ("plan_gestion", "Plan de Gestión de Convivencia Escolar", [r"plan\s+de\s+gesti[oó]n\s+de\s+convivencia"]),
+    ("encargado_convivencia", "Encargado/a de Convivencia Escolar", [r"encargad[ao]\s+de\s+convivencia"]),
+]
+
+SECTION_TITLES = {key: title for key, title, _ in SECTION_PATTERNS}
+
+PROTOCOL_CATEGORY_RULES = [
+    ("due_process", ["debido proceso", "procedimiento", "apelacion", "apelación", "reconsideracion", "reconsideración"]),
+    ("abuse_or_sexual_aggression", ["abuso sexual", "agresion sexual", "agresión sexual", "hechos de connotacion sexual", "connotación sexual"]),
+    ("rights_violation", ["vulneracion de derechos", "vulneración de derechos", "maltrato infantil"]),
+    ("bullying_or_violence", ["bullying", "acoso", "violencia", "maltrato", "ciberbullying"]),
+    ("drugs_alcohol", ["alcohol", "drogas", "estupefacientes"]),
+    ("pregnancy_parenthood", ["embarazo", "maternidad", "paternidad"]),
+    ("gender_identity", ["identidad de genero", "identidad de género"]),
+    ("accident_safety", ["accidente escolar", "accidentes escolares", "seguridad escolar", "pise"]),
+    ("emergency", ["emergencia", "evacuacion", "evacuación", "incendio", "sismo"]),
+    ("digital_violence", ["ciber", "redes sociales", "digital", "internet"]),
+    ("inclusion_nee", ["nee", "necesidades educativas especiales", "inclusion", "inclusión"]),
+    ("dec", ["dec", "desregulacion emocional", "desregulación emocional"]),
+    ("complaints", ["reclamo", "denuncia", "queja"]),
+    ("cameras", ["camara", "cámara", "cctv"]),
+    ("devices", ["celular", "telefono celular", "teléfono celular", "dispositivo"]),
+]
+
 
 def _as_dict(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
@@ -546,10 +592,627 @@ def _extract_people_role(text: str, terms: List[str]) -> Dict[str, Any]:
     return {"detected": bool(excerpt), "name": role_name, "sourceExcerpt": excerpt}
 
 
+def _heading_key(line: str) -> str:
+    candidate = _clean(line, 220)
+    if re.match(r"^\s*(?:\d{1,3}|[a-zA-Z]|[ivxlcdmIVXLCDM]{1,8})[\.\)]\s+\S", candidate):
+        return ""
+    if re.match(r"^\s*[-*•]\s+\S", candidate):
+        return ""
+    candidate = re.sub(r"^(?:cap[ií]tulo|t[ií]tulo|art[ií]culo|apartado|anexo)?\s*[ivxlcdm\d]+[\.\)\-:\s]+", "", candidate, flags=re.IGNORECASE).strip()
+    candidate_norm = _norm(candidate).strip(" .:-")
+    if not candidate_norm or len(candidate_norm) > 120:
+        return ""
+    for key, _, patterns in SECTION_PATTERNS:
+        for pattern in patterns:
+            if re.search(rf"^(?:de\s+)?{pattern}(?:\b|$)", candidate_norm, re.IGNORECASE):
+                return key
+    return ""
+
+
+def _segment_manual_text(text: str) -> Dict[str, List[Dict[str, Any]]]:
+    sections: Dict[str, List[Dict[str, Any]]] = {}
+    current_key = "document"
+    current_title = "Documento"
+    current_lines: List[str] = []
+    current_start = 0
+
+    def flush(end_line: int) -> None:
+        nonlocal current_lines
+        body = "\n".join(current_lines).strip()
+        if body:
+            sections.setdefault(current_key, []).append({
+                "key": current_key,
+                "title": current_title,
+                "text": body,
+                "startLine": current_start,
+                "endLine": end_line,
+            })
+        current_lines = []
+
+    lines = text.splitlines()
+    for idx, raw_line in enumerate(lines):
+        line = _clean(raw_line, 900)
+        if not line:
+            continue
+        key = _heading_key(line)
+        if key:
+            flush(idx)
+            current_key = key
+            current_title = SECTION_TITLES.get(key, line[:120])
+            current_start = idx + 1
+            continue
+        current_lines.append(line)
+    flush(len(lines))
+    return sections
+
+
+def _section_text(sections: Dict[str, List[Dict[str, Any]]], keys: List[str], limit: int = 9000) -> str:
+    parts: List[str] = []
+    for key in keys:
+        for section in sections.get(key, []):
+            text = _clean(section.get("text", ""), limit)
+            if text:
+                parts.append(text)
+    return _clean("\n".join(parts), limit)
+
+
+def _split_inline_list(line: str) -> List[str]:
+    if len(line) < 180:
+        return [line]
+    if re.search(r";\s*(?:\d+[\.\)]|[-•]|[A-ZÁÉÍÓÚÑ])", line):
+        return [part.strip() for part in re.split(r";\s*", line) if part.strip()]
+    return [line]
+
+
+def _looks_like_non_item(line: str) -> bool:
+    line_norm = _norm(line)
+    if len(line_norm) < 4:
+        return True
+    if _heading_key(line):
+        return True
+    return bool(re.match(r"^(faltas?|medidas?|procedimientos?|protocolos?|articulo|artículo|capitulo|capítulo|titulo|título)\b", line_norm))
+
+
+def _list_items_from_sections(
+    sections: Dict[str, List[Dict[str, Any]]],
+    keys: List[str],
+    fallback_section: str = "",
+    max_items: int = 80,
+) -> List[Dict[str, str]]:
+    raw_sections: List[Tuple[str, str]] = []
+    for key in keys:
+        for section in sections.get(key, []):
+            raw_sections.append((SECTION_TITLES.get(key, key), section.get("text", "")))
+    if not raw_sections and fallback_section:
+        raw_sections.append(("", fallback_section))
+
+    items: List[Dict[str, str]] = []
+    for source_title, section_text in raw_sections:
+        current: Optional[Dict[str, str]] = None
+        for raw_line in section_text.splitlines():
+            for raw_part in _split_inline_list(_clean(raw_line, 900)):
+                line = raw_part.strip()
+                if not line or _looks_like_non_item(line):
+                    continue
+                match = re.match(r"^(?P<idx>(?:\d{1,3}|[a-zA-Z]|[ivxlcdmIVXLCDM]{1,8})[\.\)]|[-*•])\s*(?P<body>.+)$", line)
+                table_match = re.match(r"^(?P<idx>\d{1,3})\s{2,}(?P<body>.+)$", line)
+                if match or table_match:
+                    matched = match or table_match
+                    body = _clean(matched.group("body"), 700)
+                    if body:
+                        current = {
+                            "originalIndex": matched.group("idx").strip(" .)-*•"),
+                            "text": body,
+                            "sourceSection": source_title,
+                        }
+                        items.append(current)
+                elif current and len(line) < 280 and not re.search(r"[.;:]$", current.get("text", "")):
+                    current["text"] = _clean(f"{current['text']} {line}", 700)
+                elif len(line) >= 8 and not re.match(r"^[A-ZÁÉÍÓÚÑ\s]{4,80}:?$", line):
+                    current = {"originalIndex": "", "text": _clean(line, 700), "sourceSection": source_title}
+                    items.append(current)
+                if len(items) >= max_items:
+                    return items
+    return items
+
+
+def _keywords_for_text(text: str) -> List[str]:
+    text_norm = _norm(text)
+    terms = [
+        "agresión", "agresion", "amenaza", "acoso", "bullying", "ciberbullying", "violencia",
+        "arma", "drogas", "alcohol", "abuso", "sexual", "lesiones", "incendio", "daño",
+        "infraestructura", "robo", "hurto", "discriminación", "discriminacion", "salud mental",
+        "autolesión", "autolesion", "vulneración", "vulneracion", "apoderado", "funcionario",
+    ]
+    return list(dict.fromkeys(term for term in terms if _norm(term) in text_norm))[:10]
+
+
+def _actors_for_text(text: str) -> List[str]:
+    text_norm = _norm(text)
+    actors = []
+    for code, terms in [
+        ("student", ["estudiante", "alumno", "alumna"]),
+        ("guardian", ["apoderado", "padre", "madre"]),
+        ("teacher", ["docente", "profesor", "profesora"]),
+        ("staff", ["funcionario", "asistente de la educacion", "asistente de la educación"]),
+        ("community", ["comunidad educativa"]),
+    ]:
+        if _contains(text_norm, terms):
+            actors.append(code)
+    return actors
+
+
+def _category_for_text(text: str) -> str:
+    text_norm = _norm(text)
+    for category, terms in [
+        ("violence_or_aggression", ["agresion", "agresión", "violencia", "amenaza", "lesion", "lesión"]),
+        ("bullying_or_harassment", ["bullying", "acoso", "hostigamiento"]),
+        ("sexual_or_rights_violation", ["abuso sexual", "connotacion sexual", "connotación sexual", "vulneracion", "vulneración"]),
+        ("drugs_alcohol", ["drogas", "alcohol", "estupefacientes"]),
+        ("property_damage", ["daño", "deterioro", "infraestructura", "incendio"]),
+        ("attendance_or_punctuality", ["atraso", "inasistencia", "puntualidad"]),
+        ("academic_or_materials", ["materiales", "tarea", "uniforme"]),
+        ("digital_or_devices", ["celular", "redes sociales", "digital", "telefono"]),
+    ]:
+        if _contains(text_norm, terms):
+            return category
+    return "other"
+
+
+def _aula_segura_risk(text: str) -> bool:
+    return _contains(_norm(text), [
+        "arma", "armas", "drogas", "agresion sexual", "agresión sexual", "abuso sexual",
+        "lesiones graves", "lesion grave", "lesión grave", "incendio", "amenaza grave",
+        "infraestructura esencial", "afectacion grave", "afectación grave",
+    ])
+
+
+def _extract_misconduct_objects(
+    sections: Dict[str, List[Dict[str, Any]]],
+    text: str,
+    severity: str,
+    keys: List[str],
+    fallback_terms: List[str],
+    prefix: str,
+) -> List[Dict[str, Any]]:
+    fallback = _section(text, fallback_terms, ["medidas", "procedimiento", "protocolos", "atenuantes", "agravantes"], 12000)
+    items = _list_items_from_sections(sections, keys, fallback, 120)
+    result: List[Dict[str, Any]] = []
+    for idx, item in enumerate(items, start=1):
+        description = _clean(item.get("text", ""), 700)
+        if not description:
+            continue
+        text_norm = _norm(description)
+        requires_derivation = _contains(text_norm, ["abuso", "vulneracion", "vulneración", "drogas", "salud mental", "autolesion", "autolesión", "ideacion suicida", "ideación suicida"])
+        requires_case = severity in {"grave", "gravisima"} or _contains(text_norm, ["daño", "agresion", "agresión", "acoso", "vulneracion", "vulneración", "abuso", "drogas", "salud mental", "amenaza"])
+        result.append({
+            "code": f"{prefix}-{idx:03d}",
+            "name": description[:120],
+            "description": description,
+            "severity": severity,
+            "category": _category_for_text(description),
+            "actors": _actors_for_text(description),
+            "sourceSection": item.get("sourceSection") or SECTION_TITLES.get(keys[0], ""),
+            "sourceText": _clean(description, 420),
+            "keywords": _keywords_for_text(description),
+            "suggestedMeasures": [],
+            "requiresGuardianNotification": severity in {"grave", "gravisima", "apoderado"} or _contains(text_norm, ["apoderado", "padre", "madre", "citación", "citacion"]),
+            "requiresCaseOpening": requires_case,
+            "requiresDerivation": requires_derivation,
+            "requiresEvidence": True,
+            "aulaSeguraRisk": _aula_segura_risk(description),
+            "humanReviewRequired": True,
+            **({"originalIndex": item.get("originalIndex")} if item.get("originalIndex") else {}),
+        })
+    return result
+
+
+def _measure_code_prefix(measure_type: str) -> str:
+    return {
+        "disciplinary": "MED-DISC",
+        "formativePedagogical": "MED-FORM",
+        "supportAccompaniment": "MED-SUP",
+        "reparatory": "MED-REP",
+        "guardianMeasures": "MED-GUARD",
+        "protectiveOrCautionary": "MED-PROT",
+    }.get(measure_type, "MED")
+
+
+def _compatible_severities(description: str, measure_type: str) -> List[str]:
+    text_norm = _norm(description)
+    severities = []
+    for severity, terms in [
+        ("leve", ["leve", "leves"]),
+        ("grave", ["grave", "graves"]),
+        ("gravisima", ["gravisima", "gravísima", "gravisimas", "gravísimas", "aula segura", "expulsion", "expulsión"]),
+        ("apoderado", ["apoderado", "padre", "madre"]),
+    ]:
+        if _contains(text_norm, terms):
+            severities.append(severity)
+    if severities:
+        return list(dict.fromkeys(severities))
+    if measure_type == "disciplinary":
+        return ["leve", "grave", "gravisima"]
+    if measure_type in {"supportAccompaniment", "protectiveOrCautionary"}:
+        return ["grave", "gravisima"]
+    return ["leve", "grave"]
+
+
+def _extract_measure_objects(
+    sections: Dict[str, List[Dict[str, Any]]],
+    text: str,
+    measure_type: str,
+    keys: List[str],
+    fallback_terms: List[str],
+) -> List[Dict[str, Any]]:
+    fallback = _section(text, fallback_terms, ["procedimiento", "protocolos", "faltas", "atenuantes", "agravantes"], 9000)
+    items = _list_items_from_sections(sections, keys, fallback, 80)
+    prefix = _measure_code_prefix(measure_type)
+    result: List[Dict[str, Any]] = []
+    for idx, item in enumerate(items, start=1):
+        description = _clean(item.get("text", ""), 700)
+        if not description:
+            continue
+        text_norm = _norm(description)
+        result.append({
+            "code": f"{prefix}-{idx:03d}",
+            "name": description[:120],
+            "description": description,
+            "type": measure_type,
+            "sourceSection": item.get("sourceSection") or SECTION_TITLES.get(keys[0], ""),
+            "sourceText": _clean(description, 420),
+            "applicableTo": _actors_for_text(description),
+            "compatibleSeverities": _compatible_severities(description, measure_type),
+            "requiresGuardianNotification": _contains(text_norm, ["apoderado", "padre", "madre", "citacion", "citación", "notificacion", "notificación"]),
+            "requiresEvidence": True,
+            "requiresDueProcess": _contains(text_norm, ["suspension", "suspensión", "condicionalidad", "expulsion", "expulsión", "cancelacion de matricula", "cancelación de matrícula"]),
+            "automaticApplicationAllowed": False,
+            "humanReviewRequired": True,
+            **({"originalIndex": item.get("originalIndex")} if item.get("originalIndex") else {}),
+        })
+    return result
+
+
+def _destination_for_text(text: str) -> str:
+    text_norm = _norm(text)
+    for destination, terms in [
+        ("dupla_psicosocial", ["dupla psicosocial", "equipo psicosocial"]),
+        ("orientacion", ["orientacion", "orientación"]),
+        ("psicologia", ["psicologia", "psicología", "psicologo", "psicólogo"]),
+        ("convivencia", ["convivencia escolar"]),
+        ("inspector_general", ["inspector general", "inspectoría general", "inspectoria general"]),
+        ("direccion", ["direccion", "dirección", "director", "directora"]),
+        ("cesfam", ["cesfam", "centro de salud"]),
+        ("opd", ["opd", "oln", "oficina local de la niñez", "oficina local de la ninez"]),
+        ("tribunal", ["tribunal", "juzgado", "familia"]),
+        ("carabineros", ["carabineros"]),
+        ("pdi", ["pdi", "policía de investigaciones", "policia de investigaciones"]),
+        ("fiscalia", ["fiscalia", "fiscalía", "ministerio publico", "ministerio público"]),
+    ]:
+        if _contains(text_norm, terms):
+            return destination
+    return "other"
+
+
+def _extract_derivation_rules(sections: Dict[str, List[Dict[str, Any]]], text: str) -> List[Dict[str, Any]]:
+    fallback = "\n".join([
+        _section(text, ["derivación", "derivacion", "redes de apoyo"], ["protocolos", "medidas", "procedimiento"], 7000),
+        _detected_excerpt(text, ["cesfam", "opd", "oln", "juzgado", "carabineros", "pdi", "fiscalía", "fiscalia"], 1200),
+    ])
+    items = _list_items_from_sections(sections, ["derivaciones", "medidas_apoyo"], fallback, 50)
+    seen: set = set()
+    result: List[Dict[str, Any]] = []
+    for item in items:
+        description = _clean(item.get("text", ""), 650)
+        if not description or _norm(description) in seen:
+            continue
+        destination = _destination_for_text(description)
+        if destination == "other" and not _contains(_norm(description), ["deriv", "red de apoyo", "especialista", "externo"]):
+            continue
+        seen.add(_norm(description))
+        result.append({
+            "code": f"DER-{len(result) + 1:03d}",
+            "name": description[:120],
+            "triggerKeywords": _keywords_for_text(description),
+            "triggerSeverities": [severity for severity in ["grave", "gravisima"] if severity in _compatible_severities(description, "supportAccompaniment")] or ["grave", "gravisima"],
+            "destination": destination,
+            "sourceSection": item.get("sourceSection") or "Derivaciones",
+            "sourceText": _clean(description, 420),
+            "requiresGuardianNotification": _contains(_norm(description), ["apoderado", "padre", "madre", "familia", "notificacion", "notificación"]),
+            "requiresConsentOrLegalBasis": True,
+            "requiresEvidence": True,
+            "humanReviewRequired": True,
+        })
+    return result
+
+
+def _protocol_category(name: str) -> str:
+    name_norm = _norm(name)
+    for category, terms in PROTOCOL_CATEGORY_RULES:
+        if _contains(name_norm, terms):
+            return category
+    return "other"
+
+
+def _extract_roles(text: str) -> List[str]:
+    text_norm = _norm(text)
+    roles = []
+    for role, terms in [
+        ("direccion", ["director", "directora", "direccion", "dirección"]),
+        ("encargado_convivencia", ["encargado de convivencia", "encargada de convivencia"]),
+        ("inspector_general", ["inspector general", "inspectoria", "inspectoría"]),
+        ("docente", ["docente", "profesor", "profesora"]),
+        ("orientacion", ["orientador", "orientadora", "orientacion", "orientación"]),
+        ("dupla_psicosocial", ["dupla psicosocial", "psicosocial"]),
+        ("apoderado", ["apoderado", "padre", "madre"]),
+        ("consejo_profesores", ["consejo de profesores"]),
+    ]:
+        if _contains(text_norm, terms):
+            roles.append(role)
+    return roles
+
+
+def _extract_deadlines(text: str) -> List[str]:
+    deadlines = []
+    for match in re.finditer(r"(\d{1,2}\s*(?:horas?|d[ií]as?)(?:\s+h[aá]biles|\s+corridos)?|24\s*horas)", text, re.IGNORECASE):
+        deadlines.append(_clean(match.group(1), 80))
+    return list(dict.fromkeys(deadlines))[:8]
+
+
+def _communication_channels_from_text(text: str) -> List[str]:
+    text_norm = _norm(text)
+    channels = []
+    for channel, terms in [
+        ("email", ["correo", "email", "e-mail"]),
+        ("phone", ["telefono", "teléfono", "llamado"]),
+        ("certified_letter", ["carta certificada"]),
+        ("website", ["pagina web", "página web", "sitio web", "web"]),
+        ("social_media", ["redes sociales", "rrss"]),
+        ("in_person", ["entrevista", "presencial", "reunion", "reunión", "citacion", "citación"]),
+        ("written_notice", ["notificacion escrita", "notificación escrita", "comunicacion escrita", "comunicación escrita", "acta"]),
+    ]:
+        if _contains(text_norm, terms):
+            channels.append(channel)
+    return channels
+
+
+def _required_evidence_from_text(text: str) -> List[str]:
+    text_norm = _norm(text)
+    evidence = []
+    for item, terms in [
+        ("acta", ["acta"]),
+        ("entrevista", ["entrevista"]),
+        ("registro escrito", ["registro escrito", "registro"]),
+        ("hoja de vida", ["hoja de vida"]),
+        ("evidencia documental", ["evidencia documental", "documento", "documental"]),
+        ("medios verificadores", ["medio verificador", "medios verificadores"]),
+        ("correo electrónico", ["correo", "email"]),
+        ("denuncia", ["denuncia"]),
+        ("certificado médico", ["certificado medico", "certificado médico"]),
+    ]:
+        if _contains(text_norm, terms):
+            evidence.append(item)
+    return evidence
+
+
+def _extract_protocol_objects(sections: Dict[str, List[Dict[str, Any]]], text: str) -> List[Dict[str, Any]]:
+    protocol_text = _section_text(sections, ["protocolos"], 14000) or _section(text, ["protocolos", "anexos"], ["bibliografía", "vigencia"], 14000)
+    items = _list_items_from_sections(sections, ["protocolos"], protocol_text, 80)
+    candidates: List[str] = [item.get("text", "") for item in items]
+    for _, name, terms in PROTOCOL_CATALOG:
+        if _contains(_norm(text), terms) and not any(_norm(name) in _norm(candidate) for candidate in candidates):
+            candidates.append(name)
+
+    result: List[Dict[str, Any]] = []
+    seen: set = set()
+    for candidate in candidates:
+        name = _clean(candidate, 220)
+        if not name or _norm(name) in seen:
+            continue
+        seen.add(_norm(name))
+        excerpt = _detected_excerpt(text, [name], 900) or _detected_excerpt(text, name.split()[:4], 900) or name
+        result.append({
+            "code": f"PROTO-{len(result) + 1:03d}",
+            "name": name,
+            "detected": True,
+            "category": _protocol_category(name),
+            "triggerKeywords": _keywords_for_text(name + " " + excerpt),
+            "responsibleRoles": _extract_roles(excerpt),
+            "steps": _procedure_steps_from_text(excerpt),
+            "deadlines": _extract_deadlines(excerpt),
+            "requiredEvidence": _required_evidence_from_text(excerpt),
+            "communicationChannels": _communication_channels_from_text(excerpt),
+            "externalAuthorities": [dest for dest in ["carabineros", "pdi", "fiscalia", "tribunal", "opd", "cesfam"] if dest == _destination_for_text(excerpt)],
+            "sourceSection": "Protocolos",
+            "sourceText": _clean(excerpt, 520),
+            "humanReviewRequired": True,
+        })
+    return result
+
+
+def _procedure_steps_from_text(text: str) -> List[Dict[str, Any]]:
+    step_rules = [
+        ("Notificación", ["notificacion", "notificación", "comunicar", "citación", "citacion"]),
+        ("Descargos", ["descargos", "presentar antecedentes"]),
+        ("Prueba", ["prueba", "medios de prueba", "antecedentes"]),
+        ("Resolución", ["resolucion", "resolución"]),
+        ("Reconsideración/apelación", ["reconsideracion", "reconsideración", "apelacion", "apelación"]),
+        ("Consulta Consejo de Profesores", ["consejo de profesores"]),
+        ("Decisión de Dirección", ["direccion", "dirección", "director", "directora"]),
+        ("Denuncia 24 horas", ["24 horas", "denuncia"]),
+    ]
+    steps = []
+    for name, terms in step_rules:
+        excerpt = _detected_excerpt(text, terms, 420)
+        if excerpt:
+            steps.append({
+                "order": len(steps) + 1,
+                "name": name,
+                "description": excerpt,
+                "responsibleRole": (_extract_roles(excerpt) or [""])[0],
+                "deadline": (_extract_deadlines(excerpt) or [""])[0],
+                "businessDays": _contains(_norm(excerpt), ["dias habiles", "días hábiles"]),
+                "requiredEvidence": _required_evidence_from_text(excerpt),
+            })
+    return steps
+
+
+def _extract_operational_procedures(sections: Dict[str, List[Dict[str, Any]]], text: str) -> List[Dict[str, Any]]:
+    procedure_sources = [
+        ("Procedimiento general", _section_text(sections, ["procedimiento_general", "debido_proceso"], 9000)),
+        ("Condicionalidad", _section_text(sections, ["condicionalidad"], 5000)),
+        ("Expulsión / cancelación de matrícula", _section_text(sections, ["expulsion_cancelacion"], 6000)),
+        ("Aula Segura", _section_text(sections, ["aula_segura"], 6000)),
+    ]
+    result = []
+    for name, source in procedure_sources:
+        if not source:
+            source = _section(text, [name, name.lower()], ["protocolos", "anexos", "atenuantes", "agravantes"], 6000)
+        if not source:
+            continue
+        steps = _procedure_steps_from_text(source)
+        result.append({
+            "name": name,
+            "scope": _clean(source.splitlines()[0] if source.splitlines() else name, 180),
+            "steps": steps,
+            "appealOrReconsideration": {
+                "detected": bool(_detected_excerpt(source, ["reconsideración", "reconsideracion", "apelación", "apelacion"], 300)),
+                "deadline": (_extract_deadlines(_detected_excerpt(source, ["reconsideración", "reconsideracion", "apelación", "apelacion"], 500)) or [""])[0],
+            },
+            "sourceSection": name,
+            "humanReviewRequired": True,
+        })
+    return result
+
+
+def _extract_factor_objects(sections: Dict[str, List[Dict[str, Any]]], text: str, kind: str) -> List[Dict[str, Any]]:
+    keys = ["atenuantes"] if kind == "ATEN" else ["agravantes"]
+    fallback_terms = ["atenuantes", "circunstancias atenuantes"] if kind == "ATEN" else ["agravantes", "circunstancias agravantes"]
+    fallback = _section(text, fallback_terms, ["agravantes", "protocolos", "medidas"] if kind == "ATEN" else ["protocolos", "medidas", "anexos"], 5000)
+    items = _list_items_from_sections(sections, keys, fallback, 60)
+    return [
+        {
+            "code": f"{kind}-{idx:03d}",
+            "description": _clean(item.get("text", ""), 600),
+            "sourceText": _clean(item.get("text", ""), 420),
+            "humanReviewRequired": True,
+        }
+        for idx, item in enumerate(items, start=1)
+        if _clean(item.get("text", ""), 600)
+    ]
+
+
+def _extract_communication_rules(sections: Dict[str, List[Dict[str, Any]]], text: str) -> List[Dict[str, Any]]:
+    comm_text = "\n".join([
+        _section_text(sections, ["comunicaciones", "procedimiento_general", "debido_proceso"], 8000),
+        _detected_excerpt(text, ["correo", "teléfono", "telefono", "carta certificada", "redes sociales", "página web", "pagina web"], 1600),
+    ])
+    channels = _communication_channels_from_text(comm_text)
+    result = []
+    for channel in channels:
+        result.append({
+            "code": f"COM-{len(result) + 1:03d}",
+            "channel": channel,
+            "useCase": "notificación/comunicación formal",
+            "requiredFor": ["procedures", "dueProcess"],
+            "sourceText": _clean(_detected_excerpt(comm_text, [channel.replace("_", " ")], 420) or comm_text, 420),
+            "humanReviewRequired": True,
+        })
+    return result
+
+
+def _extract_evidence_rules(sections: Dict[str, List[Dict[str, Any]]], text: str) -> List[Dict[str, Any]]:
+    evidence_text = "\n".join([
+        _section_text(sections, ["procedimiento_general", "debido_proceso", "protocolos"], 10000),
+        _detected_excerpt(text, ["acta", "entrevista", "registro escrito", "hoja de vida", "evidencia", "medios verificadores"], 1600),
+    ])
+    examples = _required_evidence_from_text(evidence_text)
+    result = []
+    for example in examples:
+        result.append({
+            "code": f"EVI-{len(result) + 1:03d}",
+            "name": example,
+            "requiredFor": ["misconduct", "procedures", "protocols"],
+            "examples": [example],
+            "sourceText": _clean(_detected_excerpt(evidence_text, [example], 420) or evidence_text, 420),
+            "humanReviewRequired": True,
+        })
+    return result
+
+
+def _build_measure_matrix(misconduct: Dict[str, List[Dict[str, Any]]], measures: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    measure_codes = {key: [item.get("code") for item in values if item.get("code")] for key, values in measures.items()}
+    matrix: List[Dict[str, Any]] = []
+    for severity, items in misconduct.items():
+        for item in items:
+            suggested: List[str] = []
+            rationale = ""
+            if severity == "leve":
+                suggested = measure_codes.get("formativePedagogical", [])[:2] + measure_codes.get("disciplinary", [])[:1]
+                rationale = "Sugerencia base para falta leve: intervención formativa, registro y comunicación si corresponde."
+            elif severity == "grave":
+                suggested = measure_codes.get("formativePedagogical", [])[:1] + measure_codes.get("supportAccompaniment", [])[:2] + measure_codes.get("disciplinary", [])[:2]
+                rationale = "Sugerencia base para falta grave: apoyo, citación/revisión y medidas disciplinarias solo con validación humana."
+            elif severity == "gravisima":
+                suggested = measure_codes.get("protectiveOrCautionary", [])[:2] + measure_codes.get("supportAccompaniment", [])[:2] + measure_codes.get("disciplinary", [])[:2]
+                rationale = "Sugerencia base para falta gravísima: activar protocolo, abrir caso, cautelar riesgo y asegurar debido proceso."
+            else:
+                suggested = measure_codes.get("guardianMeasures", [])[:2] + measure_codes.get("supportAccompaniment", [])[:1]
+                rationale = "Sugerencia base para falta de apoderado: gestión con adulto responsable y resguardo de la comunidad."
+            if item.get("aulaSeguraRisk"):
+                suggested = list(dict.fromkeys(measure_codes.get("protectiveOrCautionary", [])[:2] + suggested))
+                rationale += " Contiene bandera de riesgo Aula Segura; no habilita aplicación automática."
+            suggested = [code for code in dict.fromkeys(suggested) if code]
+            if not suggested:
+                continue
+            item["suggestedMeasures"] = suggested
+            matrix.append({
+                "misconductCode": item.get("code"),
+                "suggestedMeasureCodes": suggested,
+                "rationale": rationale,
+                "requiresHumanValidation": True,
+                "automaticApplicationAllowed": False,
+            })
+    return matrix
+
+
+def _build_extraction_quality(parameters: Dict[str, Any], families: int = 0) -> Dict[str, Any]:
+    misconduct = _as_dict(parameters.get("misconductTypes"))
+    measures = _as_dict(parameters.get("measures"))
+    procedures = parameters.get("operationalProcedures") or []
+    counts = {
+        "misconductLeve": len(misconduct.get("leve") or []),
+        "misconductGrave": len(misconduct.get("grave") or []),
+        "misconductGravisima": len(misconduct.get("gravisima") or []),
+        "misconductApoderado": len(misconduct.get("apoderado") or []),
+        "measuresDisciplinary": len(measures.get("disciplinary") or []),
+        "measuresFormative": len(measures.get("formativePedagogical") or []),
+        "measuresSupport": len(measures.get("supportAccompaniment") or []),
+        "measuresReparatory": len(measures.get("reparatory") or []),
+        "protocols": len(parameters.get("protocols") or []),
+        "derivationRules": len(parameters.get("derivationRules") or []),
+        "procedures": len(procedures),
+    }
+    detected = [key for key, value in counts.items() if value]
+    warnings = []
+    for key in ["misconductLeve", "misconductGrave", "misconductGravisima", "measuresDisciplinary", "protocols"]:
+        if counts.get(key, 0) == 0:
+            warnings.append(f"No se detectaron elementos para {key}.")
+    if families < 4:
+        warnings.append("Cobertura estructural bajo mínimo operativo.")
+    return {
+        "familiesDetected": detected,
+        "counts": counts,
+        "coverageWarnings": warnings,
+        "requiresHumanReview": True,
+    }
+
+
 def build_default_parameters(payload: Dict[str, Any], extracted: ExtractedManualText) -> Dict[str, Any]:
     evidence = _as_dict(payload.get("evidence"))
     text = extracted.text
     text_norm = _norm(text)
+    sections = _segment_manual_text(text)
     document_title = _first_match(text, [
         r"((?:Reglamento\s+Interno|RICE|Manual\s+de\s+Convivencia\s+Escolar)[^\n]{0,120})",
     ])
@@ -586,26 +1249,29 @@ def build_default_parameters(payload: Dict[str, Any], extracted: ExtractedManual
             })
 
     misconduct = {
-        "leve": _line_items_from_section(_section(text, ["faltas leves", "falta leve"], ["faltas graves", "faltas gravisimas", "faltas gravísimas", "medidas"], 4200), "Faltas leves detectadas"),
-        "grave": _line_items_from_section(_section(text, ["faltas graves", "falta grave"], ["faltas gravisimas", "faltas gravísimas", "faltas de apoderados", "medidas"], 4200), "Faltas graves detectadas"),
-        "gravisima": _line_items_from_section(_section(text, ["faltas gravísimas", "faltas gravisimas", "falta gravísima"], ["faltas de apoderados", "medidas", "procedimiento"], 4200), "Faltas gravísimas detectadas"),
-        "apoderado": _line_items_from_section(_section(text, ["faltas de apoderados", "faltas apoderados"], ["medidas", "procedimiento", "protocolos"], 3200), "Faltas de apoderados detectadas"),
+        "leve": _extract_misconduct_objects(sections, text, "leve", ["faltas_leves"], ["faltas leves", "falta leve"], "LEVE"),
+        "grave": _extract_misconduct_objects(sections, text, "grave", ["faltas_graves"], ["faltas graves", "falta grave"], "GRAVE"),
+        "gravisima": _extract_misconduct_objects(sections, text, "gravisima", ["faltas_gravisimas"], ["faltas gravísimas", "faltas gravisimas", "falta gravísima"], "GRAVISIMA"),
+        "apoderado": _extract_misconduct_objects(sections, text, "apoderado", ["faltas_apoderados"], ["faltas de apoderados", "faltas apoderados", "faltas de padres"], "APODERADO"),
     }
 
     measures = {
-        "disciplinary": _line_items_from_section(_section(text, ["medidas disciplinarias", "sanciones"], ["medidas formativas", "medidas pedagógicas", "procedimiento"], 3000), "Medidas disciplinarias detectadas"),
-        "formativePedagogical": _line_items_from_section(_section(text, ["medidas formativas", "medidas pedagógicas", "medidas formativas pedagógicas"], ["medidas de apoyo", "medidas reparatorias", "procedimiento"], 3000), "Medidas formativas/pedagógicas detectadas"),
-        "supportAccompaniment": _line_items_from_section(_section(text, ["medidas de apoyo", "acompañamiento", "apoyo y acompañamiento"], ["medidas reparatorias", "medidas protectoras", "procedimiento"], 3000), "Medidas de apoyo y acompañamiento detectadas"),
-        "reparatory": _line_items_from_section(_section(text, ["medidas reparatorias", "reparación"], ["medidas protectoras", "procedimiento", "protocolos"], 2600), "Medidas reparatorias detectadas"),
-        "guardianMeasures": _line_items_from_section(_section(text, ["medidas apoderados", "medidas de apoderados", "apoderados"], ["procedimiento", "protocolos"], 2600), "Medidas respecto de apoderados detectadas"),
-        "protectiveOrCautionary": _line_items_from_section(_section(text, ["medidas protectoras", "medidas cautelares", "protección"], ["procedimiento", "protocolos"], 2600), "Medidas protectoras/cautelares detectadas"),
+        "disciplinary": _extract_measure_objects(sections, text, "disciplinary", ["medidas_disciplinarias"], ["medidas disciplinarias", "sanciones"]),
+        "formativePedagogical": _extract_measure_objects(sections, text, "formativePedagogical", ["medidas_formativas"], ["medidas formativas", "medidas pedagógicas", "medidas formativas pedagógicas"]),
+        "supportAccompaniment": _extract_measure_objects(sections, text, "supportAccompaniment", ["medidas_apoyo"], ["medidas de apoyo", "acompañamiento", "apoyo y acompañamiento"]),
+        "reparatory": _extract_measure_objects(sections, text, "reparatory", ["medidas_reparatorias"], ["medidas reparatorias", "reparación"]),
+        "guardianMeasures": _extract_measure_objects(sections, text, "guardianMeasures", ["medidas_apoderados"], ["medidas apoderados", "medidas de apoderados"]),
+        "protectiveOrCautionary": _extract_measure_objects(sections, text, "protectiveOrCautionary", ["medidas_cautelares"], ["medidas protectoras", "medidas cautelares", "protección"]),
     }
 
-    protocol_items = [
-        {"code": code, "name": name, "detected": True}
-        for code, name, terms in PROTOCOL_CATALOG
-        if _contains(text_norm, terms)
-    ]
+    protocol_items = _extract_protocol_objects(sections, text)
+    derivation_rules = _extract_derivation_rules(sections, text)
+    operational_procedures = _extract_operational_procedures(sections, text)
+    attenuating = _extract_factor_objects(sections, text, "ATEN")
+    aggravating = _extract_factor_objects(sections, text, "AGR")
+    communication_rules = _extract_communication_rules(sections, text)
+    evidence_rules = _extract_evidence_rules(sections, text)
+    misconduct_measure_matrix = _build_measure_matrix(misconduct, measures)
 
     procedure_terms = {
         "notification": ["notificacion", "notificación", "comunicación formal", "correo", "telefono", "teléfono", "carta certificada"],
@@ -628,13 +1294,9 @@ def build_default_parameters(payload: Dict[str, Any], extracted: ExtractedManual
     if business_days_rule:
         deadlines.append({"type": "business_days", "text": business_days_rule})
 
-    attenuating = _line_items_from_section(_section(text, ["atenuantes", "circunstancias atenuantes"], ["agravantes", "protocolos", "medidas"], 2200), "Atenuantes detectadas")
-    aggravating = _line_items_from_section(_section(text, ["agravantes", "circunstancias agravantes"], ["protocolos", "medidas", "anexos"], 2200), "Agravantes detectadas")
-
     aula_detected = _contains(text_norm, ["aula segura", "afectacion grave", "afectación grave"])
     source_file = extracted.file_name or _text(evidence.get("file_name"))
-
-    return {
+    parameters = {
         "source": {
             "documentType": document_type,
             "documentYear": int(document_year) if document_year else None,
@@ -675,6 +1337,7 @@ def build_default_parameters(payload: Dict[str, Any], extracted: ExtractedManual
             "collaborativeConflictResolution": {"detected": _contains(text_norm, ["resolucion pacifica", "resolución pacífica", "mediacion", "mediación"]), "sourceExcerpt": _detected_excerpt(text, ["resolución pacífica", "mediación"])},
             "commonStages": procedure_detected,
             "sourceExcerpt": procedure_excerpt,
+            "operational": operational_procedures,
         },
         "dueProcess": {
             "principles": [name for name, terms in [
@@ -692,9 +1355,17 @@ def build_default_parameters(payload: Dict[str, Any], extracted: ExtractedManual
         "attenuatingFactors": attenuating,
         "aggravatingFactors": aggravating,
         "protocols": protocol_items,
+        "misconductMeasureMatrix": misconduct_measure_matrix,
+        "derivationRules": derivation_rules,
+        "communicationRules": communication_rules,
+        "evidenceRules": evidence_rules,
+        "operationalProcedures": operational_procedures,
         "aulaSegura": {
             "detected": aula_detected,
-            "riskFlags": ["aula_segura_or_afectacion_grave"] if aula_detected else [],
+            "riskFlags": list(dict.fromkeys(
+                (["aula_segura_or_afectacion_grave"] if aula_detected else [])
+                + ["misconduct_aula_segura_risk" for items in misconduct.values() for item in items if item.get("aulaSeguraRisk")]
+            )),
             "requiresHumanDecision": True,
             "requiresDueProcess": True,
             "automaticApplicationAllowed": False,
@@ -702,6 +1373,8 @@ def build_default_parameters(payload: Dict[str, Any], extracted: ExtractedManual
         "systemBehavior": _system_behavior(),
         "warnings": [],
     }
+    parameters["extractionQuality"] = _build_extraction_quality(parameters)
+    return parameters
 
 
 def _extract_levels(text_norm: str) -> List[str]:
@@ -830,6 +1503,11 @@ Debes extraer:
 - attenuatingFactors;
 - aggravatingFactors;
 - protocols;
+- misconductMeasureMatrix;
+- derivationRules;
+- communicationRules;
+- evidenceRules;
+- extractionQuality;
 - aulaSegura;
 - systemBehavior;
 - warnings.
@@ -1099,6 +1777,7 @@ def extract_convivencia_manual_parameters(payload: Dict[str, Any]) -> Dict[str, 
         is_valid, validation_warnings, families = validate_parameters(parameters)
     else:
         llm_warnings.append("LLM no usado para convertir una extracción determinística insuficiente en éxito automático.")
+    parameters["extractionQuality"] = _build_extraction_quality(parameters, families)
 
     combined_warnings = [
         "Extracción determinística; revisar y validar antes de guardar.",

@@ -79,32 +79,58 @@ Consejo Escolar. Encargada de Convivencia Escolar: Ana Pérez.
 Plan de Gestión de Convivencia Escolar.
 
 Faltas leves
-- Atrasos reiterados.
-- No traer materiales.
+1. Atrasos reiterados.
+2. No traer materiales.
+3. Usar teléfono celular en clases sin autorización.
+4. Interrumpir reiteradamente el desarrollo de la clase.
 Faltas graves
-- Agredir verbalmente a un integrante de la comunidad educativa.
+1. Agredir verbalmente a un integrante de la comunidad educativa.
+2. Dañar mobiliario o infraestructura del establecimiento.
+3. Realizar acoso u hostigamiento a otro estudiante.
+4. Salir del establecimiento sin autorización.
 Faltas gravísimas
-- Agresión física y afectación grave de la convivencia escolar.
+1. Agresión física y afectación grave de la convivencia escolar.
+2. Portar armas o elementos cortopunzantes.
+3. Agresión sexual o hechos de connotación sexual.
+4. Venta o porte de drogas dentro del establecimiento.
 Faltas de apoderados
-- Maltrato a funcionarios.
+1. Maltrato a funcionarios.
+2. Amenazar a docentes o asistentes de la educación.
+3. Difundir información falsa por redes sociales que afecte a la comunidad.
 
 Medidas disciplinarias
-- Amonestación escrita.
+1. Amonestación escrita.
+2. Suspensión temporal con debido proceso.
+3. Condicionalidad de matrícula.
 Medidas formativas pedagógicas
-- Diálogo reflexivo.
+1. Diálogo reflexivo.
+2. Trabajo pedagógico reparatorio.
+3. Compromiso de mejora conductual.
 Medidas de apoyo y acompañamiento
-- Derivación a convivencia escolar.
+1. Derivación a convivencia escolar.
+2. Derivación a orientación.
+3. Derivación a dupla psicosocial o psicología.
 Medidas reparatorias
-- Disculpas y reparación del daño.
+1. Disculpas y reparación del daño.
+2. Restitución del bien dañado.
+3. Acción comunitaria reparatoria.
 Medidas protectoras y cautelares
-- Separación preventiva si hay riesgo.
+1. Separación preventiva si hay riesgo.
+2. Medida de resguardo para la víctima.
+3. Contacto con Carabineros, PDI, Fiscalía, OPD/OLN o Tribunal de Familia si corresponde.
 
 Procedimiento: notificación por correo, teléfono, web, RRSS o carta certificada;
-descargos; resolución; reconsideración dentro de 5 días hábiles.
+descargos; plazo para presentar pruebas; resolución; reconsideración dentro de 5 días hábiles;
+consulta a Consejo de Profesores; decisión de Dirección; denuncia dentro de 24 horas cuando corresponda.
 Atenuantes
-- Reconocer la falta.
+1. Reconocer la falta.
+2. Reparar voluntariamente el daño.
+3. Colaborar con la investigación.
 Agravantes
-- Reiteración de la conducta.
+1. Reiteración de la conducta.
+2. Actuar con premeditación.
+3. Afectar a estudiantes vulnerables.
+Evidencias: acta, entrevista, registro escrito, hoja de vida, evidencia documental y medios verificadores.
 Protocolos anexos: debido proceso, maltrato y abuso sexual infantil, vulneración de derechos,
 maltrato acoso violencia, bullying, alcohol y drogas, embarazo maternidad paternidad,
 identidad de género, accidentes escolares, seguridad escolar, DEC, derivación,
@@ -127,9 +153,37 @@ def _assert_ok_convivencia_response(response, label: str) -> None:
         params.get("aulaSegura", {}).get("automaticApplicationAllowed") is False,
         f"{label}: automaticApplicationAllowed debe ser false",
     )
-    _assert(len(params.get("misconductTypes", {}).get("leve", [])) >= 1, f"{label}: debe clasificar faltas leves")
-    _assert(len(params.get("measures", {}).get("disciplinary", [])) >= 1, f"{label}: debe clasificar medidas disciplinarias")
-    _assert(len(params.get("protocols", [])) >= 4, f"{label}: debe detectar protocolos anexos")
+    misconduct = params.get("misconductTypes", {})
+    measures = params.get("measures", {})
+    _assert(len(misconduct.get("leve", [])) >= 3, f"{label}: debe clasificar al menos 3 faltas leves")
+    _assert(len(misconduct.get("grave", [])) >= 3, f"{label}: debe clasificar al menos 3 faltas graves")
+    _assert(len(misconduct.get("gravisima", [])) >= 3, f"{label}: debe clasificar al menos 3 faltas gravísimas")
+    _assert(len(misconduct.get("apoderado", [])) >= 3, f"{label}: debe clasificar al menos 3 faltas de apoderados")
+    first_leve = misconduct.get("leve", [{}])[0]
+    _assert(isinstance(first_leve, dict) and first_leve.get("code") == "LEVE-001", f"{label}: faltas deben ser objetos con código estable")
+    _assert(first_leve.get("humanReviewRequired") is True, f"{label}: faltas deben exigir revisión humana")
+    _assert(
+        any(item.get("aulaSeguraRisk") is True for item in misconduct.get("gravisima", [])),
+        f"{label}: faltas gravísimas deben marcar riesgo Aula Segura cuando corresponda",
+    )
+    _assert(sum(len(value) for value in measures.values() if isinstance(value, list)) >= 3, f"{label}: debe extraer al menos 3 medidas")
+    first_measure = measures.get("disciplinary", [{}])[0]
+    _assert(first_measure.get("automaticApplicationAllowed") is False, f"{label}: medidas no deben aplicarse automáticamente")
+    _assert(first_measure.get("humanReviewRequired") is True, f"{label}: medidas deben exigir revisión humana")
+    _assert(len(params.get("protocols", [])) >= 5, f"{label}: debe detectar al menos 5 protocolos anexos")
+    _assert(isinstance(params.get("misconductMeasureMatrix"), list), f"{label}: debe incluir misconductMeasureMatrix")
+    _assert(isinstance(params.get("derivationRules"), list), f"{label}: debe incluir derivationRules")
+    _assert(isinstance(params.get("communicationRules"), list), f"{label}: debe incluir communicationRules")
+    _assert(isinstance(params.get("evidenceRules"), list), f"{label}: debe incluir evidenceRules")
+    _assert(isinstance(params.get("extractionQuality"), dict), f"{label}: debe incluir extractionQuality")
+    _assert(len(params.get("misconductMeasureMatrix", [])) >= 1, f"{label}: debe sugerir matriz falta-medida")
+    _assert(len(params.get("derivationRules", [])) >= 1, f"{label}: debe extraer reglas de derivación")
+    _assert(len(params.get("communicationRules", [])) >= 1, f"{label}: debe extraer reglas de comunicación")
+    _assert(len(params.get("evidenceRules", [])) >= 1, f"{label}: debe extraer reglas de evidencia")
+    _assert(
+        params.get("extractionQuality", {}).get("requiresHumanReview") is True,
+        f"{label}: extractionQuality debe conservar revisión humana",
+    )
     _assert(isinstance(params.get("systemBehavior"), dict), f"{label}: debe incluir systemBehavior")
     _assert(
         params.get("systemBehavior", {}).get("mustSuggestNotApply") is True,
@@ -139,6 +193,7 @@ def _assert_ok_convivencia_response(response, label: str) -> None:
         params.get("systemBehavior", {}).get("mustNotClaimLegalCompliance") is True,
         f"{label}: mustNotClaimLegalCompliance debe ser true",
     )
+    _assert(any("LLM no usado" in warning for warning in body.get("warnings", [])), f"{label}: no debe usar LLM por defecto")
     _assert("raw_text" not in body.get("extraction", {}), f"{label}: no debe devolver documento completo en extraction")
 
 
