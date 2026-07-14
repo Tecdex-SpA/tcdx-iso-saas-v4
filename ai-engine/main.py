@@ -15,6 +15,7 @@ import socket
 
 from app.routes.ai import router as ai_router
 from app.routes.audit_documents import router as audit_documents_router
+from app.routes.convivencia_manual import router as convivencia_manual_router
 from app.routes.operational_risk_beta_pert import router as operational_risk_beta_pert_router
 from app.routes.senior_auditor_v2 import router as senior_auditor_v2_router
 from app.routes.soa_assessment import router as soa_assessment_router
@@ -1142,6 +1143,7 @@ def process_evidence(
 
 
 app.include_router(ai_router)
+app.include_router(convivencia_manual_router)
 app.include_router(senior_auditor_v2_router)
 app.include_router(operational_risk_beta_pert_router)
 app.include_router(audit_documents_router)
