@@ -195,10 +195,10 @@ function getEffectiveHealthTone(value?: string | null): string {
   if (normalized === 'critico') return 'border-red-200 bg-red-50 text-red-700';
   if (normalized === 'deteriorado') return 'border-rose-200 bg-rose-50 text-rose-700';
   if (normalized === 'sin_alcance' || normalized === 'fuera_alcance' || normalized === 'no_aplicable') {
-    return 'border-slate-200 bg-slate-50 text-slate-500';
+    return 'border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] text-[var(--tcdx-color-text-secondary)]';
   }
 
-  return 'border-slate-200 bg-slate-50 text-slate-600';
+  return 'border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] text-[var(--tcdx-color-text-primary)]';
 }
 
 function getSystemHealthTone(value?: string | null): string {
@@ -210,7 +210,7 @@ function getSystemHealthTone(value?: string | null): string {
   if (normalized === 'low') return 'border-orange-200 bg-orange-50 text-orange-700';
   if (normalized === 'critical') return 'border-red-200 bg-red-50 text-red-700';
 
-  return 'border-slate-200 bg-slate-50 text-slate-600';
+  return 'border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] text-[var(--tcdx-color-text-primary)]';
 }
 
 function getEffectiveStatusRank(value?: string | null): number {
@@ -575,7 +575,7 @@ function getKpiStatusClass(color?: string | null) {
   if (color === 'green') return 'bg-green-100 text-green-700 border-green-200';
   if (color === 'yellow') return 'bg-amber-100 text-amber-700 border-amber-200';
   if (color === 'red') return 'bg-red-100 text-red-700 border-red-200';
-  return 'bg-slate-100 text-slate-600 border-slate-200';
+  return 'bg-[var(--tcdx-color-surface-alt)] text-[var(--tcdx-color-text-primary)] border-[var(--tcdx-color-border)]';
 }
 
 
@@ -622,8 +622,8 @@ export default function DashboardPage() {
 function DashboardPageFallback() {
   return (
     <AppLayout>
-      <div className="min-h-screen bg-[#f5f7fb] p-6">
-        <div className="mx-auto max-w-[1720px] rounded-lg border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
+      <div className="min-h-screen bg-[var(--tcdx-color-surface)] p-6">
+        <div className="mx-auto max-w-[1720px] rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-8 text-sm text-[var(--tcdx-color-text-secondary)] shadow-sm">
           Cargando dashboard...
         </div>
       </div>
@@ -1189,15 +1189,15 @@ function DashboardPageContent() {
             subtitle={t('dashboard.subtitle')}
             actions={
               <>
-              <div className="enterprise-toolbar inline-flex p-1">
+              <div className="enterprise-toolbar inline-flex flex-wrap p-1">
                 <button
                   type="button"
                   onClick={() => handleViewChange('executive')}
                   className={[
-                    'rounded-md px-4 py-2 text-sm font-semibold transition',
+                    'rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
                     activeView === 'executive'
-                      ? 'bg-[#2563eb] text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-100',
+                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                      : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
                   ].join(' ')}
                 >
                   {t('dashboard.executiveView')}
@@ -1207,10 +1207,10 @@ function DashboardPageContent() {
                   type="button"
                   onClick={() => handleViewChange('kpi')}
                   className={[
-                    'rounded-md px-4 py-2 text-sm font-semibold transition',
+                    'rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
                     activeView === 'kpi'
-                      ? 'bg-[#2563eb] text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-100',
+                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                      : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
                   ].join(' ')}
                 >
                   {t('dashboard.kpiView')}
@@ -1220,18 +1220,18 @@ function DashboardPageContent() {
                   type="button"
                   onClick={() => handleViewChange('iso')}
                   className={[
-                    'rounded-md px-4 py-2 text-sm font-semibold transition',
+                    'rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
                     activeView === 'iso'
-                      ? 'bg-[#2563eb] text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-100',
+                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                      : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
                   ].join(' ')}
                 >
                   Salud del sistema
                 </button>
               </div>
 
-              <div className="enterprise-button-secondary">
-                <TcdxIcon name="calendar" className="h-4 w-4 text-[#2563eb]" />
+              <div className="enterprise-button-secondary border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)]">
+                <TcdxIcon name="calendar" className="h-4 w-4 text-[var(--tcdx-color-primary)]" />
                 {latestSyncText}
               </div>
 
@@ -1239,7 +1239,7 @@ function DashboardPageContent() {
                 type="button"
                 onClick={handleRefreshDashboard}
                 disabled={refreshingExecutive}
-                className="enterprise-button-secondary disabled:opacity-60"
+                className="enterprise-button-secondary border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)] disabled:opacity-60"
               >
                 <TcdxIcon name="refresh" className="h-4 w-4" />
                 {refreshingExecutive ? t('common.refreshing') : t('common.refresh')}
@@ -1249,7 +1249,7 @@ function DashboardPageContent() {
           />
 
           {errorMessage && activeView === 'executive' && (
-            <div className="rounded-[28px] border border-red-200 bg-red-50 p-5 text-red-700 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-red-200 bg-red-50 p-5 text-red-700 shadow-[var(--tcdx-shadow-tecdex-sm)]">
               {errorMessage}
             </div>
           )}
@@ -1257,22 +1257,22 @@ function DashboardPageContent() {
           {activeView === 'executive' && (
             <>
               {loading && (
-                <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-8 text-[var(--tcdx-color-text-secondary)] shadow-[var(--tcdx-shadow-tecdex-sm)]">
                   {t('dashboard.loadingData')}
                 </div>
               )}
 
               {!loading && controls.length === 0 && !dashboardHasSummaryData && effectiveActiveRows.length === 0 && !effectiveHealthLoading && (
-                <div className="rounded-[30px] border border-amber-200 bg-[linear-gradient(135deg,#fffdf5_0%,#fdf8e8_100%)] p-8 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                  <h2 className="mb-3 text-3xl font-bold text-slate-900">
+                <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-200 bg-[linear-gradient(135deg,#fffdf5_0%,#fdf8e8_100%)] p-8 shadow-[var(--tcdx-shadow-tecdex-sm)]">
+                  <h2 className="mb-3 text-3xl font-bold text-[var(--tcdx-color-text-ink)]">
                     {t('dashboard.initialControlsTitle')}
                   </h2>
 
-                  <p className="mb-4 text-lg text-slate-600">
+                  <p className="mb-4 text-lg text-[var(--tcdx-color-text-primary)]">
                     {t('dashboard.initialControlsSubtitle')}
                   </p>
 
-                  <div className="text-base text-slate-500">
+                  <div className="text-base text-[var(--tcdx-color-text-secondary)]">
                     {t('dashboard.initialControlsNext')}
                   </div>
                 </div>
@@ -1379,13 +1379,13 @@ function DashboardPageContent() {
 
           {activeView === 'kpi' && (
             <>
-              <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+              <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+                    <h2 className="text-3xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">
                       {t('dashboard.kpiView')}
                     </h2>
-                    <p className="mt-1 text-slate-500">
+                    <p className="mt-1 text-[var(--tcdx-color-text-secondary)]">
                       {t('dashboardKpi.kpiViewSubtitle')}
                     </p>
                   </div>
@@ -1393,21 +1393,21 @@ function DashboardPageContent() {
                   <div className="flex flex-wrap gap-3">
                     <a
                       href="/iso-health"
-                      className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
+                      className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
                     >{t('dashboardKpi.viewHealth')}</a>
 
                     {canManageKpis && (
                       <>
                         <a
                           href="/administrar-kpis"
-                          className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                          className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)]"
                         >{t('dashboardKpi.administerKpis')}</a>
 
                         <button
                           type="button"
                           onClick={handleRecalculateKpis}
                           disabled={recalculatingKpis}
-                          className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                          className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--tcdx-color-primary-hover)] disabled:opacity-60"
                         >
                           {recalculatingKpis ? 'Recalculando...' : 'Recalcular KPIs'}
                         </button>
@@ -1480,32 +1480,32 @@ function DashboardPageContent() {
               </div>
 
               {loadingKpis && (
-                <div className="rounded-[30px] border border-slate-200 bg-white p-8 text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-8 text-[var(--tcdx-color-text-secondary)] shadow-[var(--tcdx-shadow-tecdex-sm)]">
                   Cargando vista KPI...
                 </div>
               )}
 
               {!loadingKpis && (
                 <>
-                  <section className="rounded-[30px] border border-emerald-200 bg-emerald-50/60 p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                  <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-emerald-200 bg-emerald-50/60 p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                        <h2 className="text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
                           {t('dashboardKpi.healthEngineTitle')}
                         </h2>
-                        <p className="mt-1 text-sm text-slate-600">
+                        <p className="mt-1 text-sm text-[var(--tcdx-color-text-primary)]">
                           {t('dashboardKpi.healthEngineSubtitle')}
                         </p>
                       </div>
 
                       <a
                         href="/iso-health?tab=detalle"
-                        className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                        className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
                       >{t('dashboardKpi.viewHealthDetail')}</a>
                     </div>
 
                     {healthKpiItems.length === 0 ? (
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                      <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
                         {t('dashboardKpi.noHealthKpis')}
                         generar los snapshots del período.
                       </div>
@@ -1531,13 +1531,13 @@ function DashboardPageContent() {
                   </section>
 
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,1fr)]">
-                    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                       <div className="mb-5 flex items-center justify-between">
-                        <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">
+                        <h2 className="text-[2rem] font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
                           {t('dashboardKpi.overallKpiStatus')}
                         </h2>
 
-                        <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                        <div className="rounded-full bg-[var(--tcdx-color-surface-alt)] px-3 py-1 text-xs font-semibold text-[var(--tcdx-color-text-primary)]">
                           {kpiSummary?.total_kpis || 0} KPI(s)
                         </div>
                       </div>
@@ -1565,10 +1565,10 @@ function DashboardPageContent() {
                           </ResponsiveContainer>
 
                           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                            <div className="text-5xl font-bold tracking-tight text-slate-900">
+                            <div className="text-5xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">
                               {kpiSummary?.green || 0}
                             </div>
-                            <div className="mt-1 text-base font-medium text-slate-500">
+                            <div className="mt-1 text-base font-medium text-[var(--tcdx-color-text-secondary)]">
                               {t('dashboardKpi.greenStatus')}
                             </div>
                           </div>
@@ -1603,16 +1603,16 @@ function DashboardPageContent() {
                       </div>
                     </section>
 
-                    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                       <div className="mb-4 flex items-center justify-between">
-                        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                        <h2 className="text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
                           {t('dashboardKpi.categoryDistribution')}
                         </h2>
 
                         {canManageKpis && (
                           <a
                             href="/administrar-kpis"
-                            className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                            className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--tcdx-color-primary)] transition hover:text-[var(--tcdx-color-primary-hover)]"
                           >
                             <span>{t('dashboardKpi.manage')}</span>
                             <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
@@ -1623,14 +1623,14 @@ function DashboardPageContent() {
                       <div className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={kpiCategoryData}>
-                            <CartesianGrid vertical={false} stroke="#e5e7eb" />
+                            <CartesianGrid vertical={false} stroke="var(--tcdx-color-border)" />
                             <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} tickLine={false} axisLine={false} />
                             <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
                             <Tooltip />
                             <Bar
                               dataKey="value"
                               radius={[10, 10, 0, 0]}
-                              fill="#4f46e5"
+                              fill="var(--tcdx-color-secondary)"
                             />
                           </BarChart>
                         </ResponsiveContainer>
@@ -1639,9 +1639,9 @@ function DashboardPageContent() {
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
-                    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                       <div className="mb-4 flex items-center justify-between">
-                        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                        <h2 className="text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
                           {t('dashboardKpi.criticalKpisTitle')}
                         </h2>
 
@@ -1651,7 +1651,7 @@ function DashboardPageContent() {
                       </div>
 
                       {topRedKpis.length === 0 ? (
-                        <div className="text-slate-500">{t('dashboardKpi.noRedKpis')}</div>
+                        <div className="text-[var(--tcdx-color-text-secondary)]">{t('dashboardKpi.noRedKpis')}</div>
                       ) : (
                         <div className="space-y-4">
                           {topRedKpis.map((item) => (
@@ -1661,9 +1661,9 @@ function DashboardPageContent() {
                       )}
                     </section>
 
-                    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                       <div className="mb-4 flex items-center justify-between">
-                        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                        <h2 className="text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
                           {t('dashboardKpi.featuredKpis')}
                         </h2>
 
@@ -1673,7 +1673,7 @@ function DashboardPageContent() {
                       </div>
 
                       {topGreenKpis.length === 0 ? (
-                        <div className="text-slate-500">
+                        <div className="text-[var(--tcdx-color-text-secondary)]">
                           {t('dashboardKpi.noGreenKpis')}
                         </div>
                       ) : (
@@ -1686,16 +1686,16 @@ function DashboardPageContent() {
                     </section>
                   </div>
 
-                  <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                  <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                     <div className="mb-4 flex items-center justify-between">
-                      <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                      <h2 className="text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
                         {t('dashboardKpi.allKpis')}
                       </h2>
 
                       {canManageKpis && (
                         <a
                           href="/administrar-kpis"
-                          className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 transition hover:text-indigo-700"
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--tcdx-color-primary)] transition hover:text-[var(--tcdx-color-primary-hover)]"
                         >
                           <span>Abrir administración</span>
                           <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
@@ -1704,7 +1704,7 @@ function DashboardPageContent() {
                     </div>
 
                     {kpiItems.length === 0 ? (
-                      <div className="text-slate-500">
+                      <div className="text-[var(--tcdx-color-text-secondary)]">
                         No hay KPIs disponibles para este tenant.
                       </div>
                     ) : (
@@ -1753,44 +1753,44 @@ function SystemHealthDashboardSection({
   const score = Number(data?.global_score || 0);
 
   return (
-    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--tcdx-color-text-muted)]">
             Salud del sistema
           </p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
-            Lectura ejecutiva de health ISO
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
+            Lectura operacional de health ISO
           </h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
             Health es un indicador calculado de gestión, no certificación ni aprobación automática.
           </p>
         </div>
 
         <a
           href="/iso-health"
-          className="inline-flex w-fit rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+          className="inline-flex w-fit rounded-[var(--tcdx-radius-tecdex-sm)] border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
         >
           Ver salud completa
         </a>
       </div>
 
       {loading ? (
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+        <div className="mt-5 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-4 text-sm text-[var(--tcdx-color-text-secondary)]">
           Cargando salud del sistema...
         </div>
       ) : error ? (
-        <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="mt-5 rounded-[var(--tcdx-radius-tecdex-sm)] border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
       ) : !data ? (
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+        <div className="mt-5 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-4 text-sm text-[var(--tcdx-color-text-secondary)]">
           No fue posible cargar salud del sistema.
         </div>
       ) : (
         <>
           <div className={compact ? 'mt-5 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]' : 'mt-5 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]'}>
-            <div className="rounded-[26px] border border-slate-200 bg-slate-950 p-5 text-white">
+            <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-navy)] p-5 text-white">
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
                 Health global
               </div>
@@ -1820,19 +1820,19 @@ function SystemHealthDashboardSection({
 
           {!compact && (
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-sm font-semibold text-slate-950">Salud por norma</h3>
+            <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-4">
+              <h3 className="text-sm font-semibold text-[var(--tcdx-color-text-ink)]">Salud por norma</h3>
               {standards.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-500">No hay normas activas evaluables.</p>
+                <p className="mt-3 text-sm text-[var(--tcdx-color-text-secondary)]">No hay normas activas evaluables.</p>
               ) : (
                 <div className="mt-3 space-y-3">
                   {standards.slice(0, expanded ? 8 : 4).map((standard) => (
                     <div key={standard.id || standard.name} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2">
                       <div>
-                        <div className="text-sm font-semibold text-slate-900">{standard.name || 'Norma'}</div>
-                        <div className="text-xs text-slate-500">{standard.label || standard.status || 'Sin estado'}</div>
+                        <div className="text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{standard.name || 'Norma'}</div>
+                        <div className="text-xs text-[var(--tcdx-color-text-secondary)]">{standard.label || standard.status || 'Sin estado'}</div>
                       </div>
-                      <div className="text-right text-lg font-bold text-slate-950">
+                      <div className="text-right text-lg font-bold text-[var(--tcdx-color-text-ink)]">
                         {Number(standard.score || 0).toFixed(0)}%
                       </div>
                     </div>
@@ -1841,20 +1841,20 @@ function SystemHealthDashboardSection({
               )}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-sm font-semibold text-slate-950">Top procesos críticos</h3>
+            <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-4">
+              <h3 className="text-sm font-semibold text-[var(--tcdx-color-text-ink)]">Top procesos críticos</h3>
               {topProcesses.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-500">No hay procesos críticos destacados.</p>
+                <p className="mt-3 text-sm text-[var(--tcdx-color-text-secondary)]">No hay procesos críticos destacados.</p>
               ) : (
                 <div className="mt-3 space-y-3">
                   {topProcesses.slice(0, expanded ? 6 : 3).map((process) => (
                     <div key={`${process.standard_code}-${process.id || process.operation_id || process.name}`} className="rounded-xl bg-white px-3 py-2">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="text-sm font-semibold text-slate-900">{process.name || 'Proceso'}</div>
-                          <div className="text-xs text-slate-500">{process.standard_code || 'ISO'} · {process.main_issue || 'sin causa principal'}</div>
+                          <div className="text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{process.name || 'Proceso'}</div>
+                          <div className="text-xs text-[var(--tcdx-color-text-secondary)]">{process.standard_code || 'ISO'} · {process.main_issue || 'sin causa principal'}</div>
                         </div>
-                        <div className="text-right text-lg font-bold text-slate-950">
+                        <div className="text-right text-lg font-bold text-[var(--tcdx-color-text-ink)]">
                           {Number(process.score || 0).toFixed(0)}%
                         </div>
                       </div>
@@ -1867,7 +1867,7 @@ function SystemHealthDashboardSection({
           )}
 
           {data.data_quality_warnings && data.data_quality_warnings.length > 0 && (
-            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="mt-5 rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               {data.data_quality_warnings.slice(0, 3).map((warning) => (
                 <p key={warning}>{warning}</p>
               ))}
@@ -1945,17 +1945,17 @@ function ExecutiveStatusOverview({
   ];
 
   return (
-    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tcdx-color-text-muted)]">
             Estado operacional
           </p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-            Semáforo ejecutivo de cumplimiento, riesgos y acciones
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
+            Estado operacional de cumplimiento, riesgos y acciones
           </h2>
-          <p className="mt-1 text-sm leading-6 text-slate-500">
-            Vista global para decidir dónde priorizar: controles, riesgo operacional, vencimientos y no conformidades.
+          <p className="mt-1 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
+            Vista integrada para priorizar controles, riesgo operacional, vencimientos y no conformidades.
           </p>
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getEffectiveHealthTone(effectiveStatus)}`}>
@@ -1965,13 +1965,13 @@ function ExecutiveStatusOverview({
 
       <div className="grid gap-4 lg:grid-cols-4">
         {segments.map((segment) => (
-          <div key={segment.label} className={`rounded-2xl border ${segment.border} ${segment.bg} p-4`}>
+          <div key={segment.label} className={`rounded-[var(--tcdx-radius-tecdex-sm)] border ${segment.border} ${segment.bg} p-4`}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--tcdx-color-text-secondary)]">
                   {segment.label}
                 </p>
-                <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+                <p className="mt-2 text-3xl font-black tracking-tight text-[var(--tcdx-color-text-ink)]">
                   {segment.value}
                 </p>
               </div>
@@ -1983,7 +1983,7 @@ function ExecutiveStatusOverview({
                 style={{ width: `${Math.max(4, Math.min(100, segment.width))}%`, background: segment.color }}
               />
             </div>
-            <p className="mt-3 text-sm font-medium text-slate-600">{segment.helper}</p>
+            <p className="mt-3 text-sm font-medium text-[var(--tcdx-color-text-primary)]">{segment.helper}</p>
           </div>
         ))}
       </div>
@@ -2005,20 +2005,20 @@ function ExecutiveKpiPulse({
   health: number;
 }) {
   return (
-    <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-tecdex-sm)]">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Pulso KPI</p>
-          <h2 className="mt-1 text-xl font-semibold text-slate-950">Señales ejecutivas de desempeño</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Snapshot resumido de KPIs calculados, cobertura de medición y KPIs Health.
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tcdx-color-text-muted)]">Estado KPI</p>
+          <h2 className="mt-1 text-xl font-semibold text-[var(--tcdx-color-text-ink)]">Indicadores operacionales de desempeño</h2>
+          <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
+            Resumen de KPIs calculados, cobertura de medición y KPIs Health.
           </p>
         </div>
         <a
           href="/dashboard?view=kpi"
-          className="inline-flex w-fit rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+          className="inline-flex w-fit rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--tcdx-color-primary-hover)]"
         >
-          Abrir Vista KPI
+          Abrir vista KPI
         </a>
       </div>
 
@@ -2035,9 +2035,9 @@ function ExecutiveKpiPulse({
 
 function PriorityMiniMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-      <div className="text-[11px] text-slate-500">{label}</div>
-      <div className="mt-1 font-semibold text-slate-900">{value}</div>
+    <div className="rounded-xl border border-[var(--tcdx-color-border)] bg-white px-3 py-2">
+      <div className="text-[11px] text-[var(--tcdx-color-text-secondary)]">{label}</div>
+      <div className="mt-1 font-semibold text-[var(--tcdx-color-text-ink)]">{value}</div>
     </div>
   );
 }
@@ -2078,13 +2078,13 @@ function TopCard({
       <span
         className="relative flex h-16 w-16 items-center justify-center rounded-full"
         style={{
-          background: `conic-gradient(#2563eb ${Math.max(
+          background: `conic-gradient(var(--tcdx-color-primary) ${Math.max(
             0,
             Math.min(100, ringValue)
-          )}%, #e8eef8 0)`,
+          )}%, var(--tcdx-color-surface-alt) 0)`,
         }}
       >
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#2563eb] shadow-inner">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[var(--tcdx-color-primary)] shadow-inner">
           {icon}
         </span>
       </span>
@@ -2121,8 +2121,8 @@ function PanelHeader({
   return (
     <div className="mb-5 flex items-center justify-between gap-4">
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-bold text-[#06173a]">{title}</h2>
-        <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] font-bold text-slate-400">
+        <h2 className="text-sm font-bold text-[var(--tcdx-color-text-ink)]">{title}</h2>
+        <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] font-bold text-[var(--tcdx-color-text-muted)]">
           i
         </span>
       </div>
@@ -2130,7 +2130,7 @@ function PanelHeader({
       {href && (
         <a
           href={href}
-          className="inline-flex items-center gap-1 text-xs font-bold text-[#2563eb] transition hover:text-[#1d4ed8]"
+          className="inline-flex items-center gap-1 text-xs font-bold text-[var(--tcdx-color-primary)] transition hover:text-[var(--tcdx-color-primary-hover)]"
         >
           <span>{t('common.view')}</span>
           <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
@@ -2148,12 +2148,12 @@ function StandardHealthPanel({
   const { t } = useTranslation();
 
   return (
-    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+    <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
       <PanelHeader title={t('dashboard.controlHealthByStandard')} href="/controles" />
 
-      <div className="mb-5 flex flex-wrap gap-5 text-xs font-semibold text-slate-600">
+      <div className="mb-5 flex flex-wrap gap-5 text-xs font-semibold text-[var(--tcdx-color-text-primary)]">
         <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm bg-[#2563eb]" />
+          <span className="h-3 w-3 rounded-sm bg-[var(--tcdx-color-primary)]" />
           {t('statuses.controls.saludable')}
         </span>
         <span className="inline-flex items-center gap-2">
@@ -2167,7 +2167,7 @@ function StandardHealthPanel({
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+        <div className="rounded-lg border border-dashed border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
           {t('common.emptyState')}
         </div>
       ) : (
@@ -2180,15 +2180,15 @@ function StandardHealthPanel({
 
             return (
               <div key={item.iso} className="grid grid-cols-[86px_minmax(0,1fr)_42px] items-center gap-3">
-                <div className="text-sm font-semibold text-[#06173a]">{item.iso}</div>
-                <div className="h-4 overflow-hidden rounded-sm bg-slate-100">
+                <div className="text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{item.iso}</div>
+                <div className="h-4 overflow-hidden rounded-sm bg-[var(--tcdx-color-surface-alt)]">
                   <div className="flex h-full">
-                    <div className="bg-[#2563eb]" style={{ width: `${okPct}%` }} />
+                    <div className="bg-[var(--tcdx-color-primary)]" style={{ width: `${okPct}%` }} />
                     <div className="bg-[#93c5fd]" style={{ width: `${partialPct}%` }} />
                     <div className="bg-[#f97316]" style={{ width: `${criticalPct}%` }} />
                   </div>
                 </div>
-                <div className="text-right text-sm font-bold text-[#06173a]">{item.percent}%</div>
+                <div className="text-right text-sm font-bold text-[var(--tcdx-color-text-ink)]">{item.percent}%</div>
               </div>
             );
           })}
@@ -2206,11 +2206,11 @@ function AuditTimelinePanel({
   const { t } = useTranslation();
 
   return (
-    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+    <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
       <PanelHeader title={t('dashboard.auditStatus')} href="/auditorias" />
 
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+        <div className="rounded-lg border border-dashed border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
           {t('common.emptyState')}
         </div>
       ) : (
@@ -2224,23 +2224,23 @@ function AuditTimelinePanel({
                   index === 0
                     ? 'border-emerald-500 text-emerald-600'
                     : index === 1
-                    ? 'border-[#2563eb] text-[#2563eb]'
+                    ? 'border-[#2563eb] text-[var(--tcdx-color-primary)]'
                     : index === 2
                     ? 'border-orange-500 text-orange-500'
-                    : 'border-slate-300 text-slate-400',
+                    : 'border-slate-300 text-[var(--tcdx-color-text-muted)]',
                 ].join(' ')}
               >
                 {index === 0 && <TcdxIcon name="check" className="h-3 w-3" />}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="font-bold text-[#06173a]">{item.title}</div>
-                <div className="text-sm text-slate-500">{item.subtitle}</div>
+                <div className="font-bold text-[var(--tcdx-color-text-ink)]">{item.title}</div>
+                <div className="text-sm text-[var(--tcdx-color-text-secondary)]">{item.subtitle}</div>
               </div>
               <div className="text-right">
-                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                <div className="rounded-full bg-[var(--tcdx-color-surface-alt)] px-3 py-1 text-xs font-bold text-[var(--tcdx-color-text-primary)]">
                   {item.status}
                 </div>
-                <div className="mt-2 text-xs text-slate-500">{item.date}</div>
+                <div className="mt-2 text-xs text-[var(--tcdx-color-text-secondary)]">{item.date}</div>
               </div>
             </div>
           ))}
@@ -2254,11 +2254,11 @@ function ActionPlansPanel({ items }: { items: ActionPlanItem[] }) {
   const { t } = useTranslation();
 
   return (
-    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+    <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
       <PanelHeader title={t('dashboard.actionPlans')} href="/plan-accion" />
 
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+        <div className="rounded-lg border border-dashed border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
           {t('common.emptyState')}
         </div>
       ) : (
@@ -2276,14 +2276,14 @@ function ActionPlansPanel({ items }: { items: ActionPlanItem[] }) {
             return (
               <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_48px] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_48px_130px] sm:gap-4">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-[#06173a]">
+                  <div className="truncate text-sm font-semibold text-[var(--tcdx-color-text-ink)]">
                     {item.title || t('dashboard.actionPlans')}
                   </div>
-                  <div className="truncate text-xs text-slate-500">
+                  <div className="truncate text-xs text-[var(--tcdx-color-text-secondary)]">
                     {item.iso_code || 'Sin ISO'} · {item.owner || t('common.notSelected')}
                   </div>
                 </div>
-                <div className="text-right text-sm font-bold text-[#2563eb]">{progress}%</div>
+                <div className="text-right text-sm font-bold text-[var(--tcdx-color-primary)]">{progress}%</div>
                 <div className="col-span-2 h-2 overflow-hidden rounded-full bg-slate-200 sm:col-span-1">
                   <div className="h-full rounded-full" style={{ width: `${progress}%`, background: color }} />
                 </div>
@@ -2304,27 +2304,27 @@ function PriorityRiskPanel({
   const { t } = useTranslation();
 
   return (
-    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+    <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
       <PanelHeader title={t('dashboard.priorityRisks')} href="/matriz-riesgo" />
 
       <div className="overflow-hidden">
-        <div className="hidden grid-cols-[minmax(0,1fr)_78px_82px_28px] border-b border-slate-100 pb-2 text-xs font-bold text-slate-400 sm:grid">
+        <div className="hidden grid-cols-[minmax(0,1fr)_78px_82px_28px] border-b border-[rgba(216,216,216,0.55)] pb-2 text-xs font-bold text-[var(--tcdx-color-text-muted)] sm:grid">
           <span>{t('dashboard.risk')}</span>
           <span>{t('dashboard.standard')}</span>
           <span>{t('dashboard.level')}</span>
           <span />
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-[rgba(216,216,216,0.65)]">
           {rows.length === 0 ? (
-            <div className="py-6 text-sm text-slate-500">{t('dashboard.noPriorityRisks')}</div>
+            <div className="py-6 text-sm text-[var(--tcdx-color-text-secondary)]">{t('dashboard.noPriorityRisks')}</div>
           ) : (
             rows.map((row) => (
               <div
                 key={row.id}
                 className="grid grid-cols-[minmax(0,1fr)_82px_28px] items-center gap-2 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_78px_82px_28px]"
               >
-                <span className="truncate font-semibold text-[#06173a]">{row.risk}</span>
-                <span className="hidden text-slate-600 sm:block">{row.norm}</span>
+                <span className="truncate font-semibold text-[var(--tcdx-color-text-ink)]">{row.risk}</span>
+                <span className="hidden text-[var(--tcdx-color-text-primary)] sm:block">{row.norm}</span>
                 <span
                   className={[
                     'w-fit rounded-full px-3 py-1 text-xs font-bold',
@@ -2338,7 +2338,7 @@ function PriorityRiskPanel({
                   {row.level}
                 </span>
                 <TcdxIcon name="trend" className="h-4 w-4 justify-self-end text-[#f97316]" />
-                <span className="col-span-3 text-xs font-semibold text-slate-500 sm:hidden">
+                <span className="col-span-3 text-xs font-semibold text-[var(--tcdx-color-text-secondary)] sm:hidden">
                   {row.norm}
                 </span>
               </div>
@@ -2360,28 +2360,28 @@ function ExecutiveReportPanel({
   const { t } = useTranslation();
 
   return (
-    <section className="rounded-lg border border-[#dce4ef] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
+    <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
       <PanelHeader title={t('dashboard.executiveReport')} href="/exportes" />
 
       <div className="grid gap-5 md:grid-cols-[150px_minmax(0,1fr)]">
-        <div className="overflow-hidden rounded-sm border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-sm border border-[var(--tcdx-color-border)] bg-white shadow-sm">
           <div className="bg-white p-4">
-            <div className="text-xl font-black text-[#2563eb]">TCDX</div>
-            <div className="text-[10px] font-bold uppercase text-[#06173a]">{t('dashboard.reportTitle')}</div>
-            <div className="mt-1 text-[8px] text-slate-400">{t('dashboard.reportSubtitle')}</div>
+            <div className="text-xl font-black text-[var(--tcdx-color-primary)]">TCDX</div>
+            <div className="text-[10px] font-bold uppercase text-[var(--tcdx-color-text-ink)]">{t('dashboard.reportTitle')}</div>
+            <div className="mt-1 text-[8px] text-[var(--tcdx-color-text-muted)]">{t('dashboard.reportSubtitle')}</div>
           </div>
           <div className="h-24 bg-[linear-gradient(150deg,#ffffff_0%,#dbeafe_38%,#2563eb_39%,#06173a_78%)]" />
-          <div className="bg-[#06173a] px-4 py-3 text-[9px] font-semibold text-white/70">
+          <div className="bg-[var(--tcdx-color-navy-deep)] px-4 py-3 text-[9px] font-semibold text-white/70">
             {period}
           </div>
         </div>
 
         <div>
-          <h3 className="text-lg font-bold text-[#06173a]">
+          <h3 className="text-lg font-bold text-[var(--tcdx-color-text-ink)]">
             {t('dashboard.reportTitle')} ISO
           </h3>
-          <p className="mt-1 text-sm text-slate-500">
-            {t('exports.categoryDescriptions.executive')}
+          <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
+            {t('dashboard.reportDescription')}
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -2392,13 +2392,13 @@ function ExecutiveReportPanel({
 
           <a
             href="/exportes"
-            className="mt-5 inline-flex items-center gap-2 rounded-lg border border-[#dce4ef] bg-white px-4 py-3 text-sm font-bold text-[#06173a] shadow-sm transition hover:bg-slate-50"
+            className="mt-5 inline-flex items-center gap-2 rounded-lg border border-[var(--tcdx-color-border)] bg-white px-4 py-3 text-sm font-bold text-[var(--tcdx-color-text-ink)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)]"
           >
-            <TcdxIcon name="export" className="h-4 w-4 text-[#2563eb]" />
+            <TcdxIcon name="export" className="h-4 w-4 text-[var(--tcdx-color-primary)]" />
             {t('dashboard.downloadReport')}
           </a>
 
-          <div className="mt-4 text-xs font-semibold text-slate-500">
+          <div className="mt-4 text-xs font-semibold text-[var(--tcdx-color-text-secondary)]">
             {t('dashboard.globalCompliance')}: {complianceValue}%
           </div>
         </div>
@@ -2419,15 +2419,15 @@ function LegendRow({
   extra?: string;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+    <div className="flex items-center justify-between border-b border-[rgba(216,216,216,0.55)] pb-4">
       <div className="flex items-center gap-3">
         <span className={`h-5 w-5 rounded-md ${color}`} />
-        <span className="text-2xl text-slate-700">{label}</span>
+        <span className="text-2xl text-[var(--tcdx-color-text-primary)]">{label}</span>
       </div>
 
       <div className="text-right">
         <div className="text-3xl font-bold text-slate-800">{value}</div>
-        {extra && <div className="text-sm text-slate-400">{extra}</div>}
+        {extra && <div className="text-sm text-[var(--tcdx-color-text-muted)]">{extra}</div>}
       </div>
     </div>
   );
@@ -2443,8 +2443,8 @@ function StatChip({
   color: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-3">
-      <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
+    <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(216,216,216,0.55)] bg-white p-3">
+      <div className="text-xs uppercase tracking-wide text-[var(--tcdx-color-text-muted)]">{label}</div>
       <div className={`mt-1 text-2xl font-bold ${color}`}>{value}</div>
     </div>
   );
@@ -2469,16 +2469,16 @@ function HealthKpiMiniCard({
       ? 'border-amber-200 bg-white'
       : status === 'red'
       ? 'border-red-200 bg-white'
-      : 'border-slate-200 bg-white';
+      : 'border-[var(--tcdx-color-border)] bg-white';
 
   return (
-    <div className={`rounded-[24px] border p-5 shadow-sm ${tone}`}>
+    <div className={`rounded-[var(--tcdx-radius-tecdex-sm)] border p-5 shadow-sm ${tone}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-text-muted)]">
             {item?.code || fallback}
           </div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">{title}</div>
+          <div className="mt-1 text-lg font-semibold text-[var(--tcdx-color-text-ink)]">{title}</div>
         </div>
 
         <span
@@ -2490,11 +2490,11 @@ function HealthKpiMiniCard({
         </span>
       </div>
 
-      <div className="mt-4 text-4xl font-bold tracking-tight text-slate-900">
+      <div className="mt-4 text-4xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">
         {formatKpiValue(item?.latest_snapshot?.value, item?.unit || '%')}
       </div>
 
-      <div className="mt-2 text-xs text-slate-500">
+      <div className="mt-2 text-xs text-[var(--tcdx-color-text-secondary)]">
         {getRuntimePeriodLabel()}: {formatDateCL(item?.latest_snapshot?.period_start)} -{' '}
         {formatDateCL(item?.latest_snapshot?.period_end)}
       </div>
@@ -2504,12 +2504,12 @@ function HealthKpiMiniCard({
           {snapshots.slice(0, 4).map((snap, index) => (
             <div
               key={`${item?.id}-${snap.standard_code || 'GLOBAL'}-${index}`}
-              className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
+              className="flex items-center justify-between rounded-xl border border-[rgba(216,216,216,0.55)] bg-[var(--tcdx-color-surface)] px-3 py-2 text-xs"
             >
-              <span className="font-semibold text-slate-600">
+              <span className="font-semibold text-[var(--tcdx-color-text-primary)]">
                 {snap.standard_code || 'Global'}
               </span>
-              <span className="font-bold text-slate-900">
+              <span className="font-bold text-[var(--tcdx-color-text-ink)]">
                 {formatKpiValue(snap.value, item?.unit || '%')}
               </span>
             </div>
@@ -2524,11 +2524,11 @@ function KpiRow({ item }: { item: KpiDashboardItem }) {
   const status = item.latest_snapshot?.status_color || 'gray';
 
   return (
-    <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-4 transition hover:shadow-sm">
+    <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(216,216,216,0.55)] bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-4 transition hover:shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white">
+            <span className="rounded-lg bg-[var(--tcdx-color-navy)] px-2 py-1 text-[11px] font-semibold text-white">
               {item.code}
             </span>
             <span
@@ -2545,19 +2545,19 @@ function KpiRow({ item }: { item: KpiDashboardItem }) {
             )}
           </div>
 
-          <div className="mt-3 font-semibold text-slate-900">{item.name}</div>
+          <div className="mt-3 font-semibold text-[var(--tcdx-color-text-ink)]">{item.name}</div>
 
-          <div className="mt-1 text-sm text-slate-500">
+          <div className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
             {item.category} · {item.frequency}
           </div>
         </div>
 
         <div className="text-right">
-          <div className="text-2xl font-bold tracking-tight text-slate-900">
+          <div className="text-2xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">
             {formatKpiValue(item.latest_snapshot?.value, item.unit)}
           </div>
 
-          <div className="mt-1 text-xs text-slate-500">
+          <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">
             Objetivo:{' '}
             {item.target_value !== null && item.target_value !== undefined
               ? formatKpiValue(item.target_value, item.unit)
@@ -2573,11 +2573,11 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
   const status = item.latest_snapshot?.status_color || 'gray';
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition duration-300 hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
+    <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-tecdex-sm)] transition duration-300 hover:shadow-[var(--tcdx-shadow-tecdex-lg)]">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white">
+            <span className="rounded-lg bg-[var(--tcdx-color-navy)] px-2 py-1 text-[11px] font-semibold text-white">
               {item.code}
             </span>
             <span
@@ -2592,29 +2592,29 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
                 Motor Health
               </span>
             )}
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+            <span className="rounded-full bg-[var(--tcdx-color-surface-alt)] px-2.5 py-1 text-[11px] font-semibold text-[var(--tcdx-color-text-primary)]">
               {item.kpi_type}
             </span>
           </div>
 
-          <h3 className="mt-4 text-xl font-semibold text-slate-900">{item.name}</h3>
+          <h3 className="mt-4 text-xl font-semibold text-[var(--tcdx-color-text-ink)]">{item.name}</h3>
 
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
             {item.description || 'Sin descripción'}
           </p>
         </div>
 
-        <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
-          <div className="text-3xl font-bold tracking-tight text-slate-900">
+        <div className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-surface)] px-4 py-3 text-right">
+          <div className="text-3xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">
             {formatKpiValue(item.latest_snapshot?.value, item.unit)}
           </div>
-          <div className="mt-1 text-xs text-slate-500">{item.frequency}</div>
+          <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{item.frequency}</div>
         </div>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
-        <StatChip label="Categoría" value={item.category} color="text-slate-900" />
-        <StatChip label="Dirección" value={item.direction} color="text-slate-900" />
+        <StatChip label="Categoría" value={item.category} color="text-[var(--tcdx-color-text-ink)]" />
+        <StatChip label="Dirección" value={item.direction} color="text-[var(--tcdx-color-text-ink)]" />
         <StatChip
           label="Objetivo"
           value={
@@ -2622,7 +2622,7 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
               ? formatKpiValue(item.target_value, item.unit)
               : 'N/A'
           }
-          color="text-slate-900"
+          color="text-[var(--tcdx-color-text-ink)]"
         />
         <StatChip
           label="Delta"
@@ -2642,7 +2642,7 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
           {item.applicable_standards.map((standard) => (
             <span
               key={`${item.id}-${standard}`}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600"
+              className="rounded-full border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] px-3 py-1 text-xs font-medium text-[var(--tcdx-color-text-primary)]"
             >
               {standard}
             </span>
@@ -2651,9 +2651,9 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
       ) : null}
 
       {item.latest_snapshots?.length && item.latest_snapshots.length > 1 ? (
-        <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Snapshot por norma / alcance
+        <div className="mt-5 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(216,216,216,0.55)] bg-[var(--tcdx-color-surface)] p-4">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-text-muted)]">
+            Medición por norma / alcance
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             {item.latest_snapshots.slice(0, 6).map((snap, index) => (
@@ -2661,10 +2661,10 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
                 key={`${item.id}-${snap.standard_code || 'GLOBAL'}-${index}`}
                 className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-xs"
               >
-                <span className="font-semibold text-slate-600">
+                <span className="font-semibold text-[var(--tcdx-color-text-primary)]">
                   {snap.standard_code || 'Global'}
                 </span>
-                <span className="font-bold text-slate-900">
+                <span className="font-bold text-[var(--tcdx-color-text-ink)]">
                   {formatKpiValue(snap.value, item.unit)}
                 </span>
               </div>
@@ -2676,7 +2676,7 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
       <div className="mt-4 h-[80px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={buildTrend(numberOrZero(item.latest_snapshot?.value), item.delta)}>
-            <Line dataKey="value" stroke="#4f46e5" strokeWidth={2} dot={false} />
+            <Line dataKey="value" stroke="var(--tcdx-color-secondary)" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
