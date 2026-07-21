@@ -59,7 +59,7 @@
   --radius-card: 20px;
   --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.07);
   --shadow-soft: 0 6px 18px rgba(15, 23, 42, 0.055);
-  --shadow-sidebar-active: 0 8px 20px rgba(15, 111, 219, 0.28);
+  --shadow-sidebar-active: 0 8px 20px rgba(240, 114, 29, 0.26);
 
   --background: #f6f8fb;
   --foreground: #07152f;
@@ -82,7 +82,6 @@
   --tcdx-shadow: 0 16px 42px rgba(8, 25, 58, 0.09);
   --tcdx-shadow-soft: 0 8px 24px rgba(8, 25, 58, 0.065);
   --tcdx-shadow-card: var(--shadow-card);
-
 
   /* TECDEX Design System tokens, sourced from Tecdex-SpA/tecdex-design-system. */
   --tcdx-color-primary: #F0721D;
@@ -258,17 +257,16 @@ a[class*="flex"] {
 
 .enterprise-sidebar {
   background:
-    radial-gradient(circle at 16% 0%, rgba(22, 119, 255, 0.34), transparent 34%),
-    linear-gradient(180deg, var(--brand-deep) 0%, var(--color-brand-alt) 48%, var(--brand-deeper) 100%) !important;
+    linear-gradient(180deg, var(--tcdx-color-navy) 0%, #22313c 48%, var(--tcdx-color-navy-deep) 100%) !important;
 }
 
 .enterprise-topbar {
-  min-height: 72px;
-  border-bottom: 1px solid var(--border-soft) !important;
-  background: rgba(255, 255, 255, 0.94) !important;
-  color: var(--text-main) !important;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 10px 24px rgba(15, 23, 42, 0.04) !important;
-  backdrop-filter: blur(18px);
+  min-height: 64px;
+  border-bottom: 1px solid var(--tcdx-color-border) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: var(--tcdx-color-text-ink) !important;
+  box-shadow: 0 1px 0 rgba(22, 22, 22, 0.04), 0 8px 18px rgba(22, 22, 22, 0.05) !important;
+  backdrop-filter: blur(16px);
 }
 
 .enterprise-topbar [class*="text-white"] {
@@ -282,8 +280,8 @@ a[class*="flex"] {
 
 .enterprise-topbar [class*="border-white/"],
 .enterprise-topbar [class*="ring-white/"] {
-  border-color: var(--border-soft) !important;
-  --tw-ring-color: rgba(226, 232, 240, 0.9) !important;
+  border-color: var(--tcdx-color-border) !important;
+  --tw-ring-color: rgba(216, 216, 216, 0.9) !important;
 }
 
 .enterprise-topbar [class*="bg-white/"],
@@ -293,13 +291,13 @@ a[class*="flex"] {
 .enterprise-topbar [class*="bg-white/10"],
 .enterprise-topbar [class*="bg-white/11"],
 .enterprise-topbar [class*="bg-white/15"] {
-  background: var(--surface-muted) !important;
+  background: var(--tcdx-color-surface) !important;
 }
 
 .enterprise-topbar input {
   background: var(--surface) !important;
-  border-color: var(--border-soft) !important;
-  color: var(--text-main) !important;
+  border-color: var(--tcdx-color-border) !important;
+  color: var(--tcdx-color-text-ink) !important;
   box-shadow: inset 0 1px 0 rgba(15, 23, 42, 0.02), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
@@ -309,8 +307,8 @@ a[class*="flex"] {
 
 .enterprise-main {
   background:
-    radial-gradient(circle at 16% 0%, rgba(15, 111, 219, 0.08), transparent 30%),
-    linear-gradient(180deg, #fafcff 0%, var(--app-bg) 46%, #eef3f8 100%) !important;
+    radial-gradient(circle at 16% 0%, rgba(240, 114, 29, 0.05), transparent 30%),
+    linear-gradient(180deg, #ffffff 0%, var(--tcdx-color-surface) 48%, var(--tcdx-color-surface-alt) 100%) !important;
 }
 
 .enterprise-page {

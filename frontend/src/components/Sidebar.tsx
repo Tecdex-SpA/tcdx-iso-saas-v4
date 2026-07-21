@@ -56,18 +56,19 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
     <a
       href={href}
       title={label}
+      aria-current={active ? 'page' : undefined}
       className={[
-        'enterprise-sidebar-item group flex w-full items-center rounded-lg text-sm font-semibold transition-all duration-200',
-        collapsed ? 'justify-center px-2 py-3' : 'justify-start gap-3 px-3.5 py-3 text-left',
+        'enterprise-sidebar-item group flex w-full items-center rounded-[var(--tcdx-radius-tecdex-sm)] text-sm font-medium transition-all duration-150 focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
+        collapsed ? 'justify-center px-2 py-3' : 'justify-start gap-3 px-3 py-3 text-left',
         active
-          ? 'bg-[linear-gradient(135deg,#1677ff_0%,#0f6fdb_100%)] text-white shadow-[var(--shadow-sidebar-active)] ring-1 ring-white/12'
-          : 'text-white/78 hover:bg-white/11 hover:text-white hover:ring-1 hover:ring-white/10',
+          ? 'bg-[var(--tcdx-color-primary)] text-white shadow-[var(--shadow-sidebar-active)] ring-1 ring-white/12'
+          : 'text-white/76 hover:bg-white/10 hover:text-white hover:ring-1 hover:ring-white/10',
       ].join(' ')}
     >
       <span
         className={[
           'shrink-0 transition-colors',
-          active ? 'text-white' : 'text-white/62 group-hover:text-white',
+          active ? 'text-white' : 'text-white/64 group-hover:text-white',
         ].join(' ')}
       >
         {icon}
@@ -354,7 +355,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     if (collapsed) return null;
 
     return (
-      <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/38">
+      <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/42">
         {label}
       </div>
     );
@@ -363,14 +364,16 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   return (
     <aside
       className={[
-        'enterprise-sidebar tcdx-shell-sidebar relative flex h-screen flex-col border-r border-white/10 text-white shadow-[18px_0_42px_rgba(8,25,58,0.22)] transition-all duration-300',
-        collapsed ? 'w-[88px] px-3 pt-4 pb-5' : 'w-[252px] px-4 pt-4 pb-5',
+        'enterprise-sidebar tcdx-shell-sidebar relative flex h-screen flex-col border-r border-[var(--tcdx-color-header-border)]/40 text-white shadow-[18px_0_42px_rgba(22,22,22,0.20)] transition-all duration-300',
+        collapsed ? 'w-[76px] px-2.5 pt-4 pb-5' : 'w-[260px] px-4 pt-4 pb-5',
       ].join(' ')}
     >
       <button
         type="button"
         onClick={onToggle}
-        className="absolute -right-3 top-7 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-[#102033] shadow-lg transition hover:bg-slate-50"
+        aria-label={collapsed ? t('sidebar.expandMenu') : t('sidebar.collapseMenu')}
+        aria-expanded={!collapsed}
+        className="absolute -right-3 top-7 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-navy)] shadow-lg transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
         title={collapsed ? t('sidebar.expandMenu') : t('sidebar.collapseMenu')}
       >
         <svg
@@ -384,9 +387,9 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         </svg>
       </button>
 
-      <div className={`relative z-10 mb-7 flex min-h-20 items-center border-b border-white/10 pb-5 ${collapsed ? 'justify-center' : 'justify-center'}`}>
+      <div className={`relative z-10 mb-6 flex min-h-20 items-center border-b border-white/10 pb-5 ${collapsed ? 'justify-center' : 'justify-center'}`}>
         {collapsed ? (
-          <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/12 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_12px_30px_rgba(0,0,0,0.18)]">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/15 bg-white/10 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_24px_rgba(0,0,0,0.16)]">
             <Image
               src={SERVICE_LOGO_SRC}
               alt="ISOS-SAAS-TECDEX"
@@ -397,7 +400,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             />
           </span>
         ) : (
-          <div className="flex min-h-[124px] w-full items-center justify-center rounded-[22px] border border-white/12 bg-white/10 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_34px_rgba(0,0,0,0.18)]">
+          <div className="flex min-h-[112px] w-full items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/12 bg-white/10 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(0,0,0,0.16)]">
             <Image
               src={PLATFORM_WORDMARK_SRC}
               alt="ISOS-SAAS-TECDEX Compliance 360"
@@ -410,11 +413,11 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         )}
       </div>
 
-      <nav className="tcdx-scrollbar relative z-10 flex-1 overflow-y-auto pr-1 text-sm">
+      <nav className="tcdx-scrollbar relative z-10 flex-1 overflow-y-auto pr-1 text-sm" aria-label="Navegación principal">
         {isPlatformAdmin && (
           <>
             {sectionLabel(t('sidebar.platform'))}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {platformItems.map((item) => (
                 <NavItem
                   key={item.href}
@@ -432,7 +435,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         {isDealer && !isPlatformAdmin && (
           <>
             {sectionLabel(t('sidebar.dealer'))}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {dealerItems.map((item) => (
                 <NavItem
                   key={item.href}
@@ -450,7 +453,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         {!isPlatformAdmin && !isDealer && (
           <>
             {sectionLabel(t('sidebar.general'))}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {generalItems.map((item) => (
                 <NavItem
                   key={item.href}
@@ -469,13 +472,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       <div className={['relative z-10 mt-4 border-t border-white/10 pt-4', collapsed ? 'flex justify-center' : ''].join(' ')}>
         {collapsed ? (
-          <div title={t('sidebar.poweredBy')} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/8 ring-1 ring-white/10">
+          <div title={t('sidebar.poweredBy')} className="flex h-10 w-10 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] bg-white/8 ring-1 ring-white/10">
             <Image src={SERVICE_LOGO_SRC} alt="Tecdex" width={28} height={28} unoptimized className="h-7 w-7 object-contain" />
           </div>
         ) : (
-          <div className="rounded-lg border border-white/10 bg-white/8 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/10 bg-white/8 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] bg-[rgba(240,114,29,0.16)] text-[var(--tcdx-color-primary)]">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" />
                   <path d="M9 12l2 2 4-5" />

@@ -175,9 +175,10 @@ function buildTenantLogoCandidates(tenant: TenantInfo | null) {
 
 type HeaderProps = {
   onMenuClick?: () => void;
+  mobileMenuOpen?: boolean;
 };
 
-export default function Header({ onMenuClick }: HeaderProps) {
+export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderProps) {
   const { locale, t } = useTranslation();
   const [user, setUser] = useState<HeaderUser | null>(null);
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
@@ -562,13 +563,16 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const displayResults = search.trim().length >= 2 ? searchResults : [];
 
   return (
-    <div className="enterprise-topbar tcdx-shell-header px-4 py-3 text-slate-900 md:px-6">
+    <header className="enterprise-topbar tcdx-shell-header px-4 py-2.5 text-[var(--tcdx-color-text-ink)] md:px-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-4">
           <button
             type="button"
             onClick={onMenuClick}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 lg:hidden"
+            aria-label={t('header.openMenu')}
+            aria-controls="mobile-sidebar-drawer"
+            aria-expanded={mobileMenuOpen}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-navy)] shadow-[var(--tcdx-shadow-tecdex-sm)] transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] lg:hidden"
             title={t('header.openMenu')}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -576,8 +580,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </svg>
           </button>
 
-          <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50 p-0.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-3 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-3.5 py-2 shadow-[var(--tcdx-shadow-tecdex-sm)]">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-0.5 shadow-sm">
               <Image
                 src={tenantLogoSource}
                 width={56}
@@ -605,10 +609,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </span>
 
             <div className="hidden min-w-0 lg:block">
-              <div className="max-w-[220px] truncate text-[15px] font-black leading-tight tracking-tight text-slate-950 xl:max-w-[280px]">
+              <div className="max-w-[220px] truncate text-[15px] font-semibold leading-tight tracking-normal text-[var(--tcdx-color-text-ink)] xl:max-w-[280px]">
                 {tenantDisplayName}
               </div>
-              <div className="mt-0.5 max-w-[220px] truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 xl:max-w-[280px]">
+              <div className="mt-0.5 max-w-[220px] truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tcdx-color-text-secondary)] xl:max-w-[280px]">
                 {tenantSubtext}
               </div>
             </div>
@@ -633,16 +637,19 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 onFocus={() => setSearchOpen(true)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={t('header.searchPlaceholder') || 'Buscar controles, evidencias, riesgos...'}
-                className="w-[440px] rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-16 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-blue-300 focus:bg-white focus:shadow-[0_0_0_4px_rgba(15,111,219,0.12)]"
+                role="combobox"
+                aria-expanded={searchOpen}
+                aria-controls="global-header-search-results"
+                className="w-[440px] rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white py-3 pl-10 pr-16 text-sm text-[var(--tcdx-color-text-ink)] placeholder:text-[var(--tcdx-color-text-secondary)] transition focus:border-[var(--tcdx-color-primary)] focus:bg-white focus:shadow-[var(--tcdx-shadow-tecdex-focus)]"
               />
 
-              <span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-500 xl:block">
+              <span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] px-2 py-0.5 text-[10px] text-[var(--tcdx-color-text-secondary)] xl:block">
                 ⌘K
               </span>
             </div>
 
             {searchOpen && (
-              <div className="absolute right-0 z-50 mt-3 w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-lg border border-slate-200 bg-white text-black shadow-2xl">
+              <div id="global-header-search-results" className="absolute right-0 z-50 mt-3 w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-ink)] shadow-[var(--tcdx-shadow-tecdex-lg)]">
                 <div className="border-b border-slate-100 px-4 py-3">
                   <div className="text-sm font-semibold text-slate-900">{t('header.searchTitle')}</div>
                   <div className="text-xs text-slate-500">{t('header.searchHelp')}</div>
@@ -687,7 +694,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                         type="button"
                         onClick={() => handleResultNavigate(result)}
                         className={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${
-                          activeIndex === index ? 'bg-indigo-50' : 'hover:bg-slate-50'
+                          activeIndex === index ? 'bg-[rgba(240,114,29,0.08)]' : 'hover:bg-[var(--tcdx-color-surface)]'
                         }`}
                       >
                         <span className={`mt-0.5 rounded-lg px-2 py-1 text-[11px] font-semibold ${getTypeClasses(result.type)}`}>
@@ -706,34 +713,37 @@ export default function Header({ onMenuClick }: HeaderProps) {
             )}
           </div>
 
-          <div className="hidden xl:flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-700 shadow-sm">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-blue-700 shadow-sm">
+          <div className="hidden xl:flex items-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] px-3 py-2.5 text-xs text-[var(--tcdx-color-text-primary)] shadow-sm">
+            <span className="flex h-8 w-8 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] bg-white text-[var(--tcdx-color-secondary)] shadow-sm">
               <TcdxIcon name="calendar" className="h-4 w-4" />
             </span>
             <div className="leading-tight">
-              <div className="text-[11px] uppercase tracking-wide text-slate-400">{t('header.lastSync')}</div>
-              <div className="font-semibold text-slate-900">{lastSync}</div>
+              <div className="text-[11px] uppercase tracking-wide text-[var(--tcdx-color-text-secondary)]">{t('header.lastSync')}</div>
+              <div className="font-semibold text-[var(--tcdx-color-text-ink)]">{lastSync}</div>
             </div>
           </div>
 
           <div className="relative" ref={notificationsRef}>
             <button
               type="button"
-              className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-950"
+              aria-label={t('header.notifications')}
+              aria-haspopup="menu"
+              aria-expanded={notificationsOpen}
+              className="relative flex h-11 w-11 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)] hover:text-[var(--tcdx-color-text-ink)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
               title={t('header.notifications')}
               onClick={() => setNotificationsOpen((prev) => !prev)}
             >
               <TcdxIcon name="bell" className="h-5 w-5" />
 
               {unreadCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--tcdx-color-primary)] px-1 text-[10px] font-bold text-white">
                   {unreadCount}
                 </span>
               )}
             </button>
 
             {notificationsOpen && (
-              <div className="absolute right-0 z-50 mt-3 w-[min(390px,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-slate-200 bg-white text-black shadow-2xl">
+              <div className="absolute right-0 z-50 mt-3 w-[min(390px,calc(100vw-1.5rem))] overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-ink)] shadow-[var(--tcdx-shadow-tecdex-lg)]">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                   <div>
                     <div className="font-semibold text-slate-900">{t('header.notifications')}</div>
@@ -743,7 +753,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                   <button
                     type="button"
                     onClick={markAllNotificationsRead}
-                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                    className="text-xs font-semibold text-[var(--tcdx-color-primary)] hover:text-[var(--tcdx-color-primary-hover)]"
                   >
                     {t('header.markAllRead')}
                   </button>
@@ -784,7 +794,9 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <div className="relative">
               <button
                 type="button"
-                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left shadow-sm transition hover:bg-slate-50"
+                aria-haspopup="menu"
+                aria-expanded={open}
+                className="flex items-center gap-3 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2.5 py-1.5 text-left shadow-sm transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
                 onClick={() => setOpen(!open)}
               >
                 {avatarUrl ? (
@@ -794,24 +806,24 @@ export default function Header({ onMenuClick }: HeaderProps) {
                     width={40}
                     height={40}
                     unoptimized
-                    className="h-10 w-10 rounded-full border border-slate-200 object-cover shadow-md"
+                    className="h-10 w-10 rounded-full border border-[var(--tcdx-color-border)] object-cover shadow-md"
                   />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-blue-100 bg-blue-700 text-sm font-bold text-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(81,171,168,0.35)] bg-[var(--tcdx-color-secondary)] text-sm font-bold text-white">
                     {displayName.charAt(0).toUpperCase()}
                   </div>
                 )}
 
                 <div className="hidden max-w-[220px] sm:block">
-                  <div className="truncate text-sm font-semibold text-slate-950">{displayName}</div>
-                  <div className="truncate text-xs text-slate-500">
+                  <div className="truncate text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{displayName}</div>
+                  <div className="truncate text-xs text-[var(--tcdx-color-text-secondary)]">
                     {tenant?.name || user?.role || t('header.userFallback')}
                   </div>
                 </div>
               </button>
 
               {open && (
-                <div className="absolute right-0 z-50 mt-3 w-[min(20rem,calc(100vw-1.5rem))] rounded-lg border border-slate-200 bg-white p-4 text-black shadow-2xl">
+                <div className="absolute right-0 z-50 mt-3 w-[min(20rem,calc(100vw-1.5rem))] rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-4 text-[var(--tcdx-color-text-ink)] shadow-[var(--tcdx-shadow-tecdex-lg)]" role="menu">
                   <div className="flex items-center gap-3 mb-3">
                     {avatarUrl ? (
                       <Image
@@ -820,29 +832,30 @@ export default function Header({ onMenuClick }: HeaderProps) {
                         width={56}
                         height={56}
                         unoptimized
-                        className="h-14 w-14 rounded-full border border-slate-200 object-cover"
+                        className="h-14 w-14 rounded-full border border-[var(--tcdx-color-border)] object-cover"
                       />
                     ) : (
-                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-200 text-lg font-bold text-slate-700">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--tcdx-color-secondary)] text-lg font-bold text-white">
                         {displayName.charAt(0).toUpperCase()}
                       </div>
                     )}
 
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-900">{displayName}</p>
-                      <p className="truncate text-sm text-slate-500">{user?.email}</p>
-                      <p className="truncate text-sm text-slate-500">{tenant?.name}</p>
+                      <p className="truncate font-semibold text-[var(--tcdx-color-text-ink)]">{displayName}</p>
+                      <p className="truncate text-sm text-[var(--tcdx-color-text-secondary)]">{user?.email}</p>
+                      <p className="truncate text-sm text-[var(--tcdx-color-text-secondary)]">{tenant?.name}</p>
                     </div>
                   </div>
 
-                  <div className="mb-3 rounded-2xl bg-slate-50 px-3 py-3 text-xs text-slate-600">
+                  <div className="mb-3 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-surface)] px-3 py-3 text-xs text-[var(--tcdx-color-text-secondary)]">
                     {t('header.profileHint')}
                   </div>
 
                   <hr className="my-2 border-slate-200" />
 
                   <button
-                    className="w-full rounded-xl p-3 text-left text-sm transition hover:bg-slate-100"
+                    role="menuitem"
+                    className="w-full rounded-[var(--tcdx-radius-tecdex-sm)] p-3 text-left text-sm transition hover:bg-[rgba(240,114,29,0.08)] hover:text-[var(--tcdx-color-primary)]"
                     onClick={() => {
                       setOpen(false);
                       window.location.href = '/perfil';
@@ -855,7 +868,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </div>
 
             <button
-              className="inline-flex h-11 items-center gap-2 rounded-lg border border-white/10 bg-white px-3 text-sm font-semibold text-[#06173a] shadow-sm transition hover:bg-slate-100 sm:px-4"
+              className="inline-flex h-11 items-center gap-2 rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white px-3 text-sm font-semibold text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:border-[var(--tcdx-color-primary)] hover:bg-[rgba(240,114,29,0.08)] hover:text-[var(--tcdx-color-primary)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] sm:px-4"
               onClick={logout}
               title={t('header.logout')}
             >
@@ -865,6 +878,6 @@ export default function Header({ onMenuClick }: HeaderProps) {
           </div>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

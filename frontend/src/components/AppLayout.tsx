@@ -416,10 +416,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   if (checkingAccess) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#f6f8fb] text-[#162033]">
-        <div className="tcdx-card rounded-lg px-7 py-6">
+      <div className="flex h-screen items-center justify-center bg-[var(--tcdx-color-surface)] text-[var(--tcdx-color-text-ink)]">
+        <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-7 py-6 shadow-[var(--tcdx-shadow-tecdex-lg)]">
           <div className="text-lg font-semibold">{t('app.validatingAccess')}</div>
-          <div className="mt-1 text-sm text-slate-500">
+          <div className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
             {t('app.checkingPermissions')}
           </div>
         </div>
@@ -429,10 +429,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   if (accessDeniedMessage) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#f6f8fb] text-[#162033]">
-        <div className="max-w-md rounded-lg border border-red-200 bg-white px-7 py-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+      <div className="flex h-screen items-center justify-center bg-[var(--tcdx-color-surface)] text-[var(--tcdx-color-text-ink)]">
+        <div className="max-w-md rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(201,91,91,0.3)] bg-white px-7 py-6 shadow-[var(--tcdx-shadow-tecdex-lg)]">
           <div className="text-lg font-semibold">{t('app.restrictedAccess')}</div>
-          <div className="mt-2 text-sm text-slate-600">{accessDeniedMessage}</div>
+          <div className="mt-2 text-sm text-[var(--tcdx-color-text-secondary)]">{accessDeniedMessage}</div>
 
           <button
             type="button"
@@ -444,7 +444,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               sessionStorage.clear();
               window.location.href = '/login';
             }}
-            className="mt-4 rounded-lg bg-[#1f6feb] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#195fc9]"
+            className="mt-4 rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[var(--tcdx-letter-spacing-button)] text-white shadow-sm transition hover:bg-[var(--tcdx-color-primary-hover)]"
           >
             {t('app.logoutAndSwitch')}
           </button>
@@ -453,7 +453,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             onClick={() => {
               window.location.href = '/dashboard';
             }}
-            className="ml-2 mt-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="ml-2 mt-4 rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)]"
           >
             {t('sidebar.dashboard')}
           </button>
@@ -473,11 +473,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </div>
 
       {mobileSidebarOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div id="mobile-sidebar-drawer" className="fixed inset-0 z-40 lg:hidden">
           <button
             type="button"
             aria-label={t('common.close')}
-            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-[rgba(43,57,68,0.58)] backdrop-blur-sm"
             onClick={() => setMobileSidebarOpen(false)}
           />
 
@@ -487,9 +487,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#fafcff_0%,#f5f7fa_48%,#eef3f8_100%)]">
+      <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#ffffff_0%,var(--tcdx-color-surface)_48%,var(--tcdx-color-surface-alt)_100%)]">
         <div className="sticky top-0 z-30">
-          <Header onMenuClick={() => setMobileSidebarOpen(true)} />
+          <Header onMenuClick={() => setMobileSidebarOpen(true)} mobileMenuOpen={mobileSidebarOpen} />
         </div>
 
         <main className="enterprise-main tcdx-premium-main tcdx-scrollbar min-w-0 flex-1 overflow-auto px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
