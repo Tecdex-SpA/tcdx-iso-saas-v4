@@ -36,8 +36,17 @@ normalize_git_url() {
     git@github.com:*)
       url="https://github.com/${url#git@github.com:}"
       ;;
+    git@github-tcdx-forwarded:*)
+      url="https://github.com/${url#git@github-tcdx-forwarded:}"
+      ;;
+    git@github.com-tcdx-v4:*)
+      url="https://github.com/${url#git@github.com-tcdx-v4:}"
+      ;;
     ssh://git@github.com/*)
       url="https://github.com/${url#ssh://git@github.com/}"
+      ;;
+    ssh://git@ssh.github.com:443/*)
+      url="https://github.com/${url#ssh://git@ssh.github.com:443/}"
       ;;
   esac
 
@@ -52,6 +61,7 @@ run_ssh() {
   shift
 
   ssh \
+    -A \
     -o BatchMode=yes \
     -o ConnectTimeout=10 \
     "${DEPLOY_USER}@${host}" \
@@ -138,7 +148,7 @@ validate_backend() {
   echo ""
   echo "Validando backend: ${host}"
 
-  ssh "${DEPLOY_USER}@${host}" '
+  ssh -A "${DEPLOY_USER}@${host}" '
     systemctl is-active tecdex-backend
 
     for i in {1..25}; do
