@@ -82,6 +82,56 @@
   --tcdx-shadow: 0 16px 42px rgba(8, 25, 58, 0.09);
   --tcdx-shadow-soft: 0 8px 24px rgba(8, 25, 58, 0.065);
   --tcdx-shadow-card: var(--shadow-card);
+
+
+  /* TECDEX Design System tokens, sourced from Tecdex-SpA/tecdex-design-system. */
+  --tcdx-color-primary: #F0721D;
+  --tcdx-color-primary-hover: #D5630F;
+  --tcdx-color-primary-active: #B8540B;
+  --tcdx-color-secondary: #51ABA8;
+  --tcdx-color-secondary-hover: #438E8B;
+  --tcdx-color-navy: #2B3944;
+  --tcdx-color-navy-deep: #00133B;
+  --tcdx-color-background: #FFFFFF;
+  --tcdx-color-surface: #F2F2F2;
+  --tcdx-color-surface-alt: #EDEFEF;
+  --tcdx-color-border: #D8D8D8;
+  --tcdx-color-white: #FFFFFF;
+  --tcdx-color-text-primary: #444444;
+  --tcdx-color-text-secondary: #777777;
+  --tcdx-color-text-muted: #54595F;
+  --tcdx-color-text-ink: #161616;
+  --tcdx-color-text-on-dark: #FFFFFF;
+  --tcdx-color-success: #23A455;
+  --tcdx-color-warning: #FBC962;
+  --tcdx-color-danger: #C95B5B;
+  --tcdx-color-info: #4054B2;
+  --tcdx-color-nav-active: #FBC962;
+  --tcdx-color-header-border: #659BD0;
+  --tcdx-font-family-heading: 'Roboto', -apple-system, 'Segoe UI', Arial, sans-serif;
+  --tcdx-font-family-display: 'Lato', -apple-system, 'Segoe UI', Arial, sans-serif;
+  --tcdx-font-family-body: -apple-system, "system-ui", "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  --tcdx-font-family-accent: 'Roboto', -apple-system, 'Segoe UI', Arial, sans-serif;
+  --tcdx-font-size-h1: 40px;
+  --tcdx-font-size-h2: 30px;
+  --tcdx-font-size-body: 16px;
+  --tcdx-font-size-body-sm: 14px;
+  --tcdx-font-size-caption: 13px;
+  --tcdx-font-size-label: 13px;
+  --tcdx-font-size-button: 15px;
+  --tcdx-font-weight-medium: 500;
+  --tcdx-font-weight-semibold: 600;
+  --tcdx-line-height-tight: 1.2;
+  --tcdx-line-height-body: 1.5;
+  --tcdx-letter-spacing-button: 0.02em;
+  --tcdx-text-transform-button: uppercase;
+  --tcdx-radius-tecdex-sm: 8px;
+  --tcdx-radius-tecdex-lg: 25px;
+  --tcdx-shadow-tecdex-sm: 0 1px 2px rgba(22, 22, 22, 0.06);
+  --tcdx-shadow-tecdex-lg: 0 12px 32px rgba(22, 22, 22, 0.14);
+  --tcdx-shadow-tecdex-focus: 0 0 0 3px rgba(240, 114, 29, 0.35);
+  --tcdx-motion-fast: 150ms;
+  --tcdx-motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @theme inline {

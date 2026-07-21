@@ -128,111 +128,128 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f4f7fb_48%,#eef3f8_100%)]">
-      <div className="relative hidden w-[46%] overflow-hidden bg-[linear-gradient(180deg,#06173a_0%,#061f49_52%,#041126_100%)] text-white shadow-[18px_0_42px_rgba(8,25,58,0.2)] md:flex">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-[linear-gradient(180deg,transparent_0%,rgba(16,185,129,0.08)_100%)]" />
-        <div className="relative z-10 flex min-h-screen w-full flex-col justify-between p-10">
-        <div>
-          <Image src="/logo.png" width={224} height={80} className="mb-10 w-56" alt="TCDX Compliance" priority />
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-100/80">
-            <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.8)]" />
-            Plataforma SaaS B2B ISO
-          </div>
-        </div>
+    <main className="flex min-h-screen bg-[var(--tcdx-color-surface)] text-[var(--tcdx-color-text-primary)] [font-family:var(--tcdx-font-family-body)]">
+      <section className="relative hidden min-h-screen w-[48%] overflow-hidden border-r border-[var(--tcdx-color-header-border)] bg-[linear-gradient(145deg,var(--tcdx-color-navy-deep)_0%,var(--tcdx-color-navy)_100%)] text-[var(--tcdx-color-text-on-dark)] lg:flex">
+        <div className="absolute inset-x-0 top-0 h-px bg-[var(--tcdx-color-header-border)]" />
+        <div className="absolute inset-x-0 bottom-0 h-1 bg-[var(--tcdx-color-primary)]" />
 
-        <div>
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-100/80">
-            {t('login.heroEyebrow')}
-          </p>
+        <div className="relative z-10 flex min-h-screen w-full flex-col justify-between px-10 py-9 xl:px-14">
+          <div>
+            <Image
+              src="/logo.png"
+              width={224}
+              height={80}
+              className="mb-8 h-14 w-auto object-contain"
+              alt="TCDX Compliance"
+              priority
+            />
 
-          <h1 className="max-w-xl text-4xl font-bold leading-tight">
-            {t('login.heroTitle')}
-          </h1>
-
-          <p className="mt-5 max-w-lg text-base leading-7 text-white/72">
-            {t('login.heroSubtitle')}
-          </p>
-
-          <div className="mt-9 grid max-w-xl grid-cols-1 gap-3 text-sm text-white/82 xl:grid-cols-2">
-            <div className="rounded-lg border border-white/12 bg-white/8 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-emerald-100">
-                <TcdxIcon name="audit" className="h-5 w-5" />
-              </div>
-              <div className="font-semibold text-white">{t('login.heroCardAudits')}</div>
-              <div className="mt-2 text-xs leading-5 text-white/58">
-                Preparación auditora, hallazgos, evidencia y trazabilidad por rol.
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-white/12 bg-white/8 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-blue-100">
-                <TcdxIcon name="evidence" className="h-5 w-5" />
-              </div>
-              <div className="font-semibold text-white">{t('login.heroCardEvidence')}</div>
-              <div className="mt-2 text-xs leading-5 text-white/58">
-                Operación diaria conectada con KPIs, riesgos y acciones.
-              </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-4 py-2 text-[var(--tcdx-font-size-caption)] font-semibold uppercase tracking-[var(--tcdx-letter-spacing-button)] text-white/78">
+              <span className="h-2 w-2 rounded-full bg-[var(--tcdx-color-secondary)]" />
+              Plataforma SaaS B2B ISO
             </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-3 gap-3 text-xs text-white/60">
-          <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3">
-            <div className="text-lg font-bold text-white">ISO</div>
-            <div className="mt-1">Multinorma</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3">
-            <div className="text-lg font-bold text-white">B2B</div>
-            <div className="mt-1">Multiempresa</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/7 px-3 py-3">
-            <div className="text-lg font-bold text-white">IA</div>
-            <div className="mt-1">Auditora</div>
-          </div>
-        </div>
-        </div>
-      </div>
+          <div className="max-w-xl">
+            <p className="mb-4 text-[var(--tcdx-font-size-label)] font-semibold uppercase tracking-[0.08em] text-[var(--tcdx-color-warning)]">
+              {t('login.heroEyebrow')}
+            </p>
 
-      <div className="flex w-full items-center justify-center px-4 py-6 sm:p-6 md:w-[54%]">
-        <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white/95 p-6 shadow-[0_24px_70px_rgba(8,25,58,0.12)] backdrop-blur sm:p-8">
+            <h1 className="max-w-xl text-[var(--tcdx-font-size-h1)] font-medium leading-[var(--tcdx-line-height-tight)] text-white">
+              {t('login.heroTitle')}
+            </h1>
+
+            <p className="mt-5 max-w-lg text-[var(--tcdx-font-size-body)] leading-[var(--tcdx-line-height-body)] text-white/72">
+              {t('login.heroSubtitle')}
+            </p>
+
+            <div className="mt-9 grid max-w-xl grid-cols-1 gap-4 text-sm text-white/82 xl:grid-cols-2">
+              <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/12 bg-white/8 p-5">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] bg-[rgba(240,114,29,0.18)] text-[var(--tcdx-color-primary)]">
+                  <TcdxIcon name="audit" className="h-5 w-5" />
+                </div>
+                <div className="font-semibold text-white">{t('login.heroCardAudits')}</div>
+                <div className="mt-2 text-xs leading-5 text-white/58">
+                  Preparación auditora, hallazgos, evidencia y trazabilidad por rol.
+                </div>
+              </div>
+
+              <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/12 bg-white/8 p-5">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] bg-[rgba(81,171,168,0.18)] text-[var(--tcdx-color-secondary)]">
+                  <TcdxIcon name="evidence" className="h-5 w-5" />
+                </div>
+                <div className="font-semibold text-white">{t('login.heroCardEvidence')}</div>
+                <div className="mt-2 text-xs leading-5 text-white/58">
+                  Operación diaria conectada con KPIs, riesgos y acciones.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 text-xs text-white/62">
+            {[
+              ['ISO', 'Multinorma'],
+              ['B2B', 'Multiempresa'],
+              ['IA', 'Auditora'],
+            ].map(([value, label]) => (
+              <div
+                key={value}
+                className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/10 bg-white/7 px-3 py-3"
+              >
+                <div className="text-lg font-semibold text-white">{value}</div>
+                <div className="mt-1">{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="flex w-full items-center justify-center px-4 py-6 sm:p-6 lg:w-[52%]">
+        <div className="w-full max-w-[430px] rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-white)] p-6 shadow-[var(--tcdx-shadow-tecdex-lg)] sm:p-8">
           <div className="mb-6">
             <LanguageSelector variant="login" />
           </div>
 
           <div className="mb-8 text-center">
-            <div className="mb-5 flex justify-center md:hidden">
-              <Image src="/logo.png" width={224} height={64} className="h-16 w-auto object-contain" alt="TCDX Compliance" priority />
+            <div className="mb-5 flex justify-center lg:hidden">
+              <Image
+                src="/logo.png"
+                width={224}
+                height={64}
+                className="h-16 w-auto object-contain"
+                alt="TCDX Compliance"
+                priority
+              />
             </div>
 
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
+            <p className="mb-2 text-[var(--tcdx-font-size-label)] font-semibold uppercase tracking-[0.08em] text-[var(--tcdx-color-primary)]">
               {t('login.secureAccess')}
             </p>
 
-            <h2 className="text-2xl font-bold text-slate-950">
+            <h2 className="text-[var(--tcdx-font-size-h2)] font-normal leading-[var(--tcdx-line-height-tight)] text-[var(--tcdx-color-text-ink)] [font-family:var(--tcdx-font-family-heading)]">
               {t('login.title')}
             </h2>
 
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-3 text-[var(--tcdx-font-size-body-sm)] leading-[var(--tcdx-line-height-body)] text-[var(--tcdx-color-text-secondary)]">
               {t('login.subtitle')}
             </p>
           </div>
 
           {error && (
-            <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="mb-5 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(201,91,91,0.3)] bg-[rgba(201,91,91,0.08)] p-4 text-sm text-[#963f3f]">
               {error}
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              <label className="mb-2 block text-[var(--tcdx-font-size-label)] font-semibold text-[var(--tcdx-color-text-primary)]">
                 {t('login.email')}
               </label>
 
               <input
                 type="email"
-                className="tcdx-focus-ring w-full rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-slate-900 placeholder:text-slate-400"
+                className="tcdx-focus-ring w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-white)] px-4 py-3 text-[var(--tcdx-color-text-ink)] placeholder:text-[var(--tcdx-color-text-secondary)]"
                 placeholder={t('login.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -242,13 +259,13 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              <label className="mb-2 block text-[var(--tcdx-font-size-label)] font-semibold text-[var(--tcdx-color-text-primary)]">
                 {t('login.password')}
               </label>
 
               <input
                 type="password"
-                className="tcdx-focus-ring w-full rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-slate-900 placeholder:text-slate-400"
+                className="tcdx-focus-ring w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-white)] px-4 py-3 text-[var(--tcdx-color-text-ink)] placeholder:text-[var(--tcdx-color-text-secondary)]"
                 placeholder={t('login.password')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -261,7 +278,7 @@ export default function LoginPage() {
               type="button"
               onClick={handleLogin}
               disabled={loading}
-              className="group flex w-full items-center justify-center gap-2 rounded-lg bg-[#1f6feb] p-3 font-semibold text-white shadow-[0_14px_28px_rgba(31,111,235,0.24)] transition hover:-translate-y-0.5 hover:bg-[#195fc9] hover:shadow-[0_18px_34px_rgba(31,111,235,0.28)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-primary)] px-6 py-3 text-[var(--tcdx-font-size-button)] font-semibold uppercase tracking-[var(--tcdx-letter-spacing-button)] text-white transition duration-150 ease-[var(--tcdx-motion-ease)] hover:bg-[var(--tcdx-color-primary-hover)] active:translate-y-px active:bg-[var(--tcdx-color-primary-active)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading && (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
@@ -270,11 +287,11 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-500">
+          <div className="mt-6 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-4 text-xs leading-5 text-[var(--tcdx-color-text-secondary)]">
             {t('login.routeHint')}
           </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
