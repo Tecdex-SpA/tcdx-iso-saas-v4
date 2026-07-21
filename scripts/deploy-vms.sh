@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 EXPECTED_DEPLOY_DIR="${TCDX_DEPLOY_MAIN_DIR:-$HOME/repos/tcdx-iso-saas-v4}"
+EXPECTED_ORIGIN_URL="${TCDX_EXPECTED_ORIGIN_URL:-https://github.com/Tecdex-SpA/tcdx-iso-saas-v4.git}"
+
 CURRENT_DIR="$(pwd -P)"
 EXPECTED_DIR="$(cd "$EXPECTED_DEPLOY_DIR" 2>/dev/null && pwd -P || printf '%s' "$EXPECTED_DEPLOY_DIR")"
 CURRENT_BRANCH="$(git branch --show-current 2>/dev/null || true)"
@@ -23,6 +25,27 @@ REMOTE_AI_ENGINE_DIR="${REMOTE_REPO_DIR}/ai-engine"
 BACKEND_WRAPPER="/home/tecdex/deploy-backend.sh"
 FRONTEND_WRAPPER="/home/tecdex/deploy-frontend.sh"
 AI_ENGINE_WRAPPER="/home/tecdex/deploy-ai-engine.sh"
+
+normalize_git_url() {
+  local url="${1:-}"
+
+  url="${url%/}"
+  url="${url%.git}"
+
+  case "$url" in
+    git@github.com:*)
+      url="https://github.com/${url#git@github.com:}"
+      ;;
+    ssh://git@github.com/*)
+      url="https://github.com/${url#ssh://git@github.com/}"
+      ;;
+  esac
+
+  printf '%s' "$url"
+}
+
+EXPECTED_ORIGIN_NORMALIZED="$(normalize_git_url "$EXPECTED_ORIGIN_URL")"
+ORIGIN_URL_NORMALIZED="$(normalize_git_url "$ORIGIN_URL")"
 
 run_ssh() {
   local host="$1"
@@ -55,6 +78,32 @@ preflight_remote() {
     exit 1
   }
 
+  run_ssh "$host" "git -C '${remote_dir}' rev-parse --is-inside-work-tree >/dev/null 2>&1" || {
+    echo "ERROR: la ruta remota no pertenece a un repositorio Git para ${label}: ${remote_dir}"
+    exit 1
+  }
+
+  local remote_origin
+  remote_origin="$(run_ssh "$host" "git -C '${remote_dir}' remote get-url origin 2>/dev/null || true")"
+
+  if [[ -z "$remote_origin" ]]; then
+    echo "ERROR: no se pudo detectar origin remoto para ${label}: ${remote_dir}"
+    exit 1
+  fi
+
+  local remote_origin_normalized
+  remote_origin_normalized="$(normalize_git_url "$remote_origin")"
+
+  if [[ "$remote_origin_normalized" != "$EXPECTED_ORIGIN_NORMALIZED" ]]; then
+    echo "ERROR: origin remoto incorrecto para ${label}."
+    echo "Esperado: ${EXPECTED_ORIGIN_URL}"
+    echo "Actual:   ${remote_origin}"
+    echo ""
+    echo "Corrige en ${host}:"
+    echo "  git -C '${REMOTE_REPO_DIR}' remote set-url origin '${EXPECTED_ORIGIN_URL}'"
+    exit 1
+  fi
+
   run_ssh "$host" "test -x '${wrapper}'" || {
     echo "ERROR: wrapper remoto no existe o no es ejecutable para ${label}: ${wrapper}"
     exit 1
@@ -66,6 +115,7 @@ preflight_remote() {
   }
 
   echo "${label} OK"
+  echo "Origin remoto: ${remote_origin}"
 }
 
 deploy_remote() {
@@ -107,7 +157,7 @@ validate_backend() {
       sleep 1
     done
 
-    echo "ERROR: backend no responde de forma válida"
+    echo "ERROR: backend no responde de forma valida"
     systemctl status tecdex-backend --no-pager || true
     journalctl -u tecdex-backend -n 80 --no-pager || true
     exit 1
@@ -133,7 +183,7 @@ validate_ai() {
     sudo journalctl -u ai-engine.service -n 80 --no-pager || true
     exit 1
   ' || {
-    echo "ERROR: servicio AI Engine no quedó activo o healthcheck no paso."
+    echo "ERROR: servicio AI Engine no quedo activo o healthcheck no paso."
     exit 1
   }
 }
@@ -157,7 +207,7 @@ validate_frontend() {
     sudo journalctl -u tcdx-frontend.service -n 80 --no-pager || true
     exit 1
   ' || {
-    echo "ERROR: servicio frontend no quedó activo o healthcheck no paso."
+    echo "ERROR: servicio frontend no quedo activo o healthcheck no paso."
     exit 1
   }
 }
@@ -172,7 +222,8 @@ echo "Carpeta actual:    ${CURRENT_DIR}"
 echo "Carpeta esperada:  ${EXPECTED_DIR}"
 echo "Rama actual:       ${CURRENT_BRANCH:-no-detectada}"
 echo "Ultimo commit:     ${CURRENT_COMMIT:-no-detectado}"
-echo "Origin:            ${ORIGIN_URL:-no-detectado}"
+echo "Origin actual:     ${ORIGIN_URL:-no-detectado}"
+echo "Origin esperado:   ${EXPECTED_ORIGIN_URL}"
 echo "Usuario deploy:    ${DEPLOY_USER}"
 echo "Deploy mode:       v4 only"
 echo "Backend host:      ${BACKEND_HOST}"
@@ -185,7 +236,7 @@ echo "AI engine dir:     ${REMOTE_AI_ENGINE_DIR}"
 
 if [[ ! -d .git && ! -f .git ]]; then
   echo ""
-  echo "ERROR: este comando debe ejecutarse desde un worktree Git válido."
+  echo "ERROR: este comando debe ejecutarse desde un worktree Git valido."
   echo "Usa:"
   echo "  cd ${EXPECTED_DEPLOY_DIR}"
   exit 1
@@ -193,13 +244,13 @@ fi
 
 if [[ "$CURRENT_DIR" != "$EXPECTED_DIR" ]]; then
   echo ""
-  echo "ERROR: deploy bloqueado porque no estás en el worktree estable esperado."
+  echo "ERROR: deploy bloqueado porque no estas en el worktree estable esperado."
   echo "Worktree permitido:"
   echo "  ${EXPECTED_DIR}"
   echo "Worktree actual:"
   echo "  ${CURRENT_DIR}"
   echo ""
-  echo "Para saltarte esta protección:"
+  echo "Para saltarte esta proteccion:"
   echo "  TCDX_ALLOW_UNSAFE_DEPLOY=YES ./scripts/deploy-vms.sh"
 
   if [[ "${TCDX_ALLOW_UNSAFE_DEPLOY:-}" != "YES" ]]; then
@@ -239,6 +290,42 @@ if [[ -n "$CURRENT_STATUS" ]]; then
   echo "ADVERTENCIA: continuando con working tree sucio por TCDX_ALLOW_UNSAFE_DEPLOY=YES."
 fi
 
+if [[ -z "$ORIGIN_URL" ]]; then
+  echo ""
+  echo "ERROR: no se pudo detectar el remoto origin local."
+  exit 1
+fi
+
+if [[ "$ORIGIN_URL_NORMALIZED" != "$EXPECTED_ORIGIN_NORMALIZED" ]]; then
+  echo ""
+  echo "ERROR: deploy bloqueado porque origin local no corresponde al repositorio oficial."
+  echo "Origin esperado:"
+  echo "  ${EXPECTED_ORIGIN_URL}"
+  echo "Origin actual:"
+  echo "  ${ORIGIN_URL}"
+  echo ""
+  echo "Corrige con:"
+  echo "  git remote set-url origin '${EXPECTED_ORIGIN_URL}'"
+  exit 1
+fi
+
+git fetch origin --prune
+
+LOCAL_HEAD="$(git rev-parse HEAD)"
+REMOTE_MAIN="$(git rev-parse origin/main)"
+
+if [[ "$LOCAL_HEAD" != "$REMOTE_MAIN" ]]; then
+  echo ""
+  echo "ERROR: main local no coincide con origin/main."
+  echo "HEAD local:   ${LOCAL_HEAD}"
+  echo "origin/main:  ${REMOTE_MAIN}"
+  echo ""
+  echo "Sincroniza antes de desplegar:"
+  echo "  git switch main"
+  echo "  git pull --ff-only origin main"
+  exit 1
+fi
+
 echo ""
 echo "Preflight Git OK."
 echo ""
@@ -274,13 +361,15 @@ echo "======================================"
 echo " VALIDACION POST-DEPLOY"
 echo "======================================"
 validate_backend "$BACKEND_HOST"
-validate_ai "$AI_HOST"
-validate_frontend "$FRONTEND_HOST"
+validate_ai
+validate_frontend
 
 echo ""
 echo "======================================"
 echo " DEPLOY V4 FINALIZADO OK"
 echo "======================================"
+echo "Repositorio:  ${EXPECTED_ORIGIN_URL}"
+echo "Commit:       $(git rev-parse HEAD)"
 echo "Backend:      ${BACKEND_HOST}"
 echo "AI Engine:    ${AI_HOST}"
 echo "Frontend:     ${FRONTEND_HOST}"
