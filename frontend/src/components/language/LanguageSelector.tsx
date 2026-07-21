@@ -26,12 +26,12 @@ export default function LanguageSelector({ variant = 'compact' }: LanguageSelect
     <div
       className={[
         isLogin
-          ? 'rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm'
+          ? 'rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3 shadow-[var(--tcdx-shadow-tecdex-sm)]'
           : 'rounded-lg border border-white/10 bg-white/7 p-1',
       ].join(' ')}
     >
       {isLogin && (
-        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--tcdx-color-text-secondary)]">
           {t('login.language')}
         </div>
       )}
@@ -56,8 +56,8 @@ export default function LanguageSelector({ variant = 'compact' }: LanguageSelect
                 'rounded-md px-3 py-2 text-sm font-semibold transition',
                 isLogin
                   ? selected
-                    ? 'bg-[#1f6feb] text-white shadow-[0_8px_18px_rgba(31,111,235,0.22)]'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'bg-[var(--tcdx-color-secondary)] text-white'
+                    : 'text-[var(--tcdx-color-text-secondary)] hover:bg-[var(--tcdx-color-surface-alt)]'
                   : selected
                   ? 'bg-white text-[#06173a]'
                   : 'text-white/70 hover:bg-white/10 hover:text-white',
