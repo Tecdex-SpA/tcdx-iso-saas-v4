@@ -563,16 +563,16 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
   const displayResults = search.trim().length >= 2 ? searchResults : [];
 
   return (
-    <header className="enterprise-topbar tcdx-shell-header px-4 py-2.5 text-[var(--tcdx-color-text-ink)] md:px-6">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-4">
+    <header className="enterprise-topbar tcdx-shell-header relative px-3 py-2.5 text-[var(--tcdx-color-text-ink)] sm:px-4 md:px-5">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:grid-cols-[minmax(170px,0.9fr)_minmax(180px,1.1fr)_auto] xl:gap-3">
+        <div className="flex min-w-0 items-center gap-2 xl:gap-3">
           <button
             type="button"
             onClick={onMenuClick}
             aria-label={t('header.openMenu')}
             aria-controls="mobile-sidebar-drawer"
             aria-expanded={mobileMenuOpen}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-navy)] shadow-[var(--tcdx-shadow-tecdex-sm)] transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] lg:hidden"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-navy)] shadow-[var(--tcdx-shadow-tecdex-sm)] transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] lg:hidden"
             title={t('header.openMenu')}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -580,8 +580,8 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
             </svg>
           </button>
 
-          <div className="flex min-w-0 items-center gap-3 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-3.5 py-2 shadow-[var(--tcdx-shadow-tecdex-sm)]">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-0.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2.5 py-1.5 shadow-[var(--tcdx-shadow-tecdex-sm)] xl:gap-3 xl:px-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-0.5 shadow-sm xl:h-11 xl:w-11">
               <Image
                 src={tenantLogoSource}
                 width={56}
@@ -608,19 +608,19 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
               />
             </span>
 
-            <div className="hidden min-w-0 lg:block">
-              <div className="max-w-[220px] truncate text-[15px] font-semibold leading-tight tracking-normal text-[var(--tcdx-color-text-ink)] xl:max-w-[280px]">
+            <div className="hidden min-w-0 sm:block" title={`${tenantDisplayName} · ${tenantSubtext}`}>
+              <div className="max-w-[120px] truncate text-[13px] font-semibold leading-tight tracking-normal text-[var(--tcdx-color-text-ink)] lg:max-w-[150px] xl:max-w-[220px] 2xl:max-w-[280px]">
                 {tenantDisplayName}
               </div>
-              <div className="mt-0.5 max-w-[220px] truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tcdx-color-text-secondary)] xl:max-w-[280px]">
+              <div className="mt-0.5 hidden max-w-[220px] truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--tcdx-color-text-secondary)] xl:block 2xl:max-w-[280px]">
                 {tenantSubtext}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex min-w-0 items-center gap-3">
-          <div ref={searchRef} className="relative hidden lg:block">
+        <div className="hidden min-w-0 md:block">
+          <div ref={searchRef} className="relative min-w-0">
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                 <TcdxIcon name="search" className="h-4 w-4" />
@@ -640,7 +640,7 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
                 role="combobox"
                 aria-expanded={searchOpen}
                 aria-controls="global-header-search-results"
-                className="w-[440px] rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white py-3 pl-10 pr-16 text-sm text-[var(--tcdx-color-text-ink)] placeholder:text-[var(--tcdx-color-text-secondary)] transition focus:border-[var(--tcdx-color-primary)] focus:bg-white focus:shadow-[var(--tcdx-shadow-tecdex-focus)]"
+                className="w-full min-w-0 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white py-2.5 pl-10 pr-4 text-sm text-[var(--tcdx-color-text-ink)] placeholder:text-[var(--tcdx-color-text-secondary)] transition focus:border-[var(--tcdx-color-primary)] focus:bg-white focus:shadow-[var(--tcdx-shadow-tecdex-focus)] xl:pr-16"
               />
 
               <span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] px-2 py-0.5 text-[10px] text-[var(--tcdx-color-text-secondary)] xl:block">
@@ -712,8 +712,33 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
               </div>
             )}
           </div>
+        </div>
 
-          <div className="hidden xl:flex items-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] px-3 py-2.5 text-xs text-[var(--tcdx-color-text-primary)] shadow-sm">
+        <div className="flex min-w-0 items-center justify-end gap-1.5 xl:gap-2">
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] md:hidden"
+            aria-label={t('header.searchTitle')}
+            aria-expanded={searchOpen}
+            aria-controls="global-header-search-mobile"
+            onClick={() => {
+              setSearchOpen((prev) => !prev);
+              setTimeout(() => document.getElementById('global-header-search-mobile')?.focus(), 50);
+            }}
+          >
+            <TcdxIcon name="search" className="h-5 w-5" />
+          </button>
+
+          <button
+            type="button"
+            className="hidden h-10 w-10 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-secondary)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] xl:flex 2xl:hidden"
+            aria-label={`${t('header.lastSync')}: ${lastSync}`}
+            title={`${t('header.lastSync')}: ${lastSync}`}
+          >
+            <TcdxIcon name="calendar" className="h-4 w-4" />
+          </button>
+
+          <div className="hidden 2xl:flex items-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] px-3 py-2 text-xs text-[var(--tcdx-color-text-primary)] shadow-sm">
             <span className="flex h-8 w-8 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] bg-white text-[var(--tcdx-color-secondary)] shadow-sm">
               <TcdxIcon name="calendar" className="h-4 w-4" />
             </span>
@@ -729,7 +754,7 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
               aria-label={t('header.notifications')}
               aria-haspopup="menu"
               aria-expanded={notificationsOpen}
-              className="relative flex h-11 w-11 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)] hover:text-[var(--tcdx-color-text-ink)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
+              className="relative flex h-10 w-10 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)] hover:text-[var(--tcdx-color-text-ink)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
               title={t('header.notifications')}
               onClick={() => setNotificationsOpen((prev) => !prev)}
             >
@@ -790,13 +815,13 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3" ref={menuRef}>
+          <div className="flex min-w-0 items-center gap-1.5 xl:gap-2" ref={menuRef}>
             <div className="relative">
               <button
                 type="button"
                 aria-haspopup="menu"
                 aria-expanded={open}
-                className="flex items-center gap-3 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2.5 py-1.5 text-left shadow-sm transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
+                className="flex min-w-0 items-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-1.5 py-1 text-left shadow-sm transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] xl:px-2"
                 onClick={() => setOpen(!open)}
               >
                 {avatarUrl ? (
@@ -806,15 +831,15 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
                     width={40}
                     height={40}
                     unoptimized
-                    className="h-10 w-10 rounded-full border border-[var(--tcdx-color-border)] object-cover shadow-md"
+                    className="h-9 w-9 rounded-full border border-[var(--tcdx-color-border)] object-cover shadow-md xl:h-10 xl:w-10"
                   />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(81,171,168,0.35)] bg-[var(--tcdx-color-secondary)] text-sm font-bold text-white">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(81,171,168,0.35)] bg-[var(--tcdx-color-secondary)] text-sm font-bold text-white xl:h-10 xl:w-10">
                     {displayName.charAt(0).toUpperCase()}
                   </div>
                 )}
 
-                <div className="hidden max-w-[220px] sm:block">
+                <div className="hidden min-w-0 max-w-[120px] 2xl:block">
                   <div className="truncate text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{displayName}</div>
                   <div className="truncate text-xs text-[var(--tcdx-color-text-secondary)]">
                     {tenant?.name || user?.role || t('header.userFallback')}
@@ -851,6 +876,13 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
                     {t('header.profileHint')}
                   </div>
 
+                  <div className="mb-3 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-3 py-2 text-xs text-[var(--tcdx-color-text-secondary)]">
+                    <div className="font-semibold uppercase tracking-[0.08em] text-[var(--tcdx-color-text-muted)]">
+                      {t('header.lastSync')}
+                    </div>
+                    <div className="mt-1 text-[var(--tcdx-color-text-ink)]">{lastSync}</div>
+                  </div>
+
                   <hr className="my-2 border-slate-200" />
 
                   <button
@@ -863,21 +895,88 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
                   >
                     {t('header.profile')}
                   </button>
+
+                  <button
+                    role="menuitem"
+                    className="mt-1 flex w-full items-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] p-3 text-left text-sm font-semibold text-[var(--tcdx-color-primary)] transition hover:bg-[rgba(240,114,29,0.08)]"
+                    onClick={logout}
+                  >
+                    <TcdxIcon name="logout" className="h-4 w-4" />
+                    {t('header.logout')}
+                  </button>
                 </div>
               )}
             </div>
 
             <button
-              className="inline-flex h-11 items-center gap-2 rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white px-3 text-sm font-semibold text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:border-[var(--tcdx-color-primary)] hover:bg-[rgba(240,114,29,0.08)] hover:text-[var(--tcdx-color-primary)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] sm:px-4"
+              className="hidden h-10 items-center gap-2 rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white px-3 text-sm font-semibold text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:border-[var(--tcdx-color-primary)] hover:bg-[rgba(240,114,29,0.08)] hover:text-[var(--tcdx-color-primary)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] 2xl:inline-flex"
               onClick={logout}
               title={t('header.logout')}
             >
               <TcdxIcon name="logout" className="h-4 w-4" />
-              <span className="hidden md:inline">{t('header.logout')}</span>
+              <span>{t('header.logout')}</span>
             </button>
           </div>
         </div>
       </div>
+
+      {searchOpen && (
+        <div className="absolute left-3 right-3 top-[calc(100%+8px)] z-50 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-3 text-[var(--tcdx-color-text-ink)] shadow-[var(--tcdx-shadow-tecdex-lg)] md:hidden">
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <TcdxIcon name="search" className="h-4 w-4" />
+            </span>
+            <input
+              id="global-header-search-mobile"
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setSearchOpen(true);
+              }}
+              onKeyDown={handleSearchKeyDown}
+              placeholder={t('header.searchPlaceholder') || 'Buscar controles, evidencias, riesgos...'}
+              role="combobox"
+              aria-expanded={searchOpen}
+              aria-controls="global-header-search-mobile-results"
+              className="w-full min-w-0 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white py-2.5 pl-10 pr-3 text-sm text-[var(--tcdx-color-text-ink)] placeholder:text-[var(--tcdx-color-text-secondary)] transition focus:border-[var(--tcdx-color-primary)] focus:shadow-[var(--tcdx-shadow-tecdex-focus)]"
+            />
+          </div>
+
+          <div id="global-header-search-mobile-results" className="mt-3 max-h-[60vh] overflow-auto">
+            {search.trim() === '' ? (
+              <div className="text-sm text-slate-500">{t('header.searchHelp')}</div>
+            ) : searchLoading ? (
+              <div className="text-sm text-slate-500">{t('header.searching')}</div>
+            ) : displayResults.length === 0 ? (
+              <div className="text-sm text-slate-500">
+                {t('header.noSearchResults')} <b>{search}</b>.
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {displayResults.map((result, index) => (
+                  <button
+                    key={`${result.type}-${result.id}-mobile`}
+                    type="button"
+                    onClick={() => handleResultNavigate(result)}
+                    className={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${
+                      activeIndex === index ? 'bg-[rgba(240,114,29,0.08)]' : 'hover:bg-[var(--tcdx-color-surface)]'
+                    }`}
+                  >
+                    <span className={`mt-0.5 rounded-lg px-2 py-1 text-[11px] font-semibold ${getTypeClasses(result.type)}`}>
+                      {result.type}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-slate-900">{result.title}</div>
+                      <div className="truncate text-sm text-slate-500">{result.subtitle}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }

@@ -16,14 +16,16 @@ import {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+const TECDEX_LOGO_FALLBACK = '/tecdex.png';
+
 const SERVICE_LOGO_SRC =
-  process.env.NEXT_PUBLIC_TCDX_LOGO_URL || '/logo.png';
+  process.env.NEXT_PUBLIC_TECDX_LOGO_URL || TECDEX_LOGO_FALLBACK;
 
 const PLATFORM_WORDMARK_SRC =
-  process.env.NEXT_PUBLIC_TCDX_WORDMARK_URL || SERVICE_LOGO_SRC;
+  process.env.NEXT_PUBLIC_TECDX_WORDMARK_URL || TECDEX_LOGO_FALLBACK;
 
 const POWERED_BY_LOGO_SRC =
-  process.env.NEXT_PUBLIC_TECDX_POWERED_LOGO_URL || '/tecdex.png';
+  process.env.NEXT_PUBLIC_TECDX_POWERED_LOGO_URL || TECDEX_LOGO_FALLBACK;
 
 type SidebarProps = {
   collapsed?: boolean;
@@ -389,25 +391,25 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       <div className={`relative z-10 mb-6 flex min-h-20 items-center border-b border-white/10 pb-5 ${collapsed ? 'justify-center' : 'justify-center'}`}>
         {collapsed ? (
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/15 bg-white/10 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_24px_rgba(0,0,0,0.16)]">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/15 bg-white/10 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_24px_rgba(0,0,0,0.16)]">
             <Image
               src={SERVICE_LOGO_SRC}
-              alt="ISOS-SAAS-TECDEX"
-              width={64}
-              height={64}
+              alt="TECDEX"
+              width={88}
+              height={88}
               unoptimized
               className="h-full w-full object-contain"
             />
           </span>
         ) : (
-          <div className="flex min-h-[112px] w-full items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/12 bg-white/10 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(0,0,0,0.16)]">
+          <div className="flex min-h-[124px] w-full items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/12 bg-white/10 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(0,0,0,0.16)]">
             <Image
               src={PLATFORM_WORDMARK_SRC}
-              alt="ISOS-SAAS-TECDEX Compliance 360"
-              width={224}
-              height={112}
+              alt="TECDEX"
+              width={260}
+              height={72}
               unoptimized
-              className="h-[112px] w-full max-w-[224px] object-contain"
+              className="max-h-[78px] w-full object-contain"
             />
           </div>
         )}
