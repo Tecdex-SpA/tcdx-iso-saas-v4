@@ -13,3 +13,10 @@ No se cumplen criterios obligatorios de catálogo contractual verificado, autori
 - `artifacts/fase-0/baseline/results.csv`
 - `artifacts/fase-0/phase0-contracts-check.json`
 - `docs/product/fase-0-execution-ledger.md`
+
+
+## Actualización 2026-07-22T17:28:28Z — Contracts regression gate
+
+Se incorporó baseline decreciente para `phase0:contracts:check`. El estado esperado inicial es `BASELINE_ACCEPTED` con 328 hallazgos actuales y máximo permitido 328.
+
+Esto no cierra Fase 0: `phaseStatus` permanece abierto hasta llegar a `targetFindings: 0` y completar E2E, aislamiento, observabilidad y restore.

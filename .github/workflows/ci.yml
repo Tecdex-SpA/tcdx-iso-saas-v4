@@ -40,9 +40,11 @@ jobs:
         working-directory: backend
         run: npm run check
 
-      - name: Phase 0 capability and authorization contracts
+      - name: Phase 0 capability and authorization regression gate
         working-directory: backend
-        run: npm run phase0:inventory && npm run phase0:contracts:check
+        run: |
+          npm run phase0:inventory
+          npm run phase0:contracts:check
 
       - name: Install frontend dependencies
         working-directory: frontend

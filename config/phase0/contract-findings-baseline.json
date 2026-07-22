@@ -1,17 +1,11 @@
 {
-  "checkedAt": "2026-07-22T17:34:33.105Z",
-  "analyzedSha": "730f5da2c237f402dc357e8d4d3703b2964b6335",
-  "status": "BASELINE_ACCEPTED",
-  "phaseStatus": "OPEN",
-  "phaseOpenReason": "Fase 0 continúa abierta mientras existan hallazgos contractuales.",
-  "currentFindings": 328,
+  "schemaVersion": 1,
   "maximumAllowedFindings": 328,
   "targetFindings": 0,
-  "variation": 0,
-  "regressions": 0,
-  "newCriticalFindings": 0,
-  "baselineGeneratedFromSha": "730f5da2c237f402dc357e8d4d3703b2964b6335",
-  "baselineGeneratedAt": "2026-07-22T17:27:19Z",
+  "phaseStatus": "open",
+  "generatedFromSha": "730f5da2c237f402dc357e8d4d3703b2964b6335",
+  "generatedAt": "2026-07-22T17:27:19Z",
+  "description": "Baseline decreciente para phase0:contracts:check. No cierra ni acepta permanentemente las brechas; solo evita regresiones mientras Fase 0 permanece abierta.",
   "countsByCategory": {
     "non_productive_visible_without_feature_flag": 35,
     "productive_capability_without_e2e": 5,
@@ -23,19 +17,6 @@
     "critical": 211,
     "high": 117
   },
-  "baselineCountsByCategory": {
-    "non_productive_visible_without_feature_flag": 35,
-    "productive_capability_without_e2e": 5,
-    "endpoint_without_tenant_scope_signal": 111,
-    "endpoint_without_auth_signal": 176,
-    "capabilities_without_endpoint_association": 1
-  },
-  "baselineCountsBySeverity": {
-    "critical": 211,
-    "high": 117
-  },
-  "newFindings": [],
-  "removedFindings": [],
   "findings": [
     {
       "key": "3e4729da64428523",

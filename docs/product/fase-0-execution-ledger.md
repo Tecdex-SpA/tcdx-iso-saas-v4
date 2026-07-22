@@ -16,3 +16,12 @@
 | F0-CI-001 | CI | Checks Fase 0 integrados como bloqueantes | in_progress | .github/workflows/ci.yml; backend/package.json | El check integrado falla por brechas reales | Resolver hallazgos antes de habilitar cierre | npm --prefix backend run phase0:check |
 | F0-OBS-001 | Observabilidad | Correlation ID/logs/métricas/alertas/dashboard | pending | docs/operations/fase-0-observability-runbook.md | No se verificó implementación completa | Auditar backend/AI y agregar observabilidad mínima | docs/operations/fase-0-observability-runbook.md |
 | F0-REST-001 | Restore | Backup QA, restore aislado, RPO/RTO medidos | blocked_external | docs/operations/fase-0-restore-test-report.md | No hay DB QA aislada confirmada en este ciclo | Ejecutar restore con DB QA temporal y registrar evidencia | scripts/ops/restore-postgres-smoke-test.sh |
+
+## Ciclo 2026-07-22T17:28:28Z — Baseline decreciente phase0 contracts
+
+- SHA analizado: `730f5da2c237f402dc357e8d4d3703b2964b6335`
+- Objetivo: convertir `phase0:contracts:check` en gate de regresión sin cerrar Fase 0.
+
+| ID | Épica | Entregable o criterio | Estado | Evidencia | Bloqueo | Próxima acción | Punto de reanudación |
+|---|---|---|---|---|---|---|---|
+| F0-CONTRACT-GATE-001 | Contratos | Baseline decreciente de hallazgos contractuales | verified | `config/phase0/contract-findings-baseline.json`; `docs/qa/fase-0-contracts-check.md` | Fase 0 sigue abierta con 328 hallazgos baseline | Reducir hallazgos de forma incremental sin aumentar baseline | `npm --prefix backend run phase0:contracts:check` |
