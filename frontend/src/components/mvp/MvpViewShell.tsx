@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import AppLayout from '@/components/AppLayout';
+import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import {
   EnterpriseBadge,
   EnterpriseCard,
@@ -46,6 +47,20 @@ function getCurrentRole() {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
 }
 
+function getLinkIconName(href: string): TcdxIconName {
+  if (href.includes('diagnostico')) return 'clipboard';
+  if (href.includes('iso-health')) return 'heart';
+  if (href.includes('controles')) return 'controls';
+  if (href.includes('soa')) return 'soa';
+  if (href.includes('ciclo-vida')) return 'activity';
+  if (href.includes('auditorias')) return 'audit';
+  if (href.includes('hallazgos')) return 'finding';
+  if (href.includes('no-conformidades')) return 'alert';
+  if (href.includes('matriz-riesgo')) return 'risk';
+  if (href.includes('activos')) return 'building';
+  return 'dashboard';
+}
+
 export default function MvpViewShell({
   eyebrow,
   title,
@@ -76,6 +91,48 @@ export default function MvpViewShell({
           />
         </EnterpriseCard>
 
+        <section aria-label="Selector de vistas internas" className="enterprise-card p-0">
+          <div className="border-b border-[var(--tcdx-color-border)] px-5 py-4">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-[var(--tcdx-color-primary)]">
+              Vistas internas
+            </div>
+            <div className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
+              Accesos operacionales disponibles para el rol activo.
+            </div>
+          </div>
+
+          <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
+            {visibleLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="group flex min-h-[120px] gap-3 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[rgba(240,114,29,0.32)] hover:shadow-[var(--tcdx-shadow-tecdex-sm)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(81,171,168,0.24)] bg-[rgba(81,171,168,0.12)] text-[var(--tcdx-color-secondary-hover)]">
+                  <TcdxIcon name={getLinkIconName(link.href)} className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <EnterpriseBadge className={toneClasses[link.tone || 'blue']}>
+                    Operación
+                  </EnterpriseBadge>
+                  <span className="mt-3 block text-base font-semibold text-[var(--tcdx-color-text-ink)] group-hover:text-[var(--tcdx-color-primary)]">
+                    {link.title}
+                  </span>
+                  <span className="mt-1 block text-sm leading-5 text-[var(--tcdx-color-text-secondary)]">{link.description}</span>
+                </span>
+              </a>
+            ))}
+
+            {visibleLinks.length === 0 && (
+              <EnterpriseEmptyState
+                title="No hay opciones visibles"
+                description="No hay opciones visibles para este rol dentro de esta vista operacional."
+                className="text-sm text-[var(--tcdx-color-text-secondary)]"
+              />
+            )}
+          </div>
+        </section>
+
         {notes.length > 0 && (
           <EnterpriseCard className="border-amber-200 bg-amber-50 text-sm leading-6 text-amber-900">
             {notes.map((note) => (
@@ -85,32 +142,6 @@ export default function MvpViewShell({
         )}
 
         {children}
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibleLinks.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="enterprise-card group transition hover:-translate-y-0.5 hover:border-[rgba(240,114,29,0.32)] hover:shadow-md focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
-            >
-              <EnterpriseBadge className={toneClasses[link.tone || 'blue']}>
-                Operación
-              </EnterpriseBadge>
-              <h2 className="mt-4 text-lg font-semibold text-[var(--tcdx-color-text-ink)] group-hover:text-[var(--tcdx-color-primary)]">
-                {link.title}
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">{link.description}</p>
-            </a>
-          ))}
-
-          {visibleLinks.length === 0 && (
-            <EnterpriseEmptyState
-              title="No hay opciones visibles"
-              description="No hay opciones visibles para este rol dentro de esta vista operacional."
-              className="text-sm text-[var(--tcdx-color-text-secondary)]"
-            />
-          )}
-        </section>
       </div>
     </AppLayout>
   );

@@ -722,7 +722,7 @@ function ActivosPageContent() {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-[1800px] space-y-6">
+      <div className="tcdx-assets-risk-refinement mx-auto max-w-[1800px] space-y-6">
         <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">

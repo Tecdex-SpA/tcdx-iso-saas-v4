@@ -14,7 +14,7 @@ const options: Array<{ value: RiskViewMode; label: string; icon: 'risk' | 'trend
 
 export default function RiskViewSwitcher({ value, onChange }: RiskViewSwitcherProps) {
   return (
-    <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm sm:grid-cols-2 lg:max-w-3xl">
+    <div className="grid gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-1 shadow-[var(--tcdx-shadow-tecdex-sm)] sm:grid-cols-2 lg:max-w-3xl">
       {options.map((option) => {
         const active = value === option.value;
 
@@ -24,10 +24,10 @@ export default function RiskViewSwitcher({ value, onChange }: RiskViewSwitcherPr
             type="button"
             onClick={() => onChange(option.value)}
             className={[
-              'inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition',
+              'inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
               active
-                ? 'border border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
-                : 'border border-transparent text-slate-700 hover:bg-slate-50',
+                ? 'border border-[rgba(240,114,29,0.35)] bg-[rgba(240,114,29,0.10)] text-[var(--tcdx-color-primary)] shadow-sm'
+                : 'border border-transparent text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
             ].join(' ')}
           >
             <TcdxIcon name={option.icon} className="h-4 w-4" />
