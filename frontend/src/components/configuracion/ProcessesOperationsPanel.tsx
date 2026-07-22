@@ -529,7 +529,7 @@ export default function ProcessesOperationsPanel() {
   }
 
   return (
-    <section className="space-y-5">
+    <section className="tcdx-settings-refresh space-y-5">
       <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -538,7 +538,7 @@ export default function ProcessesOperationsPanel() {
             </p>
             <h2 className="mt-2 text-2xl font-bold text-slate-950">Procesos y operaciones</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Base administrativa tenant-scoped para registrar procesos, operaciones y sus asociaciones operacionales. KPIs, salud por proceso y reportes por proceso quedan fuera de Sprint 3.
+              Base administrativa tenant-scoped para registrar procesos, operaciones y asociaciones operacionales con controles, evidencias, riesgos y acciones.
             </p>
             <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
               <span className="font-semibold">Proceso seleccionado:</span> {selectedProcess?.name || 'Sin proceso seleccionado'}

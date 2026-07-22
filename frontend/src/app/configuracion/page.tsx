@@ -6,16 +6,16 @@ import ProcessesOperationsPanel from '@/components/configuracion/ProcessesOperat
 export default function ConfiguracionPage() {
   return (
     <AppLayout>
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="tcdx-settings-refresh mx-auto max-w-7xl space-y-6">
         <section className="rounded-lg border border-slate-200 bg-white px-6 py-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
-            Vista consolidada Sprint 2
+            Administración operacional
           </p>
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">
             Configuración
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            Administración tenant para usuarios, Perfil Empresa y la base segura de procesos y operaciones. La consola SaaS interna permanece separada del flujo cliente.
+            Administración tenant para usuarios, perfil de empresa, procesos y operaciones. La consola interna SaaS permanece separada del flujo cliente.
           </p>
 
           <div className="mt-5 flex flex-wrap gap-3">
