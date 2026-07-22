@@ -1,0 +1,124 @@
+name: Phase 0 runtime QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployed_sha:
+        description: Full commit SHA already deployed to the QA VMs
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase0-runtime-qa
+  cancel-in-progress: false
+
+jobs:
+  runtime-qa:
+    name: Validate deployed Phase 0 SHA
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: qa
+    env:
+      DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+      WORKFLOW_SHA: ${{ github.sha }}
+      WEB_BASE_URL: ${{ secrets.WEB_BASE_URL }}
+      API_BASE_URL: ${{ secrets.API_BASE_URL }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_RESTRICTED_EMAIL: ${{ secrets.E2E_RESTRICTED_EMAIL }}
+      E2E_RESTRICTED_PASSWORD: ${{ secrets.E2E_RESTRICTED_PASSWORD }}
+      E2E_RESTRICTED_API_PATH: ${{ secrets.E2E_RESTRICTED_API_PATH }}
+      E2E_TENANT_A_EMAIL: ${{ secrets.E2E_TENANT_A_EMAIL }}
+      E2E_TENANT_A_PASSWORD: ${{ secrets.E2E_TENANT_A_PASSWORD }}
+      E2E_TENANT_A_ID: ${{ secrets.E2E_TENANT_A_ID }}
+      E2E_TENANT_B_EMAIL: ${{ secrets.E2E_TENANT_B_EMAIL }}
+      E2E_TENANT_B_PASSWORD: ${{ secrets.E2E_TENANT_B_PASSWORD }}
+      E2E_TENANT_B_ID: ${{ secrets.E2E_TENANT_B_ID }}
+      E2E_TENANT_A_FILE_PATH: ${{ secrets.E2E_TENANT_A_FILE_PATH }}
+      E2E_TENANT_B_FILE_PATH: ${{ secrets.E2E_TENANT_B_FILE_PATH }}
+      E2E_TENANT_A_JOB_PATH: ${{ secrets.E2E_TENANT_A_JOB_PATH }}
+      E2E_TENANT_B_JOB_PATH: ${{ secrets.E2E_TENANT_B_JOB_PATH }}
+
+    steps:
+      - name: Checkout main workflow SHA
+        uses: actions/checkout@v6
+
+      - name: Verify deployed SHA and required QA configuration
+        shell: bash
+        run: |
+          if [[ ! "$DEPLOYED_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::deployed_sha must be a full 40-character commit SHA"
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Phase 0 runtime QA must be dispatched from the main branch"
+            exit 1
+          fi
+
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$WORKFLOW_SHA" || "$actual_sha" != "$DEPLOYED_SHA" ]]; then
+            echo "::error::main workflow SHA, checked out SHA and deployed_sha must match"
+            exit 1
+          fi
+
+          required=(
+            WEB_BASE_URL API_BASE_URL
+            E2E_ADMIN_EMAIL E2E_ADMIN_PASSWORD
+            E2E_RESTRICTED_EMAIL E2E_RESTRICTED_PASSWORD E2E_RESTRICTED_API_PATH
+            E2E_TENANT_A_EMAIL E2E_TENANT_A_PASSWORD E2E_TENANT_A_ID
+            E2E_TENANT_B_EMAIL E2E_TENANT_B_PASSWORD E2E_TENANT_B_ID
+            E2E_TENANT_A_FILE_PATH E2E_TENANT_B_FILE_PATH
+            E2E_TENANT_A_JOB_PATH E2E_TENANT_B_JOB_PATH
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing required QA secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+          echo "Runtime QA configuration verified for SHA $actual_sha"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Install Chromium
+        run: npx --prefix frontend playwright install --with-deps chromium
+
+      - name: Validate deployed Phase 0 runtime
+        run: npm run phase0:vm-check
+
+      - name: Upload Phase 0 runtime evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: phase0-runtime-evidence-${{ inputs.deployed_sha }}
+          if-no-files-found: warn
+          path: |
+            artifacts/fase-0/e2e-results.json
+            artifacts/fase-0/cross-tenant-*.json
+            artifacts/fase-0/cross-tenant-results.json
+            artifacts/fase-0/observability-runtime.json
+            frontend/test-results/
+            frontend/playwright-report/

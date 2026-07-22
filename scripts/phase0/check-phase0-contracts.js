@@ -54,6 +54,22 @@ function countBy(items, field) {
   }, {});
 }
 
+function loadExceptions() {
+  try {
+    const data = readJson('config/phase0/contract-exceptions.json');
+    return Array.isArray(data.exceptions) ? data.exceptions : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function exceptionMatches(exception, endpoint, category) {
+  return String(exception.method || '').toUpperCase() === String(endpoint.method || '').toUpperCase()
+    && String(exception.endpoint || '') === String(endpoint.endpoint || '')
+    && String(exception.sourceFile || '') === String(endpoint.sourceFile || '')
+    && String(exception.findingCategory || '') === category;
+}
+
 function currentSha() {
   try {
     return execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
@@ -66,13 +82,14 @@ const catalog = readJson('config/capabilities/catalog.json');
 const auth = readJson('config/security/authorization-matrix.json');
 const summary = readJson('artifacts/fase-0/inventory-summary.json');
 const baseline = readJson('config/phase0/contract-findings-baseline.json');
+const exceptions = loadExceptions();
 
 const findings = [];
 for (const cap of catalog.capabilities) {
   if (!['productive', 'partial', 'internal', 'beta', 'disabled'].includes(cap.runtimeState)) {
     addFinding(findings, `Invalid runtimeState for ${cap.code}`);
   }
-  if (cap.visible && cap.runtimeState === 'productive' && cap.backendEndpoints.length === 0) {
+  if (cap.visible && cap.runtimeState === 'productive' && cap.backendContractRequired !== false && cap.backendEndpoints.length === 0) {
     addFinding(findings, `Visible productive capability without endpoint: ${cap.code}`);
   }
   if (cap.runtimeState === 'productive' && !cap.testCoverage?.e2e) {
@@ -84,10 +101,16 @@ for (const cap of catalog.capabilities) {
 }
 for (const endpoint of auth.authorization) {
   if (endpoint.authSignal !== 'true') {
-    addFinding(findings, `Endpoint without static auth signal: ${endpoint.method} ${endpoint.endpoint} (${endpoint.sourceFile})`);
+    const category = 'endpoint_without_auth_signal';
+    if (!exceptions.some((exception) => exceptionMatches(exception, endpoint, category))) {
+      addFinding(findings, `Endpoint without static auth signal: ${endpoint.method} ${endpoint.endpoint} (${endpoint.sourceFile})`);
+    }
   }
   if (endpoint.dataScope === 'unknown') {
-    addFinding(findings, `Endpoint without static tenant/data scope signal: ${endpoint.method} ${endpoint.endpoint} (${endpoint.sourceFile})`);
+    const category = 'endpoint_without_tenant_scope_signal';
+    if (!exceptions.some((exception) => exceptionMatches(exception, endpoint, category))) {
+      addFinding(findings, `Endpoint without static tenant/data scope signal: ${endpoint.method} ${endpoint.endpoint} (${endpoint.sourceFile})`);
+    }
   }
 }
 if (summary.capabilitiesWithoutEndpoint > 0) {
@@ -142,6 +165,7 @@ const report = {
   baselineCountsBySeverity: baseline.countsBySeverity || {},
   newFindings,
   removedFindings,
+  exceptionsApplied: exceptions.length,
   findings,
 };
 

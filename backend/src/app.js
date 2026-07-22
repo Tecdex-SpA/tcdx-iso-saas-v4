@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const pool = require('./config/db');
 const auth = require('./middleware/auth');
 const { enforceApiAccess } = require('./middleware/rbac.middleware');
 const { enforceTenantRequestScope } = require('./middleware/tenantScope.middleware');
@@ -78,6 +79,13 @@ const { aiLocaleResponseGuard } = require('./middleware/aiLocaleResponseGuard');
 
 const app = express();
 app.use(aiLocaleResponseGuard);
+const runtimeStartedAt = Date.now();
+const runtimeMetrics = {
+  requestsTotal: 0,
+  errorsTotal: 0,
+  durationMsTotal: 0,
+  byStatus: new Map(),
+};
 
 const allowedCorsOrigins = Array.from(new Set([
   ...String(process.env.CORS_ORIGINS || '')
@@ -164,7 +172,109 @@ app.use((req, res, next) => {
   const incomingRequestId = String(req.headers['x-request-id'] || '').trim();
   req.requestId = incomingRequestId || buildRequestId();
   res.setHeader('X-Request-Id', req.requestId);
+  const started = process.hrtime.bigint();
+  res.on('finish', () => {
+    const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
+    runtimeMetrics.requestsTotal += 1;
+    runtimeMetrics.durationMsTotal += durationMs;
+    runtimeMetrics.byStatus.set(res.statusCode, (runtimeMetrics.byStatus.get(res.statusCode) || 0) + 1);
+    if (res.statusCode >= 500) runtimeMetrics.errorsTotal += 1;
+    console.log(JSON.stringify({
+      event: 'HTTP_REQUEST',
+      request_id: req.requestId,
+      tenant_id: req.user?.tenant_id || req.tenantId || null,
+      user_id: req.user?.id || req.user?.user_id || null,
+      method: req.method,
+      route: req.route?.path || req.path,
+      status: res.statusCode,
+      duration_ms: Math.round(durationMs * 100) / 100,
+      error_code: res.locals?.errorCode || null,
+    }));
+  });
   next();
+});
+
+function bounded(promise, timeoutMs, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label}_TIMEOUT`)), timeoutMs)),
+  ]);
+}
+
+async function runtimeDependencyStatus() {
+  const timeoutMs = Math.max(250, Math.min(2000, Number(process.env.READINESS_DEPENDENCY_TIMEOUT_MS || 1200)));
+  const uploadsPath = path.resolve(__dirname, '..', 'uploads');
+  const checks = {
+    database: () => pool.query('SELECT 1 AS ok'),
+    storage: () => fs.promises.access(uploadsPath, fs.constants.R_OK | fs.constants.W_OK),
+    jobs: () => pool.query("SELECT to_regclass('public.tcdx_async_jobs') AS table_name"),
+  };
+  if (process.env.AI_ENGINE_URL) {
+    checks.ai_engine = async () => {
+      const response = await fetch(`${String(process.env.AI_ENGINE_URL).replace(/\/$/, '')}/health`, {
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) throw new Error(`AI_ENGINE_HTTP_${response.status}`);
+    };
+  }
+
+  const entries = await Promise.all(Object.entries(checks).map(async ([name, check]) => {
+    const started = Date.now();
+    try {
+      await bounded(Promise.resolve().then(check), timeoutMs, name.toUpperCase());
+      return [name, { ok: true, latency_ms: Date.now() - started }];
+    } catch (_error) {
+      return [name, {
+        ok: false,
+        latency_ms: Date.now() - started,
+        error_code: `${name.toUpperCase()}_UNAVAILABLE`,
+      }];
+    }
+  }));
+  return Object.fromEntries(entries);
+}
+
+app.get('/live', (_req, res) => {
+  res.json({ ok: true, status: 'live', uptime_seconds: Math.floor((Date.now() - runtimeStartedAt) / 1000) });
+});
+
+app.get('/ready', async (_req, res) => {
+  const dependencies = await runtimeDependencyStatus();
+  const ready = Object.values(dependencies).every(item => item.ok);
+  res.status(ready ? 200 : 503).json({ ok: ready, status: ready ? 'ready' : 'degraded', dependencies });
+});
+
+app.get('/health', async (_req, res) => {
+  const dependencies = await runtimeDependencyStatus();
+  const healthy = Object.values(dependencies).every(item => item.ok);
+  res.status(200).json({
+    ok: healthy,
+    status: healthy ? 'healthy' : 'degraded',
+    service: 'tcdx-iso-saas-v4-backend',
+    uptime_seconds: Math.floor((Date.now() - runtimeStartedAt) / 1000),
+    dependencies,
+  });
+});
+
+app.get('/metrics', (_req, res) => {
+  const averageDuration = runtimeMetrics.requestsTotal
+    ? runtimeMetrics.durationMsTotal / runtimeMetrics.requestsTotal
+    : 0;
+  const statusLines = Array.from(runtimeMetrics.byStatus.entries())
+    .map(([status, count]) => `tcdx_http_responses_total{status="${status}"} ${count}`);
+  res.type('text/plain; version=0.0.4').send([
+    '# HELP tcdx_http_requests_total Total HTTP requests.',
+    '# TYPE tcdx_http_requests_total counter',
+    `tcdx_http_requests_total ${runtimeMetrics.requestsTotal}`,
+    '# HELP tcdx_http_errors_total Total HTTP responses with status >= 500.',
+    '# TYPE tcdx_http_errors_total counter',
+    `tcdx_http_errors_total ${runtimeMetrics.errorsTotal}`,
+    '# HELP tcdx_http_request_duration_ms_average Average request duration in milliseconds.',
+    '# TYPE tcdx_http_request_duration_ms_average gauge',
+    `tcdx_http_request_duration_ms_average ${averageDuration.toFixed(2)}`,
+    ...statusLines,
+    '',
+  ].join('\n'));
 });
 
 app.use((req, res, next) => {
@@ -354,6 +464,7 @@ function securityErrorHandler(err, req, res, next) {
   const status = Number(err.status || err.statusCode || (err.type === 'entity.too.large' ? 413 : 500));
   const safeStatus = status >= 400 && status < 600 ? status : 500;
   const code = err.code || (safeStatus === 413 ? 'PAYLOAD_TOO_LARGE' : 'SERVER_ERROR');
+  res.locals.errorCode = code;
   const isProduction = process.env.NODE_ENV === 'production';
 
   if (!isProduction) {

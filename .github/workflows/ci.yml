@@ -2,9 +2,6 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
 
 jobs:
   validate:
@@ -14,10 +11,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -26,7 +25,7 @@ jobs:
             frontend/package-lock.json
 
       - name: Git diff hygiene
-        run: git diff --check
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
 
       - name: Install backend dependencies
         working-directory: backend
@@ -44,15 +43,28 @@ jobs:
         working-directory: backend
         run: |
           npm run phase0:inventory
+          npm run phase0:classify
           npm run phase0:contracts:check
+          npm run phase0:capabilities-check
+          npm run phase0:permissions-check
+          npm run phase0:e2e-contract
+          npm run phase0:scripts-check
 
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
+      - name: Discover Phase 0 Playwright tests
+        working-directory: frontend
+        run: npx playwright test --list --reporter=line
+
       - name: Frontend lint
         working-directory: frontend
         run: npm run lint
+
+      - name: Frontend type check
+        working-directory: frontend
+        run: npm run check
 
       - name: Frontend build
         working-directory: frontend

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "exceptions": [
+    {
+      "id": "phase0-auth-validate-tenant-not-applicable",
+      "method": "GET",
+      "endpoint": "/api/auth/validate",
+      "sourceFile": "backend/src/routes/auth.routes.js",
+      "findingCategory": "endpoint_without_tenant_scope_signal",
+      "classification": "not_applicable",
+      "severity": "low",
+      "owner": "Security",
+      "createdAt": "2026-07-22",
+      "reason": "Authenticated token validation returns session metadata derived from the current token and does not select tenant-scoped resource data by requested tenant ID.",
+      "evidenceFile": "backend/src/routes/auth.routes.js",
+      "evidenceLine": 163
+    }
+  ]
+}

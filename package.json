@@ -1,0 +1,26 @@
+{
+  "name": "tcdx-iso-saas-v4-root",
+  "private": true,
+  "scripts": {
+    "phase0:inventory": "npm --prefix backend run phase0:inventory",
+    "phase0:classify": "npm --prefix backend run phase0:classify",
+    "phase0:contracts:check": "npm --prefix backend run phase0:contracts:check",
+    "phase0:auth-check": "npm --prefix backend run phase0:auth-check",
+    "phase0:tenant-check": "npm --prefix backend run phase0:tenant-check",
+    "phase0:capabilities-check": "node scripts/phase0/check-capability-disposition.js",
+    "phase0:permissions-check": "node scripts/phase0/check-permission-contract.js",
+    "phase0:scripts-check": "node scripts/phase0/check-phase0-scripts.js",
+    "phase0:e2e-contract": "node scripts/phase0/check-e2e-contract.js",
+    "phase0:e2e": "npm --prefix frontend run test:e2e:phase0",
+    "phase0:tenant-runtime": "node scripts/phase0/check-tenant-isolation.js",
+    "phase0:files-runtime": "node scripts/phase0/check-file-isolation.js",
+    "phase0:search-runtime": "node scripts/phase0/check-search-isolation.js",
+    "phase0:export-runtime": "node scripts/phase0/check-export-isolation.js",
+    "phase0:ai-runtime": "node scripts/phase0/check-ai-isolation.js",
+    "phase0:jobs-runtime": "node scripts/phase0/check-job-isolation.js",
+    "phase0:observability-check": "node scripts/phase0/check-observability-runtime.js",
+    "phase0:restore-check": "bash scripts/phase0/backup-restore-qa.sh",
+    "phase0:full-check": "npm run phase0:inventory && npm run phase0:classify && npm run phase0:contracts:check && npm run phase0:capabilities-check && npm run phase0:permissions-check && npm run phase0:e2e-contract && npm run phase0:scripts-check && npm --prefix backend run check && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run check && npm --prefix frontend run build",
+    "phase0:vm-check": "npm run phase0:e2e && npm run phase0:tenant-runtime && npm run phase0:files-runtime && npm run phase0:search-runtime && npm run phase0:export-runtime && npm run phase0:ai-runtime && npm run phase0:jobs-runtime && npm run phase0:observability-check"
+  }
+}
