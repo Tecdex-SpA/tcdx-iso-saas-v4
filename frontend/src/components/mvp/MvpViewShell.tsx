@@ -34,11 +34,11 @@ type MvpViewShellProps = {
 };
 
 const toneClasses = {
-  blue: 'border-blue-100 bg-blue-50 text-blue-700',
+  blue: 'border-[rgba(81,171,168,0.24)] bg-[rgba(81,171,168,0.12)] text-[var(--tcdx-color-secondary-hover)]',
   emerald: 'border-emerald-100 bg-emerald-50 text-emerald-700',
   amber: 'border-amber-100 bg-amber-50 text-amber-700',
   rose: 'border-rose-100 bg-rose-50 text-rose-700',
-  slate: 'border-slate-100 bg-slate-50 text-slate-700',
+  slate: 'border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] text-[var(--tcdx-color-text-primary)]',
 };
 
 function getCurrentRole() {
@@ -68,8 +68,8 @@ export default function MvpViewShell({
             subtitle={description}
             className="mb-0"
             actions={
-            <div className="enterprise-muted-panel px-4 py-3 text-sm text-slate-600">
-              <div className="font-semibold text-slate-900">Rol activo</div>
+            <div className="enterprise-muted-panel px-4 py-3 text-sm text-[var(--tcdx-color-text-secondary)]">
+              <div className="font-semibold text-[var(--tcdx-color-text-ink)]">Rol activo</div>
               <div className="mt-1">{roleGroup === 'unknown' ? role || 'sin rol' : roleGroup}</div>
             </div>
             }
@@ -91,23 +91,23 @@ export default function MvpViewShell({
             <a
               key={link.href}
               href={link.href}
-              className="enterprise-card group transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+              className="enterprise-card group transition hover:-translate-y-0.5 hover:border-[rgba(240,114,29,0.32)] hover:shadow-md focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
             >
               <EnterpriseBadge className={toneClasses[link.tone || 'blue']}>
-                MVP
+                Operación
               </EnterpriseBadge>
-              <h2 className="mt-4 text-lg font-semibold text-slate-950 group-hover:text-blue-700">
+              <h2 className="mt-4 text-lg font-semibold text-[var(--tcdx-color-text-ink)] group-hover:text-[var(--tcdx-color-primary)]">
                 {link.title}
               </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{link.description}</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">{link.description}</p>
             </a>
           ))}
 
           {visibleLinks.length === 0 && (
             <EnterpriseEmptyState
               title="No hay opciones visibles"
-              description="No hay opciones visibles para este rol dentro de esta vista MVP."
-              className="text-sm text-slate-600"
+              description="No hay opciones visibles para este rol dentro de esta vista operacional."
+              className="text-sm text-[var(--tcdx-color-text-secondary)]"
             />
           )}
         </section>

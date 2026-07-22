@@ -20,7 +20,7 @@ export default function EnterprisePageHeader({
     <section className={cx('enterprise-page-header', className)}>
       <div className="min-w-0">
         {eyebrow && (
-          <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-blue-700">
+          <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-[var(--tcdx-color-primary)]">
             {eyebrow}
           </div>
         )}
