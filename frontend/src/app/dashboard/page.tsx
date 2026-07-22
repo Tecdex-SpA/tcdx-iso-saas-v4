@@ -332,6 +332,12 @@ type DashboardAuditSummary = {
   note?: string;
 };
 
+type OperationalChartDatum = {
+  name: string;
+  value: number;
+  fill?: string;
+};
+
 function numberOrZero(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -1044,10 +1050,10 @@ function DashboardPageContent() {
 
   const kpiStatusData = useMemo(() => {
     return [
-      { name: t('dashboardKpi.greenStatus'), value: kpiSummary?.green || 0, fill: '#16a34a' },
-      { name: t('dashboardKpi.yellowStatus'), value: kpiSummary?.yellow || 0, fill: '#f59e0b' },
-      { name: t('dashboardKpi.redStatus'), value: kpiSummary?.red || 0, fill: '#ef4444' },
-      { name: t('dashboardKpi.noDataStatus'), value: kpiSummary?.gray || 0, fill: '#94a3b8' },
+      { name: t('dashboardKpi.greenStatus'), value: kpiSummary?.green || 0, fill: 'var(--tcdx-color-success)' },
+      { name: t('dashboardKpi.yellowStatus'), value: kpiSummary?.yellow || 0, fill: 'var(--tcdx-color-warning)' },
+      { name: t('dashboardKpi.redStatus'), value: kpiSummary?.red || 0, fill: 'var(--tcdx-color-danger)' },
+      { name: t('dashboardKpi.noDataStatus'), value: kpiSummary?.gray || 0, fill: 'var(--tcdx-color-border)' },
     ];
   }, [kpiSummary, t]);
 
@@ -1171,6 +1177,113 @@ function DashboardPageContent() {
       level: risk.level === 'alto' ? 'Crítico' : risk.level === 'medio' ? 'Alto' : 'Medio',
     }));
   }, [controls, riskSummary]);
+
+  const controlStatusChartData = useMemo<OperationalChartDatum[]>(() => {
+    const counts = controls.reduce(
+      (acc, control) => {
+        const status = String(control.status || '').toLowerCase();
+        if (status === 'cumple') acc.cumple += 1;
+        else if (status === 'parcial') acc.parcial += 1;
+        else if (status === 'no cumple' || status === 'no_cumple') acc.noCumple += 1;
+        else acc.sinEstado += 1;
+        return acc;
+      },
+      { cumple: 0, parcial: 0, noCumple: 0, sinEstado: 0 }
+    );
+
+    const fallback = {
+      cumple: numberOrZero(summary?.cumple),
+      parcial: numberOrZero(summary?.parcial),
+      noCumple: numberOrZero(summary?.noCumple),
+      sinEstado: 0,
+    };
+
+    const source = controls.length > 0 ? counts : fallback;
+
+    return [
+      { name: 'Cumple', value: source.cumple, fill: 'var(--tcdx-color-success)' },
+      { name: 'Parcial', value: source.parcial, fill: 'var(--tcdx-color-warning)' },
+      { name: 'No cumple', value: source.noCumple, fill: 'var(--tcdx-color-danger)' },
+      { name: 'Sin estado', value: source.sinEstado, fill: 'var(--tcdx-color-border)' },
+    ].filter((item) => item.value > 0);
+  }, [controls, summary]);
+
+  const riskLevelChartData = useMemo<OperationalChartDatum[]>(() => {
+    return riskSummary
+      .map((risk) => {
+        const level = String(risk.level || risk.name || risk.label || 'sin nivel').toLowerCase();
+        const label = level === 'alto' ? 'Alto' : level === 'medio' ? 'Medio' : level === 'bajo' ? 'Bajo' : level;
+        const fill = level === 'alto'
+          ? 'var(--tcdx-color-danger)'
+          : level === 'medio'
+          ? 'var(--tcdx-color-warning)'
+          : 'var(--tcdx-color-secondary)';
+        return { name: label, value: numberOrZero(risk.total), fill };
+      })
+      .filter((item) => item.value > 0);
+  }, [riskSummary]);
+
+  const auditStateChartData = useMemo<OperationalChartDatum[]>(() => {
+    const audit = auditSummary?.summary;
+    return [
+      { name: 'Pendientes', value: numberOrZero(audit?.pendientes), fill: 'var(--tcdx-color-warning)' },
+      { name: 'En ejecución', value: numberOrZero(audit?.en_ejecucion), fill: 'var(--tcdx-color-secondary)' },
+      { name: 'Completadas', value: numberOrZero(audit?.completadas), fill: 'var(--tcdx-color-success)' },
+      { name: 'Con informe', value: numberOrZero(audit?.con_informe), fill: 'var(--tcdx-color-primary)' },
+      { name: 'Sin informe', value: numberOrZero(audit?.sin_informe), fill: 'var(--tcdx-color-border)' },
+    ].filter((item) => item.value > 0);
+  }, [auditSummary]);
+
+  const actionPlanChartData = useMemo<OperationalChartDatum[]>(() => {
+    const counts = actionPlans.reduce<Record<string, number>>((acc, item) => {
+      const status = normalizeActionStatus(item.status);
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const fillByStatus: Record<string, string> = {
+      abierto: 'var(--tcdx-color-primary)',
+      'en progreso': 'var(--tcdx-color-secondary)',
+      bloqueado: 'var(--tcdx-color-danger)',
+      completado: 'var(--tcdx-color-success)',
+      cancelado: 'var(--tcdx-color-border)',
+    };
+
+    return Object.entries(counts).map(([name, value]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      value,
+      fill: fillByStatus[name] || 'var(--tcdx-color-text-secondary)',
+    }));
+  }, [actionPlans]);
+
+  const evidenceCoverageChartData = useMemo<OperationalChartDatum[]>(() => {
+    const official = effectiveActiveRows.reduce(
+      (acc, row) => acc + toSafeNumber(row.controls_with_official_evidence),
+      0
+    );
+    const approved = effectiveActiveRows.reduce(
+      (acc, row) => acc + toSafeNumber(row.controls_with_approved_non_official_evidence),
+      0
+    );
+    const missing = effectiveActiveRows.reduce(
+      (acc, row) => acc + toSafeNumber(row.controls_without_evidence),
+      0
+    );
+
+    return [
+      { name: 'Oficial', value: official, fill: 'var(--tcdx-color-success)' },
+      { name: 'Aprobada', value: approved, fill: 'var(--tcdx-color-secondary)' },
+      { name: 'Faltante', value: missing, fill: 'var(--tcdx-color-danger)' },
+    ].filter((item) => item.value > 0);
+  }, [effectiveActiveRows]);
+
+  const nonconformityChartData = useMemo<OperationalChartDatum[]>(() => {
+    return [
+      { name: 'Abiertas', value: numberOrZero(summary?.open_nonconformities), fill: 'var(--tcdx-color-warning)' },
+      { name: 'Cerradas', value: numberOrZero(summary?.closed_nonconformities), fill: 'var(--tcdx-color-success)' },
+    ].filter((item) => item.value > 0);
+  }, [summary]);
+
 
 
   const dashboardHasSummaryData =
@@ -1351,6 +1464,15 @@ function DashboardPageContent() {
                       health={kpiSummary?.health_kpis || healthKpiItems.length}
                     />
                   )}
+
+                  <OperationalChartsPanel
+                    controlStatus={controlStatusChartData}
+                    riskLevels={riskLevelChartData}
+                    auditStates={auditStateChartData}
+                    actionPlans={actionPlanChartData}
+                    evidenceCoverage={evidenceCoverageChartData}
+                    nonconformities={nonconformityChartData}
+                  />
 
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.05fr_1fr_1.22fr]">
                     <StandardHealthPanel rows={standardHealthRows} />
@@ -1734,6 +1856,160 @@ function DashboardPageContent() {
   );
 }
 
+
+function hasChartData(items: OperationalChartDatum[]) {
+  return items.some((item) => item.value > 0);
+}
+
+function OperationalChartsPanel({
+  controlStatus,
+  riskLevels,
+  auditStates,
+  actionPlans,
+  evidenceCoverage,
+  nonconformities,
+}: {
+  controlStatus: OperationalChartDatum[];
+  riskLevels: OperationalChartDatum[];
+  auditStates: OperationalChartDatum[];
+  actionPlans: OperationalChartDatum[];
+  evidenceCoverage: OperationalChartDatum[];
+  nonconformities: OperationalChartDatum[];
+}) {
+  const charts = [
+    {
+      title: 'Controles por estado',
+      description: 'Distribución de controles aplicables según estado operativo.',
+      data: controlStatus,
+      kind: 'donut' as const,
+    },
+    {
+      title: 'Riesgos por nivel',
+      description: 'Presión de riesgo informada por el resumen del tenant.',
+      data: riskLevels,
+      kind: 'bar' as const,
+    },
+    {
+      title: 'Auditorías por estado',
+      description: 'Programa auditado por fase de ejecución e informe.',
+      data: auditStates,
+      kind: 'bar' as const,
+    },
+    {
+      title: 'Planes de acción',
+      description: 'Estado de seguimiento de acciones correctivas y operativas.',
+      data: actionPlans,
+      kind: 'donut' as const,
+    },
+    {
+      title: 'Cobertura de evidencias',
+      description: 'Evidencia oficial, aprobada y faltante en controles activos.',
+      data: evidenceCoverage,
+      kind: 'bar' as const,
+    },
+    {
+      title: 'No conformidades',
+      description: 'Balance de no conformidades abiertas y cerradas.',
+      data: nonconformities,
+      kind: 'donut' as const,
+    },
+  ];
+
+  if (!charts.some((chart) => hasChartData(chart.data))) return null;
+
+  return (
+    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
+      <div className="mb-5 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tcdx-color-primary)]">
+            Gráficos operacionales
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
+            Distribución de señales ISO activas
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
+            Visualización derivada de controles, riesgos, auditorías, evidencias, planes y no conformidades ya cargados en el tenant.
+          </p>
+        </div>
+        <span className="w-fit rounded-full border border-[rgba(81,171,168,0.24)] bg-[rgba(81,171,168,0.12)] px-3 py-1 text-xs font-semibold text-[var(--tcdx-color-secondary-hover)]">
+          Datos existentes
+        </span>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+        {charts.map((chart) => (
+          <OperationalChartCard key={chart.title} {...chart} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OperationalChartCard({
+  title,
+  description,
+  data,
+  kind,
+}: {
+  title: string;
+  description: string;
+  data: OperationalChartDatum[];
+  kind: 'bar' | 'donut';
+}) {
+  const hasData = hasChartData(data);
+
+  return (
+    <article className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(216,216,216,0.72)] bg-[var(--tcdx-color-surface)] p-4">
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{title}</h3>
+        <p className="mt-1 text-xs leading-5 text-[var(--tcdx-color-text-secondary)]">{description}</p>
+      </div>
+
+      {!hasData ? (
+        <div className="flex h-[220px] items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] bg-white text-center text-sm text-[var(--tcdx-color-text-secondary)]">
+          Sin datos registrados para graficar.
+        </div>
+      ) : (
+        <div className="h-[240px] rounded-[var(--tcdx-radius-tecdex-sm)] bg-white p-2">
+          <ResponsiveContainer width="100%" height="100%">
+            {kind === 'donut' ? (
+              <PieChart>
+                <Pie
+                  data={data}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={46}
+                  outerRadius={78}
+                  paddingAngle={3}
+                  stroke="#ffffff"
+                  strokeWidth={3}
+                >
+                  {data.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill || 'var(--tcdx-color-secondary)'} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: unknown, name: unknown) => [String(value), String(name)]} />
+              </PieChart>
+            ) : (
+              <BarChart data={data} margin={{ top: 10, right: 10, left: -18, bottom: 2 }}>
+                <CartesianGrid vertical={false} stroke="var(--tcdx-color-border)" />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} />
+                <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
+                <Tooltip />
+                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                  {data.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill || 'var(--tcdx-color-secondary)'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      )}
+    </article>
+  );
+}
+
 function SystemHealthDashboardSection({
   data,
   loading,
@@ -1802,7 +2078,7 @@ function SystemHealthDashboardSection({
               </div>
               <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/12">
                 <div
-                  className="h-full rounded-full bg-blue-400"
+                  className="h-full rounded-full bg-[var(--tcdx-color-primary)]"
                   style={{ width: `${Math.max(4, Math.min(100, score))}%` }}
                 />
               </div>
@@ -1929,7 +2205,7 @@ function ExecutiveStatusOverview({
       value: overdueActionPlans,
       helper: `${activeActionPlans} acciones activas`,
       width: actionPressure,
-      color: actionPressure >= 40 ? '#dc2626' : '#2563eb',
+      color: actionPressure >= 40 ? '#dc2626' : 'var(--tcdx-color-secondary)',
       bg: actionPressure >= 40 ? 'bg-red-50' : 'bg-blue-50',
       border: actionPressure >= 40 ? 'border-red-100' : 'border-blue-100',
     },
@@ -2370,7 +2646,7 @@ function ExecutiveReportPanel({
             <div className="text-[10px] font-bold uppercase text-[var(--tcdx-color-text-ink)]">{t('dashboard.reportTitle')}</div>
             <div className="mt-1 text-[8px] text-[var(--tcdx-color-text-muted)]">{t('dashboard.reportSubtitle')}</div>
           </div>
-          <div className="h-24 bg-[linear-gradient(150deg,#ffffff_0%,#dbeafe_38%,#2563eb_39%,#06173a_78%)]" />
+          <div className="h-24 bg-[linear-gradient(150deg,#ffffff_0%,rgba(81,171,168,0.18)_38%,var(--tcdx-color-primary)_39%,var(--tcdx-color-navy-deep)_78%)]" />
           <div className="bg-[var(--tcdx-color-navy-deep)] px-4 py-3 text-[9px] font-semibold text-white/70">
             {period}
           </div>

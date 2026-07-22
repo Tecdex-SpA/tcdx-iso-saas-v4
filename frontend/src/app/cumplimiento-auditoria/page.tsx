@@ -12,9 +12,9 @@ export default function CumplimientoAuditoriaPage() {
 
   return (
     <MvpViewShell
-      eyebrow="Vista consolidada Sprint 1"
+      eyebrow="Vista operacional"
       title="Cumplimiento y Auditoría"
-      description="Entrada única para diagnóstico, controles, SoA, ciclo de vida ISO, auditorías, hallazgos y no conformidades. Las acciones disponibles dependen del rol y del alcance del tenant."
+      description="Panel de trabajo para diagnóstico, controles, SoA, ciclo de vida ISO, auditorías, hallazgos y no conformidades. Las acciones disponibles dependen del rol y del alcance del tenant."
       notes={[
         'La IA apoya el análisis, pero no certifica cumplimiento ni reemplaza revisión humana.',
         'Los movimientos del ciclo de vida quedan sujetos a solicitud del administrador de cumplimiento y revisión del auditor.',
@@ -79,7 +79,7 @@ export default function CumplimientoAuditoriaPage() {
       ]}
     >
       {intelligence.loading ? (
-        <div className="mb-6 h-48 animate-pulse rounded-lg border border-slate-200 bg-white" />
+        <div className="mb-6 h-48 animate-pulse rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white" />
       ) : intelligence.data ? (
         <div className="mb-6">
           <AuditReadinessCard brief={intelligence.data} />

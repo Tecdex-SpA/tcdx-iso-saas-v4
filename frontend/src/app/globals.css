@@ -390,8 +390,8 @@ a[class*="flex"] {
 
 .enterprise-kpi-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(15, 111, 219, 0.24);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.09);
+  border-color: rgba(240, 114, 29, 0.28);
+  box-shadow: 0 14px 34px rgba(22, 22, 22, 0.09);
 }
 
 .enterprise-ai-panel {
@@ -439,13 +439,13 @@ a[class*="flex"] {
 
 .enterprise-button-primary {
   border: 1px solid transparent;
-  background: linear-gradient(135deg, var(--brand-blue) 0%, #1677ff 100%);
+  background: linear-gradient(135deg, var(--tcdx-color-primary) 0%, var(--tcdx-color-primary-hover) 100%);
   color: white;
-  box-shadow: 0 10px 22px rgba(15, 111, 219, 0.22);
+  box-shadow: 0 10px 22px rgba(240, 114, 29, 0.22);
 }
 
 .enterprise-button-primary:hover {
-  background: linear-gradient(135deg, var(--brand-blue-hover) 0%, var(--brand-blue) 100%);
+  background: linear-gradient(135deg, var(--tcdx-color-primary-hover) 0%, var(--tcdx-color-primary-active) 100%);
 }
 
 .enterprise-button-secondary {
@@ -540,7 +540,7 @@ a[class*="flex"] {
 .enterprise-shell .tcdx-premium-view :is(section, article, form, div)[class*="rounded"][class*="border"][class*="bg-blue-50"],
 .enterprise-shell .tcdx-premium-view :is(section, article, form, div)[class*="rounded"][class*="border"][class*="bg-indigo-50"],
 .enterprise-shell .tcdx-premium-view :is(section, article, form, div)[class*="rounded"][class*="border"][class*="bg-sky-50"] {
-  border-color: rgba(37, 99, 235, 0.18) !important;
+  border-color: rgba(81, 171, 168, 0.24) !important;
   border-radius: var(--radius-card) !important;
   box-shadow: var(--shadow-soft) !important;
 }
@@ -592,8 +592,8 @@ a[class*="flex"] {
 }
 
 .tcdx-premium-view :is(input, select, textarea):focus {
-  border-color: rgba(37, 99, 235, 0.5) !important;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.11) !important;
+  border-color: rgba(240, 114, 29, 0.62) !important;
+  box-shadow: var(--tcdx-shadow-tecdex-focus) !important;
 }
 
 .tcdx-premium-view :is(button, a)[class*="rounded"] {
@@ -681,9 +681,9 @@ a[class*="flex"] {
 .tcdx-premium-view [class*="bg-blue-50"][class*="border"],
 .tcdx-premium-view [class*="bg-indigo-50"][class*="border"],
 .tcdx-premium-view [class*="bg-sky-50"][class*="border"] {
-  border-color: rgba(37, 99, 235, 0.18) !important;
+  border-color: rgba(81, 171, 168, 0.24) !important;
   background:
-    linear-gradient(135deg, rgba(239, 247, 255, 0.98) 0%, rgba(248, 251, 255, 0.98) 100%) !important;
+    linear-gradient(135deg, rgba(81, 171, 168, 0.12) 0%, rgba(248, 251, 255, 0.98) 100%) !important;
 }
 
 .tcdx-premium-view [class*="bg-emerald-50"][class*="border"],
@@ -713,9 +713,9 @@ a[class*="flex"] {
 .tcdx-premium-view a[class*="bg-blue"]:not([class*="bg-blue-50"]):not([class*="bg-blue-100"]):not([class*="bg-blue-200"]),
 .tcdx-premium-view button[class*="bg-indigo"]:not([class*="bg-indigo-50"]):not([class*="bg-indigo-100"]):not([class*="bg-indigo-200"]),
 .tcdx-premium-view a[class*="bg-indigo"]:not([class*="bg-indigo-50"]):not([class*="bg-indigo-100"]):not([class*="bg-indigo-200"]) {
-  background: linear-gradient(135deg, var(--tcdx-brand) 0%, var(--tcdx-brand-2) 100%) !important;
+  background: linear-gradient(135deg, var(--tcdx-color-primary) 0%, var(--tcdx-color-primary-hover) 100%) !important;
   color: white !important;
-  box-shadow: 0 10px 22px rgba(11, 92, 173, 0.22);
+  box-shadow: 0 10px 22px rgba(240, 114, 29, 0.22);
 }
 
 .tcdx-premium-view button[class*="bg-slate-900"],
