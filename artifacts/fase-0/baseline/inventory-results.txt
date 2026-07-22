@@ -1,0 +1,2 @@
+stack_inventory_exit=0
+code_signal_scan_exit=0

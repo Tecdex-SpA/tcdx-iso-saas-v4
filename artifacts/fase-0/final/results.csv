@@ -1,0 +1,8 @@
+backend_check,0,artifacts/fase-0/final/backend_check.log
+backend_test,0,artifacts/fase-0/final/backend_test.log
+backend_phase0_inventory,0,artifacts/fase-0/final/backend_phase0_inventory.log
+backend_phase0_contracts,0,artifacts/fase-0/final/backend_phase0_contracts.log
+frontend_lint,0,artifacts/fase-0/final/frontend_lint.log
+frontend_check,0,artifacts/fase-0/final/frontend_check.log
+frontend_build,0,artifacts/fase-0/final/frontend_build.log
+git_diff_check,0,artifacts/fase-0/final/git_diff_check.log

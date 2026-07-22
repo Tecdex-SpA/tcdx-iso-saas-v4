@@ -1,0 +1,7 @@
+{
+  "routes": 40,
+  "backendEndpoints": 497,
+  "capabilitiesWithoutEndpoint": 31,
+  "endpointsWithoutAuthSignal": 176,
+  "endpointsWithoutTenantSignal": 111
+}

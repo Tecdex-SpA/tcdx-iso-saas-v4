@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node src/app.js",
     "check": "node -c src/app.js",
-    "test": "npm run check && node src/utils/soaValidation.test.js && node src/services/soaIntelligence.service.test.js && node src/services/operationalRiskMonteCarlo.service.test.js && node src/services/operationalRiskAiJobs.service.test.js && node src/services/knowledge-base/knowledge.service.test.js && node src/services/intelligence/intelligence.service.test.js"
+    "test": "npm run check && node src/utils/soaValidation.test.js && node src/services/soaIntelligence.service.test.js && node src/services/operationalRiskMonteCarlo.service.test.js && node src/services/operationalRiskAiJobs.service.test.js && node src/services/knowledge-base/knowledge.service.test.js && node src/services/intelligence/intelligence.service.test.js",
+    "phase0:inventory": "cd .. && node scripts/phase0/generate-phase0-inventory.js",
+    "phase0:contracts:check": "cd .. && node scripts/phase0/check-phase0-contracts.js",
+    "phase0:check": "npm run check && npm test && npm run phase0:inventory && npm run phase0:contracts:check"
   },
   "keywords": [],
   "author": "",
