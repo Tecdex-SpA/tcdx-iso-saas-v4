@@ -629,7 +629,7 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
   };
 
   return (
-    <section className="space-y-5">
+    <section className="tcdx-reports-refresh space-y-5">
       <ExecutiveIntelligenceBrief
         brief={intelligence.data}
         loading={intelligence.loading}
@@ -657,7 +657,7 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
               Preview, narrativa, fuentes y export PDF/ZIP
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              Flujo revisable basado en Sprint 6.1, 6.2 y 6.2A. Todo export requiere confirmación humana y no constituye certificación ni aprobación automática.
+              Flujo operacional revisable con preview, narrativa, fuentes trazables y exportación controlada. Todo export requiere confirmación humana y no constituye certificación ni aprobación automática.
             </p>
           </div>
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">

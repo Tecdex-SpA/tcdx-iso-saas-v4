@@ -910,7 +910,7 @@ export default function ExportesPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="tcdx-reports-refresh space-y-6">
         <section className="overflow-hidden rounded-[34px] border border-slate-200 bg-[linear-gradient(135deg,#0B2F4F_0%,#103a61_48%,#0b2740_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">

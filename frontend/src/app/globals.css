@@ -898,3 +898,163 @@ a[class*="flex"] {
 .tcdx-assets-risk-refinement .tcdx-scrollbar {
   scrollbar-color: rgba(84, 89, 95, 0.42) transparent;
 }
+
+/* Reports, IA Compliance and Settings visual refresh aligned with TECDEX DS. */
+.tcdx-reports-refresh,
+.tcdx-ai-compliance-refresh,
+.tcdx-settings-refresh {
+  color: var(--tcdx-color-text-primary);
+  font-family: var(--tcdx-font-family-body);
+}
+
+.tcdx-reports-refresh :is(h1, h2, h3),
+.tcdx-ai-compliance-refresh :is(h1, h2, h3),
+.tcdx-settings-refresh :is(h1, h2, h3) {
+  color: var(--tcdx-color-text-ink) !important;
+  font-family: var(--tcdx-font-family-heading);
+  letter-spacing: 0;
+}
+
+.tcdx-reports-refresh > section:first-child {
+  background: var(--tcdx-color-navy) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  border-radius: var(--tcdx-radius-tecdex-lg) !important;
+  box-shadow: var(--tcdx-shadow-tecdex-lg) !important;
+}
+
+.tcdx-reports-refresh :is(.rounded-3xl, .rounded-2xl, .rounded-xl),
+.tcdx-ai-compliance-refresh :is(.rounded-3xl, .rounded-2xl, .rounded-xl),
+.tcdx-settings-refresh :is(.rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg) {
+  border-radius: var(--tcdx-radius-tecdex-sm) !important;
+}
+
+.tcdx-reports-refresh :is([class*="bg-white"], [class*="bg-slate-50"]),
+.tcdx-ai-compliance-refresh :is([class*="bg-white"], [class*="bg-slate-50"]),
+.tcdx-settings-refresh :is([class*="bg-white"], [class*="bg-slate-50"]) {
+  border-color: var(--tcdx-color-border) !important;
+}
+
+.tcdx-reports-refresh [class*="shadow"],
+.tcdx-ai-compliance-refresh [class*="shadow"],
+.tcdx-settings-refresh [class*="shadow"] {
+  box-shadow: var(--tcdx-shadow-tecdex-sm) !important;
+}
+
+.tcdx-reports-refresh :is(input, select, textarea),
+.tcdx-ai-compliance-refresh :is(input, select, textarea),
+.tcdx-settings-refresh :is(input, select, textarea) {
+  border-color: var(--tcdx-color-border) !important;
+  border-radius: var(--tcdx-radius-tecdex-sm) !important;
+  background: var(--tcdx-color-white) !important;
+  color: var(--tcdx-color-text-primary) !important;
+}
+
+.tcdx-reports-refresh :is(input, select, textarea):focus,
+.tcdx-ai-compliance-refresh :is(input, select, textarea):focus,
+.tcdx-settings-refresh :is(input, select, textarea):focus {
+  border-color: rgba(240, 114, 29, 0.70) !important;
+  box-shadow: var(--tcdx-shadow-tecdex-focus) !important;
+}
+
+.tcdx-reports-refresh :is(button, a)[class*="bg-[#0B2F4F]"],
+.tcdx-reports-refresh :is(button, a)[class*="bg-violet"],
+.tcdx-reports-refresh :is(button, a)[class*="bg-blue"],
+.tcdx-ai-compliance-refresh :is(button, a)[class*="bg-violet"],
+.tcdx-ai-compliance-refresh :is(button, a)[class*="bg-blue"],
+.tcdx-settings-refresh :is(button, a)[class*="bg-slate-950"],
+.tcdx-settings-refresh :is(button, a)[class*="bg-blue"] {
+  background: var(--tcdx-color-primary) !important;
+  border-color: var(--tcdx-color-primary) !important;
+  color: var(--tcdx-color-white) !important;
+}
+
+.tcdx-reports-refresh :is(button, a)[class*="bg-[#0B2F4F]"]:hover,
+.tcdx-reports-refresh :is(button, a)[class*="bg-violet"]:hover,
+.tcdx-reports-refresh :is(button, a)[class*="bg-blue"]:hover,
+.tcdx-ai-compliance-refresh :is(button, a)[class*="bg-violet"]:hover,
+.tcdx-ai-compliance-refresh :is(button, a)[class*="bg-blue"]:hover,
+.tcdx-settings-refresh :is(button, a)[class*="bg-slate-950"]:hover,
+.tcdx-settings-refresh :is(button, a)[class*="bg-blue"]:hover {
+  background: var(--tcdx-color-primary-hover) !important;
+}
+
+.tcdx-reports-refresh :is(button, a, input, select, textarea):focus-visible,
+.tcdx-ai-compliance-refresh :is(button, a, input, select, textarea):focus-visible,
+.tcdx-settings-refresh :is(button, a, input, select, textarea):focus-visible {
+  outline: none !important;
+  box-shadow: var(--tcdx-shadow-tecdex-focus) !important;
+}
+
+.tcdx-reports-refresh :is([class*="bg-blue-50"], [class*="bg-indigo-50"], [class*="bg-violet-50"], [class*="bg-sky-50"]),
+.tcdx-ai-compliance-refresh :is([class*="bg-blue-50"], [class*="bg-indigo-50"], [class*="bg-violet-50"], [class*="bg-sky-50"]),
+.tcdx-settings-refresh :is([class*="bg-blue-50"], [class*="bg-indigo-50"], [class*="bg-violet-50"], [class*="bg-sky-50"]) {
+  background: rgba(81, 171, 168, 0.10) !important;
+  border-color: rgba(81, 171, 168, 0.28) !important;
+}
+
+.tcdx-reports-refresh :is(div, p, span, label, th, td)[class*="text-blue"],
+.tcdx-reports-refresh :is(div, p, span, label, th, td)[class*="text-indigo"],
+.tcdx-reports-refresh :is(div, p, span, label, th, td)[class*="text-violet"],
+.tcdx-reports-refresh :is(div, p, span, label, th, td)[class*="text-sky"],
+.tcdx-ai-compliance-refresh :is(div, p, span, label, th, td)[class*="text-blue"],
+.tcdx-ai-compliance-refresh :is(div, p, span, label, th, td)[class*="text-indigo"],
+.tcdx-ai-compliance-refresh :is(div, p, span, label, th, td)[class*="text-violet"],
+.tcdx-ai-compliance-refresh :is(div, p, span, label, th, td)[class*="text-sky"],
+.tcdx-settings-refresh :is(div, p, span, label, th, td)[class*="text-blue"],
+.tcdx-settings-refresh :is(div, p, span, label, th, td)[class*="text-indigo"],
+.tcdx-settings-refresh :is(div, p, span, label, th, td)[class*="text-violet"],
+.tcdx-settings-refresh :is(div, p, span, label, th, td)[class*="text-sky"] {
+  color: var(--tcdx-color-secondary-hover) !important;
+}
+
+.tcdx-reports-refresh table,
+.tcdx-ai-compliance-refresh table,
+.tcdx-settings-refresh table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tcdx-reports-refresh thead,
+.tcdx-ai-compliance-refresh thead,
+.tcdx-settings-refresh thead {
+  background: var(--tcdx-color-surface) !important;
+}
+
+.tcdx-reports-refresh th,
+.tcdx-ai-compliance-refresh th,
+.tcdx-settings-refresh th {
+  color: var(--tcdx-color-text-muted) !important;
+  letter-spacing: 0.06em;
+}
+
+.tcdx-reports-refresh tbody tr:hover,
+.tcdx-ai-compliance-refresh tbody tr:hover,
+.tcdx-settings-refresh tbody tr:hover {
+  background: rgba(81, 171, 168, 0.08) !important;
+}
+
+.tcdx-reports-refresh label,
+.tcdx-ai-compliance-refresh label,
+.tcdx-settings-refresh label {
+  color: var(--tcdx-color-text-primary);
+}
+
+.tcdx-ai-compliance-refresh [class*="animate-spin"] {
+  border-color: rgba(81, 171, 168, 0.24) !important;
+  border-top-color: var(--tcdx-color-secondary) !important;
+}
+
+@media (max-width: 768px) {
+  .tcdx-reports-refresh,
+  .tcdx-ai-compliance-refresh,
+  .tcdx-settings-refresh {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .tcdx-reports-refresh :is(button, a),
+  .tcdx-ai-compliance-refresh :is(button, a),
+  .tcdx-settings-refresh :is(button, a) {
+    min-height: 42px;
+  }
+}
