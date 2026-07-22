@@ -344,7 +344,7 @@ export default function DocumentosPage() {
               </p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm">
-              Base comercial lista para revisión y ajuste humano.
+              Base documental lista para revisión y ajuste humano.
             </div>
           </div>
         </section>

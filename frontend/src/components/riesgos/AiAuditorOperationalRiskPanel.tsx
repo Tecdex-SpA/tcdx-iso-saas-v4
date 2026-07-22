@@ -322,7 +322,7 @@ export default function AiAuditorOperationalRiskPanel({
               <p className="mt-2 text-sm leading-6 text-blue-900">{analysis.lectura_portafolio}</p>
             )}
             <div className="mt-2 text-xs font-semibold text-blue-800">
-              Fuente: {engineLabel} - Modelo: {analysis.ai_model || 'ai-engine'} - Modo: {analysis.generation_mode || 'no verificable'} - Prompt: {analysis.prompt_version || 'beta-pert-operational-risk-v1'}
+              Fuente: {engineLabel} - Modelo: {analysis.ai_model || 'ai-engine'} - Modo: {analysis.generation_mode || 'no verificable'} - Versión de análisis: {analysis.prompt_version || 'beta-pert-operational-risk-v1'}
             </div>
           </div>
 

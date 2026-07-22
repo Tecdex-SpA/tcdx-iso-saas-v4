@@ -5,7 +5,7 @@ import MvpViewShell from '@/components/mvp/MvpViewShell';
 export default function PlanesAccionPage() {
   return (
     <MvpViewShell
-      eyebrow="Vista consolidada Sprint 1"
+      eyebrow="Gestión operacional"
       title="Planes de acción"
       description="Seguimiento de planes reales y acciones recomendadas, con revisión humana antes de convertir sugerencias en trabajo operativo."
       links={[
