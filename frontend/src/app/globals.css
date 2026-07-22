@@ -145,7 +145,7 @@ body {
     radial-gradient(circle at 18% 0%, rgba(27, 117, 208, 0.08), transparent 32%),
     linear-gradient(180deg, #f8fbff 0%, #f6f8fb 42%, #edf3f8 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--tcdx-font-family-body);
   min-height: 100dvh;
   overflow-x: hidden;
   text-rendering: optimizeLegibility;
@@ -183,8 +183,8 @@ footer {
 }
 
 ::selection {
-  background: rgba(31, 111, 235, 0.18);
-  color: var(--tcdx-ink);
+  background: rgba(240, 114, 29, 0.20);
+  color: var(--tcdx-color-text-ink);
 }
 
 button,
@@ -192,7 +192,22 @@ a,
 input,
 select,
 textarea {
-  outline-color: rgba(31, 111, 235, 0.55);
+  outline-color: rgba(240, 114, 29, 0.70);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--tcdx-shadow-tecdex-focus);
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 button,
@@ -245,8 +260,8 @@ a[class*="flex"] {
 
 .tcdx-focus-ring:focus,
 .tcdx-focus-ring:focus-visible {
-  border-color: rgba(31, 111, 235, 0.55);
-  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.12);
+  border-color: rgba(240, 114, 29, 0.70);
+  box-shadow: var(--tcdx-shadow-tecdex-focus);
 }
 
 .enterprise-shell {
@@ -506,7 +521,7 @@ a[class*="flex"] {
   max-width: 100%;
   color: var(--tcdx-ink);
   overflow-x: hidden;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .tcdx-premium-view > * {
@@ -515,6 +530,11 @@ a[class*="flex"] {
 
 .tcdx-premium-view :is(div, section, article, form, nav, ul, ol, li) {
   min-width: 0;
+}
+
+.tcdx-premium-view :is(p, li, td, th, label, span, a, button) {
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .tcdx-premium-view > div[class*="min-h-screen"] {
@@ -658,7 +678,7 @@ a[class*="flex"] {
 }
 
 .tcdx-premium-view tbody tr:hover {
-  background: var(--brand-blue-soft);
+  background: rgba(81, 171, 168, 0.08);
 }
 
 .tcdx-premium-view :is(.overflow-x-auto, [class*="overflow-x-auto"]) {

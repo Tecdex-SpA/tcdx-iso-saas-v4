@@ -136,17 +136,17 @@ export default function LoginPage() {
         <div className="relative z-10 flex min-h-screen w-full flex-col justify-between px-10 py-9 xl:px-14">
           <div>
             <Image
-              src="/logo.png"
-              width={224}
-              height={80}
-              className="mb-8 h-14 w-auto object-contain"
-              alt="TCDX Compliance"
+              src="/tecdex.png"
+              width={260}
+              height={72}
+              className="mb-9 h-16 w-auto object-contain"
+              alt="TECDEX"
               priority
             />
 
             <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-4 py-2 text-[var(--tcdx-font-size-caption)] font-semibold uppercase tracking-[var(--tcdx-letter-spacing-button)] text-white/78">
               <span className="h-2 w-2 rounded-full bg-[var(--tcdx-color-secondary)]" />
-              Plataforma SaaS B2B ISO
+              Plataforma de gestión ISO
             </div>
           </div>
 
@@ -170,7 +170,7 @@ export default function LoginPage() {
                 </div>
                 <div className="font-semibold text-white">{t('login.heroCardAudits')}</div>
                 <div className="mt-2 text-xs leading-5 text-white/58">
-                  Preparación auditora, hallazgos, evidencia y trazabilidad por rol.
+                  Apoyo a auditoría, hallazgos, evidencia y trazabilidad por rol.
                 </div>
               </div>
 
@@ -190,7 +190,7 @@ export default function LoginPage() {
             {[
               ['ISO', 'Multinorma'],
               ['B2B', 'Multiempresa'],
-              ['IA', 'Auditora'],
+              ['IA', 'Asistida'],
             ].map(([value, label]) => (
               <div
                 key={value}
@@ -213,11 +213,11 @@ export default function LoginPage() {
           <div className="mb-8 text-center">
             <div className="mb-5 flex justify-center lg:hidden">
               <Image
-                src="/logo.png"
-                width={224}
-                height={64}
+                src="/tecdex.png"
+                width={260}
+                height={72}
                 className="h-16 w-auto object-contain"
-                alt="TCDX Compliance"
+                alt="TECDEX"
                 priority
               />
             </div>

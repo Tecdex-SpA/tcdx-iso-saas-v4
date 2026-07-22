@@ -1111,7 +1111,7 @@ export default function HealthDashboardPage() {
       }
       setLastSprintHealthLoadedAt(new Date().toISOString());
     } catch (err: unknown) {
-      setSprintHealthError(getErrorMessage(err, 'No fue posible cargar Health/KPIs Sprint 5.'));
+      setSprintHealthError(getErrorMessage(err, 'No fue posible cargar Health/KPIs operacionales.'));
       setSprintHealthSummary(null);
       setSprintHealthDashboard(null);
       setSprintStandards([]);
