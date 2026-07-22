@@ -44,7 +44,12 @@ jobs:
         working-directory: backend
         run: |
           npm run phase0:inventory
+          npm run phase0:classify
           npm run phase0:contracts:check
+          npm run phase0:capabilities-check
+          npm run phase0:permissions-check
+          npm run phase0:e2e-contract
+          npm run phase0:scripts-check
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -54,6 +59,76 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: Frontend type check
+        working-directory: frontend
+        run: npm run check
+
       - name: Frontend build
         working-directory: frontend
         run: npm run build
+
+  phase0-runtime:
+    name: Phase 0 runtime QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: validate
+    environment: phase0-qa
+    env:
+      WEB_BASE_URL: ${{ secrets.PHASE0_WEB_BASE_URL }}
+      API_BASE_URL: ${{ secrets.PHASE0_API_BASE_URL }}
+      E2E_ADMIN_EMAIL: ${{ secrets.PHASE0_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.PHASE0_ADMIN_PASSWORD }}
+      E2E_RESTRICTED_EMAIL: ${{ secrets.PHASE0_RESTRICTED_EMAIL }}
+      E2E_RESTRICTED_PASSWORD: ${{ secrets.PHASE0_RESTRICTED_PASSWORD }}
+      E2E_RESTRICTED_API_PATH: ${{ vars.PHASE0_RESTRICTED_API_PATH }}
+      E2E_TENANT_A_EMAIL: ${{ secrets.PHASE0_TENANT_A_EMAIL }}
+      E2E_TENANT_A_PASSWORD: ${{ secrets.PHASE0_TENANT_A_PASSWORD }}
+      E2E_TENANT_A_ID: ${{ vars.PHASE0_TENANT_A_ID }}
+      E2E_TENANT_B_EMAIL: ${{ secrets.PHASE0_TENANT_B_EMAIL }}
+      E2E_TENANT_B_PASSWORD: ${{ secrets.PHASE0_TENANT_B_PASSWORD }}
+      E2E_TENANT_B_ID: ${{ vars.PHASE0_TENANT_B_ID }}
+      E2E_TENANT_A_FILE_PATH: ${{ vars.PHASE0_TENANT_A_FILE_PATH }}
+      E2E_TENANT_B_FILE_PATH: ${{ vars.PHASE0_TENANT_B_FILE_PATH }}
+      E2E_TENANT_A_JOB_PATH: ${{ vars.PHASE0_TENANT_A_JOB_PATH }}
+      E2E_TENANT_B_JOB_PATH: ${{ vars.PHASE0_TENANT_B_JOB_PATH }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Phase 0 VM-equivalent checks
+        run: npm run phase0:vm-check
+
+      - name: Upload Phase 0 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase0-runtime-evidence
+          path: |
+            artifacts/fase-0/e2e-results.json
+            artifacts/fase-0/cross-tenant-*.json
+            artifacts/fase-0/cross-tenant-results.json
+            artifacts/fase-0/observability-runtime.json
+            frontend/test-results/
+            frontend/playwright-report/

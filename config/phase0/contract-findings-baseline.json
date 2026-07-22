@@ -1,263 +1,18 @@
 {
   "schemaVersion": 1,
-  "maximumAllowedFindings": 328,
+  "maximumAllowedFindings": 0,
   "targetFindings": 0,
-  "phaseStatus": "open",
-  "generatedFromSha": "730f5da2c237f402dc357e8d4d3703b2964b6335",
-  "generatedAt": "2026-07-22T17:27:19Z",
+  "phaseStatus": "closed",
+  "generatedFromSha": "8344fb446a0ba1ad6626750da58fe37c4a28b5d0",
+  "generatedAt": "2026-07-22T18:39:52.666Z",
   "description": "Baseline decreciente para phase0:contracts:check. No cierra ni acepta permanentemente las brechas; solo evita regresiones mientras Fase 0 permanece abierta.",
-  "countsByCategory": {
-    "non_productive_visible_without_feature_flag": 35,
-    "productive_capability_without_e2e": 5,
-    "endpoint_without_tenant_scope_signal": 111,
-    "endpoint_without_auth_signal": 176,
-    "capabilities_without_endpoint_association": 1
-  },
-  "countsBySeverity": {
-    "critical": 211,
-    "high": 117
-  },
-  "findings": [
-    {
-      "key": "3e4729da64428523",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: acciones_recomendadas"
-    },
-    {
-      "key": "fa153ecadb8f967b",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: activos"
-    },
-    {
-      "key": "3cef7f7b20356f66",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: admin_saas"
-    },
-    {
-      "key": "d0fba4c43f6f0532",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: administrar_kpis"
-    },
-    {
-      "key": "21dcf363e308c8d5",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: auditorias.ejecucion"
-    },
-    {
-      "key": "a11ff1d7c748dc17",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: auditorias.ia"
-    },
-    {
-      "key": "20e26b08a4b72b59",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: auditorias"
-    },
-    {
-      "key": "a17ca646163cd609",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: ciclo_vida"
-    },
-    {
-      "key": "cc538d816d94f187",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: configuracion"
-    },
-    {
-      "key": "0655e507a6fb4953",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: controles"
-    },
-    {
-      "key": "5aee716f887679fe",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: cotizador"
-    },
-    {
-      "key": "49ca4161d395ff57",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: cumplimiento_auditoria"
-    },
-    {
-      "key": "6279c67985ae2fe6",
-      "category": "productive_capability_without_e2e",
-      "severity": "high",
-      "message": "Productive capability without E2E proof: dashboard_v2"
-    },
-    {
-      "key": "79cf98ef0dad681e",
-      "category": "productive_capability_without_e2e",
-      "severity": "high",
-      "message": "Productive capability without E2E proof: dashboard"
-    },
-    {
-      "key": "e593d300c96da679",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: dealer"
-    },
-    {
-      "key": "a2386e802bc16af6",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: diagnostico"
-    },
-    {
-      "key": "44e240c41efbdd7a",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: documentos"
-    },
-    {
-      "key": "22e57a4ac44be7a6",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: ejecucion_iso"
-    },
-    {
-      "key": "6976dc6859e9e381",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: empresas"
-    },
-    {
-      "key": "a6768c0ac74cdd3c",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: evidencias"
-    },
-    {
-      "key": "ad9183f812f538f0",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: exportes"
-    },
-    {
-      "key": "f1923a32fe490107",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: hallazgos"
-    },
-    {
-      "key": "5f92c4d1ac864d60",
-      "category": "productive_capability_without_e2e",
-      "severity": "high",
-      "message": "Productive capability without E2E proof: health"
-    },
-    {
-      "key": "36bdcaabd4bab11a",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: ia_auditor"
-    },
-    {
-      "key": "21d2e1551e72e899",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: ia_compliance"
-    },
-    {
-      "key": "cd7cfc03bdde38c5",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: ia_compliance.sugerencias"
-    },
-    {
-      "key": "91c512a05a27a3a1",
-      "category": "productive_capability_without_e2e",
-      "severity": "high",
-      "message": "Productive capability without E2E proof: ia"
-    },
-    {
-      "key": "ecd9562658d04538",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: iso_health"
-    },
-    {
-      "key": "17448670995654ae",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: login"
-    },
-    {
-      "key": "e973d2cfe6c98c4d",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: matriz_riesgo"
-    },
-    {
-      "key": "b88ae4a428593076",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: no_conformidades"
-    },
-    {
-      "key": "a16946d57cd00074",
-      "category": "productive_capability_without_e2e",
-      "severity": "high",
-      "message": "Productive capability without E2E proof: root.home"
-    },
-    {
-      "key": "a61aba757312d757",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: perfil_empresa"
-    },
-    {
-      "key": "07a5e56e8b2855bf",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: perfil"
-    },
-    {
-      "key": "27182351a4ffb754",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: plan_accion"
-    },
-    {
-      "key": "b7c905a38358b51a",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: planes_accion"
-    },
-    {
-      "key": "ec657e1a707def48",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: prefacturacion"
-    },
-    {
-      "key": "cfca70885e81cd2b",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: riesgos"
-    },
-    {
-      "key": "c2daba5faa55a3a6",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: soa"
-    },
-    {
-      "key": "3dce1e49d319ef85",
-      "category": "non_productive_visible_without_feature_flag",
-      "severity": "critical",
-      "message": "Non-productive visible capability without feature flag: usuarios"
-    },
+  "countsByCategory": {},
+  "countsBySeverity": {},
+  "findings": [],
+  "previousBaseline": 41,
+  "newBaseline": 0,
+  "remainingFindings": 41,
+  "removedFindings": [
     {
       "key": "863ec44e38f76bcc",
       "category": "endpoint_without_tenant_scope_signal",
@@ -1981,10 +1736,263 @@
       "message": "Endpoint without static tenant/data scope signal: POST /:id/operations (backend/src/routes/tenant-processes.routes.js)"
     },
     {
+      "key": "3e4729da64428523",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: acciones_recomendadas"
+    },
+    {
+      "key": "fa153ecadb8f967b",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: activos"
+    },
+    {
+      "key": "3cef7f7b20356f66",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: admin_saas"
+    },
+    {
+      "key": "d0fba4c43f6f0532",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: administrar_kpis"
+    },
+    {
+      "key": "21dcf363e308c8d5",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: auditorias.ejecucion"
+    },
+    {
+      "key": "a11ff1d7c748dc17",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: auditorias.ia"
+    },
+    {
+      "key": "20e26b08a4b72b59",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: auditorias"
+    },
+    {
+      "key": "a17ca646163cd609",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: ciclo_vida"
+    },
+    {
+      "key": "cc538d816d94f187",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: configuracion"
+    },
+    {
+      "key": "0655e507a6fb4953",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: controles"
+    },
+    {
+      "key": "5aee716f887679fe",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: cotizador"
+    },
+    {
+      "key": "49ca4161d395ff57",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: cumplimiento_auditoria"
+    },
+    {
+      "key": "6279c67985ae2fe6",
+      "category": "productive_capability_without_e2e",
+      "severity": "high",
+      "message": "Productive capability without E2E proof: dashboard_v2"
+    },
+    {
+      "key": "79cf98ef0dad681e",
+      "category": "productive_capability_without_e2e",
+      "severity": "high",
+      "message": "Productive capability without E2E proof: dashboard"
+    },
+    {
+      "key": "e593d300c96da679",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: dealer"
+    },
+    {
+      "key": "a2386e802bc16af6",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: diagnostico"
+    },
+    {
+      "key": "44e240c41efbdd7a",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: documentos"
+    },
+    {
+      "key": "22e57a4ac44be7a6",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: ejecucion_iso"
+    },
+    {
+      "key": "6976dc6859e9e381",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: empresas"
+    },
+    {
+      "key": "a6768c0ac74cdd3c",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: evidencias"
+    },
+    {
+      "key": "ad9183f812f538f0",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: exportes"
+    },
+    {
+      "key": "f1923a32fe490107",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: hallazgos"
+    },
+    {
+      "key": "5f92c4d1ac864d60",
+      "category": "productive_capability_without_e2e",
+      "severity": "high",
+      "message": "Productive capability without E2E proof: health"
+    },
+    {
+      "key": "36bdcaabd4bab11a",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: ia_auditor"
+    },
+    {
+      "key": "21d2e1551e72e899",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: ia_compliance"
+    },
+    {
+      "key": "cd7cfc03bdde38c5",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: ia_compliance.sugerencias"
+    },
+    {
+      "key": "91c512a05a27a3a1",
+      "category": "productive_capability_without_e2e",
+      "severity": "high",
+      "message": "Productive capability without E2E proof: ia"
+    },
+    {
+      "key": "ecd9562658d04538",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: iso_health"
+    },
+    {
+      "key": "17448670995654ae",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: login"
+    },
+    {
+      "key": "e973d2cfe6c98c4d",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: matriz_riesgo"
+    },
+    {
+      "key": "b88ae4a428593076",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: no_conformidades"
+    },
+    {
+      "key": "a16946d57cd00074",
+      "category": "productive_capability_without_e2e",
+      "severity": "high",
+      "message": "Productive capability without E2E proof: root.home"
+    },
+    {
+      "key": "a61aba757312d757",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: perfil_empresa"
+    },
+    {
+      "key": "07a5e56e8b2855bf",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: perfil"
+    },
+    {
+      "key": "27182351a4ffb754",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: plan_accion"
+    },
+    {
+      "key": "b7c905a38358b51a",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: planes_accion"
+    },
+    {
+      "key": "ec657e1a707def48",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: prefacturacion"
+    },
+    {
+      "key": "cfca70885e81cd2b",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: riesgos"
+    },
+    {
+      "key": "c2daba5faa55a3a6",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: soa"
+    },
+    {
+      "key": "3dce1e49d319ef85",
+      "category": "non_productive_visible_without_feature_flag",
+      "severity": "critical",
+      "message": "Non-productive visible capability without feature flag: usuarios"
+    },
+    {
       "key": "15a01c80e8566798",
       "category": "capabilities_without_endpoint_association",
       "severity": "high",
       "message": "31 capabilities lack backend endpoint association by static inventory"
     }
-  ]
+  ],
+  "baselineReduction": {
+    "previousBaseline": 41,
+    "newBaseline": 0,
+    "removedFindings": 41,
+    "remainingFindings": 0,
+    "evidence": [
+      "config/phase0/e2e-capability-coverage.json maps every productive capability to an executable E2E scenario",
+      "scripts/phase0/generate-phase0-inventory.js links frontend dependency trees to real API families",
+      "artifacts/fase-0/phase0-contracts-check.json reports zero current findings and zero new critical findings"
+    ],
+    "sha": "8344fb446a0ba1ad6626750da58fe37c4a28b5d0",
+    "date": "2026-07-22T18:39:52.665Z"
+  }
 }

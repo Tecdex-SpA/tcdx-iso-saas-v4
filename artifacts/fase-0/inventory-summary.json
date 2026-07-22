@@ -1,7 +1,10 @@
 {
   "routes": 40,
-  "backendEndpoints": 497,
-  "capabilitiesWithoutEndpoint": 31,
-  "endpointsWithoutAuthSignal": 176,
-  "endpointsWithoutTenantSignal": 111
+  "backendEndpoints": 548,
+  "capabilitiesWithoutEndpoint": 0,
+  "endpointsWithoutAuthSignal": 0,
+  "endpointsWithoutTenantSignal": 1,
+  "publicEndpoints": 2,
+  "endpointsProtectedByGlobalAuth": 520,
+  "endpointsScopedByGlobalTenantGuard": 489
 }
