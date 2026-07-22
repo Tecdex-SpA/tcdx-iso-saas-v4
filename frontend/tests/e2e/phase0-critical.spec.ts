@@ -20,12 +20,7 @@ const requiredEnvironment = [
   'E2E_TENANT_B_FILE_PATH',
 ];
 
-const missingEnvironment = requiredEnvironment.filter(name => !process.env[name]);
-if (missingEnvironment.length) {
-  throw new Error(`Missing required Phase 0 E2E environment variables: ${missingEnvironment.join(', ')}`);
-}
-
-const apiBaseUrl = String(process.env.API_BASE_URL).replace(/\/$/, '');
+const apiBaseUrl = String(process.env.API_BASE_URL || 'http://phase0.invalid').replace(/\/$/, '');
 const coveragePath = path.resolve(process.cwd(), '../config/phase0/e2e-capability-coverage.json');
 const coverage = JSON.parse(fs.readFileSync(coveragePath, 'utf8')) as {
   capabilities: Array<{ code: string; scenario: string }>;
@@ -54,6 +49,10 @@ test.describe.serial('Phase 0 critical E2E', () => {
   let api: APIRequestContext;
 
   test.beforeAll(async () => {
+    const missingEnvironment = requiredEnvironment.filter(name => !process.env[name]);
+    if (missingEnvironment.length) {
+      throw new Error(`Missing required Phase 0 E2E environment variables: ${missingEnvironment.join(', ')}`);
+    }
     api = await createRequest.newContext({ baseURL: apiBaseUrl });
   });
 

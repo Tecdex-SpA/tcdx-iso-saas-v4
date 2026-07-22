@@ -60,3 +60,17 @@
 | F0-CI-002 | CI | Jobs estático y runtime bloqueantes definidos | verified_local | `.github/workflows/ci.yml` | Requiere push y secrets environment `phase0-qa` | `gh pr checks --watch` |
 | F0-VM-001 | VM | E2E, tenant, files, search, export, AI, jobs, observabilidad | blocked_external | `npm run phase0:vm-check` | Código aún no desplegado por restricción | Ejecutar después de merge/deploy |
 | F0-RPO-RTO-001 | Continuidad | RPO/RTO medibles y artifact definido | blocked_external | `docs/operations/fase-0-backup-restore.md` | Base QA aislada no proporcionada | Ejecutar restore QA después del deploy |
+
+## Ciclo 2026-07-22 — Separación CI de PR y runtime QA
+
+- Rama: `codex/fase-0-cierre-bloqueantes`
+- SHA de trabajo: `43cda699399ae63daaf575e5030d72f583166652`
+- Causa raíz: `phase0:vm-check` estaba dentro del workflow de `pull_request` y recibía variables QA vacías antes del deploy.
+- Estado: Fase 0 continúa pendiente de validación externa; no se redujo cobertura.
+
+| ID | Épica | Entregable o criterio | Estado | Evidencia | Bloqueo externo | Acción exacta |
+|---|---|---|---|---|---|---|
+| F0-CI-003 | CI PR | Gate estático/local sin dependencia de QA | verified_local | `.github/workflows/ci.yml`; Playwright `--list` |  | Mantener como required check del PR |
+| F0-RUNTIME-002 | Runtime QA | Workflow manual protegido por Environment `qa` y SHA desplegado | verified_local | `.github/workflows/phase0-runtime-qa.yml` | Requiere merge, deploy y secrets QA | `gh workflow run phase0-runtime-qa.yml --ref main -f deployed_sha=<SHA>` |
+| F0-REST-004 | Restore QA | Restore separado del PR y runtime automatizado | blocked_external | `docs/operations/fase-0-backup-restore.md` | Requiere autorización y DB QA aislada | `npm run phase0:restore-check` |
+| F0-CLOSE-001 | Cierre | Runtime QA y restore QA verdes para el mismo SHA | blocked_external | Artifacts runtime y `backup-restore-result.json` | Código aún no mergeado/desplegado | Cambiar a `verified_vm` solo con evidencia |
