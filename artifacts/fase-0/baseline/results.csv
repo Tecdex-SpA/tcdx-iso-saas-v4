@@ -1,0 +1,9 @@
+git_status,0,artifacts/fase-0/baseline/git_status.log
+backend_check,0,artifacts/fase-0/baseline/backend_check.log
+backend_test,0,artifacts/fase-0/baseline/backend_test.log
+frontend_lint,0,artifacts/fase-0/baseline/frontend_lint.log
+frontend_check,0,artifacts/fase-0/baseline/frontend_check.log
+frontend_build,0,artifacts/fase-0/baseline/frontend_build.log
+playwright_version,0,artifacts/fase-0/baseline/playwright_version.log
+playwright_test,1,artifacts/fase-0/baseline/playwright_test.log
+git_diff_check,0,artifacts/fase-0/baseline/git_diff_check.log

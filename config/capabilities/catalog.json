@@ -1,0 +1,1810 @@
+{
+  "generatedAt": "2026-07-22T17:10:23.726Z",
+  "source": "scripts/phase0/generate-phase0-inventory.js",
+  "capabilities": [
+    {
+      "code": "acciones_recomendadas",
+      "name": "acciones recomendadas",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /acciones-recomendadas.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/acciones-recomendadas"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/acciones-recomendadas/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "activos",
+      "name": "activos",
+      "domain": "risk",
+      "description": "Capacidad visible derivada de la ruta /activos.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/activos"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/activos/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "admin_saas",
+      "name": "admin saas",
+      "domain": "administration",
+      "description": "Capacidad visible derivada de la ruta /admin-saas.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/admin-saas"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/admin-saas/page.tsx"
+      ],
+      "backendEndpoints": [
+        "GET /overview",
+        "GET /dealer/tenants",
+        "GET /tenants",
+        "POST /tenants",
+        "PUT /tenants/:tenant_id/logo",
+        "PUT /tenants/:tenant_id",
+        "PUT /tenants/:tenant_id/ai-settings",
+        "GET /tenants/:tenant_id",
+        "GET /dealers",
+        "GET /audit-log",
+        "GET /dealer/requests",
+        "GET /modules",
+        "PUT /tenants/:tenant_id/modules/:module_key",
+        "PUT /tenants/:tenant_id/standards/:standard_code",
+        "POST /tenants/:tenant_id/standards/:standard_code/initialize-controls",
+        "POST /tenants/:tenant_id/standards/:standard_code/initialize-controls",
+        "POST /tenants/:tenant_id/refresh-health",
+        "GET /external-lookup/quotas",
+        "PUT /tenants/:tenant_id/external-lookup/quota",
+        "GET /tenants/:tenant_id/external-lookup/logs",
+        "GET /tenants/:tenant_id/external-lookup/quota-audit",
+        "GET /prebilling/prices",
+        "GET /tenants/:tenant_id/prebilling/current",
+        "POST /tenants/:tenant_id/prebilling/recalculate",
+        "PUT /prebilling/:prebilling_id/status",
+        "GET /tenants/:tenant_id/standards/catalog",
+        "PUT /tenants/:tenant_id/standards/:standard_code/contract",
+        "PUT /tenants/:tenant_id/standards/:standard_code/contract",
+        "GET /tenants/:tenant_id/contract",
+        "PUT /tenants/:tenant_id/contract",
+        "PUT /prebilling/prices/:price_id",
+        "GET /dealer/my-tenants",
+        "GET /dealer/requests",
+        "GET /tenants/:tenant_id/modules/catalog",
+        "PUT /tenants/:tenant_id/modules/:module_key/contract-toggle",
+        "POST /tenants/:tenant_id/suspend-service",
+        "POST /tenants/:tenant_id/reactivate-service",
+        "DELETE /tenants/:tenant_id"
+      ],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Inventario estático; requiere validación dinámica de persistencia, autorización y auditoría."
+    },
+    {
+      "code": "administrar_kpis",
+      "name": "administrar kpis",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /administrar-kpis.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/administrar-kpis"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/administrar-kpis/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "auditorias.ejecucion",
+      "name": "auditorias / ejecucion",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /auditorias/ejecucion.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/auditorias/ejecucion"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/auditorias/ejecucion/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "auditorias.ia",
+      "name": "auditorias / ia",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /auditorias/ia.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/auditorias/ia"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/auditorias/ia/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "auditorias",
+      "name": "auditorias",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /auditorias.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/auditorias"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/auditorias/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "ciclo_vida",
+      "name": "ciclo vida",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /ciclo-vida.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/ciclo-vida"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/ciclo-vida/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "configuracion",
+      "name": "configuracion",
+      "domain": "administration",
+      "description": "Capacidad visible derivada de la ruta /configuracion.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/configuracion"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/configuracion/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "controles",
+      "name": "controles",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /controles.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/controles"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/controles/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "cotizador",
+      "name": "cotizador",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /cotizador.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/cotizador"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/cotizador/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "cumplimiento_auditoria",
+      "name": "cumplimiento auditoria",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /cumplimiento-auditoria.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/cumplimiento-auditoria"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/cumplimiento-auditoria/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "dashboard_v2",
+      "name": "dashboard v2",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /dashboard-v2.",
+      "commercialState": "productive",
+      "runtimeState": "productive",
+      "visible": true,
+      "routePatterns": [
+        "/dashboard-v2"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/dashboard-v2/page.tsx"
+      ],
+      "backendEndpoints": [
+        "GET /summary",
+        "GET /preferences",
+        "PUT /preferences",
+        "DELETE /preferences",
+        "POST /preferences/reset",
+        "GET /actions",
+        "GET /risks",
+        "GET /kpis",
+        "GET /alerts"
+      ],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Inventario estático; requiere validación dinámica de persistencia, autorización y auditoría."
+    },
+    {
+      "code": "dashboard",
+      "name": "dashboard",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /dashboard.",
+      "commercialState": "productive",
+      "runtimeState": "productive",
+      "visible": true,
+      "routePatterns": [
+        "/dashboard"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/dashboard/page.tsx"
+      ],
+      "backendEndpoints": [
+        "GET /:tenant_id",
+        "GET /summary",
+        "GET /preferences",
+        "PUT /preferences",
+        "DELETE /preferences",
+        "POST /preferences/reset",
+        "GET /actions",
+        "GET /risks",
+        "GET /kpis",
+        "GET /alerts",
+        "GET /:tenant_id",
+        "GET /dashboard",
+        "GET /dashboard/:tenantId"
+      ],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Inventario estático; requiere validación dinámica de persistencia, autorización y auditoría."
+    },
+    {
+      "code": "dealer",
+      "name": "dealer",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /dealer.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/dealer"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/dealer/page.tsx"
+      ],
+      "backendEndpoints": [
+        "GET /dealer/tenants",
+        "GET /dealers",
+        "GET /dealer/requests",
+        "GET /dealer/my-tenants",
+        "GET /dealer/requests"
+      ],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Inventario estático; requiere validación dinámica de persistencia, autorización y auditoría."
+    },
+    {
+      "code": "diagnostico",
+      "name": "diagnostico",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /diagnostico.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/diagnostico"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/diagnostico/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "documentos",
+      "name": "documentos",
+      "domain": "evidence",
+      "description": "Capacidad visible derivada de la ruta /documentos.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/documentos"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/documentos/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "ejecucion_iso",
+      "name": "ejecucion iso",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /ejecucion-iso.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/ejecucion-iso"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/ejecucion-iso/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "empresas",
+      "name": "empresas",
+      "domain": "administration",
+      "description": "Capacidad visible derivada de la ruta /empresas.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/empresas"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/empresas/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "evidencias",
+      "name": "evidencias",
+      "domain": "evidence",
+      "description": "Capacidad visible derivada de la ruta /evidencias.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/evidencias"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/evidencias/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "exportes",
+      "name": "exportes",
+      "domain": "reporting",
+      "description": "Capacidad visible derivada de la ruta /exportes.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/exportes"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/exportes/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "hallazgos",
+      "name": "hallazgos",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /hallazgos.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/hallazgos"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/hallazgos/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "health",
+      "name": "health",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /health.",
+      "commercialState": "productive",
+      "runtimeState": "productive",
+      "visible": true,
+      "routePatterns": [
+        "/health"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/health/page.tsx"
+      ],
+      "backendEndpoints": [
+        "POST /tenants/:tenant_id/refresh-health",
+        "GET /engine-health",
+        "GET /health-summary",
+        "GET /summary",
+        "GET /processes",
+        "GET /process-detail",
+        "GET /dashboard",
+        "GET /standards",
+        "GET /kpis",
+        "GET /controls-risk",
+        "GET /root-causes",
+        "GET /root-causes/standards",
+        "GET /remediation-summary",
+        "GET /remediation-summary/standards",
+        "GET /remediation-plan",
+        "GET /remediation-executive",
+        "GET /remediation-executive/standards",
+        "GET /evidence-approval-queue",
+        "GET /controls-recovered",
+        "GET /audit-log",
+        "GET /audit-log/action-plans",
+        "GET /audit-log/evidences",
+        "GET /audit-log/control-recovery",
+        "POST /remediation-plan/create-action",
+        "POST /refresh",
+        "GET /effective-health-summary/:tenantId",
+        "GET /health"
+      ],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Inventario estático; requiere validación dinámica de persistencia, autorización y auditoría."
+    },
+    {
+      "code": "ia_auditor",
+      "name": "ia auditor",
+      "domain": "ai",
+      "description": "Capacidad visible derivada de la ruta /ia-auditor.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/ia-auditor"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/ia-auditor/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "ia_compliance",
+      "name": "ia compliance",
+      "domain": "ai",
+      "description": "Capacidad visible derivada de la ruta /ia-compliance.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/ia-compliance"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/ia-compliance/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "ia_compliance.sugerencias",
+      "name": "ia compliance / sugerencias",
+      "domain": "ai",
+      "description": "Capacidad visible derivada de la ruta /ia-compliance/sugerencias.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/ia-compliance/sugerencias"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/ia-compliance/sugerencias/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "ia",
+      "name": "ia",
+      "domain": "ai",
+      "description": "Capacidad visible derivada de la ruta /ia.",
+      "commercialState": "productive",
+      "runtimeState": "productive",
+      "visible": true,
+      "routePatterns": [
+        "/ia"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/ia/page.tsx"
+      ],
+      "backendEndpoints": [
+        "POST /tenants/:tenant_id/standards/:standard_code/initialize-controls",
+        "POST /tenants/:tenant_id/standards/:standard_code/initialize-controls",
+        "GET /engine-health",
+        "GET /health-summary",
+        "POST /analyze",
+        "GET /findings",
+        "POST /finding-analysis",
+        "POST /nonconformity-draft",
+        "POST /action-plan-suggestion",
+        "GET /executive-brief",
+        "GET /suggestions",
+        "POST /suggestions/save",
+        "POST /suggestions/:id/apply",
+        "POST /apply/finding-analysis-to-finding",
+        "POST /apply/action-plan-suggestion-to-plan",
+        "POST /apply/nonconformity-draft-to-action-plan",
+        "POST /preinvoice/:tenant_id/materialize",
+        "GET /standards",
+        "GET /summary",
+        "GET /processes",
+        "GET /process-detail",
+        "POST /recommendations",
+        "POST /ai-contextual-recommendations",
+        "POST /suggestions/accept-gap",
+        "POST /suggestions/accept-action",
+        "GET /:tenant_id",
+        "PUT /:id",
+        "GET /associations",
+        "POST /associations",
+        "PATCH /associations/:id/deactivate",
+        "PATCH /associations/:id/reactivate",
+        "POST /:id/mark-official",
+        "GET /remediation-summary",
+        "GET /remediation-summary/standards",
+        "GET /remediation-plan",
+        "GET /remediation-executive",
+        "GET /remediation-executive/standards",
+        "POST /remediation-plan/create-action",
+        "GET /options/:tenantId",
+        "POST /:tenantId/calculate",
+        "GET /:tenantId/latest",
+        "GET /:tenantId/readiness",
+        "GET /:tenantId/:assessmentId/gaps",
+        "GET /:tenantId/:assessmentId/plan",
+        "POST /:tenantId/:assessmentId/archive",
+        "GET /:tenantId/:assessmentId",
+        "POST /:tenant_id/initialize",
+        "POST /initialize"
+      ],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Inventario estático; requiere validación dinámica de persistencia, autorización y auditoría."
+    },
+    {
+      "code": "iso_health",
+      "name": "iso health",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /iso-health.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/iso-health"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/iso-health/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "login",
+      "name": "login",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /login.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/login"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/login/page.tsx"
+      ],
+      "backendEndpoints": [
+        "POST /login"
+      ],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Inventario estático; requiere validación dinámica de persistencia, autorización y auditoría."
+    },
+    {
+      "code": "matriz_riesgo",
+      "name": "matriz riesgo",
+      "domain": "risk",
+      "description": "Capacidad visible derivada de la ruta /matriz-riesgo.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/matriz-riesgo"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/matriz-riesgo/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "no_conformidades",
+      "name": "no conformidades",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /no-conformidades.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/no-conformidades"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/no-conformidades/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "root.home",
+      "name": "Inicio",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /.",
+      "commercialState": "productive",
+      "runtimeState": "productive",
+      "visible": true,
+      "routePatterns": [
+        "/"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/page.tsx"
+      ],
+      "backendEndpoints": [
+        "GET /root-causes",
+        "GET /root-causes/standards"
+      ],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Inventario estático; requiere validación dinámica de persistencia, autorización y auditoría."
+    },
+    {
+      "code": "perfil_empresa",
+      "name": "perfil empresa",
+      "domain": "administration",
+      "description": "Capacidad visible derivada de la ruta /perfil-empresa.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/perfil-empresa"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/perfil-empresa/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "perfil",
+      "name": "perfil",
+      "domain": "administration",
+      "description": "Capacidad visible derivada de la ruta /perfil.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/perfil"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/perfil/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "plan_accion",
+      "name": "plan accion",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /plan-accion.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/plan-accion"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/plan-accion/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "planes_accion",
+      "name": "planes accion",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /planes-accion.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/planes-accion"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/planes-accion/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "prefacturacion",
+      "name": "prefacturacion",
+      "domain": "operations",
+      "description": "Capacidad visible derivada de la ruta /prefacturacion.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/prefacturacion"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/prefacturacion/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "riesgos",
+      "name": "riesgos",
+      "domain": "risk",
+      "description": "Capacidad visible derivada de la ruta /riesgos.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/riesgos"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/riesgos/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    },
+    {
+      "code": "soa",
+      "name": "soa",
+      "domain": "compliance",
+      "description": "Capacidad visible derivada de la ruta /soa.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/soa"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/soa/page.tsx"
+      ],
+      "backendEndpoints": [
+        "GET /:tenant_id/preflight",
+        "POST /:tenant_id/initialize",
+        "GET /:tenant_id/intelligence",
+        "GET /:tenant_id/intelligence/:tenant_control_id",
+        "GET /:tenant_id/assessments",
+        "POST /:tenant_id/assessments/run",
+        "POST /:tenant_id/assessments/run-batch",
+        "POST /:tenant_id/assessments/:assessment_id/apply",
+        "POST /:tenant_id/assessments/:assessment_id/reject",
+        "GET /:tenant_id/change-log",
+        "GET /:tenant_id",
+        "PUT /:tenant_control_id"
+      ],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Inventario estático; requiere validación dinámica de persistencia, autorización y auditoría."
+    },
+    {
+      "code": "usuarios",
+      "name": "usuarios",
+      "domain": "administration",
+      "description": "Capacidad visible derivada de la ruta /usuarios.",
+      "commercialState": "partial",
+      "runtimeState": "partial",
+      "visible": true,
+      "routePatterns": [
+        "/usuarios"
+      ],
+      "actions": [],
+      "frontendComponents": [
+        "frontend/src/app/usuarios/page.tsx"
+      ],
+      "backendEndpoints": [],
+      "services": [],
+      "databaseEntities": [],
+      "requiredPermissions": [],
+      "requiredRoles": [],
+      "tenantScope": true,
+      "organizationScope": false,
+      "unitScope": false,
+      "auditEvents": [],
+      "featureFlag": null,
+      "jobs": [],
+      "exports": [],
+      "aiPrompts": [],
+      "aiModels": [],
+      "dependencies": [],
+      "testCoverage": {
+        "unit": false,
+        "integration": false,
+        "e2e": false
+      },
+      "evidence": [
+        "artifacts/fase-0/baseline/stack-inventory.txt"
+      ],
+      "owner": "TCDX ISO SaaS",
+      "notes": "Sin endpoint detectado por heurística; no puede clasificarse como productiva sin revisión adicional."
+    }
+  ]
+}
