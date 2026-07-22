@@ -1240,11 +1240,11 @@ function RiskMatrixPageContent() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-6">
+      <div className="tcdx-risk-refinement p-6 space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-950">Riesgos</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Comparacion de vistas de evaluacion
+          <p className="text-sm text-[var(--tcdx-color-text-secondary)] mt-1">
+            Matriz ISO, riesgo operacional y priorización por impacto/probabilidad.
           </p>
         </div>
 

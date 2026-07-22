@@ -1251,14 +1251,16 @@ function EvidenciasPageContent() {
   if (!showLegacyUpload) {
     return (
       <AppLayout>
-        <UnifiedEvidenceLibrary token={token} canManage={canManageEvidenceAssociations} />
+        <div className="tcdx-evidence-refinement">
+          <UnifiedEvidenceLibrary token={token} canManage={canManageEvidenceAssociations} />
+        </div>
       </AppLayout>
     );
   }
 
   return (
     <AppLayout>
-      <div className="min-h-screen bg-[#f5f7fb] p-6 space-y-5">
+      <div className="tcdx-evidence-refinement min-h-screen bg-[var(--tcdx-color-surface)] p-6 space-y-5">
         <div className="flex flex-wrap justify-between items-center gap-3">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">

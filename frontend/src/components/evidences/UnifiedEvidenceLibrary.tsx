@@ -1087,7 +1087,7 @@ export default function UnifiedEvidenceLibrary({
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb] p-6">
+    <div className="min-h-screen bg-[var(--tcdx-color-surface)] p-6">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold text-slate-950">Evidencias</h1>

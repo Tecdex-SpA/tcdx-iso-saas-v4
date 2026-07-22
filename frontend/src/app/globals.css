@@ -799,3 +799,102 @@ a[class*="flex"] {
     font-size: 2rem !important;
   }
 }
+
+
+/* Visual refinement: dashboard, compliance selector, evidences and risk surfaces. */
+.tcdx-dashboard-refinement .enterprise-kpi-card,
+.tcdx-evidence-refinement :is(section, article, form, aside, div)[class*="rounded"][class*="border"],
+.tcdx-risk-refinement :is(section, article, form, aside, div)[class*="rounded"][class*="border"],
+.tcdx-assets-risk-refinement :is(section, article, form, aside, div)[class*="rounded"][class*="border"] {
+  border-color: var(--tcdx-color-border) !important;
+  border-radius: var(--tcdx-radius-tecdex-sm) !important;
+  box-shadow: var(--tcdx-shadow-tecdex-sm) !important;
+}
+
+.tcdx-dashboard-refinement section[class*="bg-white"],
+.tcdx-evidence-refinement :is(section, article, aside)[class*="bg-white"],
+.tcdx-risk-refinement :is(section, article, aside)[class*="bg-white"],
+.tcdx-assets-risk-refinement :is(section, article, aside)[class*="bg-white"] {
+  background: var(--tcdx-color-white) !important;
+}
+
+.tcdx-dashboard-refinement .enterprise-kpi-card {
+  min-height: 118px;
+  background: var(--tcdx-color-white);
+}
+
+.tcdx-dashboard-refinement [class*="bg-[linear-gradient"],
+.tcdx-evidence-refinement [class*="bg-[linear-gradient"],
+.tcdx-risk-refinement [class*="bg-[linear-gradient"],
+.tcdx-assets-risk-refinement [class*="bg-[linear-gradient"] {
+  background: var(--tcdx-color-white) !important;
+}
+
+.tcdx-evidence-refinement :is(input, select, textarea),
+.tcdx-risk-refinement :is(input, select, textarea),
+.tcdx-assets-risk-refinement :is(input, select, textarea) {
+  border-color: var(--tcdx-color-border) !important;
+  border-radius: var(--tcdx-radius-tecdex-sm) !important;
+  background: var(--tcdx-color-white) !important;
+  color: var(--tcdx-color-text-primary) !important;
+}
+
+.tcdx-evidence-refinement :is(input, select, textarea):focus,
+.tcdx-risk-refinement :is(input, select, textarea):focus,
+.tcdx-assets-risk-refinement :is(input, select, textarea):focus {
+  border-color: rgba(240, 114, 29, 0.62) !important;
+  box-shadow: var(--tcdx-shadow-tecdex-focus) !important;
+}
+
+.tcdx-evidence-refinement button[class*="bg-blue"],
+.tcdx-evidence-refinement a[class*="bg-blue"],
+.tcdx-evidence-refinement button[class*="bg-indigo"],
+.tcdx-evidence-refinement a[class*="bg-indigo"],
+.tcdx-risk-refinement button[class*="bg-blue"],
+.tcdx-risk-refinement a[class*="bg-blue"],
+.tcdx-risk-refinement button[class*="bg-indigo"],
+.tcdx-risk-refinement a[class*="bg-indigo"],
+.tcdx-assets-risk-refinement button[class*="bg-blue"],
+.tcdx-assets-risk-refinement a[class*="bg-blue"],
+.tcdx-assets-risk-refinement button[class*="bg-indigo"],
+.tcdx-assets-risk-refinement a[class*="bg-indigo"],
+.tcdx-assets-risk-refinement button[class*="bg-purple"],
+.tcdx-assets-risk-refinement a[class*="bg-purple"] {
+  background: var(--tcdx-color-primary) !important;
+  color: var(--tcdx-color-white) !important;
+}
+
+.tcdx-evidence-refinement :is([class*="bg-blue-50"], [class*="bg-indigo-50"], [class*="bg-sky-50"]),
+.tcdx-risk-refinement :is([class*="bg-blue-50"], [class*="bg-indigo-50"], [class*="bg-sky-50"]),
+.tcdx-assets-risk-refinement :is([class*="bg-blue-50"], [class*="bg-indigo-50"], [class*="bg-sky-50"]) {
+  background: rgba(81, 171, 168, 0.10) !important;
+  border-color: rgba(81, 171, 168, 0.24) !important;
+}
+
+.tcdx-risk-refinement table,
+.tcdx-evidence-refinement table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tcdx-risk-refinement thead,
+.tcdx-evidence-refinement thead {
+  background: var(--tcdx-color-surface) !important;
+}
+
+.tcdx-risk-refinement th,
+.tcdx-evidence-refinement th {
+  color: var(--tcdx-color-text-muted) !important;
+  letter-spacing: 0.06em;
+}
+
+.tcdx-risk-refinement tbody tr:hover,
+.tcdx-evidence-refinement tbody tr:hover {
+  background: rgba(81, 171, 168, 0.08) !important;
+}
+
+.tcdx-risk-refinement .tcdx-scrollbar,
+.tcdx-evidence-refinement .tcdx-scrollbar,
+.tcdx-assets-risk-refinement .tcdx-scrollbar {
+  scrollbar-color: rgba(84, 89, 95, 0.42) transparent;
+}

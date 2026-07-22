@@ -1295,7 +1295,7 @@ function DashboardPageContent() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="tcdx-dashboard-refinement space-y-6">
         <div className="space-y-6">
           <EnterprisePageHeader
             title={t('dashboard.title')}
