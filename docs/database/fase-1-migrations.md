@@ -10,7 +10,9 @@
 npm run phase1:migration-check
 ```
 
-`scripts/phase1/check-phase1-migration.sh` crea una base vacía desechable (servidor local completo o contenedor PostgreSQL 16), aplica el fixture base y la migración dos veces, y valida tablas, índices, constraints, FKs validadas, función/triggers de inmutabilidad, 18 permisos, nueve frameworks/versiones y `grc_phase1_core = false`. Un `trap` detiene y elimina exclusivamente el entorno temporal.
+`scripts/phase1/check-phase1-migration.sh` resuelve todos los paths desde su propia ubicación, comprueba antes de iniciar PostgreSQL que la migración, el writer y `tests/fixtures/phase1-base-schema.sql` existen y son legibles, y usa `grep` POSIX para el control destructivo, sin depender de `rg`. Crea una base vacía desechable sobre PostgreSQL 16 (servidor local completo o contenedor con puerto efímero), aplica el fixture base y la migración dos veces, y valida tablas, índices, constraints, FKs validadas, función/triggers de inmutabilidad, 18 permisos, nueve frameworks/versiones y `grc_phase1_core = false`. Un `trap` detiene el servidor y elimina el contenedor y el directorio temporal incluso ante errores, informando cualquier fallo de limpieza.
+
+El fixture base está versionado explícitamente pese a la regla global `*.sql`. Es un contrato sintético mínimo, no un dump ni un seed de aplicación: declara únicamente las tablas, columnas, FKs y roles preexistentes que la migración Fase 1 referencia (`tenants`, `users`, RBAC, módulos, auditoría, evidencias, jobs, controles, auditorías, hallazgos y acciones). No contiene secretos, credenciales, datos reales ni contenido de tenants. El repositorio no tiene una cadena de migraciones SQL que construya ese baseline completo; las migraciones históricas disponibles presuponen el esquema de aplicación, por lo que este fixture mantiene el gate aislado sin inventar funcionalidad GRC.
 
 Resultado local del 2026-07-22: dos aplicaciones exitosas; 47 tablas GRC, 20 índices, 305 constraints, 157 FKs validadas, cero operaciones destructivas. Evidencia: `artifacts/fase-1/phase1-migration-check.json`.
 

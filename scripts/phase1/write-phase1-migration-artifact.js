@@ -3,10 +3,16 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 
 const numeric = name => Number(process.env[name] || 0);
+const repoRoot = process.env.PHASE1_REPO_ROOT;
+
+if (!repoRoot) {
+  throw new Error('PHASE1_REPO_ROOT is required');
+}
+
 const report = {
   status: process.env.PHASE1_MIGRATION_STATUS,
   checkedAt: new Date().toISOString(),
-  analyzedSha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  analyzedSha: execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   postgresMode: process.env.PHASE1_MIGRATION_MODE,
   disposableDatabase: true,
   migrationApplications: 2,

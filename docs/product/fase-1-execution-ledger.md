@@ -4,7 +4,7 @@
 |---|---|---|
 | Preflight y estado heredado | verified_local | rama `codex/fase-1-nucleo-grc-automatizacion`, HEAD/base `4dae48c...`, worktree preservado |
 | Inventario y consolidación visual | verified_local | current-state + matriz; cero rutas o módulos paralelos |
-| Migración GRC | verified_local | PostgreSQL efímero, aplicada dos veces: 47 tablas, 20 índices, 305 constraints, 157 FKs válidas |
+| Migración GRC | verified_local | gate portable macOS/GitHub Actions, fixture contractual versionado, PostgreSQL 16 efímero y doble aplicación: 47 tablas, 20 índices, 305 constraints, 157 FKs válidas |
 | Feature flag | verified_local | `grc_phase1_core`, default `false`, backend/API/UI/jobs/exports tenant-scoped |
 | Workflow y aprobaciones múltiples | verified_local | simple/secuencial/paralela/quorum/unanimidad, rechazo/devolución/reapertura/delegación/sustitución, unit + integration tests |
 | Evidencia continua/readiness/frameworks | verified_local | recurrencia idempotente, calidad, ocho dimensiones, nueve marcos y exports |

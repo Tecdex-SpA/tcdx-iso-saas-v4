@@ -13,7 +13,7 @@ Validación final local:
 - backend check/tests: OK;
 - frontend lint/check/build: OK;
 - contratos, permisos, tenant y scripts: OK, cero hallazgos;
-- migración PostgreSQL efímera: aplicada dos veces, OK;
+- migración PostgreSQL 16 efímera: fixture contractual versionado, gate sin dependencia de `rg`, aplicada dos veces, OK;
 - `npm run phase1:check`: OK;
 - Playwright discovery: 21 pruebas;
 - `git diff --check`: OK.
