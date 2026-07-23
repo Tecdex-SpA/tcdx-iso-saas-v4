@@ -1700,6 +1700,8 @@ router.put('/tenants/:tenant_id/modules/:module_key', auth, async (req, res) => 
         is_enabled,
         enabled_at,
         disabled_at,
+        enabled_by,
+        disabled_by,
         notes,
         metadata
       )
@@ -1709,6 +1711,8 @@ router.put('/tenants/:tenant_id/modules/:module_key', auth, async (req, res) => 
         $3::boolean,
         CASE WHEN $3::boolean = TRUE THEN now() ELSE NULL END,
         CASE WHEN $3::boolean = FALSE THEN now() ELSE NULL END,
+        CASE WHEN $3::boolean = TRUE THEN $6::uuid ELSE NULL END,
+        CASE WHEN $3::boolean = FALSE THEN $6::uuid ELSE NULL END,
         $4::text,
         $5::jsonb
       )
@@ -1717,6 +1721,8 @@ router.put('/tenants/:tenant_id/modules/:module_key', auth, async (req, res) => 
         is_enabled = EXCLUDED.is_enabled,
         enabled_at = CASE WHEN EXCLUDED.is_enabled = TRUE THEN now() ELSE tenant_module_settings.enabled_at END,
         disabled_at = CASE WHEN EXCLUDED.is_enabled = FALSE THEN now() ELSE NULL END,
+        enabled_by = CASE WHEN EXCLUDED.is_enabled = TRUE THEN EXCLUDED.enabled_by ELSE tenant_module_settings.enabled_by END,
+        disabled_by = CASE WHEN EXCLUDED.is_enabled = FALSE THEN EXCLUDED.disabled_by ELSE NULL END,
         notes = EXCLUDED.notes,
         metadata = COALESCE(tenant_module_settings.metadata, '{}'::jsonb) || EXCLUDED.metadata
       RETURNING *
@@ -1731,6 +1737,7 @@ router.put('/tenants/:tenant_id/modules/:module_key', auth, async (req, res) => 
           updated_by: ctx.user.id,
           updated_from: 'admin_saas',
         }),
+        ctx.user.id,
       ]
     );
 
@@ -4823,20 +4830,27 @@ router.get('/tenants/:tenant_id/modules/catalog', auth, async (req, res) => {
     const modulesResult = await pool.query(
       `
       SELECT
-        tenant_id,
-        tenant_name,
-        module_key,
-        module_name,
-        module_description,
-        sort_order,
-        is_enabled,
-        enabled_at,
-        disabled_at,
-        notes,
-        metadata
-      FROM v_tenant_modules
-      WHERE tenant_id = $1::uuid
-      ORDER BY sort_order, module_key
+        vm.tenant_id,
+        vm.tenant_name,
+        vm.module_key,
+        vm.module_name,
+        vm.module_description,
+        vm.sort_order,
+        vm.is_enabled,
+        vm.enabled_at,
+        vm.disabled_at,
+        vm.notes,
+        vm.metadata,
+        sm.is_active AS global_active,
+        COALESCE(enabled_user.email, disabled_user.email) AS modified_by
+      FROM v_tenant_modules vm
+      JOIN saas_modules sm ON sm.module_key = vm.module_key
+      LEFT JOIN tenant_module_settings tms
+        ON tms.tenant_id = vm.tenant_id AND tms.module_key = vm.module_key
+      LEFT JOIN users enabled_user ON enabled_user.id = tms.enabled_by
+      LEFT JOIN users disabled_user ON disabled_user.id = tms.disabled_by
+      WHERE vm.tenant_id = $1::uuid
+      ORDER BY vm.sort_order, vm.module_key
       `,
       [tenant_id]
     );
@@ -4846,10 +4860,26 @@ router.get('/tenants/:tenant_id/modules/catalog', auth, async (req, res) => {
     const rows = modulesResult.rows.map((row) => ({
       ...row,
       can_enable:
-        row.is_enabled === true ||
-        maxPremiumModules === null ||
-        maxPremiumModules === undefined ||
-        enabledCount < Number(maxPremiumModules),
+        (row.global_active === true &&
+        row.is_enabled === true) ||
+        (
+          row.global_active === true &&
+          (
+            maxPremiumModules === null ||
+            maxPremiumModules === undefined ||
+            enabledCount < Number(maxPremiumModules)
+          )
+        ),
+      blocking_reason: row.global_active !== true
+        ? 'Módulo inactivo globalmente'
+        : (
+          row.is_enabled !== true &&
+          maxPremiumModules !== null &&
+          maxPremiumModules !== undefined &&
+          enabledCount >= Number(maxPremiumModules)
+            ? 'Límite contractual alcanzado'
+            : null
+        ),
     }));
 
     return res.json({

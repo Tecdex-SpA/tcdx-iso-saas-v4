@@ -7,6 +7,11 @@ const { observe } = require('../services/grc/grcObservability');
 const router = express.Router();
 const service = createGrcService(pool, asyncJobs);
 
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 function roleOf(req) {
   return String(req.user?.role || req.user?.user_role || req.user?.userRole || '').toLowerCase().trim();
 }
@@ -60,10 +65,21 @@ async function authorized(req, permission, operation) {
 
 router.get('/meta', route(async (req) => service.getMeta(contextOf(req))));
 router.get('/summary', route(async (req) => authorized(req, 'readiness.read', ({ tenantId }) => service.getSummary(tenantId))));
+router.get('/bootstrap/status', route(async (req) => authorized(req, 'workflow.manage', ({ tenantId }) => service.getBootstrapStatus(tenantId))));
+router.post('/bootstrap', route(async (req) => authorized(req, 'workflow.manage', (context) => service.bootstrapTenant({
+  ...context,
+  confirmation: req.body?.confirmation,
+  idempotencyKey: req.get('Idempotency-Key'),
+}))));
+router.post('/bootstrap/validate', route(async (req) => authorized(req, 'workflow.manage', (context) => service.validateBootstrap(context))));
 
 router.get('/workflows', route(async (req) => authorized(req, 'workflow.read', ({ tenantId }) => service.listWorkflowDefinitions(tenantId, req.query))));
 router.post('/workflows', route(async (req) => authorized(req, 'workflow.manage', (context) => service.createWorkflowDefinition({ ...context, body: req.body }))));
+router.post('/workflows/validate', route(async (req) => authorized(req, 'workflow.manage', () => service.validateWorkflow(req.body))));
+router.get('/workflows/:id', route(async (req) => authorized(req, 'workflow.read', ({ tenantId }) => service.getWorkflowDefinition(tenantId, req.params.id))));
+router.put('/workflows/:id/draft', route(async (req) => authorized(req, 'workflow.manage', (context) => service.saveWorkflowDraft({ ...context, definitionId: req.params.id, body: req.body }))));
 router.post('/workflows/:id/publish', route(async (req) => authorized(req, 'workflow.manage', (context) => service.publishWorkflow({ ...context, definitionId: req.params.id }))));
+router.post('/workflows/:id/archive', route(async (req) => authorized(req, 'workflow.manage', (context) => service.archiveWorkflow({ ...context, definitionId: req.params.id }))));
 router.post('/workflow-instances', route(async (req) => authorized(req, 'workflow.transition', (context) => service.startWorkflow({ ...context, body: req.body }))));
 router.get('/workflow-instances/:id', route(async (req) => authorized(req, 'workflow.read', ({ tenantId }) => service.getWorkflowInstance(tenantId, req.params.id))));
 router.post('/workflow-instances/:id/transitions', route(async (req) => authorized(req, 'workflow.transition', (context) => service.executeTransition({ ...context, instanceId: req.params.id, body: req.body }))));
@@ -72,16 +88,34 @@ router.post('/approvals/:id/delegate', route(async (req) => authorized(req, 'wor
 
 router.get('/evidence/requests', route(async (req) => authorized(req, 'evidence.request.read', ({ tenantId }) => service.listEvidenceRequests(tenantId, req.query))));
 router.post('/evidence/requests', route(async (req) => authorized(req, 'evidence.request.manage', (context) => service.createEvidenceRequest({ ...context, body: req.body }))));
+router.get('/evidence/requests/:id', route(async (req) => authorized(req, 'evidence.request.read', ({ tenantId }) => service.getEvidenceRequest(tenantId, req.params.id))));
+router.post('/evidence/requests/:id/submissions', route(async (req) => authorized(req, 'evidence.request.manage', (context) => service.submitEvidence({ ...context, requestId: req.params.id, body: req.body }))));
+router.post('/evidence/submissions/:id/versions', route(async (req) => authorized(req, 'evidence.request.manage', (context) => service.createEvidenceVersion({ ...context, submissionId: req.params.id, body: req.body }))));
 router.post('/evidence/submissions/:id/review', route(async (req) => authorized(req, 'evidence.review', (context) => service.reviewEvidence({ ...context, submissionId: req.params.id, body: req.body }))));
 router.post('/evidence/:id/quality', route(async (req) => authorized(req, 'evidence.review', (context) => service.calculateEvidenceQuality({ ...context, evidenceId: req.params.id, body: req.body }))));
+router.post('/evidence/:id/links', route(async (req) => authorized(req, 'evidence.request.manage', (context) => service.linkEvidence({ ...context, evidenceId: req.params.id, body: req.body }))));
 
 router.get('/readiness/latest', route(async (req) => authorized(req, 'readiness.read', ({ tenantId }) => service.getReadiness(tenantId))));
 router.post('/readiness/snapshots', route(async (req) => authorized(req, 'readiness.generate', (context) => service.generateReadinessSnapshot(context))));
 router.get('/frameworks', route(async (req) => authorized(req, 'framework.read', ({ tenantId }) => service.listFrameworks(tenantId))));
+router.get('/framework-requirements', route(async (req) => authorized(req, 'framework.read', ({ tenantId }) => service.listFrameworkRequirements(tenantId, req.query.version_id || null))));
+router.get('/mappings', route(async (req) => authorized(req, 'framework.read', ({ tenantId }) => service.listMappings(tenantId))));
 router.post('/mappings', route(async (req) => authorized(req, 'framework.manage', (context) => service.createMapping({ ...context, body: req.body }))));
+router.post('/mappings/:id/reviews', route(async (req) => authorized(req, 'framework.manage', (context) => service.reviewMapping({ ...context, mappingId: req.params.id, body: req.body }))));
 
 router.get('/audits/workspace', route(async (req) => authorized(req, 'audit.plan.read', ({ tenantId }) => service.getAuditWorkspace(tenantId, req.query.audit_id || null))));
+router.post('/audits/universe', route(async (req) => authorized(req, 'audit.plan.manage', (context) => service.createAuditUniverseEntity({ ...context, body: req.body }))));
 router.post('/audits/annual-plans', route(async (req) => authorized(req, 'audit.plan.manage', (context) => service.createAuditPlan({ ...context, body: req.body }))));
+router.get('/audits/:id/operations', route(async (req) => authorized(req, 'audit.plan.read', ({ tenantId }) => service.getAuditOperations(tenantId, req.params.id))));
+router.post('/audits/:id/team', route(async (req) => authorized(req, 'audit.plan.manage', (context) => service.assignAuditTeamMember({ ...context, auditId: req.params.id, body: req.body }))));
+router.post('/audits/:id/conflicts', route(async (req) => authorized(req, 'audit.plan.manage', (context) => service.recordAuditConflict({ ...context, auditId: req.params.id, body: req.body }))));
+router.post('/audits/conflicts/:id/resolve', route(async (req) => authorized(req, 'audit.review', (context) => service.resolveAuditConflict({ ...context, conflictId: req.params.id, body: req.body }))));
+router.post('/audits/:id/programs', route(async (req) => authorized(req, 'audit.plan.manage', (context) => service.createAuditProgram({ ...context, auditId: req.params.id, body: req.body }))));
+router.post('/audits/:id/interviews', route(async (req) => authorized(req, 'audit.workpaper.manage', (context) => service.createAuditInterview({ ...context, auditId: req.params.id, body: req.body }))));
+router.post('/audits/:id/samples', route(async (req) => authorized(req, 'audit.workpaper.manage', (context) => service.createAuditSample({ ...context, auditId: req.params.id, body: req.body }))));
+router.post('/audits/:id/evidence-links', route(async (req) => authorized(req, 'audit.workpaper.manage', (context) => service.linkAuditEvidence({ ...context, auditId: req.params.id, body: req.body }))));
+router.post('/audits/:id/followups', route(async (req) => authorized(req, 'audit.plan.manage', (context) => service.createAuditFollowup({ ...context, auditId: req.params.id, body: req.body }))));
+router.post('/audits/:id/close', route(async (req) => authorized(req, 'audit.review', (context) => service.closeAudit({ ...context, auditId: req.params.id }))));
 router.post('/audits/workpapers', route(async (req) => authorized(req, 'audit.workpaper.manage', (context) => service.createWorkpaper({ ...context, body: req.body }))));
 router.post('/audits/workpapers/:id/reviews', route(async (req) => authorized(req, 'audit.review', (context) => service.reviewWorkpaper({ ...context, workpaperId: req.params.id, body: req.body }))));
 router.get('/audits/workpapers/:id/reviews', route(async (req) => authorized(req, 'audit.review', ({ tenantId }) => service.listWorkpaperReviews(tenantId, req.params.id))));

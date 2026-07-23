@@ -1,7 +1,7 @@
 -- Synthetic contract fixture for the Phase 1 migration gate.
 -- Scope: only pre-existing tables, columns and roles referenced directly by
--- database/migrations/20260722_phase1_grc_core.sql. It contains no tenant data,
--- customer content, credentials or secrets and is not an application seed.
+-- the Phase 1 migrations and PostgreSQL integration gate. It contains no tenant
+-- data, customer content, credentials or secrets and is not an application seed.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -39,9 +39,27 @@ CREATE TABLE audit_event_log (
 CREATE TABLE evidences (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid REFERENCES tenants(id));
 CREATE TABLE tcdx_async_jobs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL);
 CREATE TABLE tenant_controls (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid REFERENCES tenants(id));
-CREATE TABLE audits (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid REFERENCES tenants(id));
+CREATE TABLE audits (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid REFERENCES tenants(id),
+  iso text,
+  status text,
+  start_date date,
+  end_date date,
+  requester_name text,
+  auditor_type text,
+  auditor_name text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE findings (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id));
-CREATE TABLE action_plans (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id));
+CREATE TABLE action_plans (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  status text,
+  priority text,
+  due_date date,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
 INSERT INTO app_roles(role_key) VALUES
   ('admin'), ('tenant_admin'), ('admin_cumplimiento'), ('compliance_admin'),

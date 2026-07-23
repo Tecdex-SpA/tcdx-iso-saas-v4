@@ -16,6 +16,7 @@ const report = {
   postgresMode: process.env.PHASE1_MIGRATION_MODE,
   disposableDatabase: true,
   migrationApplications: 2,
+  operationalMigrationApplications: numeric('PHASE1_OPERATIONAL_MIGRATION_APPLICATIONS'),
   destructiveOperations: 0,
   tables: numeric('PHASE1_MIGRATION_TABLES'),
   indexes: numeric('PHASE1_MIGRATION_INDEXES'),
@@ -25,6 +26,7 @@ const report = {
   permissions: numeric('PHASE1_MIGRATION_PERMISSIONS'),
   globalFrameworks: numeric('PHASE1_MIGRATION_FRAMEWORKS'),
   publishedFrameworkVersions: numeric('PHASE1_MIGRATION_VERSIONS'),
+  bootstrapTables: numeric('PHASE1_BOOTSTRAP_TABLES'),
   featureFlagDefaultEnabled: false,
   cleanupRegistered: true,
 };

@@ -4,7 +4,9 @@ const { execFileSync } = require('child_process');
 
 const files = {
   migration: 'database/migrations/20260722_phase1_grc_core.sql',
+  operationalMigration: 'database/migrations/20260723_phase1r_operational_closeout.sql',
   service: 'backend/src/services/grc/grc.service.js',
+  bootstrap: 'backend/src/services/grc/grcBootstrap.service.js',
   rules: 'backend/src/services/grc/grcRules.js',
   route: 'backend/src/routes/grc.routes.js',
   rbac: 'backend/src/middleware/rbac.middleware.js',
@@ -17,6 +19,7 @@ const files = {
   schedulerRunner: 'backend/src/services/grc/grcSchedulerRunner.js',
   exporter: 'backend/src/services/grc/grcExport.service.js',
   observability: 'backend/src/services/grc/grcObservability.js',
+  postgresIntegration: 'backend/src/services/grc/grcPostgres.integration.test.js',
 };
 
 const requiredTables = [
@@ -33,6 +36,7 @@ const requiredTables = [
   'grc_audit_workpapers', 'grc_audit_interviews', 'grc_audit_supervisor_reviews',
   'grc_audit_reports', 'grc_audit_followups',
   'grc_scheduler_runs', 'grc_escalation_policies', 'grc_escalation_events', 'grc_exports',
+  'grc_tenant_configurations', 'grc_bootstrap_runs',
 ];
 
 const requiredPermissions = [
@@ -49,6 +53,15 @@ const requiredRoutes = [
   '/audits/workspace', '/audits/annual-plans', '/audits/workpapers', '/automation/jobs',
   '/scheduler/run', '/escalations/policies', '/exports/:domain', '/runtime/:entityType/:id',
   '/audits/workpapers/:id/reviews', '/observability',
+  '/bootstrap/status', '/bootstrap', '/bootstrap/validate',
+  '/workflows/validate', '/workflows/:id', '/workflows/:id/draft', '/workflows/:id/archive',
+  '/evidence/requests/:id', '/evidence/requests/:id/submissions',
+  '/evidence/submissions/:id/versions', '/evidence/:id/links',
+  '/framework-requirements', '/mappings/:id/reviews',
+  '/audits/:id/operations', '/audits/:id/team', '/audits/:id/conflicts',
+  '/audits/conflicts/:id/resolve', '/audits/:id/programs', '/audits/:id/samples',
+  '/audits/universe', '/audits/:id/interviews', '/audits/:id/evidence-links',
+  '/audits/:id/followups', '/audits/:id/close',
 ];
 
 const requiredUi = {
@@ -65,11 +78,18 @@ for (const [name, file] of Object.entries(files)) {
 }
 
 const read = file => fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-const migration = read(files.migration);
+const migration = `${read(files.migration)}\n${read(files.operationalMigration)}`;
 const route = read(files.route);
 const service = read(files.service);
 const app = read(files.app);
 const rbac = read(files.rbac);
+const adminSaasModuleRoute = read('backend/src/routes/admin-saas.routes.js');
+
+for (const column of ['enabled_by', 'disabled_by']) {
+  if (!new RegExp(`INSERT INTO tenant_module_settings[\\s\\S]*?${column}[\\s\\S]*?ON CONFLICT`, 'm').test(adminSaasModuleRoute)) {
+    findings.push({ category: 'admin_saas_module_upsert', detail: `missing ${column}` });
+  }
+}
 
 for (const table of requiredTables) {
   if (!new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${table}\\b`, 'i').test(migration)) {
@@ -105,6 +125,8 @@ for (const [file, marker] of Object.entries(requiredUi)) {
 
 const phase1Files = [...Object.values(files), ...Object.keys(requiredUi),
   'scripts/phase1/check-phase1-migration.sh', 'scripts/phase1/check-phase1-security.js',
+  'scripts/phase1/bootstrap-tenant-grc.js', 'scripts/phase1/seed-phase1-qa.js',
+  'scripts/phase1/cleanup-phase1-qa.js', 'scripts/phase1/run-phase1-runtime-local.js',
   '.github/workflows/ci.yml', '.github/workflows/phase1-runtime-qa.yml'].filter(fs.existsSync);
 const forbidden = [
   [/continue-on-error/, 'continue-on-error'], [/\|\|\s*true/, '|| true'],
@@ -119,7 +141,8 @@ for (const file of phase1Files) {
 }
 
 for (const file of [files.rules, files.service, files.route, files.approvals, files.adapters,
-  files.scheduler, files.schedulerRunner, files.exporter, files.observability]) {
+  files.scheduler, files.schedulerRunner, files.exporter, files.observability, files.bootstrap,
+  files.postgresIntegration]) {
   if (!fs.existsSync(file)) continue;
   try {
     execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });

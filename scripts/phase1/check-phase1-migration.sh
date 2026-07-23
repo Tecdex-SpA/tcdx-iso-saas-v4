@@ -7,9 +7,11 @@ REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
 artifact="$REPO_ROOT/artifacts/fase-1/phase1-migration-check.json"
 fixture="$REPO_ROOT/tests/fixtures/phase1-base-schema.sql"
 migration="$REPO_ROOT/database/migrations/20260722_phase1_grc_core.sql"
+operational_migration="$REPO_ROOT/database/migrations/20260723_phase1r_operational_closeout.sql"
 artifact_writer="$REPO_ROOT/scripts/phase1/write-phase1-migration-artifact.js"
+integration_test="$REPO_ROOT/backend/src/services/grc/grcPostgres.integration.test.js"
 
-for required_file in "$fixture" "$migration" "$artifact_writer"; do
+for required_file in "$fixture" "$migration" "$operational_migration" "$artifact_writer" "$integration_test"; do
   if [[ ! -f "$required_file" ]]; then
     echo "ERROR: required Phase 1 migration-check file does not exist: $required_file" >&2
     exit 1
@@ -100,6 +102,7 @@ if [[ "$local_postgres_major" == "16" ]] \
   postgres_mode="local"
   createdb -h "$socket_dir" -p "$port" -U postgres "$database_name"
   psql_connection=(-h "$socket_dir" -p "$port" -U postgres -d "$database_name")
+  integration_host="$socket_dir"
 elif command -v docker >/dev/null 2>&1; then
   container_name="tcdx-phase1-postgres-$$"
   docker run --detach --name "$container_name" \
@@ -112,6 +115,7 @@ elif command -v docker >/dev/null 2>&1; then
     exit 1
   fi
   psql_connection=(-h 127.0.0.1 -p "$port" -U postgres -d "$database_name")
+  integration_host="127.0.0.1"
   ready=0
   attempt=1
   while (( attempt <= 60 )); do
@@ -144,21 +148,25 @@ if [[ "$(run_psql -Atqc 'SELECT current_database()')" != "$database_name" ]]; th
 fi
 
 destructive_pattern='^[[:space:]]*(DROP[[:space:]]|TRUNCATE[[:space:]]|DELETE[[:space:]]+FROM[[:space:]]|ALTER[[:space:]]+TABLE.*DROP[[:space:]])'
-if destructive_matches="$(LC_ALL=C grep -En "$destructive_pattern" "$migration")"; then
-  printf '%s\n' "$destructive_matches" >&2
-  echo "ERROR: destructive SQL operation found in Phase 1 migration" >&2
-  exit 1
-else
-  grep_status=$?
-  if (( grep_status != 1 )); then
-    echo "ERROR: failed to inspect Phase 1 migration for destructive SQL operations" >&2
+for migration_file in "$migration" "$operational_migration"; do
+  if destructive_matches="$(LC_ALL=C grep -En "$destructive_pattern" "$migration_file")"; then
+    printf '%s\n' "$destructive_matches" >&2
+    echo "ERROR: destructive SQL operation found in Phase 1 migration: $migration_file" >&2
     exit 1
+  else
+    grep_status=$?
+    if (( grep_status != 1 )); then
+      echo "ERROR: failed to inspect Phase 1 migration for destructive SQL operations: $migration_file" >&2
+      exit 1
+    fi
   fi
-fi
+done
 
 run_psql -v ON_ERROR_STOP=1 -f "$fixture" >/dev/null
 run_psql -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
 run_psql -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+run_psql -v ON_ERROR_STOP=1 -f "$operational_migration" >/dev/null
+run_psql -v ON_ERROR_STOP=1 -f "$operational_migration" >/dev/null
 
 table_count="$(run_psql -Atqc "SELECT COUNT(*) FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'grc_%'")"
 index_count="$(run_psql -Atqc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'idx_grc_%'")"
@@ -171,16 +179,32 @@ version_count="$(run_psql -Atqc "SELECT COUNT(*) FROM grc_framework_versions WHE
 module_default="$(run_psql -Atqc "SELECT default_enabled FROM saas_modules WHERE module_key='grc_phase1_core'")"
 function_present="$(run_psql -Atqc "SELECT to_regprocedure('grc_reject_immutable_update()') IS NOT NULL")"
 trigger_count="$(run_psql -Atqc "SELECT COUNT(*) FROM pg_trigger WHERE tgname IN ('trg_grc_published_workflow_immutable','trg_grc_readiness_snapshot_immutable','trg_grc_readiness_result_immutable') AND NOT tgisinternal")"
+bootstrap_table_count="$(run_psql -Atqc "SELECT COUNT(*) FROM pg_tables WHERE schemaname='public' AND tablename IN ('grc_tenant_configurations','grc_bootstrap_runs')")"
+bootstrap_index_count="$(run_psql -Atqc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname='idx_grc_bootstrap_runs_tenant_created'")"
+framework_root_count="$(run_psql -Atqc "SELECT COUNT(*) FROM grc_framework_requirements WHERE tenant_id IS NULL AND reference_code='FRAMEWORK-ROOT'")"
+mapping_metadata_present="$(run_psql -Atqc "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='grc_requirement_control_mappings' AND column_name='metadata'")"
 
-if (( table_count < 47 )); then echo "ERROR: expected at least 47 grc tables, got $table_count" >&2; exit 1; fi
-if (( index_count < 19 )); then echo "ERROR: expected at least 19 grc indexes, got $index_count" >&2; exit 1; fi
+if (( table_count < 49 )); then echo "ERROR: expected at least 49 grc tables, got $table_count" >&2; exit 1; fi
+if (( index_count < 21 )); then echo "ERROR: expected at least 21 grc indexes, got $index_count" >&2; exit 1; fi
 if (( constraint_count < 120 || foreign_key_count < 75 )); then echo "ERROR: incomplete constraints: total=$constraint_count fk=$foreign_key_count" >&2; exit 1; fi
 if (( invalid_foreign_keys != 0 )); then echo "ERROR: unvalidated foreign keys: $invalid_foreign_keys" >&2; exit 1; fi
 if (( permission_count < 18 )); then echo "ERROR: expected at least 18 permissions, got $permission_count" >&2; exit 1; fi
 if (( framework_count != 9 || version_count != 9 )); then echo "ERROR: expected 9 frameworks and versions, got $framework_count/$version_count" >&2; exit 1; fi
+if (( bootstrap_table_count != 2 || bootstrap_index_count != 1 || framework_root_count != 9 || mapping_metadata_present != 1 )); then
+  echo "ERROR: Phase 1R operational schema invariant failed: tables=$bootstrap_table_count indexes=$bootstrap_index_count framework_roots=$framework_root_count mapping_metadata=$mapping_metadata_present" >&2
+  exit 1
+fi
 if [[ "$module_default" != "f" || "$function_present" != "t" || "$trigger_count" != "3" ]]; then
   echo "ERROR: feature flag/function/trigger invariant failed" >&2
   exit 1
+fi
+
+if [[ "${PHASE1_RUN_INTEGRATION:-false}" == "true" ]]; then
+  PGHOST="$integration_host" \
+  PGPORT="$port" \
+  PGUSER="postgres" \
+  PGDATABASE="$database_name" \
+  node "$integration_test"
 fi
 
 PHASE1_MIGRATION_STATUS="VERIFIED_LOCAL_POSTGRESQL" \
@@ -192,8 +216,10 @@ PHASE1_MIGRATION_FOREIGN_KEYS="$foreign_key_count" \
 PHASE1_MIGRATION_PERMISSIONS="$permission_count" \
 PHASE1_MIGRATION_FRAMEWORKS="$framework_count" \
 PHASE1_MIGRATION_VERSIONS="$version_count" \
+PHASE1_OPERATIONAL_MIGRATION_APPLICATIONS="2" \
+PHASE1_BOOTSTRAP_TABLES="$bootstrap_table_count" \
 PHASE1_MIGRATION_ARTIFACT="$artifact" \
 PHASE1_REPO_ROOT="$REPO_ROOT" \
 node "$artifact_writer"
 
-echo "Phase 1 migration VERIFIED on disposable PostgreSQL ($postgres_mode): twice=true tables=$table_count indexes=$index_count constraints=$constraint_count fk=$foreign_key_count"
+echo "Phase 1/1R migrations VERIFIED on disposable PostgreSQL ($postgres_mode): twice=true tables=$table_count indexes=$index_count constraints=$constraint_count fk=$foreign_key_count"

@@ -8,6 +8,7 @@
     "start": "next start -H 0.0.0.0 -p ${PORT:-3001}",
     "check": "next build --webpack",
     "lint": "eslint",
+    "test": "node scripts/check-phase1-ui-contract.mjs",
     "lint:audit-preparation": "eslint src/components/auditorias/AuditPreparationPanel.tsx",
     "test:e2e:phase0": "playwright test --config=playwright.config.ts",
     "test:e2e:phase1": "playwright test --config=playwright.phase1.config.ts",

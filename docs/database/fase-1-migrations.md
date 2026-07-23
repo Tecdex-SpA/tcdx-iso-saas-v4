@@ -1,28 +1,23 @@
-# Fase 1 - Migración del núcleo GRC
+# Fase 1/1R - Migraciones
 
-## Archivo y política
+## Orden
 
-`database/migrations/20260722_phase1_grc_core.sql` es aditiva, transaccional y deny-by-default. Crea 47 tablas `grc_*`, 20 índices observados en PostgreSQL, permisos, constraints/FKs, inmutabilidad, scheduler, escalamiento y exports. No contiene `DROP`, `TRUNCATE`, `DELETE FROM` ni `ALTER TABLE ... DROP`, y no modifica datos históricos.
+1. `database/migrations/20260722_phase1_grc_core.sql`
+2. `database/migrations/20260723_phase1r_operational_closeout.sql`
 
-## Gate PostgreSQL efímero
+La segunda migración es aditiva: crea `grc_tenant_configurations`, `grc_bootstrap_runs`, su índice, agrega `metadata` a mappings y registra nueve raíces identificadoras sin copiar cláusulas licenciadas. No habilita módulos ni crea datos de negocio.
+
+## Gate PostgreSQL 16
 
 ```bash
 npm run phase1:migration-check
+npm run phase1:postgres-integration
 ```
 
-`scripts/phase1/check-phase1-migration.sh` resuelve todos los paths desde su propia ubicación, comprueba antes de iniciar PostgreSQL que la migración, el writer y `tests/fixtures/phase1-base-schema.sql` existen y son legibles, y usa `grep` POSIX para el control destructivo, sin depender de `rg`. Crea una base vacía desechable sobre PostgreSQL 16 (servidor local completo o contenedor con puerto efímero), aplica el fixture base y la migración dos veces, y valida tablas, índices, constraints, FKs validadas, función/triggers de inmutabilidad, 18 permisos, nueve frameworks/versiones y `grc_phase1_core = false`. Un `trap` detiene el servidor y elimina el contenedor y el directorio temporal incluso ante errores, informando cualquier fallo de limpieza.
+El script resuelve rutas desde su ubicación, comprueba todos los archivos antes de iniciar, usa `grep`/`awk` portables y no depende de `rg`. Levanta PostgreSQL 16 real, aplica el fixture contractual y cada migración dos veces, valida tablas, índices, constraints, FKs, permisos, frameworks, funciones, triggers y flag `false`. El `trap` elimina servidor/contenedor y temporales también ante error.
 
-El fixture base está versionado explícitamente pese a la regla global `*.sql`. Es un contrato sintético mínimo, no un dump ni un seed de aplicación: declara únicamente las tablas, columnas, FKs y roles preexistentes que la migración Fase 1 referencia (`tenants`, `users`, RBAC, módulos, auditoría, evidencias, jobs, controles, auditorías, hallazgos y acciones). No contiene secretos, credenciales, datos reales ni contenido de tenants. El repositorio no tiene una cadena de migraciones SQL que construya ese baseline completo; las migraciones históricas disponibles presuponen el esquema de aplicación, por lo que este fixture mantiene el gate aislado sin inventar funcionalidad GRC.
+`tests/fixtures/phase1-base-schema.sql` es un contrato sintético mínimo de las dependencias reales preexistentes; no es un dump, no contiene credenciales, tenants reales ni datos productivos. La integración agrega datos sintéticos dentro de la base desechable.
 
-Resultado local del 2026-07-22: dos aplicaciones exitosas; 47 tablas GRC, 20 índices, 305 constraints, 157 FKs validadas, cero operaciones destructivas. Evidencia: `artifacts/fase-1/phase1-migration-check.json`.
+## Operación
 
-## Aplicación QA
-
-Usar el wrapper backend del deploy oficial. Si se aplica manualmente en QA:
-
-```bash
-test "${EXPECTED_ENV}" = "qa"
-psql "${QA_DATABASE_URL}" -v ON_ERROR_STOP=1 -f database/migrations/20260722_phase1_grc_core.sql
-```
-
-No ejecutar contra producción desde una rama ni almacenar `QA_DATABASE_URL` en el repositorio. El rollback operacional consiste en deshabilitar el feature flag y preparar una migración compensatoria revisada; no se eliminan tablas ni historia.
+Precondiciones: backup verificado, SHA aprobado, PostgreSQL 16 y `ON_ERROR_STOP=1`. Aplicar en el orden anterior. Validar tablas/configuración y mantener el flag apagado hasta activación tenant autorizada. El rollback operacional es deshabilitar el flag y, si se requiere esquema, emitir una migración compensatoria revisada. Se prohíben `DROP`, `TRUNCATE`, eliminación de historia y edición silenciosa de migraciones desplegadas.

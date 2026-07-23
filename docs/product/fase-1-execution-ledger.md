@@ -1,26 +1,22 @@
-# Fase 1 - Execution ledger
+# Fase 1/1R - Execution ledger
 
 | Entregable | Estado | Evidencia |
 |---|---|---|
-| Preflight y estado heredado | verified_local | rama `codex/fase-1-nucleo-grc-automatizacion`, HEAD/base `4dae48c...`, worktree preservado |
-| Inventario y consolidación visual | verified_local | current-state + matriz; cero rutas o módulos paralelos |
-| Migración GRC | verified_local | gate portable macOS/GitHub Actions, fixture contractual versionado, PostgreSQL 16 efímero y doble aplicación: 47 tablas, 20 índices, 305 constraints, 157 FKs válidas |
-| Feature flag | verified_local | `grc_phase1_core`, default `false`, backend/API/UI/jobs/exports tenant-scoped |
-| Workflow y aprobaciones múltiples | verified_local | simple/secuencial/paralela/quorum/unanimidad, rechazo/devolución/reapertura/delegación/sustitución, unit + integration tests |
-| Evidencia continua/readiness/frameworks | verified_local | recurrencia idempotente, calidad, ocho dimensiones, nueve marcos y exports |
-| Scheduler recurrente | verified_local | runner interno + ejecución manual; lock, ventana, savepoints, retry/backoff, estado y cola |
-| Escalamiento | verified_local | políticas tenant y seis etapas idempotentes, SLA/criticidad/responsable/supervisor/rol |
-| Revisión supervisora | verified_local | asignación, independencia/conflicto, historial/versiones, evidencia y bloqueo de cierre |
-| Exportaciones avanzadas | verified_local | siete dominios; PDF/DOCX/XLSX/CSV; snapshot, filtros, fecha, versión, bytes y hashes persistidos |
-| Seis adaptadores runtime | verified_local | Documentos, Evidencias, Controles, Riesgos, Auditorías y Hallazgos/NC/Acciones |
-| Permisos y tenant | verified_local | `phase1:permissions-check` y `phase1:tenant-check`, ambos con cero hallazgos |
-| Observabilidad | verified_local | eventos auditados, logs JSON, correlation ID y métricas `tcdx_grc_phase1_operations_total` |
-| Backend check/tests | verified_local | ejecución final OK, incluidas pruebas GRC nuevas |
-| Frontend lint/check/build | verified_local | tres comandos finales OK; 43 rutas compiladas |
-| Contratos y scripts | verified_local | `VERIFIED_LOCAL_CONTRACTS`, cero hallazgos; scripts-check OK |
-| E2E discovery | verified_local | 21 pruebas Playwright descubiertas |
-| CI pull request | verified_local | checks Fase 1 completos; sin Runtime QA ni suites históricas Fase 0 |
-| Runtime QA del SHA desplegado | blocked_external | requiere commit/merge, migración/deploy oficial y Environment `qa` |
-| Evidencia runtime/VM | blocked_external | `.github/workflows/phase1-runtime-qa.yml` listo; no se ejecuta antes del deploy |
+| Preflight Fase 1R | verified_local | Base `main` limpia; `HEAD=origin/main=29d59a2cd610ed31348790b05db6a3c9eaed8354`; rama `codex/fase-1r-cierre-operacional-grc` |
+| Migración original | verified_local | `20260722_phase1_grc_core.sql`, doble aplicación PostgreSQL 16 |
+| Migración operacional | verified_local | `20260723_phase1r_operational_closeout.sql`, doble aplicación, aditiva y no destructiva |
+| Bootstrap tenant | verified_local | endpoint/status/revalidación, confirmación, permiso, flag, transacción, advisory lock, idempotencia y auditoría |
+| Feature flag y administración SaaS | verified_local | default false; activación tenant por endpoint canónico; catálogo expone estado global/tenant, bloqueo y actor; respuestas `no-store` |
+| Workflows y aprobaciones | verified_local | siete definiciones base publicadas; simple, secuencial, paralelo, quorum y unanimidad; pruebas unitarias/integración |
+| Evidencia y recurrencia | verified_local | recurrencia con índice parcial/`occurrence_key`, scheduler real e idempotencia PostgreSQL |
+| Readiness y frameworks | verified_local | ocho reglas tenant y nueve raíces de referencia sin texto licenciado |
+| Scheduler y escalamiento | verified_local | runner activo, advisory lock, retry/backoff, ventanas idempotentes, ejecución manual autorizada |
+| Exportaciones | verified_local | PDF auditado y CSV reales en PostgreSQL; PDF/DOCX/XLSX/CSV validados por formato, bytes/hash/tenant persistidos y descarga cross-tenant denegada |
+| Observabilidad | verified_local | métricas específicas de errores, scheduler, retries, escalamiento, exports y bootstrap |
+| PostgreSQL integración | verified_local | bootstrap/replay, versión publicada inmutable, evidencia/versiones/rechazo, mapping/revisión, auditoría/cierre, Tenant A/B, scheduler/reintento, no duplicación y exports contra PostgreSQL 16 |
+| Frontend consolidado | verified_local | bootstrap, workflows/instancias, evidencia, mappings y auditoría operables en vistas existentes; feedback accesible, permisos y cache SaaS |
+| E2E contract/discovery | verified_local | 30 casos ejecutables; no `skip`/`fixme`; ejecución real reservada al SHA desplegado |
+| Gate consolidado | verified_local | `npm run phase1:check` exitoso con PostgreSQL 16, backend, frontend, contratos UI/E2E y `git diff --check` |
+| Runtime QA del SHA desplegado | blocked_external | requiere PR/CI/merge/migración/deploy y Environment `qa`; workflow prepara, ejecuta, deriva evidencia y limpia sus seeds |
 
-Estados permitidos: `pending`, `in_progress`, `verified_local`, `verified_runtime`, `blocked_external`, `failed`.
+Estados válidos: `pending`, `in_progress`, `verified_local`, `verified_runtime`, `blocked_external`, `failed`.

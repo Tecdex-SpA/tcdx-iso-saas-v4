@@ -8,6 +8,7 @@
 4. `user_has_permission` valida el permiso granular de cada operación.
 5. El servicio filtra todas las lecturas y escrituras por `tenant_id`.
 6. FKs y claves únicas incluyen tenant cuando corresponde.
+7. Bootstrap exige `workflow.manage`, confirmación e idempotency key, y toma el tenant exclusivamente del contexto autenticado.
 
 ## Permisos
 
@@ -23,4 +24,4 @@ Los administradores tenant reciben administración. Auditor recibe operación/re
 - Usuario sin `audit.review`: revisión 403.
 - Job, exportación y archivo: el resultado debe conservar el tenant de origen.
 
-`npm run phase1:permissions-check` y `npm run phase1:tenant-check` bloquean contratos locales. La suite runtime de 21 casos cubre flag habilitado/deshabilitado, permiso denegado, scope explícito, Tenant A/B, scheduler, export y vistas. La verificación dinámica queda `blocked_external` hasta desplegar el SHA en QA.
+`npm run phase1:permissions-check` y `npm run phase1:tenant-check` bloquean contratos locales. La suite runtime de 30 casos cubre flag habilitado/deshabilitado, bootstrap, permiso denegado, scope explícito, Tenant A/B, scheduler, export, administración SaaS, cache y vistas. La verificación dinámica queda `blocked_external` hasta desplegar el SHA en QA.
