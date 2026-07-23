@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -2259,6 +2260,7 @@ function ControlesPageContent() {
             </section>
           </div>
         )}
+        <GrcPhase1Panel mode="framework" />
       </div>
     </AppLayout>
   );

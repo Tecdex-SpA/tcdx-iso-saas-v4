@@ -1,0 +1,38 @@
+{
+  "generatedAt": "2026-07-22T00:00:00.000Z",
+  "analyzedSha": "4dae48c871d677bc4292f7f5aded9e70517709db",
+  "architecture": {
+    "backend": "Express CommonJS with pg",
+    "frontend": "Next.js App Router with React and TypeScript",
+    "tenantScope": "Global enforceTenantRequestScope plus explicit tenant predicates",
+    "authorization": "Global RBAC plus user_has_permission",
+    "audit": "audit_event_log",
+    "jobs": "tcdx_async_jobs",
+    "featureFlags": "saas_modules and tenant_module_settings"
+  },
+  "entities": [
+    { "entity": "documents", "table": "iso_generated_documents", "route": "/api/iso-document-generator", "view": "/documentos", "gap": "no shared configurable workflow" },
+    { "entity": "evidence", "table": "evidences", "route": "/api/evidences", "view": "/evidencias", "gap": "no recurring request lifecycle or deterministic quality history" },
+    { "entity": "controls", "table": "tenant_controls", "route": "/api/controls", "view": "/controles", "gap": "mappings not versioned across frameworks" },
+    { "entity": "risks", "table": "asset_risks and iso risk tables", "route": "/api/operational-risks", "view": "/riesgos", "gap": "no shared configurable workflow" },
+    { "entity": "findings", "table": "findings", "route": "/api/findings", "view": "/hallazgos", "gap": "approval logic is domain-local" },
+    { "entity": "nonconformities", "table": "tenant_nonconformities", "route": "/api/nonconformities", "view": "/no-conformidades", "gap": "approval logic is domain-local" },
+    { "entity": "actions", "table": "action_plans", "route": "/api/action-plans", "view": "/planes-accion", "gap": "approval logic is domain-local" },
+    { "entity": "audits", "table": "audits", "route": "/api/audits", "view": "/auditorias", "gap": "universe, annual plan, workpapers and supervisor review are incomplete" },
+    { "entity": "incidents", "table": "no dedicated stable domain found", "route": null, "view": null, "gap": "workflow engine supports entity type; domain remains outside Phase 1 UI" },
+    { "entity": "suppliers", "table": "supplier references exist in related modules", "route": null, "view": null, "gap": "workflow engine supports entity type; domain remains outside Phase 1 UI" },
+    { "entity": "assessments", "table": "iso express and control assessments", "route": "/api/diagnostic", "view": "/diagnostico", "gap": "workflow engine supports entity type; adapter not yet verified in VM" }
+  ],
+  "duplicatedApprovalLogic": ["evidences.routes.js", "action-plans.routes.js", "lifecycle.routes.js"],
+  "reuseDecision": "Build one shared GRC service and embed one shared frontend component into existing views.",
+  "phase1Runtime": {
+    "approvalModes": ["simple", "sequential", "parallel", "quorum", "unanimous"],
+    "scheduler": "internal recurring runner plus controlled manual execution; tenant/window locking and exponential retry",
+    "escalationStages": ["prior_notice", "overdue", "escalation_1", "escalation_2", "resolved", "cancelled"],
+    "supervisorReview": "versioned, independent, conflict-aware and close-blocking",
+    "exportDomains": ["audit", "evidence", "readiness", "frameworks", "mappings", "findings", "actions"],
+    "exportFormats": ["pdf", "docx", "xlsx", "csv"],
+    "adapterDomains": ["documents", "evidence", "controls", "risks", "audits", "findings_nonconformities_actions"],
+    "featureFlagDefaultEnabled": false
+  }
+}

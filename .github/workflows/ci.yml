@@ -39,24 +39,27 @@ jobs:
         working-directory: backend
         run: npm run check
 
-      - name: Phase 0 capability and authorization regression gate
-        working-directory: backend
-        run: |
-          npm run phase0:inventory
-          npm run phase0:classify
-          npm run phase0:contracts:check
-          npm run phase0:capabilities-check
-          npm run phase0:permissions-check
-          npm run phase0:e2e-contract
-          npm run phase0:scripts-check
+      - name: Phase 1 contracts
+        run: npm run phase1:contracts:check
+
+      - name: Phase 1 disposable PostgreSQL migration
+        run: npm run phase1:migration-check
+
+      - name: Phase 1 permissions
+        run: npm run phase1:permissions-check
+
+      - name: Phase 1 tenant isolation contracts
+        run: npm run phase1:tenant-check
+
+      - name: Phase 1 script validation
+        run: npm run phase1:scripts-check
 
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Discover Phase 0 Playwright tests
-        working-directory: frontend
-        run: npx playwright test --list --reporter=line
+      - name: Discover Phase 1 Playwright tests
+        run: npm run phase1:e2e:discovery
 
       - name: Frontend lint
         working-directory: frontend

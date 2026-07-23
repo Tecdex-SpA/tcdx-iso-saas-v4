@@ -1,0 +1,14 @@
+{
+  "generatedAt": "2026-07-22T00:00:00.000Z",
+  "newTopLevelRoutes": [],
+  "decisions": [
+    { "capability": "workflow administration", "existingView": "/configuracion", "classification": "extend_existing_view", "decision": "embed workflow definitions and publishing" },
+    { "capability": "continuous evidence", "existingView": "/evidencias", "classification": "extend_existing_view", "decision": "embed requests, recurrence and quality" },
+    { "capability": "audit readiness", "existingView": "/dashboard", "classification": "extend_existing_view", "decision": "embed deterministic snapshot and drill-down" },
+    { "capability": "framework mappings", "existingView": "/controles", "classification": "extend_existing_view", "decision": "embed framework/version coverage" },
+    { "capability": "advanced audit", "existingView": "/auditorias", "classification": "extend_existing_view", "decision": "embed universe, annual plan, workpapers and review summary" },
+    { "capability": "shared GRC presentation", "existingView": "multiple", "classification": "shared_component", "decision": "GrcPhase1Panel with domain modes" },
+    { "capability": "separate readiness center", "existingView": "/dashboard", "classification": "new_view_rejected", "decision": "dashboard supports the required drill-down" },
+    { "capability": "separate workflow designer route", "existingView": "/configuracion", "classification": "new_view_rejected", "decision": "configuration can contain the controlled administration UI" }
+  ]
+}

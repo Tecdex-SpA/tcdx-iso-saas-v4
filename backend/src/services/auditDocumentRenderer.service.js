@@ -62,11 +62,11 @@ function dosDateTime(date = new Date()) {
   };
 }
 
-function buildZip(entries) {
+function buildZip(entries, generatedAt = new Date()) {
   const locals = [];
   const central = [];
   let offset = 0;
-  const now = dosDateTime();
+  const now = dosDateTime(generatedAt);
 
   for (const entry of entries) {
     const name = Buffer.from(entry.path.replace(/^\/+/, ''), 'utf8');

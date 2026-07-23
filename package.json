@@ -21,6 +21,15 @@
     "phase0:observability-check": "node scripts/phase0/check-observability-runtime.js",
     "phase0:restore-check": "bash scripts/phase0/backup-restore-qa.sh",
     "phase0:full-check": "npm run phase0:inventory && npm run phase0:classify && npm run phase0:contracts:check && npm run phase0:capabilities-check && npm run phase0:permissions-check && npm run phase0:e2e-contract && npm run phase0:scripts-check && npm --prefix backend run check && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run check && npm --prefix frontend run build",
-    "phase0:vm-check": "npm run phase0:e2e && npm run phase0:tenant-runtime && npm run phase0:files-runtime && npm run phase0:search-runtime && npm run phase0:export-runtime && npm run phase0:ai-runtime && npm run phase0:jobs-runtime && npm run phase0:observability-check"
+    "phase0:vm-check": "npm run phase0:e2e && npm run phase0:tenant-runtime && npm run phase0:files-runtime && npm run phase0:search-runtime && npm run phase0:export-runtime && npm run phase0:ai-runtime && npm run phase0:jobs-runtime && npm run phase0:observability-check",
+    "phase1:contracts:check": "node scripts/phase1/check-phase1-contracts.js",
+    "phase1:migration-check": "bash scripts/phase1/check-phase1-migration.sh",
+    "phase1:permissions-check": "node scripts/phase1/check-phase1-security.js permissions",
+    "phase1:tenant-check": "node scripts/phase1/check-phase1-security.js tenant",
+    "phase1:scripts-check": "bash -n scripts/phase1/check-phase1-migration.sh && node --check scripts/phase1/check-phase1-contracts.js && node --check scripts/phase1/check-phase1-security.js && node --check scripts/phase1/write-phase1-migration-artifact.js",
+    "phase1:e2e:discovery": "npm --prefix frontend run test:e2e:phase1:list",
+    "phase1:e2e": "npm --prefix frontend run test:e2e:phase1",
+    "phase1:check": "npm run phase1:contracts:check && npm run phase1:migration-check && npm run phase1:permissions-check && npm run phase1:tenant-check && npm run phase1:scripts-check && npm --prefix backend run check && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run check && npm --prefix frontend run build && npm run phase1:e2e:discovery && git diff --check",
+    "phase1:runtime-check": "npm run phase1:contracts:check && npm run phase1:permissions-check && npm run phase1:tenant-check && npm run phase1:e2e"
   }
 }

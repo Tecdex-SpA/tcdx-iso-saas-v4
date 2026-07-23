@@ -1,0 +1,19 @@
+{
+  "status": "VERIFIED_LOCAL_POSTGRESQL",
+  "checkedAt": "2026-07-23T12:35:44.508Z",
+  "analyzedSha": "4dae48c871d677bc4292f7f5aded9e70517709db",
+  "postgresMode": "docker",
+  "disposableDatabase": true,
+  "migrationApplications": 2,
+  "destructiveOperations": 0,
+  "tables": 47,
+  "indexes": 20,
+  "constraints": 305,
+  "foreignKeys": 157,
+  "invalidForeignKeys": 0,
+  "permissions": 18,
+  "globalFrameworks": 9,
+  "publishedFrameworkVersions": 9,
+  "featureFlagDefaultEnabled": false,
+  "cleanupRegistered": true
+}

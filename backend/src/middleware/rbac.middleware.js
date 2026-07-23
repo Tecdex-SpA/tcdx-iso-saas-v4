@@ -309,6 +309,11 @@ const API_RULES = [
     write: TENANT_ADMIN_ROLES,
   },
   {
+    prefix: '/api/grc',
+    read: TENANT_READ_ROLES,
+    write: TENANT_OPERATE_ROLES,
+  },
+  {
     prefix: '/api/diagnostic/recommendations',
     read: TENANT_READ_ROLES,
     write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],

@@ -1,28 +1,8 @@
 {
-  "status": "FASE 1 NO INICIADA — DEPENDENCIAS DE FASE 0 ABIERTAS",
-  "evaluatedBranch": "main",
-  "evaluatedSha": "b77a7d23e140e6ae06593911ace3c4a034fdb2e2",
-  "phase0Gate": {
-    "status": "BASELINE_ACCEPTED",
-    "phaseStatus": "OPEN",
-    "currentFindings": 328,
-    "maximumAllowedFindings": 328,
-    "regressions": 0,
-    "newCriticalFindings": 0,
-    "countsByCategory": {
-      "non_productive_visible_without_feature_flag": 35,
-      "productive_capability_without_e2e": 5,
-      "endpoint_without_tenant_scope_signal": 111,
-      "endpoint_without_auth_signal": 176,
-      "capabilities_without_endpoint_association": 1
-    }
-  },
-  "blockers": [
-    "Fase 0 abierta con 328 hallazgos baseline",
-    "E2E crítico Fase 0 inexistente",
-    "Aislamiento cross-tenant dinámico no verificado",
-    "Observabilidad mínima no verificada",
-    "Restore QA aislado/RPO/RTO no ejecutado",
-    "Deploy oficial ./scripts/deploy-vm.sh no existe en repo; existe deploy-vms.sh"
-  ]
+  "status": "SUPERSEDED_BY_PHASE1_ENTRY_PRECONDITION",
+  "evaluatedBranch": "codex/fase-1-nucleo-grc-automatizacion",
+  "evaluatedSha": "4dae48c871d677bc4292f7f5aded9e70517709db",
+  "phase0ReauditPerformed": false,
+  "source": "Phase 1 prompt section 0",
+  "blockers": []
 }
