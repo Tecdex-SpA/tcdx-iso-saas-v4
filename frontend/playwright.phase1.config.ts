@@ -15,6 +15,7 @@ export default defineConfig({
     ['html', { outputFolder: '../artifacts/fase-1/phase1-playwright-report', open: 'never' }],
   ],
   use: {
+    locale: 'es-CL',
     baseURL: process.env.WEB_BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
