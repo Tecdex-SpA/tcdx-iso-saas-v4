@@ -310,6 +310,23 @@ export default function GrcPhase1Panel({ mode }: { mode: PanelMode }) {
     }
   }
 
+  async function performWithoutReload(
+    action: () => Promise<unknown>,
+    successMessage = 'Operación validada.'
+  ) {
+    setActionLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      await action();
+      setSuccess(successMessage);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible completar la validación.');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   if (!loading && meta?.module?.is_enabled !== true) return null;
 
   if (loading) {
@@ -393,7 +410,13 @@ export default function GrcPhase1Panel({ mode }: { mode: PanelMode }) {
           disabled={actionLoading}
           onCreate={(body) => perform(() => api('/api/grc/workflows', { method: 'POST', body: JSON.stringify(body) }), 'Borrador de workflow creado.')}
           onSave={(id, body) => perform(() => api(`/api/grc/workflows/${id}/draft`, { method: 'PUT', body: JSON.stringify(body) }), 'Borrador validado y guardado.')}
-          onValidate={(body) => perform(() => api('/api/grc/workflows/validate', { method: 'POST', body: JSON.stringify(body) }), 'Configuración de workflow válida.')}
+          onValidate={(body) => performWithoutReload(
+            () => api('/api/grc/workflows/validate', {
+              method: 'POST',
+              body: JSON.stringify(body),
+            }),
+            'Configuración de workflow válida.'
+          )}
           onPublish={(id) => perform(() => api(`/api/grc/workflows/${id}/publish`, { method: 'POST', body: '{}' }), 'Versión de workflow publicada.')}
           onArchive={(id) => perform(() => api(`/api/grc/workflows/${id}/archive`, { method: 'POST', body: '{}' }), 'Workflow archivado.')}
         /><WorkflowRuntimePanel
