@@ -73,7 +73,10 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     const initialized = (await first.json()).data;
     const reused = (await replay.json()).data;
     expect(initialized.ready).toBe(true);
-    expect(reused).toEqual(initialized);
+    expect(reused).toEqual({
+      ...initialized,
+      idempotent_replay: true,
+    });
     const validated = await api.post('/api/grc/bootstrap/validate', {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
