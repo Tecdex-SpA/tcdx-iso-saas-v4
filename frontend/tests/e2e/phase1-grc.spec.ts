@@ -204,7 +204,11 @@ test.describe.serial('Phase 1 GRC runtime', () => {
   test('auditoría avanzada crea plan y expone workspace', async () => {
     const plan = await api.post('/api/grc/audits/annual-plans', {
       headers: { Authorization: `Bearer ${adminToken}` },
-      data: { year: new Date().getFullYear() + 1, version: Number(`1${nonce.slice(-2)}`), prioritization_criteria: { method: 'risk_based', evidence: 'E2E' } },
+      data: {
+        year: new Date().getFullYear() + 1,
+        version: Date.now(),
+        prioritization_criteria: { method: 'risk_based', evidence: 'E2E' },
+      },
     });
     expect(plan.status()).toBe(200);
     const workspace = await api.get('/api/grc/audits/workspace', { headers: { Authorization: `Bearer ${adminToken}` } });
