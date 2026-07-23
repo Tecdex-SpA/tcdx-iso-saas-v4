@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import { getUserFromToken } from '@/utils/auth';
 import GoogleDriveSourcesPanel from '@/components/evidences/GoogleDriveSourcesPanel';
 import IntegratedEvidenceApprovalPanel from '@/components/evidences/IntegratedEvidenceApprovalPanel';
@@ -2143,6 +2144,7 @@ function EvidenciasPageContent() {
           })}
           </EnterpriseScrollPanel>
         )}
+        <GrcPhase1Panel mode="evidence" />
       </div>
     </AppLayout>
   );

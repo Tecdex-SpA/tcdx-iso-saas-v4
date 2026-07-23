@@ -1,6 +1,7 @@
 'use client';
 
 import AppLayout from '@/components/AppLayout';
+import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import ProcessesOperationsPanel from '@/components/configuracion/ProcessesOperationsPanel';
 
 export default function ConfiguracionPage() {
@@ -27,6 +28,8 @@ export default function ConfiguracionPage() {
             </a>
           </div>
         </section>
+
+        <GrcPhase1Panel mode="workflow" />
 
         <ProcessesOperationsPanel />
       </div>

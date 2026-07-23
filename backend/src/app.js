@@ -75,6 +75,9 @@ const tenantFilesRoutes = require('./routes/tenant-files.routes');
 const syncAgentRoutes = require('./routes/sync-agent.routes');
 const knowledgeBaseRoutes = require('./routes/knowledge-base.routes');
 const intelligenceRoutes = require('./routes/intelligence.routes');
+const grcRoutes = require('./routes/grc.routes');
+const { prometheusLines: grcPrometheusLines } = require('./services/grc/grcObservability');
+const { startSchedulerRunner } = require('./services/grc/grcSchedulerRunner');
 const { aiLocaleResponseGuard } = require('./middleware/aiLocaleResponseGuard');
 
 const app = express();
@@ -273,6 +276,9 @@ app.get('/metrics', (_req, res) => {
     '# TYPE tcdx_http_request_duration_ms_average gauge',
     `tcdx_http_request_duration_ms_average ${averageDuration.toFixed(2)}`,
     ...statusLines,
+    '# HELP tcdx_grc_phase1_operations_total Total Phase 1 GRC operations by type and outcome.',
+    '# TYPE tcdx_grc_phase1_operations_total counter',
+    ...grcPrometheusLines(),
     '',
   ].join('\n'));
 });
@@ -446,6 +452,7 @@ app.use('/api/ai-compliance/tenant-search', aiTenantSearchRoutes);
 app.use('/api/lifecycle', lifecycleRoutes);
 app.use('/api/knowledge-base', knowledgeBaseRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
+app.use('/api/grc', grcRoutes);
 
 
 /* KPI: compatibilidad con ambas rutas */
@@ -495,6 +502,7 @@ const port = Number(process.env.PORT || 3000);
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
 });
+startSchedulerRunner();
 
 const backendRequestTimeoutMs = Math.max(
   Number.parseInt(

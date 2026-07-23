@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import IsoAuditorPreview from '@/components/auditor-iso/IsoAuditorPreview';
 import AuditPreparationPanel from '@/components/auditorias/AuditPreparationPanel';
@@ -311,6 +312,7 @@ function AuditoriasWorkspaceContent() {
         ) : (
           <AuditProgramPanel />
         )}
+        <GrcPhase1Panel mode="audit" />
       </div>
     </AppLayout>
   );

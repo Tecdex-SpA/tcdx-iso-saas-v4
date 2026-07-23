@@ -1,0 +1,19 @@
+{
+  "status": "VERIFIED_LOCAL_CONTRACTS",
+  "phaseStatus": "open_until_vm_verification",
+  "checkedAt": "2026-07-23T12:35:41.596Z",
+  "analyzedSha": "4dae48c871d677bc4292f7f5aded9e70517709db",
+  "findingsCount": 0,
+  "countsByCategory": {},
+  "requiredTables": 39,
+  "requiredPermissions": 18,
+  "requiredRoutes": 19,
+  "integratedViews": [
+    "frontend/src/app/dashboard/page.tsx",
+    "frontend/src/app/evidencias/page.tsx",
+    "frontend/src/app/auditorias/page.tsx",
+    "frontend/src/app/controles/page.tsx",
+    "frontend/src/app/configuracion/page.tsx"
+  ],
+  "findings": []
+}

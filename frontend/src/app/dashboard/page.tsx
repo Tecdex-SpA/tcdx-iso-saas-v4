@@ -11,6 +11,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
+import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import {
@@ -1850,6 +1851,9 @@ function DashboardPageContent() {
               expanded
             />
           )}
+        </div>
+        <div className="mx-auto mt-6 max-w-[1720px]">
+          <GrcPhase1Panel mode="dashboard" />
         </div>
       </div>
     </AppLayout>
