@@ -206,7 +206,7 @@ test.describe.serial('Phase 1 GRC runtime', () => {
       headers: { Authorization: `Bearer ${adminToken}` },
       data: {
         year: new Date().getFullYear() + 1,
-        version: Date.now(),
+        version: 1_000_000_000 + (Date.now() % 1_000_000_000),
         prioritization_criteria: { method: 'risk_based', evidence: 'E2E' },
       },
     });
