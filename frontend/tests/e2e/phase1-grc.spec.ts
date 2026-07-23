@@ -350,7 +350,10 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await page.goto('/configuracion', { waitUntil: 'domcontentloaded' });
     const row = page.getByText(`E2E evidence ${nonce}`).locator('..').locator('..');
     await row.getByRole('button', { name: 'Editar borrador' }).click();
-    const editor = page.getByText('Crear borrador').locator('..').locator('..');
+    const editor = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Guardar borrador' }),
+    });
+    await expect(editor).toBeVisible();
     await editor.getByLabel('Nombre').fill(`E2E evidence revised ${nonce}`);
     await editor.getByRole('button', { name: 'Validar' }).click();
     await expect(page.getByText('Configuración de workflow válida.')).toBeVisible();
