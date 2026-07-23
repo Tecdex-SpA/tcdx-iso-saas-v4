@@ -4,6 +4,7 @@ const { readRuntimeEntity } = require('./grcRuntimeAdapters');
 const { buildGrcExport, FORMATS } = require('./grcExport.service');
 const { escalationStages, occurrenceKey, retryBackoffSeconds, schedulerWindow } = require('./grcSchedulerRules');
 const { observe, snapshot: observabilitySnapshot } = require('./grcObservability');
+const { createGrcBootstrapService } = require('./grcBootstrap.service');
 
 const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 
@@ -33,6 +34,8 @@ function clampLimit(value) {
 }
 
 function createGrcService(pool, asyncJobs) {
+  const bootstrapService = createGrcBootstrapService(pool, { GrcError, observe });
+
   async function withTransaction(work) {
     const client = await pool.connect();
     try {
@@ -180,6 +183,143 @@ function createGrcService(pool, asyncJobs) {
       }
       await audit(client, { tenantId, userId, action: 'workflow.definition.created', tableName: 'grc_workflow_definitions', recordId: definition.id, newData: definition, metadata: { correlation_id: correlationId } });
       return { definition, version };
+    });
+  }
+
+  function validateWorkflow(body) {
+    const validation = validateWorkflowDraft(body);
+    if (!validation.valid) throw new GrcError('WORKFLOW_DRAFT_INVALID', 'La definición de workflow no es válida.', 422, validation.errors);
+    return { valid: true, errors: [] };
+  }
+
+  async function getWorkflowDefinition(tenantId, definitionId) {
+    const definition = (await pool.query(
+      `SELECT * FROM grc_workflow_definitions WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+      [tenantId, assertUuid(definitionId)]
+    )).rows[0];
+    if (!definition) throw new GrcError('WORKFLOW_DEFINITION_NOT_FOUND', 'Workflow no encontrado.', 404);
+    const versions = (await pool.query(
+      `SELECT v.*,
+        COALESCE((SELECT json_agg(s ORDER BY s.sort_order) FROM grc_workflow_states s
+          WHERE s.tenant_id = v.tenant_id AND s.version_id = v.id), '[]') AS states,
+        COALESCE((SELECT json_agg(json_build_object(
+          'id', t.id, 'code', t.code, 'name', t.name,
+          'from_state_id', t.from_state_id, 'to_state_id', t.to_state_id,
+          'required_permission', t.required_permission, 'approval_mode', t.approval_mode,
+          'quorum', t.quorum, 'approval_config', t.approval_config,
+          'sla_hours', t.sla_hours, 'preconditions', t.preconditions, 'actions', t.actions,
+          'roles', COALESCE((SELECT json_agg(r.role_key) FROM grc_workflow_transition_roles r
+            WHERE r.tenant_id = t.tenant_id AND r.transition_id = t.id), '[]'::json)
+        ) ORDER BY t.code) FROM grc_workflow_transitions t
+          WHERE t.tenant_id = v.tenant_id AND t.version_id = v.id), '[]') AS transitions
+       FROM grc_workflow_versions v
+       WHERE v.tenant_id = $1::uuid AND v.definition_id = $2::uuid ORDER BY v.version DESC`,
+      [tenantId, definitionId]
+    )).rows;
+    return { ...definition, versions };
+  }
+
+  async function saveWorkflowDraft({ tenantId, userId, definitionId, body, correlationId }) {
+    validateWorkflow(body);
+    return withTransaction(async (client) => {
+      const definition = (await client.query(
+        `SELECT * FROM grc_workflow_definitions
+         WHERE tenant_id = $1::uuid AND id = $2::uuid FOR UPDATE`,
+        [tenantId, assertUuid(definitionId)]
+      )).rows[0];
+      if (!definition) throw new GrcError('WORKFLOW_DEFINITION_NOT_FOUND', 'Workflow no encontrado.', 404);
+      let version = (await client.query(
+        `SELECT * FROM grc_workflow_versions
+         WHERE tenant_id = $1::uuid AND definition_id = $2::uuid AND status = 'draft'
+         ORDER BY version DESC LIMIT 1 FOR UPDATE`,
+        [tenantId, definitionId]
+      )).rows[0];
+      if (version) {
+        await client.query(
+          `DELETE FROM grc_workflow_transitions WHERE tenant_id = $1::uuid AND version_id = $2::uuid`,
+          [tenantId, version.id]
+        );
+        await client.query(
+          `DELETE FROM grc_workflow_states WHERE tenant_id = $1::uuid AND version_id = $2::uuid`,
+          [tenantId, version.id]
+        );
+        version = (await client.query(
+          `UPDATE grc_workflow_versions SET approval_mode = $3, quorum = $4, config = $5::jsonb
+           WHERE tenant_id = $1::uuid AND id = $2::uuid RETURNING *`,
+          [tenantId, version.id, body.approval_mode || 'simple', body.quorum || null, json(body.config || {})]
+        )).rows[0];
+      } else {
+        const next = Number((await client.query(
+          `SELECT COALESCE(MAX(version),0)::int + 1 AS version FROM grc_workflow_versions
+           WHERE tenant_id = $1::uuid AND definition_id = $2::uuid`,
+          [tenantId, definitionId]
+        )).rows[0].version);
+        version = (await client.query(
+          `INSERT INTO grc_workflow_versions (
+             tenant_id, definition_id, version, approval_mode, quorum, config, created_by
+           ) VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6::jsonb,$7::uuid) RETURNING *`,
+          [tenantId, definitionId, next, body.approval_mode || 'simple', body.quorum || null, json(body.config || {}), userId]
+        )).rows[0];
+      }
+      await client.query(
+        `UPDATE grc_workflow_definitions SET name = $3, description = $4, entity_type = $5,
+           status = 'draft', updated_at = now()
+         WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+        [tenantId, definitionId, body.name, body.description || null, body.entity_type]
+      );
+      const stateIds = new Map();
+      for (const [index, state] of body.states.entries()) {
+        const stored = (await client.query(
+          `INSERT INTO grc_workflow_states (
+             tenant_id, version_id, code, name, state_type, sort_order, metadata
+           ) VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7::jsonb) RETURNING id`,
+          [tenantId, version.id, state.code, state.name, state.state_type, index, json(state.metadata || {})]
+        )).rows[0];
+        stateIds.set(state.code, stored.id);
+      }
+      for (const transition of body.transitions) {
+        const stored = (await client.query(
+          `INSERT INTO grc_workflow_transitions (
+             tenant_id, version_id, code, name, from_state_id, to_state_id,
+             required_permission, approval_mode, quorum, approval_config, sla_hours,
+             preconditions, actions
+           ) VALUES ($1::uuid,$2::uuid,$3,$4,$5::uuid,$6::uuid,$7,$8,$9,$10::jsonb,$11,$12::jsonb,$13::jsonb)
+           RETURNING id`,
+          [tenantId, version.id, transition.code, transition.name, stateIds.get(transition.from_state),
+            stateIds.get(transition.to_state), transition.required_permission || 'workflow.transition',
+            transition.approval_mode || 'none', transition.quorum || null,
+            json(transition.approval_config || {}), transition.sla_hours || null,
+            json(transition.preconditions || []), json(transition.actions || [])]
+        )).rows[0];
+        for (const role of transition.roles || []) {
+          await client.query(
+            `INSERT INTO grc_workflow_transition_roles (transition_id, role_key, tenant_id)
+             VALUES ($1::uuid,$2,$3::uuid)`,
+            [stored.id, role, tenantId]
+          );
+        }
+      }
+      await audit(client, { tenantId, userId, action: 'workflow.draft.saved', tableName: 'grc_workflow_versions', recordId: version.id, newData: version, metadata: { correlation_id: correlationId } });
+      return { definition_id: definitionId, version };
+    });
+  }
+
+  async function archiveWorkflow({ tenantId, userId, definitionId, correlationId }) {
+    return withTransaction(async (client) => {
+      const active = await client.query(
+        `SELECT 1 FROM grc_workflow_instances
+         WHERE tenant_id = $1::uuid AND definition_id = $2::uuid AND status = 'active' LIMIT 1`,
+        [tenantId, assertUuid(definitionId)]
+      );
+      if (active.rowCount) throw new GrcError('WORKFLOW_ARCHIVE_ACTIVE_INSTANCES', 'No se puede archivar con instancias activas.', 409);
+      const updated = (await client.query(
+        `UPDATE grc_workflow_definitions SET status = 'archived', updated_at = now()
+         WHERE tenant_id = $1::uuid AND id = $2::uuid RETURNING *`,
+        [tenantId, definitionId]
+      )).rows[0];
+      if (!updated) throw new GrcError('WORKFLOW_DEFINITION_NOT_FOUND', 'Workflow no encontrado.', 404);
+      await audit(client, { tenantId, userId, action: 'workflow.archived', tableName: 'grc_workflow_definitions', recordId: definitionId, newData: updated, metadata: { correlation_id: correlationId } });
+      return updated;
     });
   }
 
@@ -402,6 +542,9 @@ function createGrcService(pool, asyncJobs) {
   }
 
   async function createEvidenceRequest({ tenantId, userId, body, correlationId }) {
+    if (!String(body.title || '').trim()) {
+      throw new GrcError('EVIDENCE_REQUEST_TITLE_REQUIRED', 'El título es obligatorio.', 422);
+    }
     return withTransaction(async (client) => {
       const request = (await client.query(
         `INSERT INTO grc_evidence_requests (
@@ -438,6 +581,145 @@ function createGrcService(pool, asyncJobs) {
     });
   }
 
+  async function getEvidenceRequest(tenantId, requestId) {
+    const request = (await pool.query(
+      `SELECT * FROM grc_evidence_requests WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+      [tenantId, assertUuid(requestId)]
+    )).rows[0];
+    if (!request) throw new GrcError('EVIDENCE_REQUEST_NOT_FOUND', 'Solicitud no encontrada.', 404);
+    const submissions = (await pool.query(
+      `SELECT s.*,
+              COALESCE((SELECT json_agg(v ORDER BY v.version) FROM grc_evidence_versions v
+                WHERE v.tenant_id = s.tenant_id AND v.submission_id = s.id), '[]') AS versions,
+              COALESCE((SELECT json_agg(r ORDER BY r.created_at) FROM grc_evidence_reviews r
+                WHERE r.tenant_id = s.tenant_id AND r.submission_id = s.id), '[]') AS reviews
+       FROM grc_evidence_submissions s
+       WHERE s.tenant_id = $1::uuid AND s.request_id = $2::uuid
+       ORDER BY s.submitted_at DESC`,
+      [tenantId, requestId]
+    )).rows;
+    const requirements = (await pool.query(
+      `SELECT * FROM grc_evidence_requirements
+       WHERE tenant_id = $1::uuid AND request_id = $2::uuid ORDER BY requirement_type`,
+      [tenantId, requestId]
+    )).rows;
+    return { ...request, submissions, requirements };
+  }
+
+  async function submitEvidence({ tenantId, userId, requestId, body, correlationId }) {
+    return withTransaction(async (client) => {
+      const request = (await client.query(
+        `SELECT * FROM grc_evidence_requests
+         WHERE tenant_id = $1::uuid AND id = $2::uuid FOR UPDATE`,
+        [tenantId, assertUuid(requestId)]
+      )).rows[0];
+      if (!request) throw new GrcError('EVIDENCE_REQUEST_NOT_FOUND', 'Solicitud no encontrada.', 404);
+      if (['approved', 'cancelled', 'superseded'].includes(request.status)) {
+        throw new GrcError('EVIDENCE_REQUEST_CLOSED', 'La solicitud no acepta nuevas entregas.', 409);
+      }
+      const evidenceId = assertUuid(body.evidence_id, 'EVIDENCE_ID_REQUIRED');
+      const evidence = await client.query(
+        'SELECT 1 FROM evidences WHERE tenant_id = $1::uuid AND id = $2::uuid',
+        [tenantId, evidenceId]
+      );
+      if (!evidence.rowCount) throw new GrcError('EVIDENCE_NOT_FOUND', 'Evidencia no encontrada.', 404);
+      let submission = (await client.query(
+        `INSERT INTO grc_evidence_submissions (
+           tenant_id, request_id, evidence_id, status, submitted_by
+         ) VALUES ($1::uuid,$2::uuid,$3::uuid,'submitted',$4::uuid)
+         ON CONFLICT (tenant_id, request_id, evidence_id) DO NOTHING RETURNING *`,
+        [tenantId, requestId, evidenceId, userId]
+      )).rows[0];
+      let reused = false;
+      if (!submission) {
+        reused = true;
+        submission = (await client.query(
+          `SELECT * FROM grc_evidence_submissions
+           WHERE tenant_id = $1::uuid AND request_id = $2::uuid AND evidence_id = $3::uuid`,
+          [tenantId, requestId, evidenceId]
+        )).rows[0];
+      } else {
+        await client.query(
+          `INSERT INTO grc_evidence_versions (
+             tenant_id, submission_id, version, evidence_id, content_hash, source_type,
+             integrity_metadata, created_by
+           ) VALUES ($1::uuid,$2::uuid,1,$3::uuid,$4,$5,$6::jsonb,$7::uuid)`,
+          [tenantId, submission.id, evidenceId, body.content_hash || null, body.source_type || 'manual',
+            json(body.integrity_metadata || {}), userId]
+        );
+        await client.query(
+          `UPDATE grc_evidence_requests SET status = 'submitted', updated_at = now()
+           WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+          [tenantId, requestId]
+        );
+        await audit(client, { tenantId, userId, action: 'evidence.submitted', tableName: 'grc_evidence_submissions', recordId: submission.id, newData: submission, metadata: { correlation_id: correlationId } });
+      }
+      observe('evidence_submission', { tenantId, correlationId, entityType: 'evidence', entityId: evidenceId, status: reused ? 'reused' : 'success' });
+      return { ...submission, reused };
+    });
+  }
+
+  async function createEvidenceVersion({ tenantId, userId, submissionId, body, correlationId }) {
+    return withTransaction(async (client) => {
+      const submission = (await client.query(
+        `SELECT * FROM grc_evidence_submissions
+         WHERE tenant_id = $1::uuid AND id = $2::uuid FOR UPDATE`,
+        [tenantId, assertUuid(submissionId)]
+      )).rows[0];
+      if (!submission) throw new GrcError('EVIDENCE_SUBMISSION_NOT_FOUND', 'Entrega no encontrada.', 404);
+      const evidenceId = assertUuid(body.evidence_id, 'EVIDENCE_ID_REQUIRED');
+      const evidence = await client.query(
+        'SELECT 1 FROM evidences WHERE tenant_id = $1::uuid AND id = $2::uuid',
+        [tenantId, evidenceId]
+      );
+      if (!evidence.rowCount) throw new GrcError('EVIDENCE_NOT_FOUND', 'Evidencia no encontrada.', 404);
+      const nextVersion = Number((await client.query(
+        `SELECT COALESCE(MAX(version),0)::int + 1 AS version
+         FROM grc_evidence_versions WHERE tenant_id = $1::uuid AND submission_id = $2::uuid`,
+        [tenantId, submissionId]
+      )).rows[0].version);
+      const version = (await client.query(
+        `INSERT INTO grc_evidence_versions (
+           tenant_id, submission_id, version, evidence_id, content_hash, source_type,
+           integrity_metadata, created_by
+         ) VALUES ($1::uuid,$2::uuid,$3,$4::uuid,$5,$6,$7::jsonb,$8::uuid) RETURNING *`,
+        [tenantId, submissionId, nextVersion, evidenceId, body.content_hash || null,
+          body.source_type || 'manual', json(body.integrity_metadata || {}), userId]
+      )).rows[0];
+      await client.query(
+        `UPDATE grc_evidence_submissions SET evidence_id = $3::uuid, status = 'submitted',
+           submitted_by = $4::uuid, submitted_at = now()
+         WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+        [tenantId, submissionId, evidenceId, userId]
+      );
+      await audit(client, { tenantId, userId, action: 'evidence.version.created', tableName: 'grc_evidence_versions', recordId: version.id, newData: version, metadata: { correlation_id: correlationId } });
+      return version;
+    });
+  }
+
+  async function linkEvidence({ tenantId, userId, evidenceId, body, correlationId }) {
+    return withTransaction(async (client) => {
+      const present = await client.query(
+        'SELECT 1 FROM evidences WHERE tenant_id = $1::uuid AND id = $2::uuid',
+        [tenantId, assertUuid(evidenceId)]
+      );
+      if (!present.rowCount) throw new GrcError('EVIDENCE_NOT_FOUND', 'Evidencia no encontrada.', 404);
+      const entityType = String(body.entity_type || '').toLowerCase();
+      const entityId = assertUuid(body.entity_id, 'GRC_ENTITY_ID_REQUIRED');
+      const runtime = await readRuntimeEntity(client, { tenantId, entityType, entityId });
+      if (!runtime) throw new GrcError('GRC_RUNTIME_ENTITY_NOT_FOUND', 'Entidad no encontrada.', 404);
+      const link = (await client.query(
+        `INSERT INTO grc_evidence_links (tenant_id, evidence_id, entity_type, entity_id, created_by)
+         VALUES ($1::uuid,$2::uuid,$3,$4::uuid,$5::uuid)
+         ON CONFLICT (tenant_id, evidence_id, entity_type, entity_id)
+         DO UPDATE SET created_by = EXCLUDED.created_by RETURNING *`,
+        [tenantId, evidenceId, entityType, entityId, userId]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: 'evidence.linked', tableName: 'grc_evidence_links', recordId: link.id, newData: link, metadata: { correlation_id: correlationId } });
+      return link;
+    });
+  }
+
   async function reviewEvidence({ tenantId, userId, submissionId, body, correlationId }) {
     if (!['approved', 'rejected', 'reopened'].includes(body.decision)) throw new GrcError('EVIDENCE_REVIEW_DECISION_INVALID', 'Decisión inválida.', 422);
     if (body.decision === 'rejected' && !String(body.reason || '').trim()) throw new GrcError('EVIDENCE_REJECTION_REASON_REQUIRED', 'El rechazo requiere una causa.', 422);
@@ -449,6 +731,11 @@ function createGrcService(pool, asyncJobs) {
       if (!submission) throw new GrcError('EVIDENCE_SUBMISSION_NOT_FOUND', 'Entrega no encontrada.', 404);
       const status = body.decision === 'reopened' ? 'under_review' : body.decision;
       await client.query('UPDATE grc_evidence_submissions SET status = $3 WHERE tenant_id = $1::uuid AND id = $2::uuid', [tenantId, submissionId, status]);
+      await client.query(
+        `UPDATE grc_evidence_requests SET status = $3, updated_at = now()
+         WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+        [tenantId, submission.request_id, status]
+      );
       const review = (await client.query(
         `INSERT INTO grc_evidence_reviews (tenant_id, submission_id, reviewer_id, decision, reason)
          VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5) RETURNING *`,
@@ -595,7 +882,24 @@ function createGrcService(pool, asyncJobs) {
   async function createMapping({ tenantId, userId, body, correlationId }) {
     const mappingTypes = new Set(['exact', 'partial', 'related', 'support', 'not_equivalent', 'pending_review']);
     if (!mappingTypes.has(body.mapping_type)) throw new GrcError('MAPPING_TYPE_INVALID', 'Tipo de equivalencia inválido.', 422);
+    if (!String(body.justification || '').trim()) throw new GrcError('MAPPING_JUSTIFICATION_REQUIRED', 'La justificación es obligatoria.', 422);
     return withTransaction(async (client) => {
+      const requirement = await client.query(
+        `SELECT 1 FROM grc_framework_requirements r
+         JOIN grc_framework_versions v ON v.id = r.version_id
+         JOIN grc_frameworks f ON f.id = v.framework_id
+         WHERE r.id = $2::uuid
+           AND (r.tenant_id = $1::uuid OR (r.tenant_id IS NULL AND v.tenant_id IS NULL AND f.tenant_id IS NULL))`,
+        [tenantId, assertUuid(body.requirement_id)]
+      );
+      if (!requirement.rowCount) throw new GrcError('MAPPING_REQUIREMENT_NOT_FOUND', 'Requisito no encontrado.', 404);
+      if (body.tenant_control_id) {
+        const control = await client.query(
+          'SELECT 1 FROM tenant_controls WHERE tenant_id = $1::uuid AND id = $2::uuid',
+          [tenantId, assertUuid(body.tenant_control_id)]
+        );
+        if (!control.rowCount) throw new GrcError('MAPPING_CONTROL_NOT_FOUND', 'Control no encontrado.', 404);
+      }
       const mapping = (await client.query(
         `INSERT INTO grc_requirement_control_mappings (
            tenant_id, requirement_id, tenant_control_id, catalog_control_id, mapping_type,
@@ -606,6 +910,67 @@ function createGrcService(pool, asyncJobs) {
       )).rows[0];
       await audit(client, { tenantId, userId, action: 'mapping.created', tableName: 'grc_requirement_control_mappings', recordId: mapping.id, newData: mapping, metadata: { correlation_id: correlationId } });
       return mapping;
+    });
+  }
+
+  async function listMappings(tenantId) {
+    return (await pool.query(
+      `SELECT m.*, r.reference_code, r.permitted_title, r.tcdx_interpretation,
+              f.code AS framework_code, f.name AS framework_name, v.version_label,
+              COALESCE((SELECT json_agg(rv ORDER BY rv.created_at)
+                FROM grc_mapping_reviews rv
+                WHERE rv.tenant_id = m.tenant_id AND rv.mapping_id = m.id), '[]') AS reviews
+       FROM grc_requirement_control_mappings m
+       JOIN grc_framework_requirements r ON r.id = m.requirement_id
+       JOIN grc_framework_versions v ON v.id = r.version_id
+       JOIN grc_frameworks f ON f.id = v.framework_id
+       WHERE m.tenant_id = $1::uuid ORDER BY m.updated_at DESC LIMIT 100`,
+      [tenantId]
+    )).rows;
+  }
+
+  async function listFrameworkRequirements(tenantId, versionId = null) {
+    return (await pool.query(
+      `SELECT r.id, r.version_id, r.reference_code, r.permitted_title,
+              r.tcdx_interpretation, r.content_classification,
+              f.code AS framework_code, f.name AS framework_name, v.version_label
+       FROM grc_framework_requirements r
+       JOIN grc_framework_versions v ON v.id = r.version_id
+       JOIN grc_frameworks f ON f.id = v.framework_id
+       WHERE (r.tenant_id = $1::uuid OR (r.tenant_id IS NULL AND v.tenant_id IS NULL AND f.tenant_id IS NULL))
+         AND ($2::uuid IS NULL OR r.version_id = $2::uuid)
+       ORDER BY f.name, r.reference_code LIMIT 500`,
+      [tenantId, versionId ? assertUuid(versionId) : null]
+    )).rows;
+  }
+
+  async function reviewMapping({ tenantId, userId, mappingId, body, correlationId }) {
+    if (!['approved', 'rejected', 'changes_requested'].includes(body.decision)) {
+      throw new GrcError('MAPPING_REVIEW_DECISION_INVALID', 'Decisión de mapping inválida.', 422);
+    }
+    if (body.decision !== 'approved' && !String(body.comment || '').trim()) {
+      throw new GrcError('MAPPING_REVIEW_COMMENT_REQUIRED', 'La decisión requiere comentario.', 422);
+    }
+    return withTransaction(async (client) => {
+      const current = (await client.query(
+        `SELECT * FROM grc_requirement_control_mappings
+         WHERE tenant_id = $1::uuid AND id = $2::uuid FOR UPDATE`,
+        [tenantId, assertUuid(mappingId)]
+      )).rows[0];
+      if (!current) throw new GrcError('MAPPING_NOT_FOUND', 'Mapping no encontrado.', 404);
+      const review = (await client.query(
+        `INSERT INTO grc_mapping_reviews (tenant_id, mapping_id, reviewer_id, decision, comment)
+         VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5) RETURNING *`,
+        [tenantId, mappingId, userId, body.decision, body.comment || null]
+      )).rows[0];
+      const status = body.decision === 'approved' ? 'published' : body.decision === 'rejected' ? 'rejected' : 'draft';
+      const updated = (await client.query(
+        `UPDATE grc_requirement_control_mappings SET status = $3, updated_at = now()
+         WHERE tenant_id = $1::uuid AND id = $2::uuid RETURNING *`,
+        [tenantId, mappingId, status]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: `mapping.${body.decision}`, tableName: 'grc_requirement_control_mappings', recordId: mappingId, oldData: current, newData: updated, metadata: { correlation_id: correlationId, review_id: review.id } });
+      return { mapping: updated, review };
     });
   }
 
@@ -642,6 +1007,222 @@ function createGrcService(pool, asyncJobs) {
       )).rows[0];
       await audit(client, { tenantId, userId, action: 'audit.plan.created', tableName: 'grc_audit_annual_plans', recordId: plan.id, newData: plan, metadata: { correlation_id: correlationId } });
       return plan;
+    });
+  }
+
+  async function assertAudit(client, tenantId, auditId) {
+    const row = (await client.query(
+      'SELECT * FROM audits WHERE tenant_id = $1::uuid AND id = $2::uuid',
+      [tenantId, assertUuid(auditId)]
+    )).rows[0];
+    if (!row) throw new GrcError('AUDIT_NOT_FOUND', 'Auditoría no encontrada.', 404);
+    return row;
+  }
+
+  async function getAuditOperations(tenantId, auditId) {
+    await assertAudit(pool, tenantId, auditId);
+    const [team, conflicts, programs, samples, workpapers, interviews, links, reviews, reports, followups] = await Promise.all([
+      pool.query('SELECT * FROM grc_audit_team_members WHERE tenant_id = $1::uuid AND audit_id = $2::uuid ORDER BY team_role', [tenantId, auditId]),
+      pool.query(`SELECT c.* FROM grc_audit_conflicts c JOIN grc_audit_team_members tm ON tm.id = c.team_member_id WHERE c.tenant_id = $1::uuid AND tm.audit_id = $2::uuid ORDER BY c.status, c.id`, [tenantId, auditId]),
+      pool.query('SELECT * FROM grc_audit_programs WHERE tenant_id = $1::uuid AND audit_id = $2::uuid ORDER BY version DESC', [tenantId, auditId]),
+      pool.query('SELECT * FROM grc_audit_sample_plans WHERE tenant_id = $1::uuid AND audit_id = $2::uuid ORDER BY created_at DESC', [tenantId, auditId]),
+      pool.query('SELECT * FROM grc_audit_workpapers WHERE tenant_id = $1::uuid AND audit_id = $2::uuid ORDER BY updated_at DESC', [tenantId, auditId]),
+      pool.query('SELECT * FROM grc_audit_interviews WHERE tenant_id = $1::uuid AND audit_id = $2::uuid ORDER BY created_at DESC', [tenantId, auditId]),
+      pool.query('SELECT * FROM grc_audit_evidence_links WHERE tenant_id = $1::uuid AND audit_id = $2::uuid ORDER BY linked_at DESC', [tenantId, auditId]),
+      pool.query('SELECT * FROM grc_audit_supervisor_reviews WHERE tenant_id = $1::uuid AND audit_id = $2::uuid ORDER BY created_at DESC', [tenantId, auditId]),
+      pool.query('SELECT * FROM grc_audit_reports WHERE tenant_id = $1::uuid AND audit_id = $2::uuid ORDER BY version DESC', [tenantId, auditId]),
+      pool.query('SELECT * FROM grc_audit_followups WHERE tenant_id = $1::uuid AND audit_id = $2::uuid ORDER BY created_at DESC', [tenantId, auditId]),
+    ]);
+    return {
+      audit_id: auditId, team: team.rows, conflicts: conflicts.rows, programs: programs.rows,
+      samples: samples.rows, workpapers: workpapers.rows, interviews: interviews.rows,
+      evidence_links: links.rows, reviews: reviews.rows, reports: reports.rows, followups: followups.rows,
+    };
+  }
+
+  async function assignAuditTeamMember({ tenantId, userId, auditId, body, correlationId }) {
+    return withTransaction(async (client) => {
+      await assertAudit(client, tenantId, auditId);
+      const memberUserId = assertUuid(body.user_id, 'AUDIT_TEAM_USER_REQUIRED');
+      const memberUser = await client.query('SELECT 1 FROM users WHERE tenant_id = $1::uuid AND id = $2::uuid', [tenantId, memberUserId]);
+      if (!memberUser.rowCount) throw new GrcError('AUDIT_TEAM_USER_NOT_FOUND', 'Usuario no encontrado en la empresa.', 404);
+      const independence = ['pending', 'declared', 'conflict', 'cleared'].includes(body.independence_status) ? body.independence_status : 'pending';
+      const member = (await client.query(
+        `INSERT INTO grc_audit_team_members (
+           tenant_id, audit_id, user_id, team_role, independence_status, declaration, declared_at
+         ) VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6::jsonb,
+           CASE WHEN $5 = 'pending' THEN NULL ELSE now() END)
+         ON CONFLICT (tenant_id, audit_id, user_id) DO UPDATE SET
+           team_role = EXCLUDED.team_role, independence_status = EXCLUDED.independence_status,
+           declaration = EXCLUDED.declaration, declared_at = EXCLUDED.declared_at RETURNING *`,
+        [tenantId, auditId, memberUserId, String(body.team_role || 'auditor'), independence, json(body.declaration || {})]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: 'audit.team.assigned', tableName: 'grc_audit_team_members', recordId: member.id, newData: member, metadata: { correlation_id: correlationId } });
+      return member;
+    });
+  }
+
+  async function recordAuditConflict({ tenantId, userId, auditId, body, correlationId }) {
+    if (!String(body.description || '').trim()) throw new GrcError('AUDIT_CONFLICT_DESCRIPTION_REQUIRED', 'La descripción es obligatoria.', 422);
+    return withTransaction(async (client) => {
+      await assertAudit(client, tenantId, auditId);
+      const member = await client.query(
+        'SELECT 1 FROM grc_audit_team_members WHERE tenant_id = $1::uuid AND audit_id = $2::uuid AND id = $3::uuid',
+        [tenantId, auditId, assertUuid(body.team_member_id)]
+      );
+      if (!member.rowCount) throw new GrcError('AUDIT_TEAM_MEMBER_NOT_FOUND', 'Miembro no encontrado.', 404);
+      const conflict = (await client.query(
+        `INSERT INTO grc_audit_conflicts (tenant_id, team_member_id, conflict_type, description)
+         VALUES ($1::uuid,$2::uuid,$3,$4) RETURNING *`,
+        [tenantId, body.team_member_id, String(body.conflict_type || 'independence'), body.description]
+      )).rows[0];
+      await client.query(`UPDATE grc_audit_team_members SET independence_status = 'conflict' WHERE tenant_id = $1::uuid AND id = $2::uuid`, [tenantId, body.team_member_id]);
+      await audit(client, { tenantId, userId, action: 'audit.conflict.recorded', tableName: 'grc_audit_conflicts', recordId: conflict.id, newData: conflict, metadata: { correlation_id: correlationId } });
+      return conflict;
+    });
+  }
+
+  async function resolveAuditConflict({ tenantId, userId, conflictId, body, correlationId }) {
+    if (!['mitigated', 'accepted', 'rejected'].includes(body.status) || !String(body.resolution || '').trim()) {
+      throw new GrcError('AUDIT_CONFLICT_RESOLUTION_INVALID', 'Estado y resolución son obligatorios.', 422);
+    }
+    return withTransaction(async (client) => {
+      const current = (await client.query(
+        'SELECT * FROM grc_audit_conflicts WHERE tenant_id = $1::uuid AND id = $2::uuid FOR UPDATE',
+        [tenantId, assertUuid(conflictId)]
+      )).rows[0];
+      if (!current) throw new GrcError('AUDIT_CONFLICT_NOT_FOUND', 'Conflicto no encontrado.', 404);
+      const updated = (await client.query(
+        `UPDATE grc_audit_conflicts SET status = $3, resolution = $4, resolved_by = $5::uuid, resolved_at = now()
+         WHERE tenant_id = $1::uuid AND id = $2::uuid RETURNING *`,
+        [tenantId, conflictId, body.status, body.resolution, userId]
+      )).rows[0];
+      await client.query(`UPDATE grc_audit_team_members SET independence_status = 'cleared' WHERE tenant_id = $1::uuid AND id = $2::uuid`, [tenantId, current.team_member_id]);
+      await audit(client, { tenantId, userId, action: 'audit.conflict.resolved', tableName: 'grc_audit_conflicts', recordId: conflictId, oldData: current, newData: updated, metadata: { correlation_id: correlationId } });
+      return updated;
+    });
+  }
+
+  async function createAuditProgram({ tenantId, userId, auditId, body, correlationId }) {
+    return withTransaction(async (client) => {
+      await assertAudit(client, tenantId, auditId);
+      const version = Number((await client.query('SELECT COALESCE(MAX(version),0)::int + 1 AS version FROM grc_audit_programs WHERE tenant_id = $1::uuid AND audit_id = $2::uuid', [tenantId, auditId])).rows[0].version);
+      const program = (await client.query(
+        `INSERT INTO grc_audit_programs (tenant_id, audit_id, version, objectives, scope, criteria, procedures)
+         VALUES ($1::uuid,$2::uuid,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7::jsonb) RETURNING *`,
+        [tenantId, auditId, version, json(body.objectives || []), json(body.scope || {}), json(body.criteria || []), json(body.procedures || [])]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: 'audit.program.created', tableName: 'grc_audit_programs', recordId: program.id, newData: program, metadata: { correlation_id: correlationId } });
+      return program;
+    });
+  }
+
+  async function createAuditUniverseEntity({ tenantId, userId, body, correlationId }) {
+    const allowed = new Set(['process', 'unit', 'site', 'system', 'supplier', 'control', 'framework', 'risk']);
+    if (!allowed.has(body.entity_type) || !String(body.name || '').trim()) {
+      throw new GrcError('AUDIT_UNIVERSE_ENTITY_INVALID', 'Tipo y nombre del universo son obligatorios.', 422);
+    }
+    return withTransaction(async (client) => {
+      const entity = (await client.query(
+        `INSERT INTO grc_audit_universe_entities (
+           tenant_id, entity_type, entity_id, name, risk_score, owner_id, metadata
+         ) VALUES ($1::uuid,$2,$3::uuid,$4,$5,$6::uuid,$7::jsonb)
+         ON CONFLICT (tenant_id, entity_type, entity_id) DO UPDATE SET
+           name = EXCLUDED.name, risk_score = EXCLUDED.risk_score,
+           owner_id = EXCLUDED.owner_id, metadata = EXCLUDED.metadata, is_active = TRUE
+         RETURNING *`,
+        [tenantId, body.entity_type, body.entity_id || null, body.name, body.risk_score || null,
+          body.owner_id || null, json(body.metadata || {})]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: 'audit.universe.upserted', tableName: 'grc_audit_universe_entities', recordId: entity.id, newData: entity, metadata: { correlation_id: correlationId } });
+      return entity;
+    });
+  }
+
+  async function createAuditInterview({ tenantId, userId, auditId, body, correlationId }) {
+    return withTransaction(async (client) => {
+      await assertAudit(client, tenantId, auditId);
+      const interview = (await client.query(
+        `INSERT INTO grc_audit_interviews (
+           tenant_id, audit_id, scheduled_at, participants, agenda,
+           questions_answers, confirmation_status, confidentiality, created_by
+         ) VALUES ($1::uuid,$2::uuid,$3,$4::jsonb,$5,$6::jsonb,$7,$8,$9::uuid) RETURNING *`,
+        [tenantId, auditId, body.scheduled_at || null, json(body.participants || []),
+          body.agenda || null, json(body.questions_answers || []),
+          body.confirmation_status || 'pending', body.confidentiality || null, userId]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: 'audit.interview.created', tableName: 'grc_audit_interviews', recordId: interview.id, newData: interview, metadata: { correlation_id: correlationId } });
+      return interview;
+    });
+  }
+
+  async function createAuditSample({ tenantId, userId, auditId, body, correlationId }) {
+    if (!String(body.population_description || '').trim() || Number(body.sample_size) < 1 || !String(body.limitation || '').trim()) {
+      throw new GrcError('AUDIT_SAMPLE_INVALID', 'Población, tamaño y limitación son obligatorios.', 422);
+    }
+    return withTransaction(async (client) => {
+      await assertAudit(client, tenantId, auditId);
+      const sample = (await client.query(
+        `INSERT INTO grc_audit_sample_plans (
+           tenant_id, audit_id, population_description, population_size, method,
+           sample_size, selection_criteria, random_seed, limitation
+         ) VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7::jsonb,$8,$9) RETURNING *`,
+        [tenantId, auditId, body.population_description, body.population_size || null,
+          String(body.method || 'judgmental'), body.sample_size, json(body.selection_criteria || {}),
+          body.random_seed || null, body.limitation]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: 'audit.sample.created', tableName: 'grc_audit_sample_plans', recordId: sample.id, newData: sample, metadata: { correlation_id: correlationId } });
+      return sample;
+    });
+  }
+
+  async function linkAuditEvidence({ tenantId, userId, auditId, body, correlationId }) {
+    return withTransaction(async (client) => {
+      await assertAudit(client, tenantId, auditId);
+      const evidenceId = assertUuid(body.evidence_id, 'EVIDENCE_ID_REQUIRED');
+      const evidence = await client.query('SELECT 1 FROM evidences WHERE tenant_id = $1::uuid AND id = $2::uuid', [tenantId, evidenceId]);
+      if (!evidence.rowCount) throw new GrcError('EVIDENCE_NOT_FOUND', 'Evidencia no encontrada.', 404);
+      const workpaperId = assertUuid(body.workpaper_id, 'AUDIT_WORKPAPER_REQUIRED');
+      const wp = await client.query('SELECT 1 FROM grc_audit_workpapers WHERE tenant_id = $1::uuid AND audit_id = $2::uuid AND id = $3::uuid', [tenantId, auditId, workpaperId]);
+      if (!wp.rowCount) throw new GrcError('AUDIT_WORKPAPER_NOT_FOUND', 'Papel de trabajo no encontrado.', 404);
+      const linked = (await client.query(
+        `INSERT INTO grc_audit_evidence_links (tenant_id, audit_id, evidence_id, workpaper_id, linked_by)
+         VALUES ($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid)
+         ON CONFLICT (tenant_id, audit_id, evidence_id, workpaper_id)
+         DO UPDATE SET linked_by = EXCLUDED.linked_by, linked_at = now() RETURNING *`,
+        [tenantId, auditId, evidenceId, workpaperId, userId]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: 'audit.evidence.linked', tableName: 'grc_audit_evidence_links', recordId: evidenceId, newData: linked, metadata: { correlation_id: correlationId, audit_id: auditId } });
+      return linked;
+    });
+  }
+
+  async function createAuditFollowup({ tenantId, userId, auditId, body, correlationId }) {
+    return withTransaction(async (client) => {
+      await assertAudit(client, tenantId, auditId);
+      const followup = (await client.query(
+        `INSERT INTO grc_audit_followups (
+           tenant_id, audit_id, finding_id, action_plan_id, owner_id, due_at, verification_notes
+         ) VALUES ($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6,$7) RETURNING *`,
+        [tenantId, auditId, body.finding_id || null, body.action_plan_id || null,
+          body.owner_id || null, body.due_at || null, body.verification_notes || null]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: 'audit.followup.created', tableName: 'grc_audit_followups', recordId: followup.id, newData: followup, metadata: { correlation_id: correlationId } });
+      return followup;
+    });
+  }
+
+  async function closeAudit({ tenantId, userId, auditId, correlationId }) {
+    return withTransaction(async (client) => {
+      const current = await assertAudit(client, tenantId, auditId);
+      const readiness = await getAuditCloseReadiness(tenantId, auditId);
+      if (!readiness.can_close) throw new GrcError('AUDIT_CLOSE_BLOCKED', 'La auditoría no cumple requisitos de cierre.', 409, readiness.blockers);
+      const updated = (await client.query(
+        `UPDATE audits SET status = 'completada' WHERE tenant_id = $1::uuid AND id = $2::uuid RETURNING *`,
+        [tenantId, auditId]
+      )).rows[0];
+      await audit(client, { tenantId, userId, action: 'audit.closed', tableName: 'audits', recordId: auditId, oldData: current, newData: updated, metadata: { correlation_id: correlationId } });
+      return updated;
     });
   }
 
@@ -895,7 +1476,9 @@ function createGrcService(pool, asyncJobs) {
                      tenant_id, title, instructions, status, owner_id, reviewer_id, approver_id,
                      due_at, valid_until, schedule_id, occurrence_key, created_by
                    ) VALUES ($1::uuid,$2,$3,'requested',$4::uuid,$5::uuid,$6::uuid,$7,$8,$9::uuid,$10,$11::uuid)
-                   ON CONFLICT (tenant_id, schedule_id, occurrence_key) DO NOTHING RETURNING id`,
+                   ON CONFLICT (tenant_id, schedule_id, occurrence_key)
+                   WHERE schedule_id IS NOT NULL AND occurrence_key IS NOT NULL
+                   DO NOTHING RETURNING id`,
                   [tenantId, schedule.title, schedule.instructions, schedule.owner_id, schedule.reviewer_id,
                     schedule.approver_id, schedule.next_run_at, schedule.valid_until, schedule.id, key, userId]
                 );
@@ -1040,15 +1623,30 @@ function createGrcService(pool, asyncJobs) {
   async function getAuditCloseReadiness(tenantId, auditId) {
     const result = (await pool.query(
       `SELECT
+         COUNT(*)::int AS workpaper_count,
          COUNT(*) FILTER (WHERE status NOT IN ('approved','locked'))::int AS unapproved_workpapers,
          (SELECT COUNT(*)::int FROM grc_audit_conflicts c
           JOIN grc_audit_team_members tm ON tm.id = c.team_member_id AND tm.tenant_id = c.tenant_id
           WHERE c.tenant_id = $1::uuid AND tm.audit_id = $2::uuid AND c.status = 'open') AS open_conflicts,
-         COUNT(*) FILTER (WHERE status = 'changes_requested')::int AS returned_workpapers
+         COUNT(*) FILTER (WHERE status = 'changes_requested')::int AS returned_workpapers,
+         (SELECT COUNT(*)::int FROM grc_audit_programs
+          WHERE tenant_id = $1::uuid AND audit_id = $2::uuid) AS program_count,
+         (SELECT COUNT(*)::int FROM grc_audit_team_members
+          WHERE tenant_id = $1::uuid AND audit_id = $2::uuid) AS team_count,
+         (SELECT COUNT(*)::int FROM grc_audit_team_members
+          WHERE tenant_id = $1::uuid AND audit_id = $2::uuid
+            AND independence_status IN ('pending','conflict')) AS unresolved_independence,
+         (SELECT COUNT(*)::int FROM grc_audit_evidence_links
+          WHERE tenant_id = $1::uuid AND audit_id = $2::uuid) AS evidence_link_count
        FROM grc_audit_workpapers WHERE tenant_id = $1::uuid AND audit_id = $2::uuid`,
       [tenantId, assertUuid(auditId)]
     )).rows[0];
     const blockers = [];
+    if (!result.program_count) blockers.push('missing_audit_program');
+    if (!result.team_count) blockers.push('missing_audit_team');
+    if (result.unresolved_independence) blockers.push('unresolved_independence');
+    if (!result.workpaper_count) blockers.push('missing_required_workpapers');
+    if (!result.evidence_link_count) blockers.push('missing_required_evidence');
     if (result.unapproved_workpapers) blockers.push('unapproved_workpapers');
     if (result.open_conflicts) blockers.push('open_independence_conflicts');
     if (result.returned_workpapers) blockers.push('returned_workpapers');
@@ -1086,13 +1684,15 @@ function createGrcService(pool, asyncJobs) {
     const status = String(filters.status || '').trim() || null;
     const from = filters.from || null;
     const to = filters.to || null;
+    const id = filters.id ? assertUuid(filters.id) : null;
     const rows = (await pool.query(
       `SELECT * FROM (${EXPORT_QUERIES[domain]}) scoped
        WHERE ($2::text IS NULL OR scoped.status::text = $2)
          AND ($3::timestamptz IS NULL OR scoped.recorded_at >= $3::timestamptz)
          AND ($4::timestamptz IS NULL OR scoped.recorded_at < $4::timestamptz + interval '1 day')
+         AND ($5::uuid IS NULL OR scoped.id = $5::uuid)
        ORDER BY scoped.recorded_at DESC, scoped.id LIMIT 10000`,
-      [tenantId, status, from, to]
+      [tenantId, status, from, to, id]
     )).rows;
     let artifact;
     try {
@@ -1111,6 +1711,22 @@ function createGrcService(pool, asyncJobs) {
           artifact.contentHash, artifact.fileName, artifact.mimeType, artifact.buffer.length, artifact.buffer,
           artifact.version, correlationId, userId, artifact.generatedAt]
       )).rows[0];
+      if (domain === 'audit' && id && ['pdf', 'docx', 'xlsx'].includes(format)) {
+        const version = Number((await client.query(
+          `SELECT COALESCE(MAX(version),0)::int + 1 AS version
+           FROM grc_audit_reports WHERE tenant_id = $1::uuid AND audit_id = $2::uuid AND report_format = $3`,
+          [tenantId, id, format]
+        )).rows[0].version);
+        const report = (await client.query(
+          `INSERT INTO grc_audit_reports (
+             tenant_id, audit_id, version, status, report_format, file_url,
+             content_hash, source_snapshot
+           ) VALUES ($1::uuid,$2::uuid,$3,'draft',$4,$5,$6,$7::jsonb) RETURNING *`,
+          [tenantId, id, version, format, `/api/grc/exports/${record.id}/download`,
+            artifact.contentHash, json(artifact.sourceSnapshot)]
+        )).rows[0];
+        await audit(client, { tenantId, userId, action: 'audit.report.generated', tableName: 'grc_audit_reports', recordId: report.id, newData: report, metadata: { correlation_id: correlationId, export_id: record.id } });
+      }
       await audit(client, { tenantId, userId, action: 'grc.export.generated', tableName: 'grc_exports', recordId: record.id, newData: { ...record, file_content: undefined }, metadata: { correlation_id: correlationId } });
       observe('export', { tenantId, correlationId, entityType: domain });
       return { record, buffer: artifact.buffer };
@@ -1158,38 +1774,63 @@ function createGrcService(pool, asyncJobs) {
     GrcError,
     assertModuleEnabled,
     assertPermission,
+    assignAuditTeamMember,
     addWorkflowContext,
+    archiveWorkflow,
     calculateEvidenceQuality,
+    bootstrapTenant: bootstrapService.initialize,
     createAuditPlan,
+    createAuditProgram,
+    createAuditSample,
+    createAuditFollowup,
+    createAuditInterview,
+    createAuditUniverseEntity,
     createEscalationPolicy,
     createEvidenceRequest,
+    createEvidenceVersion,
     createMapping,
     createWorkflowDefinition,
     createWorkpaper,
+    closeAudit,
     delegateApproval,
     enqueueAutomation,
     executeTransition,
     generateReadinessSnapshot,
     generateExport,
     getAuditWorkspace,
+    getAuditOperations,
+    getBootstrapStatus: bootstrapService.status,
     getAuditCloseReadiness,
     getExport,
+    getEvidenceRequest,
     getMeta,
     getReadiness,
     getSummary,
     getWorkflowInstance,
+    getWorkflowDefinition,
     getRuntimeAdapter,
     listEvidenceRequests,
     listEscalationPolicies,
+    listFrameworkRequirements,
     listFrameworks,
+    listMappings,
     listWorkpaperReviews,
     listWorkflowDefinitions,
+    linkAuditEvidence,
     publishWorkflow,
+    linkEvidence,
     reviewWorkpaper,
     reviewEvidence,
+    reviewMapping,
+    recordAuditConflict,
+    resolveAuditConflict,
+    validateBootstrap: bootstrapService.validate,
     runScheduler,
+    saveWorkflowDraft,
     startRuntimeWorkflow,
     startWorkflow,
+    submitEvidence,
+    validateWorkflow,
     observabilitySnapshot,
   };
 }

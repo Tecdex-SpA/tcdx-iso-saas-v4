@@ -1,31 +1,17 @@
 # Fase 1 - Closeout
 
-## Estado
+## Estado local
 
-FASE 1 IMPLEMENTADA SIN DEUDA INTERNA — PENDIENTE SOLO RUNTIME QA POST-DEPLOY
+El cierre local se evalúa en `docs/product/fase-1r-operational-closeout.md`. El runtime desplegado permanece `blocked_external`; este documento no declara cierre productivo.
 
-## Cierre local
+La remediación Fase 1R agrega configuración explícita por tenant, bootstrap auditable e idempotente, integración PostgreSQL real, administración tenant del módulo, feedback UI verificable, métricas específicas y Runtime QA reproducible. `grc_phase1_core` continúa deshabilitado por defecto y ningún bootstrap lo habilita globalmente.
 
-El núcleo transversal, aprobaciones múltiples, scheduler recurrente, escalamiento, revisión supervisora, exportaciones avanzadas, seis adaptadores, evidencia continua, readiness, frameworks, permisos, tenant scope, feature flag, observabilidad, UI consolidada, CI y Runtime QA están implementados.
+## Evidencia exigida para cierre definitivo
 
-Validación final local:
+1. CI del PR sin excepciones.
+2. Migraciones `20260722` y `20260723` aplicadas por el flujo autorizado.
+3. Deploy del SHA exacto.
+4. Workflow `phase1-runtime-qa.yml` exitoso con 30 pruebas Playwright reales.
+5. Siete artifacts runtime derivados del resultado Playwright y limpieza QA exitosa.
 
-- backend check/tests: OK;
-- frontend lint/check/build: OK;
-- contratos, permisos, tenant y scripts: OK, cero hallazgos;
-- migración PostgreSQL 16 efímera: fixture contractual versionado, gate sin dependencia de `rg`, aplicada dos veces, OK;
-- `npm run phase1:check`: OK;
-- Playwright discovery: 21 pruebas;
-- `git diff --check`: OK.
-
-No quedan entregables internos en `pending` o `in_progress`. No se hizo commit, push, merge, deploy ni cambio productivo.
-
-## Pendiente externo controlado
-
-1. Commit/push/PR/merge por el flujo autorizado.
-2. Aplicar la migración y desplegar el SHA exacto desde el Mac con `./scripts/deploy-vms.sh`.
-3. Habilitar `grc_phase1_core` solo en los tenants sintéticos autorizados; mantener Tenant B deshabilitado para la prueba negativa.
-4. Despachar `.github/workflows/phase1-runtime-qa.yml` desde `main`, Environment `qa`, con el SHA desplegado y secretos obligatorios.
-5. Conservar los artifacts E2E y marcar el ledger `verified_runtime` únicamente si los 21 casos pasan.
-
-Este cierre local no declara operación productiva, certificación ni Runtime QA ejecutado.
+Hasta entonces el estado es implementación local pendiente exclusivamente de Runtime QA post-deploy.

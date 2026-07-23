@@ -159,6 +159,9 @@ type TenantModuleCatalogItem = {
   notes?: string | null;
   metadata?: JsonObject | null;
   can_enable?: boolean;
+  global_active?: boolean;
+  modified_by?: string | null;
+  blocking_reason?: string | null;
 };
 
 type TenantModulesCatalogResponse = {
@@ -546,6 +549,7 @@ export default function AdminSaasPage() {
   const [loadingTenant, setLoadingTenant] = useState(false);
   const [savingKey, setSavingKey] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isSuperadminUi] = useState(false);
   const [activeAdminTab, setActiveAdminTab] = useState('empresa');
 
@@ -919,11 +923,12 @@ export default function AdminSaasPage() {
     try {
       setSavingKey(`tenant-module-${moduleKey}`);
       setError('');
+      setSuccess('');
 
       await fetchJson(
         `/api/admin-saas/tenants/${selectedTenantId}/modules/${encodeURIComponent(
           moduleKey
-        )}/contract-toggle`,
+        )}`,
         {
           method: 'PUT',
           body: JSON.stringify({
@@ -942,10 +947,11 @@ export default function AdminSaasPage() {
       await loadTenantModulesCatalog(selectedTenantId);
       await loadTenantDetail(selectedTenantId);
       await loadPrebilling(selectedTenantId, prebillingMonth);
+      clearTenantEntitlementsCache();
+      setSuccess(`Módulo ${moduleKey} ${isEnabled ? 'habilitado' : 'deshabilitado'} y cache de entitlements invalidado.`);
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Error actualizando módulo del tenant');
       setError(msg);
-      alert(msg);
     } finally {
       setSavingKey('');
     }
@@ -1800,6 +1806,7 @@ async function uploadSelectedTenantLogo(file: File) {
     try {
       setSavingKey(`module-${moduleKey}`);
       setError('');
+      setSuccess('');
 
       await fetchJson(
         `/api/admin-saas/tenants/${selectedTenantId}/modules/${moduleKey}`,
@@ -1820,10 +1827,12 @@ async function uploadSelectedTenantLogo(file: File) {
 
       await loadTenantDetail(selectedTenantId);
       await loadTenants();
+      await loadTenantModulesCatalog(selectedTenantId);
+      clearTenantEntitlementsCache();
+      setSuccess(`Módulo ${moduleKey} ${next ? 'habilitado' : 'deshabilitado'} correctamente.`);
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Error actualizando módulo del tenant');
       setError(msg);
-      alert(msg);
     } finally {
       setSavingKey('');
     }
@@ -2146,8 +2155,13 @@ async function uploadSelectedTenantLogo(file: File) {
         ) : (
           <>
             {error && (
-              <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {error}
+              </div>
+            )}
+            {success && (
+              <div role="status" aria-live="polite" className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                {success}
               </div>
             )}
 
@@ -3655,8 +3669,9 @@ async function uploadSelectedTenantLogo(file: File) {
                           <thead>
                             <tr className="border-b border-slate-200 text-xs uppercase text-slate-500">
                               <th className="py-3 pr-4">Módulo</th>
-                              <th className="py-3 pr-4">Estado</th>
+                              <th className="py-3 pr-4">Global / tenant</th>
                               <th className="py-3 pr-4">Último cambio</th>
+                              <th className="py-3 pr-4">Modificado por</th>
                               <th className="py-3 pr-4">Notas</th>
                               <th className="py-3 pr-4">Acción</th>
                             </tr>
@@ -3680,6 +3695,9 @@ async function uploadSelectedTenantLogo(file: File) {
                                   </td>
 
                                   <td className="py-4 pr-4">
+                                    <div className="mb-2 text-xs text-slate-500">
+                                      Global: {item.global_active === false ? 'Inactivo' : 'Activo'}
+                                    </div>
                                     <span
                                       className={`rounded-full border px-3 py-1 text-xs font-semibold ${
                                         item.is_enabled
@@ -3701,9 +3719,13 @@ async function uploadSelectedTenantLogo(file: File) {
                                         : '-'}
                                   </td>
 
+                                  <td className="py-4 pr-4 text-xs text-slate-600">
+                                    {item.modified_by || '-'}
+                                  </td>
+
                                   <td className="py-4 pr-4 text-xs text-slate-500">
                                     {blockedByContract
-                                      ? 'Bloqueado por tope contractual'
+                                      ? item.blocking_reason || 'Bloqueado por tope contractual'
                                       : item.notes || '-'}
                                   </td>
 
@@ -3746,7 +3768,7 @@ async function uploadSelectedTenantLogo(file: File) {
 
                             {(tenantModulesCatalog?.modules || []).length === 0 && (
                               <tr>
-                                <td colSpan={5} className="py-6 text-slate-500">
+                                <td colSpan={6} className="py-6 text-slate-500">
                                   No hay módulos para mostrar.
                                 </td>
                               </tr>

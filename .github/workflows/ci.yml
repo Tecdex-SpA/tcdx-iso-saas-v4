@@ -7,7 +7,7 @@ jobs:
   validate:
     name: Validate backend and frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -45,6 +45,9 @@ jobs:
       - name: Phase 1 disposable PostgreSQL migration
         run: npm run phase1:migration-check
 
+      - name: Phase 1 PostgreSQL integration
+        run: npm run phase1:postgres-integration
+
       - name: Phase 1 permissions
         run: npm run phase1:permissions-check
 
@@ -60,6 +63,13 @@ jobs:
 
       - name: Discover Phase 1 Playwright tests
         run: npm run phase1:e2e:discovery
+
+      - name: Validate Phase 1 Playwright contracts
+        run: node scripts/phase1/check-phase1-e2e-contracts.js
+
+      - name: Frontend Phase 1 UI contracts
+        working-directory: frontend
+        run: npm test
 
       - name: Frontend lint
         working-directory: frontend

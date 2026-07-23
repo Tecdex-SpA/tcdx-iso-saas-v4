@@ -24,12 +24,14 @@
     "phase0:vm-check": "npm run phase0:e2e && npm run phase0:tenant-runtime && npm run phase0:files-runtime && npm run phase0:search-runtime && npm run phase0:export-runtime && npm run phase0:ai-runtime && npm run phase0:jobs-runtime && npm run phase0:observability-check",
     "phase1:contracts:check": "node scripts/phase1/check-phase1-contracts.js",
     "phase1:migration-check": "bash scripts/phase1/check-phase1-migration.sh",
+    "phase1:postgres-integration": "PHASE1_RUN_INTEGRATION=true bash scripts/phase1/check-phase1-migration.sh",
     "phase1:permissions-check": "node scripts/phase1/check-phase1-security.js permissions",
     "phase1:tenant-check": "node scripts/phase1/check-phase1-security.js tenant",
-    "phase1:scripts-check": "bash -n scripts/phase1/check-phase1-migration.sh && node --check scripts/phase1/check-phase1-contracts.js && node --check scripts/phase1/check-phase1-security.js && node --check scripts/phase1/write-phase1-migration-artifact.js",
+    "phase1:scripts-check": "bash -n scripts/phase1/check-phase1-migration.sh && node --check scripts/phase1/check-phase1-contracts.js && node --check scripts/phase1/check-phase1-security.js && node --check scripts/phase1/write-phase1-migration-artifact.js && node --check scripts/phase1/bootstrap-tenant-grc.js && node --check scripts/phase1/seed-phase1-qa.js && node --check scripts/phase1/cleanup-phase1-qa.js && node --check scripts/phase1/run-phase1-runtime-local.js && node --check scripts/phase1/check-phase1-e2e-contracts.js && node --check scripts/phase1/prepare-phase1-runtime-qa.js && node --check scripts/phase1/write-phase1-runtime-evidence.js",
     "phase1:e2e:discovery": "npm --prefix frontend run test:e2e:phase1:list",
     "phase1:e2e": "npm --prefix frontend run test:e2e:phase1",
-    "phase1:check": "npm run phase1:contracts:check && npm run phase1:migration-check && npm run phase1:permissions-check && npm run phase1:tenant-check && npm run phase1:scripts-check && npm --prefix backend run check && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run check && npm --prefix frontend run build && npm run phase1:e2e:discovery && git diff --check",
+    "phase1:check": "npm run phase1:contracts:check && npm run phase1:migration-check && npm run phase1:postgres-integration && npm run phase1:permissions-check && npm run phase1:tenant-check && npm run phase1:scripts-check && npm --prefix backend run check && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run check && npm --prefix frontend run build && npm --prefix frontend test --if-present && npm run phase1:e2e:discovery && node scripts/phase1/check-phase1-e2e-contracts.js && git diff --check",
+    "phase1:runtime-local": "node scripts/phase1/run-phase1-runtime-local.js",
     "phase1:runtime-check": "npm run phase1:contracts:check && npm run phase1:permissions-check && npm run phase1:tenant-check && npm run phase1:e2e"
   }
 }

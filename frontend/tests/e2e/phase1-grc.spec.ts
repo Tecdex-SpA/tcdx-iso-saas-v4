@@ -5,7 +5,8 @@ const requiredEnvironment = [
   'E2E_RESTRICTED_EMAIL', 'E2E_RESTRICTED_PASSWORD',
   'E2E_TENANT_A_EMAIL', 'E2E_TENANT_A_PASSWORD', 'E2E_TENANT_A_ID',
   'E2E_TENANT_B_EMAIL', 'E2E_TENANT_B_PASSWORD', 'E2E_TENANT_B_ID',
-  'E2E_REVIEWER_EMAIL', 'E2E_REVIEWER_PASSWORD', 'E2E_AUDIT_ID',
+  'E2E_REVIEWER_EMAIL', 'E2E_REVIEWER_PASSWORD', 'E2E_REVIEWER_ID',
+  'E2E_AUDIT_ID', 'E2E_EVIDENCE_ID', 'E2E_CONTROL_ID',
 ];
 const apiBaseUrl = String(process.env.API_BASE_URL || 'http://phase1.invalid').replace(/\/$/, '');
 
@@ -53,6 +54,60 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     expect(response.status()).toBe(200);
     const body = await response.json();
     expect(body.data.module.is_enabled).toBe(true);
+  });
+
+  test('bootstrap explícito es confirmado, idempotente y deja el tenant listo', async () => {
+    const before = await api.get('/api/grc/bootstrap/status', {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(before.status()).toBe(200);
+    const idempotencyKey = `phase1-bootstrap-${nonce}`;
+    const options = {
+      headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': idempotencyKey },
+      data: { confirmation: 'INITIALIZE_GRC' },
+    };
+    const first = await api.post('/api/grc/bootstrap', options);
+    const replay = await api.post('/api/grc/bootstrap', options);
+    expect(first.status()).toBe(200);
+    expect(replay.status()).toBe(200);
+    const initialized = (await first.json()).data;
+    const reused = (await replay.json()).data;
+    expect(initialized.ready).toBe(true);
+    expect(reused).toEqual(initialized);
+    const validated = await api.post('/api/grc/bootstrap/validate', {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(validated.status()).toBe(200);
+    expect((await validated.json()).data.ready).toBe(true);
+  });
+
+  test('errores visibles conservan código cuando falta confirmación de bootstrap', async () => {
+    const response = await api.post('/api/grc/bootstrap', {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Idempotency-Key': `phase1-bootstrap-invalid-${nonce}`,
+      },
+      data: { confirmation: 'INVALID' },
+    });
+    expect(response.status()).toBe(422);
+    const body = await response.json();
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe('GRC_BOOTSTRAP_CONFIRMATION_REQUIRED');
+    expect(body.error).toBeTruthy();
+  });
+
+  test('administración SaaS y cache de módulos reflejan grc_phase1_core', async () => {
+    const first = await api.get('/api/me/modules', {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const second = await api.get('/api/me/modules', {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(first.status()).toBe(200);
+    expect(second.status()).toBe(200);
+    expect(first.headers()['cache-control']).toContain('no-store');
+    const moduleMap = (await second.json()).module_map;
+    expect(moduleMap.grc_phase1_core.is_enabled).toBe(true);
   });
 
   test('administrador crea workflow válido', async () => {
@@ -257,6 +312,91 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     expect(response.status()).toBe(200);
     const operations = (await response.json()).data.counters.map((item: { operation: string }) => item.operation);
     expect(operations).toEqual(expect.arrayContaining(['scheduler', 'approval', 'audit_review', 'export']));
+  });
+
+  test('persistencia web tras recarga conserva inicialización operacional', async ({ page }) => {
+    await installSession(page, adminToken);
+    await page.goto('/configuracion', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Inicialización operacional GRC')).toBeVisible();
+    await expect(page.getByText('Listo', { exact: true })).toBeVisible();
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Listo', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Revalidar configuración' })).toBeEnabled();
+  });
+
+  test('instancia operada desde la web persiste estado e historial', async ({ page }) => {
+    await installSession(page, adminToken);
+    await page.goto('/configuracion', { waitUntil: 'domcontentloaded' });
+    await page.getByLabel('Workflow').selectOption({ index: 1 });
+    await page.getByLabel('ID de entidad').fill(crypto.randomUUID());
+    await page.getByRole('button', { name: 'Crear instancia' }).click();
+    await expect(page.getByText('Instancia creada y persistida.')).toBeVisible();
+    await page.getByLabel('Transición').selectOption({ index: 1 });
+    await page.getByLabel('Comentario').fill('Transición ejecutada desde Playwright');
+    await page.getByRole('button', { name: 'Ejecutar transición' }).click();
+    await expect(page.getByText('Transición registrada y vista actualizada.')).toBeVisible();
+    await expect(page.getByText(/Historial: [2-9]/)).toBeVisible();
+  });
+
+  test('workflow editado desde la web valida, versiona y muestra historial', async ({ page }) => {
+    await installSession(page, adminToken);
+    await page.goto('/configuracion', { waitUntil: 'domcontentloaded' });
+    const row = page.getByText(`E2E evidence ${nonce}`).locator('..').locator('..');
+    await row.getByRole('button', { name: 'Editar borrador' }).click();
+    const editor = page.getByText('Crear borrador').locator('..').locator('..');
+    await editor.getByLabel('Nombre').fill(`E2E evidence revised ${nonce}`);
+    await editor.getByRole('button', { name: 'Validar' }).click();
+    await expect(page.getByText('Configuración de workflow válida.')).toBeVisible();
+    await editor.getByRole('button', { name: 'Guardar borrador' }).click();
+    await expect(page.getByText('Borrador validado y guardado.')).toBeVisible();
+    const revised = page.getByText(`E2E evidence revised ${nonce}`).locator('..').locator('..');
+    await revised.getByRole('button', { name: 'Publicar' }).click();
+    await expect(page.getByText('Versión de workflow publicada.')).toBeVisible();
+    await revised.getByRole('button', { name: 'Historial' }).click();
+    await expect(page.getByText('v2 · published')).toBeVisible();
+  });
+
+  test('evidencia operada desde la web se entrega, versiona y rechaza con causa', async ({ page }) => {
+    await installSession(page, adminToken);
+    await page.goto('/evidencias', { waitUntil: 'domcontentloaded' });
+    const panel = page.getByText('Entrega, revisión y vínculos').locator('..').locator('..');
+    await panel.getByLabel('Solicitud').selectOption({ index: 1 });
+    await panel.getByLabel('ID de evidencia existente').fill(String(process.env.E2E_EVIDENCE_ID));
+    await panel.getByRole('button', { name: 'Enviar evidencia' }).click();
+    await expect(panel.getByText('Evidencia enviada a revisión.')).toBeVisible();
+    await panel.getByLabel('Causa u observación').fill('Corrección solicitada desde recorrido web');
+    await panel.getByRole('button', { name: 'Rechazar' }).click();
+    await expect(panel.getByText('Evidencia rechazada con causa.')).toBeVisible();
+    await panel.getByRole('button', { name: 'Nueva versión' }).click();
+    await expect(panel.getByText('Nueva versión registrada.')).toBeVisible();
+  });
+
+  test('mapping operado desde la web conserva revisión tenant', async ({ page }) => {
+    await installSession(page, adminToken);
+    await page.goto('/controles', { waitUntil: 'domcontentloaded' });
+    const panel = page.getByText('Nuevo mapping').locator('..').locator('..');
+    await panel.getByLabel('Requisito').selectOption({ index: 2 });
+    await panel.getByLabel('ID control tenant').fill(String(process.env.E2E_CONTROL_ID));
+    await panel.getByLabel('Justificación').fill('Cobertura verificada desde recorrido web');
+    await panel.getByRole('button', { name: 'Crear mapping' }).click();
+    await expect(page.getByText('Mapping creado y enviado a revisión.')).toBeVisible();
+  });
+
+  test('auditoría operada desde la web registra equipo, programa y muestra', async ({ page }) => {
+    await installSession(page, adminToken);
+    await page.goto('/auditorias', { waitUntil: 'domcontentloaded' });
+    const panel = page.getByText('Ejecución operacional de auditoría').locator('..').locator('..');
+    await panel.getByLabel('ID de auditoría operacional').fill(String(process.env.E2E_AUDIT_ID));
+    await panel.getByRole('button', { name: 'Cargar auditoría' }).click();
+    await expect(panel.getByText('Workspace de auditoría actualizado.')).toBeVisible();
+    await panel.getByLabel('ID usuario del equipo').fill(String(process.env.E2E_REVIEWER_ID));
+    await panel.getByLabel('Rol del equipo').selectOption('supervisor');
+    await panel.getByRole('button', { name: 'Asignar y declarar' }).click();
+    await expect(panel.getByText('Miembro e independencia registrados.')).toBeVisible();
+    await panel.getByRole('button', { name: 'Crear programa' }).click();
+    await expect(panel.getByText('Programa versionado creado.')).toBeVisible();
+    await panel.getByRole('button', { name: 'Crear muestra' }).click();
+    await expect(panel.getByText('Plan de muestra creado.')).toBeVisible();
   });
 
   for (const route of ['/dashboard', '/evidencias', '/auditorias', '/controles', '/configuracion']) {

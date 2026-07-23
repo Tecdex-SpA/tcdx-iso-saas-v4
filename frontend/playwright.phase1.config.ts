@@ -12,7 +12,7 @@ export default defineConfig({
   reporter: [
     ['line'],
     ['json', { outputFile: '../artifacts/fase-1/e2e-results.json' }],
-    ['html', { outputFolder: 'playwright-report-phase1', open: 'never' }],
+    ['html', { outputFolder: '../artifacts/fase-1/phase1-playwright-report', open: 'never' }],
   ],
   use: {
     baseURL: process.env.WEB_BASE_URL,

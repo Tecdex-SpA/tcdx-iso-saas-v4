@@ -68,6 +68,7 @@ function buildModuleMap(rows) {
 // Para dealer: no aplica módulos tenant directos.
 // =====================================================
 router.get('/modules', auth, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const userId = getUserId(req.user);
     const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
