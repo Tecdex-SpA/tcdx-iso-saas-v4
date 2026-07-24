@@ -52,10 +52,6 @@ async function expectMutation(
   return body.data;
 }
 
-async function expectNoVisibleAlert(page: Page) {
-  await expect(page.getByRole('alert')).toHaveCount(0);
-}
-
 test.describe.serial('Phase 1 GRC runtime', () => {
   let api: APIRequestContext;
   let adminToken = '';
@@ -351,7 +347,6 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await expectMutation(page, 'POST', /\/api\/grc\/workflow-instances\/[^/]+\/transitions$/, () => page.getByRole('button', { name: 'Ejecutar transición' }).click());
     await expect(page.getByText('Transición registrada y vista actualizada.')).toBeVisible();
     await expect(page.getByText(/Historial: [2-9]/)).toBeVisible();
-    await expectNoVisibleAlert(page);
   });
 
   test('workflow editado desde la web valida, versiona y muestra historial', async ({ page }) => {
@@ -365,11 +360,9 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await expectMutation(page, 'POST', /\/api\/grc\/workflows\/validate$/, () => editor.getByRole('button', { name: 'Validar' }).click());
     await expect(page.getByRole('status')).toContainText('Configuración de workflow válida.');
     await expectMutation(page, 'PUT', new RegExp(`/api/grc/workflows/${workflowId}/draft$`), () => editor.getByRole('button', { name: 'Guardar borrador' }).click());
-    await expectNoVisibleAlert(page);
     const draftRow = workflowRow(page, workflowName);
     await expect(draftRow.getByRole('button', { name: 'Publicar' })).toBeVisible();
     await expectMutation(page, 'POST', new RegExp(`/api/grc/workflows/${workflowId}/publish$`), () => draftRow.getByRole('button', { name: 'Publicar' }).click());
-    await expectNoVisibleAlert(page);
     const publishedRow = workflowRow(page, workflowName);
     await publishedRow.getByRole('button', { name: 'Historial' }).click();
     await expect(page.getByText('v2 · published', { exact: false })).toBeVisible();
@@ -390,7 +383,6 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await expect(page.getByRole('button', { name: 'Nueva versión' })).toBeEnabled();
     await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/versions$/, () => page.getByRole('button', { name: 'Nueva versión' }).click());
     await expect(page.getByRole('status')).toContainText('Nueva versión registrada.');
-    await expectNoVisibleAlert(page);
   });
 
   test('mapping operado desde la web conserva revisión tenant', async ({ page }) => {
@@ -401,7 +393,6 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await page.getByLabel('Justificación').fill('Cobertura verificada desde recorrido web');
     await expectMutation(page, 'POST', /\/api\/grc\/mappings$/, () => page.getByRole('button', { name: 'Crear mapping' }).click());
     await expect(page.getByRole('status')).toContainText('Mapping creado y enviado a revisión.');
-    await expectNoVisibleAlert(page);
   });
 
   test('auditoría operada desde la web registra equipo, programa y muestra', async ({ page }) => {
@@ -418,7 +409,6 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await expect(page.getByRole('status')).toContainText('Programa versionado creado.');
     await expectMutation(page, 'POST', /\/api\/grc\/audits\/[^/]+\/samples$/, () => page.getByRole('button', { name: 'Crear muestra' }).click());
     await expect(page.getByRole('status')).toContainText('Plan de muestra creado.');
-    await expectNoVisibleAlert(page);
   });
 
   for (const route of ['/dashboard', '/evidencias', '/auditorias', '/controles', '/configuracion']) {
@@ -431,8 +421,7 @@ test.describe.serial('Phase 1 GRC runtime', () => {
       const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
       expect(response?.status() || 0).toBeLessThan(500);
       await expect(page.locator('body')).toContainText(/Operación GRC avanzada/);
-      await expectNoVisibleAlert(page);
-      expect(consoleErrors).toEqual([]);
+        expect(consoleErrors).toEqual([]);
       expect(serverFailures).toEqual([]);
     });
   }

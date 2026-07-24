@@ -785,7 +785,7 @@ function WorkflowPanel({ rows, canManage, disabled, onCreate, onSave, onValidate
         { code: 'rejected', name: 'Rechazado', state_type: 'rejected' },
       ],
       transitions: [
-        { code: 'submit', name: 'Enviar a revisión', from_state: 'draft', to_state: 'under_review', required_permission: 'workflow.transition', roles: ['admin', 'tenant_admin', 'auditor', 'operativo'] },
+        { code: 'submit', name: 'Enviar a revisión', from_state: 'draft', to_state: 'under_review', required_permission: 'workflow.transition', roles: ['admin', 'tenant_admin', 'auditor', 'control_owner'] },
         { code: 'approve', name: 'Aprobar', from_state: 'under_review', to_state: 'approved', required_permission: 'workflow.transition', roles: ['admin', 'tenant_admin', 'auditor'], preconditions: ['comment_required'] },
         { code: 'reject', name: 'Rechazar', from_state: 'under_review', to_state: 'rejected', required_permission: 'workflow.transition', roles: ['admin', 'tenant_admin', 'auditor'], preconditions: ['comment_required'] },
       ],

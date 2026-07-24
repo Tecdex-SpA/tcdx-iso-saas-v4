@@ -228,6 +228,35 @@ function createGrcService(pool, asyncJobs) {
         [tenantId, assertUuid(definitionId)]
       )).rows[0];
       if (!definition) throw new GrcError('WORKFLOW_DEFINITION_NOT_FOUND', 'Workflow no encontrado.', 404);
+
+      const requestedRoles = [
+        ...new Set(
+          body.transitions.flatMap(transition => transition.roles || [])
+        ),
+      ];
+
+      if (requestedRoles.length) {
+        const validRoles = (await client.query(
+          `SELECT role_key
+           FROM app_roles
+           WHERE role_key = ANY($1::text[])
+             AND is_active = true`,
+          [requestedRoles]
+        )).rows.map(row => row.role_key);
+
+        const invalidRoles = requestedRoles.filter(
+          role => !validRoles.includes(role)
+        );
+
+        if (invalidRoles.length) {
+          throw new GrcError(
+            'WORKFLOW_INVALID_ROLES',
+            `Los roles de transición no son válidos o están inactivos: ${invalidRoles.join(', ')}.`,
+            422
+          );
+        }
+      }
+
       let version = (await client.query(
         `SELECT * FROM grc_workflow_versions
          WHERE tenant_id = $1::uuid AND definition_id = $2::uuid AND status = 'draft'
@@ -236,11 +265,26 @@ function createGrcService(pool, asyncJobs) {
       )).rows[0];
       if (version) {
         await client.query(
-          `DELETE FROM grc_workflow_transitions WHERE tenant_id = $1::uuid AND version_id = $2::uuid`,
+          `DELETE FROM grc_workflow_transition_roles
+           WHERE tenant_id = $1::uuid
+             AND transition_id IN (
+               SELECT id
+               FROM grc_workflow_transitions
+               WHERE tenant_id = $1::uuid
+                 AND version_id = $2::uuid
+             )`,
           [tenantId, version.id]
         );
         await client.query(
-          `DELETE FROM grc_workflow_states WHERE tenant_id = $1::uuid AND version_id = $2::uuid`,
+          `DELETE FROM grc_workflow_transitions
+           WHERE tenant_id = $1::uuid
+             AND version_id = $2::uuid`,
+          [tenantId, version.id]
+        );
+        await client.query(
+          `DELETE FROM grc_workflow_states
+           WHERE tenant_id = $1::uuid
+             AND version_id = $2::uuid`,
           [tenantId, version.id]
         );
         version = (await client.query(
