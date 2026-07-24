@@ -1,4 +1,4 @@
-import { expect, request as createRequest, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, request as createRequest, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 const requiredEnvironment = [
   'WEB_BASE_URL', 'API_BASE_URL', 'E2E_ADMIN_EMAIL', 'E2E_ADMIN_PASSWORD',
@@ -21,6 +21,16 @@ async function installSession(page: Page, token: string) {
     localStorage.setItem('token', value);
     localStorage.setItem('authToken', value);
   }, token);
+}
+
+async function selectFirstAvailableOption(select: Locator) {
+  const value = await select.locator('option:not([value=""])').first().getAttribute('value');
+  expect(value, 'La lista debe contener al menos una opción operable').toBeTruthy();
+  await select.selectOption(String(value));
+}
+
+function workflowRow(page: Page, name: string) {
+  return page.getByTitle(name, { exact: true }).locator('xpath=ancestor::div[.//button][1]');
 }
 
 test.describe.serial('Phase 1 GRC runtime', () => {
@@ -334,11 +344,11 @@ test.describe.serial('Phase 1 GRC runtime', () => {
   test('instancia operada desde la web persiste estado e historial', async ({ page }) => {
     await installSession(page, adminToken);
     await page.goto('/configuracion', { waitUntil: 'domcontentloaded' });
-    await page.getByLabel('Workflow').selectOption({ index: 1 });
+    await page.getByLabel('Workflow').selectOption({ label: `E2E evidence ${nonce}` });
     await page.getByLabel('ID de entidad').fill(crypto.randomUUID());
     await page.getByRole('button', { name: 'Crear instancia' }).click();
     await expect(page.getByText('Instancia creada y persistida.')).toBeVisible();
-    await page.getByLabel('Transición').selectOption({ index: 1 });
+    await selectFirstAvailableOption(page.getByLabel('Transición'));
     await page.getByLabel('Comentario').fill('Transición ejecutada desde Playwright');
     await page.getByRole('button', { name: 'Ejecutar transición' }).click();
     await expect(page.getByText('Transición registrada y vista actualizada.')).toBeVisible();
@@ -348,65 +358,64 @@ test.describe.serial('Phase 1 GRC runtime', () => {
   test('workflow editado desde la web valida, versiona y muestra historial', async ({ page }) => {
     await installSession(page, adminToken);
     await page.goto('/configuracion', { waitUntil: 'domcontentloaded' });
-    const row = page.getByText(`E2E evidence ${nonce}`).locator('..').locator('..');
-    await row.getByRole('button', { name: 'Editar borrador' }).click();
+    const workflowName = `E2E evidence ${nonce}`;
+    await workflowRow(page, workflowName).getByRole('button', { name: 'Editar borrador' }).click();
     const editor = page.locator('form').filter({
       has: page.getByRole('button', { name: 'Guardar borrador' }),
     });
     await expect(editor).toBeVisible();
-    await editor.getByLabel('Nombre').fill(`E2E evidence revised ${nonce}`);
+    await expect(editor.getByLabel('Nombre')).toHaveValue(workflowName);
     await editor.getByRole('button', { name: 'Validar' }).click();
-    await expect(page.getByText('Configuración de workflow válida.')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Configuración de workflow válida.');
     await editor.getByRole('button', { name: 'Guardar borrador' }).click();
-    await expect(page.getByText('Borrador validado y guardado.')).toBeVisible();
-    const revised = page.getByText(`E2E evidence revised ${nonce}`).locator('..').locator('..');
-    await revised.getByRole('button', { name: 'Publicar' }).click();
-    await expect(page.getByText('Versión de workflow publicada.')).toBeVisible();
-    await revised.getByRole('button', { name: 'Historial' }).click();
-    await expect(page.getByText('v2 · published')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Borrador validado y guardado.');
+    const draftRow = workflowRow(page, workflowName);
+    await expect(draftRow.getByRole('button', { name: 'Publicar' })).toBeVisible();
+    await draftRow.getByRole('button', { name: 'Publicar' }).click();
+    await expect(page.getByRole('status')).toContainText('Versión de workflow publicada.');
+    const publishedRow = workflowRow(page, workflowName);
+    await publishedRow.getByRole('button', { name: 'Historial' }).click();
+    await expect(page.getByText('v2 · published', { exact: false })).toBeVisible();
   });
 
   test('evidencia operada desde la web se entrega, versiona y rechaza con causa', async ({ page }) => {
     await installSession(page, adminToken);
     await page.goto('/evidencias', { waitUntil: 'domcontentloaded' });
-    const panel = page.getByText('Entrega, revisión y vínculos').locator('..').locator('..');
-    await panel.getByLabel('Solicitud').selectOption({ index: 1 });
-    await panel.getByLabel('ID de evidencia existente').fill(String(process.env.E2E_EVIDENCE_ID));
-    await panel.getByRole('button', { name: 'Enviar evidencia' }).click();
-    await expect(panel.getByText('Evidencia enviada a revisión.')).toBeVisible();
-    await panel.getByLabel('Causa u observación').fill('Corrección solicitada desde recorrido web');
-    await panel.getByRole('button', { name: 'Rechazar' }).click();
-    await expect(panel.getByText('Evidencia rechazada con causa.')).toBeVisible();
-    await panel.getByRole('button', { name: 'Nueva versión' }).click();
-    await expect(panel.getByText('Nueva versión registrada.')).toBeVisible();
+    await page.getByLabel('Solicitud').selectOption({ label: `Solicitud E2E ${nonce}` });
+    await page.getByLabel('ID de evidencia existente').fill(String(process.env.E2E_EVIDENCE_ID));
+    await page.getByRole('button', { name: 'Enviar evidencia' }).click();
+    await expect(page.getByRole('status')).toContainText('Evidencia enviada a revisión.');
+    await page.getByLabel('Causa u observación').fill('Corrección solicitada desde recorrido web');
+    await page.getByRole('button', { name: 'Rechazar' }).click();
+    await expect(page.getByRole('status')).toContainText('Evidencia rechazada con causa.');
+    await page.getByRole('button', { name: 'Nueva versión' }).click();
+    await expect(page.getByRole('status')).toContainText('Nueva versión registrada.');
   });
 
   test('mapping operado desde la web conserva revisión tenant', async ({ page }) => {
     await installSession(page, adminToken);
     await page.goto('/controles', { waitUntil: 'domcontentloaded' });
-    const panel = page.getByText('Nuevo mapping').locator('..').locator('..');
-    await panel.getByLabel('Requisito').selectOption({ index: 2 });
-    await panel.getByLabel('ID control tenant').fill(String(process.env.E2E_CONTROL_ID));
-    await panel.getByLabel('Justificación').fill('Cobertura verificada desde recorrido web');
-    await panel.getByRole('button', { name: 'Crear mapping' }).click();
-    await expect(page.getByText('Mapping creado y enviado a revisión.')).toBeVisible();
+    await selectFirstAvailableOption(page.getByLabel('Requisito'));
+    await page.getByLabel('ID control tenant').fill(String(process.env.E2E_CONTROL_ID));
+    await page.getByLabel('Justificación').fill('Cobertura verificada desde recorrido web');
+    await page.getByRole('button', { name: 'Crear mapping' }).click();
+    await expect(page.getByRole('status')).toContainText('Mapping creado y enviado a revisión.');
   });
 
   test('auditoría operada desde la web registra equipo, programa y muestra', async ({ page }) => {
     await installSession(page, adminToken);
     await page.goto('/auditorias', { waitUntil: 'domcontentloaded' });
-    const panel = page.getByText('Ejecución operacional de auditoría').locator('..').locator('..');
-    await panel.getByLabel('ID de auditoría operacional').fill(String(process.env.E2E_AUDIT_ID));
-    await panel.getByRole('button', { name: 'Cargar auditoría' }).click();
-    await expect(panel.getByText('Workspace de auditoría actualizado.')).toBeVisible();
-    await panel.getByLabel('ID usuario del equipo').fill(String(process.env.E2E_REVIEWER_ID));
-    await panel.getByLabel('Rol del equipo').selectOption('supervisor');
-    await panel.getByRole('button', { name: 'Asignar y declarar' }).click();
-    await expect(panel.getByText('Miembro e independencia registrados.')).toBeVisible();
-    await panel.getByRole('button', { name: 'Crear programa' }).click();
-    await expect(panel.getByText('Programa versionado creado.')).toBeVisible();
-    await panel.getByRole('button', { name: 'Crear muestra' }).click();
-    await expect(panel.getByText('Plan de muestra creado.')).toBeVisible();
+    await page.getByLabel('ID de auditoría operacional').fill(String(process.env.E2E_AUDIT_ID));
+    await page.getByRole('button', { name: 'Cargar auditoría' }).click();
+    await expect(page.getByRole('status')).toContainText('Workspace de auditoría actualizado.');
+    await page.getByLabel('ID usuario del equipo').fill(String(process.env.E2E_REVIEWER_ID));
+    await page.getByLabel('Rol del equipo').selectOption('supervisor');
+    await page.getByRole('button', { name: 'Asignar y declarar' }).click();
+    await expect(page.getByRole('status')).toContainText('Miembro e independencia registrados.');
+    await page.getByRole('button', { name: 'Crear programa' }).click();
+    await expect(page.getByRole('status')).toContainText('Programa versionado creado.');
+    await page.getByRole('button', { name: 'Crear muestra' }).click();
+    await expect(page.getByRole('status')).toContainText('Plan de muestra creado.');
   });
 
   for (const route of ['/dashboard', '/evidencias', '/auditorias', '/controles', '/configuracion']) {
