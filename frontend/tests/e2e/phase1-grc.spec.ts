@@ -8,6 +8,7 @@ const requiredEnvironment = [
   'E2E_REVIEWER_EMAIL', 'E2E_REVIEWER_PASSWORD', 'E2E_REVIEWER_ID',
   'E2E_AUDIT_ID', 'E2E_EVIDENCE_ID', 'E2E_CONTROL_ID',
 ];
+
 const apiBaseUrl = String(process.env.API_BASE_URL || 'http://phase1.invalid').replace(/\/$/, '');
 
 async function login(api: APIRequestContext, email: string, password: string) {
@@ -31,6 +32,28 @@ async function selectFirstAvailableOption(select: Locator) {
 
 function workflowRow(page: Page, name: string) {
   return page.getByTitle(name, { exact: true }).locator('xpath=ancestor::div[.//button][1]');
+}
+
+async function expectMutation(
+  page: Page,
+  method: string,
+  pathname: RegExp,
+  action: () => Promise<void>,
+) {
+  const responsePromise = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return response.request().method() === method && pathname.test(url.pathname);
+  });
+  await action();
+  const response = await responsePromise;
+  const body = await response.json().catch(() => ({}));
+  expect(response.status(), `HTTP ${response.status()} ${response.request().method()} ${response.url()} ${JSON.stringify(body)}`).toBe(200);
+  expect(body.ok, `Respuesta inválida ${JSON.stringify(body)}`).toBe(true);
+  return body.data;
+}
+
+async function expectNoVisibleAlert(page: Page) {
+  await expect(page.getByRole('alert')).toHaveCount(0);
 }
 
 test.describe.serial('Phase 1 GRC runtime', () => {
@@ -62,18 +85,14 @@ test.describe.serial('Phase 1 GRC runtime', () => {
   test('feature flag y permisos están activos en QA', async () => {
     const response = await api.get('/api/grc/meta', { headers: { Authorization: `Bearer ${adminToken}` } });
     expect(response.status()).toBe(200);
-    const body = await response.json();
-    expect(body.data.module.is_enabled).toBe(true);
+    expect((await response.json()).data.module.is_enabled).toBe(true);
   });
 
   test('bootstrap explícito es confirmado, idempotente y deja el tenant listo', async () => {
-    const before = await api.get('/api/grc/bootstrap/status', {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
+    const before = await api.get('/api/grc/bootstrap/status', { headers: { Authorization: `Bearer ${adminToken}` } });
     expect(before.status()).toBe(200);
-    const idempotencyKey = `phase1-bootstrap-${nonce}`;
     const options = {
-      headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': idempotencyKey },
+      headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': `phase1-bootstrap-${nonce}` },
       data: { confirmation: 'INITIALIZE_GRC' },
     };
     const first = await api.post('/api/grc/bootstrap', options);
@@ -81,25 +100,16 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     expect(first.status()).toBe(200);
     expect(replay.status()).toBe(200);
     const initialized = (await first.json()).data;
-    const reused = (await replay.json()).data;
     expect(initialized.ready).toBe(true);
-    expect(reused).toEqual({
-      ...initialized,
-      idempotent_replay: true,
-    });
-    const validated = await api.post('/api/grc/bootstrap/validate', {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
+    expect((await replay.json()).data).toEqual({ ...initialized, idempotent_replay: true });
+    const validated = await api.post('/api/grc/bootstrap/validate', { headers: { Authorization: `Bearer ${adminToken}` } });
     expect(validated.status()).toBe(200);
     expect((await validated.json()).data.ready).toBe(true);
   });
 
   test('errores visibles conservan código cuando falta confirmación de bootstrap', async () => {
     const response = await api.post('/api/grc/bootstrap', {
-      headers: {
-        Authorization: `Bearer ${adminToken}`,
-        'Idempotency-Key': `phase1-bootstrap-invalid-${nonce}`,
-      },
+      headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': `phase1-bootstrap-invalid-${nonce}` },
       data: { confirmation: 'INVALID' },
     });
     expect(response.status()).toBe(422);
@@ -110,24 +120,21 @@ test.describe.serial('Phase 1 GRC runtime', () => {
   });
 
   test('administración SaaS y cache de módulos reflejan grc_phase1_core', async () => {
-    const first = await api.get('/api/me/modules', {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
-    const second = await api.get('/api/me/modules', {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
+    const first = await api.get('/api/me/modules', { headers: { Authorization: `Bearer ${adminToken}` } });
+    const second = await api.get('/api/me/modules', { headers: { Authorization: `Bearer ${adminToken}` } });
     expect(first.status()).toBe(200);
     expect(second.status()).toBe(200);
     expect(first.headers()['cache-control']).toContain('no-store');
-    const moduleMap = (await second.json()).module_map;
-    expect(moduleMap.grc_phase1_core.is_enabled).toBe(true);
+    expect((await second.json()).module_map.grc_phase1_core.is_enabled).toBe(true);
   });
 
   test('administrador crea workflow válido', async () => {
     const response = await api.post('/api/grc/workflows', {
       headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': `phase1-workflow-${nonce}` },
       data: {
-        code: `e2e-evidence-${nonce}`, name: `E2E evidence ${nonce}`, entity_type: 'evidence',
+        code: `e2e-evidence-${nonce}`,
+        name: `E2E evidence ${nonce}`,
+        entity_type: 'evidence',
         states: [
           { code: 'draft', name: 'Borrador', state_type: 'initial' },
           { code: 'review', name: 'Revisión', state_type: 'active' },
@@ -152,24 +159,17 @@ test.describe.serial('Phase 1 GRC runtime', () => {
   });
 
   test('instancia conserva versión y valida transición/precondición', async () => {
-    const entityId = crypto.randomUUID();
     const start = await api.post('/api/grc/workflow-instances', {
       headers: { Authorization: `Bearer ${adminToken}` },
-      data: { definition_id: workflowId, entity_type: 'evidence', entity_id: entityId },
+      data: { definition_id: workflowId, entity_type: 'evidence', entity_id: crypto.randomUUID() },
     });
     expect(start.status()).toBe(200);
     instanceId = (await start.json()).data.id;
-    const submit = await api.post(`/api/grc/workflow-instances/${instanceId}/transitions`, {
-      headers: { Authorization: `Bearer ${adminToken}` }, data: { transition_code: 'submit' },
-    });
+    const submit = await api.post(`/api/grc/workflow-instances/${instanceId}/transitions`, { headers: { Authorization: `Bearer ${adminToken}` }, data: { transition_code: 'submit' } });
     expect(submit.status()).toBe(200);
-    const missingComment = await api.post(`/api/grc/workflow-instances/${instanceId}/transitions`, {
-      headers: { Authorization: `Bearer ${adminToken}` }, data: { transition_code: 'approve' },
-    });
+    const missingComment = await api.post(`/api/grc/workflow-instances/${instanceId}/transitions`, { headers: { Authorization: `Bearer ${adminToken}` }, data: { transition_code: 'approve' } });
     expect(missingComment.status()).toBe(422);
-    const approve = await api.post(`/api/grc/workflow-instances/${instanceId}/transitions`, {
-      headers: { Authorization: `Bearer ${adminToken}` }, data: { transition_code: 'approve', comment: 'Revisión humana E2E' },
-    });
+    const approve = await api.post(`/api/grc/workflow-instances/${instanceId}/transitions`, { headers: { Authorization: `Bearer ${adminToken}` }, data: { transition_code: 'approve', comment: 'Revisión humana E2E' } });
     expect(approve.status()).toBe(200);
     expect((await approve.json()).data.status).toBe('completed');
   });
@@ -183,9 +183,7 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     const list = await api.get('/api/grc/evidence/requests', { headers: { Authorization: `Bearer ${adminToken}` } });
     expect(list.status()).toBe(200);
     expect((await list.json()).data.some((item: { title: string }) => item.title === `Solicitud E2E ${nonce}`)).toBe(true);
-    const invalidReview = await api.post(`/api/grc/evidence/submissions/${crypto.randomUUID()}/review`, {
-      headers: { Authorization: `Bearer ${adminToken}` }, data: { decision: 'rejected' },
-    });
+    const invalidReview = await api.post(`/api/grc/evidence/submissions/${crypto.randomUUID()}/review`, { headers: { Authorization: `Bearer ${adminToken}` }, data: { decision: 'rejected' } });
     expect(invalidReview.status()).toBe(422);
   });
 
@@ -214,11 +212,7 @@ test.describe.serial('Phase 1 GRC runtime', () => {
   test('auditoría avanzada crea plan y expone workspace', async () => {
     const plan = await api.post('/api/grc/audits/annual-plans', {
       headers: { Authorization: `Bearer ${adminToken}` },
-      data: {
-        year: new Date().getFullYear() + 1,
-        version: 1_000_000_000 + (Date.now() % 1_000_000_000),
-        prioritization_criteria: { method: 'risk_based', evidence: 'E2E' },
-      },
+      data: { year: new Date().getFullYear() + 1, version: 1_000_000_000 + (Date.now() % 1_000_000_000), prioritization_criteria: { method: 'risk_based', evidence: 'E2E' } },
     });
     expect(plan.status()).toBe(200);
     const workspace = await api.get('/api/grc/audits/workspace', { headers: { Authorization: `Bearer ${adminToken}` } });
@@ -228,9 +222,7 @@ test.describe.serial('Phase 1 GRC runtime', () => {
 
   test('Tenant A no consulta recursos de Tenant B', async () => {
     const tenantA = await login(api, String(process.env.E2E_TENANT_A_EMAIL), String(process.env.E2E_TENANT_A_PASSWORD));
-    const response = await api.get(`/api/grc/summary?tenant_id=${encodeURIComponent(String(process.env.E2E_TENANT_B_ID))}`, {
-      headers: { Authorization: `Bearer ${tenantA.token}` },
-    });
+    const response = await api.get(`/api/grc/summary?tenant_id=${encodeURIComponent(String(process.env.E2E_TENANT_B_ID))}`, { headers: { Authorization: `Bearer ${tenantA.token}` } });
     expect([403, 404]).toContain(response.status());
   });
 
@@ -238,7 +230,9 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     const workflow = await api.post('/api/grc/workflows', {
       headers: { Authorization: `Bearer ${adminToken}` },
       data: {
-        code: `e2e-quorum-${nonce}`, name: `E2E quorum ${nonce}`, entity_type: 'audit',
+        code: `e2e-quorum-${nonce}`,
+        name: `E2E quorum ${nonce}`,
+        entity_type: 'audit',
         states: [{ code: 'draft', name: 'Borrador', state_type: 'initial' }, { code: 'approved', name: 'Aprobado', state_type: 'terminal' }],
         transitions: [{ code: 'approve', name: 'Aprobar', from_state: 'draft', to_state: 'approved', required_permission: 'workflow.transition', approval_mode: 'quorum', quorum: 2, approval_config: { required_count: 2 } }],
       },
@@ -261,14 +255,18 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     const workflow = await api.post('/api/grc/workflows', {
       headers: { Authorization: `Bearer ${adminToken}` },
       data: {
-        code: `e2e-reject-${nonce}`, name: `E2E rejection ${nonce}`, entity_type: 'audit',
+        code: `e2e-reject-${nonce}`,
+        name: `E2E rejection ${nonce}`,
+        entity_type: 'audit',
         states: [{ code: 'draft', name: 'Borrador', state_type: 'initial' }, { code: 'approved', name: 'Aprobado', state_type: 'terminal' }],
         transitions: [{ code: 'approve', name: 'Aprobar', from_state: 'draft', to_state: 'approved', required_permission: 'workflow.transition', approval_mode: 'simple' }],
       },
     });
+    expect(workflow.status()).toBe(200);
     const definitionId = (await workflow.json()).data.definition.id;
-    await api.post(`/api/grc/workflows/${definitionId}/publish`, { headers: { Authorization: `Bearer ${adminToken}` } });
+    expect((await api.post(`/api/grc/workflows/${definitionId}/publish`, { headers: { Authorization: `Bearer ${adminToken}` } })).status()).toBe(200);
     const start = await api.post('/api/grc/workflow-instances', { headers: { Authorization: `Bearer ${adminToken}` }, data: { definition_id: definitionId, entity_type: 'audit', entity_id: crypto.randomUUID() } });
+    expect(start.status()).toBe(200);
     const id = (await start.json()).data.id;
     const invalid = await api.post(`/api/grc/workflow-instances/${id}/transitions`, { headers: { Authorization: `Bearer ${reviewerToken}` }, data: { transition_code: 'approve', decision: 'rejected' } });
     expect(invalid.status()).toBe(422);
@@ -346,13 +344,14 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await page.goto('/configuracion', { waitUntil: 'domcontentloaded' });
     await page.getByLabel('Workflow').selectOption({ label: `E2E evidence ${nonce}` });
     await page.getByLabel('ID de entidad').fill(crypto.randomUUID());
-    await page.getByRole('button', { name: 'Crear instancia' }).click();
+    await expectMutation(page, 'POST', /\/api\/grc\/workflow-instances$/, () => page.getByRole('button', { name: 'Crear instancia' }).click());
     await expect(page.getByText('Instancia creada y persistida.')).toBeVisible();
     await selectFirstAvailableOption(page.getByLabel('Transición'));
     await page.getByLabel('Comentario').fill('Transición ejecutada desde Playwright');
-    await page.getByRole('button', { name: 'Ejecutar transición' }).click();
+    await expectMutation(page, 'POST', /\/api\/grc\/workflow-instances\/[^/]+\/transitions$/, () => page.getByRole('button', { name: 'Ejecutar transición' }).click());
     await expect(page.getByText('Transición registrada y vista actualizada.')).toBeVisible();
     await expect(page.getByText(/Historial: [2-9]/)).toBeVisible();
+    await expectNoVisibleAlert(page);
   });
 
   test('workflow editado desde la web valida, versiona y muestra historial', async ({ page }) => {
@@ -360,19 +359,17 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await page.goto('/configuracion', { waitUntil: 'domcontentloaded' });
     const workflowName = `E2E evidence ${nonce}`;
     await workflowRow(page, workflowName).getByRole('button', { name: 'Editar borrador' }).click();
-    const editor = page.locator('form').filter({
-      has: page.getByRole('button', { name: 'Guardar borrador' }),
-    });
+    const editor = page.locator('form').filter({ has: page.getByRole('button', { name: 'Guardar borrador' }) });
     await expect(editor).toBeVisible();
     await expect(editor.getByLabel('Nombre')).toHaveValue(workflowName);
-    await editor.getByRole('button', { name: 'Validar' }).click();
+    await expectMutation(page, 'POST', /\/api\/grc\/workflows\/validate$/, () => editor.getByRole('button', { name: 'Validar' }).click());
     await expect(page.getByRole('status')).toContainText('Configuración de workflow válida.');
-    await editor.getByRole('button', { name: 'Guardar borrador' }).click();
-    await expect(page.getByRole('status')).toContainText('Borrador validado y guardado.');
+    await expectMutation(page, 'PUT', new RegExp(`/api/grc/workflows/${workflowId}/draft$`), () => editor.getByRole('button', { name: 'Guardar borrador' }).click());
+    await expectNoVisibleAlert(page);
     const draftRow = workflowRow(page, workflowName);
     await expect(draftRow.getByRole('button', { name: 'Publicar' })).toBeVisible();
-    await draftRow.getByRole('button', { name: 'Publicar' }).click();
-    await expect(page.getByRole('status')).toContainText('Versión de workflow publicada.');
+    await expectMutation(page, 'POST', new RegExp(`/api/grc/workflows/${workflowId}/publish$`), () => draftRow.getByRole('button', { name: 'Publicar' }).click());
+    await expectNoVisibleAlert(page);
     const publishedRow = workflowRow(page, workflowName);
     await publishedRow.getByRole('button', { name: 'Historial' }).click();
     await expect(page.getByText('v2 · published', { exact: false })).toBeVisible();
@@ -383,13 +380,17 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await page.goto('/evidencias', { waitUntil: 'domcontentloaded' });
     await page.getByLabel('Solicitud').selectOption({ label: `Solicitud E2E ${nonce}` });
     await page.getByLabel('ID de evidencia existente').fill(String(process.env.E2E_EVIDENCE_ID));
-    await page.getByRole('button', { name: 'Enviar evidencia' }).click();
+    await expect(page.getByRole('button', { name: 'Enviar evidencia' })).toBeEnabled();
+    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/requests\/[^/]+\/submissions$/, () => page.getByRole('button', { name: 'Enviar evidencia' }).click());
     await expect(page.getByRole('status')).toContainText('Evidencia enviada a revisión.');
     await page.getByLabel('Causa u observación').fill('Corrección solicitada desde recorrido web');
-    await page.getByRole('button', { name: 'Rechazar' }).click();
+    await expect(page.getByRole('button', { name: 'Rechazar' })).toBeEnabled();
+    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/review$/, () => page.getByRole('button', { name: 'Rechazar' }).click());
     await expect(page.getByRole('status')).toContainText('Evidencia rechazada con causa.');
-    await page.getByRole('button', { name: 'Nueva versión' }).click();
+    await expect(page.getByRole('button', { name: 'Nueva versión' })).toBeEnabled();
+    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/versions$/, () => page.getByRole('button', { name: 'Nueva versión' }).click());
     await expect(page.getByRole('status')).toContainText('Nueva versión registrada.');
+    await expectNoVisibleAlert(page);
   });
 
   test('mapping operado desde la web conserva revisión tenant', async ({ page }) => {
@@ -398,8 +399,9 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await selectFirstAvailableOption(page.getByLabel('Requisito'));
     await page.getByLabel('ID control tenant').fill(String(process.env.E2E_CONTROL_ID));
     await page.getByLabel('Justificación').fill('Cobertura verificada desde recorrido web');
-    await page.getByRole('button', { name: 'Crear mapping' }).click();
+    await expectMutation(page, 'POST', /\/api\/grc\/mappings$/, () => page.getByRole('button', { name: 'Crear mapping' }).click());
     await expect(page.getByRole('status')).toContainText('Mapping creado y enviado a revisión.');
+    await expectNoVisibleAlert(page);
   });
 
   test('auditoría operada desde la web registra equipo, programa y muestra', async ({ page }) => {
@@ -410,12 +412,13 @@ test.describe.serial('Phase 1 GRC runtime', () => {
     await expect(page.getByRole('status')).toContainText('Workspace de auditoría actualizado.');
     await page.getByLabel('ID usuario del equipo').fill(String(process.env.E2E_REVIEWER_ID));
     await page.getByLabel('Rol del equipo').selectOption('supervisor');
-    await page.getByRole('button', { name: 'Asignar y declarar' }).click();
+    await expectMutation(page, 'POST', /\/api\/grc\/audits\/[^/]+\/team$/, () => page.getByRole('button', { name: 'Asignar y declarar' }).click());
     await expect(page.getByRole('status')).toContainText('Miembro e independencia registrados.');
-    await page.getByRole('button', { name: 'Crear programa' }).click();
+    await expectMutation(page, 'POST', /\/api\/grc\/audits\/[^/]+\/programs$/, () => page.getByRole('button', { name: 'Crear programa' }).click());
     await expect(page.getByRole('status')).toContainText('Programa versionado creado.');
-    await page.getByRole('button', { name: 'Crear muestra' }).click();
+    await expectMutation(page, 'POST', /\/api\/grc\/audits\/[^/]+\/samples$/, () => page.getByRole('button', { name: 'Crear muestra' }).click());
     await expect(page.getByRole('status')).toContainText('Plan de muestra creado.');
+    await expectNoVisibleAlert(page);
   });
 
   for (const route of ['/dashboard', '/evidencias', '/auditorias', '/controles', '/configuracion']) {
@@ -428,6 +431,7 @@ test.describe.serial('Phase 1 GRC runtime', () => {
       const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
       expect(response?.status() || 0).toBeLessThan(500);
       await expect(page.locator('body')).toContainText(/Operación GRC avanzada/);
+      await expectNoVisibleAlert(page);
       expect(consoleErrors).toEqual([]);
       expect(serverFailures).toEqual([]);
     });
