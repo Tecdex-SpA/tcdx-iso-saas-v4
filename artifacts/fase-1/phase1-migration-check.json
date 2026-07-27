@@ -1,7 +1,7 @@
 {
   "status": "VERIFIED_LOCAL_POSTGRESQL",
-  "checkedAt": "2026-07-23T14:55:25.285Z",
-  "analyzedSha": "29d59a2cd610ed31348790b05db6a3c9eaed8354",
+  "checkedAt": "2026-07-27T16:20:08.857Z",
+  "analyzedSha": "d01c1f4729d0790a0601806e76249c528d14c600",
   "postgresMode": "docker",
   "disposableDatabase": true,
   "migrationApplications": 2,

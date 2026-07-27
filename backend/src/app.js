@@ -76,8 +76,12 @@ const syncAgentRoutes = require('./routes/sync-agent.routes');
 const knowledgeBaseRoutes = require('./routes/knowledge-base.routes');
 const intelligenceRoutes = require('./routes/intelligence.routes');
 const grcRoutes = require('./routes/grc.routes');
+const phase2Routes = require('./routes/phase2.routes');
+const supplierPortalRoutes = require('./routes/supplier-portal.routes');
+const phase2ExternalRoutes = require('./routes/phase2-external.routes');
 const { prometheusLines: grcPrometheusLines } = require('./services/grc/grcObservability');
 const { startSchedulerRunner } = require('./services/grc/grcSchedulerRunner');
+const { startPhase2Scheduler } = require('./services/grc/phase2SchedulerRunner');
 const { aiLocaleResponseGuard } = require('./middleware/aiLocaleResponseGuard');
 
 const app = express();
@@ -393,6 +397,8 @@ app.use('/api/auth', express.json({ limit: jsonBodyLimit }), authRoutes);
 app.use('/api/document-integrations/google', express.json({ limit: jsonBodyLimit }), documentIntegrationsGoogleRoutes);
 app.use('/api/document-integrations/zoho', express.json({ limit: jsonBodyLimit }), documentIntegrationsZohoRoutes);
 app.use('/api/agent', express.json({ limit: jsonBodyLimit }), syncAgentRoutes);
+app.use('/api/supplier-portal', supplierPortalRoutes);
+app.use('/api/grc/phase2/external', phase2ExternalRoutes);
 
 app.use('/api', auth, enforceApiAccess);
 app.use(express.json({ limit: jsonBodyLimit }));
@@ -464,6 +470,7 @@ app.use('/api/ai-compliance/tenant-search', aiTenantSearchRoutes);
 app.use('/api/lifecycle', lifecycleRoutes);
 app.use('/api/knowledge-base', knowledgeBaseRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
+app.use('/api/grc/phase2', phase2Routes);
 app.use('/api/grc', grcRoutes);
 
 
@@ -515,6 +522,7 @@ const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
 });
 startSchedulerRunner();
+startPhase2Scheduler();
 
 const backendRequestTimeoutMs = Math.max(
   Number.parseInt(

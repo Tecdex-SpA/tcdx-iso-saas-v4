@@ -37,6 +37,7 @@ export type MvpFeatureKey =
   | 'action_plans.write'
   | 'reports.read'
   | 'reports.export'
+  | 'phase2.read'
   | 'ai_compliance.read'
   | 'ai_compliance.suggest'
   | 'configuration.profile.self'
@@ -136,6 +137,7 @@ const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'action_plans.write': ['admin', 'area_owner'],
   'reports.read': ['admin', 'auditor', 'area_owner', 'executive'],
   'reports.export': ['admin', 'auditor'],
+  'phase2.read': ['admin', 'auditor', 'area_owner'],
   'ai_compliance.read': ['admin', 'auditor'],
   'ai_compliance.suggest': ['admin', 'auditor'],
   'configuration.profile.self': ['admin', 'auditor', 'area_owner', 'executive'],
@@ -196,6 +198,12 @@ export const CLIENT_MVP_NAV_ITEMS: MvpNavItem[] = [
   { href: '/planes-accion', label: 'Planes de acción', feature: 'action_plans.read' },
   { href: '/exportes', label: 'Reportes', feature: 'reports.read' },
   {
+    href: '/grc-global',
+    label: 'GRC integrado',
+    feature: 'phase2.read',
+    moduleKey: 'grc_phase2_integrated',
+  },
+  {
     href: '/ia-compliance',
     label: 'IA Compliance',
     feature: 'ai_compliance.read',
@@ -243,6 +251,17 @@ type MvpRouteRule = {
 
 export const MVP_ROUTE_RULES: MvpRouteRule[] = [
   { routes: ['/dashboard'], feature: 'dashboard.read' },
+  {
+    routes: [
+      '/grc-global',
+      '/privacidad',
+      '/incidentes',
+      '/proveedores',
+      '/conectores',
+    ],
+    feature: 'phase2.read',
+    moduleKey: 'grc_phase2_integrated',
+  },
   { routes: ['/cumplimiento-auditoria'], feature: 'compliance.read' },
   { routes: ['/iso-health', '/health'], feature: 'health.view', moduleKey: 'health' },
   { routes: ['/administrar-kpis'], feature: 'health.view', moduleKey: 'health' },

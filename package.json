@@ -35,6 +35,15 @@
     "phase1:runtime-check": "npm run phase1:contracts:check && npm run phase1:permissions-check && npm run phase1:tenant-check && npm run phase1:e2e",
     "phase1:runtime:preflight": "node scripts/phase1/check-phase1-runtime-env.js",
     "phase1:cleanup": "node scripts/phase1/cleanup-phase1-qa.js",
-    "phase1:closeout": "bash scripts/phase1/run-phase1-closeout.sh --remote"
+    "phase1:closeout": "bash scripts/phase1/run-phase1-closeout.sh --remote",
+    "phase2:contracts:check": "node scripts/phase2/check-phase2-contracts.js",
+    "phase2:migration-check": "bash scripts/phase2/check-phase2-migration.sh",
+    "phase2:postgres-integration": "bash scripts/phase2/check-phase2-postgres.sh",
+    "phase2:scripts-check": "bash -n scripts/phase2/check-phase2-migration.sh scripts/phase2/check-phase2-postgres.sh scripts/phase2/run-phase2-closeout.sh scripts/deploy-vms.sh && node --check scripts/phase2/apply-phase2-migration.js && node --check scripts/phase2/check-phase2-contracts.js && node --check scripts/phase2/check-phase2-runtime-env.js && node --check scripts/phase2/prepare-phase2-runtime-qa.js && node --check scripts/phase2/phase2-qa-manifest.js && node --check scripts/phase2/cleanup-phase2-qa.js && node --check scripts/phase2/check-playwright-result.js && node --check scripts/phase2/create-phase2-runtime-credentials.js && node --check scripts/phase2/restore-phase2-runtime-credentials.js && node --check scripts/phase2/create-phase2-qa-manifests.js && node scripts/phase2/phase2-qa-manifest.test.js",
+    "phase2:e2e:discovery": "npm --prefix frontend run test:e2e:phase2:list",
+    "phase2:e2e:full-discovery": "PHASE2_INCLUDE_PHASE1=1 npm --prefix frontend run test:e2e:phase2:list",
+    "phase2:check": "npm run phase2:contracts:check && npm run phase2:migration-check && npm run phase2:postgres-integration && npm run phase2:scripts-check && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run build && npm run phase2:e2e:discovery && npm run phase2:e2e:full-discovery && git diff --check",
+    "phase2:cleanup": "node scripts/phase2/cleanup-phase2-qa.js",
+    "phase2:closeout": "bash scripts/phase2/run-phase2-closeout.sh --remote"
   }
 }

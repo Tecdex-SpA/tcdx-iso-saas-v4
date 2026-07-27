@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/app.js",
     "check": "node -c src/app.js",
-    "test": "npm run check && node src/utils/soaValidation.test.js && node src/services/soaIntelligence.service.test.js && node src/services/operationalRiskMonteCarlo.service.test.js && node src/services/operationalRiskAiJobs.service.test.js && node src/services/knowledge-base/knowledge.service.test.js && node src/services/intelligence/intelligence.service.test.js && node src/services/grc/grcRules.test.js && node src/services/grc/grc.service.test.js && node src/services/grc/grcPhase1Core.test.js && node src/services/grc/grcBootstrap.service.test.js",
+    "test": "npm run check && node src/utils/soaValidation.test.js && node src/services/soaIntelligence.service.test.js && node src/services/operationalRiskMonteCarlo.service.test.js && node src/services/operationalRiskAiJobs.service.test.js && node src/services/knowledge-base/knowledge.service.test.js && node src/services/intelligence/intelligence.service.test.js && node src/services/grc/grcRules.test.js && node src/services/grc/grc.service.test.js && node src/services/grc/grcPhase1Core.test.js && node src/services/grc/grcBootstrap.service.test.js && node src/services/grc/phase2Core.test.js",
     "phase0:inventory": "cd .. && node scripts/phase0/generate-phase0-inventory.js",
     "phase0:contracts:check": "cd .. && node scripts/phase0/check-phase0-contracts.js",
     "phase0:check": "npm run check && npm test && npm run phase0:inventory && npm run phase0:contracts:check",
@@ -32,7 +32,7 @@
     "dayjs": "^1.11.20",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
-    "googleapis": "^144.0.0",
+    "googleapis": "^173.0.0",
     "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.11.0",
     "multer": "^2.2.0",
@@ -44,5 +44,9 @@
     "puppeteer-core": "^25.2.1",
     "uuid": "^11.1.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "overrides": {
+    "body-parser": "2.3.0",
+    "gaxios": "7.3.0"
   }
 }

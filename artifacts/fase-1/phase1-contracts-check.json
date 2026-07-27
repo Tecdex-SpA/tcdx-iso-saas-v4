@@ -1,8 +1,8 @@
 {
   "status": "VERIFIED_LOCAL_CONTRACTS",
   "phaseStatus": "open_until_vm_verification",
-  "checkedAt": "2026-07-23T14:55:18.050Z",
-  "analyzedSha": "29d59a2cd610ed31348790b05db6a3c9eaed8354",
+  "checkedAt": "2026-07-27T16:19:58.252Z",
+  "analyzedSha": "d01c1f4729d0790a0601806e76249c528d14c600",
   "findingsCount": 0,
   "countsByCategory": {},
   "requiredTables": 41,

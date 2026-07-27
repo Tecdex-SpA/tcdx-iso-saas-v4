@@ -129,6 +129,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           permission_key: 'health.view',
           permission_denied_message: 'No tienes permisos para ver Health ISO.',
         },
+        {
+          module_key: 'grc_phase2_integrated',
+          routes: ['/grc-global', '/privacidad', '/incidentes', '/proveedores', '/conectores'],
+          fallback: '/dashboard',
+          label: 'GRC integrado',
+          permission_key: null,
+          permission_denied_message: null,
+        },
       ],
     };
   }, [t]);
