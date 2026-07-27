@@ -108,6 +108,7 @@ router.post('/relations', route(req => authorized(req, 'privacy.manage', context
 router.get('/privacy/overview', route(req => authorized(req, 'privacy.read', ({ tenantId }) => service.privacyOverview(tenantId))));
 router.get('/privacy/processing-activities', route(req => authorized(req, 'privacy.read', ({ tenantId }) => service.listProcessingActivities(tenantId, req.query))));
 router.post('/privacy/processing-activities', route(req => authorized(req, 'privacy.manage', context => service.createProcessingActivity({ ...context, body: req.body }))));
+router.patch('/privacy/processing-activities/:id', route(req => authorized(req, 'privacy.manage', context => service.updateProcessingActivity({ ...context, id: req.params.id, body: req.body }))));
 router.get('/privacy/processing-activities/:id', route(req => authorized(req, 'privacy.read', ({ tenantId }) => service.getProcessing360(tenantId, req.params.id))));
 router.post('/privacy/processing-activities/:id/transitions', route(req => authorized(req, req.body?.to_status === 'approved' ? 'privacy.approve' : 'privacy.manage', context => service.transitionProcessing({ ...context, id: req.params.id, body: req.body }))));
 router.post('/privacy/processing-activities/:id/processors', route(req => authorized(req, 'privacy.manage', context => service.addProcessingProcessor({ ...context, id: req.params.id, body: req.body }))));

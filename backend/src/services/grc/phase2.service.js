@@ -409,6 +409,85 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     });
   }
 
+  async function updateProcessingActivity({ tenantId, userId, correlationId, id, body }) {
+    return withTransaction(async client => {
+      const current = await client.query(
+        'SELECT * FROM privacy_processing_activities WHERE tenant_id=$1::uuid AND id=$2::uuid FOR UPDATE',
+        [tenantId, uuid(id)]
+      );
+      if (!current.rowCount) throw new Phase2Error('PRIVACY_ACTIVITY_NOT_FOUND', 'Actividad no encontrada.', 404);
+      const row = current.rows[0];
+      if (!['draft', 'under_review', 'review_required'].includes(row.status)) {
+        throw new Phase2Error('PRIVACY_ACTIVITY_NOT_EDITABLE', 'El estado actual no permite editar la actividad.', 409);
+      }
+      const sensitiveCategories = Object.prototype.hasOwnProperty.call(body, 'sensitive_data_categories')
+        ? array(body.sensitive_data_categories)
+        : row.sensitive_data_categories;
+      const version = Number(row.version) + 1;
+      const updated = await client.query(
+        `UPDATE privacy_processing_activities SET
+           name=COALESCE($3,name),description=COALESCE($4,description),
+           legal_basis=COALESCE($5,legal_basis),legal_basis_source=COALESCE($6,legal_basis_source),
+           purposes=COALESCE($7::jsonb,purposes),
+           data_subject_categories=COALESCE($8::jsonb,data_subject_categories),
+           data_categories=COALESCE($9::jsonb,data_categories),
+           sensitive_data_categories=$10::jsonb,
+           data_sources=COALESCE($11::jsonb,data_sources),
+           recipients=COALESCE($12::jsonb,recipients),
+           retention_period=COALESCE($13,retention_period),
+           retention_basis=COALESCE($14,retention_basis),
+           deletion_method=COALESCE($15,deletion_method),
+           international_transfers=COALESCE($16::jsonb,international_transfers),
+           systems=COALESCE($17::jsonb,systems),
+           dpia_required=COALESCE($18,dpia_required) OR jsonb_array_length($10::jsonb)>0,
+           next_review_at=COALESCE($19::timestamptz,next_review_at),
+           version=$20,updated_at=now()
+         WHERE tenant_id=$1::uuid AND id=$2::uuid RETURNING *`,
+        [
+          tenantId, id, optionalText(body.name, 240), optionalText(body.description),
+          optionalText(body.legal_basis, 500), optionalText(body.legal_basis_source, 1000),
+          Object.prototype.hasOwnProperty.call(body, 'purposes') ? json(array(body.purposes)) : null,
+          Object.prototype.hasOwnProperty.call(body, 'data_subject_categories') ? json(array(body.data_subject_categories)) : null,
+          Object.prototype.hasOwnProperty.call(body, 'data_categories') ? json(array(body.data_categories)) : null,
+          json(sensitiveCategories),
+          Object.prototype.hasOwnProperty.call(body, 'data_sources') ? json(array(body.data_sources)) : null,
+          Object.prototype.hasOwnProperty.call(body, 'recipients') ? json(array(body.recipients)) : null,
+          optionalText(body.retention_period, 500), optionalText(body.retention_basis, 1000),
+          optionalText(body.deletion_method, 1000),
+          Object.prototype.hasOwnProperty.call(body, 'international_transfers') ? json(array(body.international_transfers)) : null,
+          Object.prototype.hasOwnProperty.call(body, 'systems') ? json(array(body.systems)) : null,
+          Object.prototype.hasOwnProperty.call(body, 'dpia_required') ? asBoolean(body.dpia_required) : null,
+          body.next_review_at || null, version,
+        ]
+      );
+      await client.query(
+        `INSERT INTO privacy_processing_versions (
+           tenant_id,processing_activity_id,version,snapshot,change_reason,created_by
+         ) VALUES ($1::uuid,$2::uuid,$3,$4::jsonb,$5,$6::uuid)`,
+        [
+          tenantId, id, version, json(updated.rows[0]),
+          requiredText(body.change_reason, 'PRIVACY_CHANGE_REASON_REQUIRED', 1000), userId || null,
+        ]
+      );
+      await audit(client, {
+        tenantId, userId, action: 'update', tableName: 'privacy_processing_activities',
+        recordId: id, oldData: row, newData: updated.rows[0],
+      });
+      await recordEvent(client, {
+        tenantId, userId, eventName: 'privacy.processing.reviewed',
+        aggregateType: 'processing_activity', aggregateId: id, aggregateVersion: version,
+        payload: {
+          status: updated.rows[0].status,
+          retention_period: updated.rows[0].retention_period,
+          dpia_approved: false,
+          owner_user_id: updated.rows[0].owner_user_id,
+        },
+        correlationId, idempotencyKey: `privacy.processing.reviewed:${id}:${version}`,
+      });
+      return updated.rows[0];
+    });
+  }
+
   async function getProcessing360(tenantId, id) {
     const activity = await pool.query(
       `SELECT p.*,tp.name AS process_name,op.name AS operation_name,u.full_name AS owner_name
@@ -2731,6 +2810,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     createPrivacyBreach,
     createPrivacyRequest,
     createProcessingActivity,
+    updateProcessingActivity,
     createQuestionnaireTemplate,
     createRelation,
     createSupplier,

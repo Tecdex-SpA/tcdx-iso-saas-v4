@@ -133,6 +133,14 @@ test.describe.serial('Phase 2 integrated GRC runtime', () => {
   });
 
   test('DPIA completa screening, riesgo, aprobación y activa el tratamiento', async () => {
+    await ok(await api.patch(`/api/grc/phase2/privacy/processing-activities/${activityId}`, {
+      headers: auth(),
+      data: {
+        retention_period: 'Cinco años desde el cierre de la relación',
+        retention_basis: 'Obligación contractual y normativa',
+        change_reason: 'Completar prerrequisito de retención antes de aprobación',
+      },
+    }));
     const dpia = await ok(await api.post(`/api/grc/phase2/privacy/processing-activities/${activityId}/dpias`, {
       headers: auth(),
       data: {
