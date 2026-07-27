@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
@@ -481,6 +482,7 @@ function EvidenciasPageContent() {
   const aiAuditorDraftSource = searchParams.get('source');
   const aiAuditorDraftMode = searchParams.get('draft');
   const showLegacyUpload = searchParams.get('legacy_upload') === '1';
+  const showGrcOperations = searchParams.get('grc_operations') === '1';
 
   const [data, setData] = useState<EvidenceRow[]>([]);
   const [standards, setStandards] = useState<ScopeStandard[]>([]);
@@ -782,10 +784,10 @@ function EvidenciasPageContent() {
 
 
   useEffect(() => {
-    if (!token || !canManageEvidenceAssociations) return;
+    if (!showLegacyUpload || !token || !canManageEvidenceAssociations) return;
     loadProcessOptions(token);
     loadEvidenceCandidates(token);
-  }, [token, canManageEvidenceAssociations]);
+  }, [token, canManageEvidenceAssociations, showLegacyUpload]);
 
   useEffect(() => {
     focusAppliedRef.current = false;
@@ -878,6 +880,12 @@ function EvidenciasPageContent() {
     setToken(authToken);
     setUser(u);
 
+    if (!showLegacyUpload) {
+      setLoading(false);
+      setLoadingStandards(false);
+      return;
+    }
+
     if (!authToken || !resolvedTenantId) {
       setLoading(false);
       setLoadingStandards(false);
@@ -893,7 +901,7 @@ function EvidenciasPageContent() {
     }
 
     loadStandards(resolvedTenantId, authToken);
-  }, [actionPlanIdFromUrl, loadStandards, tenantControlIdFromUrl, t]);
+  }, [actionPlanIdFromUrl, loadStandards, showLegacyUpload, tenantControlIdFromUrl, t]);
 
   const load = useCallback(async (resolvedTenantId: string, authToken: string, selectedIso: string) => {
     try {
@@ -930,7 +938,7 @@ function EvidenciasPageContent() {
   }, [actionPlanIdFromUrl, tenantControlIdFromUrl]);
 
   useEffect(() => {
-    if (!token || !tenantId) return;
+    if (!showLegacyUpload || !token || !tenantId) return;
 
     if (!loadingStandards) {
       load(tenantId, token, iso);
@@ -943,6 +951,7 @@ function EvidenciasPageContent() {
     loadingStandards,
     tenantControlIdFromUrl,
     actionPlanIdFromUrl,
+    showLegacyUpload,
   ]);
 
   const refresh = async () => {
@@ -1249,10 +1258,46 @@ function EvidenciasPageContent() {
     );
   }
 
+  if (showGrcOperations) {
+    return (
+      <AppLayout>
+        <div className="tcdx-evidence-refinement min-h-screen bg-[var(--tcdx-color-surface)] p-6">
+          <div className="mx-auto max-w-7xl space-y-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold text-[var(--tcdx-color-text-ink)]">
+                  Operación GRC de evidencias
+                </h1>
+                <p className="mt-1 text-sm text-[var(--tcdx-color-text-muted)]">
+                  Gestiona solicitudes, entregas, revisiones y versiones de evidencia.
+                </p>
+              </div>
+              <Link
+                href="/evidencias"
+                className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm transition-colors hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+              >
+                Volver a biblioteca
+              </Link>
+            </div>
+            <GrcPhase1Panel mode="evidence" />
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   if (!showLegacyUpload) {
     return (
       <AppLayout>
-        <div className="tcdx-evidence-refinement">
+        <div className="tcdx-evidence-refinement space-y-4">
+          <div className="flex justify-end px-6 pt-6">
+            <Link
+              href="/evidencias?grc_operations=1"
+              className="inline-flex min-h-10 items-center rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--tcdx-color-action-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+            >
+              Operación GRC de evidencias
+            </Link>
+          </div>
           <UnifiedEvidenceLibrary token={token} canManage={canManageEvidenceAssociations} />
         </div>
       </AppLayout>

@@ -30,13 +30,19 @@ async function installSession(page: Page, token: string) {
   }, token);
 }
 
-async function selectFirstAvailableOption(select: Locator) {
+async function selectAvailableOption(select: Locator, index = 0) {
   await expect(select).toBeVisible();
-  const option = select.locator('option:not([value=""])').first();
-  await expect(option, 'La lista debe contener al menos una opción operable').toHaveCount(1);
+  const options = select.locator('option:not([value=""])');
+  const optionCount = await options.count();
+  expect(optionCount, `La lista debe contener al menos ${index + 1} opciones operables`).toBeGreaterThan(index);
+  const option = options.nth(index);
   const value = await option.getAttribute('value');
   expect(value, 'La opción operable debe tener valor').toBeTruthy();
   await select.selectOption(String(value));
+}
+
+async function selectFirstAvailableOption(select: Locator) {
+  await selectAvailableOption(select);
 }
 
 async function selectOptionByLabel(select: Locator, label: string) {
@@ -486,7 +492,7 @@ test.describe('Phase 1 GRC runtime', () => {
       const url = new URL(response.url());
       return response.request().method() === 'GET' && url.pathname === '/api/grc/evidence/requests';
     });
-    const navigation = await page.goto('/evidencias?legacy_upload=1', { waitUntil: 'domcontentloaded' });
+    const navigation = await page.goto('/evidencias?grc_operations=1', { waitUntil: 'domcontentloaded' });
     expect(navigation?.status(), 'La ruta /evidencias no respondió correctamente').toBe(200);
     await expect(page, 'La sesión no debe redirigir fuera de /evidencias').toHaveURL(/\/evidencias(?:\?|$)/);
     const loaded = await requestsResponse;
@@ -525,7 +531,7 @@ test.describe('Phase 1 GRC runtime', () => {
   test('mapping operado desde la web conserva revisión tenant', async ({ page }) => {
     await installSession(page, adminToken);
     await page.goto('/controles', { waitUntil: 'domcontentloaded' });
-    await selectFirstAvailableOption(page.getByLabel('Requisito'));
+    await selectAvailableOption(page.getByLabel('Requisito'), executionPass === 'targeted' ? 0 : 1);
     await page.getByLabel('ID control tenant').fill(String(process.env.E2E_CONTROL_ID));
     await page.getByLabel('Justificación').fill('Cobertura verificada desde recorrido web');
     const mapping = await expectMutation(page, 'POST', /\/api\/grc\/mappings$/, () => page.getByRole('button', { name: 'Crear mapping' }).click());
