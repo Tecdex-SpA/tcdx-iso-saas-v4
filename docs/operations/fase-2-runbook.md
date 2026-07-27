@@ -25,7 +25,9 @@ migración se comprueba en PostgreSQL antes de habilitar el módulo de QA.
 
 Se crea un manifest por pasada con `phase2-qa-manifest.js`, se habilita
 `grc_phase2_integrated` de forma controlada y se ejecutan targeted y full sin
-retries. La pasada full incluye las 30 pruebas de Fase 1 y las 16 de Fase 2.
+retries. Antes de full se ejecutan las 13 pruebas dirigidas de Fase 1 con el
+mismo manifest, preservando su contrato de idempotencia. La pasada full incluye
+las 30 pruebas de Fase 1 y las 16 de Fase 2.
 
 ## Cleanup
 

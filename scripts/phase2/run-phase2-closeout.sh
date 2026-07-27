@@ -87,10 +87,12 @@ clean_generated() {
   rm -f artifacts/fase-2/phase2-qa-manifest.json \
     artifacts/fase-2/phase2-targeted-results.json artifacts/fase-2/phase2-full-results.json \
     artifacts/fase-2/phase2-cleanup-result.json artifacts/fase-2/phase2-cleanup-second.json \
-    artifacts/fase-1/phase1-qa-manifest.json artifacts/fase-1/phase1-cleanup-result.json \
+    artifacts/fase-1/phase1-qa-manifest.json artifacts/fase-1/phase1-prerequisite-results.json \
+    artifacts/fase-1/phase1-cleanup-result.json \
     artifacts/fase-1/phase1-cleanup-second.json
   rm -rf artifacts/fase-2/phase2-targeted-playwright-report \
-    artifacts/fase-2/phase2-full-playwright-report frontend/test-results
+    artifacts/fase-2/phase2-full-playwright-report \
+    artifacts/fase-1/phase1-prerequisite-playwright-report frontend/test-results
 }
 
 on_error() {
@@ -154,12 +156,22 @@ PHASE1_QA_RUN_ID="phase1-${BASE_RUN_ID}-full"
 PHASE1_QA_ENV=qa
 PHASE1_TENANT_ID="$E2E_TENANT_A_ID"
 PHASE1_QA_MANIFEST="$ROOT_DIR/artifacts/fase-1/phase1-qa-manifest.json"
-PHASE1_E2E_PASS=full
+PHASE1_E2E_PASS=targeted
 export PHASE2_QA_RUN_ID PHASE1_QA_RUN_ID PHASE1_QA_ENV PHASE1_TENANT_ID
 export PHASE1_QA_MANIFEST PHASE1_E2E_PASS
 node scripts/phase2/create-phase2-qa-manifests.js
 
+stage=phase1-prerequisite-e2e
+PHASE1_E2E_RESULTS_FILE=../artifacts/fase-1/phase1-prerequisite-results.json \
+PHASE1_PLAYWRIGHT_REPORT_DIR=../artifacts/fase-1/phase1-prerequisite-playwright-report \
+  npm --prefix frontend run test:e2e:phase1 -- --grep \
+  'administrador crea workflow válido|administrador publica versión|evidencia recurrente|instancia operada desde la web|workflow editado desde la web|evidencia operada desde la web|mapping operado desde la web|auditoría operada desde la web|vista consolidada carga sin errores'
+node scripts/phase2/check-playwright-result.js artifacts/fase-1/phase1-prerequisite-results.json 13
+cp artifacts/fase-1/phase1-prerequisite-results.json "$EVIDENCE_DIR/"
+
 stage=full-e2e
+PHASE1_E2E_PASS=full
+export PHASE1_E2E_PASS
 PHASE2_INCLUDE_PHASE1=1 \
 PHASE2_E2E_RESULTS_FILE=../artifacts/fase-2/phase2-full-results.json \
 PHASE2_PLAYWRIGHT_REPORT_DIR=../artifacts/fase-2/phase2-full-playwright-report \
@@ -191,7 +203,7 @@ if [[ -n "$status" ]]; then
   exit 1
 fi
 
-printf '{"status":"VERIFIED_RUNTIME","sha":"%s","run_id":"%s","targeted":16,"full":46,"retries":0,"cleanup":"CLEANED_AND_IDEMPOTENT","credentials":"RESTORED","git":"clean"}\n' \
+printf '{"status":"VERIFIED_RUNTIME","sha":"%s","run_id":"%s","targeted":16,"phase1_prerequisite":13,"full":46,"retries":0,"cleanup":"CLEANED_AND_IDEMPOTENT","credentials":"RESTORED","git":"clean"}\n' \
   "$DEPLOYED_SHA" "$BASE_RUN_ID" > "$EVIDENCE_DIR/phase2-closeout-result.json"
 cat > "$EVIDENCE_DIR/phase2-closeout-result.md" <<EOF
 # Phase 2 closeout
@@ -200,6 +212,7 @@ cat > "$EVIDENCE_DIR/phase2-closeout-result.md" <<EOF
 - SHA: $DEPLOYED_SHA
 - Run: $BASE_RUN_ID
 - Targeted E2E: 16/16
+- Phase 1 idempotency prerequisite: 13/13
 - Full E2E: 46/46
 - Retries/skips/fixme: 0
 - Phase 2 cleanup: CLEANED, then ALREADY_CLEAN

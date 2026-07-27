@@ -8,8 +8,9 @@
 4. RBAC, tenant, reglas, scoring, normalización, firma e idempotencia.
 5. ESLint, TypeScript y build Next.
 6. Playwright targeted: 16 pruebas.
-7. Playwright full: 46 pruebas, incluidas las 30 de regresión Fase 1.
-8. Runtime público y cleanup idempotente.
+7. Prerrequisito de idempotencia Fase 1: 13 pruebas dirigidas.
+8. Playwright full: 46 pruebas, incluidas las 30 de regresión Fase 1.
+9. Runtime público y cleanup idempotente.
 
 ## Cobertura dirigida
 
@@ -27,4 +28,6 @@
 
 No se acepta retry, skip, fixme, did-not-run ni fixture fuera de manifest. El
 parser de resultados debe confirmar exactamente 16/16 targeted y 46/46 full.
+El prerrequisito Fase 1 se valida 13/13 con el mismo manifest antes de full y
+no altera esos conteos oficiales.
 El cleanup PostgreSQL se prueba y luego se ejecuta dos veces en runtime.
