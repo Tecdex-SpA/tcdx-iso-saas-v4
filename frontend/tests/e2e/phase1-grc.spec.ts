@@ -502,13 +502,14 @@ test.describe('Phase 1 GRC runtime', () => {
     await grcPanel.getByLabel('ID de evidencia existente').fill(String(process.env.E2E_EVIDENCE_ID));
     const submitButton = grcPanel.getByRole('button', { name: 'Enviar evidencia', exact: true });
     await expect(submitButton).toBeEnabled();
-    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/requests\/[^/]+\/submissions$/, () => submitButton.click());
-    await expect(grcPanel.getByRole('status')).toContainText('Evidencia enviada a revisión.');
+    const createdSubmission = await expectMutation(page, 'POST', /\/api\/grc\/evidence\/requests\/[^/]+\/submissions$/, () => submitButton.click());
+    expect(createdSubmission.request_id).toBe(requestId);
     await grcPanel.getByLabel('Causa u observación').fill('Corrección solicitada desde recorrido web');
     const rejectButton = grcPanel.getByRole('button', { name: 'Rechazar', exact: true });
     await expect(rejectButton).toBeEnabled();
-    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/review$/, () => rejectButton.click());
-    await expect(grcPanel.getByRole('status')).toContainText('Evidencia rechazada con causa.');
+    const createdReview = await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/review$/, () => rejectButton.click());
+    expect(createdReview.decision).toBe('rejected');
+    expect(createdReview.reason).toBe('Corrección solicitada desde recorrido web');
     const versionButton = grcPanel.getByRole('button', { name: 'Nueva versión', exact: true });
     await expect(versionButton).toBeEnabled();
     const createdVersion = await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/versions$/, () => versionButton.click());
@@ -516,7 +517,8 @@ test.describe('Phase 1 GRC runtime', () => {
     const persistedResponse = await requireApi().get(`/api/grc/evidence/requests/${requestId}`, { headers: { Authorization: `Bearer ${adminToken}` } });
     const persistedBody = await persistedResponse.json().catch(() => ({}));
     expect(persistedResponse.status(), `Evidence detail failed: ${JSON.stringify(persistedBody)}`).toBe(200);
-    const persistedSubmission = persistedBody.data.submissions.find((item: { id: string }) => item.id === createdVersion.submission_id);
+    const persistedSubmission = persistedBody.data.submissions.find((item: { id: string }) => item.id === createdSubmission.id);
+    expect(persistedSubmission?.reviews.some((item: { id: string }) => item.id === createdReview.id)).toBe(true);
     expect(persistedSubmission?.versions.some((item: { id: string }) => item.id === createdVersion.id)).toBe(true);
   });
 
