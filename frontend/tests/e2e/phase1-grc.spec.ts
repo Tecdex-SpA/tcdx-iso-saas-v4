@@ -485,7 +485,7 @@ test.describe('Phase 1 GRC runtime', () => {
       const url = new URL(response.url());
       return response.request().method() === 'GET' && url.pathname === '/api/grc/evidence/requests';
     });
-    const navigation = await page.goto('/evidencias', { waitUntil: 'domcontentloaded' });
+    const navigation = await page.goto('/evidencias?legacy_upload=1', { waitUntil: 'domcontentloaded' });
     expect(navigation?.status(), 'La ruta /evidencias no respondió correctamente').toBe(200);
     await expect(page, 'La sesión no debe redirigir fuera de /evidencias').toHaveURL(/\/evidencias(?:\?|$)/);
     const loaded = await requestsResponse;
@@ -531,6 +531,9 @@ test.describe('Phase 1 GRC runtime', () => {
       : [reviewerUserId, adminUserId, restrictedUserId];
     const qaMemberId = candidates.find(id => id && !assignedUsers.has(id));
     expect(qaMemberId, 'No existe una cuenta QA controlada libre para asignación sin modificar equipo preexistente').toBeTruthy();
+    expect(String(qaMemberId), 'La cuenta QA seleccionada debe usar un UUID compatible con PostgreSQL').toMatch(
+      /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
+    );
     await installSession(page, adminToken);
     await page.goto('/auditorias', { waitUntil: 'domcontentloaded' });
     await page.getByLabel('ID de auditoría operacional').fill(String(process.env.E2E_AUDIT_ID));
@@ -558,7 +561,11 @@ test.describe('Phase 1 GRC runtime', () => {
       page.on('response', response => { if (response.status() >= 500) serverFailures.push(`${response.status()} ${response.url()}`); });
       const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
       expect(response?.status() || 0).toBeLessThan(500);
-      await expect(page.locator('body')).toContainText(/Operación GRC avanzada/);
+      if (route === '/evidencias') {
+        await expect(page.getByRole('heading', { name: 'Biblioteca documental' })).toBeVisible();
+      } else {
+        await expect(page.getByLabel('Operación GRC avanzada')).toBeVisible();
+      }
       expect(consoleErrors).toEqual([]);
       expect(serverFailures).toEqual([]);
     });

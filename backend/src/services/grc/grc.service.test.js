@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { createGrcService, GrcError } = require('./grc.service');
+const { assertUuid, createGrcService, GrcError } = require('./grc.service');
 
 function fakePool(resolver) {
   const calls = [];
@@ -24,6 +24,11 @@ function fakePool(resolver) {
 
 async function run() {
   const tenantA = '70000000-0000-0000-0000-000000000701';
+  assert.equal(assertUuid(tenantA), tenantA);
+  assert.throws(
+    () => assertUuid('not-a-uuid'),
+    error => error instanceof GrcError && error.code === 'GRC_ID_REQUIRED'
+  );
   const pool = fakePool((sql, values) => {
     if (sql.includes('FROM saas_modules')) return { rows: [{ is_enabled: true }], rowCount: 1 };
     if (sql.includes('user_has_permission')) return { rows: [{ allowed: values[1] !== 'framework.manage' }], rowCount: 1 };
