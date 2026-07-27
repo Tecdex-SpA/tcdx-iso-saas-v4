@@ -127,7 +127,10 @@ const phase1Files = [...Object.values(files), ...Object.keys(requiredUi),
   'scripts/phase1/check-phase1-migration.sh', 'scripts/phase1/check-phase1-security.js',
   'scripts/phase1/bootstrap-tenant-grc.js', 'scripts/phase1/seed-phase1-qa.js',
   'scripts/phase1/cleanup-phase1-qa.js', 'scripts/phase1/run-phase1-runtime-local.js',
-  '.github/workflows/ci.yml', '.github/workflows/phase1-runtime-qa.yml'].filter(fs.existsSync);
+  'scripts/phase1/run-phase1-closeout.sh', 'scripts/phase1/check-phase1-runtime-env.js',
+  'scripts/phase1/check-playwright-result.js', 'scripts/phase1/phase1-qa-manifest.js',
+  'scripts/phase1/verify-phase1-runtime-fixtures.js',
+  '.github/workflows/ci.yml'].filter(fs.existsSync);
 const forbidden = [
   [/continue-on-error/, 'continue-on-error'], [/\|\|\s*true/, '|| true'],
   [/\.skip\s*\(/, 'test.skip'], [/\.fixme\s*\(/, 'test.fixme'],

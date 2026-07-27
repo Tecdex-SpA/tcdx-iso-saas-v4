@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const crypto = require('crypto');
+const { resolveRuntimeToken } = require('./phase1-runtime-auth');
 
 function required(name) {
   const value = String(process.env[name] || '').trim();
@@ -22,7 +23,7 @@ async function main() {
   const tenantId = required('PHASE1_TENANT_ID');
   if (!/^[0-9a-f-]{36}$/i.test(tenantId)) throw new Error('PHASE1_TENANT_ID must be a UUID');
   const apiBaseUrl = required('PHASE1_API_BASE_URL').replace(/\/$/, '');
-  const token = required('PHASE1_API_TOKEN');
+  const token = await resolveRuntimeToken('PHASE1_API_TOKEN', apiBaseUrl);
   const response = await fetch(`${apiBaseUrl}/api/grc/bootstrap`, {
     method: 'POST',
     headers: {

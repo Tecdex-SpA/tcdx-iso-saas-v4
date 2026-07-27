@@ -25,3 +25,22 @@ El runner está activo salvo `GRC_PHASE1_SCHEDULER_ENABLED=false`. La ejecución
 ## Rollback operacional
 
 Deshabilitar el módulo para el tenant. Conservar tablas e historia. Cualquier reversión de esquema debe ser una migración compensatoria revisada; se prohíben `DROP`, `TRUNCATE` y limpieza manual de tenants.
+
+## Cierre runtime
+
+Desde el Mac, con `main` publicado:
+
+```bash
+./scripts/deploy-vms.sh
+npm run phase1:closeout
+```
+
+El comando delega la operación en `bk-v4`, exige el mismo SHA desplegado y ejecuta de forma bloqueante: preflight, preparación, bootstrap, seed, validación de fixtures, 13 casos críticos, 30 casos completos, evidencia y limpieza.
+
+No ejecutar SQL manual para limpiar QA. La única limpieza soportada es:
+
+```bash
+PHASE1_QA_CONFIRM="CLEAN_PHASE1_QA:<run_id>" npm run phase1:cleanup
+```
+
+Debe usar el manifest del mismo run, tenant QA y archivo de entorno protegido. Si la limpieza falla, conservar manifest y evidencia; no iniciar otro run.

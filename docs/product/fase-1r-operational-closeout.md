@@ -18,10 +18,10 @@ Fase 1 tenía persistencia, servicios y gates, pero la UI exponía solo un panel
 - upsert SaaS validado con columnas `enabled_by`/`disabled_by` y catálogo basado en el setting tenant real;
 - PostgreSQL 16 real para bootstrap, scheduler, escalamiento, export y Tenant A/B;
 - métricas estables por operación;
-- 30 contratos Playwright y workflow runtime con evidencia derivada.
+- 30 contratos Playwright, 13 críticos y runner VM con evidencia derivada y limpieza transaccional.
 
 ## Estado verificable
 
-Localmente se validan contratos, migraciones, PostgreSQL, permisos, tenant, backend, frontend y discovery. La ejecución Playwright real exige el SHA desplegado y queda `blocked_external`; por ello este documento no declara cierre definitivo ni `verified_runtime`.
+Localmente se validan contratos, migraciones, PostgreSQL, permisos, tenant, backend, frontend y discovery. La ejecución real se delega a `npm run phase1:closeout` sobre el SHA desplegado. El artifact de cada run, no este texto estático, determina `VERIFIED_RUNTIME`.
 
-No se hicieron commit, push, merge, migración en ambiente, deploy ni cambios de datos reales.
+El runner usa únicamente cuentas y fixtures QA controlados, conserva evidencia no sensible y elimina sus registros antes de declarar éxito.

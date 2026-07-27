@@ -10,8 +10,9 @@ migration="$REPO_ROOT/database/migrations/20260722_phase1_grc_core.sql"
 operational_migration="$REPO_ROOT/database/migrations/20260723_phase1r_operational_closeout.sql"
 artifact_writer="$REPO_ROOT/scripts/phase1/write-phase1-migration-artifact.js"
 integration_test="$REPO_ROOT/backend/src/services/grc/grcPostgres.integration.test.js"
+cleanup_integration_test="$REPO_ROOT/scripts/phase1/cleanup-phase1-qa.integration.test.js"
 
-for required_file in "$fixture" "$migration" "$operational_migration" "$artifact_writer" "$integration_test"; do
+for required_file in "$fixture" "$migration" "$operational_migration" "$artifact_writer" "$integration_test" "$cleanup_integration_test"; do
   if [[ ! -f "$required_file" ]]; then
     echo "ERROR: required Phase 1 migration-check file does not exist: $required_file" >&2
     exit 1
@@ -205,6 +206,13 @@ if [[ "${PHASE1_RUN_INTEGRATION:-false}" == "true" ]]; then
   PGUSER="postgres" \
   PGDATABASE="$database_name" \
   node "$integration_test"
+  DATABASE_URL="postgresql://postgres@${integration_host}:${port}/${database_name}" \
+  PGHOST="$integration_host" \
+  PGPORT="$port" \
+  PGUSER="postgres" \
+  PGDATABASE="$database_name" \
+  PHASE1_QA_ENV="qa" \
+  node "$cleanup_integration_test"
 fi
 
 PHASE1_MIGRATION_STATUS="VERIFIED_LOCAL_POSTGRESQL" \

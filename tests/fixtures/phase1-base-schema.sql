@@ -7,7 +7,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE tenants (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL);
 CREATE TABLE users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid REFERENCES tenants(id), email text NOT NULL);
-CREATE TABLE app_roles (role_key text PRIMARY KEY);
+CREATE TABLE app_roles (role_key text PRIMARY KEY, is_active boolean NOT NULL DEFAULT TRUE);
 CREATE TABLE permissions (
   permission_key text PRIMARY KEY, permission_group text NOT NULL, display_name text NOT NULL,
   description text, is_active boolean NOT NULL DEFAULT TRUE,

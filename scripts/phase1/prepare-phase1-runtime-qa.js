@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+const { resolveRuntimeToken } = require('./phase1-runtime-auth');
 
 function required(name) {
   const value = String(process.env[name] || '').trim();
@@ -15,7 +16,7 @@ async function main() {
   }
   const apiBaseUrl = required('API_BASE_URL').replace(/\/$/, '');
   const tenantId = required('PHASE1_TENANT_ID');
-  const token = required('PHASE1_PLATFORM_TOKEN');
+  const token = await resolveRuntimeToken('PHASE1_PLATFORM_TOKEN', apiBaseUrl);
   const response = await fetch(
     `${apiBaseUrl}/api/admin-saas/tenants/${encodeURIComponent(tenantId)}/modules/grc_phase1_core`,
     {

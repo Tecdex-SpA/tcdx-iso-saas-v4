@@ -2,7 +2,7 @@
 
 | Entregable | Estado | Evidencia |
 |---|---|---|
-| Preflight Fase 1R | verified_local | Base `main` limpia; `HEAD=origin/main=29d59a2cd610ed31348790b05db6a3c9eaed8354`; rama `codex/fase-1r-cierre-operacional-grc` |
+| Preflight Fase 1R | verified_local | Base `main`; estabilización iniciada desde `447b060ac6527a03cb11751bd284563322ec649f` |
 | Migración original | verified_local | `20260722_phase1_grc_core.sql`, doble aplicación PostgreSQL 16 |
 | Migración operacional | verified_local | `20260723_phase1r_operational_closeout.sql`, doble aplicación, aditiva y no destructiva |
 | Bootstrap tenant | verified_local | endpoint/status/revalidación, confirmación, permiso, flag, transacción, advisory lock, idempotencia y auditoría |
@@ -15,8 +15,10 @@
 | Observabilidad | verified_local | métricas específicas de errores, scheduler, retries, escalamiento, exports y bootstrap |
 | PostgreSQL integración | verified_local | bootstrap/replay, versión publicada inmutable, evidencia/versiones/rechazo, mapping/revisión, auditoría/cierre, Tenant A/B, scheduler/reintento, no duplicación y exports contra PostgreSQL 16 |
 | Frontend consolidado | verified_local | bootstrap, workflows/instancias, evidencia, mappings y auditoría operables en vistas existentes; feedback accesible, permisos y cache SaaS |
-| E2E contract/discovery | verified_local | 30 casos ejecutables; no `skip`/`fixme`; ejecución real reservada al SHA desplegado |
+| E2E contract/discovery | verified_local | 30 casos ejecutables y 13 críticos identificados; sin `skip`/`fixme`, retries deshabilitados |
+| Fixtures E2E aislados | verified_local | Cada prueba resuelve sus prerrequisitos; IDs trazables por run y manifest; ejecución filtrada no depende de tests previos |
+| Limpieza QA | verified_local | Manifest estricto, ownership/prefijo, orden FK, trigger transaccional, ledger bootstrap y verificación idempotente |
 | Gate consolidado | verified_local | `npm run phase1:check` exitoso con PostgreSQL 16, backend, frontend, contratos UI/E2E y `git diff --check` |
-| Runtime QA del SHA desplegado | blocked_external | requiere PR/CI/merge/migración/deploy y Environment `qa`; workflow prepara, ejecuta, deriva evidencia y limpia sus seeds |
+| Runtime QA del SHA desplegado | blocked_external | Requiere deploy del SHA; `npm run phase1:closeout` exige 13/13, luego 30/30, evidencia, limpieza y VM limpia |
 
 Estados válidos: `pending`, `in_progress`, `verified_local`, `verified_runtime`, `blocked_external`, `failed`.
