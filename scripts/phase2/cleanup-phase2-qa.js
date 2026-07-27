@@ -12,7 +12,7 @@ const ROOTS = Object.freeze({
   incident_ids: ['grc_incidents', 'incident_number'],
   supplier_ids: ['grc_suppliers', 'code'],
   questionnaire_template_ids: ['grc_questionnaire_templates', 'code'],
-  connector_ids: ['tenant_integrations', 'display_name'],
+  connector_ids: ['grc_connector_instances', 'display_name'],
   export_ids: ['grc_exports', null],
 });
 
@@ -152,7 +152,7 @@ async function runCleanup({ manifest, pool }) {
       ['incident_ids', 'grc_incidents'],
       ['supplier_ids', 'grc_suppliers'],
       ['questionnaire_template_ids', 'grc_questionnaire_templates'],
-      ['connector_ids', 'tenant_integrations'],
+      ['connector_ids', 'grc_connector_instances'],
       ['export_ids', 'grc_exports'],
     ];
     for (const [key, table] of order) {

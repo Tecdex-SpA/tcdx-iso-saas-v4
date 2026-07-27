@@ -103,7 +103,7 @@ module_default="$(run_psql -Atqc "SELECT default_enabled FROM saas_modules WHERE
 connector_definitions="$(run_psql -Atqc "SELECT COUNT(*) FROM grc_connector_definitions WHERE status='active'")"
 credential_column="$(run_psql -Atqc "
   SELECT COUNT(*) FROM information_schema.columns
-  WHERE table_schema='public' AND table_name='tenant_integrations'
+  WHERE table_schema='public' AND table_name='grc_connector_instances'
     AND column_name='credential_envelope' AND data_type='jsonb'")"
 provenance_check="$(run_psql -Atqc "
   SELECT COUNT(*) FROM pg_constraint

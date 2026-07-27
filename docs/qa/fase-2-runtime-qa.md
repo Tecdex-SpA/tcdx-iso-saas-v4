@@ -4,7 +4,7 @@
 
 La evidencia local verificada incluye:
 
-- migración repetible en PostgreSQL 16: 43 tablas, 22 permisos y 4 adapters;
+- migración repetible en PostgreSQL 16: 44 tablas, 22 permisos y 4 adapters;
 - integración PostgreSQL: 23 eventos y 10 ejecuciones de regla;
 - aislamiento tenant sin hallazgos;
 - idempotencia de conector y webhook firmado;

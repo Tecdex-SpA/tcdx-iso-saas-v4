@@ -286,7 +286,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
       finding: { table: 'findings', tenant: 'tenant_id=$1::uuid' },
       nonconformity: { table: 'tenant_nonconformities', tenant: 'tenant_id=$1::uuid' },
       action: { table: 'action_plans', tenant: 'tenant_id=$1::uuid' },
-      connector: { table: 'tenant_integrations', tenant: 'tenant_id=$1::uuid' },
+      connector: { table: 'grc_connector_instances', tenant: 'tenant_id=$1::uuid' },
       external_record: { table: 'grc_external_records', tenant: 'tenant_id=$1::uuid' },
     };
     const target = registry[entityType];
@@ -1876,7 +1876,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
 
   async function listConnectors(tenantId) {
     const result = await pool.query(
-      `SELECT * FROM tenant_integrations WHERE tenant_id=$1::uuid ORDER BY updated_at DESC`,
+      `SELECT * FROM grc_connector_instances WHERE tenant_id=$1::uuid ORDER BY updated_at DESC`,
       [tenantId]
     );
     return result.rows.map(redactIntegration);
@@ -1899,16 +1899,17 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
       ? encryptCredential(object(body.credentials), environment)
       : {};
     const result = await pool.query(
-      `INSERT INTO tenant_integrations (
-         tenant_id,provider,status,display_name,connected_by_user_id,scopes,metadata_json,
+      `INSERT INTO grc_connector_instances (
+         tenant_id,definition_id,provider,status,display_name,connected_by_user_id,scopes,metadata_json,
          connector_version,execution_mode,credential_envelope,schedule,webhook_config,
          rate_limit_config,retry_config,health_status,next_sync_at
        ) VALUES (
-         $1::uuid,$2,'connected',$3,$4::uuid,$5,$6::jsonb,$7,$8,$9::jsonb,
-         $10::jsonb,$11::jsonb,$12::jsonb,$13::jsonb,'unknown',$14::timestamptz
+         $1::uuid,$2::uuid,$3,'connected',$4,$5::uuid,$6,$7::jsonb,$8,$9,$10::jsonb,
+         $11::jsonb,$12::jsonb,$13::jsonb,$14::jsonb,'unknown',$15::timestamptz
        ) RETURNING *`,
       [
-        tenantId, provider, optionalText(body.display_name, 180) || definition.rows[0].display_name,
+        tenantId, definition.rows[0].id, provider,
+        optionalText(body.display_name, 180) || definition.rows[0].display_name,
         userId || null, array(body.scopes).join(' '), json(object(body.metadata)),
         definition.rows[0].version, mode, json(envelope),
         json(object(body.schedule, { enabled: false })), json(object(body.webhook_config)),
@@ -1922,7 +1923,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   async function updateConnector({ tenantId, userId, id, body }) {
     return withTransaction(async client => {
       const current = await client.query(
-        'SELECT * FROM tenant_integrations WHERE tenant_id=$1::uuid AND id=$2::uuid FOR UPDATE',
+        'SELECT * FROM grc_connector_instances WHERE tenant_id=$1::uuid AND id=$2::uuid FOR UPDATE',
         [tenantId, uuid(id)]
       );
       if (!current.rowCount) throw new Phase2Error('CONNECTOR_NOT_FOUND', 'Conector no encontrado.', 404);
@@ -1931,7 +1932,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
         ? encryptCredential(object(body.credentials), environment)
         : current.rows[0].credential_envelope;
       const updated = await client.query(
-        `UPDATE tenant_integrations SET
+        `UPDATE grc_connector_instances SET
            display_name=COALESCE($3,display_name),status=COALESCE($4,status),
            execution_mode=$5,credential_envelope=$6::jsonb,
            scopes=COALESCE($7,scopes),schedule=COALESCE($8::jsonb,schedule),
@@ -1949,7 +1950,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
         ]
       );
       await audit(client, {
-        tenantId, userId, action: 'update', tableName: 'tenant_integrations',
+        tenantId, userId, action: 'update', tableName: 'grc_connector_instances',
         recordId: id, oldData: redactIntegration(current.rows[0]), newData: redactIntegration(updated.rows[0]),
       });
       return redactIntegration(updated.rows[0]);
@@ -1966,7 +1967,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
 
   async function prepareConnectorOAuth({ tenantId, id }) {
     const result = await pool.query(
-      `SELECT * FROM tenant_integrations
+      `SELECT * FROM grc_connector_instances
        WHERE tenant_id=$1::uuid AND id=$2::uuid AND execution_mode='live' AND status='connected'`,
       [tenantId, uuid(id)]
     );
@@ -1980,7 +1981,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     }
     const state = randomToken();
     await pool.query(
-      `UPDATE tenant_integrations SET oauth_state_hash=$3,updated_at=now()
+      `UPDATE grc_connector_instances SET oauth_state_hash=$3,updated_at=now()
        WHERE tenant_id=$1::uuid AND id=$2::uuid`,
       [tenantId, integration.id, hashToken(state)]
     );
@@ -2059,7 +2060,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
 
   async function completeConnectorOAuth({ state, code }) {
     const result = await pool.query(
-      `SELECT * FROM tenant_integrations
+      `SELECT * FROM grc_connector_instances
        WHERE oauth_state_hash=$1 AND execution_mode='live' AND status='connected'
          AND updated_at>now()-interval '15 minutes'`,
       [hashToken(requiredText(state, 'CONNECTOR_OAUTH_STATE_REQUIRED', 500))]
@@ -2079,7 +2080,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
       token_type: token.token_type || 'Bearer',
     };
     await pool.query(
-      `UPDATE tenant_integrations SET credential_envelope=$2::jsonb,oauth_state_hash=NULL,
+      `UPDATE grc_connector_instances SET credential_envelope=$2::jsonb,oauth_state_hash=NULL,
          token_expires_at=$3::timestamptz,refresh_after=$3::timestamptz-interval '5 minutes',
          health_status='unknown',updated_at=now()
        WHERE id=$1::uuid`,
@@ -2110,7 +2111,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
       };
       const expiresAt = new Date(clock() + Math.max(60, Number(token.expires_in) || 3600) * 1000);
       await client.query(
-        `UPDATE tenant_integrations SET credential_envelope=$3::jsonb,
+        `UPDATE grc_connector_instances SET credential_envelope=$3::jsonb,
            token_expires_at=$4::timestamptz,refresh_after=$4::timestamptz-interval '5 minutes',
            updated_at=now() WHERE tenant_id=$1::uuid AND id=$2::uuid`,
         [integration.tenant_id, integration.id, json(encryptCredential(credentials, environment)), expiresAt]
@@ -2144,7 +2145,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     const key = requiredText(idempotencyKey, 'CONNECTOR_IDEMPOTENCY_KEY_REQUIRED', 240);
     return withTransaction(async client => {
       const integrationResult = await client.query(
-        'SELECT * FROM tenant_integrations WHERE tenant_id=$1::uuid AND id=$2::uuid FOR UPDATE',
+        'SELECT * FROM grc_connector_instances WHERE tenant_id=$1::uuid AND id=$2::uuid FOR UPDATE',
         [tenantId, integrationId]
       );
       if (!integrationResult.rowCount) throw new Phase2Error('CONNECTOR_NOT_FOUND', 'Conector no encontrado.', 404);
@@ -2225,7 +2226,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
           ]
         );
         await client.query(
-          `UPDATE tenant_integrations SET cursor=$3::jsonb,last_sync_at=now(),
+          `UPDATE grc_connector_instances SET cursor=$3::jsonb,last_sync_at=now(),
              health_status='healthy',last_error_code=NULL,updated_at=now()
            WHERE tenant_id=$1::uuid AND id=$2::uuid`,
           [tenantId, integrationId, json(pulled.cursor)]
@@ -2247,7 +2248,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
           [tenantId, run.rows[0].id, error.code || 'CONNECTOR_SYNC_FAILED', String(error.message || 'Connector failure').slice(0, 1000), nextRetryAt]
         );
         await client.query(
-          `UPDATE tenant_integrations SET health_status='failed',last_error_code=$3,updated_at=now()
+          `UPDATE grc_connector_instances SET health_status='failed',last_error_code=$3,updated_at=now()
            WHERE tenant_id=$1::uuid AND id=$2::uuid`,
           [tenantId, integrationId, error.code || 'CONNECTOR_SYNC_FAILED']
         );
@@ -2269,7 +2270,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
 
   async function connector360(tenantId, id) {
     const integration = await pool.query(
-      'SELECT * FROM tenant_integrations WHERE tenant_id=$1::uuid AND id=$2::uuid',
+      'SELECT * FROM grc_connector_instances WHERE tenant_id=$1::uuid AND id=$2::uuid',
       [tenantId, uuid(id)]
     );
     if (!integration.rowCount) throw new Phase2Error('CONNECTOR_NOT_FOUND', 'Conector no encontrado.', 404);
@@ -2289,7 +2290,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
 
   async function ingestConnectorWebhook({ integrationId, signature, rawBody, eventType }) {
     const integrationResult = await pool.query(
-      `SELECT * FROM tenant_integrations
+      `SELECT * FROM grc_connector_instances
        WHERE id=$1::uuid AND status='connected' AND execution_mode='live'`,
       [uuid(integrationId)]
     );
@@ -2364,7 +2365,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
         });
       }
       await client.query(
-        `UPDATE tenant_integrations SET last_sync_at=now(),health_status='healthy',updated_at=now()
+        `UPDATE grc_connector_instances SET last_sync_at=now(),health_status='healthy',updated_at=now()
          WHERE tenant_id=$1::uuid AND id=$2::uuid`,
         [integration.tenant_id, integration.id]
       );
@@ -2376,7 +2377,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     const result = await pool.query(
       `SELECT r.*,i.provider,i.display_name
        FROM grc_connector_runs r
-       JOIN tenant_integrations i ON i.id=r.integration_id AND i.tenant_id=r.tenant_id
+       JOIN grc_connector_instances i ON i.id=r.integration_id AND i.tenant_id=r.tenant_id
        WHERE r.tenant_id=$1::uuid
          AND ($2::uuid IS NULL OR r.integration_id=$2)
          AND ($3::text IS NULL OR r.status=$3)
@@ -2400,7 +2401,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
          (SELECT COUNT(*)::int FROM grc_external_records WHERE tenant_id=$1::uuid) AS records_normalized,
          (SELECT COUNT(*)::int FROM grc_connector_dead_letters WHERE tenant_id=$1::uuid AND status IN ('open','retrying')) AS mapping_errors,
          (SELECT COUNT(*)::int FROM grc_operational_alerts WHERE tenant_id=$1::uuid AND entity_type='external_record' AND status='open') AS alerts_generated
-       FROM tenant_integrations WHERE tenant_id=$1::uuid`,
+       FROM grc_connector_instances WHERE tenant_id=$1::uuid`,
       [tenantId]
     );
     return result.rows[0];
@@ -2636,7 +2637,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     suppliers: `SELECT id,code,legal_name,status,criticality,inherent_risk_score,residual_risk_score,risk_level,data_access_level,created_at AS recorded_at FROM grc_suppliers WHERE tenant_id=$1::uuid`,
     supplier_assessments: `SELECT a.id,s.code,s.legal_name,a.status,a.score,a.inherent_risk_score,a.residual_risk_score,a.due_at,a.expires_at,a.created_at AS recorded_at FROM grc_supplier_assessments a JOIN grc_suppliers s ON s.id=a.supplier_id AND s.tenant_id=a.tenant_id WHERE a.tenant_id=$1::uuid`,
     supplier_evidence: `SELECT e.id,s.code,s.legal_name,e.file_name,e.mime_type,e.size_bytes,e.content_hash,e.status,e.uploaded_at AS recorded_at FROM grc_supplier_portal_evidence e JOIN grc_suppliers s ON s.id=e.supplier_id AND s.tenant_id=e.tenant_id WHERE e.tenant_id=$1::uuid`,
-    connectors_health: `SELECT id,provider,display_name,status,execution_mode,connector_version,health_status,last_sync_at,last_error_code,updated_at AS recorded_at FROM tenant_integrations WHERE tenant_id=$1::uuid`,
+    connectors_health: `SELECT id,provider,display_name,status,execution_mode,connector_version,health_status,last_sync_at,last_error_code,updated_at AS recorded_at FROM grc_connector_instances WHERE tenant_id=$1::uuid`,
   });
 
   function csvCell(value) {

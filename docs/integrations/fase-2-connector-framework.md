@@ -2,7 +2,7 @@
 
 ## Ciclo
 
-`tenant_integrations` conserva configuración por tenant, versión, modo,
+`grc_connector_instances` conserva configuración por tenant, versión, modo,
 credential envelope cifrado, OAuth state hash, expiración/refresh, scopes,
 cursor, scheduler, webhook, rate limit, retry y salud.
 

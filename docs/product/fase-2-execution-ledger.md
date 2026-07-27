@@ -44,7 +44,7 @@ presente en las VMs de backend o frontend.
 |---|---|---|
 | A. Preflight | verified_local | Baseline anterior y gate consolidado exitoso |
 | B. Remediación inicial de dependencias | verified_local | Backend, runtime frontend y sync agent en 0; excepción dev-only documentada; tests, lint y build exitosos |
-| C. Arquitectura común | verified_local | Migración repetible: 43 tablas/extensiones, 22 permisos, FK/checks/índices, relaciones, eventos y reglas |
+| C. Arquitectura común | verified_local | Migración repetible: 44 tablas/extensiones, 22 permisos, FK/checks/índices, relaciones, eventos y reglas |
 | D. Privacidad | verified_local | Actividad versionada, DPIA, solicitudes, consentimientos, brechas, 360, reglas y métricas |
 | E. Incidentes | verified_local | Severidad explicable, lifecycle, timeline, impacto, notificación, causa, postmortem, eficacia y cierre |
 | F. TPRM | verified_local | Proveedor, servicios, contratos, cuestionario, evaluación humana, monitoreo y salida |

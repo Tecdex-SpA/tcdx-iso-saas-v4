@@ -10,7 +10,7 @@ async function runDueConnectors() {
   try {
     const due = await pool.query(
       `SELECT i.id,i.tenant_id
-       FROM tenant_integrations i
+       FROM grc_connector_instances i
        JOIN tenant_module_settings ms
          ON ms.tenant_id=i.tenant_id AND ms.module_key='grc_phase2_integrated' AND ms.is_enabled=TRUE
        WHERE i.status='connected'
@@ -31,7 +31,7 @@ async function runDueConnectors() {
       });
       const intervalMinutes = Math.max(5, Number(result.run?.metrics?.interval_minutes) || 60);
       await pool.query(
-        `UPDATE tenant_integrations SET next_sync_at=now()+make_interval(mins=>$3),updated_at=now()
+        `UPDATE grc_connector_instances SET next_sync_at=now()+make_interval(mins=>$3),updated_at=now()
          WHERE tenant_id=$1::uuid AND id=$2::uuid`,
         [connector.tenant_id, connector.id, intervalMinutes]
       );

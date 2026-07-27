@@ -2,7 +2,7 @@
 
 ## Núcleo compartido
 
-La migración `20260727_phase2_integrated_grc.sql` agrega 43 tablas o
+La migración `20260727_phase2_integrated_grc.sql` agrega 44 tablas o
 extensiones funcionales sobre los maestros existentes. Todas las entidades de
 cliente llevan `tenant_id`; las relaciones estructurales usan FK y borrado
 coherente.
@@ -20,7 +20,7 @@ tenant.
 | Tratamiento | `privacy_processing_activities` | versiones, encargados, DPIA, riesgos, consentimientos, solicitudes y brechas |
 | Incidente | `grc_incidents` | historia, timeline, impactos, notificaciones, causas y postmortem |
 | Proveedor | `grc_suppliers` | historia, servicios, contratos, evaluaciones, portal y controles de salida |
-| Conector | `tenant_integrations` | ejecuciones, registros normalizados, mappings y dead-letter |
+| Conector | `grc_connector_instances` | ejecuciones, registros normalizados, mappings y dead-letter |
 
 ## Cadena operativa
 

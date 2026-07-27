@@ -811,33 +811,6 @@ CREATE TABLE IF NOT EXISTS grc_incident_postmortems (
   UNIQUE (tenant_id, incident_id)
 );
 
--- Connector framework extends the existing tenant integration master.
-ALTER TABLE tenant_integrations
-  DROP CONSTRAINT IF EXISTS tenant_integrations_provider_check;
-ALTER TABLE tenant_integrations
-  ADD CONSTRAINT tenant_integrations_provider_check
-  CHECK (provider IN (
-    'google_drive', 'google_workspace', 'microsoft_graph', 'microsoft_365',
-    'entra_id', 'onedrive', 'sharepoint', 'jira', 'confluence', 'github'
-  ));
-
-ALTER TABLE tenant_integrations
-  ADD COLUMN IF NOT EXISTS connector_version text NOT NULL DEFAULT '1.0.0',
-  ADD COLUMN IF NOT EXISTS execution_mode text NOT NULL DEFAULT 'sandbox'
-    CHECK (execution_mode IN ('sandbox', 'live')),
-  ADD COLUMN IF NOT EXISTS credential_envelope jsonb NOT NULL DEFAULT '{}'::jsonb,
-  ADD COLUMN IF NOT EXISTS oauth_state_hash text,
-  ADD COLUMN IF NOT EXISTS refresh_after timestamptz,
-  ADD COLUMN IF NOT EXISTS cursor jsonb NOT NULL DEFAULT '{}'::jsonb,
-  ADD COLUMN IF NOT EXISTS schedule jsonb NOT NULL DEFAULT '{"enabled":false}'::jsonb,
-  ADD COLUMN IF NOT EXISTS webhook_config jsonb NOT NULL DEFAULT '{}'::jsonb,
-  ADD COLUMN IF NOT EXISTS rate_limit_config jsonb NOT NULL DEFAULT '{}'::jsonb,
-  ADD COLUMN IF NOT EXISTS retry_config jsonb NOT NULL DEFAULT '{"max_attempts":5,"base_seconds":30}'::jsonb,
-  ADD COLUMN IF NOT EXISTS health_status text NOT NULL DEFAULT 'unknown'
-    CHECK (health_status IN ('unknown', 'healthy', 'degraded', 'failed', 'disabled')),
-  ADD COLUMN IF NOT EXISTS last_error_code text,
-  ADD COLUMN IF NOT EXISTS next_sync_at timestamptz;
-
 CREATE TABLE IF NOT EXISTS grc_connector_definitions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   provider text NOT NULL,
@@ -872,10 +845,48 @@ ON CONFLICT (provider, version) DO UPDATE SET
   default_mapping = EXCLUDED.default_mapping,
   status = 'active';
 
+-- Dedicated Phase 2 connector master. The legacy tenant_integrations table is
+-- reserved for document sources and is intentionally left unchanged.
+CREATE TABLE IF NOT EXISTS grc_connector_instances (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  definition_id uuid NOT NULL REFERENCES grc_connector_definitions(id),
+  provider text NOT NULL,
+  connector_version text NOT NULL,
+  status text NOT NULL DEFAULT 'connected'
+    CHECK (status IN ('prepared', 'connected', 'error', 'disabled', 'disconnected')),
+  display_name text NOT NULL,
+  connected_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  scopes text,
+  metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+  execution_mode text NOT NULL DEFAULT 'sandbox'
+    CHECK (execution_mode IN ('sandbox', 'live')),
+  credential_envelope jsonb NOT NULL DEFAULT '{}'::jsonb,
+  oauth_state_hash text,
+  token_expires_at timestamptz,
+  refresh_after timestamptz,
+  cursor jsonb NOT NULL DEFAULT '{}'::jsonb,
+  schedule jsonb NOT NULL DEFAULT '{"enabled":false}'::jsonb,
+  webhook_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  rate_limit_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  retry_config jsonb NOT NULL DEFAULT '{"max_attempts":5,"base_seconds":30}'::jsonb,
+  health_status text NOT NULL DEFAULT 'unknown'
+    CHECK (health_status IN ('unknown', 'healthy', 'degraded', 'failed', 'disabled')),
+  last_error_code text,
+  next_sync_at timestamptz,
+  last_sync_at timestamptz,
+  disconnected_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, id),
+  FOREIGN KEY (provider, connector_version)
+    REFERENCES grc_connector_definitions(provider, version)
+);
+
 CREATE TABLE IF NOT EXISTS grc_connector_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  integration_id uuid NOT NULL REFERENCES tenant_integrations(id) ON DELETE CASCADE,
+  integration_id uuid NOT NULL REFERENCES grc_connector_instances(id) ON DELETE CASCADE,
   run_type text NOT NULL DEFAULT 'sync' CHECK (run_type IN ('sync', 'webhook', 'retry', 'healthcheck')),
   status text NOT NULL DEFAULT 'started' CHECK (status IN ('queued', 'started', 'completed', 'completed_with_warnings', 'failed', 'dead_lettered')),
   attempt integer NOT NULL DEFAULT 1 CHECK (attempt > 0),
@@ -901,7 +912,7 @@ CREATE TABLE IF NOT EXISTS grc_connector_runs (
 CREATE TABLE IF NOT EXISTS grc_external_records (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  integration_id uuid NOT NULL REFERENCES tenant_integrations(id) ON DELETE CASCADE,
+  integration_id uuid NOT NULL REFERENCES grc_connector_instances(id) ON DELETE CASCADE,
   run_id uuid NOT NULL REFERENCES grc_connector_runs(id) ON DELETE CASCADE,
   provider text NOT NULL,
   external_type text NOT NULL,
@@ -922,7 +933,7 @@ CREATE TABLE IF NOT EXISTS grc_external_records (
 CREATE TABLE IF NOT EXISTS grc_connector_mappings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  integration_id uuid NOT NULL REFERENCES tenant_integrations(id) ON DELETE CASCADE,
+  integration_id uuid NOT NULL REFERENCES grc_connector_instances(id) ON DELETE CASCADE,
   external_type text NOT NULL,
   target_type text NOT NULL,
   mapping jsonb NOT NULL,
@@ -940,7 +951,7 @@ CREATE TABLE IF NOT EXISTS grc_connector_mappings (
 CREATE TABLE IF NOT EXISTS grc_connector_dead_letters (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  integration_id uuid NOT NULL REFERENCES tenant_integrations(id) ON DELETE CASCADE,
+  integration_id uuid NOT NULL REFERENCES grc_connector_instances(id) ON DELETE CASCADE,
   run_id uuid REFERENCES grc_connector_runs(id) ON DELETE SET NULL,
   external_record_id uuid REFERENCES grc_external_records(id) ON DELETE SET NULL,
   error_code text NOT NULL,
@@ -999,7 +1010,7 @@ COMMENT ON TABLE grc_domain_events IS
   'Immutable idempotent domain event ledger for Phase 2 rules and operational effects.';
 COMMENT ON TABLE grc_metric_observations IS
   'Metric observations require explicit provenance and never replace KPI/KRI definitions.';
-COMMENT ON COLUMN tenant_integrations.credential_envelope IS
+COMMENT ON COLUMN grc_connector_instances.credential_envelope IS
   'Ciphertext envelope only. Plaintext credentials are rejected by the service and never returned by the API.';
 
 COMMIT;
