@@ -510,8 +510,13 @@ test.describe('Phase 1 GRC runtime', () => {
     await expect(grcPanel.getByRole('status')).toContainText('Evidencia rechazada con causa.');
     const versionButton = grcPanel.getByRole('button', { name: 'Nueva versión', exact: true });
     await expect(versionButton).toBeEnabled();
-    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/versions$/, () => versionButton.click());
-    await expect(grcPanel.getByRole('status')).toContainText('Nueva versión registrada.');
+    const createdVersion = await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/versions$/, () => versionButton.click());
+    expect(createdVersion.version).toBe(2);
+    const persistedResponse = await requireApi().get(`/api/grc/evidence/requests/${requestId}`, { headers: { Authorization: `Bearer ${adminToken}` } });
+    const persistedBody = await persistedResponse.json().catch(() => ({}));
+    expect(persistedResponse.status(), `Evidence detail failed: ${JSON.stringify(persistedBody)}`).toBe(200);
+    const persistedSubmission = persistedBody.data.submissions.find((item: { id: string }) => item.id === createdVersion.submission_id);
+    expect(persistedSubmission?.versions.some((item: { id: string }) => item.id === createdVersion.id)).toBe(true);
   });
 
   test('mapping operado desde la web conserva revisión tenant', async ({ page }) => {
