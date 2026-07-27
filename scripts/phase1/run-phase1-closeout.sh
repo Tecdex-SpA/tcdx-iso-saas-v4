@@ -66,6 +66,20 @@ chmod 700 "$EVIDENCE_DIR"
 stage=preflight
 cleanup_completed=false
 
+run_stage() {
+  local next_stage="$1"
+  shift
+  local code
+  stage="$next_stage"
+  set +e
+  "$@"
+  code=$?
+  set -e
+  if (( code != 0 )); then
+    on_error "$code"
+  fi
+}
+
 preserve_evidence() {
   mkdir -p "$EVIDENCE_DIR"
   for item in artifacts/fase-1/e2e-results.json artifacts/fase-1/phase1-targeted-results.json \
@@ -124,42 +138,32 @@ if [[ -f "$PHASE1_QA_MANIFEST" ]]; then
   exit 1
 fi
 
-stage=environment
-node scripts/phase1/check-phase1-runtime-env.js --allow-missing-manifest
+run_stage environment node scripts/phase1/check-phase1-runtime-env.js --allow-missing-manifest
+run_stage prepare env PHASE1_QA_CONFIRM=PREPARE_PHASE1_QA node scripts/phase1/prepare-phase1-runtime-qa.js
+run_stage bootstrap env PHASE1_QA_CONFIRM=PREPARE_PHASE1_QA \
+  PHASE1_IDEMPOTENCY_KEY="phase1-$PHASE1_QA_RUN_ID" node scripts/phase1/bootstrap-tenant-grc.js
+run_stage seed env PHASE1_QA_CONFIRM=PREPARE_PHASE1_QA node scripts/phase1/seed-phase1-qa.js
+run_stage environment-manifest node scripts/phase1/check-phase1-runtime-env.js
+run_stage fixture-preflight node scripts/phase1/verify-phase1-runtime-fixtures.js
 
-stage=prepare
-PHASE1_QA_CONFIRM=PREPARE_PHASE1_QA node scripts/phase1/prepare-phase1-runtime-qa.js
-stage=bootstrap
-PHASE1_QA_CONFIRM=PREPARE_PHASE1_QA PHASE1_IDEMPOTENCY_KEY="phase1-$PHASE1_QA_RUN_ID" node scripts/phase1/bootstrap-tenant-grc.js
-stage=seed
-PHASE1_QA_CONFIRM=PREPARE_PHASE1_QA node scripts/phase1/seed-phase1-qa.js
-node scripts/phase1/check-phase1-runtime-env.js
-
-stage=fixture-preflight
-node scripts/phase1/verify-phase1-runtime-fixtures.js
-
-stage=targeted-e2e
 export PHASE1_E2E_PASS=targeted
 export PHASE1_E2E_RESULTS_FILE=../artifacts/fase-1/phase1-targeted-results.json
 export PHASE1_PLAYWRIGHT_REPORT_DIR=../artifacts/fase-1/phase1-targeted-playwright-report
-npm --prefix frontend run test:e2e:phase1 -- --grep 'administrador crea workflow válido|administrador publica versión|evidencia recurrente|instancia operada desde la web|workflow editado desde la web|evidencia operada desde la web|mapping operado desde la web|auditoría operada desde la web|vista consolidada carga sin errores'
-node scripts/phase1/check-playwright-result.js artifacts/fase-1/phase1-targeted-results.json 13
+run_stage targeted-e2e npm --prefix frontend run test:e2e:phase1 -- --grep \
+  'administrador crea workflow válido|administrador publica versión|evidencia recurrente|instancia operada desde la web|workflow editado desde la web|evidencia operada desde la web|mapping operado desde la web|auditoría operada desde la web|vista consolidada carga sin errores'
+run_stage targeted-result node scripts/phase1/check-playwright-result.js \
+  artifacts/fase-1/phase1-targeted-results.json 13
 
-stage=full-e2e
 export PHASE1_E2E_PASS=full
 export PHASE1_E2E_RESULTS_FILE=../artifacts/fase-1/e2e-results.json
 export PHASE1_PLAYWRIGHT_REPORT_DIR=../artifacts/fase-1/phase1-playwright-report
-npm run phase1:runtime-check
-node scripts/phase1/check-playwright-result.js artifacts/fase-1/e2e-results.json 30
-
-stage=evidence
-node scripts/phase1/write-phase1-runtime-evidence.js
-stage=cleanup
-cleanup_database
+run_stage full-e2e npm run phase1:runtime-check
+run_stage full-result node scripts/phase1/check-playwright-result.js artifacts/fase-1/e2e-results.json 30
+run_stage evidence node scripts/phase1/write-phase1-runtime-evidence.js
+run_stage cleanup cleanup_database
 preserve_evidence
 
-stage=worktree-cleanup
-clean_worktree_artifacts
+run_stage worktree-cleanup clean_worktree_artifacts
 
 status="$(git status --short)"
 if [[ -n "$status" ]]; then
