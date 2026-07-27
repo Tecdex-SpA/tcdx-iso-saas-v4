@@ -493,21 +493,25 @@ test.describe('Phase 1 GRC runtime', () => {
     expect(loaded.status(), `Evidence requests API failed: ${JSON.stringify(loadedBody)}`).toBe(200);
     expect(loadedBody.ok, `Evidence requests API returned an invalid envelope: ${JSON.stringify(loadedBody)}`).toBe(true);
     expect(loadedBody.data.some((item: { id: string }) => item.id === requestId), 'La solicitud creada no fue devuelta por la API').toBe(true);
-    await expect(page.getByLabel('Operación GRC avanzada'), 'El panel GRC no se renderizó o el módulo está deshabilitado').toBeVisible();
-    const requestSelect = page.getByRole('combobox', { name: 'Solicitud', exact: true });
+    const grcPanel = page.getByLabel('Operación GRC avanzada');
+    await expect(grcPanel, 'El panel GRC no se renderizó o el módulo está deshabilitado').toBeVisible();
+    const requestSelect = grcPanel.getByRole('combobox', { name: 'Solicitud', exact: true });
     await expect(requestSelect, 'La UI no renderizó el selector accesible de solicitudes').toBeVisible();
     await selectOptionByLabel(requestSelect, evidenceRequestTitle);
-    await page.getByLabel('ID de evidencia existente').fill(String(process.env.E2E_EVIDENCE_ID));
-    await expect(page.getByRole('button', { name: 'Enviar evidencia' })).toBeEnabled();
-    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/requests\/[^/]+\/submissions$/, () => page.getByRole('button', { name: 'Enviar evidencia' }).click());
-    await expect(page.getByRole('status')).toContainText('Evidencia enviada a revisión.');
-    await page.getByLabel('Causa u observación').fill('Corrección solicitada desde recorrido web');
-    await expect(page.getByRole('button', { name: 'Rechazar' })).toBeEnabled();
-    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/review$/, () => page.getByRole('button', { name: 'Rechazar' }).click());
-    await expect(page.getByRole('status')).toContainText('Evidencia rechazada con causa.');
-    await expect(page.getByRole('button', { name: 'Nueva versión' })).toBeEnabled();
-    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/versions$/, () => page.getByRole('button', { name: 'Nueva versión' }).click());
-    await expect(page.getByRole('status')).toContainText('Nueva versión registrada.');
+    await grcPanel.getByLabel('ID de evidencia existente').fill(String(process.env.E2E_EVIDENCE_ID));
+    const submitButton = grcPanel.getByRole('button', { name: 'Enviar evidencia', exact: true });
+    await expect(submitButton).toBeEnabled();
+    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/requests\/[^/]+\/submissions$/, () => submitButton.click());
+    await expect(grcPanel.getByRole('status')).toContainText('Evidencia enviada a revisión.');
+    await grcPanel.getByLabel('Causa u observación').fill('Corrección solicitada desde recorrido web');
+    const rejectButton = grcPanel.getByRole('button', { name: 'Rechazar', exact: true });
+    await expect(rejectButton).toBeEnabled();
+    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/review$/, () => rejectButton.click());
+    await expect(grcPanel.getByRole('status')).toContainText('Evidencia rechazada con causa.');
+    const versionButton = grcPanel.getByRole('button', { name: 'Nueva versión', exact: true });
+    await expect(versionButton).toBeEnabled();
+    await expectMutation(page, 'POST', /\/api\/grc\/evidence\/submissions\/[^/]+\/versions$/, () => versionButton.click());
+    await expect(grcPanel.getByRole('status')).toContainText('Nueva versión registrada.');
   });
 
   test('mapping operado desde la web conserva revisión tenant', async ({ page }) => {
