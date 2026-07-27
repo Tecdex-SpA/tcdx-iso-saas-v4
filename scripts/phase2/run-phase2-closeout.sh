@@ -165,8 +165,8 @@ stage=phase1-prerequisite-e2e
 PHASE1_E2E_RESULTS_FILE=../artifacts/fase-1/phase1-prerequisite-results.json \
 PHASE1_PLAYWRIGHT_REPORT_DIR=../artifacts/fase-1/phase1-prerequisite-playwright-report \
   npm --prefix frontend run test:e2e:phase1 -- --grep \
-  'administrador crea workflow válido|administrador publica versión|evidencia recurrente|instancia operada desde la web|workflow editado desde la web|evidencia operada desde la web|mapping operado desde la web|auditoría operada desde la web|vista consolidada carga sin errores'
-node scripts/phase2/check-playwright-result.js artifacts/fase-1/phase1-prerequisite-results.json 13
+  'administrador crea workflow válido|administrador publica versión|evidencia recurrente|instancia operada desde la web|workflow editado desde la web|evidencia operada desde la web|mapping operado desde la web|auditoría operada desde la web'
+node scripts/phase2/check-playwright-result.js artifacts/fase-1/phase1-prerequisite-results.json 8
 cp artifacts/fase-1/phase1-prerequisite-results.json "$EVIDENCE_DIR/"
 
 stage=full-e2e
@@ -203,7 +203,7 @@ if [[ -n "$status" ]]; then
   exit 1
 fi
 
-printf '{"status":"VERIFIED_RUNTIME","sha":"%s","run_id":"%s","targeted":16,"phase1_prerequisite":13,"full":46,"retries":0,"cleanup":"CLEANED_AND_IDEMPOTENT","credentials":"RESTORED","git":"clean"}\n' \
+printf '{"status":"VERIFIED_RUNTIME","sha":"%s","run_id":"%s","targeted":16,"phase1_prerequisite":8,"full":46,"retries":0,"cleanup":"CLEANED_AND_IDEMPOTENT","credentials":"RESTORED","git":"clean"}\n' \
   "$DEPLOYED_SHA" "$BASE_RUN_ID" > "$EVIDENCE_DIR/phase2-closeout-result.json"
 cat > "$EVIDENCE_DIR/phase2-closeout-result.md" <<EOF
 # Phase 2 closeout
@@ -212,7 +212,7 @@ cat > "$EVIDENCE_DIR/phase2-closeout-result.md" <<EOF
 - SHA: $DEPLOYED_SHA
 - Run: $BASE_RUN_ID
 - Targeted E2E: 16/16
-- Phase 1 idempotency prerequisite: 13/13
+- Phase 1 stateful idempotency prerequisite: 8/8
 - Full E2E: 46/46
 - Retries/skips/fixme: 0
 - Phase 2 cleanup: CLEANED, then ALREADY_CLEAN
