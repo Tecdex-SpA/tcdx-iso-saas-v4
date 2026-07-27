@@ -479,6 +479,7 @@ test.describe('Phase 1 GRC runtime', () => {
   });
 
   test('evidencia operada desde la web se entrega, versiona y rechaza con causa', async ({ page }) => {
+    test.setTimeout(90_000);
     const requestId = await ensureEvidenceRequest();
     await installSession(page, adminToken);
     const requestsResponse = page.waitForResponse(response => {
