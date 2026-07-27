@@ -66,6 +66,11 @@ test.describe.serial('Phase 2 integrated GRC runtime', () => {
   const auth = () => ({ Authorization: `Bearer ${adminToken}` });
 
   test.beforeAll(async () => {
+    const rateLimitResetWaitMs = Number(process.env.PHASE2_RATE_LIMIT_RESET_WAIT_MS || 0);
+    if (Number.isFinite(rateLimitResetWaitMs) && rateLimitResetWaitMs > 0) {
+      test.setTimeout(rateLimitResetWaitMs + 60_000);
+      await new Promise(resolve => setTimeout(resolve, rateLimitResetWaitMs));
+    }
     api = await createRequest.newContext({ baseURL: apiBaseUrl });
     const [admin, restricted, tenantB] = await Promise.all([
       login(api, String(process.env.E2E_ADMIN_EMAIL), String(process.env.E2E_ADMIN_PASSWORD)),

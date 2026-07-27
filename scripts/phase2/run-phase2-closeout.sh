@@ -172,7 +172,15 @@ cp artifacts/fase-1/phase1-prerequisite-results.json "$EVIDENCE_DIR/"
 stage=full-e2e
 PHASE1_E2E_PASS=full
 export PHASE1_E2E_PASS
+rate_limit_reset_wait_seconds="${PHASE2_RATE_LIMIT_RESET_WAIT_SECONDS:-62}"
+if [[ ! "$rate_limit_reset_wait_seconds" =~ ^[0-9]+$ || "$rate_limit_reset_wait_seconds" -lt 60 ]]; then
+  echo "PHASE2_RATE_LIMIT_RESET_WAIT_SECONDS must be an integer >= 60" >&2
+  exit 1
+fi
+echo "Waiting ${rate_limit_reset_wait_seconds}s for the production rate-limit window before the full suite."
+sleep "$rate_limit_reset_wait_seconds"
 PHASE2_INCLUDE_PHASE1=1 \
+PHASE2_RATE_LIMIT_RESET_WAIT_MS="$((rate_limit_reset_wait_seconds * 1000))" \
 PHASE2_E2E_RESULTS_FILE=../artifacts/fase-2/phase2-full-results.json \
 PHASE2_PLAYWRIGHT_REPORT_DIR=../artifacts/fase-2/phase2-full-playwright-report \
   npm --prefix frontend run test:e2e:phase2

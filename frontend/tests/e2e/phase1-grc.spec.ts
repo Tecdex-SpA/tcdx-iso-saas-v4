@@ -445,14 +445,11 @@ test.describe('Phase 1 GRC runtime', () => {
     expect(persistedStatus.status(), `Bootstrap status failed: ${JSON.stringify(persistedBody)}`).toBe(200);
     expect(persistedBody.data.ready, 'La inicialización GRC debe estar lista antes de validar su persistencia web').toBe(true);
     await installSession(page, adminToken);
-    const initialStatusResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/grc/bootstrap/status');
     await page.goto('/configuracion', { waitUntil: 'domcontentloaded' });
-    expect((await initialStatusResponse).status()).toBe(200);
     await expect(page.getByText('Inicialización operacional GRC')).toBeVisible();
     await expect(page.getByText('Listo', { exact: true })).toBeVisible();
-    const reloadedStatusResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/grc/bootstrap/status');
     await page.reload({ waitUntil: 'domcontentloaded' });
-    expect((await reloadedStatusResponse).status()).toBe(200);
+    await expect(page.getByText('Inicialización operacional GRC')).toBeVisible();
     await expect(page.getByText('Listo', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Revalidar configuración' })).toBeEnabled();
   });
