@@ -113,7 +113,7 @@ clean_worktree_artifacts() {
 }
 
 on_error() {
-  code=$?
+  code="${1:-$?}"
   trap - ERR
   preserve_evidence
   if [[ -f "$PHASE1_QA_MANIFEST" && "$cleanup_completed" != true ]]; then
