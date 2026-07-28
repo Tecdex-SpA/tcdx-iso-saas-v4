@@ -13,6 +13,8 @@ const exists = relative => fs.existsSync(path.join(root, relative));
 
 const required = [
   'backend/src/routes/imports.routes.js',
+  'backend/src/middleware/rbac.middleware.js',
+  'backend/src/middleware/rbac.middleware.test.js',
   'backend/src/services/imports/importDefinitions.js',
   'backend/src/services/imports/excelWorkbook.js',
   'backend/src/services/imports/excelWorkbook.test.js',
@@ -30,6 +32,7 @@ const missing = required.filter(relative => !exists(relative));
 if (missing.length) throw new Error(`Universal import missing files: ${missing.join(', ')}`);
 
 const routes = read('backend/src/routes/imports.routes.js');
+const rbac = read('backend/src/middleware/rbac.middleware.js');
 const workbook = read('backend/src/services/imports/excelWorkbook.js');
 const service = read('backend/src/services/imports/universalImport.service.js');
 const migration = read('database/migrations/20260730_universal_excel_import.sql');
@@ -51,6 +54,49 @@ const routeMarkers = [
 ];
 const missingRoutes = routeMarkers.filter(marker => !routes.includes(marker));
 if (missingRoutes.length) throw new Error(`Universal import route gaps: ${missingRoutes.join(', ')}`);
+const firstBatchRoute = routes.indexOf("router.get('/:batchId'");
+for (const marker of routeMarkers.slice(0, 6)) {
+  if (routes.indexOf(marker) > firstBatchRoute) {
+    throw new Error(`Universal import static route follows /:batchId: ${marker}`);
+  }
+}
+
+const rbacPermissions = [
+  'imports.read',
+  'imports.template.download',
+  'imports.catalog.download',
+  'imports.preview',
+  'imports.confirm',
+  'imports.rollback',
+  'imports.history.read',
+  'imports.errors.download',
+];
+const missingRbacPermissions = rbacPermissions.filter(permission => !rbac.includes(permission));
+if (missingRbacPermissions.length) {
+  throw new Error(`Universal import RBAC gaps: ${missingRbacPermissions.join(', ')}`);
+}
+if (!rbac.includes('function findRule(method, path)')) {
+  throw new Error('Universal import RBAC is not registered in the central rule matcher');
+}
+if (rbac.includes("prefix: '/api/imports'")) {
+  throw new Error('Universal import RBAC must not use a broad prefix wildcard');
+}
+for (const permission of ['operations.dashboard.read', 'operations.import']) {
+  if (!service.includes(permission)) {
+    throw new Error(`Universal import persisted permission missing: ${permission}`);
+  }
+}
+const productionImportSource = `${routes}\n${rbac}\n${service}`;
+for (const forbiddenIdentity of [
+  '70000000-0000-0000-0000-000000000701',
+  'admin.demo@tcdx.local',
+  'owner-a@example.test',
+  'owner-b@example.test',
+]) {
+  if (productionImportSource.includes(forbiddenIdentity)) {
+    throw new Error(`Universal import production path contains fixed identity: ${forbiddenIdentity}`);
+  }
+}
 
 const securityMarkers = [
   'IMPORT_MACRO_REJECTED',
@@ -102,8 +148,12 @@ if (missingUi.length) throw new Error(`Universal import UI gaps: ${missingUi.joi
 
 const definitions = listImportDefinitions();
 const operational = definitions.filter(item => item.availability === 'importable_now');
-if (definitions.length < 30 || operational.length < 10) {
-  throw new Error(`Insufficient domain inventory: total=${definitions.length} operational=${operational.length}`);
+const blocked = definitions.filter(item => item.availability === 'blocked');
+if (definitions.length !== 33 || operational.length !== 10 || blocked.length !== 23) {
+  throw new Error(
+    `Unexpected domain inventory: total=${definitions.length} `
+    + `operational=${operational.length} blocked=${blocked.length}`
+  );
 }
 for (const wave of [1, 2, 3]) {
   if (!definitions.some(item => item.wave === wave)) {

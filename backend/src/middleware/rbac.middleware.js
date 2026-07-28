@@ -48,16 +48,21 @@ const REPORT_GENERATE_ROLES = [
   'auditor',
 ];
 const TENANT_DASHBOARD_ROLES = ['admin', 'tenant_admin', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
+const IMPORT_READ_ROLES = [...TENANT_ADMIN_ROLES, 'auditor'];
+const IMPORT_OPERATE_ROLES = [...TENANT_ADMIN_ROLES];
 
 function roleIsPlatform(role) {
   return PLATFORM_ROLES.includes(role);
 }
 
-function deny(res, message = 'No autorizado para ejecutar esta acción') {
+function deny(req, res, message = 'No autorizado para ejecutar esta acción') {
+  res.locals = res.locals || {};
+  res.locals.errorCode = 'RBAC_DENIED';
   return res.status(403).json({
     ok: false,
     code: 'RBAC_DENIED',
     error: message,
+    request_id: req.requestId || null,
   });
 }
 
@@ -102,6 +107,68 @@ function roleCanUseReports(role, permission) {
 }
 
 const API_RULES = [
+  // Importaciones: rutas explícitas; no agregar un prefijo amplio /api/imports.
+  {
+    method: 'GET',
+    pattern: /^\/api\/imports\/definitions$/,
+    permission: 'imports.read',
+    roles: IMPORT_READ_ROLES,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/imports\/definitions\/[^/]+$/,
+    permission: 'imports.read',
+    roles: IMPORT_READ_ROLES,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/imports\/templates\/[^/]+\.xlsx$/,
+    permission: 'imports.template.download',
+    roles: IMPORT_READ_ROLES,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/imports\/catalogs\/[^/]+\.xlsx$/,
+    permission: 'imports.catalog.download',
+    roles: IMPORT_READ_ROLES,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/imports\/preview$/,
+    permission: 'imports.preview',
+    roles: IMPORT_OPERATE_ROLES,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/imports\/history$/,
+    permission: 'imports.history.read',
+    roles: IMPORT_READ_ROLES,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/imports\/[^/]+$/,
+    permission: 'imports.read',
+    roles: IMPORT_READ_ROLES,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/imports\/[^/]+\/confirm$/,
+    permission: 'imports.confirm',
+    roles: IMPORT_OPERATE_ROLES,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/imports\/[^/]+\/rollback$/,
+    permission: 'imports.rollback',
+    roles: IMPORT_OPERATE_ROLES,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/imports\/[^/]+\/errors\.xlsx$/,
+    permission: 'imports.errors.download',
+    roles: IMPORT_READ_ROLES,
+  },
+
   // Perfil / contexto / módulos
   {
     prefix: '/api/me',
@@ -512,17 +579,22 @@ const API_RULES = [
   },
 ];
 
-function findRule(path) {
-  return API_RULES.find((rule) => starts(path, rule.prefix)) || null;
+function findRule(method, path) {
+  return API_RULES.find(rule => (
+    rule.pattern
+      ? rule.method === method && rule.pattern.test(path)
+      : starts(path, rule.prefix)
+  )) || null;
 }
 
 function enforceApiAccess(req, res, next) {
   const role = getUserRole(req);
   const path = pathOf(req);
+  const method = String(req.method || '').toUpperCase();
   const read = isReadMethod(req);
 
   if (!role) {
-    return deny(res, 'Usuario sin rol válido');
+    return deny(req, res, 'Usuario sin rol válido');
   }
 
   if (roleIsPlatform(role)) {
@@ -546,7 +618,7 @@ function enforceApiAccess(req, res, next) {
       return next();
     }
 
-    return deny(res, `Permiso reports:${reportPermission} requerido`);
+    return deny(req, res, `Permiso reports:${reportPermission} requerido`);
   }
 
   if (role === 'dealer') {
@@ -558,22 +630,26 @@ function enforceApiAccess(req, res, next) {
 
     if (dealerAllowed) return next();
 
-    return deny(res, 'Rol dealer no autorizado para esta sección');
+    return deny(req, res, 'Rol dealer no autorizado para esta sección');
   }
 
-  const rule = findRule(path);
+  const rule = findRule(method, path);
 
   if (!rule) {
-    return deny(res, 'Ruta API sin regla RBAC explícita');
+    return deny(req, res, 'Ruta API sin regla RBAC explícita');
   }
 
-  const allowedRoles = read ? rule.read : rule.write;
+  const allowedRoles = rule.roles || (read ? rule.read : rule.write);
 
   if (allowedRoles.includes(role)) {
     return next();
   }
 
-  return deny(res);
+  return deny(
+    req,
+    res,
+    rule.permission ? `Permiso ${rule.permission} requerido` : undefined
+  );
 }
 
 module.exports = {
