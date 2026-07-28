@@ -44,6 +44,9 @@
     "phase2:e2e:full-discovery": "PHASE2_INCLUDE_PHASE1=1 npm --prefix frontend run test:e2e:phase2:list",
     "phase2:check": "npm run phase2:contracts:check && npm run phase2:migration-check && npm run phase2:postgres-integration && npm run phase2:scripts-check && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run build && npm run phase2:e2e:discovery && npm run phase2:e2e:full-discovery && git diff --check",
     "phase2:cleanup": "node scripts/phase2/cleanup-phase2-qa.js",
-    "phase2:closeout": "bash scripts/phase2/run-phase2-closeout.sh --remote"
+    "phase2:closeout": "bash scripts/phase2/run-phase2-closeout.sh --remote",
+    "phase3:migration:checksum": "node scripts/phase3/apply-phase3-migration.js --checksum",
+    "phase3:migration:preflight": "node scripts/phase3/apply-phase3-migration.js --preflight",
+    "phase3:migration:apply": "node scripts/phase3/apply-phase3-migration.js --apply"
   }
 }

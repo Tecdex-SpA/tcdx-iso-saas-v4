@@ -1,12 +1,18 @@
 #!/usr/bin/env node
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '../..');
-require(path.join(root, 'backend/node_modules/dotenv')).config({
-  path: path.join(root, 'backend/.env'),
-});
-const pool = require(path.join(root, 'backend/src/config/db'));
+const { Client } = require(path.join(root, 'backend/node_modules/pg'));
+
+const MIGRATION_ID = '20260728_phase3_operational_grc';
+const MIGRATION_FILE = path.join(
+  root,
+  'database/migrations/20260728_phase3_operational_grc.sql'
+);
+const ADVISORY_LOCK_NAMESPACE = 844332;
+const ADVISORY_LOCK_KEY = 20260728;
 
 const permissionKeys = [
   'organizations.read', 'organizations.manage',
@@ -21,23 +27,319 @@ const permissionKeys = [
   'operations.dashboard.read', 'operations.360.read',
 ];
 
-async function main() {
-  const file = path.join(root, 'database/migrations/20260728_phase3_operational_grc.sql');
-  await pool.query(fs.readFileSync(file, 'utf8'));
+function sanitizeError(error) {
+  const message = String(error?.message || 'unknown migration error')
+    .replace(/postgres(?:ql)?:\/\/\S+/gi, '[redacted-database-url]')
+    .replace(/\bpassword\s*=\s*\S+/gi, 'password=[redacted]')
+    .replace(/\bMIGRATION_DATABASE_URL\s*=\s*\S+/gi, 'MIGRATION_DATABASE_URL=[redacted]');
+  return {
+    code: String(error?.code || 'MIGRATION_ERROR').slice(0, 64),
+    message: message.slice(0, 1000),
+  };
+}
 
-  const result = await pool.query(
+function readMigration() {
+  const sql = fs.readFileSync(MIGRATION_FILE, 'utf8');
+  const checksum = crypto.createHash('sha256').update(sql).digest('hex');
+  return { sql, checksum };
+}
+
+function unwrapMigrationTransaction(sql) {
+  const lines = sql.split(/\r?\n/);
+  const beginIndexes = [];
+  const commitIndexes = [];
+
+  lines.forEach((line, index) => {
+    const normalized = line.trim().toUpperCase();
+    if (normalized === 'BEGIN;') beginIndexes.push(index);
+    if (normalized === 'COMMIT;') commitIndexes.push(index);
+  });
+
+  if (
+    beginIndexes.length !== 1
+    || commitIndexes.length !== 1
+    || beginIndexes[0] >= commitIndexes[0]
+  ) {
+    throw new Error('Migration must contain exactly one outer BEGIN/COMMIT pair');
+  }
+
+  return [
+    ...lines.slice(0, beginIndexes[0]),
+    ...lines.slice(beginIndexes[0] + 1, commitIndexes[0]),
+    ...lines.slice(commitIndexes[0] + 1),
+  ].join('\n');
+}
+
+function requireMigrationDatabaseUrl() {
+  const value = String(process.env.MIGRATION_DATABASE_URL || '').trim();
+  if (!value) {
+    throw new Error(
+      'MIGRATION_DATABASE_URL is required for privileged DDL migrations; '
+      + 'DATABASE_URL is not accepted as a fallback'
+    );
+  }
+  if (!/^postgres(?:ql)?:\/\//i.test(value)) {
+    throw new Error('MIGRATION_DATABASE_URL must be a PostgreSQL connection URL');
+  }
+  return value;
+}
+
+async function runPrivilegePreflight(client) {
+  const result = await client.query(`
+    WITH actor AS (
+      SELECT oid, rolsuper
+      FROM pg_roles
+      WHERE rolname = current_user
+    ),
+    target AS (
+      SELECT c.relowner, pg_get_userbyid(c.relowner) AS owner_name
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relname = 'tenant_processes'
+        AND c.relkind IN ('r', 'p')
+    ),
+    alter_targets AS (
+      SELECT
+        COUNT(*)::int AS target_count,
+        BOOL_AND(
+          actor.rolsuper
+          OR c.relowner = actor.oid
+          OR pg_has_role(c.relowner, 'USAGE')
+        ) AS can_alter_all
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN actor
+      WHERE n.nspname = 'public'
+        AND c.relname = ANY(ARRAY[
+          'tenant_processes', 'grc_phase2_relations', 'grc_exports'
+        ])
+        AND c.relkind IN ('r', 'p')
+    )
+    SELECT
+      current_user AS migration_user,
+      target.owner_name AS tenant_processes_owner,
+      (
+        actor.rolsuper
+        OR target.relowner = actor.oid
+        OR pg_has_role(target.relowner, 'USAGE')
+      ) AS can_alter_tenant_processes,
+      (
+        alter_targets.target_count = 3
+        AND alter_targets.can_alter_all
+      ) AS can_alter_required_tables,
+      has_schema_privilege(current_user, 'public', 'CREATE') AS can_create_tables,
+      (
+        has_schema_privilege(current_user, 'public', 'CREATE')
+        AND (
+          actor.rolsuper
+          OR target.relowner = actor.oid
+          OR pg_has_role(target.relowner, 'USAGE')
+        )
+      ) AS can_create_indexes,
+      (
+        EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto')
+        OR (
+          EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pgcrypto')
+          AND has_database_privilege(current_user, current_database(), 'CREATE')
+        )
+      ) AS pgcrypto_available,
+      (
+        has_table_privilege(current_user, 'public.permissions', 'SELECT,INSERT,UPDATE')
+        AND has_table_privilege(current_user, 'public.role_permissions', 'SELECT,INSERT,UPDATE')
+        AND has_table_privilege(current_user, 'public.saas_modules', 'SELECT,INSERT,UPDATE')
+        AND has_table_privilege(
+          current_user,
+          'public.tenant_module_settings',
+          'SELECT,INSERT,UPDATE'
+        )
+      ) AS can_write_catalog
+    FROM actor
+    CROSS JOIN target
+    CROSS JOIN alter_targets
+  `);
+
+  if (result.rowCount !== 1) {
+    throw new Error('Privilege preflight could not resolve public.tenant_processes');
+  }
+
+  const row = result.rows[0];
+  const visible = {
+    migration_user: row.migration_user,
+    tenant_processes_owner: row.tenant_processes_owner,
+    can_alter_tenant_processes: row.can_alter_tenant_processes === true,
+    can_create_tables: row.can_create_tables === true,
+    can_create_indexes: row.can_create_indexes === true,
+    pgcrypto_available: row.pgcrypto_available === true,
+  };
+
+  for (const [key, value] of Object.entries(visible)) {
+    process.stdout.write(`${key}=${value}\n`);
+  }
+
+  if (
+    !visible.can_alter_tenant_processes
+    || row.can_alter_required_tables !== true
+    || row.migration_user === 'tecdex_user'
+    || !visible.can_create_tables
+    || !visible.can_create_indexes
+    || !visible.pgcrypto_available
+    || row.can_write_catalog !== true
+  ) {
+    throw new Error('Migration privilege preflight failed');
+  }
+
+  return visible;
+}
+
+async function acquireMigrationLock(client) {
+  const result = await client.query(
+    'SELECT pg_try_advisory_lock($1, $2) AS acquired',
+    [ADVISORY_LOCK_NAMESPACE, ADVISORY_LOCK_KEY]
+  );
+  if (result.rows[0]?.acquired !== true) {
+    throw new Error('Another Phase 3 migration process holds the advisory lock');
+  }
+}
+
+async function releaseMigrationLock(client) {
+  const result = await client.query(
+    'SELECT pg_advisory_unlock($1, $2)',
+    [ADVISORY_LOCK_NAMESPACE, ADVISORY_LOCK_KEY]
+  );
+  if (result.rows[0]?.pg_advisory_unlock !== true) {
+    throw new Error('Phase 3 advisory lock was not released by this session');
+  }
+}
+
+async function ensureLedger(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS public.schema_migrations (
+      migration_id text PRIMARY KEY,
+      checksum char(64) NOT NULL,
+      applied_at timestamptz,
+      applied_by text NOT NULL,
+      duration_ms bigint NOT NULL DEFAULT 0 CHECK (duration_ms >= 0),
+      status text NOT NULL CHECK (status IN ('running', 'applied', 'failed')),
+      details jsonb NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
+  await client.query(`
+    COMMENT ON TABLE public.schema_migrations IS
+      'Administrative migration ledger. It never stores credentials or connection URLs.'
+  `);
+
+  const compatibility = await client.query(`
+    SELECT
+      COUNT(*) FILTER (
+        WHERE column_name IN (
+          'migration_id', 'checksum', 'applied_at', 'applied_by',
+          'duration_ms', 'status', 'details'
+        )
+      )::int AS required_columns,
+      EXISTS (
+        SELECT 1
+        FROM pg_index i
+        JOIN pg_class c ON c.oid = i.indrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relname = 'schema_migrations'
+          AND i.indisunique
+          AND pg_get_indexdef(i.indexrelid) LIKE '%(migration_id)%'
+      ) AS migration_id_unique
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'schema_migrations'
+  `);
+
+  const row = compatibility.rows[0];
+  if (row.required_columns !== 7 || row.migration_id_unique !== true) {
+    throw new Error('Existing public.schema_migrations schema is incompatible');
+  }
+}
+
+async function readLedgerEntry(client) {
+  const result = await client.query(
+    `SELECT migration_id, checksum, status
+     FROM public.schema_migrations
+     WHERE migration_id = $1`,
+    [MIGRATION_ID]
+  );
+  return result.rows[0] || null;
+}
+
+async function markRunning(client, checksum, migrationUser) {
+  await client.query(
+    `INSERT INTO public.schema_migrations (
+       migration_id, checksum, applied_at, applied_by, duration_ms, status, details
+     ) VALUES ($1, $2, NULL, $3, 0, 'running', $4::jsonb)
+     ON CONFLICT (migration_id) DO UPDATE SET
+       checksum = EXCLUDED.checksum,
+       applied_at = NULL,
+       applied_by = EXCLUDED.applied_by,
+       duration_ms = 0,
+       status = 'running',
+       details = EXCLUDED.details`,
+    [
+      MIGRATION_ID,
+      checksum,
+      migrationUser,
+      JSON.stringify({
+        migration_file: path.relative(root, MIGRATION_FILE),
+        started_at: new Date().toISOString(),
+      }),
+    ]
+  );
+}
+
+async function markFailed(client, checksum, migrationUser, durationMs, error) {
+  const safe = sanitizeError(error);
+  await client.query(
+    `INSERT INTO public.schema_migrations (
+       migration_id, checksum, applied_at, applied_by, duration_ms, status, details
+     ) VALUES ($1, $2, NULL, $3, $4, 'failed', $5::jsonb)
+     ON CONFLICT (migration_id) DO UPDATE SET
+       checksum = EXCLUDED.checksum,
+       applied_at = NULL,
+       applied_by = EXCLUDED.applied_by,
+       duration_ms = EXCLUDED.duration_ms,
+       status = 'failed',
+       details = EXCLUDED.details`,
+    [
+      MIGRATION_ID,
+      checksum,
+      migrationUser,
+      durationMs,
+      JSON.stringify({
+        migration_file: path.relative(root, MIGRATION_FILE),
+        failed_at: new Date().toISOString(),
+        error_code: safe.code,
+        error_message: safe.message,
+      }),
+    ]
+  );
+}
+
+async function verifyPostconditions(client) {
+  const result = await client.query(
     `SELECT
-       (SELECT COUNT(*)::int FROM permissions WHERE permission_key = ANY($1::text[])) AS permissions,
-       (SELECT default_enabled FROM saas_modules WHERE module_key='grc_phase3_operations') AS default_enabled,
-       (SELECT is_enabled FROM tenant_module_settings
-        WHERE tenant_id='70000000-0000-0000-0000-000000000701'::uuid
-          AND module_key='grc_phase3_operations') AS tcdx_enabled,
+       (SELECT COUNT(*)::int
+        FROM permissions
+        WHERE permission_key = ANY($1::text[])) AS permissions,
+       (SELECT default_enabled
+        FROM saas_modules
+        WHERE module_key = 'grc_phase3_operations') AS default_enabled,
+       (SELECT is_enabled
+        FROM tenant_module_settings
+        WHERE tenant_id = '70000000-0000-0000-0000-000000000701'::uuid
+          AND module_key = 'grc_phase3_operations') AS tcdx_enabled,
        to_regclass('public.grc_organizational_units') IS NOT NULL AS units_ready,
        to_regclass('public.grc_bia_assessments') IS NOT NULL AS bia_ready,
        to_regclass('public.grc_continuity_plans') IS NOT NULL AS continuity_ready,
        to_regclass('public.grc_metric_definitions') IS NOT NULL AS metrics_ready`,
     [permissionKeys]
   );
+
   const row = result.rows[0];
   if (
     row.permissions !== permissionKeys.length
@@ -50,15 +352,145 @@ async function main() {
   ) {
     throw new Error('Phase 3 migration postcondition failed');
   }
-  process.stdout.write(
-    `Phase 3 migration applied: permissions=${row.permissions} default_enabled=false tcdx_enabled=true\n`
-  );
+
+  return {
+    permissions: row.permissions,
+    default_enabled: row.default_enabled,
+    tcdx_enabled: row.tcdx_enabled,
+    units_ready: row.units_ready,
+    bia_ready: row.bia_ready,
+    continuity_ready: row.continuity_ready,
+    metrics_ready: row.metrics_ready,
+  };
 }
 
-main()
-  .then(() => pool.end())
-  .catch(async error => {
-    console.error(`Phase 3 migration failed: ${error.message}`);
-    await pool.end().catch(() => undefined);
-    process.exit(1);
+async function applyMigration(client, rawSql, checksum, migrationUser) {
+  const existing = await readLedgerEntry(client);
+  if (existing && existing.checksum !== checksum) {
+    throw new Error(
+      `Checksum mismatch for migration_id ${MIGRATION_ID}; refusing to execute changed DDL`
+    );
+  }
+
+  if (existing?.status === 'applied') {
+    await verifyPostconditions(client);
+    process.stdout.write(
+      `migration_id=${MIGRATION_ID} status=already_applied checksum=${checksum}\n`
+    );
+    return;
+  }
+
+  const sql = unwrapMigrationTransaction(rawSql);
+  const startedAt = Date.now();
+  await markRunning(client, checksum, migrationUser);
+
+  try {
+    await client.query('BEGIN');
+    await client.query("SET LOCAL lock_timeout = '10s'");
+    await client.query(sql);
+    const postconditions = await verifyPostconditions(client);
+    const durationMs = Date.now() - startedAt;
+    await client.query(
+      `UPDATE public.schema_migrations
+       SET applied_at = now(),
+           applied_by = $2,
+           duration_ms = $3,
+           status = 'applied',
+           details = $4::jsonb
+       WHERE migration_id = $1
+         AND checksum = $5`,
+      [
+        MIGRATION_ID,
+        migrationUser,
+        durationMs,
+        JSON.stringify({
+          migration_file: path.relative(root, MIGRATION_FILE),
+          postconditions,
+        }),
+        checksum,
+      ]
+    );
+    await client.query('COMMIT');
+    process.stdout.write(
+      `migration_id=${MIGRATION_ID} status=applied checksum=${checksum} `
+      + `duration_ms=${durationMs}\n`
+    );
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    const durationMs = Date.now() - startedAt;
+    try {
+      await markFailed(client, checksum, migrationUser, durationMs, error);
+    } catch (ledgerError) {
+      const primary = sanitizeError(error);
+      const ledger = sanitizeError(ledgerError);
+      throw new Error(
+        `Migration rolled back [${primary.code}]; `
+        + `failed to record ledger [${ledger.code}]`
+      );
+    }
+    throw error;
+  }
+}
+
+async function main() {
+  const mode = process.argv[2];
+  const { sql, checksum } = readMigration();
+
+  if (mode === '--checksum') {
+    process.stdout.write(`migration_id=${MIGRATION_ID} checksum=${checksum}\n`);
+    return;
+  }
+
+  if (!['--preflight', '--apply'].includes(mode)) {
+    throw new Error('Usage: apply-phase3-migration.js --checksum|--preflight|--apply');
+  }
+
+  const client = new Client({
+    connectionString: requireMigrationDatabaseUrl(),
+    application_name: 'TCDX Phase 3 privileged migration runner',
   });
+  let lockAcquired = false;
+  let operationError = null;
+
+  try {
+    await client.connect();
+    const preflight = await runPrivilegePreflight(client);
+    if (mode === '--preflight') {
+      process.stdout.write(`migration_id=${MIGRATION_ID} status=preflight_ok\n`);
+    } else {
+      await acquireMigrationLock(client);
+      lockAcquired = true;
+      await ensureLedger(client);
+      await applyMigration(client, sql, checksum, preflight.migration_user);
+    }
+  } catch (error) {
+    operationError = error;
+  }
+
+  let cleanupError = null;
+  try {
+    if (lockAcquired) {
+      await releaseMigrationLock(client);
+    }
+  } catch (error) {
+    cleanupError = error;
+  }
+  try {
+    await client.end();
+  } catch (error) {
+    cleanupError ||= error;
+  }
+
+  if (operationError) {
+    throw operationError;
+  }
+  if (cleanupError) {
+    throw cleanupError;
+  }
+}
+
+main().catch(error => {
+  const safe = sanitizeError(error);
+  console.error(`Phase 3 migration failed [${safe.code}]: ${safe.message}`);
+  process.exit(1);
+});

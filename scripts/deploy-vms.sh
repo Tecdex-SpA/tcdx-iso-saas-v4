@@ -21,6 +21,7 @@ REMOTE_REPO_DIR="${TCDX_REMOTE_REPO_DIR:-/home/tecdex/tcdx-iso-saas-v4}"
 REMOTE_BACKEND_DIR="${REMOTE_REPO_DIR}/backend"
 REMOTE_FRONTEND_DIR="${REMOTE_REPO_DIR}/frontend"
 REMOTE_AI_ENGINE_DIR="${REMOTE_REPO_DIR}/ai-engine"
+REMOTE_MIGRATION_ENV_FILE="${TCDX_MIGRATION_ENV_FILE:-/home/tecdex/.config/tcdx/migration.env}"
 
 BACKEND_WRAPPER="/home/tecdex/deploy-backend.sh"
 FRONTEND_WRAPPER="/home/tecdex/deploy-frontend.sh"
@@ -142,6 +143,76 @@ deploy_remote() {
   run_ssh "$host" "$wrapper"
 }
 
+sync_backend_source_for_migrations() {
+  local expected_sha="$1"
+
+  echo ""
+  echo "Sincronizando codigo backend para migraciones sin reiniciar servicios"
+
+  run_ssh "$BACKEND_HOST" "
+    set -Eeuo pipefail
+    cd '${REMOTE_REPO_DIR}'
+
+    if [[ -n \"\$(git status --porcelain)\" ]]; then
+      echo 'ERROR: repositorio backend remoto tiene cambios locales.'
+      exit 1
+    fi
+
+    git fetch origin --prune
+    git switch main
+    git pull --ff-only origin main
+
+    actual_sha=\"\$(git rev-parse HEAD)\"
+    if [[ \"\$actual_sha\" != '${expected_sha}' ]]; then
+      echo 'ERROR: SHA backend preparado no coincide con el SHA local validado.'
+      exit 1
+    fi
+
+    echo \"Backend preparado para migracion: \$actual_sha\"
+  "
+}
+
+run_phase3_migration() {
+  local mode="$1"
+
+  run_ssh "$BACKEND_HOST" "
+    set -Eeuo pipefail
+    migration_env_file='${REMOTE_MIGRATION_ENV_FILE}'
+
+    if [[ ! -r \"\$migration_env_file\" ]]; then
+      echo 'ERROR: archivo protegido de migracion ausente o no legible.'
+      echo 'Ruta esperada: ${REMOTE_MIGRATION_ENV_FILE}'
+      exit 1
+    fi
+
+    file_mode=\"\$(stat -c '%a' \"\$migration_env_file\")\"
+    if [[ \"\$file_mode\" != '600' && \"\$file_mode\" != '400' ]]; then
+      echo 'ERROR: el archivo de migracion debe tener permisos 600 o 400.'
+      exit 1
+    fi
+
+    file_owner=\"\$(stat -c '%U' \"\$migration_env_file\")\"
+    current_user=\"\$(id -un)\"
+    if [[ \"\$file_owner\" != \"\$current_user\" ]]; then
+      echo 'ERROR: el archivo de migracion debe pertenecer al usuario de deploy.'
+      exit 1
+    fi
+
+    set -a
+    source \"\$migration_env_file\"
+    set +a
+
+    if [[ -z \"\${MIGRATION_DATABASE_URL:-}\" ]]; then
+      echo 'ERROR: MIGRATION_DATABASE_URL no esta definida en el entorno protegido.'
+      exit 1
+    fi
+
+    cd '${REMOTE_REPO_DIR}'
+    node scripts/phase3/apply-phase3-migration.js '${mode}'
+    unset MIGRATION_DATABASE_URL
+  "
+}
+
 validate_backend() {
   local host="$1"
 
@@ -243,6 +314,13 @@ echo "Remote repo dir:   ${REMOTE_REPO_DIR}"
 echo "Backend dir:       ${REMOTE_BACKEND_DIR}"
 echo "Frontend dir:      ${REMOTE_FRONTEND_DIR}"
 echo "AI engine dir:     ${REMOTE_AI_ENGINE_DIR}"
+echo "Migration env:     ${REMOTE_MIGRATION_ENV_FILE}"
+
+if [[ ! "$REMOTE_MIGRATION_ENV_FILE" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+  echo ""
+  echo "ERROR: TCDX_MIGRATION_ENV_FILE debe ser una ruta absoluta segura."
+  exit 1
+fi
 
 if [[ ! -d .git && ! -f .git ]]; then
   echo ""
@@ -350,15 +428,22 @@ preflight_remote "frontend" "$FRONTEND_HOST" "$REMOTE_FRONTEND_DIR" "$FRONTEND_W
 
 echo ""
 echo "======================================"
-echo " DEPLOY BACKEND"
+echo " PREPARACION MIGRACION FASE 3"
 echo "======================================"
-deploy_remote "backend" "$BACKEND_HOST" "$BACKEND_WRAPPER"
+sync_backend_source_for_migrations "$LOCAL_HEAD"
+run_phase3_migration "--preflight"
 
 echo ""
 echo "======================================"
-echo " MIGRACIONES GRC"
+echo " MIGRACION FASE 3"
 echo "======================================"
-run_ssh "$BACKEND_HOST" "cd '${REMOTE_REPO_DIR}' && node scripts/phase2/apply-phase2-migration.js && node scripts/phase3/apply-phase3-migration.js && sudo systemctl restart tecdex-backend"
+run_phase3_migration "--apply"
+
+echo ""
+echo "======================================"
+echo " DEPLOY BACKEND"
+echo "======================================"
+deploy_remote "backend" "$BACKEND_HOST" "$BACKEND_WRAPPER"
 
 echo ""
 echo "======================================"
