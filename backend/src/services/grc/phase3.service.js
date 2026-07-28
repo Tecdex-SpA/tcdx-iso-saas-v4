@@ -1,4 +1,5 @@
 const { assertTransition, evaluatePhase3Rules } = require('./phase3Rules');
+const { createPhase2Service } = require('./phase2.service');
 
 const PLATFORM_ROLES = new Set([
   'superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner',
@@ -165,6 +166,46 @@ const IMPORT_DEFINITIONS = Object.freeze({
     columns: ['code', 'name', 'description', 'metric_type', 'entity_type', 'entity_code', 'owner_email', 'formula_definition', 'source_description', 'frequency', 'unit', 'expected_direction', 'target_value', 'warning_threshold', 'critical_threshold', 'measurement_window'],
     example: ['KPI-001', 'Disponibilidad', 'Disponibilidad mensual', 'kpi', 'service', 'SRV-001', 'responsable@empresa.cl', 'Horas disponibles / horas totales', 'Monitoreo operativo', 'monthly', '%', 'higher_is_better', '99.9', '99.5', '99', 'month'],
   },
+  suppliers: {
+    creator: 'createSupplier',
+    table: 'grc_suppliers',
+    type: 'supplier',
+    versioned: false,
+    provenanceColumn: 'metadata',
+    statusColumn: 'status',
+    rollbackStatuses: ['draft'],
+    columns: ['code', 'legal_name', 'trade_name', 'tax_identifier', 'country_code', 'criticality', 'inherent_risk_score', 'residual_risk_score', 'owner_email', 'data_access_level', 'access_summary', 'next_assessment_at'],
+    example: ['PRV-001', 'Proveedor Ejemplo SpA', 'Proveedor Ejemplo', 'ID-EJEMPLO', 'CHL', 'medium', '50', '30', 'responsable@empresa.cl', 'none', 'Sin acceso', '2027-01-31'],
+  },
+  continuity_tests: {
+    creator: 'createContinuityTest',
+    table: 'grc_continuity_tests',
+    type: 'continuity_test',
+    versioned: false,
+    statusColumn: 'status',
+    rollbackStatuses: ['planned'],
+    columns: ['plan_code', 'test_type', 'objective', 'scenario', 'scope', 'scheduled_at', 'expected_result', 'target_rto_minutes', 'target_rpo_minutes', 'next_test_at'],
+    example: ['PCN-001', 'tabletop', 'Validar coordinación', 'Indisponibilidad del servicio', 'Proceso crítico', '2027-02-01T12:00:00Z', 'Roles y tiempos validados', '240', '60', '2027-08-01T12:00:00Z'],
+  },
+  metric_measurements: {
+    creator: 'recordMeasurement',
+    table: 'grc_metric_measurements',
+    type: 'metric_measurement',
+    versioned: false,
+    statusColumn: 'quality',
+    rollbackStatuses: ['valid', 'estimated', 'rejected'],
+    columns: ['metric_code', 'period_start', 'period_end', 'numeric_value', 'source_description', 'measured_at', 'quality', 'comment'],
+    example: ['KPI-001', '2027-01-01', '2027-01-31', '99.8', 'Monitoreo operacional', '2027-02-01T12:00:00Z', 'valid', 'Cierre mensual'],
+  },
+  quantitative_risks: {
+    creator: 'createQuantitativeRisk',
+    table: 'grc_quantitative_risk_assessments',
+    type: 'quantitative_risk',
+    statusColumn: 'status',
+    rollbackStatuses: ['draft'],
+    columns: ['code', 'risk_code', 'unit_code', 'process_code', 'service_code', 'scenario', 'minimum_impact', 'most_likely_impact', 'maximum_impact', 'estimated_frequency', 'residual_annualized_loss', 'treatment_annualized_loss', 'control_cost', 'expected_reduction', 'assumptions', 'source_description'],
+    example: ['QRA-001', 'RISK-001', 'TI', 'PROC-001', 'SRV-001', 'Interrupción mayor', '1000', '5000', '15000', '0.5', '2500', '1500', '800', '1000', 'Estimación experta', 'Registro operacional'],
+  },
 });
 
 function csvCell(value) {
@@ -175,10 +216,21 @@ function csvCell(value) {
 function normalizeImportRow(row) {
   return Object.fromEntries(
     Object.entries(object(row)).map(([key, value]) => [
-      String(key).trim(),
+      String(key).replace(/^\uFEFF/, '').trim(),
       typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value,
     ])
   );
+}
+
+function isImportHeaderRow(row, definition) {
+  const normalized = normalizeImportRow(row);
+  const entries = Object.entries(normalized).filter(([key, value]) => (
+    definition.columns.includes(key)
+    && String(value || '').trim() !== ''
+  ));
+  return entries.length >= 2 && entries.every(([key, value]) => (
+    String(value).trim().toLowerCase() === key.toLowerCase()
+  ));
 }
 
 const UPDATE_CONFIG = Object.freeze({
@@ -255,6 +307,7 @@ const UPDATE_CONFIG = Object.freeze({
 });
 
 function createPhase3Service(pool, { clock = Date.now } = {}) {
+  const phase2Service = createPhase2Service(pool);
   async function withTransaction(work) {
     const client = await pool.connect();
     try {
@@ -575,7 +628,7 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
     const [
       users, organizations, processes, services, bias, plans, assets, locations, incidents, risks,
       controls, suppliers, requirements, evidences, audits, findings,
-      nonconformities, actions,
+      nonconformities, actions, metrics,
     ] = await Promise.all([
       pool.query(
         `SELECT u.id,u.email,
@@ -584,52 +637,52 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
          FROM users u
          WHERE u.tenant_id=$1::uuid
            AND COALESCE((to_jsonb(u)->>'is_active')::boolean,TRUE)
-         ORDER BY name,email LIMIT 500`,
+         ORDER BY name,email LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT id,code,name FROM grc_organizational_units
-         WHERE tenant_id=$1::uuid AND status<>'retired' ORDER BY code,name LIMIT 500`,
+         WHERE tenant_id=$1::uuid AND status<>'retired' ORDER BY code,name LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT id,code,name FROM tenant_processes
-         WHERE tenant_id=$1::uuid AND COALESCE(is_active,TRUE) ORDER BY code,name LIMIT 500`,
+         WHERE tenant_id=$1::uuid AND COALESCE(is_active,TRUE) ORDER BY code,name LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT id,code,name FROM grc_operational_services
-         WHERE tenant_id=$1::uuid AND status<>'retired' ORDER BY code,name LIMIT 500`,
+         WHERE tenant_id=$1::uuid AND status<>'retired' ORDER BY code,name LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT id,code,COALESCE(process_id::text,service_id::text) AS name
          FROM grc_bia_assessments WHERE tenant_id=$1::uuid
-         ORDER BY code LIMIT 500`,
+         ORDER BY code LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT id,code,name FROM grc_continuity_plans
          WHERE tenant_id=$1::uuid AND status NOT IN ('closed','superseded')
-         ORDER BY code,name LIMIT 500`,
+         ORDER BY code,name LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT a.id,
                 COALESCE(to_jsonb(a)->>'code',to_jsonb(a)->>'asset_code',a.id::text) AS code,
                 COALESCE(to_jsonb(a)->>'name',to_jsonb(a)->>'asset_name',a.id::text) AS name
-         FROM assets a WHERE a.tenant_id=$1::uuid ORDER BY a.id LIMIT 500`,
+         FROM assets a WHERE a.tenant_id=$1::uuid ORDER BY a.id LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT id,code,name FROM grc_organizational_units
          WHERE tenant_id=$1::uuid AND unit_type='location' AND status<>'retired'
-         ORDER BY code,name LIMIT 500`,
+         ORDER BY code,name LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT id,incident_number AS code,title AS name FROM grc_incidents
-         WHERE tenant_id=$1::uuid ORDER BY created_at DESC LIMIT 500`,
+         WHERE tenant_id=$1::uuid ORDER BY created_at DESC LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
@@ -637,7 +690,7 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
                 COALESCE(to_jsonb(r)->>'risk_code',r.id::text) AS code,
                 COALESCE(to_jsonb(r)->>'risk_title',to_jsonb(r)->>'risk_description',r.id::text) AS name
          FROM iso_risk_matrix_items r WHERE r.tenant_id=$1::uuid
-         ORDER BY r.updated_at DESC LIMIT 500`,
+         ORDER BY r.updated_at DESC LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
@@ -645,40 +698,40 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
                 COALESCE(to_jsonb(c)->>'control_code',to_jsonb(c)->>'code',c.id::text) AS code,
                 COALESCE(to_jsonb(c)->>'control_name',to_jsonb(c)->>'name',
                   to_jsonb(c)->>'control_code',c.id::text) AS name
-         FROM tenant_controls c WHERE c.tenant_id=$1::uuid LIMIT 500`,
+         FROM tenant_controls c WHERE c.tenant_id=$1::uuid LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT id,code,COALESCE(trade_name,legal_name,code) AS name
-         FROM grc_suppliers WHERE tenant_id=$1::uuid ORDER BY code LIMIT 500`,
+         FROM grc_suppliers WHERE tenant_id=$1::uuid ORDER BY code LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT r.id,r.reference_code AS code,
                 COALESCE(r.permitted_title,r.tcdx_interpretation,r.reference_code) AS name
          FROM grc_framework_requirements r
-         WHERE r.tenant_id=$1::uuid OR r.tenant_id IS NULL ORDER BY r.reference_code LIMIT 500`,
+         WHERE r.tenant_id=$1::uuid OR r.tenant_id IS NULL ORDER BY r.reference_code LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT e.id,
                 COALESCE(to_jsonb(e)->>'title',to_jsonb(e)->>'name',e.id::text) AS code,
                 COALESCE(to_jsonb(e)->>'title',to_jsonb(e)->>'name',e.id::text) AS name
-         FROM evidences e WHERE e.tenant_id=$1::uuid ORDER BY e.id LIMIT 500`,
+         FROM evidences e WHERE e.tenant_id=$1::uuid ORDER BY e.id LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT a.id,
                 COALESCE(to_jsonb(a)->>'code',to_jsonb(a)->>'audit_code',a.id::text) AS code,
                 COALESCE(to_jsonb(a)->>'title',to_jsonb(a)->>'name',a.id::text) AS name
-         FROM audits a WHERE a.tenant_id=$1::uuid ORDER BY a.created_at DESC LIMIT 500`,
+         FROM audits a WHERE a.tenant_id=$1::uuid ORDER BY a.created_at DESC LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT f.id,
                 COALESCE(to_jsonb(f)->>'code',to_jsonb(f)->>'finding_number',f.id::text) AS code,
                 COALESCE(to_jsonb(f)->>'title',to_jsonb(f)->>'description',f.id::text) AS name
-         FROM findings f WHERE f.tenant_id=$1::uuid ORDER BY f.id LIMIT 500`,
+         FROM findings f WHERE f.tenant_id=$1::uuid ORDER BY f.id LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
@@ -686,14 +739,19 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
                 COALESCE(to_jsonb(n)->>'code',to_jsonb(n)->>'nonconformity_number',n.id::text) AS code,
                 COALESCE(to_jsonb(n)->>'title',to_jsonb(n)->>'description',n.id::text) AS name
          FROM tenant_nonconformities n WHERE n.tenant_id=$1::uuid
-         ORDER BY n.id LIMIT 500`,
+         ORDER BY n.id LIMIT 5000`,
         [tenantId]
       ),
       pool.query(
         `SELECT a.id,
                 COALESCE(to_jsonb(a)->>'code',to_jsonb(a)->>'action_number',a.id::text) AS code,
                 COALESCE(to_jsonb(a)->>'title',to_jsonb(a)->>'description',a.id::text) AS name
-         FROM action_plans a WHERE a.tenant_id=$1::uuid ORDER BY a.created_at DESC LIMIT 500`,
+         FROM action_plans a WHERE a.tenant_id=$1::uuid ORDER BY a.created_at DESC LIMIT 5000`,
+        [tenantId]
+      ),
+      pool.query(
+        `SELECT id,code,name FROM grc_metric_definitions
+         WHERE tenant_id=$1::uuid AND status<>'retired' ORDER BY code,name LIMIT 5000`,
         [tenantId]
       ),
     ]);
@@ -717,6 +775,7 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
       finding: findings.rows,
       nonconformity: nonconformities.rows,
       action: actions.rows,
+      metric: metrics.rows,
     };
   }
 
@@ -2049,8 +2108,14 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
     };
   }
 
-  function importIssue(column, code, message) {
-    return { column, code, message };
+  function importIssue(column, code, message, suggestion = null, validValues = []) {
+    return {
+      column,
+      code,
+      message,
+      ...(suggestion ? { suggestion } : {}),
+      ...(validValues.length ? { valid_values: validValues } : {}),
+    };
   }
 
   function validImportDate(value) {
@@ -2077,14 +2142,35 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
         400
       );
     }
-    if (body.template_version !== IMPORT_TEMPLATE_VERSION) {
+    const duplicatePolicy = String(body.duplicate_policy || 'create_only');
+    const duplicatePolicies = new Set([
+      'create_only', 'update_existing', 'create_or_update', 'reject_duplicates',
+    ]);
+    if (!duplicatePolicies.has(duplicatePolicy)) {
+      throw new Phase3Error(
+        'PHASE3_IMPORT_DUPLICATE_POLICY_INVALID',
+        'La política de duplicados no es válida.',
+        400
+      );
+    }
+    const acceptedTemplateVersions = new Set([
+      IMPORT_TEMPLATE_VERSION,
+      'universal-excel-v1',
+    ]);
+    if (!acceptedTemplateVersions.has(body.template_version)) {
       throw new Phase3Error(
         'PHASE3_IMPORT_TEMPLATE_VERSION_INVALID',
-        `La plantilla debe usar la versión ${IMPORT_TEMPLATE_VERSION}.`,
+        'La versión de la plantilla no corresponde a una definición vigente.',
         409
       );
     }
-    const inputRows = Array.isArray(body.rows) ? body.rows.slice(0, 1000) : [];
+    const submittedRows = Array.isArray(body.rows) ? body.rows : [];
+    const inputRows = submittedRows
+      .filter(row => !isImportHeaderRow(row, definition))
+      .filter(row => !['example', 'ejemplo', 'instruction'].includes(
+        String(object(row).__row_type || '').trim().toLowerCase()
+      ))
+      .slice(0, 5000);
     if (!inputRows.length) {
       throw new Phase3Error(
         'PHASE3_IMPORT_ROWS_REQUIRED',
@@ -2092,10 +2178,10 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
         400
       );
     }
-    if (Array.isArray(body.rows) && body.rows.length > 1000) {
+    if (inputRows.length > 5000 || submittedRows.length > 5002) {
       throw new Phase3Error(
         'PHASE3_IMPORT_ROW_LIMIT',
-        'Cada lote admite un máximo de 1000 filas.',
+        'Cada lote admite un máximo de 5000 filas.',
         413
       );
     }
@@ -2110,27 +2196,30 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
 
     const lookups = await getLookups(tenantId);
     const lookupMaps = Object.fromEntries(
-      Object.entries(lookups).map(([type, rows]) => [
-        type,
-        new Map(rows.flatMap(row => {
-          const entries = [];
-          if (row.code) entries.push([String(row.code).trim().toLowerCase(), row]);
-          if (row.email) entries.push([String(row.email).trim().toLowerCase(), row]);
-          return entries;
-        })),
-      ])
+      Object.entries(lookups).map(([type, rows]) => {
+        const map = new Map();
+        for (const row of rows) {
+          for (const value of [row.code, row.email].filter(Boolean)) {
+            const key = String(value).trim().toLowerCase();
+            map.set(key, [...(map.get(key) || []), row]);
+          }
+        }
+        return [type, map];
+      })
     );
-    const codes = inputRows
+    const codes = definition.columns.includes('code') ? inputRows
       .map(row => String(object(row).code || '').trim())
-      .filter(Boolean);
+      .filter(Boolean) : [];
     const existing = codes.length
       ? await pool.query(
-        `SELECT code FROM ${definition.table}
+        `SELECT * FROM ${definition.table}
          WHERE tenant_id=$1::uuid AND lower(code)=ANY($2::text[])`,
         [tenantId, codes.map(code => code.toLowerCase())]
       )
       : { rows: [] };
-    const existingCodes = new Set(existing.rows.map(row => String(row.code).toLowerCase()));
+    const existingByCode = new Map(
+      existing.rows.map(row => [String(row.code).toLowerCase(), row])
+    );
     const seenCodes = new Set();
     const requiredByEntity = {
       organizations: ['code', 'name', 'unit_type'],
@@ -2147,6 +2236,18 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
         'expected_direction', 'target_value', 'warning_threshold',
         'critical_threshold', 'measurement_window',
       ],
+      suppliers: ['code', 'legal_name'],
+      continuity_tests: [
+        'plan_code', 'test_type', 'objective', 'scenario', 'scope',
+        'scheduled_at', 'expected_result',
+      ],
+      metric_measurements: [
+        'metric_code', 'period_start', 'period_end', 'numeric_value', 'source_description',
+      ],
+      quantitative_risks: [
+        'code', 'risk_code', 'scenario', 'minimum_impact', 'most_likely_impact',
+        'maximum_impact', 'estimated_frequency', 'assumptions', 'source_description',
+      ],
     };
 
     function resolve(type, value, column, errors, required = false) {
@@ -2157,16 +2258,28 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
         }
         return null;
       }
-      const resolved = lookupMaps[type]?.get(reference);
-      if (!resolved) {
+      const candidates = lookupMaps[type]?.get(reference) || [];
+      const validValues = Array.from(lookupMaps[type]?.keys() || []).slice(0, 25);
+      if (!candidates.length) {
         errors.push(importIssue(
           column,
           'REFERENCE_NOT_FOUND',
-          `${column} no existe dentro de esta empresa.`
+          `${column} no existe dentro de esta empresa.`,
+          'Use un valor exacto disponible en la hoja Catálogos.',
+          validValues
         ));
         return null;
       }
-      return resolved.id;
+      if (candidates.length > 1) {
+        errors.push(importIssue(
+          column,
+          'REFERENCE_AMBIGUOUS',
+          `${column} coincide con más de una entidad de esta empresa.`,
+          'Use un código único o corrija el catálogo antes de importar.'
+        ));
+        return null;
+      }
+      return candidates[0].id;
     }
 
     const preparedRows = inputRows.map((rawRow, index) => {
@@ -2179,8 +2292,22 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
         }
       }
       const codeKey = code.toLowerCase();
-      if (codeKey && (seenCodes.has(codeKey) || existingCodes.has(codeKey))) {
-        errors.push(importIssue('code', 'DUPLICATE', 'El código está duplicado en el lote o ya existe.'));
+      const existingRow = codeKey ? existingByCode.get(codeKey) : null;
+      if (codeKey && seenCodes.has(codeKey)) {
+        errors.push(importIssue('code', 'DUPLICATE_IN_BATCH', 'El código está duplicado dentro del lote.'));
+      }
+      if (
+        existingRow
+        && ['create_only', 'reject_duplicates'].includes(duplicatePolicy)
+      ) {
+        errors.push(importIssue('code', 'DUPLICATE', 'El código ya existe en esta empresa.'));
+      }
+      if (
+        codeKey
+        && !existingRow
+        && duplicatePolicy === 'update_existing'
+      ) {
+        errors.push(importIssue('code', 'UPDATE_TARGET_NOT_FOUND', 'No existe un registro para actualizar.'));
       }
       if (codeKey) seenCodes.add(codeKey);
 
@@ -2195,6 +2322,8 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
         ...normalized,
         ...(ownerId ? { owner_user_id: ownerId } : {}),
       };
+      delete bodyRow.__source_row;
+      delete bodyRow.__row_type;
       delete bodyRow.owner_email;
 
       if (entityType === 'processes') {
@@ -2258,9 +2387,37 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
           true
         );
       }
+      if (entityType === 'suppliers') {
+        bodyRow.owner_user_id = resolve(
+          'users', normalized.owner_email, 'owner_email', errors, false
+        );
+      }
+      if (entityType === 'continuity_tests') {
+        bodyRow.plan_id = resolve(
+          'continuity_plan', normalized.plan_code, 'plan_code', errors, true
+        );
+      }
+      if (entityType === 'metric_measurements') {
+        bodyRow.metric_id = resolve(
+          'metric', normalized.metric_code, 'metric_code', errors, true
+        );
+      }
+      if (entityType === 'quantitative_risks') {
+        bodyRow.risk_id = resolve('risk', normalized.risk_code, 'risk_code', errors, true);
+        bodyRow.organizational_unit_id = resolve(
+          'organization', normalized.unit_code, 'unit_code', errors, false
+        );
+        bodyRow.process_id = resolve(
+          'process', normalized.process_code, 'process_code', errors, false
+        );
+        bodyRow.service_id = resolve(
+          'service', normalized.service_code, 'service_code', errors, false
+        );
+      }
       for (const alias of [
         'unit_code', 'process_code', 'service_code', 'bia_code',
-        'activation_authority_email', 'entity_code',
+        'activation_authority_email', 'entity_code', 'owner_email', 'plan_code',
+        'metric_code', 'risk_code',
       ]) {
         delete bodyRow[alias];
       }
@@ -2269,6 +2426,10 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
         'criticality_score', 'rto_minutes', 'rpo_minutes', 'mtpd_minutes',
         'estimated_financial_impact', 'required_people', 'target_value',
         'warning_threshold', 'critical_threshold',
+        'inherent_risk_score', 'residual_risk_score', 'numeric_value',
+        'minimum_impact', 'most_likely_impact', 'maximum_impact',
+        'estimated_frequency', 'residual_annualized_loss',
+        'treatment_annualized_loss', 'control_cost', 'expected_reduction',
       ];
       for (const field of numericFields) {
         if (bodyRow[field] === '' || bodyRow[field] === undefined) {
@@ -2292,36 +2453,56 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
         if (value === '') delete bodyRow[field];
       }
       bodyRow.provenance = {
-        source: 'phase3_import',
-        template_version: IMPORT_TEMPLATE_VERSION,
-        source_row: index + 2,
+        source: 'universal_import',
+        template_version: body.template_version,
+        source_row: Number(object(rawRow).__source_row) || index + 2,
       };
       if (entityType === 'processes') {
         bodyRow.metadata = bodyRow.provenance;
       }
+      const operation = existingRow
+        ? ['update_existing', 'create_or_update'].includes(duplicatePolicy) ? 'update' : 'create'
+        : 'create';
+      const changedFields = operation === 'update'
+        ? Object.keys(bodyRow).filter(field => (
+          !['provenance', 'metadata'].includes(field)
+          && String(existingRow[field] ?? '') !== String(bodyRow[field] ?? '')
+        ))
+        : [];
       return {
-        row_number: index + 2,
+        row_number: Number(object(rawRow).__source_row) || index + 2,
         raw_data: normalized,
         normalized_data: bodyRow,
         errors,
         status: errors.length ? 'invalid' : 'valid',
+        operation: operation === 'update' && changedFields.length === 0 ? 'no_change' : operation,
+        previous_data: existingRow,
+        changed_fields: changedFields,
       };
     });
 
     return withTransaction(async client => {
       const batch = await client.query(
         `INSERT INTO grc_phase3_import_batches (
-           tenant_id,entity_type,template_version,file_name,status,total_rows,
-           valid_rows,invalid_rows,summary,created_by
-         ) VALUES ($1::uuid,$2,$3,$4,'preview_ready',$5,$6,$7,$8::jsonb,$9::uuid)
+           tenant_id,entity_type,template_version,definition_version,file_name,status,total_rows,
+           valid_rows,invalid_rows,summary,duplicate_policy,created_rows,
+           updated_rows,unchanged_rows,created_by
+         ) VALUES (
+           $1::uuid,$2,$3,$3,$4,'preview_ready',$5,$6,$7,$8::jsonb,
+           $9,$10,$11,$12,$13::uuid
+         )
          RETURNING *`,
         [
-          tenantId, entityType, IMPORT_TEMPLATE_VERSION,
+          tenantId, entityType, body.template_version,
           optionalText(body.file_name, 300) || `import-${entityType}.csv`,
           preparedRows.length,
           preparedRows.filter(row => row.status === 'valid').length,
           preparedRows.filter(row => row.status === 'invalid').length,
           json({ source: 'web_preview', confirmation_required: true }),
+          duplicatePolicy,
+          preparedRows.filter(row => row.operation === 'create' && row.status === 'valid').length,
+          preparedRows.filter(row => row.operation === 'update' && row.status === 'valid').length,
+          preparedRows.filter(row => row.operation === 'no_change' && row.status === 'valid').length,
           userId || null,
         ]
       );
@@ -2332,16 +2513,24 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
         };
         await client.query(
           `INSERT INTO grc_phase3_import_rows (
-             tenant_id,batch_id,row_number,raw_data,normalized_data,errors,status
-           ) VALUES ($1::uuid,$2::uuid,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7)`,
+           tenant_id,batch_id,row_number,raw_data,normalized_data,errors,status
+             ,operation,previous_data,changed_fields
+           ) VALUES (
+             $1::uuid,$2::uuid,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7,
+             $8,$9::jsonb,$10::jsonb
+           )`,
           [
             tenantId, batch.rows[0].id, row.row_number, json(row.raw_data),
             json({
               ...row.normalized_data,
               provenance: importProvenance,
-              ...(entityType === 'processes' ? { metadata: importProvenance } : {}),
+              ...(['processes', 'suppliers'].includes(entityType)
+                ? { metadata: importProvenance }
+                : {}),
             }),
-            json(row.errors, []), row.status,
+            json(row.errors, []), row.status, row.operation,
+            row.previous_data ? json(row.previous_data) : null,
+            json(row.changed_fields, []),
           ]
         );
       }
@@ -2408,6 +2597,16 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
       createBia,
       createContinuityPlan,
       createMetric,
+      createSupplier: async context => ({
+        entity: await phase2Service.createSupplier(context),
+      }),
+      createContinuityTest,
+      recordMeasurement: async context => recordMeasurement({
+        ...context,
+        metricId: context.body.metric_id,
+        idempotencyKey: `import:${batchId}:${context.body.provenance?.source_row}`,
+      }).then(result => ({ entity: result.measurement, impact: result.impact })),
+      createQuantitativeRisk,
     };
     const creator = creators[definition.creator];
     let imported = 0;
@@ -2415,23 +2614,49 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
     for (const row of loaded.rows.filter(item => item.status === 'valid')) {
       let createdEntityId = null;
       try {
-        const result = await creator({
-          tenantId,
-          userId,
-          correlationId,
-          body: row.normalized_data,
-        });
+        if (row.operation === 'no_change') {
+          await pool.query(
+            `UPDATE grc_phase3_import_rows SET status='imported',
+               created_entity_type=$4,created_entity_id=(previous_data->>'id')::uuid,
+               processed_at=now(),imported_version=COALESCE((previous_data->>'version')::int,1)
+             WHERE tenant_id=$1::uuid AND batch_id=$2::uuid AND id=$3::uuid`,
+            [tenantId, batchId, row.id, definition.type]
+          );
+          imported += 1;
+          continue;
+        }
+        const result = row.operation === 'update'
+          ? await updateEntity({
+            tenantId,
+            userId,
+            correlationId,
+            entityType: definition.type,
+            entityId: row.previous_data.id,
+            body: row.normalized_data,
+            idempotencyKey: `import-update:${batchId}:${row.id}`,
+          })
+          : await creator({
+            tenantId,
+            userId,
+            correlationId,
+            body: row.normalized_data,
+          });
         createdEntityId = result.entity.id;
         await pool.query(
           `UPDATE grc_phase3_import_rows SET status='imported',
-             created_entity_type=$4,created_entity_id=$5::uuid,processed_at=now()
+             created_entity_type=$4,created_entity_id=$5::uuid,processed_at=now(),
+             imported_version=COALESCE($6::int,1)
            WHERE tenant_id=$1::uuid AND batch_id=$2::uuid AND id=$3::uuid`,
-          [tenantId, batchId, row.id, definition.type, result.entity.id]
+          [
+            tenantId, batchId, row.id, definition.type, result.entity.id,
+            result.entity.version || 1,
+          ]
         );
         imported += 1;
       } catch (error) {
-        if (createdEntityId) {
-          const provenanceColumn = definition.type === 'process' ? 'metadata' : 'provenance';
+        if (createdEntityId && row.operation === 'create') {
+          const provenanceColumn = definition.provenanceColumn
+            || (definition.type === 'process' ? 'metadata' : 'provenance');
           await pool.query(
             `DELETE FROM ${definition.table}
              WHERE tenant_id=$1::uuid AND id=$2::uuid
@@ -2492,18 +2717,66 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
     const definition = IMPORT_DEFINITIONS[loaded.batch.entity_type];
     let rolledBack = 0;
     let blocked = 0;
-    const statusColumn = definition.type === 'process' ? 'lifecycle_status' : 'status';
-    const provenanceColumn = definition.type === 'process' ? 'metadata' : 'provenance';
+    const statusColumn = definition.statusColumn
+      || (definition.type === 'process' ? 'lifecycle_status' : 'status');
+    const provenanceColumn = definition.provenanceColumn
+      || (definition.type === 'process' ? 'metadata' : 'provenance');
+    const rollbackStatuses = definition.rollbackStatuses || ['draft'];
+    const versionPredicate = definition.versioned === false ? '' : 'AND version=1';
     for (const row of loaded.rows.filter(item => item.status === 'imported')) {
       try {
+        if (row.operation === 'no_change') {
+          await pool.query(
+            `UPDATE grc_phase3_import_rows SET status='rolled_back',rolled_back_at=now()
+             WHERE tenant_id=$1::uuid AND id=$2::uuid`,
+            [tenantId, row.id]
+          );
+          rolledBack += 1;
+          continue;
+        }
+        if (row.operation === 'update') {
+          const current = await pool.query(
+            `SELECT version FROM ${definition.table}
+             WHERE tenant_id=$1::uuid AND id=$2::uuid`,
+            [tenantId, row.created_entity_id]
+          );
+          if (
+            !current.rowCount
+            || Number(current.rows[0].version || 1) !== Number(row.imported_version || 1)
+          ) {
+            blocked += 1;
+            await pool.query(
+              `UPDATE grc_phase3_import_rows SET status='rollback_blocked'
+               WHERE tenant_id=$1::uuid AND id=$2::uuid`,
+              [tenantId, row.id]
+            );
+            continue;
+          }
+          await updateEntity({
+            tenantId,
+            userId,
+            correlationId: null,
+            entityType: definition.type,
+            entityId: row.created_entity_id,
+            body: row.previous_data,
+            idempotencyKey: `import-rollback:${batchId}:${row.id}`,
+          });
+          await pool.query(
+            `UPDATE grc_phase3_import_rows SET status='rolled_back',rolled_back_at=now()
+             WHERE tenant_id=$1::uuid AND id=$2::uuid`,
+            [tenantId, row.id]
+          );
+          rolledBack += 1;
+          continue;
+        }
         const removed = await withTransaction(async client => {
           const result = await client.query(
             `DELETE FROM ${definition.table}
              WHERE tenant_id=$1::uuid AND id=$2::uuid
                AND ${provenanceColumn}->>'import_batch_id'=$3
-               AND version=1 AND ${statusColumn}='draft'
+               ${versionPredicate} AND ${statusColumn}=ANY($4::text[])
              RETURNING id`,
-            [tenantId, row.created_entity_id, batchId]
+            [tenantId, row.created_entity_id, batchId, rollbackStatuses]
           );
           if (!result.rowCount) return false;
           await audit(client, {

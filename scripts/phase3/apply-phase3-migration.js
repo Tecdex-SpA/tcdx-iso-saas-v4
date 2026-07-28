@@ -16,6 +16,11 @@ const ONBOARDING_MIGRATION_FILE = path.join(
   root,
   'database/migrations/20260729_phase3_operational_onboarding.sql'
 );
+const UNIVERSAL_IMPORT_MIGRATION_ID = '20260730_universal_excel_import';
+const UNIVERSAL_IMPORT_MIGRATION_FILE = path.join(
+  root,
+  'database/migrations/20260730_universal_excel_import.sql'
+);
 const ADVISORY_LOCK_NAMESPACE = 844332;
 const ADVISORY_LOCK_KEY = 20260728;
 
@@ -51,6 +56,12 @@ function readMigration() {
 
 function readOnboardingMigration() {
   const sql = fs.readFileSync(ONBOARDING_MIGRATION_FILE, 'utf8');
+  const checksum = crypto.createHash('sha256').update(sql).digest('hex');
+  return { sql, checksum };
+}
+
+function readUniversalImportMigration() {
+  const sql = fs.readFileSync(UNIVERSAL_IMPORT_MIGRATION_FILE, 'utf8');
   const checksum = crypto.createHash('sha256').update(sql).digest('hex');
   return { sql, checksum };
 }
@@ -546,15 +557,124 @@ async function applyOnboardingMigration(client, rawSql, checksum, migrationUser)
   }
 }
 
+async function verifyUniversalImportPostconditions(client) {
+  const result = await client.query(
+    `SELECT
+       to_regclass('public.grc_import_files') IS NOT NULL AS files_ready,
+       to_regclass('public.grc_import_cell_errors') IS NOT NULL AS errors_ready,
+       to_regclass('public.grc_import_audit_events') IS NOT NULL AS audit_ready,
+       EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema='public' AND table_name='grc_phase3_import_batches'
+           AND column_name='file_checksum'
+       ) AS checksum_ready`
+  );
+  const row = result.rows[0];
+  if (!row.files_ready || !row.errors_ready || !row.audit_ready || !row.checksum_ready) {
+    throw new Error('Universal import migration postcondition failed');
+  }
+  return row;
+}
+
+async function applyUniversalImportMigration(client, rawSql, checksum, migrationUser) {
+  const existingResult = await client.query(
+    `SELECT migration_id,checksum,status FROM public.schema_migrations
+     WHERE migration_id=$1`,
+    [UNIVERSAL_IMPORT_MIGRATION_ID]
+  );
+  const existing = existingResult.rows[0] || null;
+  if (existing && existing.checksum !== checksum) {
+    throw new Error(
+      `Checksum mismatch for migration_id ${UNIVERSAL_IMPORT_MIGRATION_ID}; refusing changed DDL`
+    );
+  }
+  if (existing?.status === 'applied') {
+    await verifyUniversalImportPostconditions(client);
+    process.stdout.write(
+      `migration_id=${UNIVERSAL_IMPORT_MIGRATION_ID} status=already_applied checksum=${checksum}\n`
+    );
+    return;
+  }
+
+  const sql = unwrapMigrationTransaction(rawSql);
+  const startedAt = Date.now();
+  await client.query(
+    `INSERT INTO public.schema_migrations (
+       migration_id,checksum,applied_at,applied_by,duration_ms,status,details
+     ) VALUES ($1,$2,NULL,$3,0,'running',$4::jsonb)
+     ON CONFLICT (migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,
+       applied_at=NULL,applied_by=EXCLUDED.applied_by,duration_ms=0,
+       status='running',details=EXCLUDED.details`,
+    [
+      UNIVERSAL_IMPORT_MIGRATION_ID,
+      checksum,
+      migrationUser,
+      JSON.stringify({
+        migration_file: path.relative(root, UNIVERSAL_IMPORT_MIGRATION_FILE),
+        started_at: new Date().toISOString(),
+      }),
+    ]
+  );
+  try {
+    await client.query('BEGIN');
+    await client.query("SET LOCAL lock_timeout = '10s'");
+    await client.query(sql);
+    const postconditions = await verifyUniversalImportPostconditions(client);
+    const durationMs = Date.now() - startedAt;
+    await client.query(
+      `UPDATE public.schema_migrations SET applied_at=now(),applied_by=$2,
+         duration_ms=$3,status='applied',details=$4::jsonb
+       WHERE migration_id=$1 AND checksum=$5`,
+      [
+        UNIVERSAL_IMPORT_MIGRATION_ID,
+        migrationUser,
+        durationMs,
+        JSON.stringify({
+          migration_file: path.relative(root, UNIVERSAL_IMPORT_MIGRATION_FILE),
+          postconditions,
+        }),
+        checksum,
+      ]
+    );
+    await client.query('COMMIT');
+    process.stdout.write(
+      `migration_id=${UNIVERSAL_IMPORT_MIGRATION_ID} status=applied checksum=${checksum} `
+      + `duration_ms=${durationMs}\n`
+    );
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    const safe = sanitizeError(error);
+    await client.query(
+      `UPDATE public.schema_migrations SET status='failed',duration_ms=$2,
+         details=$3::jsonb WHERE migration_id=$1`,
+      [
+        UNIVERSAL_IMPORT_MIGRATION_ID,
+        Date.now() - startedAt,
+        JSON.stringify({
+          migration_file: path.relative(root, UNIVERSAL_IMPORT_MIGRATION_FILE),
+          failed_at: new Date().toISOString(),
+          error_code: safe.code,
+          error_message: safe.message,
+        }),
+      ]
+    );
+    throw error;
+  }
+}
+
 async function main() {
   const mode = process.argv[2];
   const { sql, checksum } = readMigration();
   const onboarding = readOnboardingMigration();
+  const universalImport = readUniversalImportMigration();
 
   if (mode === '--checksum') {
     process.stdout.write(`migration_id=${MIGRATION_ID} checksum=${checksum}\n`);
     process.stdout.write(
       `migration_id=${ONBOARDING_MIGRATION_ID} checksum=${onboarding.checksum}\n`
+    );
+    process.stdout.write(
+      `migration_id=${UNIVERSAL_IMPORT_MIGRATION_ID} checksum=${universalImport.checksum}\n`
     );
     return;
   }
@@ -584,6 +704,12 @@ async function main() {
         client,
         onboarding.sql,
         onboarding.checksum,
+        preflight.migration_user
+      );
+      await applyUniversalImportMigration(
+        client,
+        universalImport.sql,
+        universalImport.checksum,
         preflight.migration_user
       );
     }

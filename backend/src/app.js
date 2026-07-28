@@ -78,6 +78,7 @@ const intelligenceRoutes = require('./routes/intelligence.routes');
 const grcRoutes = require('./routes/grc.routes');
 const phase2Routes = require('./routes/phase2.routes');
 const phase3Routes = require('./routes/phase3.routes');
+const importsRoutes = require('./routes/imports.routes');
 const supplierPortalRoutes = require('./routes/supplier-portal.routes');
 const phase2ExternalRoutes = require('./routes/phase2-external.routes');
 const { prometheusLines: grcPrometheusLines } = require('./services/grc/grcObservability');
@@ -473,6 +474,7 @@ app.use('/api/knowledge-base', knowledgeBaseRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
 app.use('/api/grc/phase2', phase2Routes);
 app.use('/api/grc/phase3', phase3Routes);
+app.use('/api/imports', importsRoutes);
 app.use('/api/grc', grcRoutes);
 
 

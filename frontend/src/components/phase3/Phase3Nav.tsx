@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 const sections = [
   { href: '/operaciones-grc', label: 'Resumen' },
   { href: '/operaciones-grc/activacion', label: 'Activación' },
-  { href: '/operaciones-grc/importar', label: 'Importar' },
+  { href: '/importaciones', label: 'Importaciones' },
   { href: '/unidades', label: 'Unidades' },
   { href: '/procesos', label: 'Procesos' },
   { href: '/servicios', label: 'Servicios' },

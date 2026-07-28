@@ -2,6 +2,7 @@
   "name": "tcdx-iso-saas-v4-root",
   "private": true,
   "scripts": {
+    "imports:check": "node scripts/imports/check-universal-import.js && node backend/src/services/imports/excelWorkbook.test.js",
     "phase0:inventory": "npm --prefix backend run phase0:inventory",
     "phase0:classify": "npm --prefix backend run phase0:classify",
     "phase0:contracts:check": "npm --prefix backend run phase0:contracts:check",
@@ -51,7 +52,7 @@
     "phase3:contracts:check": "node scripts/phase3/check-phase3-contracts.js",
     "phase3:postgres-integration": "bash scripts/phase3/check-phase3-postgres.sh",
     "phase3:security-check": "node scripts/phase3/check-phase3-security.js",
-    "phase3:scripts-check": "bash -n scripts/phase3/check-phase3-postgres.sh && node --check scripts/phase3/apply-phase3-migration.js && node --check scripts/phase3/check-phase3-contracts.js && node --check scripts/phase3/check-phase3-security.js && node --check backend/src/services/grc/phase3Core.test.js && node --check backend/src/services/grc/phase3Postgres.integration.test.js",
-    "phase3:check": "npm run phase3:contracts:check && npm run phase3:security-check && npm run phase3:scripts-check && npm run phase3:migration:checksum && npm run phase3:postgres-integration && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend test && npm --prefix frontend run build && git diff --check"
+    "phase3:scripts-check": "bash -n scripts/phase3/check-phase3-postgres.sh && node --check scripts/phase3/apply-phase3-migration.js && node --check scripts/phase3/check-phase3-contracts.js && node --check scripts/phase3/check-phase3-security.js && node --check scripts/imports/check-universal-import.js && node --check backend/src/routes/imports.routes.js && node --check backend/src/services/imports/importDefinitions.js && node --check backend/src/services/imports/excelWorkbook.js && node --check backend/src/services/imports/excelWorkbook.test.js && node --check backend/src/services/imports/universalImport.service.js && node --check backend/src/services/grc/phase3Core.test.js && node --check backend/src/services/grc/phase3Postgres.integration.test.js",
+    "phase3:check": "npm run imports:check && npm run phase3:contracts:check && npm run phase3:security-check && npm run phase3:scripts-check && npm run phase3:migration:checksum && npm run phase3:postgres-integration && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend test && npm --prefix frontend run build && git diff --check"
   }
 }

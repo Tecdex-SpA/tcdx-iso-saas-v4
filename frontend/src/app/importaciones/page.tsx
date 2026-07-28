@@ -1,5 +1,5 @@
 import UniversalImportCenter from '@/components/phase3/UniversalImportCenter';
 
-export default function Phase3ImportPage() {
+export default function ImportacionesPage() {
   return <UniversalImportCenter />;
 }

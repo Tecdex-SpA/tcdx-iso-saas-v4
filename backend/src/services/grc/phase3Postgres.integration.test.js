@@ -402,6 +402,80 @@ async function run() {
   assert.strictEqual(duplicatePreview.batch.invalid_rows, 1);
   assert(duplicatePreview.rows[0].errors.some(error => error.code === 'DUPLICATE'));
 
+  const headerRegression = await service.createImportPreview({
+    tenantId: tenantA,
+    userId: userA,
+    body: {
+      entity_type: 'processes',
+      template_version: 'universal-excel-v1',
+      duplicate_policy: 'create_only',
+      file_name: 'header-regression.csv',
+      rows: [
+        {
+          code: 'code',
+          name: 'name',
+          process_type: 'process_type',
+          criticality_score: 'criticality_score',
+          unit_code: 'unit_code',
+          owner_email: 'owner_email',
+        },
+        {
+          code: 'HEADER-REGRESSION',
+          name: 'Regresión encabezado',
+          process_type: 'operational',
+          criticality_score: '60',
+          unit_code: 'TI',
+          owner_email: 'owner-a@example.test',
+        },
+      ],
+    },
+  });
+  assert.strictEqual(headerRegression.batch.total_rows, 1);
+  assert.strictEqual(headerRegression.batch.valid_rows, 1);
+  assert(!headerRegression.rows.some(row => (
+    row.raw_data.owner_email === 'owner_email' || row.raw_data.unit_code === 'unit_code'
+  )));
+
+  const updatePreview = await service.createImportPreview({
+    tenantId: tenantA,
+    userId: userA,
+    body: {
+      entity_type: 'organizations',
+      template_version: 'universal-excel-v1',
+      duplicate_policy: 'update_existing',
+      file_name: 'units-update.xlsx',
+      rows: [{
+        code: 'TI',
+        name: 'Tecnología actualizada',
+        unit_type: 'department',
+        owner_email: 'owner-a@example.test',
+      }],
+    },
+  });
+  assert.strictEqual(updatePreview.rows[0].operation, 'update');
+  const updatedImport = await service.confirmImport({
+    tenantId: tenantA,
+    userId: userA,
+    correlationId: 'phase3-postgres:import-update',
+    batchId: updatePreview.batch.id,
+    confirmed: true,
+  });
+  assert.strictEqual(updatedImport.batch.imported_rows, 1);
+  assert.strictEqual(
+    (await service.getEntity360(tenantA, 'organization', organization.entity.id)).entity.name,
+    'Tecnología actualizada'
+  );
+  const updateRollback = await service.rollbackImport({
+    tenantId: tenantA,
+    userId: userA,
+    batchId: updatePreview.batch.id,
+  });
+  assert.strictEqual(updateRollback.batch.status, 'rolled_back');
+  assert.strictEqual(
+    (await service.getEntity360(tenantA, 'organization', organization.entity.id)).entity.name,
+    'Tecnología'
+  );
+
   const invalidDate = await service.createImportPreview({
     tenantId: tenantA,
     userId: userA,
@@ -503,6 +577,46 @@ async function run() {
       critical_threshold: '90',
       measurement_window: 'month',
     }],
+    ['suppliers', {
+      code: 'IMP-SUP',
+      legal_name: 'Proveedor importado SpA',
+      trade_name: 'Proveedor importado',
+      criticality: 'medium',
+      owner_email: 'owner-a@example.test',
+      data_access_level: 'none',
+    }],
+    ['continuity_tests', {
+      plan_code: 'PCN-001',
+      test_type: 'tabletop',
+      objective: 'Prueba importada',
+      scenario: 'Escenario importado',
+      scope: 'Servicio principal',
+      scheduled_at: '2027-02-01T12:00:00Z',
+      expected_result: 'Coordinación validada',
+      target_rto_minutes: '240',
+      target_rpo_minutes: '60',
+    }],
+    ['metric_measurements', {
+      metric_code: 'KPI-001',
+      period_start: '2027-01-01T00:00:00Z',
+      period_end: '2027-01-31T23:59:59Z',
+      numeric_value: '99.7',
+      source_description: 'Medición importada',
+      quality: 'valid',
+    }],
+    ['quantitative_risks', {
+      code: 'IMP-QR',
+      risk_code: 'RISK-001',
+      process_code: 'PROC-001',
+      service_code: 'SRV-001',
+      scenario: 'Escenario cuantitativo importado',
+      minimum_impact: '500',
+      most_likely_impact: '1500',
+      maximum_impact: '5000',
+      estimated_frequency: '0.2',
+      assumptions: 'Supuestos importados',
+      source_description: 'Taller importado',
+    }],
   ];
   for (const [entityType, row] of importCases) {
     const preview = await service.createImportPreview({
@@ -515,7 +629,11 @@ async function run() {
         rows: [row],
       },
     });
-    assert.strictEqual(preview.batch.valid_rows, 1, entityType);
+    assert.strictEqual(
+      preview.batch.valid_rows,
+      1,
+      `${entityType}: ${JSON.stringify(preview.rows[0]?.errors || [])}`
+    );
     const imported = await service.confirmImport({
       tenantId: tenantA,
       userId: userA,

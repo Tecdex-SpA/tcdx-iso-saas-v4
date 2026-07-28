@@ -11,13 +11,15 @@ PHASE1R_MIGRATION="$REPO_ROOT/database/migrations/20260723_phase1r_operational_c
 PHASE2_MIGRATION="$REPO_ROOT/database/migrations/20260727_phase2_integrated_grc.sql"
 PHASE3_MIGRATION="$REPO_ROOT/database/migrations/20260728_phase3_operational_grc.sql"
 ONBOARDING_MIGRATION="$REPO_ROOT/database/migrations/20260729_phase3_operational_onboarding.sql"
+UNIVERSAL_IMPORT_MIGRATION="$REPO_ROOT/database/migrations/20260730_universal_excel_import.sql"
 MIGRATION_RUNNER="$REPO_ROOT/scripts/phase3/apply-phase3-migration.js"
 INTEGRATION_TEST="$REPO_ROOT/backend/src/services/grc/phase3Postgres.integration.test.js"
 
 for file in \
   "$BASE_FIXTURE" "$PHASE2_MASTER" "$PHASE3_MASTER" "$PHASE1_MIGRATION" \
   "$PHASE1R_MIGRATION" "$PHASE2_MIGRATION" "$PHASE3_MIGRATION" \
-  "$ONBOARDING_MIGRATION" "$MIGRATION_RUNNER" "$INTEGRATION_TEST"; do
+  "$ONBOARDING_MIGRATION" "$UNIVERSAL_IMPORT_MIGRATION" \
+  "$MIGRATION_RUNNER" "$INTEGRATION_TEST"; do
   [[ -r "$file" ]] || { echo "Required integration input is not readable: $file" >&2; exit 1; }
 done
 

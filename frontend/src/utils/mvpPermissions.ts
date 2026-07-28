@@ -274,6 +274,7 @@ export const MVP_ROUTE_RULES: MvpRouteRule[] = [
   {
     routes: [
       '/operaciones-grc',
+      '/importaciones',
       '/unidades',
       '/procesos',
       '/servicios',

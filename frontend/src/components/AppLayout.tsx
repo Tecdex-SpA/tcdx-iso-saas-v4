@@ -141,6 +141,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           module_key: 'grc_phase3_operations',
           routes: [
             '/operaciones-grc',
+            '/importaciones',
             '/unidades',
             '/procesos',
             '/servicios',

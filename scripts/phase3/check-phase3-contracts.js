@@ -9,6 +9,7 @@ const exists = relative => fs.existsSync(path.join(root, relative));
 const requiredFiles = [
   'database/migrations/20260728_phase3_operational_grc.sql',
   'database/migrations/20260729_phase3_operational_onboarding.sql',
+  'database/migrations/20260730_universal_excel_import.sql',
   'backend/src/routes/phase3.routes.js',
   'backend/src/services/grc/phase3.service.js',
   'backend/src/services/grc/phase3Rules.js',
@@ -16,7 +17,7 @@ const requiredFiles = [
   'backend/src/services/grc/phase3Postgres.integration.test.js',
   'frontend/src/components/phase3/Phase3Workspace.tsx',
   'frontend/src/components/phase3/Phase3Activation.tsx',
-  'frontend/src/components/phase3/Phase3Import.tsx',
+  'frontend/src/components/phase3/UniversalImportCenter.tsx',
   'frontend/src/components/phase3/Phase3Nav.tsx',
   'frontend/src/app/operaciones-grc/activacion/page.tsx',
   'frontend/src/app/operaciones-grc/importar/page.tsx',
@@ -31,7 +32,7 @@ const service = read('backend/src/services/grc/phase3.service.js');
 const migration = read('database/migrations/20260729_phase3_operational_onboarding.sql');
 const workspace = read('frontend/src/components/phase3/Phase3Workspace.tsx');
 const activation = read('frontend/src/components/phase3/Phase3Activation.tsx');
-const imports = read('frontend/src/components/phase3/Phase3Import.tsx');
+const imports = read('frontend/src/components/phase3/UniversalImportCenter.tsx');
 const api = read('frontend/src/components/phase3/phase3Api.ts');
 const phase2Service = read('backend/src/services/grc/phase2.service.js');
 const phase2Workspace = read('frontend/src/components/phase2/Phase2Workspace.tsx');
@@ -52,7 +53,7 @@ const shellRoutes = [
 ];
 for (const routeFile of shellRoutes) {
   if (!exists(routeFile)
-    || !/(Phase3Workspace|Phase3Activation|Phase3Import)/.test(read(routeFile))) {
+    || !/(Phase3Workspace|Phase3Activation|UniversalImportCenter)/.test(read(routeFile))) {
     throw new Error(`Phase 3 route is not integrated with the official shell: ${routeFile}`);
   }
 }
@@ -131,8 +132,8 @@ const uiMarkers = [
   'Datos listos para operar',
   'Previsualizar y validar',
   'Confirmar importación',
-  'Revertir lote de forma segura',
-  'Errores por columna',
+  'Revertir este lote',
+  'Descargar archivo con errores',
 ];
 const uiSource = `${workspace}\n${activation}\n${imports}`;
 const missingUi = uiMarkers.filter(marker => !uiSource.includes(marker));
