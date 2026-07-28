@@ -18,6 +18,10 @@ checklist web.
 - Vistas 360 con relaciones, alertas, readiness, eventos e historial.
 - Capability y permisos de mínimo privilegio.
 - Runbooks de deploy y validación web.
+- Runner DDL con `MIGRATION_DATABASE_URL` separada del usuario runtime.
+- Ledger `schema_migrations`, checksum SHA-256, advisory lock y postcondiciones.
+- Deploy fail-fast que no continúa a servicios cuando la migración falla.
+- Runbook de credencial administrativa temporal, rotación y eliminación.
 
 ## Controles estáticos
 
@@ -25,6 +29,9 @@ checklist web.
 - Revisión de rutas, permisos, capability y tenant scope.
 - Revisión de imports, navegación y contratos frontend/backend.
 - `git diff --check`.
+- Selección de conexión administrativa sin fallback a `DATABASE_URL`.
+- Revisión de ledger, checksum, advisory lock y transacción externa.
+- Revisión de sanitización de errores y ausencia de secretos.
 - Búsqueda focalizada de marcadores de deuda y dobles productivos.
 
 ## Pendiente externo
