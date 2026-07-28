@@ -38,6 +38,7 @@ export type MvpFeatureKey =
   | 'reports.read'
   | 'reports.export'
   | 'phase2.read'
+  | 'phase3.read'
   | 'ai_compliance.read'
   | 'ai_compliance.suggest'
   | 'configuration.profile.self'
@@ -138,6 +139,7 @@ const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'reports.read': ['admin', 'auditor', 'area_owner', 'executive'],
   'reports.export': ['admin', 'auditor'],
   'phase2.read': ['admin', 'auditor', 'area_owner'],
+  'phase3.read': ['admin', 'auditor', 'area_owner'],
   'ai_compliance.read': ['admin', 'auditor'],
   'ai_compliance.suggest': ['admin', 'auditor'],
   'configuration.profile.self': ['admin', 'auditor', 'area_owner', 'executive'],
@@ -204,6 +206,12 @@ export const CLIENT_MVP_NAV_ITEMS: MvpNavItem[] = [
     moduleKey: 'grc_phase2_integrated',
   },
   {
+    href: '/operaciones-grc',
+    label: 'Operación GRC',
+    feature: 'phase3.read',
+    moduleKey: 'grc_phase3_operations',
+  },
+  {
     href: '/ia-compliance',
     label: 'IA Compliance',
     feature: 'ai_compliance.read',
@@ -263,6 +271,21 @@ export const MVP_ROUTE_RULES: MvpRouteRule[] = [
     moduleKey: 'grc_phase2_integrated',
   },
   { routes: ['/cumplimiento-auditoria'], feature: 'compliance.read' },
+  {
+    routes: [
+      '/operaciones-grc',
+      '/unidades',
+      '/procesos',
+      '/servicios',
+      '/bia',
+      '/continuidad',
+      '/crisis',
+      '/indicadores',
+      '/riesgo-cuantitativo',
+    ],
+    feature: 'phase3.read',
+    moduleKey: 'grc_phase3_operations',
+  },
   { routes: ['/iso-health', '/health'], feature: 'health.view', moduleKey: 'health' },
   { routes: ['/administrar-kpis'], feature: 'health.view', moduleKey: 'health' },
   {

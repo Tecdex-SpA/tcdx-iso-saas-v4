@@ -137,6 +137,24 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           permission_key: null,
           permission_denied_message: null,
         },
+        {
+          module_key: 'grc_phase3_operations',
+          routes: [
+            '/operaciones-grc',
+            '/unidades',
+            '/procesos',
+            '/servicios',
+            '/bia',
+            '/continuidad',
+            '/crisis',
+            '/indicadores',
+            '/riesgo-cuantitativo',
+          ],
+          fallback: '/dashboard',
+          label: 'Operación GRC',
+          permission_key: null,
+          permission_denied_message: null,
+        },
       ],
     };
   }, [t]);

@@ -356,9 +356,9 @@ deploy_remote "backend" "$BACKEND_HOST" "$BACKEND_WRAPPER"
 
 echo ""
 echo "======================================"
-echo " MIGRACION FASE 2"
+echo " MIGRACIONES GRC"
 echo "======================================"
-run_ssh "$BACKEND_HOST" "cd '${REMOTE_REPO_DIR}' && node scripts/phase2/apply-phase2-migration.js && sudo systemctl restart tecdex-backend"
+run_ssh "$BACKEND_HOST" "cd '${REMOTE_REPO_DIR}' && node scripts/phase2/apply-phase2-migration.js && node scripts/phase3/apply-phase3-migration.js && sudo systemctl restart tecdex-backend"
 
 echo ""
 echo "======================================"
