@@ -2,8 +2,9 @@
 
 ## Propósito
 
-Aplicar `20260728_phase3_operational_grc` con un usuario administrativo separado
-del runtime, sin exponer credenciales ni repetir DDL.
+Validar `20260728_phase3_operational_grc` y aplicar el forward-fix
+`20260729_phase3_operational_onboarding` con un usuario administrativo separado del
+runtime, sin exponer credenciales ni repetir DDL.
 
 ## Controles del runner
 
@@ -13,7 +14,9 @@ del runtime, sin exponer credenciales ni repetir DDL.
 - usa una conexión `pg.Client` independiente del pool backend;
 - valida usuario, ownership, creación de tablas/índices, catálogos y `pgcrypto`;
 - toma un advisory lock de sesión antes de crear/consultar el ledger;
-- calcula SHA-256 del archivo SQL;
+- calcula SHA-256 de ambos archivos SQL y conserva el checksum productivo
+  `2dd9376e49937795bc7dbd03332536e26f4e8bfbc883d731818dda9fa620bb50`
+  para la migración base;
 - rechaza un checksum distinto para el mismo `migration_id`;
 - ejecuta DDL, postcondiciones y estado `applied` en una transacción;
 - registra `running`, `applied` o `failed` en `public.schema_migrations`;
@@ -71,8 +74,9 @@ El wrapper realiza secuencialmente:
 6. deploy AI Engine y frontend;
 7. validación de servicios.
 
-Un error en los pasos 1-4 detiene todo el deploy. Una reejecución con checksum
-coincidente devuelve `status=already_applied` y continúa sin repetir DDL.
+Un error en los pasos 1-4 detiene todo el deploy. La migración base debe devolver
+`status=already_applied`; el forward-fix devuelve `status=applied` en su primera
+ejecución y `status=already_applied` en las siguientes.
 
 ## Ejecución administrativa aislada
 

@@ -17,7 +17,9 @@
 3. Ejecutar desde el Mac `./scripts/deploy-vms.sh`.
 4. El deploy sincroniza el SHA backend sin reiniciar el servicio.
 5. Valida la presencia de `MIGRATION_DATABASE_URL` y ejecuta el preflight administrativo.
-6. El runner toma advisory lock, verifica checksum/ledger y aplica Fase 3 si corresponde.
+6. El runner toma advisory lock, verifica checksum/ledger y valida la migración base
+   ya aplicada antes de ejecutar el forward-fix
+   `20260729_phase3_operational_onboarding`.
 7. Solo después del estado `applied` o `already_applied` se ejecuta el wrapper backend.
 8. Luego actualiza AI Engine y frontend mediante sus wrappers oficiales.
 9. Ejecuta las validaciones post-deploy incluidas y el plan web Fase 3.
@@ -25,7 +27,7 @@
 Ante cualquier fallo de migración, `set -Eeuo pipefail` detiene el deploy antes de
 reiniciar backend o intervenir AI Engine/frontend. Reejecutar el deploy es seguro:
 una migración aplicada con el mismo checksum no repite DDL; un checksum distinto para
-el mismo `migration_id` bloquea la ejecución.
+cualquiera de los `migration_id` bloquea la ejecución.
 
 ## Dependencias
 

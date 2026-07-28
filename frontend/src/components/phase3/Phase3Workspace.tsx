@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import AppLayout from '@/components/AppLayout';
 import Phase3Nav from './Phase3Nav';
 import {
   Phase3Entity360,
@@ -29,6 +30,8 @@ type Field = {
   required?: boolean;
   type?: 'text' | 'textarea' | 'number' | 'date' | 'datetime-local' | 'select';
   options?: { value: string; label: string }[];
+  lookup?: string;
+  help?: string;
 };
 
 type ViewConfig = {
@@ -42,6 +45,39 @@ type ViewConfig = {
   fields?: Field[];
   columns?: string[];
   overview?: boolean;
+};
+
+type LookupRecord = {
+  id: string;
+  code?: string;
+  name?: string;
+  email?: string;
+};
+
+type Phase3Lookups = Record<string, LookupRecord[]>;
+
+const summaryLabels: Record<string, string> = {
+  units: 'Unidades',
+  units_without_owner: 'Unidades sin responsable',
+  processes: 'Procesos',
+  critical_processes: 'Procesos críticos',
+  critical_processes_without_bia: 'Procesos críticos sin BIA',
+  critical_processes_without_plan: 'Procesos críticos sin plan',
+  services: 'Servicios',
+  current_plans: 'Planes vigentes',
+  expired_plans: 'Planes vencidos',
+  failed_tests: 'Pruebas fallidas',
+  rto_breaches: 'Incumplimientos de RTO',
+  rpo_breaches: 'Incumplimientos de RPO',
+  critical_metrics: 'Indicadores críticos',
+  critical_supplier_dependencies: 'Dependencias críticas de proveedores',
+  degraded_controls: 'Controles degradados',
+  open_findings: 'Hallazgos abiertos',
+  open_nonconformities: 'No conformidades abiertas',
+  overdue_actions: 'Acciones vencidas',
+  open_alerts: 'Alertas abiertas',
+  degraded_readiness: 'Readiness degradado',
+  annualized_exposure: 'Exposición anualizada',
 };
 
 const statusOptions = {
@@ -74,6 +110,8 @@ const configs: Record<ViewKey, ViewConfig> = {
       { key: 'code', label: 'Código', required: true },
       { key: 'name', label: 'Nombre', required: true },
       { key: 'description', label: 'Descripción', type: 'textarea' },
+      { key: 'parent_unit_id', label: 'Unidad superior', lookup: 'organization' },
+      { key: 'owner_user_id', label: 'Responsable', lookup: 'users' },
       {
         key: 'unit_type',
         label: 'Tipo',
@@ -107,8 +145,8 @@ const configs: Record<ViewKey, ViewConfig> = {
       { key: 'process_type', label: 'Tipo', required: true },
       { key: 'objective', label: 'Objetivo', type: 'textarea' },
       { key: 'scope', label: 'Alcance', type: 'textarea' },
-      { key: 'organizational_unit_id', label: 'ID de unidad' },
-      { key: 'owner_user_id', label: 'ID de responsable' },
+      { key: 'organizational_unit_id', label: 'Unidad', lookup: 'organization' },
+      { key: 'owner_user_id', label: 'Responsable', lookup: 'users' },
       { key: 'criticality_score', label: 'Criticidad calculada', type: 'number', required: true },
       {
         key: 'criticality',
@@ -132,8 +170,9 @@ const configs: Record<ViewKey, ViewConfig> = {
       { key: 'code', label: 'Código', required: true },
       { key: 'name', label: 'Nombre', required: true },
       { key: 'description', label: 'Descripción', type: 'textarea' },
-      { key: 'organizational_unit_id', label: 'ID de unidad' },
-      { key: 'primary_process_id', label: 'ID de proceso principal' },
+      { key: 'organizational_unit_id', label: 'Unidad', lookup: 'organization' },
+      { key: 'primary_process_id', label: 'Proceso principal', lookup: 'process' },
+      { key: 'owner_user_id', label: 'Responsable', lookup: 'users' },
       { key: 'minimum_service_level', label: 'Nivel mínimo aceptable', required: true },
       { key: 'critical_schedule', label: 'Horario crítico' },
       {
@@ -143,9 +182,9 @@ const configs: Record<ViewKey, ViewConfig> = {
         type: 'select',
         options: statusOptions.criticality,
       },
-      { key: 'rto_minutes', label: 'RTO (minutos)', type: 'number' },
-      { key: 'rpo_minutes', label: 'RPO (minutos)', type: 'number' },
-      { key: 'mtpd_minutes', label: 'MTPD/MAO (minutos)', type: 'number' },
+      { key: 'rto_minutes', label: 'RTO (minutos)', type: 'number', help: 'Tiempo objetivo para recuperar el servicio.' },
+      { key: 'rpo_minutes', label: 'RPO (minutos)', type: 'number', help: 'Pérdida máxima de datos aceptable medida en tiempo.' },
+      { key: 'mtpd_minutes', label: 'MTPD/MAO (minutos)', type: 'number', help: 'Tiempo máximo tolerable de interrupción.' },
       { key: 'next_review_at', label: 'Próxima revisión', type: 'datetime-local' },
     ],
   },
@@ -160,14 +199,15 @@ const configs: Record<ViewKey, ViewConfig> = {
     columns: ['code', 'assessment_date', 'mtpd_minutes', 'rto_minutes', 'rpo_minutes', 'status'],
     fields: [
       { key: 'code', label: 'Código', required: true },
-      { key: 'process_id', label: 'ID de proceso' },
-      { key: 'service_id', label: 'ID de servicio' },
+      { key: 'process_id', label: 'Proceso', lookup: 'process' },
+      { key: 'service_id', label: 'Servicio', lookup: 'service' },
+      { key: 'owner_user_id', label: 'Responsable', lookup: 'users' },
       { key: 'assessment_date', label: 'Fecha de evaluación', type: 'date' },
       { key: 'assumptions', label: 'Supuestos', type: 'textarea', required: true },
       { key: 'estimated_financial_impact', label: 'Impacto financiero estimado', type: 'number' },
-      { key: 'mtpd_minutes', label: 'MTPD/MAO (minutos)', type: 'number', required: true },
-      { key: 'rto_minutes', label: 'RTO (minutos)', type: 'number', required: true },
-      { key: 'rpo_minutes', label: 'RPO (minutos)', type: 'number', required: true },
+      { key: 'mtpd_minutes', label: 'MTPD/MAO (minutos)', type: 'number', required: true, help: 'Tiempo máximo tolerable de interrupción.' },
+      { key: 'rto_minutes', label: 'RTO (minutos)', type: 'number', required: true, help: 'Tiempo objetivo para recuperar la operación.' },
+      { key: 'rpo_minutes', label: 'RPO (minutos)', type: 'number', required: true, help: 'Pérdida máxima de datos aceptable medida en tiempo.' },
       { key: 'minimum_service_level', label: 'Nivel mínimo aceptable' },
       { key: 'required_people', label: 'Personas requeridas', type: 'number' },
       { key: 'alternative_resources', label: 'Recursos alternativos', type: 'textarea' },
@@ -187,9 +227,10 @@ const configs: Record<ViewKey, ViewConfig> = {
       { key: 'code', label: 'Código', required: true },
       { key: 'name', label: 'Nombre', required: true },
       { key: 'scope', label: 'Alcance', type: 'textarea', required: true },
-      { key: 'process_id', label: 'ID de proceso' },
-      { key: 'service_id', label: 'ID de servicio' },
-      { key: 'bia_id', label: 'ID de BIA' },
+      { key: 'process_id', label: 'Proceso', lookup: 'process' },
+      { key: 'service_id', label: 'Servicio', lookup: 'service' },
+      { key: 'bia_id', label: 'BIA', lookup: 'bia' },
+      { key: 'activation_authority_user_id', label: 'Autoridad de activación', lookup: 'users' },
       { key: 'activation_criteria', label: 'Criterios de activación', type: 'textarea', required: true },
       { key: 'procedures', label: 'Procedimientos', type: 'textarea', required: true },
       { key: 'recovery_sequence', label: 'Secuencia de recuperación', type: 'textarea', required: true },
@@ -215,7 +256,7 @@ const configs: Record<ViewKey, ViewConfig> = {
     entityType: 'continuity_test',
     columns: ['test_type', 'scheduled_at', 'status', 'target_rto_minutes', 'observed_rto_minutes'],
     fields: [
-      { key: 'plan_id', label: 'ID de plan', required: true },
+      { key: 'plan_id', label: 'Plan de continuidad', required: true, lookup: 'continuity_plan' },
       {
         key: 'test_type',
         label: 'Tipo',
@@ -251,8 +292,10 @@ const configs: Record<ViewKey, ViewConfig> = {
     columns: ['code', 'crisis_level', 'status', 'recovery_status', 'activated_at'],
     fields: [
       { key: 'code', label: 'Código', required: true },
-      { key: 'plan_id', label: 'ID de plan' },
-      { key: 'incident_id', label: 'ID de incidente' },
+      { key: 'plan_id', label: 'Plan de continuidad', lookup: 'continuity_plan' },
+      { key: 'incident_id', label: 'Incidente', lookup: 'incident' },
+      { key: 'process_id', label: 'Proceso', lookup: 'process' },
+      { key: 'service_id', label: 'Servicio', lookup: 'service' },
       {
         key: 'crisis_level',
         label: 'Nivel',
@@ -306,7 +349,8 @@ const configs: Record<ViewKey, ViewConfig> = {
           { value: 'continuity_plan', label: 'Plan' },
         ],
       },
-      { key: 'entity_id', label: 'ID de entidad', required: true },
+      { key: 'entity_id', label: 'Entidad relacionada', required: true, lookup: 'metric_entity' },
+      { key: 'owner_user_id', label: 'Responsable', lookup: 'users' },
       { key: 'formula_definition', label: 'Fórmula declarativa', type: 'textarea', required: true },
       { key: 'source_description', label: 'Fuente', required: true },
       { key: 'frequency', label: 'Frecuencia', required: true },
@@ -339,9 +383,9 @@ const configs: Record<ViewKey, ViewConfig> = {
     columns: ['code', 'scenario', 'expected_impact', 'annualized_loss', 'net_expected_benefit', 'status'],
     fields: [
       { key: 'code', label: 'Código', required: true },
-      { key: 'risk_id', label: 'ID de riesgo', required: true },
-      { key: 'process_id', label: 'ID de proceso' },
-      { key: 'service_id', label: 'ID de servicio' },
+      { key: 'risk_id', label: 'Riesgo', required: true, lookup: 'risk' },
+      { key: 'process_id', label: 'Proceso', lookup: 'process' },
+      { key: 'service_id', label: 'Servicio', lookup: 'service' },
       { key: 'scenario', label: 'Escenario', type: 'textarea', required: true },
       { key: 'minimum_impact', label: 'Impacto mínimo', type: 'number', required: true },
       { key: 'most_likely_impact', label: 'Impacto más probable', type: 'number', required: true },
@@ -379,6 +423,99 @@ function editableValue(value: unknown, type?: Field['type']) {
   return text;
 }
 
+function lookupLabel(record: LookupRecord) {
+  const identity = record.code || record.email || record.id;
+  const description = record.name || record.email;
+  return description && description !== identity
+    ? `${identity} — ${description}`
+    : identity;
+}
+
+function detailFieldLabel(key: string) {
+  const labels: Record<string, string> = {
+    code: 'Código',
+    name: 'Nombre',
+    description: 'Descripción',
+    status: 'Estado',
+    lifecycle_status: 'Estado',
+    version: 'Versión',
+    owner_user_id: 'Responsable',
+    backup_owner_user_id: 'Responsable alterno',
+    organizational_unit_id: 'Unidad',
+    process_id: 'Proceso',
+    primary_process_id: 'Proceso principal',
+    service_id: 'Servicio',
+    bia_id: 'BIA',
+    plan_id: 'Plan de continuidad',
+    risk_id: 'Riesgo',
+  };
+  return labels[key] || key.replaceAll('_', ' ');
+}
+
+function detailFieldValue(
+  key: string,
+  value: unknown,
+  entity: Phase3Record,
+  lookups: Phase3Lookups
+) {
+  if (typeof value !== 'string') return valueLabel(value);
+  let group = '';
+  if (key.endsWith('_user_id') || ['approved_by', 'activated_by', 'closed_by'].includes(key)) {
+    group = 'users';
+  } else {
+    const groups: Record<string, string> = {
+      organizational_unit_id: 'organization',
+      process_id: 'process',
+      primary_process_id: 'process',
+      service_id: 'service',
+      bia_id: 'bia',
+      plan_id: 'continuity_plan',
+      risk_id: 'risk',
+      entity_id: String(entity.entity_type || ''),
+    };
+    group = groups[key] || '';
+  }
+  const resolved = (lookups[group] || []).find(item => item.id === value);
+  return resolved ? lookupLabel(resolved) : valueLabel(value);
+}
+
+function LookupSelect({
+  field,
+  lookups,
+  defaultValue = '',
+}: {
+  field: Field;
+  lookups: Phase3Lookups;
+  defaultValue?: string;
+}) {
+  const groups = field.lookup === 'metric_entity'
+    ? ['organization', 'process', 'service', 'risk', 'control', 'requirement', 'supplier', 'incident', 'action', 'audit', 'evidence', 'continuity_plan']
+    : [field.lookup || ''];
+  return (
+    <select
+      name={field.key}
+      required={field.required}
+      defaultValue={defaultValue}
+      className="min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm text-[var(--tcdx-color-text-primary)] focus:border-[var(--tcdx-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--tcdx-color-primary)]"
+    >
+      <option value="">Sin relación / seleccione</option>
+      {groups.map(group => {
+        const options = lookups[group] || [];
+        if (!options.length) return null;
+        return (
+          <optgroup key={group} label={valueLabel(group)}>
+            {options.map(option => (
+              <option key={option.id} value={option.id}>
+                {lookupLabel(option)}
+              </option>
+            ))}
+          </optgroup>
+        );
+      })}
+    </select>
+  );
+}
+
 function permissionAllowed(meta: Phase3Meta | null, permission?: string) {
   if (!permission || !meta) return false;
   return meta.permissions.platform === true || meta.permissions[permission] === true;
@@ -394,6 +531,23 @@ function severityClass(severity: string) {
   return 'border-[var(--tcdx-color-info)] bg-[var(--tcdx-color-surface-alt)] text-[var(--tcdx-color-text-primary)]';
 }
 
+function columnLabel(config: ViewConfig, column: string) {
+  const fieldLabel = config.fields?.find(field => field.key === column)?.label;
+  if (fieldLabel) return fieldLabel;
+  const labels: Record<string, string> = {
+    status: 'Estado',
+    lifecycle_status: 'Estado',
+    version: 'Versión',
+    annualized_loss: 'Pérdida anualizada',
+    net_expected_benefit: 'Beneficio esperado neto',
+    expected_impact: 'Impacto esperado',
+    activated_at: 'Fecha de activación',
+    recovery_status: 'Estado de recuperación',
+    observed_rto_minutes: 'RTO observado',
+  };
+  return labels[column] || column.replaceAll('_', ' ');
+}
+
 export default function Phase3Workspace({
   view,
   entityId,
@@ -403,6 +557,7 @@ export default function Phase3Workspace({
 }) {
   const config = configs[view];
   const [meta, setMeta] = useState<Phase3Meta | null>(null);
+  const [lookups, setLookups] = useState<Phase3Lookups>({});
   const [records, setRecords] = useState<Phase3Record[]>([]);
   const [detail, setDetail] = useState<Phase3Entity360 | null>(null);
   const [overview, setOverview] = useState<Record<string, unknown> | null>(null);
@@ -424,6 +579,9 @@ export default function Phase3Workspace({
       setMeta(loadedMeta);
       if (!loadedMeta.module.is_enabled) {
         throw new Error('La operación integrada al GRC no está habilitada para esta empresa.');
+      }
+      if (!config.overview) {
+        setLookups(await phase3Request<Phase3Lookups>('/lookups'));
       }
       if (entityId && config.entityType) {
         const endpoint = view === 'metrics'
@@ -458,10 +616,11 @@ export default function Phase3Workspace({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setSaving(true);
     setError('');
     setNotice('');
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const body = Object.fromEntries(
       [...formData.entries()]
         .filter(([, value]) => String(value).trim() !== '')
@@ -472,7 +631,7 @@ export default function Phase3Workspace({
     );
     try {
       await phase3Mutation(config.endpoint, body);
-      event.currentTarget.reset();
+      form.reset();
       setFormOpen(false);
       setNotice('Registro guardado y propagado al contexto GRC.');
       await load();
@@ -485,23 +644,37 @@ export default function Phase3Workspace({
 
   if (loading) {
     return (
-      <section aria-busy="true" className="space-y-5">
-        <Phase3Nav />
-        <div className="h-32 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]" />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {[0, 1, 2].map(item => (
-            <div
-              key={item}
-              className="h-28 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]"
-            />
-          ))}
-        </div>
-      </section>
+      <AppLayout>
+        <section aria-busy="true" className="space-y-5">
+          <Phase3Nav />
+          <div className="h-32 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {[0, 1, 2].map(item => (
+              <div
+                key={item}
+                className="h-28 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]"
+              />
+            ))}
+          </div>
+        </section>
+      </AppLayout>
     );
   }
 
   return (
+    <AppLayout>
     <section className="space-y-6">
+      <nav aria-label="Migas de pan" className="text-sm text-[var(--tcdx-color-text-secondary)]">
+        <Link href="/dashboard" className="hover:text-[var(--tcdx-color-primary)]">Inicio</Link>
+        <span aria-hidden="true" className="mx-2">/</span>
+        <Link href="/operaciones-grc" className="hover:text-[var(--tcdx-color-primary)]">Operación GRC</Link>
+        {view !== 'operations' && (
+          <>
+            <span aria-hidden="true" className="mx-2">/</span>
+            <span aria-current="page">{config.title}</span>
+          </>
+        )}
+      </nav>
       <Phase3Nav />
 
       <header className="flex flex-col gap-4 border-b border-[var(--tcdx-color-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
@@ -558,6 +731,11 @@ export default function Phase3Workspace({
               >
                 <span className="mb-1.5 block text-sm font-semibold text-[var(--tcdx-color-text-primary)]">
                   {field.label}
+                  {field.help && (
+                    <span className="ml-1 font-normal text-[var(--tcdx-color-text-secondary)]" title={field.help}>
+                      ⓘ
+                    </span>
+                  )}
                 </span>
                 {field.type === 'textarea' ? (
                   <textarea
@@ -566,6 +744,8 @@ export default function Phase3Workspace({
                     rows={3}
                     className="w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm text-[var(--tcdx-color-text-primary)] focus:border-[var(--tcdx-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--tcdx-color-primary)]"
                   />
+                ) : field.lookup ? (
+                  <LookupSelect field={field} lookups={lookups} />
                 ) : field.type === 'select' ? (
                   <select
                     name={field.key}
@@ -606,6 +786,14 @@ export default function Phase3Workspace({
 
       {config.overview && overview && (
         <>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/operaciones-grc/activacion" className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2 text-sm font-semibold text-white">
+              Revisar activación operacional
+            </Link>
+            <Link href="/operaciones-grc/importar" className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-4 py-2 text-sm font-semibold text-[var(--tcdx-color-text-primary)]">
+              Importar datos reales
+            </Link>
+          </div>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {summary.map(([key, value]) => (
               <article
@@ -613,7 +801,7 @@ export default function Phase3Workspace({
                 className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-4 shadow-[var(--tcdx-shadow-card)]"
               >
                 <p className="text-xs font-semibold text-[var(--tcdx-color-text-secondary)]">
-                  {key.replaceAll('_', ' ')}
+                  {summaryLabels[key] || key.replaceAll('_', ' ')}
                 </p>
                 <p className="mt-2 text-2xl font-bold text-[var(--tcdx-color-text-primary)]">
                   {valueLabel(value)}
@@ -671,10 +859,10 @@ export default function Phase3Workspace({
                   <tr>
                     {config.columns?.map(column => (
                       <th key={column} scope="col" className="px-4 py-3 font-semibold">
-                        {column.replaceAll('_', ' ')}
+                        {columnLabel(config, column)}
                       </th>
                     ))}
-                    {config.detailBase && <th scope="col" className="px-4 py-3 text-right">Detalle</th>}
+                    {config.detailBase && <th scope="col" className="px-4 py-3 text-right">Acciones</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -691,13 +879,29 @@ export default function Phase3Workspace({
                         </td>
                       ))}
                       {config.detailBase && (
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-44 flex-col items-end gap-1">
                           <Link
                             href={`${config.detailBase}/${record.id}`}
                             className="font-semibold text-[var(--tcdx-color-primary)] hover:underline"
                           >
-                            Abrir
+                            Ver detalle
                           </Link>
+                          <Link
+                            href={`${config.detailBase}/${record.id}#vista-360`}
+                            className="font-semibold text-[var(--tcdx-color-primary)] hover:underline"
+                          >
+                            Ver vista 360
+                          </Link>
+                          {canManage && (
+                            <Link
+                              href={`${config.detailBase}/${record.id}#editar`}
+                              className="font-semibold text-[var(--tcdx-color-primary)] hover:underline"
+                            >
+                              Editar
+                            </Link>
+                          )}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -737,10 +941,13 @@ export default function Phase3Workspace({
           canManage={canManage}
           permissions={meta?.permissions || {}}
           canRecordMetric={permissionAllowed(meta, 'metrics.record')}
+          lookups={lookups}
           onReload={load}
         />
       )}
+      <Phase3Glossary />
     </section>
+    </AppLayout>
   );
 }
 
@@ -801,9 +1008,104 @@ function ImpactPanels({
   );
 }
 
+const linkedContextLabels: Record<string, string> = {
+  units: 'Unidad',
+  processes: 'Procesos',
+  services: 'Servicios',
+  bia: 'BIA',
+  plans: 'Planes de continuidad',
+  tests: 'Pruebas de continuidad',
+  metrics: 'KPI/KRI',
+  quantitative_risks: 'Riesgos cuantitativos',
+  crises: 'Crisis',
+  risks: 'Riesgos',
+  controls: 'Controles',
+  findings: 'Hallazgos',
+  nonconformities: 'No conformidades',
+  actions: 'Acciones',
+  alerts: 'Alertas',
+  readiness: 'Readiness',
+  suppliers: 'Proveedores',
+  incidents: 'Incidentes',
+  audits: 'Auditorías',
+  evidences: 'Evidencias',
+  requirements: 'Requisitos',
+};
+
+function LinkedContextPanels({ context }: { context: Record<string, Phase3Record[]> }) {
+  return (
+    <section aria-labelledby="phase3-context-title" className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-5">
+      <h2 id="phase3-context-title" className="font-bold text-[var(--tcdx-color-text-primary)]">
+        Contexto GRC relacionado
+      </h2>
+      <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
+        Cadena operacional, gobierno, riesgos y evidencia vinculada dentro de la empresa.
+      </p>
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {Object.entries(linkedContextLabels).map(([key, label]) => {
+          const rows = context[key] || [];
+          return (
+            <article key={key} className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface-alt)] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-[var(--tcdx-color-text-primary)]">{label}</h3>
+                <span className="text-sm font-bold text-[var(--tcdx-color-primary)]">{rows.length}</span>
+              </div>
+              {rows.length ? (
+                <ul className="mt-2 space-y-1 text-xs text-[var(--tcdx-color-text-secondary)]">
+                  {rows.slice(0, 3).map(row => (
+                    <li key={row.id}>
+                      {valueLabel(
+                        row.code
+                        || row.name
+                        || row.title
+                        || row.relation_type
+                        || row.reason_code
+                        || row.explanation
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-[var(--tcdx-color-text-secondary)]">
+                  Sin relaciones registradas.
+                </p>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Phase3Glossary() {
+  const terms = [
+    ['BIA', 'Análisis de impacto al negocio: determina consecuencias y prioridades de recuperación.'],
+    ['RTO', 'Tiempo objetivo para recuperar un proceso o servicio.'],
+    ['RPO', 'Pérdida máxima de datos aceptable, expresada como tiempo.'],
+    ['MTPD', 'Tiempo máximo tolerable durante el cual una interrupción puede mantenerse.'],
+    ['KPI', 'Indicador clave de desempeño.'],
+    ['KRI', 'Indicador clave de riesgo.'],
+    ['Readiness', 'Nivel explicable de preparación para operar, responder y demostrar cumplimiento.'],
+  ];
+  return (
+    <aside aria-label="Ayuda de conceptos" className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-info)] bg-white p-4">
+      <h2 className="text-sm font-bold text-[var(--tcdx-color-text-primary)]">Conceptos de esta vista</h2>
+      <dl className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {terms.map(([term, description]) => (
+          <div key={term}>
+            <dt className="text-xs font-bold text-[var(--tcdx-color-primary)]">{term}</dt>
+            <dd className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{description}</dd>
+          </div>
+        ))}
+      </dl>
+    </aside>
+  );
+}
+
 function EntityDetail({
   detail,
-  config, canManage, permissions, canRecordMetric, onReload,
+  config, canManage, permissions, canRecordMetric, lookups, onReload,
 }: {
   detail: Phase3Entity360;
   config: ViewConfig;
@@ -811,13 +1113,14 @@ function EntityDetail({
   permissions: Phase3Meta['permissions'];
   onReload: () => Promise<void>;
   canRecordMetric: boolean;
+  lookups: Phase3Lookups;
 }) {
   const visibleFields = Object.entries(detail.entity).filter(
     ([key, value]) => !['metadata', 'provenance'].includes(key) && value !== null
   );
   return (
     <>
-      <section className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-card)]">
+      <section id="vista-360" className="scroll-mt-24 rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-card)]">
         <div className="flex flex-col gap-2 border-b border-[var(--tcdx-color-border)] pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-[var(--tcdx-color-primary)]">
@@ -826,6 +1129,14 @@ function EntityDetail({
             <h2 className="text-xl font-bold text-[var(--tcdx-color-text-primary)]">
               {detail.entity.name || detail.entity.code || config.title}
             </h2>
+            {config.detailBase && (
+              <Link
+                href={config.detailBase}
+                className="mt-2 inline-block text-sm font-semibold text-[var(--tcdx-color-primary)] hover:underline"
+              >
+                Volver al listado
+              </Link>
+            )}
           </div>
           <span className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface-alt)] px-3 py-1.5 text-sm font-semibold text-[var(--tcdx-color-text-secondary)]">
             {valueLabel(detail.entity.status || detail.entity.lifecycle_status)}
@@ -835,13 +1146,13 @@ function EntityDetail({
           {visibleFields.slice(0, 24).map(([key, value]) => (
             <div key={key} className="min-w-0">
               <dt className="text-xs font-semibold text-[var(--tcdx-color-text-secondary)]">
-                {key.replaceAll('_', ' ')}
+                {detailFieldLabel(key)}
               </dt>
               <dd
                 className="mt-1 break-words text-sm text-[var(--tcdx-color-text-primary)]"
                 title={String(value)}
               >
-                {valueLabel(value)}
+                {detailFieldValue(key, value, detail.entity, lookups)}
               </dd>
             </div>
           ))}
@@ -858,10 +1169,13 @@ function EntityDetail({
           canManage={canManage}
           permissions={permissions}
           canRecordMetric={canRecordMetric}
+          lookups={lookups}
           onReload={onReload}
         />
       )}
       <ImpactPanels alerts={detail.alerts} impacts={detail.readiness_impacts} />
+
+      <LinkedContextPanels context={detail.linked_context || {}} />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <section className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-5">
@@ -1057,6 +1371,7 @@ function EntityActions({
   canManage,
   permissions,
   canRecordMetric,
+  lookups,
   onReload,
 }: {
   detail: Phase3Entity360;
@@ -1066,10 +1381,13 @@ function EntityActions({
   canManage: boolean;
   permissions: Phase3Meta['permissions'];
   canRecordMetric: boolean;
+  lookups: Phase3Lookups;
   onReload: () => Promise<void>;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  const [relationTargetType, setRelationTargetType] = useState('');
+  const [dependencyContract, setDependencyContract] = useState('');
   const currentStatus = String(detail.entity.status || detail.entity.lifecycle_status || '');
   const allowedTransitions = (transitionOptions[entityType]?.[currentStatus] || [])
     .filter(status => {
@@ -1093,6 +1411,12 @@ function EntityActions({
           numericFields.has(key) ? Number(value) : value,
         ])
     );
+    if (method === 'PATCH') {
+      const formData = new FormData(form);
+      for (const field of editableFields.filter(item => item.lookup)) {
+        if (formData.get(field.key) === '') body[field.key] = null;
+      }
+    }
     if (path.includes('/measurements') && body.provenance_source) {
       body.provenance = { source: body.provenance_source };
       delete body.provenance_source;
@@ -1105,7 +1429,7 @@ function EntityActions({
     }
     try {
       await phase3Mutation(path, body, method);
-      form.reset();
+      if (method !== 'PATCH') form.reset();
       setMessage('Operación registrada con trazabilidad.');
       await onReload();
     } catch (cause) {
@@ -1116,12 +1440,13 @@ function EntityActions({
   }
 
   return (
-    <section className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-5">
+    <section id="editar" className="scroll-mt-24 rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-5">
       <h2 className="font-bold text-[var(--tcdx-color-text-primary)]">Operación y relaciones</h2>
       {message && <p role="status" className="mt-2 text-sm text-[var(--tcdx-color-text-secondary)]">{message}</p>}
       <div className="mt-4 grid grid-cols-1 gap-5 xl:grid-cols-2">
         {canManage && editableFields.length > 0 && (
           <form
+            key={`${detail.entity.id}:${detail.entity.version || detail.entity.updated_at || ''}`}
             onSubmit={event => {
               event.preventDefault();
               void execute(`${endpoint}/${detail.entity.id}`, event.currentTarget, 'PATCH');
@@ -1139,6 +1464,7 @@ function EntityActions({
                 >
                   <span className="mb-1.5 block text-sm font-semibold text-[var(--tcdx-color-text-primary)]">
                     {field.label}
+                    {field.help && <span className="ml-1 font-normal" title={field.help}>ⓘ</span>}
                   </span>
                   {field.type === 'textarea' ? (
                     <textarea
@@ -1147,6 +1473,12 @@ function EntityActions({
                       rows={3}
                       defaultValue={editableValue(detail.entity[field.key], field.type)}
                       className="w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm text-[var(--tcdx-color-text-primary)] focus:border-[var(--tcdx-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--tcdx-color-primary)]"
+                    />
+                  ) : field.lookup ? (
+                    <LookupSelect
+                      field={field}
+                      lookups={lookups}
+                      defaultValue={editableValue(detail.entity[field.key], field.type)}
                     />
                   ) : field.type === 'select' ? (
                     <select
@@ -1203,11 +1535,20 @@ function EntityActions({
             <h3 className="text-sm font-semibold text-[var(--tcdx-color-text-primary)]">Vincular entidad GRC</h3>
             <input type="hidden" name="source_type" value={entityType} />
             <input type="hidden" name="source_id" value={detail.entity.id} />
-            <select name="target_type" required defaultValue="" className="min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm">
+            <select
+              name="target_type"
+              required
+              value={relationTargetType}
+              onChange={event => setRelationTargetType(event.target.value)}
+              className="min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm"
+            >
               <option value="">Seleccione tipo</option>
               {['risk', 'control', 'requirement', 'evidence', 'supplier', 'incident', 'audit', 'finding', 'nonconformity', 'action'].map(type => <option key={type} value={type}>{valueLabel(type)}</option>)}
             </select>
-            <input name="target_id" required placeholder="ID de entidad" className="min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] px-3 py-2 text-sm" />
+            <LookupSelect
+              field={{ key: 'target_id', label: 'Entidad', required: true, lookup: relationTargetType }}
+              lookups={lookups}
+            />
             <input name="relation_type" required placeholder="Tipo de relación" className="min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] px-3 py-2 text-sm" />
             <button disabled={submitting} className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-4 py-2 text-sm font-semibold text-[var(--tcdx-color-text-primary)] disabled:opacity-60">Crear relación</button>
           </form>
@@ -1222,7 +1563,14 @@ function EntityActions({
             </h3>
             <input type="hidden" name="source_type" value={entityType} />
             <input type="hidden" name="source_id" value={detail.entity.id} />
-            <select name="dependency_contract" required defaultValue="" aria-label="Relación de dependencia" className="min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm">
+            <select
+              name="dependency_contract"
+              required
+              value={dependencyContract}
+              onChange={event => setDependencyContract(event.target.value)}
+              aria-label="Relación de dependencia"
+              className="min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm"
+            >
               <option value="">Seleccione relación</option>
               {(dependencyContracts[entityType] || []).map(([targetType, dependencyType]) => (
                 <option key={dependencyType} value={`${targetType}:${dependencyType}`}>
@@ -1230,7 +1578,15 @@ function EntityActions({
                 </option>
               ))}
             </select>
-            <input name="target_id" required aria-label="ID de entidad dependiente" placeholder="ID de entidad dependiente" className="min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] px-3 py-2 text-sm" />
+            <LookupSelect
+              field={{
+                key: 'target_id',
+                label: 'Entidad dependiente',
+                required: true,
+                lookup: dependencyContract.split(':')[0],
+              }}
+              lookups={lookups}
+            />
             <select name="criticality" defaultValue="medium" aria-label="Criticidad de dependencia" className="min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm">
               {statusOptions.criticality.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>

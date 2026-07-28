@@ -11,11 +11,15 @@ checklist web.
 ## Entregables
 
 - Migración `20260728_phase3_operational_grc.sql`.
+- Forward-fix `20260729_phase3_operational_onboarding.sql` para importaciones
+  tenant-scoped, permiso y reversión segura por lote.
 - Aplicador idempotente `scripts/phase3/apply-phase3-migration.js`.
 - API tenant-scoped bajo `/api/grc/phase3`.
 - Rutas web de unidades, procesos, servicios, BIA, continuidad, crisis, indicadores y
   riesgo cuantitativo.
 - Vistas 360 con relaciones, alertas, readiness, eventos e historial.
+- App Shell oficial, asistente de activación e importación por códigos/correos.
+- Conectores no certificados gobernados como “No disponible”.
 - Capability y permisos de mínimo privilegio.
 - Runbooks de deploy y validación web.
 - Runner DDL con `MIGRATION_DATABASE_URL` separada del usuario runtime.

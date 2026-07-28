@@ -156,11 +156,11 @@ router.post('/assessments/:id/transitions', route(req => authorized(req, req.bod
 router.post('/assessments/:id/portal-invitations', route(req => authorized(req, 'suppliers.portal.manage', context => service.createPortalInvitation({ ...context, assessmentId: req.params.id, body: req.body }))));
 
 router.get('/connectors/catalog', route(req => authorized(req, 'connectors.read', () => service.connectorCatalog())));
-router.get('/connectors/health', route(req => authorized(req, 'connectors.read', ({ tenantId }) => service.integrationHealth(tenantId))));
-router.get('/connectors/runs', route(req => authorized(req, 'connectors.logs.read', ({ tenantId }) => service.listConnectorRuns(tenantId, req.query))));
-router.get('/connectors', route(req => authorized(req, 'connectors.read', ({ tenantId }) => service.listConnectors(tenantId))));
+router.get('/connectors/health', route(req => authorized(req, 'connectors.read', ({ tenantId, role }) => service.integrationHealth(tenantId, role))));
+router.get('/connectors/runs', route(req => authorized(req, 'connectors.logs.read', ({ tenantId, role }) => service.listConnectorRuns(tenantId, req.query, role))));
+router.get('/connectors', route(req => authorized(req, 'connectors.read', ({ tenantId, role }) => service.listConnectors(tenantId, role))));
 router.post('/connectors', route(req => authorized(req, Object.keys(req.body?.credentials || {}).length ? 'connectors.credentials.manage' : 'connectors.manage', context => service.createConnector({ ...context, body: req.body }))));
-router.get('/connectors/:id', route(req => authorized(req, 'connectors.read', ({ tenantId }) => service.connector360(tenantId, req.params.id))));
+router.get('/connectors/:id', route(req => authorized(req, 'connectors.read', ({ tenantId, role }) => service.connector360(tenantId, req.params.id, role))));
 router.put('/connectors/:id', route(req => authorized(req, Object.keys(req.body?.credentials || {}).length ? 'connectors.credentials.manage' : 'connectors.manage', context => service.updateConnector({ ...context, id: req.params.id, body: req.body }))));
 router.post('/connectors/:id/oauth/start', route(req => authorized(req, 'connectors.credentials.manage', context => service.prepareConnectorOAuth({ ...context, id: req.params.id }))));
 router.post('/connectors/:id/sync', route(req => authorized(req, 'connectors.sync.run', context => service.runConnector({

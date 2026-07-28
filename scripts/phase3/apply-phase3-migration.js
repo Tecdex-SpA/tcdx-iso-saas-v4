@@ -11,6 +11,11 @@ const MIGRATION_FILE = path.join(
   root,
   'database/migrations/20260728_phase3_operational_grc.sql'
 );
+const ONBOARDING_MIGRATION_ID = '20260729_phase3_operational_onboarding';
+const ONBOARDING_MIGRATION_FILE = path.join(
+  root,
+  'database/migrations/20260729_phase3_operational_onboarding.sql'
+);
 const ADVISORY_LOCK_NAMESPACE = 844332;
 const ADVISORY_LOCK_KEY = 20260728;
 
@@ -40,6 +45,12 @@ function sanitizeError(error) {
 
 function readMigration() {
   const sql = fs.readFileSync(MIGRATION_FILE, 'utf8');
+  const checksum = crypto.createHash('sha256').update(sql).digest('hex');
+  return { sql, checksum };
+}
+
+function readOnboardingMigration() {
+  const sql = fs.readFileSync(ONBOARDING_MIGRATION_FILE, 'utf8');
   const checksum = crypto.createHash('sha256').update(sql).digest('hex');
   return { sql, checksum };
 }
@@ -432,12 +443,119 @@ async function applyMigration(client, rawSql, checksum, migrationUser) {
   }
 }
 
+async function verifyOnboardingPostconditions(client) {
+  const result = await client.query(
+    `SELECT
+       EXISTS (
+         SELECT 1 FROM permissions
+         WHERE permission_key='operations.import' AND is_active=TRUE
+       ) AS import_permission,
+       to_regclass('public.grc_phase3_import_batches') IS NOT NULL AS batches_ready,
+       to_regclass('public.grc_phase3_import_rows') IS NOT NULL AS rows_ready`
+  );
+  const row = result.rows[0];
+  if (!row.import_permission || !row.batches_ready || !row.rows_ready) {
+    throw new Error('Phase 3 onboarding migration postcondition failed');
+  }
+  return row;
+}
+
+async function applyOnboardingMigration(client, rawSql, checksum, migrationUser) {
+  const existingResult = await client.query(
+    `SELECT migration_id,checksum,status FROM public.schema_migrations
+     WHERE migration_id=$1`,
+    [ONBOARDING_MIGRATION_ID]
+  );
+  const existing = existingResult.rows[0] || null;
+  if (existing && existing.checksum !== checksum) {
+    throw new Error(
+      `Checksum mismatch for migration_id ${ONBOARDING_MIGRATION_ID}; refusing to execute changed DDL`
+    );
+  }
+  if (existing?.status === 'applied') {
+    await verifyOnboardingPostconditions(client);
+    process.stdout.write(
+      `migration_id=${ONBOARDING_MIGRATION_ID} status=already_applied checksum=${checksum}\n`
+    );
+    return;
+  }
+
+  const sql = unwrapMigrationTransaction(rawSql);
+  const startedAt = Date.now();
+  await client.query(
+    `INSERT INTO public.schema_migrations (
+       migration_id,checksum,applied_at,applied_by,duration_ms,status,details
+     ) VALUES ($1,$2,NULL,$3,0,'running',$4::jsonb)
+     ON CONFLICT (migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,
+       applied_at=NULL,applied_by=EXCLUDED.applied_by,duration_ms=0,
+       status='running',details=EXCLUDED.details`,
+    [
+      ONBOARDING_MIGRATION_ID,
+      checksum,
+      migrationUser,
+      JSON.stringify({
+        migration_file: path.relative(root, ONBOARDING_MIGRATION_FILE),
+        started_at: new Date().toISOString(),
+      }),
+    ]
+  );
+  try {
+    await client.query('BEGIN');
+    await client.query("SET LOCAL lock_timeout = '10s'");
+    await client.query(sql);
+    const postconditions = await verifyOnboardingPostconditions(client);
+    const durationMs = Date.now() - startedAt;
+    await client.query(
+      `UPDATE public.schema_migrations SET applied_at=now(),applied_by=$2,
+         duration_ms=$3,status='applied',details=$4::jsonb
+       WHERE migration_id=$1 AND checksum=$5`,
+      [
+        ONBOARDING_MIGRATION_ID,
+        migrationUser,
+        durationMs,
+        JSON.stringify({
+          migration_file: path.relative(root, ONBOARDING_MIGRATION_FILE),
+          postconditions,
+        }),
+        checksum,
+      ]
+    );
+    await client.query('COMMIT');
+    process.stdout.write(
+      `migration_id=${ONBOARDING_MIGRATION_ID} status=applied checksum=${checksum} `
+      + `duration_ms=${durationMs}\n`
+    );
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    const safe = sanitizeError(error);
+    await client.query(
+      `UPDATE public.schema_migrations SET status='failed',duration_ms=$2,
+         details=$3::jsonb WHERE migration_id=$1`,
+      [
+        ONBOARDING_MIGRATION_ID,
+        Date.now() - startedAt,
+        JSON.stringify({
+          migration_file: path.relative(root, ONBOARDING_MIGRATION_FILE),
+          failed_at: new Date().toISOString(),
+          error_code: safe.code,
+          error_message: safe.message,
+        }),
+      ]
+    );
+    throw error;
+  }
+}
+
 async function main() {
   const mode = process.argv[2];
   const { sql, checksum } = readMigration();
+  const onboarding = readOnboardingMigration();
 
   if (mode === '--checksum') {
     process.stdout.write(`migration_id=${MIGRATION_ID} checksum=${checksum}\n`);
+    process.stdout.write(
+      `migration_id=${ONBOARDING_MIGRATION_ID} checksum=${onboarding.checksum}\n`
+    );
     return;
   }
 
@@ -462,6 +580,12 @@ async function main() {
       lockAcquired = true;
       await ensureLedger(client);
       await applyMigration(client, sql, checksum, preflight.migration_user);
+      await applyOnboardingMigration(
+        client,
+        onboarding.sql,
+        onboarding.checksum,
+        preflight.migration_user
+      );
     }
   } catch (error) {
     operationError = error;

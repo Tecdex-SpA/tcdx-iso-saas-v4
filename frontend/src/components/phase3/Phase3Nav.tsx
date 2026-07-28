@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 
 const sections = [
   { href: '/operaciones-grc', label: 'Resumen' },
+  { href: '/operaciones-grc/activacion', label: 'Activación' },
+  { href: '/operaciones-grc/importar', label: 'Importar' },
   { href: '/unidades', label: 'Unidades' },
   { href: '/procesos', label: 'Procesos' },
   { href: '/servicios', label: 'Servicios' },
@@ -21,7 +23,8 @@ export default function Phase3Nav() {
   return (
     <nav aria-label="Operación integrada al GRC" className="flex flex-wrap gap-2">
       {sections.map(section => {
-        const active = pathname === section.href || pathname.startsWith(`${section.href}/`);
+        const active = pathname === section.href
+          || (section.href !== '/operaciones-grc' && pathname.startsWith(`${section.href}/`));
         return (
           <Link
             key={section.href}

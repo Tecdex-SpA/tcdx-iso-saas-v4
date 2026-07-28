@@ -62,6 +62,7 @@ export type Phase3Entity360 = {
   events: Phase3Record[];
   bia_impacts: Phase3Record[];
   measurements?: Phase3Record[];
+  linked_context?: Record<string, Phase3Record[]>;
 };
 
 type ApiEnvelope<T> = {
@@ -69,6 +70,35 @@ type ApiEnvelope<T> = {
   data: T;
   request_id?: string;
 };
+
+export function normalizePhase3Payload(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(body)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => {
+        if (Array.isArray(value)) {
+          return [key, value.map(item => (
+            item && typeof item === 'object' && !Array.isArray(item)
+              ? normalizePhase3Payload(item as Record<string, unknown>)
+              : item
+          ))];
+        }
+        if (value && typeof value === 'object') {
+          return [key, normalizePhase3Payload(value as Record<string, unknown>)];
+        }
+        if (key === 'id' || key.endsWith('_id')) {
+          const normalized = String(value ?? '').trim();
+          if (!normalized || ['null', 'undefined'].includes(normalized.toLowerCase())) {
+            return [key, null];
+          }
+          return [key, normalized];
+        }
+        return [key, typeof value === 'string' ? value.trim() : value];
+      })
+  );
+}
 
 export async function phase3Request<T>(
   path: string,
@@ -100,7 +130,7 @@ export function phase3Mutation<T>(
 ) {
   return phase3Request<T>(path, {
     method,
-    body: JSON.stringify(body),
+    body: JSON.stringify(normalizePhase3Payload(body)),
     headers: { 'Idempotency-Key': idempotencyKey },
   });
 }

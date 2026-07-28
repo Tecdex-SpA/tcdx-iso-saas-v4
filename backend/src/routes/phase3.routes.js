@@ -4,11 +4,129 @@ const { Phase3Error, createPhase3Service } = require('../services/grc/phase3.ser
 
 const router = express.Router();
 const service = createPhase3Service(pool);
+const UUID_PATTERN = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+const EMPTY_ID_VALUES = new Set(['', 'null', 'undefined']);
 
 router.use((_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   next();
 });
+
+function normalizePayload(value, key = '') {
+  if (Array.isArray(value)) {
+    return value.map(item => normalizePayload(item));
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([childKey, childValue]) => [
+        childKey,
+        normalizePayload(childValue, childKey),
+      ])
+    );
+  }
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim();
+  if ((key === 'id' || key.endsWith('_id')) && EMPTY_ID_VALUES.has(normalized.toLowerCase())) {
+    return null;
+  }
+  return normalized;
+}
+
+function validatePayloadIds(value, path = 'body') {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => validatePayloadIds(item, `${path}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const [key, childValue] of Object.entries(value)) {
+    const fieldPath = `${path}.${key}`;
+    if (
+      (key === 'id' || key.endsWith('_id'))
+      && childValue !== null
+      && childValue !== undefined
+      && !UUID_PATTERN.test(String(childValue))
+    ) {
+      throw new Phase3Error(
+        'PHASE3_UUID_INVALID',
+        `El campo ${key} debe usar una entidad válida de esta empresa.`,
+        400,
+        { field: key }
+      );
+    }
+    validatePayloadIds(childValue, fieldPath);
+  }
+}
+
+router.use((req, res, next) => {
+  try {
+    if (req.body && typeof req.body === 'object') {
+      req.body = normalizePayload(req.body);
+      validatePayloadIds(req.body);
+    }
+    next();
+  } catch (error) {
+    if (error instanceof Phase3Error) {
+      res.locals.errorCode = error.code;
+      return res.status(error.status).json({
+        ok: false,
+        code: error.code,
+        error: error.message,
+        ...(error.details ? { details: error.details } : {}),
+        request_id: req.requestId || null,
+      });
+    }
+    next(error);
+  }
+});
+
+function safePayloadSummary(body) {
+  if (!body || typeof body !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(body).slice(0, 50).map(([key, value]) => {
+      if (value === null) return [key, 'null'];
+      if (Array.isArray(value)) return [key, `array(${value.length})`];
+      if (typeof value === 'object') return [key, 'object'];
+      if (key.endsWith('_id')) return [key, UUID_PATTERN.test(String(value)) ? 'uuid' : 'invalid-id'];
+      return [key, `${typeof value}(${String(value).length})`];
+    })
+  );
+}
+
+function mapDatabaseError(error) {
+  const mappings = {
+    '23505': [
+      'PHASE3_DUPLICATE',
+      'Ya existe un registro con el mismo código o relación en esta empresa.',
+      409,
+    ],
+    '23503': [
+      'PHASE3_RELATION_NOT_FOUND',
+      'La relación seleccionada no existe o no está disponible en esta empresa.',
+      409,
+    ],
+    '23514': [
+      'PHASE3_CONSTRAINT_VIOLATION',
+      'Los valores no cumplen las reglas operacionales de la entidad.',
+      409,
+    ],
+    '23502': [
+      'PHASE3_REQUIRED_FIELD',
+      'Falta un campo obligatorio para completar la operación.',
+      400,
+    ],
+    '22P02': [
+      'PHASE3_VALUE_FORMAT_INVALID',
+      'Uno de los campos tiene un formato inválido.',
+      400,
+    ],
+  };
+  const mapped = mappings[error?.code];
+  if (!mapped) return null;
+  return new Phase3Error(mapped[0], mapped[1], mapped[2], {
+    field: error?.column || null,
+    constraint: error?.constraint || null,
+  });
+}
 
 function roleOf(req) {
   return String(req.user?.role || req.user?.user_role || req.user?.userRole || '')
@@ -43,13 +161,14 @@ function route(handler) {
       const data = await handler(req);
       return res.json({ ok: true, data, request_id: req.requestId || null });
     } catch (error) {
-      if (error instanceof Phase3Error) {
-        res.locals.errorCode = error.code;
-        return res.status(error.status).json({
+      const mappedError = error instanceof Phase3Error ? error : mapDatabaseError(error);
+      if (mappedError) {
+        res.locals.errorCode = mappedError.code;
+        return res.status(mappedError.status).json({
           ok: false,
-          code: error.code,
-          error: error.message,
-          ...(error.details ? { details: error.details } : {}),
+          code: mappedError.code,
+          error: mappedError.message,
+          ...(mappedError.details ? { details: mappedError.details } : {}),
           request_id: req.requestId || null,
         });
       }
@@ -59,6 +178,8 @@ function route(handler) {
         tenant_id: tenantIdOf(req),
         route: req.originalUrl,
         error_code: error?.code || 'GRC_PHASE3_INTERNAL_ERROR',
+        payload: safePayloadSummary(req.body),
+        stack: String(error?.stack || '').split('\n').slice(0, 8).join(' | '),
       }));
       res.locals.errorCode = error?.code || 'GRC_PHASE3_INTERNAL_ERROR';
       return res.status(500).json({
@@ -104,6 +225,56 @@ router.get('/meta', route(req => {
   const context = contextOf(req);
   return service.getMeta(context);
 }));
+
+router.get('/lookups', route(req => authorized(
+  req,
+  'operations.360.read',
+  ({ tenantId }) => service.getLookups(tenantId)
+)));
+router.get('/summary', route(req => authorized(
+  req,
+  'operations.dashboard.read',
+  ({ tenantId }) => service.operationsOverview(tenantId)
+)));
+router.get('/readiness', route(req => authorized(
+  req,
+  'operations.dashboard.read',
+  ({ tenantId }) => service.activationReadiness(tenantId)
+)));
+router.get('/templates/:entityType', route(req => authorized(
+  req,
+  'operations.import',
+  () => service.getImportTemplate(req.params.entityType)
+)));
+router.post('/imports/preview', route(req => authorized(
+  req,
+  'operations.import',
+  context => service.createImportPreview({ ...context, body: req.body })
+)));
+router.get('/imports/:id', route(req => authorized(
+  req,
+  'operations.import',
+  ({ tenantId }) => service.getImportBatch(tenantId, req.params.id)
+)));
+router.post('/imports/:id/confirm', route(req => authorized(
+  req,
+  'operations.import',
+  context => service.confirmImport({
+    ...context,
+    batchId: req.params.id,
+    confirmed: req.body?.confirm === true,
+  })
+)));
+router.post('/imports/:id/rollback', route(req => authorized(
+  req,
+  'operations.import',
+  context => service.rollbackImport({ ...context, batchId: req.params.id })
+)));
+router.get('/360/:entityType/:id', route(req => authorized(
+  req,
+  'operations.360.read',
+  ({ tenantId }) => service.getEntity360(tenantId, req.params.entityType, req.params.id)
+)));
 
 router.get('/operations-overview', route(req => authorized(
   req,
@@ -408,5 +579,12 @@ router.post('/:entityType/:id/transitions', route(req => {
     idempotencyKey: req.get('Idempotency-Key'),
   }));
 }));
+
+router._test = {
+  mapDatabaseError,
+  normalizePayload,
+  safePayloadSummary,
+  validatePayloadIds,
+};
 
 module.exports = router;
