@@ -247,22 +247,22 @@ async function run() {
   assert.strictEqual((await service.listSuppliers(tenantB)).length, 0);
 
   const connector = await service.createConnector({
-    tenantId: tenantA, userId: userA,
+    tenantId: tenantA, userId: userA, role: 'platform_admin',
     body: { provider: 'github', display_name: `${qaPrefix} GitHub sandbox controlado`, execution_mode: 'sandbox' },
   });
   assert.strictEqual(connector.credentials_configured, false);
   const firstRun = await service.runConnector({
-    tenantId: tenantA, userId: userA, correlationId: 'integration:connector',
+    tenantId: tenantA, userId: userA, role: 'platform_admin', correlationId: 'integration:connector',
     id: connector.id, idempotencyKey: 'integration:github:1',
   });
   const repeatedRun = await service.runConnector({
-    tenantId: tenantA, userId: userA, correlationId: 'integration:connector-repeat',
+    tenantId: tenantA, userId: userA, role: 'platform_admin', correlationId: 'integration:connector-repeat',
     id: connector.id, idempotencyKey: 'integration:github:1',
   });
   assert.strictEqual(firstRun.run.status, 'completed');
   assert.strictEqual(firstRun.run.records_normalized, 3);
   assert.strictEqual(repeatedRun.reused, true);
-  const connector360 = await service.connector360(tenantA, connector.id);
+  const connector360 = await service.connector360(tenantA, connector.id, 'platform_admin');
   assert.strictEqual(connector360.records.length, 3);
   assert.strictEqual(connector360.connector.credential_envelope, undefined);
   const report = await service.generateReport({
@@ -279,6 +279,7 @@ async function run() {
   const liveConnector = await service.createConnector({
     tenantId: tenantA,
     userId: userA,
+    role: 'platform_admin',
     body: {
       provider: 'github',
       display_name: `${qaPrefix} GitHub webhook controlado`,

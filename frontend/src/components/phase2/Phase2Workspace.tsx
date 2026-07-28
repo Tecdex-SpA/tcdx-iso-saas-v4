@@ -420,22 +420,6 @@ export default function Phase2Workspace({ view, id }: { view: Phase2View; id?: s
     }
   }
 
-  async function syncConnector() {
-    if (!id) return;
-    setSaving(true);
-    setError('');
-    try {
-      const key = `ui:${id}:${Date.now()}`;
-      await phase2Mutation(`/connectors/${id}/sync`, {}, 'POST', key);
-      setNotice('Sincronización ejecutada; se conservaron procedencia e idempotencia.');
-      await load();
-    } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : 'No fue posible sincronizar.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   const localLinks = view.startsWith('privacy') || ['processing', 'dpias', 'requests', 'breaches'].includes(view)
     ? privacyLinks
     : ['suppliers', 'supplier-detail', 'assessments', 'questionnaires'].includes(view)
@@ -479,15 +463,35 @@ export default function Phase2Workspace({ view, id }: { view: Phase2View; id?: s
         {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
         {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
 
-        {config.create && (
+        {config.create && config.create !== 'connector' && (
           <EnterpriseSection>
-            <SectionHeading title={`Crear ${config.create === 'connector' ? 'instancia sandbox' : 'registro'}`} description="Los campos se validan en backend y la operación queda auditada." />
+            <SectionHeading title="Crear registro" description="Los campos se validan en backend y la operación queda auditada." />
             <form onSubmit={submit} className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <CreateFields kind={config.create} catalog={catalog} />
               <div className="flex items-end">
                 <EnterpriseButton type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</EnterpriseButton>
               </div>
             </form>
+          </EnterpriseSection>
+        )}
+
+        {view === 'connectors' && (
+          <EnterpriseSection>
+            <SectionHeading
+              title="Estado real de conectores"
+              description="No hay conectores externos habilitados para tenants en esta fase. No se solicitan credenciales ni se ofrece una conexión simulada."
+            />
+            <div className="grid gap-3 md:grid-cols-2">
+              {catalog.map(item => (
+                <article key={String(item.provider)} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <h3 className="font-bold text-[var(--tcdx-color-text-primary)]">{text(item.display_name)}</h3>
+                  <p className="mt-1 text-sm font-semibold text-amber-900">No disponible</p>
+                  <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
+                    {text(item.availability_message)}
+                  </p>
+                </article>
+              ))}
+            </div>
           </EnterpriseSection>
         )}
 
@@ -532,10 +536,7 @@ export default function Phase2Workspace({ view, id }: { view: Phase2View; id?: s
 
         {view === 'connector-detail' && id && (
           <EnterpriseSection>
-            <SectionHeading title="Ejecución" description="La repetición de una misma clave es idempotente; errores pasan a retry y dead-letter." />
-            <EnterpriseButton type="button" onClick={() => void syncConnector()} disabled={saving}>
-              {saving ? 'Sincronizando…' : 'Sincronizar ahora'}
-            </EnterpriseButton>
+            <SectionHeading title="No disponible" description="La sincronización externa permanece deshabilitada para tenants hasta su certificación productiva en Fase 6." />
           </EnterpriseSection>
         )}
 

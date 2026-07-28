@@ -1950,10 +1950,16 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
       `SELECT provider,version,display_name,capabilities,supported_scopes,default_mapping,status
        FROM grc_connector_definitions WHERE status='active' ORDER BY display_name`
     );
-    return result.rows;
+    return result.rows.map(row => ({
+      ...row,
+      operational_status: 'prototipo',
+      available_for_tenants: false,
+      availability_message: 'No disponible. Integración productiva planificada para Fase 6.',
+    }));
   }
 
-  async function listConnectors(tenantId) {
+  async function listConnectors(tenantId, role) {
+    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) return [];
     const result = await pool.query(
       `SELECT * FROM grc_connector_instances WHERE tenant_id=$1::uuid ORDER BY updated_at DESC`,
       [tenantId]
@@ -1961,7 +1967,14 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     return result.rows.map(redactIntegration);
   }
 
-  async function createConnector({ tenantId, userId, body }) {
+  async function createConnector({ tenantId, userId, role, body }) {
+    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+      throw new Phase2Error(
+        'CONNECTOR_NOT_AVAILABLE',
+        'Los conectores externos no están disponibles para tenants en esta fase.',
+        403
+      );
+    }
     const provider = requiredText(body.provider, 'CONNECTOR_PROVIDER_REQUIRED', 80);
     const definition = await pool.query(
       `SELECT * FROM grc_connector_definitions
@@ -1999,7 +2012,16 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     return redactIntegration(result.rows[0]);
   }
 
-  async function updateConnector({ tenantId, userId, id, body }) {
+  async function updateConnector({
+    tenantId, userId, role, id, body,
+  }) {
+    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+      throw new Phase2Error(
+        'CONNECTOR_NOT_AVAILABLE',
+        'Los conectores externos no están disponibles para tenants en esta fase.',
+        403
+      );
+    }
     return withTransaction(async client => {
       const current = await client.query(
         'SELECT * FROM grc_connector_instances WHERE tenant_id=$1::uuid AND id=$2::uuid FOR UPDATE',
@@ -2044,7 +2066,14 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     throw new Phase2Error('CONNECTOR_OAUTH_UNSUPPORTED', 'OAuth no soportado para el conector.', 400);
   }
 
-  async function prepareConnectorOAuth({ tenantId, id }) {
+  async function prepareConnectorOAuth({ tenantId, role, id }) {
+    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+      throw new Phase2Error(
+        'CONNECTOR_NOT_AVAILABLE',
+        'La conexión OAuth externa no está disponible para tenants en esta fase.',
+        403
+      );
+    }
     const result = await pool.query(
       `SELECT * FROM grc_connector_instances
        WHERE tenant_id=$1::uuid AND id=$2::uuid AND execution_mode='live' AND status='connected'`,
@@ -2219,7 +2248,14 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     return null;
   }
 
-  async function runConnector({ tenantId, userId, correlationId, id, idempotencyKey, runType = 'sync' }) {
+  async function runConnector({ tenantId, userId, role, correlationId, id, idempotencyKey, runType = 'sync' }) {
+    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+      throw new Phase2Error(
+        'CONNECTOR_NOT_AVAILABLE',
+        'La sincronización externa no está disponible para tenants en esta fase.',
+        403
+      );
+    }
     const integrationId = uuid(id);
     const key = requiredText(idempotencyKey, 'CONNECTOR_IDEMPOTENCY_KEY_REQUIRED', 240);
     return withTransaction(async client => {
@@ -2347,7 +2383,14 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     });
   }
 
-  async function connector360(tenantId, id) {
+  async function connector360(tenantId, id, role) {
+    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+      throw new Phase2Error(
+        'CONNECTOR_NOT_AVAILABLE',
+        'Los conectores externos no están disponibles para tenants en esta fase.',
+        403
+      );
+    }
     const integration = await pool.query(
       'SELECT * FROM grc_connector_instances WHERE tenant_id=$1::uuid AND id=$2::uuid',
       [tenantId, uuid(id)]
@@ -2452,7 +2495,8 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     });
   }
 
-  async function listConnectorRuns(tenantId, filters = {}) {
+  async function listConnectorRuns(tenantId, filters = {}, role = null) {
+    if (role !== null && !PLATFORM_ROLES.has(String(role || '').toLowerCase())) return [];
     const result = await pool.query(
       `SELECT r.*,i.provider,i.display_name
        FROM grc_connector_runs r
@@ -2466,7 +2510,20 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
     return result.rows;
   }
 
-  async function integrationHealth(tenantId) {
+  async function integrationHealth(tenantId, role = null) {
+    if (role !== null && !PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+      return {
+        connectors: 0,
+        healthy: 0,
+        unhealthy: 0,
+        last_sync_at: null,
+        failure_rate: 0,
+        records_normalized: 0,
+        mapping_errors: 0,
+        alerts_generated: 0,
+        operational_status: 'no_disponible',
+      };
+    }
     const result = await pool.query(
       `SELECT
          COUNT(*)::int AS connectors,

@@ -47,6 +47,11 @@
     "phase2:closeout": "bash scripts/phase2/run-phase2-closeout.sh --remote",
     "phase3:migration:checksum": "node scripts/phase3/apply-phase3-migration.js --checksum",
     "phase3:migration:preflight": "node scripts/phase3/apply-phase3-migration.js --preflight",
-    "phase3:migration:apply": "node scripts/phase3/apply-phase3-migration.js --apply"
+    "phase3:migration:apply": "node scripts/phase3/apply-phase3-migration.js --apply",
+    "phase3:contracts:check": "node scripts/phase3/check-phase3-contracts.js",
+    "phase3:postgres-integration": "bash scripts/phase3/check-phase3-postgres.sh",
+    "phase3:security-check": "node scripts/phase3/check-phase3-security.js",
+    "phase3:scripts-check": "bash -n scripts/phase3/check-phase3-postgres.sh && node --check scripts/phase3/apply-phase3-migration.js && node --check scripts/phase3/check-phase3-contracts.js && node --check scripts/phase3/check-phase3-security.js && node --check backend/src/services/grc/phase3Core.test.js && node --check backend/src/services/grc/phase3Postgres.integration.test.js",
+    "phase3:check": "npm run phase3:contracts:check && npm run phase3:security-check && npm run phase3:scripts-check && npm run phase3:migration:checksum && npm run phase3:postgres-integration && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend test && npm --prefix frontend run build && git diff --check"
   }
 }

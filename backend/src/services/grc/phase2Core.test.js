@@ -13,6 +13,7 @@ const {
   redactIntegration,
 } = require('./phase2Crypto');
 const { normalizeRecord, pullConnectorRecords } = require('./phase2ConnectorAdapters');
+const { createPhase2Service, Phase2Error } = require('./phase2.service');
 
 async function run() {
   assert.strictEqual(EVENT_NAMES.size, 38);
@@ -95,6 +96,39 @@ async function run() {
     assert(pulled.records.length >= 3);
     assert(pulled.records.every(record => record.provenance.controlled_fixture === true));
     assert(pulled.records.every(record => record.payload_hash.length === 64));
+  }
+
+  const connectorGate = createPhase2Service({
+    async query() {
+      throw new Error('A tenant connector gate must reject before database access.');
+    },
+  });
+  assert.deepStrictEqual(await connectorGate.listConnectors('tenant', 'tenant_admin'), []);
+  assert.deepStrictEqual(await connectorGate.listConnectorRuns('tenant', {}, 'tenant_admin'), []);
+  assert.strictEqual(
+    (await connectorGate.integrationHealth('tenant', 'tenant_admin')).operational_status,
+    'no_disponible'
+  );
+  for (const operation of [
+    () => connectorGate.createConnector({
+      tenantId: 'tenant', userId: 'user', role: 'tenant_admin', body: {},
+    }),
+    () => connectorGate.updateConnector({
+      tenantId: 'tenant', userId: 'user', role: 'tenant_admin', id: 'connector', body: {},
+    }),
+    () => connectorGate.prepareConnectorOAuth({
+      tenantId: 'tenant', role: 'tenant_admin', id: 'connector',
+    }),
+    () => connectorGate.runConnector({
+      tenantId: 'tenant', userId: 'user', role: 'tenant_admin', id: 'connector',
+    }),
+  ]) {
+    await assert.rejects(
+      operation(),
+      error => error instanceof Phase2Error
+        && error.code === 'CONNECTOR_NOT_AVAILABLE'
+        && error.status === 403
+    );
   }
 
   console.log('grc Phase 2 core tests: OK');

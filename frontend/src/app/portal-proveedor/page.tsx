@@ -98,13 +98,14 @@ export default function SupplierPortalPage() {
 
   async function uploadEvidence(event: FormEvent<HTMLFormElement>, questionId: string) {
     event.preventDefault();
-    const body = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const body = new FormData(form);
     body.set('question_id', questionId);
     setLoading(true);
     setError('');
     try {
       await portalRequest('/evidence', { method: 'POST', body }, session);
-      event.currentTarget.reset();
+      form.reset();
       setNotice('Evidencia recibida con hash y procedencia.');
       await load(session);
     } catch (uploadError) {
