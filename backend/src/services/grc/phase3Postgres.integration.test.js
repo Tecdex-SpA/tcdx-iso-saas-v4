@@ -9,6 +9,7 @@ const tenantA = '83000000-0000-4000-8000-000000000001';
 const tenantB = '83000000-0000-4000-8000-000000000002';
 const userA = '83000000-0000-4000-8000-000000000011';
 const userB = '83000000-0000-4000-8000-000000000012';
+const tenantAdminB = '83000000-0000-4000-8000-000000000013';
 const riskA = '83000000-0000-4000-8000-000000000021';
 
 async function seed() {
@@ -19,14 +20,20 @@ async function seed() {
   await pool.query(
     `INSERT INTO users (id,tenant_id,email,full_name)
      VALUES ($3,$1,'owner-a@example.test','Owner A'),
-            ($4,$2,'owner-b@example.test','Owner B')`,
-    [tenantA, tenantB, userA, userB]
+            ($4,$2,'owner-b@example.test','Owner B'),
+            ($5,$2,'admin-b@example.test','Admin B')`,
+    [tenantA, tenantB, userA, userB, tenantAdminB]
+  );
+  await pool.query(
+    `INSERT INTO test_user_role_assignments (user_id,role_key)
+     VALUES ($1,'tenant_admin'),($2,'auditor'),($3,'tenant_admin')`,
+    [userA, userB, tenantAdminB]
   );
   await pool.query(
     `INSERT INTO tenant_module_settings (tenant_id,module_key,is_enabled,enabled_by)
      VALUES ($1,'grc_phase3_operations',TRUE,$3),
             ($2,'grc_phase3_operations',TRUE,$4)`,
-    [tenantA, tenantB, userA, userB]
+    [tenantA, tenantB, userA, tenantAdminB]
   );
   await pool.query(
     `INSERT INTO iso_risk_matrix_items (id,tenant_id,risk_code,risk_title)
@@ -368,6 +375,18 @@ async function run() {
   assert.strictEqual(validPreview.batch.valid_rows, 1);
   assert.strictEqual(validPreview.rows[0].normalized_data.owner_user_id, userA);
   await assert.rejects(
+    service.getImportBatch(tenantB, validPreview.batch.id),
+    error => error instanceof Phase3Error && error.code === 'PHASE3_IMPORT_NOT_FOUND'
+  );
+  await assert.rejects(
+    service.rollbackImport({
+      tenantId: tenantB,
+      userId: tenantAdminB,
+      batchId: validPreview.batch.id,
+    }),
+    error => error instanceof Phase3Error && error.code === 'PHASE3_IMPORT_NOT_FOUND'
+  );
+  await assert.rejects(
     service.confirmImport({
       tenantId: tenantA,
       userId: userA,
@@ -695,6 +714,16 @@ async function run() {
     userId: userA,
     role: 'tenant_admin',
     permission: 'operations.import',
+  });
+  await service.assertPermission({
+    userId: tenantAdminB,
+    role: 'tenant_admin',
+    permission: 'operations.import',
+  });
+  await service.assertPermission({
+    userId: userB,
+    role: 'auditor',
+    permission: 'operations.dashboard.read',
   });
   await assert.rejects(
     service.assertPermission({

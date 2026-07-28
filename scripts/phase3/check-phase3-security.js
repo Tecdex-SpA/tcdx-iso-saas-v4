@@ -6,6 +6,8 @@ const root = path.resolve(__dirname, '../..');
 const targets = [
   'backend/src/routes/phase2.routes.js',
   'backend/src/routes/phase3.routes.js',
+  'backend/src/middleware/rbac.middleware.js',
+  'backend/src/middleware/rbac.middleware.test.js',
   'backend/src/services/grc/phase2.service.js',
   'backend/src/services/grc/phase3.service.js',
   'backend/src/services/grc/phase3Rules.js',

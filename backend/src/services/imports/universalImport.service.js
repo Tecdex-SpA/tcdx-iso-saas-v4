@@ -18,6 +18,9 @@ const {
   createPhase3Service,
 } = require('../grc/phase3.service');
 
+const IMPORT_READ_PERMISSION = 'operations.dashboard.read';
+const IMPORT_OPERATE_PERMISSION = 'operations.import';
+
 function createUniversalImportService(pool) {
   const phase3 = createPhase3Service(pool);
 
@@ -37,18 +40,18 @@ function createUniversalImportService(pool) {
     return definition;
   }
 
-  async function authorize({ tenantId, userId, role }) {
+  async function authorize({ tenantId, userId, role }, permission) {
     await phase3.assertModuleEnabled(tenantId);
-    await phase3.assertPermission({ userId, role, permission: 'operations.import' });
+    await phase3.assertPermission({ userId, role, permission });
   }
 
   async function definitions(context) {
-    await authorize(context);
+    await authorize(context, IMPORT_READ_PERMISSION);
     return listImportDefinitions();
   }
 
   async function definition(context, entityType) {
-    await authorize(context);
+    await authorize(context, IMPORT_READ_PERMISSION);
     return requireDefinition(entityType);
   }
 
@@ -81,7 +84,7 @@ function createUniversalImportService(pool) {
   }
 
   async function catalogs(context, entityType) {
-    await authorize(context);
+    await authorize(context, IMPORT_READ_PERMISSION);
     const importDefinition = requireDefinition(entityType, { operational: true });
     const currentCatalogs = await phase3.getLookups(context.tenantId);
     const definitionChecksum = await registerTemplateVersion(importDefinition);
@@ -94,7 +97,7 @@ function createUniversalImportService(pool) {
   }
 
   async function template(context, entityType, options = {}) {
-    await authorize(context);
+    await authorize(context, IMPORT_READ_PERMISSION);
     const importDefinition = requireDefinition(entityType, { operational: true });
     const currentCatalogs = await phase3.getLookups(context.tenantId);
     const buffer = await generateTemplate(importDefinition, currentCatalogs, options);
@@ -122,7 +125,7 @@ function createUniversalImportService(pool) {
   }
 
   async function preview(context, { entityType, file, duplicatePolicy }) {
-    await authorize(context);
+    await authorize(context, IMPORT_OPERATE_PERMISSION);
     const importDefinition = requireDefinition(entityType, { operational: true });
     if (!file) {
       throw new ImportFileError('IMPORT_FILE_REQUIRED', 'Selecciona un archivo .xlsx.', 400);
@@ -245,12 +248,12 @@ function createUniversalImportService(pool) {
   }
 
   async function batch(context, batchId) {
-    await authorize(context);
+    await authorize(context, IMPORT_READ_PERMISSION);
     return phase3.getImportBatch(context.tenantId, batchId);
   }
 
   async function confirm(context, batchId, confirmed) {
-    await authorize(context);
+    await authorize(context, IMPORT_OPERATE_PERMISSION);
     const result = await phase3.confirmImport({
       tenantId: context.tenantId,
       userId: context.userId,
@@ -267,7 +270,7 @@ function createUniversalImportService(pool) {
   }
 
   async function rollback(context, batchId) {
-    await authorize(context);
+    await authorize(context, IMPORT_OPERATE_PERMISSION);
     const result = await phase3.rollbackImport({
       tenantId: context.tenantId,
       userId: context.userId,
@@ -282,7 +285,7 @@ function createUniversalImportService(pool) {
   }
 
   async function history(context, { limit = 50, entityType = null } = {}) {
-    await authorize(context);
+    await authorize(context, IMPORT_READ_PERMISSION);
     const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
     const values = [context.tenantId, safeLimit];
     const clause = entityType ? `AND entity_type=$${values.push(entityType)}` : '';
@@ -300,7 +303,7 @@ function createUniversalImportService(pool) {
   }
 
   async function errorsWorkbook(context, batchId) {
-    await authorize(context);
+    await authorize(context, IMPORT_READ_PERMISSION);
     const loaded = await phase3.getImportBatch(context.tenantId, batchId);
     const importDefinition = requireDefinition(loaded.batch.entity_type);
     const errors = loaded.rows.flatMap(row => (row.errors || []).map(issue => ({

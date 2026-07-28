@@ -41,6 +41,11 @@ CREATE TABLE IF NOT EXISTS iso_risk_matrix_items (
   UNIQUE (tenant_id, risk_code)
 );
 
+CREATE TABLE IF NOT EXISTS test_user_role_assignments (
+  user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  role_key text NOT NULL REFERENCES app_roles(role_key) ON DELETE RESTRICT
+);
+
 CREATE OR REPLACE FUNCTION user_has_permission(
   requested_user_id uuid,
   requested_permission text
@@ -52,11 +57,12 @@ AS $$
   SELECT EXISTS (
     SELECT 1
     FROM users u
+    JOIN test_user_role_assignments ura
+      ON ura.user_id = u.id
     JOIN role_permissions rp
-      ON rp.role_key = 'tenant_admin'
-     AND rp.permission_key = requested_permission
-     AND rp.is_allowed = TRUE
+      ON rp.role_key = ura.role_key
+      AND rp.permission_key = requested_permission
+      AND rp.is_allowed = TRUE
     WHERE u.id = requested_user_id
-      AND u.email = 'owner-a@example.test'
   );
 $$;
