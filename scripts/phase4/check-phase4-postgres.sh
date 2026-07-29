@@ -63,7 +63,7 @@ run_psql -v ON_ERROR_STOP=1 -f "$PHASE1_MIGRATION" >/dev/null
 run_psql -v ON_ERROR_STOP=1 -f "$PHASE1R_MIGRATION" >/dev/null
 run_psql -v ON_ERROR_STOP=1 -f "$PHASE2_MIGRATION" >/dev/null
 run_psql -v ON_ERROR_STOP=1 -c "
-  ALTER TABLE tenants ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
+  ALTER TABLE tenants DROP COLUMN IF EXISTS status;
   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS service_status text DEFAULT 'active';
   INSERT INTO tenants (id,name)
   VALUES
@@ -113,24 +113,71 @@ run_psql -v ON_ERROR_STOP=1 -c "
   ON CONFLICT DO NOTHING;
 " >/dev/null
 
+phase4_checksum="$(node "$PHASE4_RUNNER" --checksum | sed -E 's/^.*checksum=//')"
+failed_checksum="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+run_psql -v ON_ERROR_STOP=1 -c "
+  ALTER TABLE tenants DROP COLUMN IF EXISTS status;
+  INSERT INTO schema_migrations (migration_id, checksum, applied_at, applied_by, status, details)
+  VALUES ('20260729_phase4_commercial_product', '$failed_checksum', now(), current_user, 'failed', jsonb_build_object('test','failed-retry'))
+  ON CONFLICT (migration_id) DO UPDATE
+    SET checksum = EXCLUDED.checksum,
+        applied_at = EXCLUDED.applied_at,
+        applied_by = EXCLUDED.applied_by,
+        status = 'failed',
+        details = EXCLUDED.details;
+" >/dev/null
+
+tenants_status_columns="$(run_psql -Atqc "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='tenants' AND column_name='status'")"
+[[ "$tenants_status_columns" == "0" ]] || { echo "Integration fixture unexpectedly has tenants.status" >&2; exit 1; }
+
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$PORT/$DATABASE_NAME" node "$PHASE4_RUNNER" --apply >/tmp/tcdx-phase4-apply-1.txt
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$PORT/$DATABASE_NAME" node "$PHASE4_RUNNER" --apply >/tmp/tcdx-phase4-apply-2.txt
 
 tables_count="$(run_psql -Atqc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY(ARRAY['product_families','commercial_editions','commercial_plans','commercial_plan_versions','commercial_modules','commercial_addons','commercial_features','commercial_technical_capabilities','tenant_subscriptions','tenant_feature_overrides','tenant_usage_limits','usage_measurements','trials','commercial_events','pack_definitions','pack_versions','pack_items','risk_methodology_versions','audit_workpaper_template_versions'])")"
 views_count="$(run_psql -Atqc "SELECT COUNT(*) FROM information_schema.views WHERE table_schema='public' AND table_name = ANY(ARRAY['v_commercial_plan_capabilities','v_commercial_tenant_subscription','v_commercial_tenant_modules','v_commercial_tenant_capabilities','v_commercial_tenant_health','v_tenant_commercial_entitlements'])")"
 ledger_status="$(run_psql -Atqc "SELECT status FROM schema_migrations WHERE migration_id='20260729_phase4_commercial_product'")"
+ledger_checksum="$(run_psql -Atqc "SELECT checksum FROM schema_migrations WHERE migration_id='20260729_phase4_commercial_product'")"
 legacy_subscriptions="$(run_psql -Atqc "SELECT COUNT(*) FROM tenant_subscriptions WHERE tenant_id IN ('70000000-0000-0000-0000-000000000701','70000000-0000-0000-0000-000000000702')")"
 capabilities_count="$(run_psql -Atqc "SELECT COUNT(*) FROM v_commercial_tenant_capabilities WHERE tenant_id='70000000-0000-0000-0000-000000000701'")"
+health_rows="$(run_psql -Atqc "SELECT COUNT(*) FROM v_commercial_tenant_health")"
+health_statuses="$(run_psql -Atqc "SELECT COUNT(*) FROM v_commercial_tenant_health WHERE health->>'status' IS NOT NULL")"
 pack_count="$(run_psql -Atqc "SELECT COUNT(*) FROM pack_definitions WHERE status='published'")"
 trigger_enabled="$(run_psql -Atqc "SELECT tgenabled FROM pg_trigger WHERE tgname='trg_commercial_plan_versions_immutable'")"
 
 [[ "$tables_count" == "19" ]] || { echo "Unexpected Phase 4 table count: $tables_count" >&2; exit 1; }
 [[ "$views_count" == "6" ]] || { echo "Unexpected Phase 4 view count: $views_count" >&2; exit 1; }
 [[ "$ledger_status" == "applied" ]] || { echo "Phase 4 ledger status is not applied: $ledger_status" >&2; exit 1; }
+[[ "$ledger_checksum" == "$phase4_checksum" ]] || { echo "Phase 4 failed retry did not replace checksum" >&2; exit 1; }
 [[ "$legacy_subscriptions" -ge 2 ]] || { echo "Legacy tenant subscriptions were not seeded" >&2; exit 1; }
 [[ "$capabilities_count" -gt 0 ]] || { echo "Tenant A capabilities were not resolved" >&2; exit 1; }
+[[ "$health_rows" -ge 2 ]] || { echo "Tenant health view did not return expected rows" >&2; exit 1; }
+[[ "$health_statuses" -ge 2 ]] || { echo "Tenant health view did not expose health status" >&2; exit 1; }
 [[ "$pack_count" -ge 4 ]] || { echo "Expected published packs were not seeded" >&2; exit 1; }
 [[ "$trigger_enabled" == "O" ]] || { echo "Plan version immutability trigger is not enabled" >&2; exit 1; }
 
-printf '{"status":"VERIFIED_PHASE4_POSTGRES","tables":%s,"views":%s,"legacy_subscriptions":%s,"tenant_a_capabilities":%s,"published_packs":%s,"ledger":"%s","trigger":"%s"}\n' \
-  "$tables_count" "$views_count" "$legacy_subscriptions" "$capabilities_count" "$pack_count" "$ledger_status" "$trigger_enabled"
+bad_applied_checksum="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+run_psql -v ON_ERROR_STOP=1 -c "
+  UPDATE schema_migrations
+     SET checksum = '$bad_applied_checksum', status = 'applied', details = jsonb_build_object('test','applied-mismatch')
+   WHERE migration_id = '20260729_phase4_commercial_product';
+" >/dev/null
+if MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$PORT/$DATABASE_NAME" node "$PHASE4_RUNNER" --apply >/tmp/tcdx-phase4-applied-mismatch.txt 2>&1; then
+  echo "Applied checksum mismatch was not rejected" >&2
+  exit 1
+fi
+if ! grep -q 'checksum differs from applied ledger entry' /tmp/tcdx-phase4-applied-mismatch.txt; then
+  echo "Applied checksum mismatch did not produce the expected error" >&2
+  cat /tmp/tcdx-phase4-applied-mismatch.txt >&2
+  exit 1
+fi
+mismatch_status="$(run_psql -Atqc "SELECT status FROM schema_migrations WHERE migration_id='20260729_phase4_commercial_product'")"
+mismatch_checksum="$(run_psql -Atqc "SELECT checksum FROM schema_migrations WHERE migration_id='20260729_phase4_commercial_product'")"
+[[ "$mismatch_status" == "applied" && "$mismatch_checksum" == "$bad_applied_checksum" ]] || { echo "Applied checksum mismatch rewrote the ledger" >&2; exit 1; }
+run_psql -v ON_ERROR_STOP=1 -c "
+  UPDATE schema_migrations
+     SET checksum = '$phase4_checksum', status = 'applied', details = details || jsonb_build_object('restored_after_mismatch_test', true)
+   WHERE migration_id = '20260729_phase4_commercial_product';
+" >/dev/null
+
+printf '{"status":"VERIFIED_PHASE4_POSTGRES","tables":%s,"views":%s,"tenants_status_columns":%s,"tenant_health_rows":%s,"failed_retry":"verified","applied_checksum_mismatch":"rejected","legacy_subscriptions":%s,"tenant_a_capabilities":%s,"published_packs":%s,"ledger":"%s","trigger":"%s"}\n' \
+  "$tables_count" "$views_count" "$tenants_status_columns" "$health_rows" "$legacy_subscriptions" "$capabilities_count" "$pack_count" "$ledger_status" "$trigger_enabled"

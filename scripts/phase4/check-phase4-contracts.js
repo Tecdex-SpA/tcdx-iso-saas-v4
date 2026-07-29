@@ -45,6 +45,17 @@ const markers = [
 const missingMigration = markers.filter((marker) => !migration.includes(marker));
 if (missingMigration.length) throw new Error(`Phase 4 migration gaps: ${missingMigration.join(', ')}`);
 
+const tenantHealthViewStart = migration.indexOf('CREATE OR REPLACE VIEW v_commercial_tenant_health AS');
+const tenantHealthViewEnd = migration.indexOf('CREATE OR REPLACE VIEW v_tenant_commercial_entitlements AS');
+if (tenantHealthViewStart === -1 || tenantHealthViewEnd === -1 || tenantHealthViewEnd <= tenantHealthViewStart) {
+  throw new Error('Phase 4 tenant health view block not found');
+}
+const tenantHealthView = migration.slice(tenantHealthViewStart, tenantHealthViewEnd);
+if (/\bt\.status\b/.test(migration)) throw new Error('Phase 4 migration must not reference tenants.status through alias t.status');
+const serviceStatusUsages = tenantHealthView.match(/COALESCE\(t\.service_status, 'active'\)/g) || [];
+if (serviceStatusUsages.length !== 2) throw new Error('Phase 4 tenant health view must use service_status fallback exactly twice');
+
+
 const routeMarkers = [
   "router.get('/catalog'", "router.post('/catalog/items'", "router.get('/plans'", "router.post('/plans/publish'",
   "router.get('/tenants/:tenantId/subscription'", "router.get('/tenants/:tenantId/entitlements'", "router.get('/tenants/:tenantId/limits'",
