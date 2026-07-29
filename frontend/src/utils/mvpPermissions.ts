@@ -214,6 +214,12 @@ export const CLIENT_MVP_NAV_ITEMS: MvpNavItem[] = [
     moduleKey: 'grc_phase3_operations',
   },
   {
+    href: '/grc',
+    label: 'Portal GRC',
+    feature: 'phase5.read',
+    moduleKey: 'data_governance',
+  },
+  {
     href: '/datos',
     label: 'Datos',
     feature: 'phase5.read',
@@ -350,6 +356,31 @@ export const MVP_ROUTE_RULES: MvpRouteRule[] = [
     feature: 'action_plans.functional_subflows.read',
   },
   { routes: ['/exportes'], feature: 'reports.read' },
+  {
+    routes: ['/grc', '/datos'],
+    feature: 'phase5.read',
+    moduleKey: 'data_governance',
+  },
+  {
+    routes: ['/metricas', '/bi'],
+    feature: 'phase5.read',
+    moduleKey: 'metrics_bi',
+  },
+  {
+    routes: ['/encuestas', '/evaluaciones'],
+    feature: 'phase5.read',
+    moduleKey: 'surveys_assessments',
+  },
+  {
+    routes: ['/tests', '/eventos-perdida'],
+    feature: 'phase5.read',
+    moduleKey: 'assurance_loss',
+  },
+  {
+    routes: ['/reportes'],
+    feature: 'phase5.read',
+    moduleKey: 'report_studio',
+  },
   { routes: ['/ia-compliance'], feature: 'ai_compliance.read', moduleKey: 'ai' },
   { routes: ['/perfil'], feature: 'configuration.profile.self' },
   { routes: ['/configuracion', '/usuarios', '/perfil-empresa'], feature: 'configuration.users.manage' },

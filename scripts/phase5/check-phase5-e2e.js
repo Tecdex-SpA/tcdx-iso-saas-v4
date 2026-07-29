@@ -22,13 +22,14 @@ const requiredRoutes = [
   'frontend/src/app/bi/dashboards/[id]/page.tsx',
   'frontend/src/app/reportes/studio/page.tsx',
   'frontend/src/app/reportes/generaciones/page.tsx',
+  'frontend/src/app/grc/page.tsx',
 ];
 
 for (const route of requiredRoutes) {
   const filePath = path.join(root, route);
   if (!fs.existsSync(filePath)) throw new Error(`Missing frontend route: ${route}`);
   const source = fs.readFileSync(filePath, 'utf8');
-  if (!source.includes('Phase5Workspace')) throw new Error(`Route does not render Phase5Workspace: ${route}`);
+  if (!source.includes('Phase5Workspace') && !source.includes('GrcPortal') && !source.includes('LineageExplorer')) throw new Error(`Route does not render governed workspace: ${route}`);
 }
 
 const workspace = fs.readFileSync(path.join(root, 'frontend/src/components/phase5/Phase5Workspace.tsx'), 'utf8');
@@ -37,11 +38,23 @@ for (const requiredText of ['Cargando informaci√≥n gobernada', 'Requiere atenci√
 }
 
 const nav = fs.readFileSync(path.join(root, 'frontend/src/utils/mvpPermissions.ts'), 'utf8');
-for (const href of ['/datos','/metricas','/encuestas','/tests','/eventos-perdida','/bi','/reportes/studio']) {
+for (const href of ['/grc','/datos','/metricas','/encuestas','/tests','/eventos-perdida','/bi','/reportes/studio']) {
   if (!nav.includes(`href: '${href}'`)) throw new Error(`Navigation missing: ${href}`);
 }
 
+const grcPortal = fs.readFileSync(path.join(root, 'frontend/src/components/grc/GrcPortal.tsx'), 'utf8');
+for (const requiredText of ['/api/grc/overview', 'Selecciona una empresa', 'Sin datos', 'Freshness']) {
+  if (!grcPortal.includes(requiredText)) throw new Error(`GRC portal missing runtime flow text: ${requiredText}`);
+}
+
+const apiClient = fs.readFileSync(path.join(root, 'frontend/src/utils/apiClient.ts'), 'utf8');
+if (!apiClient.includes('X-Tenant-Id') || !apiClient.includes('TENANT_REQUIRED')) {
+  throw new Error('E2E contract missing tenant-aware API client');
+}
+
 process.stdout.write(JSON.stringify({
-  status: 'VERIFIED_PHASE5_E2E_STATIC',
+  status: 'VERIFIED_PHASE5_E2E_CONTRACT',
   routes: requiredRoutes.length,
+  grc: 'verified',
+  tenant_context: 'verified',
 }) + '\n');

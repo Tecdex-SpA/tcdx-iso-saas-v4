@@ -1,3 +1,5 @@
+import { getStoredValidToken, getTenantIdFromToken, getUserRoleFromToken } from './auth';
+
 export function getApiBaseUrl() {
   return String(
     process.env.NEXT_PUBLIC_API_URL ||
@@ -7,6 +9,22 @@ export function getApiBaseUrl() {
 }
 
 type ApiJsonObject = Record<string, unknown>;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
+
+export class ApiClientError extends Error {
+  code: string;
+  status?: number;
+  requestId?: string | null;
+
+  constructor(code: string, message: string, status?: number, requestId?: string | null) {
+    super(message);
+    this.name = 'ApiClientError';
+    this.code = code;
+    this.status = status;
+    this.requestId = requestId;
+  }
+}
 
 function localizedDefaultMessage(locale: string, status: number) {
   const en = locale === 'en';
@@ -83,8 +101,85 @@ export async function readJsonResponse<T = ApiJsonObject>(
       localizedDefaultMessage(locale, response.status) ||
       fallbackMessage;
     const suffix = requestId ? ` (request_id: ${requestId})` : '';
-    throw new Error(`${message}${suffix}`);
+    const code = typeof payload?.code === 'string' ? payload.code : `HTTP_${response.status}`;
+    throw new ApiClientError(code, `${message}${suffix}`, response.status, requestId || null);
   }
 
   return (payload || {}) as T;
+}
+
+export function isUuid(value: unknown) {
+  return UUID_RE.test(String(value || '').trim());
+}
+
+export function getActiveTenantId() {
+  if (typeof window === 'undefined') return null;
+  const value = localStorage.getItem('activeTenantId');
+  return isUuid(value) ? value : null;
+}
+
+export function setActiveTenantId(tenantId: string | null) {
+  if (typeof window === 'undefined') return;
+  if (tenantId && isUuid(tenantId)) {
+    localStorage.setItem('activeTenantId', tenantId);
+  } else {
+    localStorage.removeItem('activeTenantId');
+  }
+}
+
+export function resolveEffectiveTenantContext({ tenantRequired = true }: { tenantRequired?: boolean } = {}) {
+  const token = getStoredValidToken();
+  if (!token) {
+    throw new ApiClientError('AUTH_REQUIRED', 'La sesión expiró o no es válida. Vuelve a iniciar sesión.', 401);
+  }
+
+  const role = getUserRoleFromToken();
+  const tokenTenantId = getTenantIdFromToken();
+  const platform = PLATFORM_ROLES.has(role);
+
+  if (platform) {
+    const activeTenantId = getActiveTenantId();
+    if (!activeTenantId) {
+      if (!tenantRequired) return { token, tenantId: null, role, platform };
+      throw new ApiClientError('TENANT_REQUIRED', 'Selecciona una empresa para operar este módulo GRC.', 400);
+    }
+    return { token, tenantId: activeTenantId, role, platform };
+  }
+
+  if (!isUuid(tokenTenantId)) {
+    throw new ApiClientError('TENANT_INVALID', 'La sesión no contiene un tenant válido.', 422);
+  }
+  return { token, tenantId: String(tokenTenantId), role, platform };
+}
+
+export function buildTenantHeaders({ tenantRequired = true }: { tenantRequired?: boolean } = {}) {
+  const context = resolveEffectiveTenantContext({ tenantRequired });
+  return {
+    context,
+    headers: {
+      Authorization: `Bearer ${context.token}`,
+      ...(context.tenantId ? { 'X-Tenant-Id': context.tenantId } : {}),
+      'X-Request-Id': `web-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    },
+  };
+}
+
+export async function apiRequestJson<T = ApiJsonObject>(
+  path: string,
+  options: RequestInit & { tenantRequired?: boolean; fallbackMessage?: string; locale?: string } = {}
+) {
+  const { tenantRequired = true, fallbackMessage, locale, headers, ...requestOptions } = options;
+  const baseUrl = getApiBaseUrl();
+  const { headers: tenantHeaders } = buildTenantHeaders({ tenantRequired });
+  const bodyIsFormData = typeof FormData !== 'undefined' && requestOptions.body instanceof FormData;
+  const requestHeaders = new Headers(headers || undefined);
+  Object.entries(tenantHeaders).forEach(([key, value]) => requestHeaders.set(key, value));
+  if (!bodyIsFormData && !requestHeaders.has('Content-Type')) {
+    requestHeaders.set('Content-Type', 'application/json');
+  }
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...requestOptions,
+    headers: requestHeaders,
+  });
+  return readJsonResponse<T>(response, { fallbackMessage, locale });
 }

@@ -1,9 +1,16 @@
 const { resolveCapability } = require('../services/commercial/entitlementResolver.service');
+const { TenantResolutionError, resolveEffectiveTenant } = require('../utils/effectiveTenant');
 
 function responseForDecision(decision, req, res) {
+  const code = decision.reason_code === 'RBAC_PERMISSION_REQUIRED'
+    ? 'PERMISSION_DENIED'
+    : ['CAPABILITY_NOT_ENTITLED', 'CAPABILITY_DISABLED', 'OVERRIDE_DISABLED'].includes(decision.reason_code)
+      ? 'CAPABILITY_NOT_INCLUDED'
+      : decision.reason_code || 'CAPABILITY_DENIED';
   const payload = {
     ok: false,
-    code: decision.reason_code || 'CAPABILITY_DENIED',
+    code,
+    reason_code: decision.reason_code || 'CAPABILITY_DENIED',
     error: decision.reason_code === 'RBAC_PERMISSION_REQUIRED'
       ? 'Permiso requerido para operar esta capacidad.'
       : 'La capacidad no esta habilitada para esta empresa.',
@@ -21,9 +28,13 @@ function responseForDecision(decision, req, res) {
 function requireCommercialCapability(capabilityKey, options = {}) {
   return async function commercialCapabilityMiddleware(req, res, next) {
     try {
-      const tenantId = options.tenantIdFromParams
+      const explicitTenantId = options.tenantIdFromParams
         ? req.params?.[options.tenantIdFromParams]
-        : (req.tenantId || req.user?.tenant_id || req.user?.tenantId || null);
+        : null;
+      const tenantId = await resolveEffectiveTenant(req, {
+        tenantId: explicitTenantId,
+        required: options.tenantRequired !== false,
+      });
       const decision = await resolveCapability({
         tenantId,
         user: req.user,
@@ -37,6 +48,16 @@ function requireCommercialCapability(capabilityKey, options = {}) {
       return responseForDecision(decision, req, res);
     } catch (error) {
       res.locals = res.locals || {};
+      if (error instanceof TenantResolutionError) {
+        res.locals.errorCode = error.code;
+        return res.status(error.status || 403).json({
+          ok: false,
+          code: error.code,
+          error: error.message,
+          details: error.details || undefined,
+          request_id: req.requestId || null,
+        });
+      }
       res.locals.errorCode = 'COMMERCIAL_ENTITLEMENT_ERROR';
       return res.status(500).json({
         ok: false,

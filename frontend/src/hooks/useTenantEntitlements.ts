@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getApiBaseUrl } from '@/utils/apiClient';
+import { getActiveTenantId, getApiBaseUrl } from '@/utils/apiClient';
 
 const API_URL = getApiBaseUrl();
 
@@ -112,7 +112,7 @@ const pending = new Map<string, Promise<Entitlements>>();
 
 function cacheKey(token: string) {
   if (typeof window === 'undefined') return 'server';
-  const tenantId = localStorage.getItem('activeTenantId') || localStorage.getItem('tenant_id') || 'default-tenant';
+  const tenantId = getActiveTenantId() || localStorage.getItem('tenant_id') || 'no-tenant-selected';
   const userId = localStorage.getItem('user_id') || localStorage.getItem('email') || token.slice(-16) || 'default-user';
   return `${tenantId}:${userId}`;
 }
@@ -203,8 +203,12 @@ async function fetchEntitlements(): Promise<Entitlements> {
   if (currentPending) return currentPending;
 
   const request = (async () => {
+    const selectedTenantId = getActiveTenantId();
     const response = await fetch(`${API_URL}/api/me/entitlements`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(selectedTenantId ? { 'X-Tenant-Id': selectedTenantId } : {}),
+      },
     });
     const text = await response.text();
     let json: unknown = null;

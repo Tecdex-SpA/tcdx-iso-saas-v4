@@ -9,17 +9,25 @@ const COMPONENTS = [
   'validation',
   'stability',
   'coverage',
+  'source_availability',
+  'assurance_result',
+  'evidence_trace',
+  'dimension_quality',
 ];
 
 const DEFAULT_WEIGHTS = Object.freeze({
-  completeness: 0.16,
-  accuracy: 0.16,
-  consistency: 0.12,
-  freshness: 0.14,
-  lineage: 0.14,
-  validation: 0.12,
-  stability: 0.08,
-  coverage: 0.08,
+  completeness: 0.12,
+  accuracy: 0.12,
+  consistency: 0.1,
+  freshness: 0.12,
+  lineage: 0.1,
+  validation: 0.1,
+  stability: 0.06,
+  coverage: 0.06,
+  source_availability: 0.08,
+  assurance_result: 0.06,
+  evidence_trace: 0.04,
+  dimension_quality: 0.04,
 });
 
 class TrustScoreError extends Error {
@@ -70,10 +78,11 @@ function normalizeComponent(key, input = {}, weight) {
 
 function statusFromScore(score, components) {
   const rejected = components.validation?.status === 'untrusted';
+  const unavailable = components.source_availability?.status === 'untrusted';
   const stale = ['untrusted', 'unknown'].includes(components.freshness?.status);
   const noLineage = components.lineage?.score < 100;
-  if (rejected || score < 40) return 'untrusted';
-  if (stale || score < 70) return 'attention';
+  if (rejected || unavailable || score < 40) return 'untrusted';
+  if (stale || score < 70 || components.assurance_result?.status === 'attention') return 'attention';
   if (noLineage || score < 85) return 'acceptable';
   return 'trusted';
 }
@@ -91,15 +100,20 @@ function calculateTrustScore(input = {}, weightsInput = DEFAULT_WEIGHTS) {
 
   if (components.freshness.status === 'untrusted') score = Math.min(score, 69);
   if (components.freshness.status === 'unknown') score = Math.min(score, 74);
+  if (components.source_availability.status === 'untrusted') score = Math.min(score, 59);
+  if (components.source_availability.status === 'unknown') score = Math.min(score, 79);
   if (components.lineage.score < 100) score = Math.min(score, 89);
+  if (components.evidence_trace.score < 100) score = Math.min(score, 94);
   if (components.validation.status === 'untrusted') score = Math.min(score, 39);
+  if (components.assurance_result.status === 'untrusted') score = Math.min(score, 69);
 
   const rounded = Math.round(score * 100) / 100;
   return {
     score: rounded,
     status: statusFromScore(rounded, components),
     components,
-    formula_version: 'data_trust_score_v1',
+    formula_version: 'data_trust_score_v2',
+    calculated_at: new Date().toISOString(),
   };
 }
 

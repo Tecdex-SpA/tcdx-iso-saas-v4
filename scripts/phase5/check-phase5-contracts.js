@@ -7,12 +7,16 @@ const path = require('path');
 const root = path.resolve(__dirname, '../..');
 const requiredFiles = [
   'database/migrations/20260729_phase5_data_metrics_bi_reporting.sql',
+  'database/migrations/20260730_phase5_tenant_shell_grc_data_integration.sql',
   'scripts/phase5/apply-phase5-migration.js',
+  'backend/src/utils/effectiveTenant.js',
   'backend/src/services/phase5/formulaEngine.js',
   'backend/src/services/phase5/dataTrustScore.js',
   'backend/src/services/phase5/phase5.service.js',
   'backend/src/routes/phase5.routes.js',
   'frontend/src/components/phase5/Phase5Workspace.tsx',
+  'frontend/src/components/grc/GrcPortal.tsx',
+  'frontend/src/app/grc/page.tsx',
   'docs/phase5/phase5-baseline.md',
   'docs/phase5/closeout.md',
 ];
@@ -35,6 +39,7 @@ const endpoints = [
   '/api/metrics','/api/metrics/:id/formulas','/api/metrics/:id/publish','/api/metrics/:id/calculate',
   '/api/surveys','/api/survey-campaigns','/api/survey-responses','/api/assurance-tests',
   '/api/loss-events','/api/dashboards','/api/report-generations','/api/report-schedules',
+  '/api/grc/overview','/api/grc/impact/:entityType/:entityId',
 ];
 
 for (const file of requiredFiles) {
@@ -42,6 +47,7 @@ for (const file of requiredFiles) {
 }
 
 const migration = fs.readFileSync(path.join(root, requiredFiles[0]), 'utf8');
+const hotfixMigration = fs.readFileSync(path.join(root, 'database/migrations/20260730_phase5_tenant_shell_grc_data_integration.sql'), 'utf8');
 for (const table of requiredTables) {
   if (!migration.includes(`CREATE TABLE IF NOT EXISTS ${table}`)) {
     throw new Error(`Migration missing table: ${table}`);
@@ -49,8 +55,13 @@ for (const table of requiredTables) {
 }
 
 const app = fs.readFileSync(path.join(root, 'backend/src/app.js'), 'utf8');
-for (const mount of ['/api/data','/api/metrics','/api/surveys','/api/loss-events','/api/dashboards','/api/report-generations']) {
+for (const mount of ['/api/grc','/api/data','/api/metrics','/api/surveys','/api/loss-events','/api/dashboards','/api/report-generations']) {
   if (!app.includes(`app.use('${mount}'`)) throw new Error(`App missing mount: ${mount}`);
+}
+for (const table of ['grc_analytical_impact_rules','grc_analytical_impact_events','data_trust_score_versions']) {
+  if (!hotfixMigration.includes(`CREATE TABLE IF NOT EXISTS ${table}`)) {
+    throw new Error(`Hotfix migration missing table: ${table}`);
+  }
 }
 
 const rbac = fs.readFileSync(path.join(root, 'backend/src/middleware/rbac.middleware.js'), 'utf8');
@@ -71,4 +82,5 @@ process.stdout.write(JSON.stringify({
   status: 'VERIFIED_PHASE5_CONTRACTS',
   tables: requiredTables.length,
   endpoints: endpoints.length,
+  hotfix: 'verified',
 }) + '\n');

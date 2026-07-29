@@ -12,7 +12,7 @@ const asyncJobs = require('../asyncJob.service');
 const { evaluate, validateExpression, FormulaError } = require('./formulaEngine');
 const { calculateTrustScore, assessFreshness, TrustScoreError } = require('./dataTrustScore');
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 class Phase5Error extends Error {
   constructor(code, message, status = 400, details = null) {
@@ -56,7 +56,7 @@ function userId(user) {
 
 function tenantIdFrom(reqOrScope) {
   const tenantId = reqOrScope?.tenant_id || reqOrScope?.tenantId || reqOrScope?.tenant || null;
-  if (!tenantId) throw new Phase5Error('PHASE5_TENANT_REQUIRED', 'Tenant requerido para operar Fase 5.', 403);
+  if (!tenantId) throw new Phase5Error('PHASE5_TENANT_REQUIRED', 'Tenant requerido para operar GRC.', 403);
   return assertUuid(tenantId, 'tenant_id');
 }
 
@@ -110,6 +110,40 @@ async function auditEvent(client, { tenantId, userId: actor, action, entityType,
 async function tableExists(client, tableName) {
   const result = await client.query(`SELECT to_regclass($1) AS regclass`, [`public.${tableName}`]);
   return Boolean(result.rows[0]?.regclass);
+}
+
+async function recordLineageEdge(scope, edge = {}) {
+  const tenantId = typeof scope === 'string' ? assertUuid(scope, 'tenant_id') : tenantIdFrom(scope);
+  const fromType = text(edge.fromType || edge.from_type);
+  const toType = text(edge.toType || edge.to_type);
+  const relationType = text(edge.relationType || edge.relation_type, 'related_to');
+  const fromId = assertUuid(edge.fromId || edge.from_id, 'from_id');
+  const toId = assertUuid(edge.toId || edge.to_id, 'to_id');
+  if (!fromType || !toType) throw new Phase5Error('PHASE5_LINEAGE_TYPE_REQUIRED', 'Lineage requiere tipos origen y destino.', 422);
+  const result = await pool.query(
+    `INSERT INTO data_lineage_edges (
+       tenant_id, from_type, from_id, to_type, to_id, relation_type, transformation,
+       created_by, correlation_id, metadata
+     )
+     VALUES ($1::uuid,$2,$3::uuid,$4,$5::uuid,$6,$7,$8::uuid,$9,$10::jsonb)
+     ON CONFLICT (tenant_id, from_type, from_id, to_type, to_id, relation_type, COALESCE(correlation_id, '')) DO UPDATE
+     SET transformation=COALESCE(EXCLUDED.transformation, data_lineage_edges.transformation),
+         metadata=data_lineage_edges.metadata || EXCLUDED.metadata
+     RETURNING *`,
+    [
+      tenantId,
+      fromType,
+      fromId,
+      toType,
+      toId,
+      relationType,
+      text(edge.transformation),
+      typeof scope === 'string' ? null : userId(scope.user),
+      text(edge.correlationId || edge.correlation_id),
+      json(edge.metadata),
+    ]
+  );
+  return result.rows[0];
 }
 
 async function listDataDomains(scope, filters = {}) {
@@ -250,28 +284,61 @@ async function graph(scope, entityType, entityId, direction = 'lineage') {
   const tenantId = tenantIdFrom(scope);
   const type = text(entityType);
   const id = assertUuid(entityId);
+  const graphDirection = direction === 'impact' ? 'impact' : 'lineage';
   const rows = await queryRows(
     `WITH RECURSIVE edges AS (
-       SELECT 1 AS depth, e.*
+       SELECT
+         1 AS depth,
+         ARRAY[e.from_type || ':' || e.from_id::text || '>' || e.relation_type || '>' || e.to_type || ':' || e.to_id::text] AS path,
+         e.*
        FROM data_lineage_edges e
        WHERE e.tenant_id=$1::uuid
          AND (($4::text='lineage' AND e.from_type=$2 AND e.from_id=$3::uuid)
            OR ($4::text='impact' AND e.to_type=$2 AND e.to_id=$3::uuid))
        UNION ALL
-       SELECT edges.depth + 1, e.*
+       SELECT
+         edges.depth + 1,
+         edges.path || (e.from_type || ':' || e.from_id::text || '>' || e.relation_type || '>' || e.to_type || ':' || e.to_id::text),
+         e.*
        FROM data_lineage_edges e
        JOIN edges ON edges.tenant_id=e.tenant_id
         AND (($4::text='lineage' AND e.from_type=edges.to_type AND e.from_id=edges.to_id)
           OR ($4::text='impact' AND e.to_type=edges.from_type AND e.to_id=edges.from_id))
        WHERE edges.depth < 5
+         AND NOT (e.from_type || ':' || e.from_id::text || '>' || e.relation_type || '>' || e.to_type || ':' || e.to_id::text = ANY(edges.path))
      )
      SELECT DISTINCT ON (from_type, from_id, to_type, to_id, relation_type)
-       depth, from_type, from_id, to_type, to_id, relation_type, transformation, created_at, correlation_id, metadata
+       depth, path, from_type, from_id, to_type, to_id, relation_type, transformation, created_at, correlation_id, metadata
      FROM edges
      ORDER BY from_type, from_id, to_type, to_id, relation_type, depth`,
-    [tenantId, type, id, direction]
+    [tenantId, type, id, graphDirection]
   );
-  return { root: { entity_type: type, entity_id: id }, max_depth: 5, edges: rows };
+  const nodes = new Map([[`${type}:${id}`, { entity_type: type, entity_id: id, root: true }]]);
+  rows.forEach((row) => {
+    nodes.set(`${row.from_type}:${row.from_id}`, { entity_type: row.from_type, entity_id: row.from_id });
+    nodes.set(`${row.to_type}:${row.to_id}`, { entity_type: row.to_type, entity_id: row.to_id });
+  });
+  return {
+    root: { entity_type: type, entity_id: id },
+    direction: graphDirection,
+    max_depth: 5,
+    nodes: [...nodes.values()],
+    edges: rows.map((row) => ({
+      depth: row.depth,
+      from_type: row.from_type,
+      from_id: row.from_id,
+      to_type: row.to_type,
+      to_id: row.to_id,
+      relation_type: row.relation_type,
+      transformation: row.transformation,
+      created_at: row.created_at,
+      correlation_id: row.correlation_id,
+      metadata: row.metadata,
+      path: row.path,
+      explanation: `${row.from_type} ${row.relation_type} ${row.to_type}`,
+    })),
+    warnings: rows.length === 0 ? ['Sin relaciones registradas para este alcance.'] : [],
+  };
 }
 
 async function listMetrics(scope, filters = {}) {
@@ -411,6 +478,7 @@ async function publishMetric(scope, metricId, requestId = null) {
 function trustInputForMeasurement({ qualityStatus, freshnessStatus, hasLineage = false, validationStatus = 'pending' }) {
   const valid = qualityStatus === 'valid';
   const rejected = qualityStatus === 'rejected' || validationStatus === 'rejected';
+  const unavailable = freshnessStatus === 'unavailable';
   const freshnessMap = {
     current: { score: 100, status: 'trusted', reason: 'Medicion vigente.' },
     aging: { score: 75, status: 'acceptable', reason: 'Medicion envejeciendo.' },
@@ -428,6 +496,10 @@ function trustInputForMeasurement({ qualityStatus, freshnessStatus, hasLineage =
     validation: { score: rejected ? 0 : validationStatus === 'approved' || validationStatus === 'valid' ? 100 : 60, status: rejected ? 'untrusted' : 'acceptable', reason: 'Estado de validacion de medicion.' },
     stability: { score: 80, status: 'acceptable', reason: 'Sin volatilidad historica suficiente; se usa baseline conservador.' },
     coverage: { score: valid ? 90 : 60, status: valid ? 'trusted' : 'attention', reason: 'Cobertura conservadora segun datos disponibles.' },
+    source_availability: { score: unavailable ? 0 : hasLineage ? 90 : 50, status: unavailable ? 'untrusted' : hasLineage ? 'trusted' : 'unknown', reason: unavailable ? 'Fuente no disponible.' : hasLineage ? 'Fuente trazada.' : 'Fuente no trazada completamente.' },
+    assurance_result: { score: rejected ? 30 : 80, status: rejected ? 'untrusted' : 'acceptable', reason: rejected ? 'Medicion rechazada por validacion.' : 'Sin test de assurance negativo asociado.' },
+    evidence_trace: { score: hasLineage ? 100 : 40, status: hasLineage ? 'trusted' : 'attention', reason: hasLineage ? 'Existe traza hacia fuente o evidencia.' : 'No existe evidencia trazable completa.' },
+    dimension_quality: { score: valid ? 90 : 60, status: valid ? 'trusted' : 'attention', reason: 'Calidad dimensional inferida desde completitud y consistencia disponibles.' },
   };
 }
 
@@ -462,6 +534,40 @@ async function recordMeasurement(scope, metricId, body = {}, requestId = null) {
     ]
   );
   await auditEvent(pool, { tenantId, userId: userId(scope.user), action: 'metric.measurement.recorded', entityType: 'metric_measurement', entityId: result.rows[0].id, requestId });
+  await recordLineageEdge(scope, {
+    fromType: 'metric_measurement',
+    fromId: result.rows[0].id,
+    toType: 'metric_definition',
+    toId: metric.id,
+    relationType: 'measured_from',
+    transformation: 'Medicion registrada para la metrica.',
+    correlationId: text(body.correlation_id, requestId || 'manual'),
+    metadata: { period_key: periodKey, freshness_status: freshness, trust_status: trust.status },
+  }).catch(() => null);
+  if (body.formula_version_id) {
+    await recordLineageEdge(scope, {
+      fromType: 'metric_measurement',
+      fromId: result.rows[0].id,
+      toType: 'metric_formula_version',
+      toId: body.formula_version_id,
+      relationType: 'derived_from',
+      transformation: 'La medicion conserva snapshot de la formula versionada.',
+      correlationId: text(body.correlation_id, requestId || 'manual'),
+      metadata: { formula_version_id: body.formula_version_id },
+    }).catch(() => null);
+  }
+  if (body.evidence_id) {
+    await recordLineageEdge(scope, {
+      fromType: 'metric_measurement',
+      fromId: result.rows[0].id,
+      toType: 'evidence',
+      toId: body.evidence_id,
+      relationType: 'supported_by',
+      transformation: 'La evidencia soporta la medicion.',
+      correlationId: text(body.correlation_id, requestId || 'manual'),
+      metadata: { evidence_id: body.evidence_id },
+    }).catch(() => null);
+  }
   return result.rows[0];
 }
 
@@ -777,7 +883,7 @@ async function createAssuranceTest(scope, body = {}, requestId = null) {
 
 async function executeAssuranceTest(scope, testId, body = {}, requestId = null) {
   const tenantId = tenantIdFrom(scope);
-  await assertTenantRecord('assurance_test_definitions', tenantId, testId, 'id');
+  const test = await assertTenantRecord('assurance_test_definitions', tenantId, testId, '*');
   const result = await pool.query(
     `INSERT INTO assurance_test_executions (
        tenant_id, test_definition_id, execution_code, population_description, sample_method,
@@ -788,6 +894,30 @@ async function executeAssuranceTest(scope, testId, body = {}, requestId = null) 
     [tenantId, testId, text(body.execution_code || `exec_${Date.now()}`), text(body.population_description, 'Poblacion definida por el ejecutor.'), text(body.sample_method, 'judgmental'), userId(scope.user), body.evidence_id || null, json(body.metadata)]
   );
   await auditEvent(pool, { tenantId, userId: userId(scope.user), action: 'assurance.test.executed', entityType: 'assurance_test_execution', entityId: result.rows[0].id, requestId });
+  if (test.target_entity_id) {
+    await recordLineageEdge(scope, {
+      fromType: 'assurance_test_execution',
+      fromId: result.rows[0].id,
+      toType: text(test.target_entity_type, 'control'),
+      toId: test.target_entity_id,
+      relationType: 'tests',
+      transformation: 'La ejecucion de assurance prueba la entidad objetivo.',
+      correlationId: requestId,
+      metadata: { test_definition_id: test.id, test_type: test.test_type },
+    }).catch(() => null);
+  }
+  if (body.evidence_id) {
+    await recordLineageEdge(scope, {
+      fromType: 'assurance_test_execution',
+      fromId: result.rows[0].id,
+      toType: 'evidence',
+      toId: body.evidence_id,
+      relationType: 'supported_by',
+      transformation: 'La evidencia soporta la ejecucion del test.',
+      correlationId: requestId,
+      metadata: { test_definition_id: test.id },
+    }).catch(() => null);
+  }
   return result.rows[0];
 }
 
@@ -801,6 +931,22 @@ async function completeAssuranceExecution(scope, executionId, body = {}, request
     [tenantId, executionId, text(body.result, 'inconclusive'), text(body.conclusion), json(body.metadata)]
   );
   await auditEvent(pool, { tenantId, userId: userId(scope.user), action: 'assurance.test.completed', entityType: 'assurance_test_execution', entityId: executionId, requestId });
+  if (result.rows[0]?.result === 'fail') {
+    const execution = result.rows[0];
+    const test = (await queryRows(`SELECT * FROM assurance_test_definitions WHERE tenant_id=$1::uuid AND id=$2::uuid`, [tenantId, execution.test_definition_id]))[0];
+    if (test?.target_entity_id) {
+      await recordLineageEdge(scope, {
+        fromType: 'assurance_test_execution',
+        fromId: execution.id,
+        toType: text(test.target_entity_type, 'control'),
+        toId: test.target_entity_id,
+        relationType: 'affects',
+        transformation: 'Resultado fallido genera advertencia analitica; no cambia decision aprobada.',
+        correlationId: requestId,
+        metadata: { result: execution.result, rule: 'assurance_test_failed_affects_control_risk' },
+      }).catch(() => null);
+    }
+  }
   return result.rows[0];
 }
 
@@ -844,6 +990,30 @@ async function createLossEvent(scope, body = {}, requestId = null) {
     [tenantId, text(body.event_code || body.code), text(body.event_type, 'operational'), text(body.occurred_at, new Date().toISOString()), body.detected_at || null, body.process_id || null, body.service_id || null, body.risk_id || null, text(body.cause), text(body.impact_description), gross, recoveries, gross - recoveries, text(body.currency, 'CLP').slice(0, 3).toUpperCase(), body.supplier_id || null, body.incident_id || null, body.failed_control_id || null, body.evidence_id || null, body.action_plan_id || null, text(body.status, 'draft'), userId(scope.user), json(body.metadata)]
   );
   await auditEvent(pool, { tenantId, userId: userId(scope.user), action: 'loss.event.upserted', entityType: 'loss_event', entityId: result.rows[0].id, requestId });
+  const loss = result.rows[0];
+  const relations = [
+    ['process', loss.process_id, 'affects'],
+    ['service', loss.service_id, 'affects'],
+    ['risk', loss.risk_id, 'affects'],
+    ['supplier', loss.supplier_id, 'related_to'],
+    ['incident', loss.incident_id, 'related_to'],
+    ['control', loss.failed_control_id, 'affects'],
+    ['evidence', loss.evidence_id, 'supported_by'],
+    ['action', loss.action_plan_id, 'generates'],
+  ];
+  for (const [targetType, targetId, relationType] of relations) {
+    if (!targetId) continue;
+    await recordLineageEdge(scope, {
+      fromType: 'loss_event',
+      fromId: loss.id,
+      toType: targetType,
+      toId: targetId,
+      relationType,
+      transformation: 'Relacion analitica registrada desde evento de perdida.',
+      correlationId: requestId,
+      metadata: { status: loss.status, gross_loss: loss.gross_loss, net_loss: loss.net_loss, currency: loss.currency },
+    }).catch(() => null);
+  }
   return result.rows[0];
 }
 
@@ -882,6 +1052,28 @@ async function transitionLossEvent(scope, id, status, requestId = null) {
   );
   if (!result.rows[0]) throw new Phase5Error('PHASE5_LOSS_NOT_FOUND', 'Evento de perdida no encontrado.', 404);
   await auditEvent(pool, { tenantId, userId: userId(scope.user), action: `loss.event.${status}`, entityType: 'loss_event', entityId: id, requestId });
+  if (status === 'confirmed') {
+    const kri = (await queryRows(
+      `SELECT id FROM metric_definitions
+       WHERE metric_code IN ('net_losses','loss_events_by_period','loss_events','gross_losses')
+         AND (tenant_id=$1::uuid OR tenant_id IS NULL)
+       ORDER BY tenant_id NULLS LAST
+       LIMIT 1`,
+      [tenantId]
+    ))[0];
+    if (kri?.id) {
+      await recordLineageEdge(scope, {
+        fromType: 'loss_event',
+        fromId: result.rows[0].id,
+        toType: 'metric_definition',
+        toId: kri.id,
+        relationType: 'affects',
+        transformation: 'Evento confirmado alimenta KRI/resumen de perdidas sin crear mediciones ficticias.',
+        correlationId: requestId,
+        metadata: { rule: 'loss_event_confirmed_updates_kri', net_loss: result.rows[0].net_loss },
+      }).catch(() => null);
+    }
+  }
   return result.rows[0];
 }
 
@@ -904,6 +1096,18 @@ async function addLossRecovery(scope, id, body = {}, requestId = null) {
     const updated = await client.query(`UPDATE loss_events SET recoveries=$3, net_loss=gross_loss-$3, status='recovered_partial', updated_at=now() WHERE tenant_id=$1::uuid AND id=$2::uuid RETURNING *`, [tenantId, id, total]);
     await auditEvent(client, { tenantId, userId: userId(scope.user), action: 'loss.recovery.created', entityType: 'loss_event', entityId: id, requestId });
     await client.query('COMMIT');
+    if (recovery.rows[0]?.evidence_id) {
+      await recordLineageEdge(scope, {
+        fromType: 'loss_recovery',
+        fromId: recovery.rows[0].id,
+        toType: 'evidence',
+        toId: recovery.rows[0].evidence_id,
+        relationType: 'supported_by',
+        transformation: 'Evidencia soporta recuperacion registrada.',
+        correlationId: requestId,
+        metadata: { amount, currency: recovery.rows[0].currency },
+      }).catch(() => null);
+    }
     return { recovery: recovery.rows[0], loss_event: updated.rows[0] };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => null);
@@ -934,7 +1138,7 @@ async function createDashboard(scope, body = {}, requestId = null) {
     [tenantId, text(body.dashboard_key || body.key), text(body.display_name || body.name), text(body.description), text(body.dashboard_type, 'custom'), json(body.layout_config), json(body.filter_config), text(body.status, 'draft'), userId(scope.user), json(body.metadata)]
   );
   for (const widget of body.widgets || []) {
-    await pool.query(
+    const widgetRow = await pool.query(
       `INSERT INTO dashboard_widgets (
          tenant_id, dashboard_id, widget_key, display_name, widget_type, data_source_type,
          data_source_ref, position_row, position_col, width, height, config, status, metadata
@@ -944,9 +1148,22 @@ async function createDashboard(scope, body = {}, requestId = null) {
        SET display_name=EXCLUDED.display_name, widget_type=EXCLUDED.widget_type, data_source_type=EXCLUDED.data_source_type,
            data_source_ref=EXCLUDED.data_source_ref, position_row=EXCLUDED.position_row, position_col=EXCLUDED.position_col,
            width=EXCLUDED.width, height=EXCLUDED.height, config=EXCLUDED.config, status=EXCLUDED.status,
-           updated_at=now(), metadata=dashboard_widgets.metadata || EXCLUDED.metadata`,
+           updated_at=now(), metadata=dashboard_widgets.metadata || EXCLUDED.metadata
+       RETURNING *`,
       [tenantId, result.rows[0].id, text(widget.widget_key || widget.key), text(widget.display_name || widget.name), text(widget.widget_type, 'kpi_card'), text(widget.data_source_type, 'metric'), text(widget.data_source_ref), widget.position_row || 1, widget.position_col || 1, widget.width || 4, widget.height || 2, json(widget.config), text(widget.status, 'active'), json(widget.metadata)]
     );
+    if (widgetRow.rows[0]?.data_source_type === 'metric' && UUID_RE.test(String(widgetRow.rows[0].data_source_ref))) {
+      await recordLineageEdge(scope, {
+        fromType: 'dashboard_widget',
+        fromId: widgetRow.rows[0].id,
+        toType: 'metric_definition',
+        toId: widgetRow.rows[0].data_source_ref,
+        relationType: 'aggregates',
+        transformation: 'Widget consume metrica gobernada.',
+        correlationId: requestId,
+        metadata: { dashboard_id: result.rows[0].id, widget_type: widgetRow.rows[0].widget_type },
+      }).catch(() => null);
+    }
   }
   await auditEvent(pool, { tenantId, userId: userId(scope.user), action: 'dashboard.upserted', entityType: 'dashboard_definition', entityId: result.rows[0].id, requestId });
   return result.rows[0];
@@ -984,6 +1201,16 @@ async function createSnapshot(scope, entityType, entityId, payload, requestId = 
 async function snapshotDashboard(scope, id, requestId = null) {
   const dashboard = await getDashboard(scope, id);
   const snapshot = await createSnapshot(scope, 'dashboard', id, { snapshot_type: 'dashboard', dashboard, captured_at: new Date().toISOString() }, requestId);
+  await recordLineageEdge(scope, {
+    fromType: 'data_snapshot',
+    fromId: snapshot.id,
+    toType: 'dashboard_definition',
+    toId: id,
+    relationType: 'snapshot_of',
+    transformation: 'Snapshot auditable del dashboard.',
+    correlationId: requestId,
+    metadata: { snapshot_type: 'dashboard' },
+  }).catch(() => null);
   await auditEvent(pool, { tenantId: tenantIdFrom(scope), userId: userId(scope.user), action: 'dashboard.snapshot.created', entityType: 'dashboard_definition', entityId: id, requestId });
   return snapshot;
 }
@@ -1083,6 +1310,16 @@ async function generateReport(scope, reportId, body = {}, requestId = null) {
     request_id: requestId || null,
   };
   const snapshot = await createSnapshot(scope, 'report', report.id, { snapshot_type: 'report', ...snapshotPayload }, requestId);
+  await recordLineageEdge(scope, {
+    fromType: 'data_snapshot',
+    fromId: snapshot.id,
+    toType: 'report_definition',
+    toId: report.id,
+    relationType: 'snapshot_of',
+    transformation: 'Snapshot reproducible usado para emision de reporte.',
+    correlationId: requestId,
+    metadata: { report_type: report.report_type },
+  }).catch(() => null);
   const generation = (await pool.query(
     `INSERT INTO report_generations (
        tenant_id, report_definition_id, generation_key, format, status, snapshot_id, requested_by, started_at, correlation_id, metadata
@@ -1140,6 +1377,16 @@ async function generateReport(scope, reportId, body = {}, requestId = null) {
     [tenantId, generation.id, format, fileName, mimeType, buffer.length, checksum, storagePath, report.classification, json({ snapshot_id: snapshot.id })]
   )).rows[0];
   await auditEvent(pool, { tenantId, userId: userId(scope.user), action: 'report.generated', entityType: 'report_generation', entityId: generation.id, requestId, metadata: { format, checksum } });
+  await recordLineageEdge(scope, {
+    fromType: 'report_generation',
+    fromId: generation.id,
+    toType: 'data_snapshot',
+    toId: snapshot.id,
+    relationType: 'reported_in',
+    transformation: 'Emision de reporte conserva snapshot independiente.',
+    correlationId: requestId,
+    metadata: { format, checksum, artifact_id: artifact.id },
+  }).catch(() => null);
   return { generation: { ...generation, status: 'generated', checksum }, artifact, snapshot };
 }
 
@@ -1225,11 +1472,244 @@ async function updateReportSchedule(scope, id, body = {}, requestId = null) {
   return result.rows[0];
 }
 
+async function safeBlock(name, producer) {
+  try {
+    const data = await producer();
+    return {
+      status: data?.status || 'ok',
+      data: data?.data ?? null,
+      freshness: data?.freshness || 'unknown',
+      trust: data?.trust || { status: 'unknown', score: null },
+      source_count: Number(data?.source_count || 0),
+      warnings: Array.isArray(data?.warnings) ? data.warnings : [],
+      last_updated_at: data?.last_updated_at || null,
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      data: null,
+      freshness: 'unknown',
+      trust: { status: 'unknown', score: null },
+      source_count: 0,
+      warnings: [`${name}: ${sanitizeError(error)}`],
+      last_updated_at: null,
+    };
+  }
+}
+
+async function countWhere(tableName, tenantId, whereSql = 'TRUE', params = []) {
+  if (!(await tableExists(pool, tableName))) return null;
+  const result = await pool.query(`SELECT COUNT(*)::int AS count FROM ${tableName} WHERE tenant_id=$1::uuid AND ${whereSql}`, [tenantId, ...params]);
+  return Number(result.rows[0]?.count || 0);
+}
+
+async function sumWhere(tableName, column, tenantId, whereSql = 'TRUE', params = []) {
+  if (!(await tableExists(pool, tableName))) return null;
+  const result = await pool.query(`SELECT COALESCE(SUM(${column}), 0)::numeric AS total FROM ${tableName} WHERE tenant_id=$1::uuid AND ${whereSql}`, [tenantId, ...params]);
+  return result.rows[0]?.total === null ? null : Number(result.rows[0]?.total || 0);
+}
+
+function statusForCount(value, warningMessage) {
+  if (value === null) return { status: 'unmeasured', warnings: ['Sin datos configurados.'] };
+  if (Number(value) > 0) return { status: 'attention', warnings: [warningMessage] };
+  return { status: 'ok', warnings: [] };
+}
+
+async function getGrcOverview(scope, requestId = null) {
+  const tenantId = tenantIdFrom(scope);
+  const now = new Date().toISOString();
+  const tenantBlock = safeBlock('tenant', async () => {
+    const tenant = (await queryRows(`SELECT id, name, service_status, created_at, updated_at FROM tenants WHERE id=$1::uuid LIMIT 1`, [tenantId]))[0];
+    return {
+      status: tenant ? 'ok' : 'error',
+      data: tenant || null,
+      freshness: 'current',
+      trust: { status: tenant ? 'trusted' : 'unknown', score: tenant ? 100 : null },
+      source_count: tenant ? 1 : 0,
+      last_updated_at: tenant?.updated_at || tenant?.created_at || now,
+    };
+  });
+  const commercialBlock = safeBlock('commercial', async () => {
+    const hasView = await tableExists(pool, 'v_commercial_tenant_subscription');
+    const subscription = hasView
+      ? (await queryRows(`SELECT * FROM v_commercial_tenant_subscription WHERE tenant_id=$1::uuid LIMIT 1`, [tenantId]))[0]
+      : null;
+    const health = (await tableExists(pool, 'v_commercial_tenant_health'))
+      ? (await queryRows(`SELECT * FROM v_commercial_tenant_health WHERE tenant_id=$1::uuid LIMIT 1`, [tenantId]))[0]
+      : null;
+    return {
+      status: subscription ? 'ok' : 'unmeasured',
+      data: { subscription, health },
+      freshness: 'current',
+      trust: { status: subscription ? 'trusted' : 'unknown', score: subscription ? 95 : null },
+      source_count: subscription ? 1 : 0,
+      warnings: subscription ? [] : ['Sin contrato comercial efectivo disponible para el tenant seleccionado.'],
+      last_updated_at: subscription?.updated_at || health?.updated_at || now,
+    };
+  });
+  const metricsBlock = safeBlock('metrics', async () => {
+    const definitions = (await tableExists(pool, 'metric_definitions'))
+      ? Number((await pool.query(`SELECT COUNT(*)::int AS count FROM metric_definitions WHERE tenant_id=$1::uuid OR tenant_id IS NULL`, [tenantId])).rows[0]?.count || 0)
+      : null;
+    const measurements = await countWhere('metric_measurements', tenantId);
+    const stale = await countWhere('metric_measurements', tenantId, `freshness_status IN ('stale','expired','unavailable','unknown') OR quality_status IN ('rejected','unknown')`);
+    const trusted = await countWhere('metric_measurements', tenantId, `trust_status='trusted'`);
+    const warnings = [];
+    if (stale && stale > 0) warnings.push('Existen mediciones stale, rechazadas o sin freshness confiable.');
+    if (!measurements) warnings.push('Métricas sin medición; no se inventan valores.');
+    return {
+      status: measurements ? (stale ? 'attention' : 'ok') : 'unmeasured',
+      data: { definitions, measurements: measurements || null, trusted_measurements: trusted || null, warning_measurements: stale || null },
+      freshness: stale ? 'stale' : measurements ? 'current' : 'unknown',
+      trust: { status: stale ? 'attention' : measurements ? 'acceptable' : 'unknown', score: measurements ? Math.round(((trusted || 0) / Math.max(measurements, 1)) * 100) : null },
+      source_count: measurements || 0,
+      warnings,
+      last_updated_at: now,
+    };
+  });
+  const lossesBlock = safeBlock('losses', async () => {
+    const open = await countWhere('loss_events', tenantId, `status NOT IN ('closed','cancelled')`);
+    const confirmed = await countWhere('loss_events', tenantId, `status IN ('confirmed','recovered_partial')`);
+    const gross = await sumWhere('loss_events', 'gross_loss', tenantId, `status NOT IN ('cancelled')`);
+    const recoveries = await sumWhere('loss_events', 'recoveries', tenantId, `status NOT IN ('cancelled')`);
+    const net = await sumWhere('loss_events', 'net_loss', tenantId, `status NOT IN ('cancelled')`);
+    const sourceCount = await countWhere('loss_events', tenantId);
+    return {
+      status: open ? 'attention' : sourceCount ? 'ok' : 'unmeasured',
+      data: sourceCount ? { open, confirmed, gross_loss: gross, recoveries, net_loss: net } : null,
+      freshness: sourceCount ? 'current' : 'unknown',
+      trust: { status: sourceCount ? 'acceptable' : 'unknown', score: sourceCount ? 80 : null },
+      source_count: sourceCount || 0,
+      warnings: open ? ['Existen eventos de pérdida abiertos o en revisión.'] : sourceCount ? [] : ['Sin eventos de pérdida registrados.'],
+      last_updated_at: now,
+    };
+  });
+  const assuranceBlock = safeBlock('assurance', async () => {
+    const executions = await countWhere('assurance_test_executions', tenantId);
+    const failed = await countWhere('assurance_test_executions', tenantId, `result='fail'`);
+    const pendingReview = await countWhere('assurance_test_executions', tenantId, `status IN ('completed','in_progress')`);
+    return {
+      status: failed ? 'attention' : executions ? 'ok' : 'unmeasured',
+      data: executions ? { executions, failed, pending_review: pendingReview } : null,
+      freshness: executions ? 'current' : 'unknown',
+      trust: { status: failed ? 'attention' : executions ? 'acceptable' : 'unknown', score: executions ? Math.max(40, 90 - (failed || 0) * 10) : null },
+      source_count: executions || 0,
+      warnings: failed ? ['Tests de assurance fallidos requieren revisión.'] : executions ? [] : ['Sin ejecuciones de assurance registradas.'],
+      last_updated_at: now,
+    };
+  });
+  const reportingBlock = safeBlock('reporting', async () => {
+    const generations = await countWhere('report_generations', tenantId);
+    const schedules = await countWhere('report_schedules', tenantId, `status='active'`);
+    const failed = await countWhere('report_generations', tenantId, `status='failed'`);
+    return {
+      status: failed ? 'attention' : generations ? 'ok' : 'unmeasured',
+      data: generations ? { generations, scheduled: schedules, failed } : { generations: null, scheduled: schedules || null, failed: null },
+      freshness: generations ? 'current' : 'unknown',
+      trust: { status: failed ? 'attention' : generations ? 'acceptable' : 'unknown', score: generations ? 85 : null },
+      source_count: generations || schedules || 0,
+      warnings: failed ? ['Existen generaciones de reporte fallidas.'] : [],
+      last_updated_at: now,
+    };
+  });
+  const simpleBlocks = {
+    data_trust: safeBlock('data_trust', async () => {
+      const rows = await countWhere('data_trust_scores', tenantId);
+      const untrusted = await countWhere('data_trust_scores', tenantId, `trust_status IN ('untrusted','unknown')`);
+      return {
+        status: rows ? (untrusted ? 'attention' : 'ok') : 'unmeasured',
+        data: rows ? { scores: rows, untrusted } : null,
+        freshness: rows ? 'current' : 'unknown',
+        trust: { status: untrusted ? 'attention' : rows ? 'acceptable' : 'unknown', score: rows ? Math.round(((rows - (untrusted || 0)) / Math.max(rows, 1)) * 100) : null },
+        source_count: rows || 0,
+        warnings: untrusted ? ['Existen scores no confiables o desconocidos.'] : rows ? [] : ['Sin scores de confianza registrados.'],
+        last_updated_at: now,
+      };
+    }),
+    surveys: safeBlock('surveys', async () => {
+      const active = await countWhere('assessment_campaigns', tenantId, `status IN ('active','launched')`);
+      const responses = await countWhere('survey_responses', tenantId);
+      return {
+        status: active ? 'attention' : responses ? 'ok' : 'unmeasured',
+        data: active || responses ? { active_campaigns: active, responses } : null,
+        freshness: active || responses ? 'current' : 'unknown',
+        trust: { status: active || responses ? 'acceptable' : 'unknown', score: active || responses ? 80 : null },
+        source_count: (active || 0) + (responses || 0),
+        warnings: active ? ['Campañas activas pendientes de seguimiento.'] : [],
+        last_updated_at: now,
+      };
+    }),
+    bi: safeBlock('bi', async () => {
+      const dashboards = await countWhere('dashboard_definitions', tenantId, `status='published'`);
+      return {
+        status: dashboards ? 'ok' : 'unmeasured',
+        data: dashboards ? { published_dashboards: dashboards } : null,
+        freshness: dashboards ? 'current' : 'unknown',
+        trust: { status: dashboards ? 'acceptable' : 'unknown', score: dashboards ? 80 : null },
+        source_count: dashboards || 0,
+        warnings: dashboards ? [] : ['Sin dashboards publicados.'],
+        last_updated_at: now,
+      };
+    }),
+  };
+  const legacyBlocks = {
+    compliance: ['readiness_snapshots', 'status'],
+    risks: ['operational_risks', 'status'],
+    controls: ['control_runtime_states', 'status'],
+    evidence: ['grc_evidence_submissions', 'review_status'],
+    audits: ['audit_plans', 'status'],
+    actions: ['recommended_actions', 'status'],
+    suppliers: ['suppliers', 'status'],
+    incidents: ['incidents', 'status'],
+    continuity: ['continuity_plans', 'status'],
+  };
+  const blockPromises = {
+    tenant: tenantBlock,
+    commercial: commercialBlock,
+    metrics: metricsBlock,
+    losses: lossesBlock,
+    assurance: assuranceBlock,
+    reporting: reportingBlock,
+    ...simpleBlocks,
+  };
+  Object.entries(legacyBlocks).forEach(([name, [tableName]]) => {
+    blockPromises[name] = safeBlock(name, async () => {
+      const count = await countWhere(tableName, tenantId);
+      const state = statusForCount(count === null ? null : 0, '');
+      return {
+        status: count ? 'ok' : state.status,
+        data: count ? { records: count } : null,
+        freshness: count ? 'current' : 'unknown',
+        trust: { status: count ? 'acceptable' : 'unknown', score: count ? 75 : null },
+        source_count: count || 0,
+        warnings: count ? [] : state.warnings,
+        last_updated_at: now,
+      };
+    });
+  });
+  const settled = await Promise.allSettled(Object.entries(blockPromises).map(async ([key, promise]) => [key, await promise]));
+  const overview = {};
+  for (const item of settled) {
+    if (item.status === 'fulfilled') overview[item.value[0]] = item.value[1];
+  }
+  const alerts = Object.entries(overview)
+    .flatMap(([block, value]) => (value.warnings || []).map((message) => ({ block, severity: value.status === 'error' ? 'high' : 'medium', message })))
+    .slice(0, 50);
+  return {
+    ...overview,
+    alerts,
+    request_id: requestId || null,
+    generated_at: now,
+  };
+}
+
 module.exports = {
   Phase5Error,
   FormulaError,
   TrustScoreError,
   sanitizeError,
+  recordLineageEdge,
+  getGrcOverview,
   listDataDomains,
   createDataDomain,
   listDataElements,
