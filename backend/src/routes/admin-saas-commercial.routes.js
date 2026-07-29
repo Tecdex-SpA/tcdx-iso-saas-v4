@@ -38,10 +38,35 @@ async function tenantRoute(req, action) {
   return action();
 }
 
+function sanitizeErrorMessage(error) {
+  return String(error?.message || 'commercial admin error')
+    .replace(/postgres(?:ql)?:\/\/\S+/gi, '[redacted-database-url]')
+    .replace(/password\s*=\s*\S+/gi, 'password=[redacted]')
+    .replace(/\s+/g, ' ')
+    .slice(0, 240);
+}
+
+function logicalRoute(req) {
+  return `${req.method || 'UNKNOWN'} ${req.baseUrl || ''}${req.route?.path || req.path || ''}`;
+}
+
+function logCommercialError(req, status, error) {
+  console.error(JSON.stringify({
+    event: 'COMMERCIAL_ADMIN_ERROR',
+    request_id: req.requestId || null,
+    pg_code: typeof error?.code === 'string' && /^[0-9A-Z]{5}$/.test(error.code) ? error.code : null,
+    operation: logicalRoute(req),
+    route: logicalRoute(req),
+    status,
+    message: sanitizeErrorMessage(error),
+  }));
+}
+
 function handleError(req, res, error) {
   const status = Number(error?.status || 500);
   res.locals = res.locals || {};
   res.locals.errorCode = error?.code || 'COMMERCIAL_ADMIN_ERROR';
+  logCommercialError(req, status, error);
   return res.status(status).json({
     ok: false,
     code: error?.code || 'COMMERCIAL_ADMIN_ERROR',

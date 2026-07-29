@@ -104,6 +104,25 @@ for (const marker of [
   if (!deploy.includes(marker)) throw new Error(`Deploy migration safety marker missing: ${marker}`);
 }
 
+const commercialDomainFiles = [
+  'backend/src/services/commercial/commercialAdmin.service.js',
+  'backend/src/services/commercial/entitlementResolver.service.js',
+  'backend/src/routes/admin-saas-commercial.routes.js',
+  'backend/src/middleware/commercialEntitlement.middleware.js',
+  'frontend/src/components/commercial/Phase4CommercialPanel.tsx',
+];
+const invalidTenantStatusPatterns = [
+  /SELECT\s+id,\s*name,\s*status,\s*service_status\s+FROM\s+tenants/i,
+  /\btenants\.status\b/i,
+  /\bt\.status\b/i,
+];
+for (const relative of commercialDomainFiles) {
+  const source = read(relative);
+  for (const pattern of invalidTenantStatusPatterns) {
+    if (pattern.test(source)) throw new Error(`Invalid tenants.status reference in commercial domain: ${relative}`);
+  }
+}
+
 for (const script of ['phase4:migration:checksum', 'phase4:contracts:check', 'phase4:check']) {
   if (!packageJson.includes(script)) throw new Error(`Phase 4 package script missing: ${script}`);
 }
