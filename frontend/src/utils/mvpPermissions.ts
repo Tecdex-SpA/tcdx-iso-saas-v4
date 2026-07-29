@@ -39,6 +39,7 @@ export type MvpFeatureKey =
   | 'reports.export'
   | 'phase2.read'
   | 'phase3.read'
+  | 'phase5.read'
   | 'ai_compliance.read'
   | 'ai_compliance.suggest'
   | 'configuration.profile.self'
@@ -140,6 +141,7 @@ const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
   'reports.export': ['admin', 'auditor'],
   'phase2.read': ['admin', 'auditor', 'area_owner'],
   'phase3.read': ['admin', 'auditor', 'area_owner'],
+  'phase5.read': ['admin', 'auditor', 'area_owner', 'executive'],
   'ai_compliance.read': ['admin', 'auditor'],
   'ai_compliance.suggest': ['admin', 'auditor'],
   'configuration.profile.self': ['admin', 'auditor', 'area_owner', 'executive'],
@@ -210,6 +212,48 @@ export const CLIENT_MVP_NAV_ITEMS: MvpNavItem[] = [
     label: 'Operación GRC',
     feature: 'phase3.read',
     moduleKey: 'grc_phase3_operations',
+  },
+  {
+    href: '/datos',
+    label: 'Datos',
+    feature: 'phase5.read',
+    moduleKey: 'data_governance',
+  },
+  {
+    href: '/metricas',
+    label: 'Métricas',
+    feature: 'phase5.read',
+    moduleKey: 'metrics_bi',
+  },
+  {
+    href: '/encuestas',
+    label: 'Encuestas',
+    feature: 'phase5.read',
+    moduleKey: 'surveys_assessments',
+  },
+  {
+    href: '/tests',
+    label: 'Tests',
+    feature: 'phase5.read',
+    moduleKey: 'assurance_loss',
+  },
+  {
+    href: '/eventos-perdida',
+    label: 'Eventos de pérdida',
+    feature: 'phase5.read',
+    moduleKey: 'assurance_loss',
+  },
+  {
+    href: '/bi',
+    label: 'Business Intelligence',
+    feature: 'phase5.read',
+    moduleKey: 'metrics_bi',
+  },
+  {
+    href: '/reportes/studio',
+    label: 'Report Studio',
+    feature: 'phase5.read',
+    moduleKey: 'report_studio',
   },
   {
     href: '/ia-compliance',

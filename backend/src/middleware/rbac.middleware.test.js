@@ -93,6 +93,40 @@ assert.equal(unregistered.nextCalled, false);
 assert.equal(unregistered.res.statusCode, 403);
 assert.equal(unregistered.res.payload.error, 'Ruta API sin regla RBAC explícita');
 
+const phase5ReadRoutes = [
+  '/api/data/domains',
+  '/api/data/quality',
+  '/api/metrics',
+  `/api/metrics/${batchId}/trend`,
+  '/api/surveys',
+  '/api/survey-campaigns',
+  '/api/assurance-tests',
+  '/api/loss-events',
+  '/api/dashboards',
+  '/api/report-generations',
+];
+
+for (const path of phase5ReadRoutes) {
+  const result = authorize({ method: 'GET', path, role: 'viewer' });
+  assert.equal(result.nextCalled, true, `viewer phase5 read ${path}`);
+}
+
+for (const path of [
+  '/api/data/domains',
+  '/api/metrics',
+  '/api/surveys',
+  '/api/loss-events',
+  '/api/dashboards',
+  '/api/report-schedules',
+]) {
+  const admin = authorize({ method: 'POST', path, role: 'tenant_admin' });
+  assert.equal(admin.nextCalled, true, `tenant_admin phase5 write ${path}`);
+}
+
+const viewerDeniedMetricWrite = authorize({ method: 'POST', path: '/api/metrics', role: 'viewer' });
+assert.equal(viewerDeniedMetricWrite.nextCalled, false);
+assert.equal(viewerDeniedMetricWrite.res.statusCode, 403);
+
 const definitions = listImportDefinitions();
 assert.equal(definitions.length, 33);
 assert.equal(

@@ -611,6 +611,58 @@ const API_RULES = [
     write: TENANT_READ_ROLES,
   },
 
+  // Fase 5: datos, métricas, encuestas, assurance, pérdidas, BI y reporting gobernado
+  {
+    prefix: '/api/data',
+    read: TENANT_READ_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
+    prefix: '/api/metrics',
+    read: TENANT_READ_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
+    prefix: '/api/surveys',
+    read: TENANT_READ_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
+    prefix: '/api/survey-campaigns',
+    read: TENANT_READ_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
+    prefix: '/api/survey-responses',
+    read: TENANT_READ_ROLES,
+    write: [...TENANT_OPERATE_ROLES, ...EXECUTIVE_ROLES],
+  },
+  {
+    prefix: '/api/assurance-tests',
+    read: TENANT_READ_ROLES,
+    write: TENANT_AUDIT_WRITE_ROLES,
+  },
+  {
+    prefix: '/api/loss-events',
+    read: TENANT_READ_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
+    prefix: '/api/dashboards',
+    read: TENANT_DASHBOARD_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
+    prefix: '/api/report-generations',
+    read: TENANT_READ_ROLES,
+    write: REPORT_GENERATE_ROLES,
+  },
+  {
+    prefix: '/api/report-schedules',
+    read: TENANT_ADMIN_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+
   // Dealer
   {
     prefix: '/api/quotes',
