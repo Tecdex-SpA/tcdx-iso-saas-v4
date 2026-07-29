@@ -222,6 +222,39 @@ run_phase_migration() {
   "
 }
 
+MIGRATION_RUNNERS=(
+  "Fase 3|scripts/phase3/apply-phase3-migration.js"
+  "Fase 4|scripts/phase4/apply-phase4-migration.js"
+  "Fase 5|scripts/phase5/apply-phase5-migration.js"
+)
+
+run_registered_migrations() {
+  local expected_sha="$1"
+
+  echo ""
+  echo "======================================"
+  echo " PREPARACION MIGRACIONES REGISTRADAS"
+  echo "======================================"
+  sync_backend_source_for_migrations "$expected_sha"
+
+  for entry in "${MIGRATION_RUNNERS[@]}"; do
+    local phase="${entry%%|*}"
+    local script_path="${entry#*|}"
+
+    echo ""
+    echo "======================================"
+    echo " PREFLIGHT ${phase}"
+    echo "======================================"
+    run_phase_migration "$phase" "--preflight" "$script_path"
+
+    echo ""
+    echo "======================================"
+    echo " MIGRACION ${phase}"
+    echo "======================================"
+    run_phase_migration "$phase" "--apply" "$script_path"
+  done
+}
+
 validate_backend() {
   local host="$1"
 
@@ -435,30 +468,7 @@ preflight_remote "backend" "$BACKEND_HOST" "$REMOTE_BACKEND_DIR" "$BACKEND_WRAPP
 preflight_remote "AI Engine" "$AI_HOST" "$REMOTE_AI_ENGINE_DIR" "$AI_ENGINE_WRAPPER" "ai-engine.service"
 preflight_remote "frontend" "$FRONTEND_HOST" "$REMOTE_FRONTEND_DIR" "$FRONTEND_WRAPPER" "tcdx-frontend.service"
 
-echo ""
-echo "======================================"
-echo " PREPARACION MIGRACION FASE 3"
-echo "======================================"
-sync_backend_source_for_migrations "$LOCAL_HEAD"
-run_phase_migration "Fase 3" "--preflight" "scripts/phase3/apply-phase3-migration.js"
-
-echo ""
-echo "======================================"
-echo " MIGRACION FASE 3"
-echo "======================================"
-run_phase_migration "Fase 3" "--apply" "scripts/phase3/apply-phase3-migration.js"
-
-echo ""
-echo "======================================"
-echo " PREPARACION MIGRACION FASE 4"
-echo "======================================"
-run_phase_migration "Fase 4" "--preflight" "scripts/phase4/apply-phase4-migration.js"
-
-echo ""
-echo "======================================"
-echo " MIGRACION FASE 4"
-echo "======================================"
-run_phase_migration "Fase 4" "--apply" "scripts/phase4/apply-phase4-migration.js"
+run_registered_migrations "$LOCAL_HEAD"
 echo ""
 echo "======================================"
 echo " DEPLOY BACKEND"

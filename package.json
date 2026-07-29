@@ -62,6 +62,15 @@
     "phase4:postgres-integration": "bash scripts/phase4/check-phase4-postgres.sh",
     "phase4:scripts-check": "bash -n scripts/phase4/check-phase4-postgres.sh && node --check scripts/phase4/apply-phase4-migration.js && node --check scripts/phase4/check-phase4-contracts.js && node --check scripts/phase4/check-phase4-security.js && node --check scripts/phase4/check-phase4-e2e-discovery.js && node --check backend/src/routes/admin-saas-commercial.routes.js && node --check backend/src/middleware/commercialEntitlement.middleware.js && node --check backend/src/services/commercial/commercialCatalog.js && node --check backend/src/services/commercial/commercialAdmin.service.js && node --check backend/src/services/commercial/entitlementResolver.service.js && node backend/src/services/commercial/commercial.service.test.js",
     "phase4:e2e:discovery": "node scripts/phase4/check-phase4-e2e-discovery.js",
-    "phase4:check": "npm run phase4:contracts:check && npm run phase4:security-check && npm run phase4:scripts-check && npm run phase4:migration:checksum && npm run phase4:postgres-integration && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend test && npm --prefix frontend run build && npm run phase4:e2e:discovery && npm run phase3:check && git diff --check"
+    "phase4:check": "npm run phase4:contracts:check && npm run phase4:security-check && npm run phase4:scripts-check && npm run phase4:migration:checksum && npm run phase4:postgres-integration && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend test && npm --prefix frontend run build && npm run phase4:e2e:discovery && npm run phase3:check && git diff --check",
+    "phase5:migration:checksum": "node scripts/phase5/apply-phase5-migration.js --checksum",
+    "phase5:migration:preflight": "node scripts/phase5/apply-phase5-migration.js --preflight",
+    "phase5:migration:apply": "node scripts/phase5/apply-phase5-migration.js --apply",
+    "phase5:contracts:check": "node scripts/phase5/check-phase5-contracts.js",
+    "phase5:security-check": "node scripts/phase5/check-phase5-security.js",
+    "phase5:postgres-integration": "bash scripts/phase5/check-phase5-postgres.sh",
+    "phase5:scripts-check": "bash -n scripts/phase5/check-phase5-postgres.sh scripts/deploy-vms.sh && node --check scripts/phase5/apply-phase5-migration.js && node --check scripts/phase5/check-phase5-contracts.js && node --check scripts/phase5/check-phase5-security.js && node --check scripts/phase5/check-phase5-e2e.js && node --check backend/src/services/phase5/formulaEngine.js && node --check backend/src/services/phase5/dataTrustScore.js && node --check backend/src/services/phase5/phase5.service.js && node --check backend/src/services/phase5/phase5Core.test.js && node --check backend/src/routes/phase5.routes.js",
+    "phase5:e2e": "node scripts/phase5/check-phase5-e2e.js",
+    "phase5:check": "npm run phase5:contracts:check && npm run phase5:security-check && npm run phase5:migration:checksum && npm run phase5:scripts-check && npm run phase5:postgres-integration && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend run build && npm run phase5:e2e && git diff --check"
   }
 }

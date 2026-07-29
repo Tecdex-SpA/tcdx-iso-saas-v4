@@ -82,6 +82,7 @@ const phase3Routes = require('./routes/phase3.routes');
 const importsRoutes = require('./routes/imports.routes');
 const supplierPortalRoutes = require('./routes/supplier-portal.routes');
 const phase2ExternalRoutes = require('./routes/phase2-external.routes');
+const phase5Routes = require('./routes/phase5.routes');
 const { prometheusLines: grcPrometheusLines } = require('./services/grc/grcObservability');
 const { startSchedulerRunner } = require('./services/grc/grcSchedulerRunner');
 const { startPhase2Scheduler } = require('./services/grc/phase2SchedulerRunner');
@@ -478,6 +479,17 @@ app.use('/api/grc/phase2', phase2Routes);
 app.use('/api/grc/phase3', phase3Routes);
 app.use('/api/imports', importsRoutes);
 app.use('/api/grc', grcRoutes);
+app.use('/api/data', phase5Routes.dataRouter);
+app.use('/api/metrics', phase5Routes.metricsRouter);
+app.use('/api/surveys', phase5Routes.surveysRouter);
+app.use('/api/survey-campaigns', phase5Routes.surveyCampaignsRouter);
+app.use('/api/survey-responses', phase5Routes.surveyResponsesRouter);
+app.use('/api/assurance-tests', phase5Routes.assuranceTestsRouter);
+app.use('/api/loss-events', phase5Routes.lossEventsRouter);
+app.use('/api/dashboards', phase5Routes.dashboardsRouter);
+app.use('/api/reports', phase5Routes.reportsRouter);
+app.use('/api/report-generations', phase5Routes.reportGenerationsRouter);
+app.use('/api/report-schedules', phase5Routes.reportSchedulesRouter);
 
 
 /* KPI: compatibilidad con ambas rutas */

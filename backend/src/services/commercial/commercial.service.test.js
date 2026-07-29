@@ -137,14 +137,26 @@ async function withTestServer(callback) {
     next();
   });
   app.use('/api/admin-saas', commercialRouter);
-  const server = await new Promise((resolve) => {
-    const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
+  const server = await new Promise((resolve, reject) => {
+    const instance = app.listen(0, '127.0.0.1', () => {
+      const address = instance.address();
+      if (!address || typeof address === 'string') {
+        reject(new Error('Commercial test server did not bind to a TCP port'));
+        return;
+      }
+      resolve(instance);
+    });
+    instance.on('error', reject);
   });
   try {
     const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Commercial test server address unavailable');
     await callback(`http://127.0.0.1:${address.port}`);
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    await new Promise((resolve, reject) => {
+      if (!server.listening) return resolve();
+      return server.close((error) => (error ? reject(error) : resolve()));
+    });
   }
 }
 
