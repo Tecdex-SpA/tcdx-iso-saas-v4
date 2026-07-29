@@ -10,6 +10,7 @@ const {
   DEFAULT_FEATURES,
   getTenantAiSettings,
 } = require('../services/tenantAiSettings.service');
+const { resolveTenantEntitlements } = require('../services/commercial/entitlementResolver.service');
 
 function normalizeRole(role) {
   return String(role || '').trim().toLowerCase();
@@ -270,10 +271,17 @@ router.get('/entitlements', auth, async (req, res) => {
 
     const platform = isPlatformRole(role) && !tenantId;
     const settings = platform ? null : await getTenantAiSettings(tenantId);
+    const commercial = await resolveTenantEntitlements({ tenantId, user: req.user });
 
     return res.json({
       ok: true,
       tenant_id: tenantId || null,
+      subscription: commercial.subscription || {},
+      modules: commercial.modules || [],
+      capabilities: commercial.capabilities || {},
+      limits: commercial.limits || {},
+      usage: commercial.usage || {},
+      health: commercial.health || {},
       ai: buildAiEntitlements(settings, { platform }),
     });
   } catch (error) {
