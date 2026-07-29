@@ -50,6 +50,9 @@ const REPORT_GENERATE_ROLES = [
 const TENANT_DASHBOARD_ROLES = ['admin', 'tenant_admin', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
 const IMPORT_READ_ROLES = [...TENANT_ADMIN_ROLES, 'auditor'];
 const IMPORT_OPERATE_ROLES = [...TENANT_ADMIN_ROLES];
+const COMMERCIAL_ADMIN_READ_ROLES = PLATFORM_ROLES;
+const COMMERCIAL_ADMIN_MANAGE_ROLES = PLATFORM_ROLES;
+const COMMERCIAL_TENANT_READ_ROLES = [...TENANT_ADMIN_ROLES, 'dealer'];
 
 function roleIsPlatform(role) {
   return PLATFORM_ROLES.includes(role);
@@ -107,6 +110,43 @@ function roleCanUseReports(role, permission) {
 }
 
 const API_RULES = [
+
+  {
+    method: 'GET',
+    pattern: /^\/api\/admin-saas\/(catalog|plans|packs|methodologies|workpapers|history)$/,
+    permission: 'commercial.catalog.read',
+    roles: COMMERCIAL_ADMIN_READ_ROLES,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/admin-saas\/(catalog\/items|plans\/publish|methodologies|workpapers)$/,
+    permission: 'commercial.catalog.manage',
+    roles: COMMERCIAL_ADMIN_MANAGE_ROLES,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/admin-saas\/tenants\/[^/]+\/(subscription|entitlements|limits|usage|health)$/,
+    permission: 'commercial.subscription.read',
+    roles: [...COMMERCIAL_ADMIN_READ_ROLES, ...COMMERCIAL_TENANT_READ_ROLES],
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/admin-saas\/tenants\/[^/]+\/limits\/[^/]+$/,
+    permission: 'commercial.subscription.manage',
+    roles: COMMERCIAL_ADMIN_MANAGE_ROLES,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/admin-saas\/tenants\/[^/]+\/(change-preview|change-plan|trials|overrides)$/,
+    permission: 'commercial.subscription.manage',
+    roles: COMMERCIAL_ADMIN_MANAGE_ROLES,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/admin-saas\/tenants\/[^/]+\/packs\/[^/]+\/(preview|install)$/,
+    permission: 'commercial.pack.install',
+    roles: COMMERCIAL_ADMIN_MANAGE_ROLES,
+  },
   // Importaciones: rutas explícitas; no agregar un prefijo amplio /api/imports.
   {
     method: 'GET',

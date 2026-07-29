@@ -15,8 +15,39 @@ type AiFeatures = {
   [key: string]: boolean;
 };
 
+type EntitlementDecision = {
+  capability_key: string;
+  enabled: boolean;
+  decision: string;
+  source: string;
+  reason_code: string;
+  effective_from: string | null;
+  effective_until: string | null;
+  limit: number | null;
+  usage: number;
+  remaining: number | null;
+  dependencies: string[];
+  read_only: boolean;
+};
+
+type LimitState = {
+  resource_key: string;
+  limit: number | null;
+  usage: number;
+  remaining: number | null;
+  warning_threshold?: number;
+  enforcement?: string;
+  exhausted?: boolean;
+};
+
 type Entitlements = {
   tenant_id: string | null;
+  subscription: Record<string, unknown>;
+  modules: Array<Record<string, unknown>>;
+  capabilities: Record<string, EntitlementDecision>;
+  limits: Record<string, LimitState>;
+  usage: Record<string, number>;
+  health: Record<string, unknown>;
   ai: {
     enabled: boolean;
     plan: string;
@@ -49,6 +80,12 @@ function numberOrNull(value: unknown): number | null {
 
 const DISABLED_ENTITLEMENTS: Entitlements = {
   tenant_id: null,
+  subscription: {},
+  modules: [],
+  capabilities: {},
+  limits: {},
+  usage: {},
+  health: {},
   ai: {
     enabled: false,
     plan: 'none',
@@ -70,8 +107,33 @@ const DISABLED_ENTITLEMENTS: Entitlements = {
   },
 };
 
-let cachedEntitlements: Entitlements | null = null;
-let pendingRequest: Promise<Entitlements> | null = null;
+const cache = new Map<string, Entitlements>();
+const pending = new Map<string, Promise<Entitlements>>();
+
+function cacheKey(token: string) {
+  if (typeof window === 'undefined') return 'server';
+  const tenantId = localStorage.getItem('activeTenantId') || localStorage.getItem('tenant_id') || 'default-tenant';
+  const userId = localStorage.getItem('user_id') || localStorage.getItem('email') || token.slice(-16) || 'default-user';
+  return `${tenantId}:${userId}`;
+}
+
+function normalizeDecision(key: string, value: unknown): EntitlementDecision {
+  const row = isRecord(value) ? value : {};
+  return {
+    capability_key: String(row.capability_key || key),
+    enabled: row.enabled === true,
+    decision: typeof row.decision === 'string' ? row.decision : (row.enabled === true ? 'allowed' : 'denied'),
+    source: typeof row.source === 'string' ? row.source : 'none',
+    reason_code: typeof row.reason_code === 'string' ? row.reason_code : 'CAPABILITY_NOT_ENTITLED',
+    effective_from: stringOrNull(row.effective_from),
+    effective_until: stringOrNull(row.effective_until),
+    limit: numberOrNull(row.limit),
+    usage: Number(row.usage || 0),
+    remaining: numberOrNull(row.remaining),
+    dependencies: Array.isArray(row.dependencies) ? row.dependencies.map(String) : [],
+    read_only: row.read_only === true,
+  };
+}
 
 function normalizeEntitlements(payload: unknown): Entitlements {
   const root = isRecord(payload) ? payload : {};
@@ -80,9 +142,32 @@ function normalizeEntitlements(payload: unknown): Entitlements {
   const quota = isRecord(ai.quota) ? ai.quota : {};
   const planValue = typeof ai.plan === 'string' && ai.plan.trim() ? ai.plan : 'none';
   const enabled = ai.enabled === true && planValue.toLowerCase() !== 'none';
+  const rawCapabilities = isRecord(root.capabilities) ? root.capabilities : {};
+  const rawLimits = isRecord(root.limits) ? root.limits : {};
 
   return {
     tenant_id: stringOrNull(root.tenant_id),
+    subscription: isRecord(root.subscription) ? root.subscription : {},
+    modules: Array.isArray(root.modules) ? root.modules.filter(isRecord) : [],
+    capabilities: Object.fromEntries(
+      Object.entries(rawCapabilities).map(([key, value]) => [key, normalizeDecision(key, value)])
+    ),
+    limits: Object.fromEntries(
+      Object.entries(rawLimits).map(([key, value]) => {
+        const row = isRecord(value) ? value : {};
+        return [key, {
+          resource_key: String(row.resource_key || key),
+          limit: numberOrNull(row.limit),
+          usage: Number(row.usage || 0),
+          remaining: numberOrNull(row.remaining),
+          warning_threshold: numberOrNull(row.warning_threshold) || undefined,
+          enforcement: typeof row.enforcement === 'string' ? row.enforcement : undefined,
+          exhausted: row.exhausted === true,
+        }];
+      })
+    ),
+    usage: isRecord(root.usage) ? Object.fromEntries(Object.entries(root.usage).map(([key, value]) => [key, Number(value || 0)])) : {},
+    health: isRecord(root.health) ? root.health : {},
     ai: {
       enabled,
       plan: enabled ? planValue : 'none',
@@ -109,70 +194,74 @@ function normalizeEntitlements(payload: unknown): Entitlements {
 }
 
 async function fetchEntitlements(): Promise<Entitlements> {
-  if (cachedEntitlements) return cachedEntitlements;
-  if (pendingRequest) return pendingRequest;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
+  if (!token) return DISABLED_ENTITLEMENTS;
+  const key = cacheKey(token);
+  const current = cache.get(key);
+  if (current) return current;
+  const currentPending = pending.get(key);
+  if (currentPending) return currentPending;
 
-  pendingRequest = (async () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
-    if (!token) return DISABLED_ENTITLEMENTS;
-
+  const request = (async () => {
     const response = await fetch(`${API_URL}/api/me/entitlements`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
-
     const text = await response.text();
     let json: unknown = null;
-
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
       return DISABLED_ENTITLEMENTS;
     }
-
     if (!response.ok || (isRecord(json) && json.ok === false)) return DISABLED_ENTITLEMENTS;
-
-    cachedEntitlements = normalizeEntitlements(json);
-    return cachedEntitlements;
+    const normalized = normalizeEntitlements(json);
+    cache.set(key, normalized);
+    return normalized;
   })().finally(() => {
-    pendingRequest = null;
+    pending.delete(key);
   });
 
-  return pendingRequest;
+  pending.set(key, request);
+  return request;
 }
 
 export function clearTenantEntitlementsCache() {
-  cachedEntitlements = null;
-  pendingRequest = null;
+  cache.clear();
+  pending.clear();
 }
 
 export function useTenantEntitlements() {
-  const [entitlements, setEntitlements] = useState<Entitlements>(cachedEntitlements || DISABLED_ENTITLEMENTS);
-  const [loading, setLoading] = useState(!cachedEntitlements);
+  const [entitlements, setEntitlements] = useState<Entitlements>(DISABLED_ENTITLEMENTS);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-
     fetchEntitlements()
       .then((value) => {
-        if (!cancelled) {
-          setEntitlements(value);
-          setLoading(false);
-        }
+        if (!cancelled) setEntitlements(value);
       })
       .catch(() => {
-        if (!cancelled) {
-          setEntitlements(DISABLED_ENTITLEMENTS);
-          setLoading(false);
-        }
+        if (!cancelled) setEntitlements(DISABLED_ENTITLEMENTS);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const hasCapability = useCallback(
+    (capabilityKey: string) => entitlements.capabilities[capabilityKey]?.enabled === true,
+    [entitlements.capabilities]
+  );
+  const hasModule = useCallback(
+    (moduleKey: string) => entitlements.modules.some((module) => module.module_key === moduleKey && module.enabled !== false),
+    [entitlements.modules]
+  );
+  const getLimit = useCallback((resourceKey: string) => entitlements.limits[resourceKey]?.limit ?? null, [entitlements.limits]);
+  const getUsage = useCallback((resourceKey: string) => entitlements.limits[resourceKey]?.usage ?? entitlements.usage[resourceKey] ?? 0, [entitlements.limits, entitlements.usage]);
+  const isReadOnly = useCallback((capabilityKey: string) => entitlements.capabilities[capabilityKey]?.read_only === true, [entitlements.capabilities]);
   const canUseAiFeature = useCallback(
     (featureName: string) => {
       if (!entitlements.ai.enabled) return false;
@@ -180,7 +269,7 @@ export function useTenantEntitlements() {
       if (!key) return false;
       return entitlements.ai.features[key] === true;
     },
-    [entitlements]
+    [entitlements.ai]
   );
 
   return useMemo(
@@ -191,7 +280,12 @@ export function useTenantEntitlements() {
       aiPlan: entitlements.ai.plan,
       aiFeatures: entitlements.ai.features,
       canUseAiFeature,
+      hasModule,
+      hasCapability,
+      getLimit,
+      getUsage,
+      isReadOnly,
     }),
-    [loading, entitlements, canUseAiFeature]
+    [loading, entitlements, canUseAiFeature, hasModule, hasCapability, getLimit, getUsage, isReadOnly]
   );
 }

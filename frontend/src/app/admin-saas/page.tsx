@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import { useLanguage } from '@/context/LanguageContext';
 import { translateStandardLabel } from '@/i18n/displayText';
 import { clearTenantEntitlementsCache } from '@/hooks/useTenantEntitlements';
+import Phase4CommercialPanel from '@/components/commercial/Phase4CommercialPanel';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -4069,6 +4070,10 @@ async function uploadSelectedTenantLogo(file: File) {
                           </div>
                         )}
                       </div>
+                    </div>
+
+                    <div data-admin-tab-section="comercial" className={`${activeAdminTab === 'comercial' ? 'block' : 'hidden'} mb-6`}>
+                      <Phase4CommercialPanel selectedTenantId={selectedTenantId} canManage={canManageAdminSaas} onChanged={refreshAll} />
                     </div>
 
                     <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
