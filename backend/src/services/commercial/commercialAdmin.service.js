@@ -20,7 +20,7 @@ function asJson(value) {
 }
 
 async function assertTenantExists(client, tenantId) {
-  const result = await client.query('SELECT id, name, status, service_status FROM tenants WHERE id = $1::uuid LIMIT 1', [tenantId]);
+  const result = await client.query('SELECT id, name, service_status FROM tenants WHERE id = $1::uuid LIMIT 1', [tenantId]);
   if (result.rowCount !== 1) throw new CommercialError('TENANT_NOT_FOUND', 'Tenant no encontrado.', 404);
   return result.rows[0];
 }
@@ -118,7 +118,7 @@ async function publishPlanVersion({ body, user, requestId }) {
 
 async function getTenantCommercialState(tenantId) {
   const [tenant, entitlements, events, trials, packs] = await Promise.all([
-    pool.query('SELECT id, name, status, service_status FROM tenants WHERE id = $1::uuid LIMIT 1', [tenantId]),
+    pool.query('SELECT id, name, service_status FROM tenants WHERE id = $1::uuid LIMIT 1', [tenantId]),
     resolveTenantEntitlements({ tenantId }),
     pool.query('SELECT * FROM commercial_events WHERE tenant_id = $1::uuid ORDER BY created_at DESC LIMIT 100', [tenantId]).catch(() => ({ rows: [] })),
     pool.query('SELECT * FROM trials WHERE tenant_id = $1::uuid ORDER BY created_at DESC', [tenantId]).catch(() => ({ rows: [] })),
@@ -287,6 +287,7 @@ async function upsertWorkpaperTemplate({ body, user, requestId }) {
 
 module.exports = {
   CommercialError,
+  assertTenantExists,
   listCatalog,
   createCatalogItem,
   publishPlanVersion,

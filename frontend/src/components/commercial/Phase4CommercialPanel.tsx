@@ -85,6 +85,8 @@ export default function Phase4CommercialPanel({ selectedTenantId, canManage, onC
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [catalogError, setCatalogError] = useState('');
+  const [tenantError, setTenantError] = useState('');
   const [message, setMessage] = useState('');
 
   const capabilities = useMemo(() => Object.values(tenantState.capabilities || {}), [tenantState.capabilities]);
@@ -94,18 +96,27 @@ export default function Phase4CommercialPanel({ selectedTenantId, canManage, onC
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    try {
-      const [catalogData, tenantData] = await Promise.all([
-        api<Catalog>('/api/admin-saas/catalog'),
-        selectedTenantId ? api<TenantState>(`/api/admin-saas/tenants/${selectedTenantId}/entitlements`) : Promise.resolve({}),
-      ]);
-      setCatalog(catalogData || {});
-      setTenantState(tenantData || {});
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No fue posible cargar gobierno comercial.');
-    } finally {
-      setLoading(false);
+    setCatalogError('');
+    setTenantError('');
+
+    const [catalogResult, tenantResult] = await Promise.allSettled([
+      api<Catalog>('/api/admin-saas/catalog'),
+      selectedTenantId ? api<TenantState>(`/api/admin-saas/tenants/${selectedTenantId}/entitlements`) : Promise.resolve({}),
+    ]);
+
+    if (catalogResult.status === 'fulfilled') {
+      setCatalog(catalogResult.value || {});
+    } else {
+      setCatalogError(catalogResult.reason instanceof Error ? catalogResult.reason.message : 'No fue posible cargar catálogo comercial.');
     }
+
+    if (tenantResult.status === 'fulfilled') {
+      setTenantState(tenantResult.value || {});
+    } else {
+      setTenantError(tenantResult.reason instanceof Error ? tenantResult.reason.message : 'No fue posible cargar estado comercial del tenant.');
+    }
+
+    setLoading(false);
   }, [selectedTenantId]);
 
   useEffect(() => {
@@ -220,6 +231,8 @@ export default function Phase4CommercialPanel({ selectedTenantId, canManage, onC
       </div>
 
       {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {catalogError && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Catálogo: {catalogError}</div>}
+      {tenantError && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Tenant: {tenantError}</div>}
       {message && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}
 
       <div className="grid gap-3 md:grid-cols-4">
