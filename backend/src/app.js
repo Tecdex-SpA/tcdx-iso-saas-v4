@@ -479,6 +479,7 @@ app.use('/api/grc/phase2', phase2Routes);
 app.use('/api/grc/phase3', phase3Routes);
 app.use('/api/imports', importsRoutes);
 app.use('/api/grc', grcRoutes);
+app.use('/api/grc', phase5Routes.grcRouter);
 app.use('/api/data', phase5Routes.dataRouter);
 app.use('/api/metrics', phase5Routes.metricsRouter);
 app.use('/api/surveys', phase5Routes.surveysRouter);

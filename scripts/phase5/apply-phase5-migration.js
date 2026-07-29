@@ -8,10 +8,23 @@ const path = require('path');
 const root = path.resolve(__dirname, '../..');
 const { Client } = require(path.join(root, 'backend/node_modules/pg'));
 
-const MIGRATION_ID = '20260729_phase5_data_metrics_bi_reporting';
-const MIGRATION_FILE = path.join(root, 'database/migrations/20260729_phase5_data_metrics_bi_reporting.sql');
+process.stdout.on('error', (error) => {
+  if (error?.code === 'EPIPE') process.exit(0);
+  throw error;
+});
+
 const ADVISORY_LOCK_NAMESPACE = 844332;
-const ADVISORY_LOCK_KEY = 2026072905;
+const ADVISORY_LOCK_KEY = 2026073005;
+const MIGRATIONS = [
+  {
+    id: '20260729_phase5_data_metrics_bi_reporting',
+    file: path.join(root, 'database/migrations/20260729_phase5_data_metrics_bi_reporting.sql'),
+  },
+  {
+    id: '20260730_phase5_tenant_shell_grc_data_integration',
+    file: path.join(root, 'database/migrations/20260730_phase5_tenant_shell_grc_data_integration.sql'),
+  },
+];
 
 function sanitizeError(error) {
   return String(error?.message || 'phase5 migration error')
@@ -21,8 +34,8 @@ function sanitizeError(error) {
     .slice(0, 1000);
 }
 
-function readMigration() {
-  const sql = fs.readFileSync(MIGRATION_FILE, 'utf8');
+function readMigration(migration) {
+  const sql = fs.readFileSync(migration.file, 'utf8');
   const checksum = crypto.createHash('sha256').update(sql).digest('hex');
   return { sql, checksum };
 }
@@ -97,8 +110,8 @@ async function preflight(client) {
   return visible;
 }
 
-async function alreadyApplied(client, checksum) {
-  const result = await client.query('SELECT checksum, status FROM schema_migrations WHERE migration_id = $1', [MIGRATION_ID]);
+async function alreadyApplied(client, migrationId, checksum) {
+  const result = await client.query('SELECT checksum, status FROM schema_migrations WHERE migration_id = $1', [migrationId]);
   if (result.rowCount === 0) return false;
   const row = result.rows[0];
   if (row.status === 'applied' && row.checksum === checksum) return true;
@@ -137,14 +150,29 @@ async function postconditions(client) {
   if (Number(catalog.rows[0]?.count || 0) < 20) throw new Error('Phase 5 postcondition missing initial metric catalog');
   if (Number(permissions.rows[0]?.count || 0) < 30) throw new Error('Phase 5 postcondition missing permissions');
   if (Number(capabilities.rows[0]?.count || 0) < 16) throw new Error('Phase 5 postcondition missing capabilities');
+  const hotfix = await client.query(`
+    SELECT
+      EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='grc_analytical_impact_rules') AS impact_rules,
+      EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='grc_analytical_impact_events') AS impact_events,
+      EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='data_trust_score_versions') AS trust_versions,
+      (SELECT COUNT(*)::int FROM grc_analytical_impact_rules WHERE status='published') AS impact_rules_count,
+      (SELECT COUNT(*)::int FROM data_trust_score_versions WHERE version_key='data_trust_score' AND version_number=2 AND status='published') AS trust_v2_count`);
+  const hotfixRow = hotfix.rows[0];
+  if (hotfixRow.impact_rules !== true || hotfixRow.impact_events !== true || hotfixRow.trust_versions !== true) {
+    throw new Error('Phase 5 hotfix postcondition missing analytical tables');
+  }
+  if (Number(hotfixRow.impact_rules_count || 0) < 7) throw new Error('Phase 5 hotfix postcondition missing impact rules');
+  if (Number(hotfixRow.trust_v2_count || 0) < 1) throw new Error('Phase 5 hotfix postcondition missing trust score v2');
 
-  return { tables: requiredTables.length, global_metrics: Number(catalog.rows[0].count), permissions: Number(permissions.rows[0].count), capabilities: Number(capabilities.rows[0].count) };
+  return { tables: requiredTables.length, global_metrics: Number(catalog.rows[0].count), permissions: Number(permissions.rows[0].count), capabilities: Number(capabilities.rows[0].count), impact_rules: Number(hotfixRow.impact_rules_count), trust_score_version: 2 };
 }
 
 async function run(mode) {
-  const { sql, checksum } = readMigration();
   if (mode === 'checksum') {
-    process.stdout.write(`${MIGRATION_ID} checksum=${checksum}\n`);
+    for (const migration of MIGRATIONS) {
+      const { checksum } = readMigration(migration);
+      process.stdout.write(`${migration.id} checksum=${checksum}\n`);
+    }
     return;
   }
 
@@ -152,49 +180,68 @@ async function run(mode) {
   const started = Date.now();
   await client.connect();
   let lockHeld = false;
+  let pendingForFailure = [];
   try {
     await acquireLock(client);
     lockHeld = true;
     await ensureLedger(client);
     await preflight(client);
-    if (await alreadyApplied(client, checksum)) {
-      process.stdout.write(`Phase 5 migration already applied: ${MIGRATION_ID}\n`);
-      return;
+    const readable = MIGRATIONS.map((migration) => ({ ...migration, ...readMigration(migration) }));
+    const pending = [];
+    for (const migration of readable) {
+      if (await alreadyApplied(client, migration.id, migration.checksum)) {
+        process.stdout.write(`Phase 5 migration already applied: ${migration.id}\n`);
+      } else {
+        pending.push(migration);
+      }
     }
+    pendingForFailure = pending;
     if (mode === 'preflight') {
-      process.stdout.write(`Phase 5 migration preflight OK: ${MIGRATION_ID}\n`);
+      process.stdout.write(`Phase 5 migration preflight OK: pending=${pending.map((migration) => migration.id).join(',') || 'none'}\n`);
       return;
     }
     if (mode !== 'apply') throw new Error('Use --checksum, --preflight or --apply');
 
     await client.query('BEGIN');
-    await client.query(
-      `INSERT INTO schema_migrations (migration_id, checksum, applied_by, status, details)
-       VALUES ($1,$2,current_user,'running',$3::jsonb)
-       ON CONFLICT (migration_id) DO UPDATE
-       SET checksum = EXCLUDED.checksum, applied_by = current_user, status = 'running', details = EXCLUDED.details`,
-      [MIGRATION_ID, checksum, JSON.stringify({ file: path.relative(root, MIGRATION_FILE) })]
-    );
-    await client.query(unwrapMigrationTransaction(sql));
+    for (const migration of pending) {
+      await client.query(
+        `INSERT INTO schema_migrations (migration_id, checksum, applied_by, status, details)
+         VALUES ($1,$2,current_user,'running',$3::jsonb)
+         ON CONFLICT (migration_id) DO UPDATE
+         SET checksum = EXCLUDED.checksum, applied_by = current_user, status = 'running', details = EXCLUDED.details`,
+        [migration.id, migration.checksum, JSON.stringify({ file: path.relative(root, migration.file) })]
+      );
+      await client.query(unwrapMigrationTransaction(migration.sql));
+      await client.query(
+        `UPDATE schema_migrations
+         SET applied_at = now(), applied_by = current_user, duration_ms = $2, status = 'applied', details = details || $3::jsonb
+         WHERE migration_id = $1`,
+        [migration.id, Date.now() - started, JSON.stringify({ applied: true })]
+      );
+    }
     const details = await postconditions(client);
-    await client.query(
-      `UPDATE schema_migrations
-       SET applied_at = now(), applied_by = current_user, duration_ms = $2, status = 'applied', details = details || $3::jsonb
-       WHERE migration_id = $1`,
-      [MIGRATION_ID, Date.now() - started, JSON.stringify(details)]
-    );
+    for (const migration of readable) {
+      await client.query(
+        `UPDATE schema_migrations
+         SET duration_ms = GREATEST(duration_ms, $2), details = details || $3::jsonb
+         WHERE migration_id = $1`,
+        [migration.id, Date.now() - started, JSON.stringify(details)]
+      );
+    }
     await client.query('COMMIT');
-    process.stdout.write(`Phase 5 migration applied: ${MIGRATION_ID} checksum=${checksum}\n`);
+    process.stdout.write(`Phase 5 migrations applied: ${pending.map((migration) => migration.id).join(',') || 'none'}\n`);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => null);
     if (!error.preserveLedger) {
-      await client.query(
-        `INSERT INTO schema_migrations (migration_id, checksum, applied_by, duration_ms, status, details)
-         VALUES ($1,$2,current_user,$3,'failed',$4::jsonb)
-         ON CONFLICT (migration_id) DO UPDATE
-         SET checksum = EXCLUDED.checksum, applied_by = current_user, duration_ms = EXCLUDED.duration_ms, status = 'failed', details = EXCLUDED.details`,
-        [MIGRATION_ID, checksum, Date.now() - started, JSON.stringify({ error: sanitizeError(error) })]
-      ).catch(() => null);
+      for (const migration of pendingForFailure.length ? pendingForFailure : MIGRATIONS.map((item) => ({ ...item, ...readMigration(item) }))) {
+        await client.query(
+          `INSERT INTO schema_migrations (migration_id, checksum, applied_by, duration_ms, status, details)
+           VALUES ($1,$2,current_user,$3,'failed',$4::jsonb)
+           ON CONFLICT (migration_id) DO UPDATE
+           SET checksum = EXCLUDED.checksum, applied_by = current_user, duration_ms = EXCLUDED.duration_ms, status = 'failed', details = EXCLUDED.details`,
+          [migration.id, migration.checksum, Date.now() - started, JSON.stringify({ error: sanitizeError(error) })]
+        ).catch(() => null);
+      }
     }
     throw error;
   } finally {

@@ -158,7 +158,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         },
         {
           module_key: 'data_governance',
-          routes: ['/datos'],
+          routes: ['/grc', '/datos'],
           fallback: '/dashboard',
           label: 'Datos',
           permission_key: null,

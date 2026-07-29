@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import { useLanguage } from '@/context/LanguageContext';
 import { translateStandardLabel } from '@/i18n/displayText';
 import { clearTenantEntitlementsCache } from '@/hooks/useTenantEntitlements';
+import { setActiveTenantId } from '@/utils/apiClient';
 import Phase4CommercialPanel from '@/components/commercial/Phase4CommercialPanel';
 
 const API_URL =
@@ -562,6 +563,11 @@ export default function AdminSaasPage() {
     isPlatform;
 
   const canAccess = isPlatform || canViewAdminSaas;
+
+  useEffect(() => {
+    setActiveTenantId(selectedTenantId || null);
+    clearTenantEntitlementsCache();
+  }, [selectedTenantId]);
 
   const fetchJson = useCallback(async function fetchJson<TData = unknown>(
     path: string,

@@ -10,6 +10,7 @@ const JSZip = require('jszip');
 const XLSX = require('xlsx');
 const { evaluate, validateExpression, FormulaError } = require('./formulaEngine');
 const { calculateTrustScore, assessFreshness } = require('./dataTrustScore');
+const { TenantResolutionError, resolveEffectiveTenant } = require('../../utils/effectiveTenant');
 
 function assertZipMagic(buffer) {
   assert.strictEqual(buffer.slice(0, 2).toString('utf8'), 'PK');
@@ -83,6 +84,11 @@ async function run() {
   });
   assert.ok(trust.score <= 69, 'dato stale debe reducir el score');
   assert.notStrictEqual(trust.status, 'trusted', 'dato stale no puede mostrarse trusted');
+  assert.strictEqual(trust.formula_version, 'data_trust_score_v2');
+  assert.ok(trust.components.source_availability, 'score v2 debe incluir disponibilidad de fuente');
+  assert.ok(trust.components.assurance_result, 'score v2 debe incluir resultado de assurance');
+  assert.ok(trust.components.evidence_trace, 'score v2 debe incluir traza de evidencia');
+  assert.ok(trust.components.dimension_quality, 'score v2 debe incluir calidad dimensional');
 
   const rejected = calculateTrustScore({
     completeness: { score: 100, status: 'trusted' },
@@ -102,6 +108,32 @@ async function run() {
     frequency: 'daily',
   });
   assert.ok(['stale', 'expired'].includes(stale.status));
+
+  const tenantReq = {
+    headers: {},
+    query: {},
+    body: {},
+    user: { role: 'tenant_admin', tenant_id: '70000000-0000-0000-0000-000000000701' },
+  };
+  assert.strictEqual(await resolveEffectiveTenant(tenantReq), '70000000-0000-0000-0000-000000000701');
+  assert.strictEqual(tenantReq.resolvedTenantId, '70000000-0000-0000-0000-000000000701');
+  await assert.rejects(
+    () => resolveEffectiveTenant({
+      headers: { 'x-tenant-id': '70000000-0000-0000-0000-000000000702' },
+      query: {},
+      body: {},
+      user: { role: 'tenant_admin', tenant_id: '70000000-0000-0000-0000-000000000701' },
+    }),
+    (error) => error instanceof TenantResolutionError && error.code === 'TENANT_FORBIDDEN'
+  );
+  await assert.rejects(
+    () => resolveEffectiveTenant({ headers: {}, query: {}, body: {}, user: { role: 'tenant_admin', tenant_id: 'tecdex.net' } }),
+    (error) => error instanceof TenantResolutionError && error.code === 'TENANT_INVALID'
+  );
+  await assert.rejects(
+    () => resolveEffectiveTenant({ headers: {}, query: {}, body: {}, user: { role: 'platform_admin' } }),
+    (error) => error instanceof TenantResolutionError && error.code === 'TENANT_REQUIRED'
+  );
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'phase5-artifact-'));
   const lines = ['Informe ejecutivo GRC', 'Tenant: qa-tenant', 'Clasificacion: internal', 'Identificador de emision: qa-generation'];

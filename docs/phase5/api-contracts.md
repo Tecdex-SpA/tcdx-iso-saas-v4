@@ -2,6 +2,8 @@
 
 Datos:
 
+- `GET /api/grc/overview`
+- `GET /api/grc/impact/:entityType/:entityId`
 - `GET /api/data/domains`
 - `POST /api/data/domains`
 - `GET /api/data/elements`

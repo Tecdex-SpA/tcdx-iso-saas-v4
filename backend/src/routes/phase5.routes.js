@@ -3,9 +3,10 @@
 const express = require('express');
 const service = require('../services/phase5/phase5.service');
 const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
+const { resolveEffectiveTenant } = require('../utils/effectiveTenant');
 
 function scope(req) {
-  return { tenant_id: req.tenantId || req.user?.tenant_id || req.user?.tenantId, user: req.user };
+  return { tenant_id: req.resolvedTenantId || req.tenantId, user: req.user };
 }
 
 function send(res, data, req) {
@@ -28,10 +29,25 @@ function handleError(req, res, error) {
   return res.status(status).json({
     ok: false,
     code: error?.code || 'PHASE5_ERROR',
-    error: status >= 500 ? 'Error procesando Fase 5.' : error.message,
+    error: status >= 500 ? 'Error procesando información GRC.' : error.message,
     details: status >= 500 ? undefined : error.details,
     request_id: req.requestId || null,
   });
+}
+
+async function requireTenant(req, res, next) {
+  try {
+    await resolveEffectiveTenant(req, { required: true });
+    return next();
+  } catch (error) {
+    return res.status(error.status || 403).json({
+      ok: false,
+      code: error.code || 'TENANT_REQUIRED',
+      error: error.message || 'Se requiere contexto de empresa.',
+      details: error.details || undefined,
+      request_id: req.requestId || null,
+    });
+  }
 }
 
 function route(handler) {
@@ -45,6 +61,7 @@ function route(handler) {
 }
 
 const dataRouter = express.Router();
+dataRouter.use(requireTenant);
 dataRouter.use(requireCommercialCapability('data.governance'));
 dataRouter.get('/domains', route((req) => service.listDataDomains(scope(req), req.query)));
 dataRouter.post('/domains', route((req) => service.createDataDomain(scope(req), req.body, req.requestId)));
@@ -58,6 +75,7 @@ dataRouter.get('/lineage/:entityType/:entityId', requireCommercialCapability('da
 dataRouter.get('/impact/:entityType/:entityId', requireCommercialCapability('data.impact_graph'), route((req) => service.graph(scope(req), req.params.entityType, req.params.entityId, 'impact')));
 
 const metricsRouter = express.Router();
+metricsRouter.use(requireTenant);
 metricsRouter.use(requireCommercialCapability('metrics.catalog'));
 metricsRouter.get('/', route((req) => service.listMetrics(scope(req), req.query)));
 metricsRouter.post('/', route((req) => service.createMetric(scope(req), req.body, req.requestId)));
@@ -74,6 +92,7 @@ metricsRouter.get('/:id/trend', route((req) => service.metricTrend(scope(req), r
 metricsRouter.get('/:id/trust', requireCommercialCapability('metrics.data_trust'), route((req) => service.metricTrust(scope(req), req.params.id)));
 
 const surveysRouter = express.Router();
+surveysRouter.use(requireTenant);
 surveysRouter.use(requireCommercialCapability('surveys.engine'));
 surveysRouter.get('/', route((req) => service.listSurveys(scope(req), req.query)));
 surveysRouter.post('/', route((req) => service.createSurvey(scope(req), req.body, req.requestId)));
@@ -83,6 +102,7 @@ surveysRouter.post('/:id/versions', route((req) => service.createSurveyVersion(s
 surveysRouter.post('/:id/publish', route((req) => service.publishSurvey(scope(req), req.params.id, req.requestId)));
 
 const surveyCampaignsRouter = express.Router();
+surveyCampaignsRouter.use(requireTenant);
 surveyCampaignsRouter.use(requireCommercialCapability('surveys.engine'));
 surveyCampaignsRouter.post('/', route((req) => service.createCampaign(scope(req), req.body, req.requestId)));
 surveyCampaignsRouter.get('/', route((req) => service.listCampaigns(scope(req), req.query)));
@@ -91,6 +111,7 @@ surveyCampaignsRouter.post('/:id/launch', route((req) => service.transitionCampa
 surveyCampaignsRouter.post('/:id/close', route((req) => service.transitionCampaign(scope(req), req.params.id, 'closed', req.requestId)));
 
 const surveyResponsesRouter = express.Router();
+surveyResponsesRouter.use(requireTenant);
 surveyResponsesRouter.use(requireCommercialCapability('surveys.engine'));
 surveyResponsesRouter.post('/', route((req) => service.submitResponse(scope(req), req.body, req.requestId)));
 surveyResponsesRouter.post('/:id/submit', route((req) => service.submitResponse(scope(req), { ...req.body, response_id: req.params.id, submit: true }, req.requestId)));
@@ -98,6 +119,7 @@ surveyResponsesRouter.post('/:id/evaluate', route((req) => service.evaluateRespo
 surveyResponsesRouter.post('/:id/approve', route((req) => service.approveResponse(scope(req), req.params.id, req.body, req.requestId)));
 
 const assuranceTestsRouter = express.Router();
+assuranceTestsRouter.use(requireTenant);
 assuranceTestsRouter.use(requireCommercialCapability('assurance.testing'));
 assuranceTestsRouter.get('/', route((req) => service.listAssuranceTests(scope(req), req.query)));
 assuranceTestsRouter.post('/', route((req) => service.createAssuranceTest(scope(req), req.body, req.requestId)));
@@ -106,6 +128,7 @@ assuranceTestsRouter.post('/executions/:executionId/complete', route((req) => se
 assuranceTestsRouter.post('/executions/:executionId/review', route((req) => service.reviewAssuranceExecution(scope(req), req.params.executionId, req.body, req.requestId)));
 
 const lossEventsRouter = express.Router();
+lossEventsRouter.use(requireTenant);
 lossEventsRouter.use(requireCommercialCapability('loss.events'));
 lossEventsRouter.get('/', route((req) => service.listLossEvents(scope(req), req.query)));
 lossEventsRouter.post('/', route((req) => service.createLossEvent(scope(req), req.body, req.requestId)));
@@ -116,6 +139,7 @@ lossEventsRouter.post('/:id/recoveries', route((req) => service.addLossRecovery(
 lossEventsRouter.post('/:id/close', route((req) => service.transitionLossEvent(scope(req), req.params.id, 'closed', req.requestId)));
 
 const dashboardsRouter = express.Router();
+dashboardsRouter.use(requireTenant);
 dashboardsRouter.use(requireCommercialCapability('bi.executive_dashboards'));
 dashboardsRouter.get('/', route((req) => service.listDashboards(scope(req), req.query)));
 dashboardsRouter.post('/', requireCommercialCapability('bi.dashboard_builder'), route((req) => service.createDashboard(scope(req), req.body, req.requestId)));
@@ -126,6 +150,7 @@ dashboardsRouter.post('/:id/snapshot', route((req) => service.snapshotDashboard(
 dashboardsRouter.get('/:id/render', route((req) => service.renderDashboard(scope(req), req.params.id)));
 
 const reportsRouter = express.Router();
+reportsRouter.use(requireTenant);
 reportsRouter.use(requireCommercialCapability('reporting.studio'));
 reportsRouter.get('/', route((req) => service.listReports(scope(req), req.query)));
 reportsRouter.post('/', route((req) => service.createReport(scope(req), req.body, req.requestId)));
@@ -134,6 +159,7 @@ reportsRouter.put('/:id', route((req) => service.createReport(scope(req), req.bo
 reportsRouter.post('/:id/generate', route((req) => service.generateReport(scope(req), req.params.id, req.body, req.requestId)));
 
 const reportGenerationsRouter = express.Router();
+reportGenerationsRouter.use(requireTenant);
 reportGenerationsRouter.use(requireCommercialCapability('reporting.studio'));
 reportGenerationsRouter.get('/', route((req) => service.listReportGenerations(scope(req), req.query)));
 reportGenerationsRouter.get('/:id', route((req) => service.getReportGeneration(scope(req), req.params.id)));
@@ -151,13 +177,19 @@ reportGenerationsRouter.get('/:id/download', requireCommercialCapability('report
 reportGenerationsRouter.post('/:id/approve', route((req) => service.approveReportGeneration(scope(req), req.params.id, req.body, req.requestId)));
 
 const reportSchedulesRouter = express.Router();
+reportSchedulesRouter.use(requireTenant);
 reportSchedulesRouter.use(requireCommercialCapability('reporting.scheduled'));
 reportSchedulesRouter.post('/', route((req) => service.createReportSchedule(scope(req), req.body, req.requestId)));
 reportSchedulesRouter.put('/:id', route((req) => service.updateReportSchedule(scope(req), req.params.id, req.body, req.requestId)));
 reportSchedulesRouter.post('/:id/pause', route((req) => service.updateReportSchedule(scope(req), req.params.id, { status: 'paused' }, req.requestId)));
 reportSchedulesRouter.post('/:id/resume', route((req) => service.updateReportSchedule(scope(req), req.params.id, { status: 'active' }, req.requestId)));
 
+const grcRouter = express.Router();
+grcRouter.get('/overview', requireTenant, requireCommercialCapability('data.governance'), route((req) => service.getGrcOverview(scope(req), req.requestId)));
+grcRouter.get('/impact/:entityType/:entityId', requireTenant, requireCommercialCapability('data.impact_graph'), route((req) => service.graph(scope(req), req.params.entityType, req.params.entityId, 'impact')));
+
 module.exports = {
+  grcRouter,
   dataRouter,
   metricsRouter,
   surveysRouter,

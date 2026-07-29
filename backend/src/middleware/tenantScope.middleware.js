@@ -137,6 +137,8 @@ function getPathTenantIds(req) {
 
 function getRequestedTenantIds(req) {
   return compactTenantIds([
+    req.headers?.['x-tenant-id'],
+    req.headers?.['x-tenant'],
     ...getPathTenantIds(req),
     ...getQueryTenantIds(req.query),
     ...getBodyTenantIds(req.body),
