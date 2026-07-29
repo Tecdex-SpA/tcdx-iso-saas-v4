@@ -172,8 +172,10 @@ sync_backend_source_for_migrations() {
   "
 }
 
-run_phase3_migration() {
-  local mode="$1"
+run_phase_migration() {
+  local phase="$1"
+  local mode="$2"
+  local script_path="$3"
 
   run_ssh "$BACKEND_HOST" "
     set -Eeuo pipefail
@@ -208,7 +210,14 @@ run_phase3_migration() {
     fi
 
     cd '${REMOTE_REPO_DIR}'
-    node scripts/phase3/apply-phase3-migration.js '${mode}'
+
+    if [[ ! -f '${script_path}' ]]; then
+      echo 'ERROR: script de migracion no encontrado: ${script_path}'
+      exit 1
+    fi
+
+    echo 'Ejecutando migracion ${phase}: ${script_path} ${mode}'
+    node '${script_path}' '${mode}'
     unset MIGRATION_DATABASE_URL
   "
 }
@@ -431,14 +440,25 @@ echo "======================================"
 echo " PREPARACION MIGRACION FASE 3"
 echo "======================================"
 sync_backend_source_for_migrations "$LOCAL_HEAD"
-run_phase3_migration "--preflight"
+run_phase_migration "Fase 3" "--preflight" "scripts/phase3/apply-phase3-migration.js"
 
 echo ""
 echo "======================================"
 echo " MIGRACION FASE 3"
 echo "======================================"
-run_phase3_migration "--apply"
+run_phase_migration "Fase 3" "--apply" "scripts/phase3/apply-phase3-migration.js"
 
+echo ""
+echo "======================================"
+echo " PREPARACION MIGRACION FASE 4"
+echo "======================================"
+run_phase_migration "Fase 4" "--preflight" "scripts/phase4/apply-phase4-migration.js"
+
+echo ""
+echo "======================================"
+echo " MIGRACION FASE 4"
+echo "======================================"
+run_phase_migration "Fase 4" "--apply" "scripts/phase4/apply-phase4-migration.js"
 echo ""
 echo "======================================"
 echo " DEPLOY BACKEND"

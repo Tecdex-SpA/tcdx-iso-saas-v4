@@ -30,6 +30,7 @@ const rbac = read('backend/src/middleware/rbac.middleware.js');
 const hook = read('frontend/src/hooks/useTenantEntitlements.ts');
 const panel = read('frontend/src/components/commercial/Phase4CommercialPanel.tsx');
 const packageJson = read('package.json');
+const deploy = read('scripts/deploy-vms.sh');
 
 const markers = [
   'product_families', 'commercial_editions', 'commercial_plans', 'commercial_plan_versions',
@@ -70,6 +71,28 @@ for (const marker of ['hasModule', 'hasCapability', 'getLimit', 'getUsage', 'isR
 for (const marker of ['Gobierno comercial del producto', 'Cambio de plan', 'Packs y metodologías', 'Capabilities efectivas']) {
   if (!panel.includes(marker)) throw new Error(`Phase 4 admin UI marker missing: ${marker}`);
 }
+
+const deployOrderMarkers = [
+  'scripts/phase3/apply-phase3-migration.js',
+  'scripts/phase4/apply-phase4-migration.js',
+  'DEPLOY BACKEND',
+];
+let lastDeployIndex = -1;
+for (const marker of deployOrderMarkers) {
+  const index = deploy.indexOf(marker);
+  if (index === -1) throw new Error(`Deploy marker missing: ${marker}`);
+  if (index <= lastDeployIndex) throw new Error(`Deploy marker out of order: ${marker}`);
+  lastDeployIndex = index;
+}
+for (const marker of [
+  'run_phase_migration()',
+  'MIGRATION_DATABASE_URL no esta definida',
+  'script de migracion no encontrado',
+  'unset MIGRATION_DATABASE_URL',
+]) {
+  if (!deploy.includes(marker)) throw new Error(`Deploy migration safety marker missing: ${marker}`);
+}
+
 for (const script of ['phase4:migration:checksum', 'phase4:contracts:check', 'phase4:check']) {
   if (!packageJson.includes(script)) throw new Error(`Phase 4 package script missing: ${script}`);
 }
