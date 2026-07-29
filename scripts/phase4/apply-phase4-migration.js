@@ -92,7 +92,11 @@ async function alreadyApplied(client, checksum) {
   if (result.rowCount === 0) return false;
   const row = result.rows[0];
   if (row.status === 'applied' && row.checksum === checksum) return true;
-  if (row.status === 'applied' && row.checksum !== checksum) throw new Error('Phase 4 migration checksum differs from applied ledger entry');
+  if (row.status === 'applied' && row.checksum !== checksum) {
+    const error = new Error('Phase 4 migration checksum differs from applied ledger entry');
+    error.preserveLedger = true;
+    throw error;
+  }
   return false;
 }
 
@@ -148,7 +152,9 @@ async function run(mode) {
     process.stdout.write(`Phase 4 migration applied: ${MIGRATION_ID} checksum=${checksum}\n`);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => null);
-    await client.query(`INSERT INTO schema_migrations (migration_id, checksum, applied_by, duration_ms, status, details) VALUES ($1,$2,current_user,$3,'failed',$4::jsonb) ON CONFLICT (migration_id) DO UPDATE SET applied_by = current_user, duration_ms = EXCLUDED.duration_ms, status = 'failed', details = EXCLUDED.details`, [MIGRATION_ID, checksum, Date.now() - started, JSON.stringify({ error: sanitizeError(error) })]).catch(() => null);
+    if (!error.preserveLedger) {
+      await client.query(`INSERT INTO schema_migrations (migration_id, checksum, applied_by, duration_ms, status, details) VALUES ($1,$2,current_user,$3,'failed',$4::jsonb) ON CONFLICT (migration_id) DO UPDATE SET checksum = EXCLUDED.checksum, applied_by = current_user, duration_ms = EXCLUDED.duration_ms, status = 'failed', details = EXCLUDED.details`, [MIGRATION_ID, checksum, Date.now() - started, JSON.stringify({ error: sanitizeError(error) })]).catch(() => null);
+    }
     throw error;
   } finally {
     if (lockHeld) await releaseLock(client).catch((error) => process.stderr.write(`${sanitizeError(error)}\n`));

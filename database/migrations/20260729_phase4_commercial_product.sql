@@ -764,7 +764,7 @@ SELECT
   t.id AS tenant_id,
   jsonb_build_object(
     'status', CASE
-      WHEN COALESCE(t.service_status, t.status, 'active') IN ('suspended','cancelled') THEN 'suspended'
+      WHEN COALESCE(t.service_status, 'active') IN ('suspended','cancelled') THEN 'suspended'
       WHEN COALESCE(limit_pressure.pressure, 0) >= 0.9 THEN 'at_risk'
       WHEN vts.id IS NULL THEN 'attention'
       ELSE 'healthy'
@@ -773,7 +773,7 @@ SELECT
       100
       - CASE WHEN vts.id IS NULL THEN 35 ELSE 0 END
       - CASE WHEN COALESCE(limit_pressure.pressure, 0) >= 0.9 THEN 25 WHEN COALESCE(limit_pressure.pressure, 0) >= 0.8 THEN 10 ELSE 0 END
-      - CASE WHEN COALESCE(t.service_status, t.status, 'active') IN ('suspended','cancelled') THEN 60 ELSE 0 END
+      - CASE WHEN COALESCE(t.service_status, 'active') IN ('suspended','cancelled') THEN 60 ELSE 0 END
     )),
     'factors', jsonb_build_array(
       jsonb_build_object('key','subscription_status','status',COALESCE(vts.status,'missing'),'weight',25),
