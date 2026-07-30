@@ -3,9 +3,16 @@
 const pool = require('../../config/db');
 const { FORMULAS, OfficialFormulaRegistry } = require('./formulaRegistry.service');
 const { resolveFormulaSource } = require('./sourceResolver.service');
+const { buildDecision, numeric } = require('./decisionInterpretation.service');
 const phase5Service = require('../phase5/phase5.service');
 
 const SOURCE_DATASET_SNAPSHOT_TYPE = 'source_dataset';
+const FUNCTIONAL_FAILURE_CODES = Object.freeze({
+  insufficient_data: 'Datos insuficientes',
+  dependency_pending: 'Dependencia pendiente',
+  source_incompatible: 'Fuente incompatible',
+  technical_error: 'Error técnico',
+});
 
 class OfficialCalculationOrchestratorError extends Error {
   constructor(code, message, status = 400, details = null) {
@@ -36,7 +43,17 @@ function normalizePeriod(period = {}) {
   return { start, end, timezone: period.timezone || 'America/Santiago' };
 }
 
-const FORMULA_PRIORITY = Object.freeze({ F5_5_GRC_HEALTH: 100 });
+const FORMULA_PRIORITY = Object.freeze({
+  F5_5_COMPLIANCE_WEIGHTED: 5,
+  F5_5_COVERAGE: 6,
+  F5_5_INHERENT_RISK: 7,
+  F5_5_RESIDUAL_RISK: 8,
+  F5_5_WEIGHTED_PROGRESS: 9,
+  F5_5_EVIDENCE_QUALITY: 10,
+  F5_5_COMPLETENESS: 11,
+  F5_5_READINESS: 90,
+  F5_5_GRC_HEALTH: 100,
+});
 
 function selectedFormulas(body = {}) {
   const requested = Array.isArray(body.formula_codes) ? new Set(body.formula_codes.map(String)) : null;
@@ -44,15 +61,91 @@ function selectedFormulas(body = {}) {
   return FORMULAS.filter((formula) => formula.status === 'published')
     .filter((formula) => !requested || requested.has(formula.formula_code))
     .filter((formula) => !domain || formula.category === domain)
-    .sort((a, b) => (FORMULA_PRIORITY[a.formula_code] || 10) - (FORMULA_PRIORITY[b.formula_code] || 10));
+    .sort((a, b) => (FORMULA_PRIORITY[a.formula_code] || 20) - (FORMULA_PRIORITY[b.formula_code] || 20));
 }
 
 function summarize(results) {
   return results.reduce((summary, item) => {
     summary.total += 1;
     summary[item.status] = (summary[item.status] || 0) + 1;
+    if (item.failure_type) summary.failure_types[item.failure_type] = (summary.failure_types[item.failure_type] || 0) + 1;
     return summary;
-  }, { total: 0, calculated: 0, unmeasured: 0, source_unavailable: 0, not_applicable: 0, failed: 0 });
+  }, {
+    total: 0,
+    calculated: 0,
+    unmeasured: 0,
+    source_unavailable: 0,
+    not_applicable: 0,
+    failed: 0,
+    dependency_pending: 0,
+    source_incompatible: 0,
+    failure_types: {},
+  });
+}
+
+function functionalFailure({ formula, sourceContext = {}, status, failureType, code, message, warnings = [] }) {
+  return {
+    formula_code: formula.formula_code,
+    display_name: formula.display_name,
+    domain: formula.category,
+    status,
+    failure_type: failureType,
+    failure_label: FUNCTIONAL_FAILURE_CODES[failureType] || FUNCTIONAL_FAILURE_CODES.technical_error,
+    code,
+    message,
+    error: message,
+    warnings,
+    ...sourceContext,
+  };
+}
+
+function enrichDependencies(formulaCode, input, calculatedByCode) {
+  const enriched = { ...(input || {}) };
+  if (formulaCode === 'F5_5_READINESS') {
+    if (enriched.compliance === null || enriched.compliance === undefined) {
+      const coverage = calculatedByCode.get('F5_5_COVERAGE') ?? calculatedByCode.get('F5_5_COMPLIANCE_WEIGHTED');
+      if (coverage !== undefined) enriched.compliance = Number(coverage) > 1 ? Number(coverage) / 100 : Number(coverage);
+    }
+    const missing = ['compliance', 'evidence', 'health', 'actions'].filter((key) => enriched[key] === null || enriched[key] === undefined);
+    if (missing.length) return { input: enriched, missing };
+  }
+  if (formulaCode === 'F5_5_RESIDUAL_RISK' && (enriched.inherentRisk === null || enriched.inherentRisk === undefined)) {
+    const inherent = calculatedByCode.get('F5_5_INHERENT_RISK');
+    if (inherent !== undefined) enriched.inherentRisk = inherent;
+  }
+  if (formulaCode === 'F5_5_GRC_HEALTH') {
+    const dependencyMap = {
+      compliance: 'F5_5_COMPLIANCE_WEIGHTED',
+      actions: 'F5_5_WEIGHTED_PROGRESS',
+      evidence: 'F5_5_EVIDENCE_QUALITY',
+      dataTrust: 'F5_5_COMPLETENESS',
+      risk: 'F5_5_RESIDUAL_RISK',
+    };
+    for (const [key, dependencyCode] of Object.entries(dependencyMap)) {
+      if (enriched[key] === null || enriched[key] === undefined) {
+        const raw = calculatedByCode.get(dependencyCode);
+        if (raw !== undefined) {
+          const value = Number(raw);
+          enriched[key] = key === 'risk' ? Math.max(0, 1 - (value > 1 ? value / 100 : value)) : (value > 1 ? value / 100 : value);
+        }
+      }
+    }
+    const missing = ['compliance', 'actions', 'evidence', 'dataTrust', 'risk'].filter((key) => enriched[key] === null || enriched[key] === undefined);
+    if (missing.length) return { input: enriched, missing };
+  }
+  return { input: enriched, missing: [] };
+}
+
+function classifyError(error) {
+  const code = String(error?.code || 'OFFICIAL_RECALC_FORMULA_FAILED');
+  const message = String(error?.message || error || 'Error procesando la fórmula.').slice(0, 320);
+  if (['FORMULA_VARIABLE_REQUIRED', 'FORMULA_ZERO_DENOMINATOR', 'FORMULA_DIVISION_BY_ZERO', 'FORMULA_ZERO_WEIGHTS', 'AVAILABILITY_METHOD_REQUIRED'].includes(code)) {
+    return { status: 'unmeasured', failureType: 'insufficient_data', code, message };
+  }
+  if (['42703', '42P01', '42883', '22P02', 'SOURCE_SCHEMA_INCOMPATIBLE'].includes(code) || /column .* does not exist|relation .* does not exist|invalid input syntax/i.test(message)) {
+    return { status: 'source_incompatible', failureType: 'source_incompatible', code, message: 'La fuente operacional existe, pero su estructura no es compatible con el contrato analítico vigente.' };
+  }
+  return { status: 'failed', failureType: 'technical_error', code, message: 'Ocurrió un error técnico al procesar la fórmula. El detalle quedó registrado para soporte.' };
 }
 
 async function assertSnapshotContract(client) {
@@ -65,11 +158,7 @@ async function assertSnapshotContract(client) {
     LIMIT 1`);
   const definition = String(result.rows[0]?.definition || '');
   if (definition && !definition.includes(SOURCE_DATASET_SNAPSHOT_TYPE)) {
-    throw new OfficialCalculationOrchestratorError(
-      'SNAPSHOT_TYPE_CONTRACT_MISMATCH',
-      `La base de datos no admite snapshot_type=${SOURCE_DATASET_SNAPSHOT_TYPE}. Ejecute la migración oficial de Fase 5.`,
-      500
-    );
+    throw new OfficialCalculationOrchestratorError('SNAPSHOT_TYPE_CONTRACT_MISMATCH', `La base de datos no admite snapshot_type=${SOURCE_DATASET_SNAPSHOT_TYPE}. Ejecute la migración oficial.`, 500);
   }
 }
 
@@ -80,10 +169,7 @@ async function persistSourceSnapshot(client, tenantId, source, persisted) {
   await assertSnapshotContract(client);
   let sourceContractId = null;
   if (tables.rows[0]?.contracts) {
-    const contract = await client.query(
-      `SELECT id FROM official_formula_source_contracts WHERE tenant_id IS NULL AND source_code=$1 AND status='published' ORDER BY version_number DESC LIMIT 1`,
-      [source.source_code]
-    );
+    const contract = await client.query(`SELECT id FROM official_formula_source_contracts WHERE tenant_id IS NULL AND source_code=$1 AND status='published' ORDER BY version_number DESC LIMIT 1`, [source.source_code]);
     sourceContractId = contract.rows[0]?.id || null;
   }
   const snapshot = await client.query(
@@ -92,11 +178,27 @@ async function persistSourceSnapshot(client, tenantId, source, persisted) {
      RETURNING id`,
     [tenantId, persisted.calculation_run_id, sourceContractId, SOURCE_DATASET_SNAPSHOT_TYPE, source.source_snapshot_hash, Number(source.counts?.usable || 0), JSON.stringify(source.source_snapshot || {}), JSON.stringify({ source_code: source.source_code, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [] })]
   );
-  await client.query(
-    `UPDATE calculation_runs SET source_contract_id=COALESCE($3::uuid,source_contract_id), source_snapshot_hash=$4 WHERE tenant_id=$1::uuid AND id=$2::uuid`,
-    [tenantId, persisted.calculation_run_id, sourceContractId, source.source_snapshot_hash]
-  );
+  await client.query(`UPDATE calculation_runs SET source_contract_id=COALESCE($3::uuid,source_contract_id), source_snapshot_hash=$4 WHERE tenant_id=$1::uuid AND id=$2::uuid`, [tenantId, persisted.calculation_run_id, sourceContractId, source.source_snapshot_hash]);
   return snapshot.rows[0]?.id || null;
+}
+
+async function previousValue(client, tenantId, formulaCode, periodStart) {
+  try {
+    const result = await client.query(
+      `SELECT co.output_value
+       FROM calculation_runs cr
+       JOIN calculation_outputs co ON co.run_id=cr.id AND co.tenant_id=cr.tenant_id
+       WHERE cr.tenant_id=$1::uuid AND cr.formula_code=$2 AND cr.run_status='calculated'
+         AND ($3::timestamptz IS NULL OR cr.period_end IS NULL OR cr.period_end < $3::timestamptz)
+       ORDER BY cr.completed_at DESC NULLS LAST, cr.started_at DESC
+       LIMIT 1`,
+      [tenantId, formulaCode, periodStart || null]
+    );
+    const raw = result.rows[0]?.output_value;
+    return numeric(raw?.value ?? raw);
+  } catch {
+    return null;
+  }
 }
 
 async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, dependencies = {}) {
@@ -111,11 +213,13 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
   const persist = dependencies.persistOfficialCalculation || phase5Service.persistOfficialCalculation;
   const persistSnapshot = dependencies.persistSourceSnapshot || persistSourceSnapshot;
   const results = [];
+  const calculatedByCode = new Map();
 
   for (const formula of formulas) {
+    let sourceContext = {};
     try {
       const source = await resolver({ client, tenantId, formulaCode: formula.formula_code, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
-      const sourceContext = {
+      sourceContext = {
         source_contract_status: source.contract?.availability || source.status || 'unknown',
         source_resolution_status: source.physical_sources?.length ? 'resolved' : 'not_resolved',
         source_code: source.source_code,
@@ -123,25 +227,40 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         source_counts: source.counts || { received: 0, usable: 0, excluded: 0 },
       };
       if (source.status === 'source_unavailable') {
-        results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'source_unavailable', ...sourceContext, warnings: source.warnings || [] });
-        continue;
-      }
-      if (!source.formula_input) {
-        results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'not_applicable', ...sourceContext, warnings: ['La fuente existe, pero no hay equivalencia operativa para esta fórmula.'] });
+        results.push(functionalFailure({ formula, sourceContext, status: 'source_unavailable', failureType: 'source_incompatible', code: 'SOURCE_UNAVAILABLE', message: source.reason || 'No existe una fuente operacional habilitada para esta fórmula.', warnings: source.warnings || [] }));
         continue;
       }
       if (!source.counts?.usable) {
-        results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'unmeasured', ...sourceContext, warnings: source.warnings || ['No hay datos utilizables para el período.'] });
+        results.push(functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'SOURCE_DATA_INSUFFICIENT', message: 'No hay datos utilizables para el período seleccionado.', warnings: source.warnings || [] }));
+        continue;
+      }
+      if (!source.formula_input) {
+        results.push(functionalFailure({ formula, sourceContext, status: 'source_incompatible', failureType: 'source_incompatible', code: 'FORMULA_SOURCE_EQUIVALENCE_MISSING', message: 'La fuente existe, pero todavía no dispone de equivalencia operacional completa para esta fórmula.' }));
         continue;
       }
 
-      const calculated = registry.execute(formula.formula_code, source.formula_input);
+      const dependency = enrichDependencies(formula.formula_code, source.formula_input, calculatedByCode);
+      if (dependency.missing.length) {
+        results.push(functionalFailure({ formula, sourceContext, status: 'dependency_pending', failureType: 'dependency_pending', code: 'FORMULA_DEPENDENCY_PENDING', message: `Faltan resultados previos requeridos: ${dependency.missing.join(', ')}.` }));
+        continue;
+      }
+
+      const calculated = registry.execute(formula.formula_code, dependency.input);
+      const resultValue = numeric(calculated.value);
+      if (calculated.status !== 'calculated' || resultValue === null) {
+        results.push(functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'FORMULA_RESULT_EMPTY', message: 'La fórmula no produjo un valor numérico verificable y no será publicada.' }));
+        continue;
+      }
+
+      const prior = await previousValue(client, tenantId, formula.formula_code, period.start);
+      const decision = buildDecision({ formula, value: resultValue, unit: calculated.unit || formula.units?.output, source, previousValue: prior, details: calculated.details || {} });
       const officialResult = {
         ...calculated,
+        value: resultValue,
         formula_version: calculated.version || formula.version,
-        status: calculated.status === 'calculated' ? 'completed' : 'unmeasured',
+        status: 'completed',
         period,
-        components: source.formula_input,
+        components: dependency.input,
         source_status: source.status,
         source_code: source.source_code,
         physical_sources: source.physical_sources || [],
@@ -151,22 +270,41 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         source_snapshot_hash: source.source_snapshot_hash,
         lineage: source.lineage,
         warnings: source.warnings || [],
-        details: { ...(calculated.details || {}), source_counts: source.counts, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [], equivalence: source.equivalence || null },
+        decision,
+        details: { ...(calculated.details || {}), decision, source_counts: source.counts, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [], equivalence: source.equivalence || null },
       };
       const persisted = await persist(scope, officialResult, requestId);
+      const persistedValue = numeric(persisted.value);
+      if (persistedValue === null) throw new OfficialCalculationOrchestratorError('CALCULATED_RESULT_WITHOUT_VALUE', 'El cálculo no puede marcarse como calculado sin valor numérico.', 500);
       const snapshotId = await persistSnapshot(client, tenantId, source, persisted);
       if (!snapshotId) throw new OfficialCalculationOrchestratorError('SOURCE_SNAPSHOT_NOT_PERSISTED', 'El cálculo no puede publicarse sin snapshot de fuente.', 500);
-      results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'calculated', ...sourceContext, value: persisted.value, unit: persisted.unit, calculation_run_id: persisted.calculation_run_id || null, snapshot_id: snapshotId, warnings: persisted.warnings || [] });
+      calculatedByCode.set(formula.formula_code, persistedValue);
+      results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'calculated', ...sourceContext, value: persistedValue, unit: persisted.unit, calculation_run_id: persisted.calculation_run_id || null, snapshot_id: snapshotId, warnings: persisted.warnings || [], decision });
     } catch (error) {
-      results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'failed', code: error.code || 'OFFICIAL_RECALC_FORMULA_FAILED', error: String(error.message || error).slice(0, 240) });
+      const classified = classifyError(error);
+      results.push(functionalFailure({ formula, sourceContext, status: classified.status, failureType: classified.failureType, code: classified.code, message: classified.message }));
     }
   }
 
   const summary = summarize(results);
-  if (summary.failed > 0 && dependencies.failOnPersistenceError === true) {
-    throw new OfficialCalculationOrchestratorError('OFFICIAL_RECALCULATION_PERSISTENCE_FAILED', `${summary.failed} fórmulas fallaron durante la persistencia oficial.`, 500, { summary, results });
+  const invalidCalculated = results.filter((item) => item.status === 'calculated' && numeric(item.value) === null);
+  if (invalidCalculated.length) throw new OfficialCalculationOrchestratorError('CALCULATED_RESULT_WITHOUT_VALUE', 'Se detectaron fórmulas calculadas sin valor.', 500, { formulas: invalidCalculated.map((item) => item.formula_code) });
+  if (summary.failed > 0 && dependencies.failOnTechnicalError === true) {
+    throw new OfficialCalculationOrchestratorError('OFFICIAL_RECALCULATION_TECHNICAL_FAILED', `${summary.failed} fórmulas terminaron con error técnico.`, 500, { summary, results });
   }
   return { status: 'OFFICIAL_RECALCULATION_COMPLETED', tenant_id: tenantId, requested_by: actorIdFrom(scope), period, summary, results };
 }
 
-module.exports = { SOURCE_DATASET_SNAPSHOT_TYPE, OfficialCalculationOrchestratorError, normalizePeriod, selectedFormulas, assertSnapshotContract, persistSourceSnapshot, recalculateOfficialAnalytics };
+module.exports = {
+  SOURCE_DATASET_SNAPSHOT_TYPE,
+  FUNCTIONAL_FAILURE_CODES,
+  OfficialCalculationOrchestratorError,
+  normalizePeriod,
+  selectedFormulas,
+  summarize,
+  classifyError,
+  enrichDependencies,
+  assertSnapshotContract,
+  persistSourceSnapshot,
+  recalculateOfficialAnalytics,
+};
