@@ -1,4 +1,4 @@
- 'use strict';
+'use strict';
 
 const crypto = require('crypto');
 
@@ -84,6 +84,7 @@ function contract(definition) {
     version: definition.version || 1,
     status: definition.status || 'published',
     adapter: definition.adapter || definition.source_code,
+    variable_map: Object.freeze(definition.variable_map || {}),
     query: definition.query || null,
     limitations: definition.limitations || null,
   });
@@ -92,16 +93,47 @@ function contract(definition) {
 
 const SOURCE_CONTRACTS = Object.freeze([
   contract({
-    source_code: 'compliance_requirements_assessments', entity: 'compliance', tables: ['grc_framework_requirements', 'grc_requirement_control_mappings', 'control_soa_assessments'],
-    columns: ['tenant_id', 'requirement_id', 'control_id', 'status', 'applicability', 'weight', 'assessed_at'],
-    joins: ['grc_requirement_control_mappings.requirement_id -> grc_framework_requirements.id', 'control_soa_assessments.control_id -> grc_requirement_control_mappings.control_id'],
-    required_fields: ['id', 'tenant_id', 'status'], status_filter: { excluded: ['deleted', 'retired'] }, availability: 'legacy_adapter_required',
-    limitations: 'Legacy compliance sources exist under framework and SoA tables; exact status normalization is package-3 work.'
+    source_code: 'compliance_requirements_assessments', entity: 'compliance',
+    tables: ['grc_framework_requirements', 'grc_requirement_control_mappings', 'grc_control_assurance'],
+    columns: ['tenant_id', 'requirement_id', 'tenant_control_id', 'mapping_type', 'coverage_level', 'status', 'score', 'created_at', 'updated_at'],
+    joins: ['grc_requirement_control_mappings.requirement_id -> grc_framework_requirements.id', 'grc_control_assurance.tenant_control_id -> grc_requirement_control_mappings.tenant_control_id'],
+    required_fields: ['id', 'tenant_id', 'status'], status_filter: { excluded: ['deleted', 'retired', 'rejected'] },
+    variable_map: { assessments: 'rows[{status,weight,applicability}]', evaluated: 'count(status not pending)', applicable: 'count(applicability=true)' },
+    availability: 'available', version: 2,
+    limitations: 'El adaptador normaliza mappings publicados/revisados y assurance de control; requisitos sin mapping permanecen pendientes y no se convierten en cero.'
   }),
-  contract({ source_code: 'grc_readiness_operational_snapshot', entity: 'readiness', tables: ['grc_readiness_findings', 'grc_evidence_quality_scores', 'data_trust_scores'], columns: ['tenant_id','status','severity','score','created_at'], required_fields: ['id','tenant_id','status'], availability: 'partially_available', limitations: 'Readiness has evidence and finding signals, but final consumer weights are package-3 work.' }),
-  contract({ source_code: 'risk_register_controls', entity: 'risk', tables: ['iso_risk_matrix_items', 'iso_risk_matrix_runs', 'grc_quantitative_risk_assessments', 'grc_control_assurance'], columns: ['tenant_id','risk_id','probability','impact','exposure','control_id','effectiveness','status'], required_fields: ['id','tenant_id'], availability: 'legacy_adapter_required', limitations: 'Risk data is split between ISO risk matrix and Phase 3 quantitative risk tables.' }),
-  contract({ source_code: 'control_assurance_evidence', entity: 'control', tables: ['tenant_applicable_controls','grc_control_assurance','grc_evidence_links','grc_evidence_quality_scores'], columns: ['tenant_id','control_id','design_score','implementation_score','operation_score','evidence_score','frequency','status'], required_fields: ['id','tenant_id'], availability: 'legacy_adapter_required', limitations: 'Control effectiveness dimensions require package-3 adapter normalization.' }),
-  contract({ source_code: 'audit_findings_actions', entity: 'audit', tables: ['grc_readiness_findings','grc_audit_followups','iso_recommended_action_workflow_events'], columns: ['tenant_id','severity','status','opened_at','closed_at','due_at','progress'], required_fields: ['id','tenant_id','status'], availability: 'partially_available', limitations: 'Findings and followups exist; action progress is split across readiness and workflow tables.' }),
+  contract({
+    source_code: 'grc_readiness_operational_snapshot', entity: 'readiness',
+    tables: ['grc_readiness_snapshots', 'grc_readiness_results', 'grc_readiness_findings'],
+    columns: ['tenant_id','snapshot_id','dimension','score','weight','source_as_of','severity'], required_fields: ['id','tenant_id','score'],
+    variable_map: { compliance: 'dimension=compliance', evidence: 'dimension=evidence', health: 'dimension=health', actions: 'dimension=actions' },
+    availability: 'available', version: 2,
+    limitations: 'Usa el snapshot más reciente del período; dimensiones ausentes producen unmeasured en vez de imputación.'
+  }),
+  contract({
+    source_code: 'risk_register_controls', entity: 'risk',
+    tables: ['iso_risk_matrix_items', 'iso_risk_matrix_runs', 'grc_quantitative_risk_assessments', 'grc_control_assurance'],
+    columns: ['tenant_id','risk_id','probability','impact','exposure','severity','occurrence','detection','tenant_control_id','score','status'], required_fields: ['id','tenant_id'],
+    variable_map: { probability: 'probability', impact: 'impact', inherentRisk: 'exposure|probability*impact', controlEffectiveness: 'assurance_score/100', severity: 'severity', occurrence: 'occurrence', detection: 'detection' },
+    availability: 'available', version: 2,
+    limitations: 'Resuelve primero evaluaciones cuantitativas y usa la matriz ISO como fallback; no cruza tenants ni inventa escalas ausentes.'
+  }),
+  contract({
+    source_code: 'control_assurance_evidence', entity: 'control',
+    tables: ['grc_control_assurance', 'grc_evidence_links', 'grc_evidence_quality_scores'],
+    columns: ['tenant_id','tenant_control_id','score','assurance_status','calculated_at','evidence_score'], required_fields: ['id','tenant_id','score'],
+    variable_map: { design: 'dimension.design|score/100', implementation: 'dimension.implementation|score/100', operation: 'dimension.operation|score/100', evidence: 'evidence_score|score/100', effectivenesses: 'rows.score/100' },
+    availability: 'available', version: 2,
+    limitations: 'Cuando no hay dimensiones separadas se usa el score oficial de assurance como medida compuesta declarada, conservando warning metodológico.'
+  }),
+  contract({
+    source_code: 'audit_findings_actions', entity: 'audit',
+    tables: ['grc_readiness_findings', 'action_plans', 'grc_effectiveness_verifications'],
+    columns: ['tenant_id','severity','status','created_at','opened_at','closed_at','due_at','progress','weight'], required_fields: ['id','tenant_id','status'],
+    variable_map: { low: 'count(severity=low)', medium: 'count(severity=medium)', high: 'count(severity=high)', critical: 'count(severity=critical)', items: 'rows[{createdAt,openedAt,closedAt,progress,weight,overdue}]' },
+    availability: 'available', version: 2,
+    limitations: 'Unifica hallazgos de readiness y planes de acción; campos ausentes se excluyen y se registran en warnings.'
+  }),
   contract({ source_code: 'loss_events_operational', entity: 'loss', tables: ['loss_events','loss_recoveries'], columns: ['tenant_id','event_date','gross_loss_amount','net_loss_amount','currency','recovery_amount','status'], required_fields: ['id','tenant_id','event_date'], unit: 'currency', availability: 'available' }),
   contract({ source_code: 'continuity_resilience_tests', entity: 'continuity', tables: ['grc_bia_assessments','grc_continuity_plans','grc_continuity_tests'], columns: ['tenant_id','rto_hours','rpo_hours','actual_recovery_hours','actual_data_loss_hours','result','tested_at','status'], required_fields: ['id','tenant_id'], unit: 'hours', availability: 'available' }),
   contract({ source_code: 'asset_inventory_security', entity: 'asset', tables: ['data_elements'], columns: ['tenant_id','name','classification','owner_user_id','metadata','status'], required_fields: ['id','tenant_id'], availability: 'available', limitations: 'Package 4 binds asset criticality to data_elements until a dedicated asset inventory table supersedes it.' }),
@@ -111,29 +143,30 @@ const SOURCE_CONTRACTS = Object.freeze([
   contract({ source_code: 'data_quality_observations', entity: 'data_quality', tables: ['data_quality_rules','data_quality_assessments','metric_validations'], columns: ['tenant_id','rule_type','expected_count','valid_count','invalid_count','coverage','assessed_at'], required_fields: ['id','tenant_id'], availability: 'available' }),
   contract({ source_code: 'data_lineage_observations', entity: 'data_lineage', tables: ['data_lineage_edges','data_sources','data_elements'], columns: ['tenant_id','source_entity_type','source_entity_id','target_entity_type','target_entity_id','relation_type','created_at'], required_fields: ['id','tenant_id','relation_type'], availability: 'available' }),
   contract({ source_code: 'statistical_metric_measurements', entity: 'statistics', tables: ['metric_measurements','metric_definitions','metric_dimensions'], columns: ['tenant_id','metric_id','numeric_value','measured_at','unit','dimension_values','status'], required_fields: ['id','tenant_id','numeric_value'], cardinality: 'time_series', availability: 'available' }),
-  contract({ source_code: 'grc_health_components', entity: 'health', tables: ['calculation_runs','calculation_outputs','data_trust_scores','metric_measurements'], columns: ['tenant_id','formula_code','output_value','trust_score','measured_at','status'], required_fields: ['id','tenant_id'], availability: 'partially_available', limitations: 'Health score combines official calculation outputs after package-3 consumer migration.' }),
-  contract({ source_code: 'maturity_assessments', entity: 'maturity', tables: ['grc_readiness_findings','survey_evaluations','metric_measurements'], columns: ['tenant_id','level','weight','evaluated_at','status'], required_fields: ['id','tenant_id'], availability: 'legacy_adapter_required', limitations: 'Maturity data exists as signals but not as one canonical operational table yet.' }),
+  contract({
+    source_code: 'grc_health_components', entity: 'health',
+    tables: ['calculation_runs','calculation_outputs','data_trust_scores'],
+    columns: ['tenant_id','formula_code','output_value','trust_score','period_start','period_end','run_status'], required_fields: ['id','tenant_id','formula_code'],
+    variable_map: { risk: 'latest risk output', compliance: 'latest compliance output', actions: 'latest actions output', evidence: 'latest evidence/trust output', dataTrust: 'latest trust score' },
+    availability: 'available', version: 2,
+    limitations: 'Solo consume outputs oficiales calculados y aprobados; componentes ausentes dejan Health como unmeasured.'
+  }),
+  contract({
+    source_code: 'maturity_assessments', entity: 'maturity',
+    tables: ['survey_evaluations','metric_measurements'],
+    columns: ['tenant_id','score','numeric_value','weight','evaluated_at','measured_at','status','metadata'], required_fields: ['id','tenant_id'],
+    variable_map: { items: 'rows[{level|score|numeric_value,weight}]' },
+    availability: 'available', version: 2,
+    limitations: 'Prioriza evaluaciones publicadas y usa mediciones de madurez como fallback; no infiere niveles sin datos.'
+  }),
   contract({ source_code: 'external_fx_rates', entity: 'currency_conversion', tables: ['external_fx_rates'], columns: ['base_currency','quote_currency','rate','effective_at','source'], required_fields: ['base_currency','quote_currency','rate'], availability: 'source_unavailable', limitations: 'No official tenant-safe FX source is configured; loss calculations must not mix currencies.' }),
 ]);
 
 const SOURCE_CONTRACT_MAP = new Map(SOURCE_CONTRACTS.map((item) => [item.source_code, item]));
 
-function getSourceCodeForFormula(formulaCode) {
-  return FORMULA_SOURCE_MAP[formulaCode] || 'source_unavailable';
-}
-
-function listSourceContracts() {
-  return SOURCE_CONTRACTS.map((item) => ({ ...item }));
-}
-
-function getSourceContract(sourceCode) {
-  const contractDefinition = SOURCE_CONTRACT_MAP.get(sourceCode);
-  if (!contractDefinition) return null;
-  return { ...contractDefinition };
-}
-
-function listFormulaSourceBindings() {
-  return Object.entries(FORMULA_SOURCE_MAP).map(([formula_code, source_code]) => ({ formula_code, source_code, contract: getSourceContract(source_code) }));
-}
+function getSourceCodeForFormula(formulaCode) { return FORMULA_SOURCE_MAP[formulaCode] || 'source_unavailable'; }
+function listSourceContracts() { return SOURCE_CONTRACTS.map((item) => ({ ...item })); }
+function getSourceContract(sourceCode) { const value = SOURCE_CONTRACT_MAP.get(sourceCode); return value ? { ...value } : null; }
+function listFormulaSourceBindings() { return Object.entries(FORMULA_SOURCE_MAP).map(([formula_code, source_code]) => ({ formula_code, source_code, contract: getSourceContract(source_code) })); }
 
 module.exports = { AVAILABILITY, FORMULA_SOURCE_MAP, SOURCE_CONTRACTS, getSourceCodeForFormula, getSourceContract, listSourceContracts, listFormulaSourceBindings };
