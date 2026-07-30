@@ -42,8 +42,8 @@ jobs:
       - name: Phase 5.5 source bindings and equivalence
         run: npm run phase5-5:source-binding-check
 
-      - name: Phase 5.5 operational PostgreSQL adapters
-        run: npm run phase5-5:package3-check
+      - name: Phase 5.5 PostgreSQL source adapters
+        run: bash scripts/phase5-5/check-source-adapters-postgres-ci.sh
 
       - name: Phase 1 contracts
         run: npm run phase1:contracts:check
