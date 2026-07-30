@@ -7,7 +7,7 @@ jobs:
   validate:
     name: Validate backend and frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -38,6 +38,12 @@ jobs:
       - name: Backend syntax check
         working-directory: backend
         run: npm run check
+
+      - name: Phase 5.5 source bindings and equivalence
+        run: npm run phase5-5:source-binding-check
+
+      - name: Phase 5.5 operational PostgreSQL adapters
+        run: npm run phase5-5:package3-check
 
       - name: Phase 1 contracts
         run: npm run phase1:contracts:check
