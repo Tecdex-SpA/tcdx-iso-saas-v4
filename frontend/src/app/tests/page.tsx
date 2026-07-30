@@ -1,3 +1,5 @@
+import AssuranceScoringBuilder from '@/components/math-governance/AssuranceScoringBuilder';
+import SampleSizeCalculator from '@/components/math-governance/SampleSizeCalculator';
 import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 
 export default function AssuranceTestManager() {
@@ -8,12 +10,16 @@ export default function AssuranceTestManager() {
       endpoint="/api/assurance-tests"
       primaryLabel="tests"
       emptyMessage="No hay tests de assurance configurados."
+      analyticsDomain="assurance"
       columns={[
         { key: 'test_code', label: 'Código' },
         { key: 'display_name', label: 'Nombre' },
         { key: 'test_type', label: 'Tipo' },
         { key: 'status', label: 'Estado' },
       ]}
-    />
+    >
+      <AssuranceScoringBuilder />
+      <SampleSizeCalculator />
+    </Phase5Workspace>
   );
 }

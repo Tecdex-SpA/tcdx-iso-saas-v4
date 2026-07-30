@@ -1,3 +1,4 @@
+import SurveyScoringBuilder from '@/components/math-governance/SurveyScoringBuilder';
 import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 
 export default function SurveyBuilder() {
@@ -8,12 +9,15 @@ export default function SurveyBuilder() {
       endpoint="/api/surveys"
       primaryLabel="encuestas"
       emptyMessage="No hay encuestas configuradas para este tenant."
+      analyticsDomain="survey"
       columns={[
         { key: 'survey_key', label: 'Clave' },
         { key: 'display_name', label: 'Nombre' },
         { key: 'survey_type', label: 'Tipo' },
         { key: 'status', label: 'Estado' },
       ]}
-    />
+    >
+      <SurveyScoringBuilder />
+    </Phase5Workspace>
   );
 }
