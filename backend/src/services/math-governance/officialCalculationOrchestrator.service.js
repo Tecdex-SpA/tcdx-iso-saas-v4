@@ -50,6 +50,31 @@ function summarize(results) {
   }, { total: 0, calculated: 0, unmeasured: 0, source_unavailable: 0, not_applicable: 0, failed: 0 });
 }
 
+async function persistSourceSnapshot(client, tenantId, source, persisted) {
+  if (!persisted?.calculation_run_id || !source?.source_snapshot_hash) return null;
+  const tables = await client.query(`SELECT to_regclass('public.calculation_snapshots') AS snapshots, to_regclass('public.official_formula_source_contracts') AS contracts`);
+  if (!tables.rows[0]?.snapshots) return null;
+  let sourceContractId = null;
+  if (tables.rows[0]?.contracts) {
+    const contract = await client.query(
+      `SELECT id FROM official_formula_source_contracts WHERE tenant_id IS NULL AND source_code=$1 AND status='published' ORDER BY version_number DESC LIMIT 1`,
+      [source.source_code]
+    );
+    sourceContractId = contract.rows[0]?.id || null;
+  }
+  const snapshot = await client.query(
+    `INSERT INTO calculation_snapshots (tenant_id, run_id, source_contract_id, snapshot_type, snapshot_hash, row_count, payload, metadata)
+     VALUES ($1::uuid,$2::uuid,$3::uuid,'source',$4,$5,$6::jsonb,$7::jsonb)
+     RETURNING id`,
+    [tenantId, persisted.calculation_run_id, sourceContractId, source.source_snapshot_hash, Number(source.counts?.usable || 0), JSON.stringify(source.source_snapshot || {}), JSON.stringify({ source_code: source.source_code, exclusions: source.exclusions || [] })]
+  );
+  await client.query(
+    `UPDATE calculation_runs SET source_contract_id=COALESCE($3::uuid,source_contract_id), source_snapshot_hash=$4 WHERE tenant_id=$1::uuid AND id=$2::uuid`,
+    [tenantId, persisted.calculation_run_id, sourceContractId, source.source_snapshot_hash]
+  );
+  return snapshot.rows[0]?.id || null;
+}
+
 async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, dependencies = {}) {
   const tenantId = tenantIdFrom(scope);
   const period = normalizePeriod(body.period || {});
@@ -60,6 +85,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
   const resolver = dependencies.resolveFormulaSource || resolveFormulaSource;
   const registry = dependencies.registry || new OfficialFormulaRegistry();
   const persist = dependencies.persistOfficialCalculation || phase5Service.persistOfficialCalculation;
+  const persistSnapshot = dependencies.persistSourceSnapshot || persistSourceSnapshot;
   const results = [];
 
   for (const formula of formulas) {
@@ -92,6 +118,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         formula_version: calculated.version || formula.version,
         status: calculated.status === 'calculated' ? 'completed' : 'unmeasured',
         period,
+        components: source.formula_input,
         source_status: source.status,
         source_code: source.source_code,
         source_contract: source.contract?.source_code || source.source_code,
@@ -108,6 +135,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         },
       };
       const persisted = await persist(scope, officialResult, requestId);
+      const snapshotId = await persistSnapshot(client, tenantId, source, persisted);
       results.push({
         formula_code: formula.formula_code,
         display_name: formula.display_name,
@@ -117,7 +145,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         value: persisted.value,
         unit: persisted.unit,
         calculation_run_id: persisted.calculation_run_id || null,
-        snapshot_id: persisted.snapshot_id || null,
+        snapshot_id: snapshotId,
         warnings: persisted.warnings || [],
       });
     } catch (error) {
@@ -146,5 +174,6 @@ module.exports = {
   OfficialCalculationOrchestratorError,
   normalizePeriod,
   selectedFormulas,
+  persistSourceSnapshot,
   recalculateOfficialAnalytics,
 };
