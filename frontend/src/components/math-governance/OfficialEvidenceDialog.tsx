@@ -32,15 +32,12 @@ function display(value: unknown) {
 
 export default function OfficialEvidenceDialog({ open, kind, runId, formulaName, onClose }: Props) {
   const [data, setData] = useState<UnknownRecord | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!open || !runId) return;
     let cancelled = false;
-    setLoading(true);
-    setError('');
-    setData(null);
     apiRequestJson(`/api/grc/official/calculations/${runId}/${kind}`, {
       fallbackMessage: `No fue posible cargar ${kind === 'explanation' ? 'la explicación' : 'el lineage'} del cálculo.`,
     })
@@ -53,8 +50,8 @@ export default function OfficialEvidenceDialog({ open, kind, runId, formulaName,
   }, [kind, open, runId]);
 
   if (!open) return null;
-  const lineage = Array.isArray(data?.lineage) ? data?.lineage.filter(isRecord) : [];
-  const variables = isRecord(data?.variables) ? data?.variables : {};
+  const lineage = Array.isArray(data?.lineage) ? data.lineage.filter(isRecord) : [];
+  const variables = isRecord(data?.variables) ? data.variables : {};
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
