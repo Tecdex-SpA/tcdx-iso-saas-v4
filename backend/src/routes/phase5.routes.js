@@ -2,6 +2,7 @@
 
 const express = require('express');
 const service = require('../services/phase5/phase5.service');
+const officialCalculationOrchestrator = require('../services/math-governance/officialCalculationOrchestrator.service');
 const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 const { resolveEffectiveTenant } = require('../utils/effectiveTenant');
 
@@ -191,6 +192,7 @@ grcRouter.get('/official/analytics/catalog', requireTenant, requireCommercialCap
 grcRouter.get('/official/analytics/health-catalog', requireTenant, requireCommercialCapability('metrics.catalog'), route((req) => service.listOfficialHealthCatalog(scope(req))));
 grcRouter.get('/official/analytics/:resultCode', requireTenant, requireCommercialCapability('metrics.catalog'), route((req) => service.getOfficialAnalyticsResult(scope(req), req.params.resultCode, { filters: req.query, period: req.query })));
 grcRouter.post('/official/analytics/:resultCode', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.getOfficialAnalyticsResult(scope(req), req.params.resultCode, req.body)));
+grcRouter.post('/official/recalculate', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => officialCalculationOrchestrator.recalculateOfficialAnalytics(scope(req), req.body, req.requestId)));
 
 grcRouter.get('/official/package4/jobs', requireTenant, requireCommercialCapability('metrics.catalog'), route((req) => service.listOfficialPackage4Jobs(scope(req))));
 grcRouter.post('/official/package4/jobs/:jobKey', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.runOfficialPackage4Job(scope(req), req.params.jobKey, req.body, req.requestId)));
