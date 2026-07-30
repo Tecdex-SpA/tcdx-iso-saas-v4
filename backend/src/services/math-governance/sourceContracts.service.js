@@ -155,7 +155,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     source_code: 'maturity_assessments', entity: 'maturity',
     tables: ['survey_evaluations','metric_measurements'],
     columns: ['tenant_id','score','numeric_value','weight','evaluated_at','measured_at','status','metadata'], required_fields: ['id','tenant_id'],
-    variable_map: { items: 'rows[{level|score|numeric_value,weight}]' },
+    variable_map: { levels: 'rows[{level|score|numeric_value,weight}]' },
     availability: 'available', version: 2,
     limitations: 'Prioriza evaluaciones publicadas y usa mediciones de madurez como fallback; no infiere niveles sin datos.'
   }),
