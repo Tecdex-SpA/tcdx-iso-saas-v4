@@ -52,15 +52,17 @@ assert(sectionBoundary.includes('METRICS_SECTION_ERROR'), 'Los fallos de secció
 assert(sectionBoundary.includes('El resto de la vista continúa operativo'), 'Un fallo parcial no debe reemplazar toda la ruta.');
 
 const roleScenarios = [
-  { role: 'superadmin', platform: true, selectable: true },
-  { role: 'platform_admin', platform: true, selectable: true },
-  { role: 'admin', platform: false, selectable: false },
-  { role: 'viewer', platform: false, selectable: false },
+  { role: 'superadmin', platform: true, selectable: true, tenantSource: 'active-selection' },
+  { role: 'platform_admin', platform: true, selectable: true, tenantSource: 'active-selection' },
+  { role: 'owner', platform: true, selectable: true, tenantSource: 'active-selection' },
+  { role: 'admin', platform: false, selectable: false, tenantSource: 'token' },
+  { role: 'viewer', platform: false, selectable: false, tenantSource: 'token' },
 ];
 const platformRoles = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 for (const scenario of roleScenarios) {
   assert(platformRoles.has(scenario.role) === scenario.platform, `Escenario de rol inconsistente: ${scenario.role}.`);
   assert(scenario.selectable === scenario.platform, `Selector incorrecto para rol ${scenario.role}.`);
+  assert(scenario.tenantSource === (scenario.platform ? 'active-selection' : 'token'), `Fuente de tenant incorrecta para ${scenario.role}.`);
 }
 
 if (!process.exitCode) {
