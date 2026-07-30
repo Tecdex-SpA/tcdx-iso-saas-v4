@@ -106,7 +106,7 @@ function mapFormulaInput(formulaCode, rows) {
   if (formulaCode === 'F5_5_CLOSURE_RATE') return { closed: rows.filter((r) => ['closed','completed'].includes(String(r.status))).length, openAtStart: rows.filter((r) => !['closed','completed'].includes(String(r.status))).length, created: 0 };
   if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((r) => !['closed','completed'].includes(String(r.status))); return { overdueOpen: open.filter((r) => r.due_at && new Date(r.due_at) < new Date()).length, openActions: open.length, items: open.map((r) => ({ overdue: r.due_at && new Date(r.due_at) < new Date() ? 1 : 0, weight: number(r.weight, 1) })) }; }
   if (formulaCode === 'F5_5_GRC_HEALTH') { const values = {}; for (const r of rows) { const raw = r.output_value?.value ?? r.output_value; const value = ratio(raw); if (r.formula_code === 'F5_5_RESIDUAL_RISK') values.risk = value === null ? null : 1 - value; if (r.formula_code === 'F5_5_COMPLIANCE_WEIGHTED') values.compliance = value; if (r.formula_code === 'F5_5_WEIGHTED_PROGRESS') values.actions = value; if (r.formula_code === 'F5_5_EVIDENCE_QUALITY') values.evidence = value; if (r.formula_code === 'F5_5_COMPLETENESS') values.dataTrust = value; } return values; }
-  if (formulaCode === 'F5_5_MATURITY') return { items: rows.map((r) => ({ level: number(r.level), weight: number(r.weight, 1) })).filter((r) => r.level !== null) };
+  if (formulaCode === 'F5_5_MATURITY') return { levels: rows.map((r) => ({ level: number(r.level), weight: number(r.weight, 1) })).filter((r) => r.level !== null) };
   return null;
 }
 
