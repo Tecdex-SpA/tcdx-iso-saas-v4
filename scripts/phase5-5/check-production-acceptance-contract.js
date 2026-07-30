@@ -16,6 +16,7 @@ const analyticsPanel = read('frontend/src/components/math-governance/OfficialAna
 const tenantContext = read('frontend/src/components/math-governance/MetricsTenantContext.tsx');
 const authRoutes = read('backend/src/routes/auth.routes.js');
 const sidebar = read('frontend/src/components/Sidebar.tsx');
+const permissions = read('frontend/src/utils/mvpPermissions.ts');
 const postgresTest = read('scripts/phase5-5/check-50-formulas-snapshot-postgres.js');
 
 assert(orchestrator.includes("SOURCE_DATASET_SNAPSHOT_TYPE = 'source_dataset'"), 'orchestrator must use source_dataset');
@@ -49,8 +50,8 @@ for (const pair of [
 ]) assert(sidebar.includes(pair[0]), `${pair[1]} must govern navigation`);
 assert(sidebar.includes('hasRouteCapability(item.href)'), 'sidebar must filter routes by capabilities');
 
+const roleSources = tenantContext + formulaCatalog + sidebar + permissions;
 for (const role of ['superadmin','platform_admin','admin','viewer']) {
-  const roleSources = tenantContext + formulaCatalog + sidebar;
   assert(roleSources.includes(role), `role contract missing: ${role}`);
 }
 for (const tenant of ['Servicios tecnologicos tecdex SPA','Servicios de Información Credex SPA','Empresa Demo TCDX Compliance']) {
