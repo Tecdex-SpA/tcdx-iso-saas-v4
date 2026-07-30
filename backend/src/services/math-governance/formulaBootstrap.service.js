@@ -1,4 +1,4 @@
- 'use strict';
+'use strict';
 const { FORMULAS } = require('./formulaRegistry.service');
 const { getSourceContract, listSourceContracts } = require('./sourceContracts.service');
 
@@ -60,7 +60,6 @@ async function syncOfficialFormulaRegistry(client, { actorId = null, status = 'p
   return { status: 'OFFICIAL_FORMULA_REGISTRY_SYNCED', formulas: results.length, results };
 }
 
-
 async function syncOfficialSourceContracts(client, { actorId = null } = {}) {
   if (!client || typeof client.query !== 'function') throw new Error('syncOfficialSourceContracts requires a PostgreSQL client');
   const results = [];
@@ -82,7 +81,7 @@ async function syncOfficialSourceContracts(client, { actorId = null } = {}) {
         [contract.source_code, contract.entity, contract.version, JSON.stringify(contract.tables), JSON.stringify(contract.columns), JSON.stringify(contract.joins),
           JSON.stringify(contract.tenant_filter), JSON.stringify(contract.status_filter), JSON.stringify(contract.period), contract.timezone, contract.unit,
           contract.cardinality, JSON.stringify(contract.required_fields), JSON.stringify(contract.exclusions), contract.null_policy, contract.availability,
-          contract.checksum, contract.status, actorId, JSON.stringify({ package: 'phase5_5', adapter: contract.adapter, limitations: contract.limitations })]
+          contract.checksum, contract.status, actorId, JSON.stringify({ package: 'phase5_5', adapter: contract.adapter, variable_map: contract.variable_map, limitations: contract.limitations })]
       );
       results.push({ source_code: contract.source_code, action: 'created', checksum: contract.checksum });
     } else {
