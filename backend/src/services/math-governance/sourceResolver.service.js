@@ -1,4 +1,5 @@
 'use strict';
+
 const crypto = require('crypto');
 const { MathGovernanceError } = require('./statisticalEngine.service');
 const { FORMULA_MAP } = require('./formulaRegistry.service');
@@ -6,129 +7,192 @@ const { validateDataset } = require('./datasetValidation.service');
 const { getSourceCodeForFormula, getSourceContract, listSourceContracts, listFormulaSourceBindings } = require('./sourceContracts.service');
 
 const SOURCE_STATES = new Set(['ready', 'source_unavailable', 'empty_dataset', 'partially_available', 'legacy_adapter_required', 'validated_with_warnings']);
-const FIXED_QUERY_BY_SOURCE = Object.freeze({
-  loss_events_operational: `SELECT le.id, le.tenant_id, le.event_date, le.gross_loss_amount, le.net_loss_amount, le.currency, le.status, COALESCE(SUM(lr.recovery_amount), 0) AS recovery_amount FROM loss_events le LEFT JOIN loss_recoveries lr ON lr.tenant_id = le.tenant_id AND lr.loss_event_id = le.id WHERE le.tenant_id = $1::uuid AND ($2::timestamptz IS NULL OR le.event_date >= $2::timestamptz) AND ($3::timestamptz IS NULL OR le.event_date <= $3::timestamptz) GROUP BY le.id`,
-  continuity_resilience_tests: `SELECT id, tenant_id, tested_at, rto_hours, rpo_hours, actual_recovery_hours, actual_data_loss_hours, result, status FROM grc_continuity_tests WHERE tenant_id = $1::uuid AND ($2::timestamptz IS NULL OR tested_at >= $2::timestamptz) AND ($3::timestamptz IS NULL OR tested_at <= $3::timestamptz)`,
-  supplier_tprm_assessments: `SELECT s.id, s.tenant_id, s.status, s.criticality, a.security_score, a.dependency_score, a.resilience_score, a.privacy_score, a.assessed_at FROM grc_suppliers s LEFT JOIN grc_supplier_assessments a ON a.tenant_id = s.tenant_id AND a.supplier_id = s.id WHERE s.tenant_id = $1::uuid`,
-  survey_response_scoring: `SELECT ri.id, r.tenant_id, r.status, r.submitted_at, ri.question_id, ri.score, ri.max_score, ri.weight FROM survey_responses r JOIN survey_response_items ri ON ri.response_id = r.id WHERE r.tenant_id = $1::uuid AND ($2::timestamptz IS NULL OR r.submitted_at >= $2::timestamptz) AND ($3::timestamptz IS NULL OR r.submitted_at <= $3::timestamptz)`,
-  assurance_test_results: `SELECT r.id, e.tenant_id, e.status, e.executed_at, r.result, r.weight, r.sample_id FROM assurance_test_results r JOIN assurance_test_executions e ON e.id = r.execution_id WHERE e.tenant_id = $1::uuid AND ($2::timestamptz IS NULL OR e.executed_at >= $2::timestamptz) AND ($3::timestamptz IS NULL OR e.executed_at <= $3::timestamptz)`,
-  data_quality_observations: `SELECT id, tenant_id, assessed_at, rule_type, expected_count, valid_count, invalid_count, coverage, status FROM data_quality_assessments WHERE tenant_id = $1::uuid AND ($2::timestamptz IS NULL OR assessed_at >= $2::timestamptz) AND ($3::timestamptz IS NULL OR assessed_at <= $3::timestamptz)`,
-  data_lineage_observations: `SELECT id, tenant_id, source_entity_type, source_entity_id, target_entity_type, target_entity_id, relation_type, created_at FROM data_lineage_edges WHERE tenant_id = $1::uuid`,
-  statistical_metric_measurements: `SELECT id, tenant_id, metric_id, numeric_value, measured_at, unit, dimension_values, status FROM metric_measurements WHERE tenant_id = $1::uuid AND ($2::timestamptz IS NULL OR measured_at >= $2::timestamptz) AND ($3::timestamptz IS NULL OR measured_at <= $3::timestamptz)`,
-  asset_inventory_security: `SELECT id, tenant_id, name, classification, owner_user_id, metadata, status, created_at FROM data_elements WHERE tenant_id = $1::uuid AND ($2::timestamptz IS NULL OR created_at >= $2::timestamptz) AND ($3::timestamptz IS NULL OR created_at <= $3::timestamptz)`,
-});
+const SAFE_IDENTIFIER = /^[a-z_][a-z0-9_]*$/i;
 
 function hash(value) { return crypto.createHash('sha256').update(JSON.stringify(value, Object.keys(value).sort())).digest('hex'); }
-function number(value, fallback = null) { const n = Number(value); return Number.isFinite(n) ? n : fallback; }
+function number(value, fallback = null) { if (value === '' || value === null || value === undefined) return fallback; const n = Number(value); return Number.isFinite(n) ? n : fallback; }
 function ratio(value) { const n = number(value); return n === null ? null : Math.max(0, Math.min(1, n > 1 ? n / 100 : n)); }
-function buildSourceContract({ sourceKey, entityType, requiredFields = [], tenantScoped = true, status = 'source_unavailable', unit = null } = {}) { if (!sourceKey || !entityType) throw new MathGovernanceError('SOURCE_CONTRACT_INVALID', 'sourceKey y entityType son obligatorios.'); if (!SOURCE_STATES.has(status) && status !== 'available') throw new MathGovernanceError('SOURCE_STATUS_INVALID', 'Estado de fuente invalido.'); return Object.freeze({ sourceKey, entityType, requiredFields, tenantScoped, status, unit, lineageRequired: true }); }
-function sourceUnavailable(sourceKey, reason = 'Operational source is not available for this formula.') { return Object.freeze({ sourceKey, source_code: sourceKey, status: 'source_unavailable', rows: [], reason, warnings: [reason], inputHash: null, source_snapshot: null, lineage: [], formula_input: null }); }
+function average(values) { const usable = values.map((value) => number(value)).filter((value) => value !== null); return usable.length ? usable.reduce((sum, value) => sum + value, 0) / usable.length : null; }
+function sum(values) { const usable = values.map((value) => number(value)).filter((value) => value !== null); return usable.length ? usable.reduce((total, value) => total + value, 0) : null; }
+function buildSourceContract({ sourceKey, entityType, requiredFields = [], tenantScoped = true, status = 'source_unavailable', unit = null } = {}) { if (!sourceKey || !entityType) throw new MathGovernanceError('SOURCE_CONTRACT_INVALID', 'sourceKey y entityType son obligatorios.'); if (!SOURCE_STATES.has(status) && status !== 'available') throw new MathGovernanceError('SOURCE_STATUS_INVALID', 'Estado de fuente inválido.'); return Object.freeze({ sourceKey, entityType, requiredFields, tenantScoped, status, unit, lineageRequired: true }); }
+function sourceUnavailable(sourceKey, reason = 'La fuente operacional no está disponible para esta fórmula.') { return Object.freeze({ sourceKey, source_code: sourceKey, status: 'source_unavailable', rows: [], reason, warnings: [reason], inputHash: null, source_snapshot: null, lineage: [], formula_input: null, counts: { received: 0, usable: 0, excluded: 0 } }); }
 async function tableExists(client, tableName) { if (!client || typeof client.query !== 'function') return false; const result = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [`public.${tableName}`]); return result.rows[0]?.exists === true; }
-async function allTablesExist(client, tables) { for (const table of tables) if (!(await tableExists(client, table))) return false; return true; }
+async function allTablesExist(client, tables) { for (const table of tables || []) if (!(await tableExists(client, table))) return false; return true; }
 function assertTenant(tenantId) { if (!tenantId) throw new MathGovernanceError('SOURCE_TENANT_REQUIRED', 'Resolver de fuentes requiere tenant efectivo.'); }
-function assertPermission(permission) { if (permission && permission.allowed === false) throw new MathGovernanceError('SOURCE_PERMISSION_DENIED', 'Permiso insuficiente para resolver dataset matematico.', { required: permission.required }); }
-function normalizeRows(rows, contract) { return rows.map((row) => { const normalized = {}; for (const [key, value] of Object.entries(row)) normalized[key] = typeof value === 'string' ? value.trim() : value; normalized.__source_code = contract.source_code; return normalized; }); }
-function buildLineage({ rows, contract, formula, runId = null, snapshotHash = null }) { return rows.slice(0, 1000).map((row) => ({ source_record: row.id || row.source_entity_id || null, physical_source: row.__physical_source || null, source_contract: contract.source_code, dataset_snapshot: snapshotHash, formula_version: `${formula.formula_code}@${formula.version}`, calculation_run: runId })); }
+function assertPermission(permission) { if (permission && permission.allowed === false) throw new MathGovernanceError('SOURCE_PERMISSION_DENIED', 'Permiso insuficiente para resolver dataset matemático.', { required: permission.required }); }
 function periodArgs(tenantId, period = {}) { return [tenantId, period.start || null, period.end || null]; }
 function tagRows(rows, physicalSource) { return (rows || []).map((row) => ({ ...row, __physical_source: physicalSource })); }
-async function firstPopulated(client, candidates) {
+function normalizeRows(rows, contract) { return rows.map((row) => { const normalized = {}; for (const [key, value] of Object.entries(row)) normalized[key] = typeof value === 'string' ? value.trim() : value; normalized.__source_code = contract.source_code; return normalized; }); }
+function buildLineage({ rows, contract, formula, runId = null, snapshotHash = null }) { return rows.slice(0, 1000).map((row) => ({ source_record: row.id || row.source_entity_id || null, physical_source: row.__physical_source || null, source_contract: contract.source_code, dataset_snapshot: snapshotHash, formula_version: `${formula.formula_code}@${formula.version}`, calculation_run: runId })); }
+
+function jsonValue(payload, keys) {
+  for (const key of keys) {
+    const value = payload?.[key];
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return null;
+}
+
+function normalizePayload(payload, table) {
+  const occurredAt = jsonValue(payload, ['event_date', 'occurred_at', 'detected_at', 'reported_at', 'assessed_at', 'measured_at', 'tested_at', 'executed_at', 'submitted_at', 'updated_at', 'created_at']);
+  const status = String(jsonValue(payload, ['status', 'assessment_status', 'compliance_status', 'result']) || 'pending').toLowerCase();
+  return {
+    ...payload,
+    id: jsonValue(payload, ['id', 'risk_id', 'control_id', 'metric_id']),
+    tenant_id: jsonValue(payload, ['tenant_id', 'tenantId']),
+    status,
+    event_date: occurredAt,
+    assessed_at: occurredAt,
+    measured_at: occurredAt,
+    probability: number(jsonValue(payload, ['probability', 'likelihood', 'probability_score', 'frequency'])),
+    impact: number(jsonValue(payload, ['impact', 'severity_score', 'impact_score', 'severity'])),
+    exposure: number(jsonValue(payload, ['exposure', 'inherent_score', 'risk_score'])),
+    control_effectiveness: number(jsonValue(payload, ['control_effectiveness', 'control_score', 'effectiveness_score'])),
+    score: number(jsonValue(payload, ['score', 'numeric_value', 'value', 'health_score', 'overall_score', 'compliance_score'])),
+    weight: number(jsonValue(payload, ['weight']), 1),
+    progress: number(jsonValue(payload, ['progress', 'progress_ratio', 'completion_percentage'])),
+    opened_at: jsonValue(payload, ['opened_at', 'created_at']),
+    closed_at: jsonValue(payload, ['closed_at', 'completed_at']),
+    due_at: jsonValue(payload, ['due_at', 'due_date', 'target_date']),
+    gross_loss_amount: number(jsonValue(payload, ['gross_loss_amount', 'gross_amount', 'loss_amount', 'amount'])),
+    net_loss_amount: number(jsonValue(payload, ['net_loss_amount', 'net_amount'])),
+    recovery_amount: number(jsonValue(payload, ['recovery_amount', 'recovered_amount']), 0),
+    expected_count: number(jsonValue(payload, ['expected_count', 'expected', 'total_count'])),
+    valid_count: number(jsonValue(payload, ['valid_count', 'valid', 'correct_count'])),
+    invalid_count: number(jsonValue(payload, ['invalid_count', 'invalid', 'contradictory_count'])),
+    max_score: number(jsonValue(payload, ['max_score', 'maximum_score'])),
+    dimension: jsonValue(payload, ['dimension', 'category', 'domain']),
+    owner_user_id: jsonValue(payload, ['owner_user_id', 'owner_id', 'responsible_user_id']),
+    __physical_source: table,
+  };
+}
+
+async function rawRows(client, table, tenantId, period = {}) {
+  if (!SAFE_IDENTIFIER.test(table)) throw new MathGovernanceError('SOURCE_SCHEMA_INCOMPATIBLE', 'Nombre de tabla operacional inválido.');
+  if (!(await tableExists(client, table))) return null;
+  const result = await client.query(`SELECT to_jsonb(x) AS payload FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')=$1`, [String(tenantId)]);
+  return (result.rows || []).map((row) => normalizePayload(row.payload || {}, table)).filter((row) => {
+    if (!period.start && !period.end) return true;
+    if (!row.event_date) return true;
+    const date = new Date(row.event_date).getTime();
+    if (!Number.isFinite(date)) return true;
+    if (period.start && date < new Date(period.start).getTime()) return false;
+    if (period.end && date > new Date(period.end).getTime()) return false;
+    return true;
+  });
+}
+
+async function firstPopulatedTables(client, tables, tenantId, period = {}) {
   let available = false;
-  for (const candidate of candidates) {
-    if (!(await tableExists(client, candidate.table))) continue;
+  for (const table of tables || []) {
+    const rows = await rawRows(client, table, tenantId, period);
+    if (rows === null) continue;
     available = true;
-    const result = await client.query(candidate.sql, candidate.params || []);
-    if (result.rows?.length) return tagRows(result.rows, candidate.table);
+    if (rows.length) return rows;
   }
   return available ? [] : null;
 }
 
-async function queryCompliance(client, tenantId, period) {
-  const candidates = [];
-  if (await allTablesExist(client, ['grc_framework_requirements','grc_requirement_control_mappings'])) candidates.push({ table: 'grc_requirement_control_mappings', params: periodArgs(tenantId, period), sql: `
-    SELECT m.id, COALESCE(m.tenant_id, r.tenant_id) AS tenant_id, m.requirement_id, m.tenant_control_id,
-      CASE WHEN m.mapping_type='not_equivalent' THEN 'not_applicable' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level,0)>=80 THEN 'conform' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level,0)>0 THEN 'partial' WHEN m.status='rejected' THEN 'non_conform' ELSE 'pending' END AS status,
-      (m.mapping_type <> 'not_equivalent') AS applicability, 1::numeric AS weight,
-      COALESCE(m.updated_at,m.created_at) AS assessed_at, a.score AS assurance_score
-    FROM grc_requirement_control_mappings m JOIN grc_framework_requirements r ON r.id=m.requirement_id
-    LEFT JOIN grc_control_assurance a ON a.tenant_id=COALESCE(m.tenant_id,r.tenant_id) AND a.tenant_control_id=m.tenant_control_id
-    WHERE COALESCE(m.tenant_id,r.tenant_id)=$1::uuid AND ($2::timestamptz IS NULL OR COALESCE(m.updated_at,m.created_at)>=$2) AND ($3::timestamptz IS NULL OR COALESCE(m.updated_at,m.created_at)<=$3)` });
-  candidates.push({ table: 'control_soa_assessments', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'control_id','')::uuid,NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS requirement_id,COALESCE(NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,NULLIF(to_jsonb(x)->>'control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('compliant','conform','effective','implemented','approved') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('not_applicable','na') THEN 'not_applicable' ELSE 'pending' END AS status,lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) NOT IN ('not_applicable','na') AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,COALESCE(NULLIF(to_jsonb(x)->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(x)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(x)->>'created_at','')::timestamptz) AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'compliance_score','')::numeric) AS assurance_score FROM control_soa_assessments x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` });
-  candidates.push({ table: 'tenant_controls', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,(to_jsonb(x)->>'id')::uuid AS requirement_id,(to_jsonb(x)->>'id')::uuid AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('compliant','conform','effective','implemented','approved','active') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('not_applicable','na') THEN 'not_applicable' ELSE 'pending' END AS status,COALESCE(NULLIF(to_jsonb(x)->>'is_applicable','')::boolean,true) AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,COALESCE(NULLIF(to_jsonb(x)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(x)->>'created_at','')::timestamptz) AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'effectiveness_score','')::numeric) AS assurance_score FROM tenant_controls x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` });
-  return firstPopulated(client, candidates);
-}
-async function queryReadiness(client, tenantId, period) {
-  if (!(await allTablesExist(client, ['grc_readiness_snapshots','grc_readiness_results']))) return null;
-  const rows = (await client.query(`SELECT rr.id, rr.tenant_id, rr.snapshot_id, rr.dimension, rr.score, rr.weight, rr.source_as_of, 'evaluated'::text AS status FROM grc_readiness_results rr JOIN grc_readiness_snapshots rs ON rs.id=rr.snapshot_id AND rs.tenant_id=rr.tenant_id WHERE rr.tenant_id=$1::uuid AND ($2::timestamptz IS NULL OR rr.source_as_of >= $2) AND ($3::timestamptz IS NULL OR rr.source_as_of <= $3) AND rr.snapshot_id=(SELECT id FROM grc_readiness_snapshots WHERE tenant_id=$1::uuid ORDER BY generated_at DESC LIMIT 1)`, periodArgs(tenantId, period))).rows;
-  return tagRows(rows, 'grc_readiness_results');
-}
-async function queryRisk(client, tenantId, period) {
-  const candidates = ['grc_quantitative_risk_assessments','iso_risk_matrix_items','asset_risks','privacy_dpia_risks'].map((table) => ({ table, params: periodArgs(tenantId, period), sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'risk_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS risk_id,COALESCE(NULLIF(to_jsonb(x)->>'probability','')::numeric,NULLIF(to_jsonb(x)->>'likelihood','')::numeric,NULLIF(to_jsonb(x)->>'probability_score','')::numeric) AS probability,COALESCE(NULLIF(to_jsonb(x)->>'impact','')::numeric,NULLIF(to_jsonb(x)->>'severity','')::numeric,NULLIF(to_jsonb(x)->>'impact_score','')::numeric) AS impact,COALESCE(NULLIF(to_jsonb(x)->>'exposure','')::numeric,NULLIF(to_jsonb(x)->>'inherent_score','')::numeric,NULLIF(to_jsonb(x)->>'risk_score','')::numeric) AS exposure,NULLIF(to_jsonb(x)->>'occurrence','')::numeric AS occurrence,NULLIF(to_jsonb(x)->>'detection','')::numeric AS detection,COALESCE(NULLIF(to_jsonb(x)->>'control_effectiveness','')::numeric,NULLIF(to_jsonb(x)->>'control_score','')::numeric) AS control_effectiveness,COALESCE(to_jsonb(x)->>'status','evaluated') AS status,COALESCE(NULLIF(to_jsonb(x)->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(x)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(x)->>'created_at','')::timestamptz) AS assessed_at FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid AND ($2::timestamptz IS NULL OR COALESCE(NULLIF(to_jsonb(x)->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(x)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(x)->>'created_at','')::timestamptz)>=$2) AND ($3::timestamptz IS NULL OR COALESCE(NULLIF(to_jsonb(x)->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(x)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(x)->>'created_at','')::timestamptz)<=$3) ORDER BY COALESCE(NULLIF(to_jsonb(x)->>'exposure','')::numeric,NULLIF(to_jsonb(x)->>'inherent_score','')::numeric,NULLIF(to_jsonb(x)->>'risk_score','')::numeric,0) DESC` }));
-  return firstPopulated(client, candidates);
-}
-async function queryControls(client, tenantId, period) {
-  const candidates = [
-    { table: 'grc_control_assurance', params: periodArgs(tenantId, period), sql: `SELECT id,tenant_id,tenant_control_id AS control_id,score,score/100.0 AS design_score,score/100.0 AS implementation_score,score/100.0 AS operation_score,score/100.0 AS evidence_score,assurance_status AS status,calculated_at FROM grc_control_assurance WHERE tenant_id=$1::uuid AND ($2::timestamptz IS NULL OR calculated_at >= $2) AND ($3::timestamptz IS NULL OR calculated_at <= $3)` },
-    { table: 'control_soa_assessments', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,NULLIF(to_jsonb(x)->>'control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS control_id,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'effectiveness_score','')::numeric,NULLIF(to_jsonb(x)->>'health_score','')::numeric) AS score,COALESCE(NULLIF(to_jsonb(x)->>'design_score','')::numeric,NULLIF(to_jsonb(x)->>'score','')::numeric,0)/100.0 AS design_score,COALESCE(NULLIF(to_jsonb(x)->>'implementation_score','')::numeric,NULLIF(to_jsonb(x)->>'score','')::numeric,0)/100.0 AS implementation_score,COALESCE(NULLIF(to_jsonb(x)->>'operation_score','')::numeric,NULLIF(to_jsonb(x)->>'operating_score','')::numeric,NULLIF(to_jsonb(x)->>'score','')::numeric,0)/100.0 AS operation_score,COALESCE(NULLIF(to_jsonb(x)->>'evidence_score','')::numeric,NULLIF(to_jsonb(x)->>'score','')::numeric,0)/100.0 AS evidence_score,COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','evaluated') AS status,COALESCE(NULLIF(to_jsonb(x)->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(x)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(x)->>'created_at','')::timestamptz) AS calculated_at FROM control_soa_assessments x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
-    { table: 'control_health_scores', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,NULLIF(to_jsonb(x)->>'control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS control_id,COALESCE(NULLIF(to_jsonb(x)->>'health_score','')::numeric,NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'overall_score','')::numeric) AS score,COALESCE(NULLIF(to_jsonb(x)->>'design_score','')::numeric,NULLIF(to_jsonb(x)->>'health_score','')::numeric,0)/100.0 AS design_score,COALESCE(NULLIF(to_jsonb(x)->>'implementation_score','')::numeric,NULLIF(to_jsonb(x)->>'health_score','')::numeric,0)/100.0 AS implementation_score,COALESCE(NULLIF(to_jsonb(x)->>'operation_score','')::numeric,NULLIF(to_jsonb(x)->>'health_score','')::numeric,0)/100.0 AS operation_score,COALESCE(NULLIF(to_jsonb(x)->>'evidence_score','')::numeric,NULLIF(to_jsonb(x)->>'health_score','')::numeric,0)/100.0 AS evidence_score,COALESCE(to_jsonb(x)->>'status','evaluated') AS status,COALESCE(NULLIF(to_jsonb(x)->>'calculated_at','')::timestamptz,NULLIF(to_jsonb(x)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(x)->>'created_at','')::timestamptz) AS calculated_at FROM control_health_scores x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
-  ];
-  return firstPopulated(client, candidates);
-}
-async function queryAuditActions(client, tenantId) {
-  const rows = [];
-  if (await tableExists(client, 'grc_readiness_findings')) rows.push(...tagRows((await client.query(`SELECT f.id,f.tenant_id,f.severity,'open'::text AS status,NULL::timestamptz AS opened_at,NULL::timestamptz AS closed_at,NULL::timestamptz AS due_at,0::numeric AS progress,1::numeric AS weight FROM grc_readiness_findings f WHERE f.tenant_id=$1::uuid`, [tenantId])).rows, 'grc_readiness_findings'));
-  if (await tableExists(client, 'action_plans')) rows.push(...tagRows((await client.query(`SELECT (to_jsonb(a)->>'id')::uuid AS id,(to_jsonb(a)->>'tenant_id')::uuid AS tenant_id,COALESCE(to_jsonb(a)->>'severity','medium') AS severity,COALESCE(to_jsonb(a)->>'status','open') AS status,COALESCE(NULLIF(to_jsonb(a)->>'opened_at','')::timestamptz,NULLIF(to_jsonb(a)->>'created_at','')::timestamptz) AS opened_at,COALESCE(NULLIF(to_jsonb(a)->>'closed_at','')::timestamptz,NULLIF(to_jsonb(a)->>'completed_at','')::timestamptz) AS closed_at,NULLIF(COALESCE(to_jsonb(a)->>'due_at',to_jsonb(a)->>'due_date'),'')::timestamptz AS due_at,COALESCE(NULLIF(to_jsonb(a)->>'progress','')::numeric,NULLIF(to_jsonb(a)->>'progress_ratio','')::numeric,0) AS progress,COALESCE(NULLIF(to_jsonb(a)->>'weight','')::numeric,1) AS weight FROM action_plans a WHERE (to_jsonb(a)->>'tenant_id')::uuid=$1::uuid`, [tenantId])).rows, 'action_plans'));
-  return rows.length ? rows : null;
-}
+async function queryCompliance(client, tenantId, period) { return firstPopulatedTables(client, ['grc_requirement_control_mappings', 'control_soa_assessments', 'tenant_controls'], tenantId, period); }
+async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period); }
+async function queryRisk(client, tenantId, period) { return firstPopulatedTables(client, ['grc_quantitative_risk_assessments', 'iso_risk_matrix_items', 'asset_risks', 'privacy_dpia_risks'], tenantId, period); }
+async function queryControls(client, tenantId, period) { return firstPopulatedTables(client, ['grc_control_assurance', 'control_soa_assessments', 'control_health_scores', 'tenant_controls'], tenantId, period); }
+async function queryAuditActions(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_findings', 'findings', 'action_plans'], tenantId, period); }
+async function queryMaturity(client, tenantId, period) { return firstPopulatedTables(client, ['survey_evaluations', 'metric_measurements', 'grc_metric_measurements'], tenantId, period); }
+
 async function queryHealth(client, tenantId, period) {
-  if (!(await allTablesExist(client, ['calculation_runs','calculation_outputs']))) return null;
+  if (!(await allTablesExist(client, ['calculation_runs', 'calculation_outputs']))) return null;
   const rows = (await client.query(`SELECT DISTINCT ON (cr.formula_code) cr.id,cr.tenant_id,cr.formula_code,cr.run_status AS status,cr.period_start,cr.period_end,co.output_value,co.unit FROM calculation_runs cr JOIN calculation_outputs co ON co.run_id=cr.id AND co.tenant_id=cr.tenant_id WHERE cr.tenant_id=$1::uuid AND cr.run_status='calculated' AND cr.formula_code IN ('F5_5_RESIDUAL_RISK','F5_5_COMPLIANCE_WEIGHTED','F5_5_WEIGHTED_PROGRESS','F5_5_EVIDENCE_QUALITY','F5_5_COMPLETENESS') AND ($2::timestamptz IS NULL OR cr.period_end IS NULL OR cr.period_end >= $2) AND ($3::timestamptz IS NULL OR cr.period_start IS NULL OR cr.period_start <= $3) ORDER BY cr.formula_code,cr.completed_at DESC NULLS LAST,cr.started_at DESC`, periodArgs(tenantId, period))).rows;
   return tagRows(rows, 'calculation_runs');
 }
-async function queryMaturity(client, tenantId) {
-  const candidates = ['survey_evaluations','metric_measurements','grc_metric_measurements'].map((table) => ({ table, params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'level','')::numeric,NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'numeric_value','')::numeric,NULLIF(to_jsonb(x)->>'value','')::numeric) AS level,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,COALESCE(NULLIF(to_jsonb(x)->>'evaluated_at','')::timestamptz,NULLIF(to_jsonb(x)->>'measured_at','')::timestamptz,NULLIF(to_jsonb(x)->>'created_at','')::timestamptz) AS evaluated_at,COALESCE(to_jsonb(x)->>'status','evaluated') AS status FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` }));
-  return firstPopulated(client, candidates);
-}
-const ADAPTER_BY_SOURCE = Object.freeze({ compliance_requirements_assessments: queryCompliance, grc_readiness_operational_snapshot: queryReadiness, risk_register_controls: queryRisk, control_assurance_evidence: queryControls, audit_findings_actions: queryAuditActions, grc_health_components: queryHealth, maturity_assessments: queryMaturity });
+
+const ADAPTER_BY_SOURCE = Object.freeze({
+  compliance_requirements_assessments: queryCompliance,
+  grc_readiness_operational_snapshot: queryReadiness,
+  risk_register_controls: queryRisk,
+  control_assurance_evidence: queryControls,
+  audit_findings_actions: queryAuditActions,
+  grc_health_components: queryHealth,
+  maturity_assessments: queryMaturity,
+});
 
 async function queryOperationalRows({ client, contract, tenantId, period = {} }) {
   const adapter = ADAPTER_BY_SOURCE[contract.source_code];
-  if (adapter) { const rows = await adapter(client, tenantId, period); return rows === null ? { rows: [], unavailable: true, reason: `Operational tables are not present for ${contract.source_code}.` } : { rows, unavailable: false, reason: null }; }
-  const fixedQuery = FIXED_QUERY_BY_SOURCE[contract.source_code];
-  if (!fixedQuery) return { rows: [], unavailable: true, reason: `No fixed adapter query registered for ${contract.source_code}.` };
-  const ready = await allTablesExist(client, contract.tables);
-  if (!ready) return { rows: [], unavailable: true, reason: `One or more source tables are not present for ${contract.source_code}.` };
-  const result = await client.query(fixedQuery, periodArgs(tenantId, period));
-  return { rows: tagRows(result.rows || [], contract.tables?.[0] || contract.source_code), unavailable: false, reason: null };
+  if (adapter) {
+    const rows = await adapter(client, tenantId, period);
+    return rows === null ? { rows: [], unavailable: true, reason: `No existen tablas operacionales para ${contract.source_code}.` } : { rows, unavailable: false, reason: null };
+  }
+  const rows = await firstPopulatedTables(client, contract.tables || [], tenantId, period);
+  return rows === null ? { rows: [], unavailable: true, reason: `No existen tablas operacionales para ${contract.source_code}.` } : { rows, unavailable: false, reason: null };
 }
 
 function mapFormulaInput(formulaCode, rows) {
   const first = rows[0] || {};
-  if (formulaCode === 'F5_5_COMPLIANCE_WEIGHTED') return { assessments: rows.map((r) => ({ status: r.status, weight: number(r.weight, 1), notApplicable: r.applicability === false })) };
-  if (formulaCode === 'F5_5_COVERAGE') return { evaluated: rows.filter((r) => !['pending','not_evaluated'].includes(String(r.status))).length, applicable: rows.filter((r) => r.applicability !== false).length };
-  if (formulaCode === 'F5_5_READINESS') { const by = Object.fromEntries(rows.map((r) => [String(r.dimension).toLowerCase(), ratio(r.score)])); return { compliance: by.compliance, evidence: by.evidence, health: by.health, actions: by.actions }; }
+  const statuses = rows.map((row) => String(row.status || '').toLowerCase());
+  const usableScores = rows.map((row) => number(row.score)).filter((value) => value !== null);
+  const dates = rows.map((row) => row.event_date || row.measured_at || row.assessed_at).filter(Boolean);
+
+  if (formulaCode === 'F5_5_COMPLIANCE_WEIGHTED') return { assessments: rows.map((row) => ({ status: row.status, weight: number(row.weight, 1), notApplicable: ['not_applicable', 'na'].includes(String(row.status)) })) };
+  if (formulaCode === 'F5_5_COVERAGE') return { evaluated: statuses.filter((status) => !['pending', 'not_evaluated', 'draft', ''].includes(status)).length, applicable: statuses.filter((status) => !['not_applicable', 'na'].includes(status)).length };
+  if (formulaCode === 'F5_5_READINESS') { const by = Object.fromEntries(rows.map((row) => [String(row.dimension || '').toLowerCase(), ratio(row.score)])); return { compliance: by.compliance, evidence: by.evidence, health: by.health, actions: by.actions }; }
   if (formulaCode === 'F5_5_INHERENT_RISK') return { probability: number(first.probability), impact: number(first.impact) };
-  if (formulaCode === 'F5_5_RESIDUAL_RISK') return { inherentRisk: number(first.exposure, number(first.probability, 0) * number(first.impact, 0)), controlEffectiveness: ratio(first.control_effectiveness ?? first.assurance_score ?? 0) };
-  if (formulaCode === 'F5_5_FMEA_RPN') return { severity: number(first.impact ?? first.severity), occurrence: number(first.occurrence ?? first.probability), detection: number(first.detection) };
-  if (formulaCode === 'F5_5_COMBINED_EFFECTIVENESS') return { effectivenesses: rows.map((r) => ratio(r.score)).filter((v) => v !== null) };
-  if (formulaCode === 'F5_5_CONTROL_EFFECTIVENESS') return { design: ratio(first.design_score), implementation: ratio(first.implementation_score), operation: ratio(first.operation_score), evidence: ratio(first.evidence_score) };
-  if (formulaCode === 'F5_5_CONTROL_COVERAGE') return { risksWithControl: rows.filter((r) => number(r.score, 0) > 0).length, relevantRisks: rows.length };
-  if (formulaCode === 'F5_5_FREQUENCY_COMPLIANCE') return { onTimeExecutions: rows.filter((r) => ['effective','completed','on_time'].includes(String(r.status))).length, scheduledExecutions: rows.length };
-  if (formulaCode === 'F5_5_SEVERITY_INDEX') return { low: rows.filter((r) => r.severity === 'low').length, medium: rows.filter((r) => r.severity === 'medium').length, high: rows.filter((r) => r.severity === 'high').length, critical: rows.filter((r) => r.severity === 'critical').length };
-  if (['F5_5_MTTC','F5_5_AGE','F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((r) => ({ openedAt: r.opened_at, closedAt: r.closed_at, createdAt: r.opened_at, progress: number(r.progress, 0), weight: number(r.weight, 1) })), now: new Date().toISOString() };
-  if (formulaCode === 'F5_5_CLOSURE_RATE') return { closed: rows.filter((r) => ['closed','completed'].includes(String(r.status))).length, openAtStart: rows.filter((r) => !['closed','completed'].includes(String(r.status))).length, created: 0 };
-  if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((r) => !['closed','completed'].includes(String(r.status))); return { overdueOpen: open.filter((r) => r.due_at && new Date(r.due_at) < new Date()).length, openActions: open.length, items: open.map((r) => ({ overdue: r.due_at && new Date(r.due_at) < new Date() ? 1 : 0, weight: number(r.weight, 1) })) }; }
-  if (formulaCode === 'F5_5_GRC_HEALTH') { const values = {}; for (const r of rows) { const raw = r.output_value?.value ?? r.output_value; const value = ratio(raw); if (r.formula_code === 'F5_5_RESIDUAL_RISK') values.risk = value === null ? null : 1 - value; if (r.formula_code === 'F5_5_COMPLIANCE_WEIGHTED') values.compliance = value; if (r.formula_code === 'F5_5_WEIGHTED_PROGRESS') values.actions = value; if (r.formula_code === 'F5_5_EVIDENCE_QUALITY') values.evidence = value; if (r.formula_code === 'F5_5_COMPLETENESS') values.dataTrust = value; } return values; }
-  if (formulaCode === 'F5_5_MATURITY') return { levels: rows.map((r) => ({ level: number(r.level), weight: number(r.weight, 1) })).filter((r) => r.level !== null) };
+  if (formulaCode === 'F5_5_RESIDUAL_RISK') { const inherent = number(first.exposure); const probability = number(first.probability); const impact = number(first.impact); return { inherentRisk: inherent ?? (probability !== null && impact !== null ? probability * impact : null), controlEffectiveness: ratio(first.control_effectiveness) }; }
+  if (formulaCode === 'F5_5_FMEA_RPN') return { severity: number(first.impact), occurrence: number(first.occurrence ?? first.probability), detection: number(first.detection) };
+  if (formulaCode === 'F5_5_COMBINED_EFFECTIVENESS') return { effectivenesses: usableScores.map(ratio).filter((value) => value !== null) };
+  if (formulaCode === 'F5_5_CONTROL_EFFECTIVENESS') return { design: ratio(first.design_score ?? first.score), implementation: ratio(first.implementation_score ?? first.score), operation: ratio(first.operation_score ?? first.score), evidence: ratio(first.evidence_score ?? first.score) };
+  if (formulaCode === 'F5_5_CONTROL_COVERAGE') return { risksWithControl: rows.filter((row) => number(row.score) !== null || number(row.control_effectiveness) !== null).length, relevantRisks: rows.length };
+  if (formulaCode === 'F5_5_FREQUENCY_COMPLIANCE') return { onTimeExecutions: statuses.filter((status) => ['effective', 'completed', 'on_time', 'compliant'].includes(status)).length, scheduledExecutions: rows.length };
+  if (formulaCode === 'F5_5_FAILURE_RATE') return { failedTests: statuses.filter((status) => ['fail', 'failed', 'non_compliant'].includes(status)).length, executedTests: rows.length };
+  if (formulaCode === 'F5_5_SEVERITY_INDEX') return { low: statuses.filter((status) => status === 'low').length, medium: statuses.filter((status) => status === 'medium').length, high: statuses.filter((status) => status === 'high').length, critical: statuses.filter((status) => status === 'critical').length };
+  if (['F5_5_MTTC', 'F5_5_AGE', 'F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((row) => ({ openedAt: row.opened_at, closedAt: row.closed_at, createdAt: row.opened_at, progress: number(row.progress), weight: number(row.weight, 1) })).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
+  if (formulaCode === 'F5_5_CLOSURE_RATE') return { closed: statuses.filter((status) => ['closed', 'completed', 'resolved'].includes(status)).length, openAtStart: statuses.filter((status) => !['closed', 'completed', 'resolved'].includes(status)).length, created: 0 };
+  if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((row) => !['closed', 'completed', 'resolved'].includes(String(row.status))); return { overdueOpen: open.filter((row) => row.due_at && new Date(row.due_at) < new Date()).length, openActions: open.length, items: open.map((row) => ({ overdue: row.due_at && new Date(row.due_at) < new Date() ? 1 : 0, weight: number(row.weight, 1) })) }; }
+  if (formulaCode === 'F5_5_EXPECTED_LOSS') return { probability: number(first.probability), impact: number(first.impact ?? first.gross_loss_amount) };
+  if (formulaCode === 'F5_5_NET_LOSS') return { grossLoss: sum(rows.map((row) => row.gross_loss_amount)), recoveries: sum(rows.map((row) => row.recovery_amount)) };
+  if (formulaCode === 'F5_5_LOSS_SEVERITY') return { netLosses: rows.map((row) => number(row.net_loss_amount, number(row.gross_loss_amount) !== null ? number(row.gross_loss_amount) - number(row.recovery_amount, 0) : null)).filter((value) => value !== null) };
+  if (formulaCode === 'F5_5_PARAMETRIC_VAR') { const losses = rows.map((row) => number(row.net_loss_amount ?? row.gross_loss_amount)).filter((value) => value !== null); const mean = average(losses); const variance = mean === null || losses.length < 2 ? null : losses.reduce((total, value) => total + ((value - mean) ** 2), 0) / (losses.length - 1); return { mean, z: 1.65, sigma: variance === null ? null : Math.sqrt(variance) }; }
+  if (formulaCode === 'F5_5_MONTE_CARLO') { const losses = rows.map((row) => number(row.net_loss_amount ?? row.gross_loss_amount)).filter((value) => value !== null); return losses.length ? { iterations: 1000, seed: 42, frequency: { type: 'poisson', lambda: Math.max(0.01, losses.length / 12) }, severity: { type: 'fixed', value: average(losses) }, threshold: Math.max(...losses) } : null; }
+  if (formulaCode === 'F5_5_AVAILABILITY') return { totalTime: number(first.total_time ?? first.totalTime), downtime: number(first.downtime ?? first.downtime_hours), mtbf: number(first.mtbf), mttr: number(first.mttr) };
+  if (formulaCode === 'F5_5_MTBF') return { operatingTime: number(first.operating_time ?? first.total_time), failures: number(first.failures ?? rows.filter((row) => ['failed', 'failure'].includes(String(row.status))).length) };
+  if (formulaCode === 'F5_5_MTTR') return { repairTimes: rows.map((row) => number(row.repair_time ?? row.actual_recovery_hours)).filter((value) => value !== null) };
+  if (formulaCode === 'F5_5_SLA_COMPLIANCE') return { withinSla: rows.filter((row) => ['pass', 'compliant', 'within_sla', 'completed'].includes(String(row.status))).length, applicableCases: rows.length };
+  if (formulaCode === 'F5_5_RTO_GAP') return { recoveryActual: number(first.actual_recovery_hours ?? first.recovery_actual), rtoObjective: number(first.rto_hours ?? first.rto_objective) };
+  if (formulaCode === 'F5_5_RPO_GAP') return { dataLossActual: number(first.actual_data_loss_hours ?? first.data_loss_actual), rpoObjective: number(first.rpo_hours ?? first.rpo_objective) };
+  if (formulaCode === 'F5_5_ASSET_CRITICALITY') return { confidentiality: number(first.confidentiality), integrity: number(first.integrity), availability: number(first.availability), legal: number(first.legal ?? first.legal_impact) };
+  if (formulaCode === 'F5_5_SUPPLIER_RISK') return { compliance: number(first.compliance_score ?? first.score), security: number(first.security_score), dependency: number(first.dependency_score), privacy: number(first.privacy_score), resilience: number(first.resilience_score) };
+  if (formulaCode === 'F5_5_SURVEY_SCORE') return { items: rows.map((row) => ({ score: number(row.score), maxScore: number(row.max_score), weight: number(row.weight, 1), notApplicable: ['not_applicable', 'na'].includes(String(row.status)) })).filter((item) => item.score !== null && item.maxScore !== null) };
+  if (formulaCode === 'F5_5_RESPONSE_RATE') return { completedResponses: statuses.filter((status) => ['completed', 'submitted', 'approved'].includes(status)).length, validInvitations: rows.length };
+  if (formulaCode === 'F5_5_DROPOUT_RATE') return { started: rows.length, completed: statuses.filter((status) => ['completed', 'submitted', 'approved'].includes(status)).length };
+  if (formulaCode === 'F5_5_ASSURANCE_SCORE') return { results: rows.map((row) => ({ result: row.result || row.status, weight: number(row.weight, 1) })) };
+  if (formulaCode === 'F5_5_SAMPLE_SIZE') return { z: 1.96, p: 0.5, e: 0.05, population: rows.length };
+  if (formulaCode === 'F5_5_COMPLETENESS') return { validRequired: sum(rows.map((row) => row.valid_count)), expectedRequired: sum(rows.map((row) => row.expected_count)) };
+  if (formulaCode === 'F5_5_ACCURACY') return { verifiedCorrect: sum(rows.map((row) => row.valid_count)), verified: sum(rows.map((row) => number(row.valid_count, 0) + number(row.invalid_count, 0))) };
+  if (formulaCode === 'F5_5_CONSISTENCY') return { contradictory: sum(rows.map((row) => row.invalid_count)), evaluated: sum(rows.map((row) => number(row.valid_count, 0) + number(row.invalid_count, 0))) };
+  if (formulaCode === 'F5_5_FRESHNESS_CONTINUOUS') { const latest = dates.length ? Math.max(...dates.map((date) => new Date(date).getTime()).filter(Number.isFinite)) : null; return { ageHours: latest === null ? null : (Date.now() - latest) / 3600000, halfLifeHours: 24 * 30 }; }
+  if (formulaCode === 'F5_5_LINEAGE_SCORE') return { presentRelations: rows.length, requiredRelations: rows.length || null };
+  if (formulaCode === 'F5_5_GRC_HEALTH') { const values = {}; for (const row of rows) { const raw = row.output_value?.value ?? row.output_value; const value = ratio(raw); if (row.formula_code === 'F5_5_RESIDUAL_RISK') values.risk = value === null ? null : 1 - value; if (row.formula_code === 'F5_5_COMPLIANCE_WEIGHTED') values.compliance = value; if (row.formula_code === 'F5_5_WEIGHTED_PROGRESS') values.actions = value; if (row.formula_code === 'F5_5_EVIDENCE_QUALITY') values.evidence = value; if (row.formula_code === 'F5_5_COMPLETENESS') values.dataTrust = value; } return values; }
+  if (formulaCode === 'F5_5_MATURITY') return { levels: rows.map((row) => ({ level: number(row.level ?? row.score), weight: number(row.weight, 1) })).filter((row) => row.level !== null) };
+  if (['F5_5_ROBUST_Z_SCORE', 'F5_5_LINEAR_TREND', 'F5_5_PERCENT_VARIATION', 'F5_5_MOVING_AVERAGE', 'F5_5_EMA', 'F5_5_CONFIDENCE_INTERVAL'].includes(formulaCode)) {
+    const values = usableScores;
+    if (formulaCode === 'F5_5_ROBUST_Z_SCORE') return values.length ? { x: values[values.length - 1], values } : null;
+    if (formulaCode === 'F5_5_LINEAR_TREND') return values.length > 1 ? { points: values.map((value, index) => ({ x: index + 1, y: value })) } : null;
+    if (formulaCode === 'F5_5_PERCENT_VARIATION') return values.length > 1 ? { current: values[values.length - 1], previous: values[values.length - 2] } : null;
+    if (formulaCode === 'F5_5_MOVING_AVERAGE' || formulaCode === 'F5_5_EMA') return values.length ? { values, windowSize: Math.min(3, values.length) } : null;
+    if (formulaCode === 'F5_5_CONFIDENCE_INTERVAL') return rows.length ? { successes: statuses.filter((status) => ['pass', 'compliant', 'completed', 'valid'].includes(status)).length, sampleSize: rows.length, z: 1.96 } : null;
+  }
   return null;
 }
 
 async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode = null, period = {}, timezone = 'UTC', permission = null, runId = null } = {}) {
   assertTenant(tenantId); assertPermission(permission);
-  const formula = FORMULA_MAP.get(formulaCode); if (!formula) throw new MathGovernanceError('SOURCE_FORMULA_NOT_FOUND', 'Formula no registrada para resolver fuente.', { formulaCode });
+  const formula = FORMULA_MAP.get(formulaCode); if (!formula) throw new MathGovernanceError('SOURCE_FORMULA_NOT_FOUND', 'Fórmula no registrada para resolver fuente.', { formulaCode });
   const resolvedSourceCode = sourceCode || getSourceCodeForFormula(formulaCode); const contract = getSourceContract(resolvedSourceCode);
-  if (!contract) return sourceUnavailable(resolvedSourceCode, 'No existe contrato de fuente para la formula.');
+  if (!contract) return sourceUnavailable(resolvedSourceCode, 'No existe contrato de fuente para la fórmula.');
   if (contract.availability === 'source_unavailable') return sourceUnavailable(contract.source_code, contract.limitations || 'Fuente no disponible.');
-  const queried = await queryOperationalRows({ client, contract, tenantId, period }); if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason);
+  let queried;
+  try { queried = await queryOperationalRows({ client, contract, tenantId, period }); }
+  catch (error) { const wrapped = new MathGovernanceError('SOURCE_SCHEMA_INCOMPATIBLE', 'La estructura física de la fuente no coincide con el contrato analítico.', { source_code: contract.source_code, original_code: error.code || null }); wrapped.cause = error; throw wrapped; }
+  if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason);
   const rows = normalizeRows(queried.rows, contract);
   const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null });
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
@@ -136,5 +200,6 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   const snapshotHash = hash(sourceSnapshot);
   return { source_code: contract.source_code, physical_sources: physicalSources, status: validation.status, rows: validation.usable_rows, warnings: validation.warnings, exclusions: validation.exclusions, invalid_rows: validation.invalid_rows, counts: { received: rows.length, usable: validation.usable_rows.length, excluded: validation.exclusions.length }, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: validation.usable_rows, contract, formula, runId, snapshotHash }), formula_input: mapFormulaInput(formulaCode, validation.usable_rows), equivalence: contract.variable_map, contract };
 }
+
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }
-module.exports = { SOURCE_STATES, buildSourceContract, sourceUnavailable, listSourceContracts, listFormulaSourceBindings, resolveFormulaSource, resolveFormulaSources, getSourceContract, tableExists, mapFormulaInput, queryOperationalRows, firstPopulated };
+module.exports = { SOURCE_STATES, buildSourceContract, sourceUnavailable, listSourceContracts, listFormulaSourceBindings, resolveFormulaSource, resolveFormulaSources, getSourceContract, tableExists, mapFormulaInput, queryOperationalRows, firstPopulated: firstPopulatedTables };
