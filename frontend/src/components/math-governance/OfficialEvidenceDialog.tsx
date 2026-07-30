@@ -52,6 +52,15 @@ function EvidenceLoader({ kind, runId, formulaName, onClose }: LoaderProps) {
 
   const lineage = Array.isArray(data?.lineage) ? data.lineage.filter(isRecord) : [];
   const variables = isRecord(data?.variables) ? data.variables : {};
+  const explanationFields: Array<[string, unknown]> = [
+    ['Estado', data?.status],
+    ['Explicación', data?.explanation],
+    ['Tipo', data?.explanation_type],
+    ['Fórmula', data?.formula_code],
+    ['Ejecución', data?.run_status],
+    ['Inicio', data?.started_at],
+    ['Término', data?.completed_at],
+  ];
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -70,10 +79,7 @@ function EvidenceLoader({ kind, runId, formulaName, onClose }: LoaderProps) {
           {!loading && !error && data && kind === 'explanation' && (
             <div className="space-y-4">
               <dl className="grid gap-3 md:grid-cols-2">
-                {[
-                  ['Estado', data.status], ['Explicación', data.explanation], ['Tipo', data.explanation_type], ['Fórmula', data.formula_code],
-                  ['Ejecución', data.run_status], ['Inicio', data.started_at], ['Término', data.completed_at],
-                ].map(([label, value]) => <div key={String(label)} className="rounded-md border border-slate-200 bg-slate-50 p-3"><dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt><dd className="mt-1 break-words text-sm text-slate-950">{display(value)}</dd></div>)}
+                {explanationFields.map(([label, value]) => <div key={label} className="rounded-md border border-slate-200 bg-slate-50 p-3"><dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt><dd className="mt-1 break-words text-sm text-slate-950">{display(value)}</dd></div>)}
               </dl>
               <section><h4 className="text-sm font-semibold text-slate-950">Variables utilizadas</h4>{Object.keys(variables).length ? <div className="mt-2 overflow-x-auto rounded-md border border-slate-200"><table className="min-w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-3 py-2 text-left">Variable</th><th className="px-3 py-2 text-left">Valor</th></tr></thead><tbody>{Object.entries(variables).map(([key, value]) => <tr key={key} className="border-t"><td className="px-3 py-2 font-semibold">{key}</td><td className="px-3 py-2">{display(value)}</td></tr>)}</tbody></table></div> : <p className="mt-2 text-sm text-slate-600">La ejecución no reportó variables visibles.</p>}</section>
             </div>
