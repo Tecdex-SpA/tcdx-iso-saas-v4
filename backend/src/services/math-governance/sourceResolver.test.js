@@ -43,11 +43,12 @@ async function main() {
   assert.deepStrictEqual(controlInput, { design: 0.8, implementation: 0.7, operation: 0.9, evidence: 0.6 });
   const severity = mapFormulaInput('F5_5_SEVERITY_INDEX', [{ severity: 'low' }, { severity: 'critical' }, { severity: 'high' }]);
   assert.deepStrictEqual(severity, { low: 1, medium: 0, high: 1, critical: 1 });
+  assert.deepStrictEqual(mapFormulaInput('F5_5_MATURITY', [{ level: 2, weight: 1 }, { level: 4, weight: 3 }]), { levels: [{ level: 2, weight: 1 }, { level: 4, weight: 3 }] });
 
   const fakeClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
   const missingTables = await resolveFormulaSource({ client: fakeClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
   assert.strictEqual(missingTables.status, 'source_unavailable');
   assert.ok(missingTables.reason.includes('not present'));
-  process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_RESOLVER_TESTS_OK', formulas: FORMULAS.length, contracts: contracts.length, unresolved_internal: 0, equivalence_assertions: 6 }) + '\n');
+  process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_RESOLVER_TESTS_OK', formulas: FORMULAS.length, contracts: contracts.length, unresolved_internal: 0, equivalence_assertions: 7 }) + '\n');
 }
 main().catch((error) => { console.error(error); process.exit(1); });
