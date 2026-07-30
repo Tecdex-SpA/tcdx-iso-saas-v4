@@ -204,7 +204,7 @@ function DisplayValue({ value }: { value: unknown }) {
 function ExplanationEvidence({ data }: { data: UnknownRecord }) {
   const variables = isRecord(data.variables) ? data.variables : {};
   const metadata = isRecord(data.metadata) ? data.metadata : {};
-  const rows = [
+  const rows: Array<[string, unknown]> = [
     ['Estado de evidencia', data.status],
     ['Explicación', data.explanation],
     ['Tipo de explicación', data.explanation_type],
@@ -219,7 +219,7 @@ function ExplanationEvidence({ data }: { data: UnknownRecord }) {
     <div className="space-y-4">
       <dl className="grid gap-3 md:grid-cols-2">
         {rows.map(([label, value]) => (
-          <div key={String(label)} className="rounded-md border border-[var(--tcdx-color-border)] bg-slate-50 p-3">
+          <div key={label} className="rounded-md border border-[var(--tcdx-color-border)] bg-slate-50 p-3">
             <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-text-secondary)]">{label}</dt>
             <dd className="mt-1 break-words text-sm text-[var(--tcdx-color-text-ink)]"><DisplayValue value={value} /></dd>
           </div>
@@ -396,7 +396,7 @@ export default function FormulaCatalog() {
       {recalculateReason && <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{recalculateReason}</div>}
       {error && <div role="alert" className="mt-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-950">{error}</div>}
 
-      {lastRun && <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[['Calculadas', lastRun.summary.calculated || 0], ['Sin medición', lastRun.summary.unmeasured || 0], ['Sin fuente', lastRun.summary.source_unavailable || 0], ['No aplicables', lastRun.summary.not_applicable || 0], ['Errores', lastRun.summary.failed || 0]].map(([label, value]) => <div key={String(label)} className="rounded-md border border-[var(--tcdx-color-border)] bg-white p-3"><div className="text-xs text-[var(--tcdx-color-text-secondary)]">{label}</div><div className="mt-1 text-2xl font-semibold">{value}</div></div>)}</div>}
+      {lastRun && <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[['Calculadas', lastRun.summary.calculated || 0], ['Sin medición', lastRun.summary.unmeasured || 0], ['Sin fuente', lastRun.summary.source_unavailable || 0], ['No aplicables', lastRun.summary.not_applicable || 0], ['Errores', lastRun.summary.failed || 0]].map(([label, value]) => <div key={String(label)} className="rounded-md border border-[var(--tcdx-color-border)] bg-white p-3"><div className="text-xs text-[var(--tcdx-color-text-secondary)]">{String(label)}</div><div className="mt-1 text-2xl font-semibold">{Number(value)}</div></div>)}</div>}
 
       {loading ? <div className="mt-5 rounded-md border border-dashed p-4 text-sm">Cargando fórmulas oficiales…</div> : (
         <div className="mt-5 overflow-x-auto">
