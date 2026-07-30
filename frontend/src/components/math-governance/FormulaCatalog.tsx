@@ -41,6 +41,15 @@ type RecalculationPayload = {
   results: RecalculationResult[];
 };
 
+type EvidenceKind = 'explanation' | 'lineage';
+
+type EvidenceDialog = {
+  kind: EvidenceKind;
+  runId: string;
+  formulaName: string;
+  data: unknown | null;
+};
+
 function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -67,6 +76,10 @@ function statusTone(value?: string) {
   return 'border-slate-200 bg-slate-50 text-slate-700';
 }
 
+function evidenceTitle(kind: EvidenceKind) {
+  return kind === 'explanation' ? 'Explicación del cálculo' : 'Lineage del cálculo';
+}
+
 export default function FormulaCatalog() {
   const now = new Date();
   const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -78,6 +91,9 @@ export default function FormulaCatalog() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<EvidenceDialog | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -126,8 +142,30 @@ export default function FormulaCatalog() {
     }
   }
 
+  async function openEvidence(kind: EvidenceKind, runId: string, formulaName: string) {
+    setEvidence({ kind, runId, formulaName, data: null });
+    setEvidenceLoading(true);
+    setEvidenceError(null);
+    try {
+      const payload = await apiRequestJson<unknown>(`/api/grc/official/calculations/${runId}/${kind}`, {
+        fallbackMessage: `No fue posible cargar ${kind === 'explanation' ? 'la explicación' : 'el lineage'} del cálculo.`,
+      });
+      setEvidence({ kind, runId, formulaName, data: payload });
+    } catch (err) {
+      setEvidenceError(err instanceof ApiClientError ? err.message : 'No fue posible cargar la evidencia del cálculo.');
+    } finally {
+      setEvidenceLoading(false);
+    }
+  }
+
+  function closeEvidence() {
+    setEvidence(null);
+    setEvidenceError(null);
+    setEvidenceLoading(false);
+  }
+
   return (
-    <section className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-tecdex-sm)]">
+    <section id="catalogo-formulas" className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-tecdex-sm)]">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--tcdx-color-primary)]">Capa matemática oficial</p>
@@ -137,7 +175,7 @@ export default function FormulaCatalog() {
           </p>
         </div>
         <Link href="/datos/lineage" className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] px-3 text-sm font-semibold text-[var(--tcdx-color-primary)]">
-          Ver lineage
+          Ver lineage general
         </Link>
       </div>
 
@@ -202,10 +240,11 @@ export default function FormulaCatalog() {
                 const result = runMap.get(formulaCode);
                 const runId = result?.calculation_run_id || item.latest_calculation_run;
                 const physicalSources = result?.physical_sources || [];
+                const formulaName = item.display_name || formulaCode;
                 return (
                   <tr key={`${formulaCode}-${item.result_code || ''}`}>
                     <td className="border-b px-3 py-3">
-                      <div className="font-semibold text-[var(--tcdx-color-text-ink)]">{item.display_name || formulaCode}</div>
+                      <div className="font-semibold text-[var(--tcdx-color-text-ink)]">{formulaName}</div>
                       <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{formulaCode}</div>
                     </td>
                     <td className="border-b px-3 py-3">{item.domain || '—'}</td>
@@ -231,8 +270,8 @@ export default function FormulaCatalog() {
                     <td className="border-b px-3 py-3">
                       {runId ? (
                         <div className="flex flex-wrap gap-2 text-xs font-semibold text-[var(--tcdx-color-primary)]">
-                          <Link href={`/api/grc/official/calculations/${runId}/explanation`} className="underline">Explicación</Link>
-                          <Link href={`/api/grc/official/calculations/${runId}/lineage`} className="underline">Lineage</Link>
+                          <button type="button" onClick={() => void openEvidence('explanation', runId, formulaName)} className="rounded-md border border-[var(--tcdx-color-border)] bg-white px-2 py-1 underline hover:bg-slate-50">Explicación</button>
+                          <button type="button" onClick={() => void openEvidence('lineage', runId, formulaName)} className="rounded-md border border-[var(--tcdx-color-border)] bg-white px-2 py-1 underline hover:bg-slate-50">Lineage</button>
                         </div>
                       ) : <span className="text-xs text-[var(--tcdx-color-text-secondary)]">Sin ejecución</span>}
                     </td>
@@ -241,6 +280,28 @@ export default function FormulaCatalog() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {evidence && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeEvidence(); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="formula-evidence-title" className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-xl border border-[var(--tcdx-color-border)] bg-white shadow-2xl">
+            <header className="flex items-start justify-between gap-4 border-b border-[var(--tcdx-color-border)] p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-primary)]">Evidencia autenticada</p>
+                <h3 id="formula-evidence-title" className="mt-1 text-xl font-semibold text-[var(--tcdx-color-text-ink)]">{evidenceTitle(evidence.kind)}</h3>
+                <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">{evidence.formulaName} · ejecución {evidence.runId}</p>
+              </div>
+              <button type="button" onClick={closeEvidence} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold">Cerrar</button>
+            </header>
+            <div className="max-h-[calc(90vh-108px)] overflow-auto p-4">
+              {evidenceLoading && <div className="rounded-md border border-dashed p-4 text-sm">Cargando evidencia…</div>}
+              {evidenceError && <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-950">{evidenceError}</div>}
+              {!evidenceLoading && !evidenceError && evidence.data !== null && (
+                <pre className="overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-950 p-4 text-xs leading-6 text-slate-100">{JSON.stringify(evidence.data, null, 2)}</pre>
+              )}
+            </div>
+          </section>
         </div>
       )}
     </section>
