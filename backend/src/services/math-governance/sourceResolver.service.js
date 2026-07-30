@@ -29,7 +29,7 @@ async function firstPopulatedTables(client, tables, tenantId, period = {}) {
     if (!(await tableExists(client, table))) continue;
     existing = true;
     const timestamp = safeTimestampExpression('x');
-    const result = await client.query(`SELECT to_jsonb(x).* , ${timestamp} AS __event_time FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid AND ($2::timestamptz IS NULL OR ${timestamp}>=$2) AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`, [tenantId, period.start || null, period.end || null]);
+    const result = await client.query(`SELECT x.*, ${timestamp} AS __event_time FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid AND ($2::timestamptz IS NULL OR ${timestamp}>=$2) AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`, [tenantId, period.start || null, period.end || null]);
     if (result.rows?.length) return tagRows(result.rows, table);
   }
   return existing ? [] : null;
