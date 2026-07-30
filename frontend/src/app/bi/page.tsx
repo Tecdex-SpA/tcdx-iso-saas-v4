@@ -1,15 +1,15 @@
 import DashboardBuilderGuide from '@/components/math-governance/DashboardBuilder';
-import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
+import GrcDecisionCenter from '@/components/math-governance/GrcDecisionCenter';
 import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 
 export default function DashboardBuilder() {
   return (
     <Phase5Workspace
       title="Business Intelligence"
-      description="Dashboard builder gobernado. Cada widget consume resultados oficiales con fórmula, versión, fuente, confianza, freshness, variación, drill-down y snapshot."
+      description="Cockpit ejecutivo para interpretar resultados oficiales, priorizar riesgos y convertir indicadores en acciones verificables."
       endpoint="/api/dashboards"
       primaryLabel="dashboards"
-      emptyMessage="No hay dashboards configurados. Los dashboards predefinidos se crean como definiciones editables por tenant y consumen resultados oficiales."
+      emptyMessage="No hay dashboards configurados. Los tableros predefinidos consumen resultados oficiales, tendencias y decisiones por tenant."
       analyticsDomain=""
       columns={[
         { key: 'dashboard_key', label: 'Dashboard' },
@@ -18,8 +18,8 @@ export default function DashboardBuilder() {
         { key: 'status', label: 'Estado' },
       ]}
     >
+      <GrcDecisionCenter title="Cockpit ejecutivo de decisiones" limit={18} />
       <DashboardBuilderGuide />
-      <OfficialAnalyticsPanel title="Catálogo consumible por widgets" compact limit={12} />
     </Phase5Workspace>
   );
 }
