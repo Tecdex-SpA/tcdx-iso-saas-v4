@@ -5,11 +5,11 @@ import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 export default function MetricCatalog() {
   return (
     <Phase5Workspace
-      title="Métricas"
-      description="Catálogo versionado de KPI, KRI, KCI, KQI, SLA y métricas de calidad con fuente, fórmula, umbral y confianza."
+      title="Métricas y fórmulas"
+      description="Opera la capa matemática oficial y administra el catálogo versionado de KPI, KRI, KCI, KQI, SLA y métricas de calidad."
       endpoint="/api/metrics"
       primaryLabel="métricas"
-      emptyMessage="No hay métricas visibles. El catálogo inicial global aparece después de aplicar la migración Fase 5."
+      emptyMessage="No hay métricas visibles. Revisa el catálogo oficial y los datos operacionales de la empresa seleccionada."
       analyticsDomain="data_quality"
       columns={[
         { key: 'metric_code', label: 'Código' },
@@ -19,8 +19,8 @@ export default function MetricCatalog() {
         { key: 'status', label: 'Estado' },
       ]}
     >
-      <MetricBuilder />
       <FormulaCatalog />
+      <MetricBuilder />
     </Phase5Workspace>
   );
 }
