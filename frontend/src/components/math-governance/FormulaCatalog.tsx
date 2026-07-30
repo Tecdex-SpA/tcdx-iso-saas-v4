@@ -23,6 +23,9 @@ type RecalculationResult = {
   display_name?: string;
   domain?: string;
   status: 'calculated' | 'unmeasured' | 'source_unavailable' | 'not_applicable' | 'failed';
+  source_code?: string;
+  physical_sources?: string[];
+  source_counts?: { received?: number; usable?: number; excluded?: number };
   value?: number | null;
   unit?: string | null;
   calculation_run_id?: string | null;
@@ -188,7 +191,7 @@ export default function FormulaCatalog() {
                 <th className="border-b px-3 py-2">Fórmula</th>
                 <th className="border-b px-3 py-2">Dominio</th>
                 <th className="border-b px-3 py-2">Versión</th>
-                <th className="border-b px-3 py-2">Fuente</th>
+                <th className="border-b px-3 py-2">Fuente operacional</th>
                 <th className="border-b px-3 py-2">Resultado del recálculo</th>
                 <th className="border-b px-3 py-2">Evidencia</th>
               </tr>
@@ -198,6 +201,7 @@ export default function FormulaCatalog() {
                 const formulaCode = item.formula_code || item.result_code || item.analytical_result_code || 'unknown';
                 const result = runMap.get(formulaCode);
                 const runId = result?.calculation_run_id || item.latest_calculation_run;
+                const physicalSources = result?.physical_sources || [];
                 return (
                   <tr key={`${formulaCode}-${item.result_code || ''}`}>
                     <td className="border-b px-3 py-3">
@@ -206,7 +210,15 @@ export default function FormulaCatalog() {
                     </td>
                     <td className="border-b px-3 py-3">{item.domain || '—'}</td>
                     <td className="border-b px-3 py-3">v{item.formula_version || 1} · {item.unit || 'sin unidad'}</td>
-                    <td className="border-b px-3 py-3"><span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${statusTone(item.source_status)}`}>{statusLabel(item.source_status)}</span></td>
+                    <td className="border-b px-3 py-3">
+                      <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${statusTone(result?.status === 'calculated' ? 'available' : item.source_status)}`}>{statusLabel(result?.status === 'calculated' ? 'available' : item.source_status)}</span>
+                      {result && (
+                        <div className="mt-2 max-w-xs text-xs text-[var(--tcdx-color-text-secondary)]">
+                          <div>{physicalSources.length ? physicalSources.join(', ') : result.source_code || 'Sin tabla resuelta'}</div>
+                          <div className="mt-1">Recibidos: {result.source_counts?.received || 0} · Usables: {result.source_counts?.usable || 0} · Excluidos: {result.source_counts?.excluded || 0}</div>
+                        </div>
+                      )}
+                    </td>
                     <td className="border-b px-3 py-3">
                       {result ? (
                         <div>

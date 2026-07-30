@@ -3,7 +3,7 @@ const assert = require('assert');
 const { FORMULAS, executeFormula } = require('./formulaRegistry.service');
 const { listFormulaSourceBindings, listSourceContracts } = require('./sourceContracts.service');
 const { validateDataset } = require('./datasetValidation.service');
-const { resolveFormulaSource, mapFormulaInput } = require('./sourceResolver.service');
+const { resolveFormulaSource, mapFormulaInput, firstPopulated } = require('./sourceResolver.service');
 
 async function main() {
   const bindings = listFormulaSourceBindings();
@@ -62,10 +62,26 @@ async function main() {
   assert.deepStrictEqual(maturityInput, { levels: [{ level: 2, weight: 1 }, { level: 4, weight: 3 }] });
   assert.strictEqual(executeFormula('F5_5_MATURITY', maturityInput).value, 3.5);
 
-  const fakeClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
-  const missingTables = await resolveFormulaSource({ client: fakeClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
+  const calls = [];
+  const fallbackClient = { async query(sql, params) {
+    if (sql.includes('to_regclass')) return { rows: [{ exists: true }] };
+    calls.push({ sql, params });
+    if (sql === 'primary') return { rows: [] };
+    if (sql === 'legacy') return { rows: [{ id: 'risk-1', tenant_id: 'tenant-a' }] };
+    throw new Error('unexpected query');
+  } };
+  const fallback = await firstPopulated(fallbackClient, [
+    { table: 'primary_table', sql: 'primary', params: ['tenant-a'] },
+    { table: 'legacy_table', sql: 'legacy', params: ['tenant-a'] },
+  ]);
+  assert.strictEqual(calls.length, 2, 'empty primary source must continue to legacy source');
+  assert.strictEqual(fallback.length, 1);
+  assert.strictEqual(fallback[0].__physical_source, 'legacy_table');
+
+  const missingClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
+  const missingTables = await resolveFormulaSource({ client: missingClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
   assert.strictEqual(missingTables.status, 'source_unavailable');
   assert.ok(missingTables.reason.includes('not present'));
-  process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_RESOLVER_TESTS_OK', formulas: FORMULAS.length, contracts: contracts.length, unresolved_internal: 0, equivalence_assertions: 7, formula_execution_assertions: 7 }) + '\n');
+  process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_RESOLVER_TESTS_OK', formulas: FORMULAS.length, contracts: contracts.length, unresolved_internal: 0, fallback_assertions: 3, equivalence_assertions: 7, formula_execution_assertions: 7 }) + '\n');
 }
 main().catch((error) => { console.error(error); process.exit(1); });

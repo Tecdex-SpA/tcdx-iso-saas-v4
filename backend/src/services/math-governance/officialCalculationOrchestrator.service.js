@@ -34,12 +34,17 @@ function normalizePeriod(period = {}) {
   return { start, end, timezone: period.timezone || 'America/Santiago' };
 }
 
+const FORMULA_PRIORITY = Object.freeze({
+  F5_5_GRC_HEALTH: 100,
+});
+
 function selectedFormulas(body = {}) {
   const requested = Array.isArray(body.formula_codes) ? new Set(body.formula_codes.map(String)) : null;
   const domain = body.domain ? String(body.domain) : null;
   return FORMULAS.filter((formula) => formula.status === 'published')
     .filter((formula) => !requested || requested.has(formula.formula_code))
-    .filter((formula) => !domain || formula.category === domain);
+    .filter((formula) => !domain || formula.category === domain)
+    .sort((a, b) => (FORMULA_PRIORITY[a.formula_code] || 10) - (FORMULA_PRIORITY[b.formula_code] || 10));
 }
 
 function summarize(results) {
@@ -66,7 +71,7 @@ async function persistSourceSnapshot(client, tenantId, source, persisted) {
     `INSERT INTO calculation_snapshots (tenant_id, run_id, source_contract_id, snapshot_type, snapshot_hash, row_count, payload, metadata)
      VALUES ($1::uuid,$2::uuid,$3::uuid,'source',$4,$5,$6::jsonb,$7::jsonb)
      RETURNING id`,
-    [tenantId, persisted.calculation_run_id, sourceContractId, source.source_snapshot_hash, Number(source.counts?.usable || 0), JSON.stringify(source.source_snapshot || {}), JSON.stringify({ source_code: source.source_code, exclusions: source.exclusions || [] })]
+    [tenantId, persisted.calculation_run_id, sourceContractId, source.source_snapshot_hash, Number(source.counts?.usable || 0), JSON.stringify(source.source_snapshot || {}), JSON.stringify({ source_code: source.source_code, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [] })]
   );
   await client.query(
     `UPDATE calculation_runs SET source_contract_id=COALESCE($3::uuid,source_contract_id), source_snapshot_hash=$4 WHERE tenant_id=$1::uuid AND id=$2::uuid`,
@@ -99,16 +104,21 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         permission: { allowed: true, required: 'metrics.engine' },
       });
 
+      const sourceContext = {
+        source_code: source.source_code,
+        physical_sources: source.physical_sources || source.source_snapshot?.physical_sources || [],
+        source_counts: source.counts || { received: 0, usable: 0, excluded: 0 },
+      };
       if (source.status === 'source_unavailable') {
-        results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'source_unavailable', source_code: source.source_code, warnings: source.warnings || [] });
+        results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'source_unavailable', ...sourceContext, warnings: source.warnings || [] });
         continue;
       }
       if (!source.formula_input) {
-        results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'not_applicable', source_code: source.source_code, warnings: ['La fuente existe, pero no hay equivalencia operativa para esta fórmula.'] });
+        results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'not_applicable', ...sourceContext, warnings: ['La fuente existe, pero no hay equivalencia operativa para esta fórmula.'] });
         continue;
       }
       if (!source.counts?.usable) {
-        results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'unmeasured', source_code: source.source_code, warnings: source.warnings || ['No hay datos utilizables para el período.'] });
+        results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'unmeasured', ...sourceContext, warnings: source.warnings || ['No hay datos utilizables para el período.'] });
         continue;
       }
 
@@ -121,6 +131,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         components: source.formula_input,
         source_status: source.status,
         source_code: source.source_code,
+        physical_sources: source.physical_sources || [],
         source_contract: source.contract?.source_code || source.source_code,
         input_hash: source.input_hash,
         source_snapshot: source.source_snapshot,
@@ -130,6 +141,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         details: {
           ...(calculated.details || {}),
           source_counts: source.counts,
+          physical_sources: source.physical_sources || [],
           exclusions: source.exclusions || [],
           equivalence: source.equivalence || null,
         },
@@ -141,7 +153,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         display_name: formula.display_name,
         domain: formula.category,
         status: 'calculated',
-        source_code: source.source_code,
+        ...sourceContext,
         value: persisted.value,
         unit: persisted.unit,
         calculation_run_id: persisted.calculation_run_id || null,
