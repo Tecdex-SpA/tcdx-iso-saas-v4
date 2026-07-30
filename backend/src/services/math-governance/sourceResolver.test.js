@@ -42,7 +42,11 @@ async function main() {
   assert.strictEqual(executeFormula('F5_5_RESIDUAL_RISK', residualInput).value, 7);
   const residualMissingControl = mapFormulaInput('F5_5_RESIDUAL_RISK', [{ exposure: 20 }]);
   assert.deepStrictEqual(residualMissingControl, { inherentRisk: 20, controlEffectiveness: null });
-  assert.throws(() => executeFormula('F5_5_RESIDUAL_RISK', residualMissingControl), /required|null/i, 'missing control effectiveness must not become zero');
+  assert.throws(
+    () => executeFormula('F5_5_RESIDUAL_RISK', residualMissingControl),
+    (error) => error?.code === 'FORMULA_VARIABLE_REQUIRED' && error?.details?.variable === 'controlEffectiveness',
+    'missing control effectiveness must not become zero'
+  );
 
   const coverageInput = mapFormulaInput('F5_5_COVERAGE', [{ status: 'conform', applicability: true }, { status: 'pending', applicability: true }, { status: 'not_applicable', applicability: false }]);
   assert.deepStrictEqual(coverageInput, { evaluated: 2, applicable: 2 });
@@ -84,7 +88,7 @@ async function main() {
   const missingClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
   const missingTables = await resolveFormulaSource({ client: missingClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
   assert.strictEqual(missingTables.status, 'source_unavailable');
-  assert.ok(missingTables.reason.includes('No existen'));
+  assert.ok(missingTables.reason.includes('No existen tablas operacionales'));
   process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_RESOLVER_TESTS_OK', formulas: FORMULAS.length, contracts: contracts.length, unresolved_internal: 0, fallback_assertions: 3, equivalence_assertions: 9, formula_execution_assertions: 8 }) + '\n');
 }
 main().catch((error) => { console.error(error); process.exit(1); });
