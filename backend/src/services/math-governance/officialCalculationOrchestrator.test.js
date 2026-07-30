@@ -29,16 +29,19 @@ async function run() {
       }),
       persistOfficialCalculation: async (_scope, result) => {
         persisted.push(result);
-        return { ...result, calculation_run_id: '70000000-0000-0000-0000-000000000799', snapshot_id: '70000000-0000-0000-0000-000000000798' };
+        return { ...result, calculation_run_id: '70000000-0000-0000-0000-000000000799' };
       },
+      persistSourceSnapshot: async () => '70000000-0000-0000-0000-000000000798',
     }
   );
 
   assert.equal(calculated.status, 'OFFICIAL_RECALCULATION_COMPLETED');
   assert.equal(calculated.summary.calculated, 1);
   assert.equal(calculated.results[0].value, 20);
+  assert.equal(calculated.results[0].snapshot_id, '70000000-0000-0000-0000-000000000798');
   assert.equal(persisted[0].source_code, 'risk_register_controls');
   assert.equal(persisted[0].lineage.length, 1);
+  assert.deepEqual(persisted[0].components, { probability: 4, impact: 5 });
 
   const unavailable = await recalculateOfficialAnalytics(
     { tenant_id: '70000000-0000-0000-0000-000000000701', user: { id: '70000000-0000-0000-0000-000000000711' } },
@@ -48,6 +51,7 @@ async function run() {
       client: {},
       resolveFormulaSource: async () => ({ status: 'source_unavailable', source_code: 'risk_register_controls', warnings: ['tabla ausente'] }),
       persistOfficialCalculation: async () => { throw new Error('no debe persistir'); },
+      persistSourceSnapshot: async () => { throw new Error('no debe persistir snapshot'); },
     }
   );
   assert.equal(unavailable.summary.source_unavailable, 1);
@@ -60,11 +64,12 @@ async function run() {
       client: {},
       resolveFormulaSource: async () => ({ status: 'empty_dataset', source_code: 'risk_register_controls', counts: { usable: 0 }, formula_input: { probability: null, impact: null }, warnings: ['sin datos'] }),
       persistOfficialCalculation: async () => { throw new Error('no debe persistir'); },
+      persistSourceSnapshot: async () => { throw new Error('no debe persistir snapshot'); },
     }
   );
   assert.equal(unmeasured.summary.unmeasured, 1);
 
-  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 9 }));
+  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 11 }));
 }
 
 run().catch((error) => {
