@@ -5,6 +5,8 @@ const { FORMULAS, OfficialFormulaRegistry } = require('./formulaRegistry.service
 const { resolveFormulaSource } = require('./sourceResolver.service');
 const phase5Service = require('../phase5/phase5.service');
 
+const SOURCE_DATASET_SNAPSHOT_TYPE = 'source_dataset';
+
 class OfficialCalculationOrchestratorError extends Error {
   constructor(code, message, status = 400, details = null) {
     super(message);
@@ -34,9 +36,7 @@ function normalizePeriod(period = {}) {
   return { start, end, timezone: period.timezone || 'America/Santiago' };
 }
 
-const FORMULA_PRIORITY = Object.freeze({
-  F5_5_GRC_HEALTH: 100,
-});
+const FORMULA_PRIORITY = Object.freeze({ F5_5_GRC_HEALTH: 100 });
 
 function selectedFormulas(body = {}) {
   const requested = Array.isArray(body.formula_codes) ? new Set(body.formula_codes.map(String)) : null;
@@ -55,10 +55,29 @@ function summarize(results) {
   }, { total: 0, calculated: 0, unmeasured: 0, source_unavailable: 0, not_applicable: 0, failed: 0 });
 }
 
+async function assertSnapshotContract(client) {
+  const result = await client.query(`
+    SELECT pg_get_constraintdef(c.oid) AS definition
+    FROM pg_constraint c
+    JOIN pg_class t ON t.oid=c.conrelid
+    WHERE t.relname='calculation_snapshots'
+      AND c.conname='calculation_snapshots_snapshot_type_check'
+    LIMIT 1`);
+  const definition = String(result.rows[0]?.definition || '');
+  if (definition && !definition.includes(SOURCE_DATASET_SNAPSHOT_TYPE)) {
+    throw new OfficialCalculationOrchestratorError(
+      'SNAPSHOT_TYPE_CONTRACT_MISMATCH',
+      `La base de datos no admite snapshot_type=${SOURCE_DATASET_SNAPSHOT_TYPE}. Ejecute la migración oficial de Fase 5.`,
+      500
+    );
+  }
+}
+
 async function persistSourceSnapshot(client, tenantId, source, persisted) {
   if (!persisted?.calculation_run_id || !source?.source_snapshot_hash) return null;
   const tables = await client.query(`SELECT to_regclass('public.calculation_snapshots') AS snapshots, to_regclass('public.official_formula_source_contracts') AS contracts`);
   if (!tables.rows[0]?.snapshots) return null;
+  await assertSnapshotContract(client);
   let sourceContractId = null;
   if (tables.rows[0]?.contracts) {
     const contract = await client.query(
@@ -69,9 +88,9 @@ async function persistSourceSnapshot(client, tenantId, source, persisted) {
   }
   const snapshot = await client.query(
     `INSERT INTO calculation_snapshots (tenant_id, run_id, source_contract_id, snapshot_type, snapshot_hash, row_count, payload, metadata)
-     VALUES ($1::uuid,$2::uuid,$3::uuid,'source',$4,$5,$6::jsonb,$7::jsonb)
+     VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7::jsonb,$8::jsonb)
      RETURNING id`,
-    [tenantId, persisted.calculation_run_id, sourceContractId, source.source_snapshot_hash, Number(source.counts?.usable || 0), JSON.stringify(source.source_snapshot || {}), JSON.stringify({ source_code: source.source_code, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [] })]
+    [tenantId, persisted.calculation_run_id, sourceContractId, SOURCE_DATASET_SNAPSHOT_TYPE, source.source_snapshot_hash, Number(source.counts?.usable || 0), JSON.stringify(source.source_snapshot || {}), JSON.stringify({ source_code: source.source_code, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [] })]
   );
   await client.query(
     `UPDATE calculation_runs SET source_contract_id=COALESCE($3::uuid,source_contract_id), source_snapshot_hash=$4 WHERE tenant_id=$1::uuid AND id=$2::uuid`,
@@ -95,16 +114,10 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
 
   for (const formula of formulas) {
     try {
-      const source = await resolver({
-        client,
-        tenantId,
-        formulaCode: formula.formula_code,
-        period,
-        timezone: period.timezone,
-        permission: { allowed: true, required: 'metrics.engine' },
-      });
-
+      const source = await resolver({ client, tenantId, formulaCode: formula.formula_code, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
       const sourceContext = {
+        source_contract_status: source.contract?.availability || source.status || 'unknown',
+        source_resolution_status: source.physical_sources?.length ? 'resolved' : 'not_resolved',
         source_code: source.source_code,
         physical_sources: source.physical_sources || source.source_snapshot?.physical_sources || [],
         source_counts: source.counts || { received: 0, usable: 0, excluded: 0 },
@@ -138,54 +151,22 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         source_snapshot_hash: source.source_snapshot_hash,
         lineage: source.lineage,
         warnings: source.warnings || [],
-        details: {
-          ...(calculated.details || {}),
-          source_counts: source.counts,
-          physical_sources: source.physical_sources || [],
-          exclusions: source.exclusions || [],
-          equivalence: source.equivalence || null,
-        },
+        details: { ...(calculated.details || {}), source_counts: source.counts, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [], equivalence: source.equivalence || null },
       };
       const persisted = await persist(scope, officialResult, requestId);
       const snapshotId = await persistSnapshot(client, tenantId, source, persisted);
-      results.push({
-        formula_code: formula.formula_code,
-        display_name: formula.display_name,
-        domain: formula.category,
-        status: 'calculated',
-        ...sourceContext,
-        value: persisted.value,
-        unit: persisted.unit,
-        calculation_run_id: persisted.calculation_run_id || null,
-        snapshot_id: snapshotId,
-        warnings: persisted.warnings || [],
-      });
+      if (!snapshotId) throw new OfficialCalculationOrchestratorError('SOURCE_SNAPSHOT_NOT_PERSISTED', 'El cálculo no puede publicarse sin snapshot de fuente.', 500);
+      results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'calculated', ...sourceContext, value: persisted.value, unit: persisted.unit, calculation_run_id: persisted.calculation_run_id || null, snapshot_id: snapshotId, warnings: persisted.warnings || [] });
     } catch (error) {
-      results.push({
-        formula_code: formula.formula_code,
-        display_name: formula.display_name,
-        domain: formula.category,
-        status: 'failed',
-        code: error.code || 'OFFICIAL_RECALC_FORMULA_FAILED',
-        error: String(error.message || error).slice(0, 240),
-      });
+      results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'failed', code: error.code || 'OFFICIAL_RECALC_FORMULA_FAILED', error: String(error.message || error).slice(0, 240) });
     }
   }
 
-  return {
-    status: 'OFFICIAL_RECALCULATION_COMPLETED',
-    tenant_id: tenantId,
-    requested_by: actorIdFrom(scope),
-    period,
-    summary: summarize(results),
-    results,
-  };
+  const summary = summarize(results);
+  if (summary.failed > 0 && dependencies.failOnPersistenceError === true) {
+    throw new OfficialCalculationOrchestratorError('OFFICIAL_RECALCULATION_PERSISTENCE_FAILED', `${summary.failed} fórmulas fallaron durante la persistencia oficial.`, 500, { summary, results });
+  }
+  return { status: 'OFFICIAL_RECALCULATION_COMPLETED', tenant_id: tenantId, requested_by: actorIdFrom(scope), period, summary, results };
 }
 
-module.exports = {
-  OfficialCalculationOrchestratorError,
-  normalizePeriod,
-  selectedFormulas,
-  persistSourceSnapshot,
-  recalculateOfficialAnalytics,
-};
+module.exports = { SOURCE_DATASET_SNAPSHOT_TYPE, OfficialCalculationOrchestratorError, normalizePeriod, selectedFormulas, assertSnapshotContract, persistSourceSnapshot, recalculateOfficialAnalytics };
