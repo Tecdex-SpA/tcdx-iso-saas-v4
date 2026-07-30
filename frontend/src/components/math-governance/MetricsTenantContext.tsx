@@ -83,8 +83,6 @@ export default function MetricsTenantContext() {
     if (!isPlatform) return;
 
     let cancelled = false;
-    setLoading(true);
-    setError('');
 
     apiRequestJson('/api/admin-saas/tenants', {
       tenantRequired: false,
