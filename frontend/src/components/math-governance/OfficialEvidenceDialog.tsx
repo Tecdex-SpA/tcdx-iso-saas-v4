@@ -14,6 +14,8 @@ type Props = {
   onClose: () => void;
 };
 
+type LoaderProps = Omit<Props, 'open'>;
+
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -30,13 +32,12 @@ function display(value: unknown) {
   return JSON.stringify(value);
 }
 
-export default function OfficialEvidenceDialog({ open, kind, runId, formulaName, onClose }: Props) {
+function EvidenceLoader({ kind, runId, formulaName, onClose }: LoaderProps) {
   const [data, setData] = useState<UnknownRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!open || !runId) return;
     let cancelled = false;
     apiRequestJson(`/api/grc/official/calculations/${runId}/${kind}`, {
       fallbackMessage: `No fue posible cargar ${kind === 'explanation' ? 'la explicación' : 'el lineage'} del cálculo.`,
@@ -47,9 +48,8 @@ export default function OfficialEvidenceDialog({ open, kind, runId, formulaName,
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [kind, open, runId]);
+  }, [kind, runId]);
 
-  if (!open) return null;
   const lineage = Array.isArray(data?.lineage) ? data.lineage.filter(isRecord) : [];
   const variables = isRecord(data?.variables) ? data.variables : {};
 
@@ -85,4 +85,9 @@ export default function OfficialEvidenceDialog({ open, kind, runId, formulaName,
       </section>
     </div>
   );
+}
+
+export default function OfficialEvidenceDialog({ open, kind, runId, formulaName, onClose }: Props) {
+  if (!open || !runId) return null;
+  return <EvidenceLoader key={`${kind}-${runId}`} kind={kind} runId={runId} formulaName={formulaName} onClose={onClose} />;
 }
