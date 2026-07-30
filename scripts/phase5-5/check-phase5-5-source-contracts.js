@@ -19,16 +19,20 @@ for (const formula of FORMULAS) {
 const contracts = listSourceContracts();
 if (contracts.length < 12) failures.push(`expected_at_least_12_contracts_found_${contracts.length}`);
 for (const contract of contracts) {
-  for (const field of ['source_code','entity','tables','columns','tenant_filter','period','timezone','cardinality','required_fields','availability','version','checksum']) {
+  for (const field of ['source_code','entity','tables','columns','tenant_filter','period','timezone','cardinality','required_fields','availability','version','checksum','variable_map']) {
     if (contract[field] === undefined) failures.push(`${contract.source_code || 'unknown'}_missing_${field}`);
   }
   if (contract.checksum?.length !== 64) failures.push(`${contract.source_code}_checksum_invalid`);
-  if (!['available','partially_available','source_unavailable','legacy_adapter_required'].includes(contract.availability)) failures.push(`${contract.source_code}_availability_invalid`);
+  if (!['available','source_unavailable'].includes(contract.availability)) failures.push(`${contract.source_code}_unresolved_availability_${contract.availability}`);
   if (!contract.tenant_filter?.required) failures.push(`${contract.source_code}_tenant_filter_not_required`);
+  if (contract.availability === 'available' && (!contract.adapter || !contract.tables.length)) failures.push(`${contract.source_code}_available_without_adapter_or_tables`);
 }
+const unresolvedInternal = contracts.filter((item) => ['legacy_adapter_required','partially_available'].includes(item.availability));
+if (unresolvedInternal.length) failures.push(`unresolved_internal_contracts_${unresolvedInternal.map((item) => item.source_code).join(',')}`);
+const unavailableContracts = contracts.filter((item) => item.availability === 'source_unavailable');
+if (unavailableContracts.length !== 1 || unavailableContracts[0]?.source_code !== 'external_fx_rates') failures.push(`unexpected_unavailable_contracts_${unavailableContracts.map((item) => item.source_code).join(',')}`);
 const availability = contracts.reduce((acc, item) => { acc[item.availability] = (acc[item.availability] || 0) + 1; return acc; }, {});
 if (!availability.available) failures.push('missing_available_contracts');
-if (!availability.source_unavailable) failures.push('missing_explicit_source_unavailable_contracts');
 const contract = buildSourceContract({ sourceKey: 'risks', entityType: 'risk', requiredFields: ['id','impact'], status: 'source_unavailable' });
 if (contract.status !== 'source_unavailable' || contract.tenantScoped !== true) failures.push('source_contract_shape_invalid');
 const unavailable = sourceUnavailable('risks');
@@ -39,4 +43,4 @@ if (failures.length) {
   process.stderr.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_CONTRACTS_FAILED', failures }, null, 2) + '\n');
   process.exit(1);
 }
-process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_CONTRACTS_OK', formulas: FORMULAS.length, contracts: contracts.length, availability }) + '\n');
+process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_CONTRACTS_OK', formulas: FORMULAS.length, contracts: contracts.length, availability, unresolved_internal: 0, external_unavailable: 'external_fx_rates' }) + '\n');
