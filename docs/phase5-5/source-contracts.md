@@ -1,22 +1,41 @@
 # Source Contracts
 
-Estado global: NOT_READY. Ultima actualizacion: 2026-07-29T21:01:13Z.
+Estado global: APPROVED_FOR_REVIEW sujeto a CI remoto del commit final.
 
-Los contratos fuente viven en `backend/src/services/math-governance/sourceContracts.service.js`. Cada contrato declara `source_code`, formula asociada, entidad, tablas, columnas, joins permitidos, filtro tenant, filtro de estado, periodo, timezone, unidad, cardinalidad, campos obligatorios, exclusiones, politica de nulos, disponibilidad, version y checksum.
+Los contratos viven en `backend/src/services/math-governance/sourceContracts.service.js`. Cada contrato declara fuente, entidad, tablas, columnas, joins, tenant scope, período, timezone, unidad, campos obligatorios, exclusiones, política de nulos, disponibilidad, versión, adaptador, equivalencia de variables y checksum.
 
-## Reglas de seguridad
+## Reglas de seguridad y confiabilidad
 
 - No existe SQL arbitrario configurable.
-- El tenant efectivo se resuelve antes de leer fuentes.
-- Las fuentes ausentes devuelven `source_unavailable`; no se inventan ceros.
-- Los adaptadores registran warnings, exclusiones, conteos, input hash y lineage.
+- El tenant efectivo y los permisos se validan antes de leer fuentes.
+- Los períodos se parametrizan; no se concatenan valores de usuario en SQL.
+- Las fuentes vacías, incompletas o ausentes devuelven estados explícitos; no se inventan ceros.
+- Los datasets registran warnings, exclusiones, conteos, input hash, source snapshot y lineage.
+- Las equivalencias se exponen como `variable_map` y se persisten en metadata del contrato oficial.
+- Las fórmulas consumen `formula_input` normalizado, no nombres de columnas implícitos.
 
-## Estado Paquete 3
+## Estado final de disponibilidad
 
-Los consumidores centrales de cumplimiento, cobertura, readiness, riesgo, controles, hallazgos, acciones, health y operational excellence consumen el runtime oficial mediante servicios backend. La migracion masiva de dominios de encuestas, assurance, perdidas, continuidad, activos y proveedores corresponde al Paquete 4.
+- 16 contratos internos: `available`.
+- 0 contratos internos: `legacy_adapter_required`.
+- 0 contratos internos: `partially_available`.
+- 1 contrato externo: `external_fx_rates = source_unavailable`.
 
-## Paquete 4 completed (2026-07-29T21:20:57Z)
+La ausencia de FX es deliberada: no existe un proveedor tenant-safe aprobado. Los cálculos de pérdida conservan la moneda original, no mezclan monedas y no inventan tasas.
 
-Dominios integrados: encuestas, campanas, assurance, muestreo, perdidas, continuidad, activos y proveedores. Los servicios oficiales viven en `backend/src/services/math-governance/*Calculation.service.js`; `phase5Package4Jobs.service.js` define jobs tenant-scoped e idempotentes.
+## Adaptadores cerrados por el hotfix
 
-Validacion: `npm run phase5-5:package4-check` ejecuta integraciones por dominio, PostgreSQL efimero con runs/snapshots/lineage Tenant A/B, aislamiento conceptual y E2E tecnico basado en servicios.
+- Cumplimiento y cobertura: requirements + mappings + assurance.
+- Readiness: último snapshot y resultados por dimensión.
+- Riesgos y FMEA: evaluación cuantitativa o fallback de matriz ISO.
+- Controles: assurance y evidencia.
+- Hallazgos y acciones: findings + action plans.
+- GRC Health: calculation runs y outputs oficiales.
+- Madurez: evaluaciones publicadas o mediciones de madurez.
+
+## Validación
+
+- `npm run phase5-5:source-binding-check` exige 50 bindings, cero contratos internos pendientes y solo FX como fuente no disponible.
+- `sourceResolver.test.js` verifica equivalencias representativas de cumplimiento, cobertura, riesgo, riesgo residual, controles, hallazgos y madurez.
+- `formula-data-equivalence-matrix.md` documenta las 50 fórmulas.
+- Los checks PostgreSQL y E2E de Fase 5.5 continúan siendo las puertas de aceptación antes de merge y deploy.
