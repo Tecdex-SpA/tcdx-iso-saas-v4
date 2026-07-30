@@ -1,5 +1,7 @@
 import FormulaCatalog from '@/components/math-governance/FormulaCatalog';
 import MetricBuilder from '@/components/math-governance/MetricBuilder';
+import MetricsSectionBoundary from '@/components/math-governance/MetricsSectionBoundary';
+import MetricsTenantContext from '@/components/math-governance/MetricsTenantContext';
 import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 
 export default function MetricCatalog() {
@@ -10,7 +12,6 @@ export default function MetricCatalog() {
       endpoint="/api/metrics"
       primaryLabel="métricas"
       emptyMessage="No hay métricas visibles. Revisa el catálogo oficial y los datos operacionales de la empresa seleccionada."
-      analyticsDomain="data_quality"
       columns={[
         { key: 'metric_code', label: 'Código' },
         { key: 'display_name', label: 'Nombre' },
@@ -19,8 +20,13 @@ export default function MetricCatalog() {
         { key: 'status', label: 'Estado' },
       ]}
     >
-      <FormulaCatalog />
-      <MetricBuilder />
+      <MetricsTenantContext />
+      <MetricsSectionBoundary title="Catálogo y recálculo oficial">
+        <FormulaCatalog />
+      </MetricsSectionBoundary>
+      <MetricsSectionBoundary title="Constructor de métricas">
+        <MetricBuilder />
+      </MetricsSectionBoundary>
     </Phase5Workspace>
   );
 }
