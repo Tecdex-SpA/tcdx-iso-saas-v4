@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function SourceBindingEditor() {
-  return (
-    <BuilderSurface
-      title="Source binding"
-      description="Mapea variables a source contracts permitidos y tenant-scoped."
-      steps={["Seleccionar fuente","Mapear variable","Validar tenant","Validar cobertura","Guardar binding"]}
-      resultCode="source_binding"
-      primaryHref="/datos"
-    />
-  );
+  return <OperationalBuilder kind="metric" title="Editor de source binding" description="Asocia métrica, resultado oficial y source contract tenant-scoped; valida disponibilidad y ejecuta preview oficial antes de persistir." domain="data_quality" defaultResultCode="data.completeness" />;
 }

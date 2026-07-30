@@ -1684,9 +1684,15 @@ async function persistOfficialCalculation(scope, result, requestId = null) {
   const outputHash = hashPayload({ value: result.value, unit: result.unit, status: result.status, formula_code: result.formula_code, formula_version: result.formula_version });
   const inputHash = /^[0-9a-f]{64}$/i.test(String(result.input_hash || '')) ? result.input_hash : hashPayload({ formula_code: result.formula_code, period: result.period || {}, components: result.components || {} });
   const formulaVersion = (await pool.query(
-    `SELECT id FROM official_formula_versions
-     WHERE tenant_id IS NULL AND formula_code=$1 AND version_number=$2 AND status='published'
-     ORDER BY published_at DESC NULLS LAST, created_at DESC LIMIT 1`,
+    `SELECT ofv.id
+     FROM official_formula_versions ofv
+     JOIN official_formula_definitions ofd ON ofd.id = ofv.formula_definition_id
+     WHERE ofd.tenant_id IS NULL
+       AND ofd.formula_code=$1
+       AND ofv.version_number=$2
+       AND ofv.status='published'
+     ORDER BY ofv.effective_from DESC NULLS LAST, ofv.created_at DESC
+     LIMIT 1`,
     [result.formula_code, result.formula_version || 1]
   )).rows[0] || null;
   const runStatus = result.status === 'completed' ? 'calculated' : result.status === 'unmeasured' ? 'not_calculable' : 'calculated';

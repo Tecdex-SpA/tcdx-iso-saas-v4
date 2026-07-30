@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function AssuranceScoringBuilder() {
-  return (
-    <BuilderSurface
-      title="Assurance scoring"
-      description="Opera pruebas, población, muestra, resultados, excepción, hallazgo y acción."
-      steps={["Definir test","Población","Muestra","Ejecución","Evidencia","Resultado","Aprobación","Re-test"]}
-      resultCode="F5_5_ASSURANCE_SCORE"
-      primaryHref="/tests"
-    />
-  );
+  return <OperationalBuilder kind="assurance" testId="assurance-score" title="Constructor de assurance" description="Crea test, define población, muestra, ejecución, resultado, revisión, sample size y assurance score oficial." domain="assurance" defaultResultCode="assurance.score" />;
 }

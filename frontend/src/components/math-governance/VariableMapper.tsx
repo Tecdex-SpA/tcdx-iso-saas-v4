@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function VariableMapper() {
-  return (
-    <BuilderSurface
-      title="Mapeo de variables"
-      description="Relaciona variables oficiales con campos permitidos del contrato fuente."
-      steps={["Variable","Campo","Unidad","Normalización","Validación"]}
-      resultCode="variable_mapping"
-      primaryHref="/datos"
-    />
-  );
+  return <OperationalBuilder kind="metric" title="Mapeo de variables" description="Mapea variables de fórmula a inputs gobernados, valida muestra de preview, guarda versión y conserva lineage al ejecutar." domain="data_quality" defaultResultCode="data.completeness" />;
 }

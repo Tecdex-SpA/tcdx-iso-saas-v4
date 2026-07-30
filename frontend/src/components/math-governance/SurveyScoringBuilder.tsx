@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function SurveyScoringBuilder() {
-  return (
-    <BuilderSurface
-      title="Scoring de encuestas"
-      description="Define secciones, dimensiones, pesos, máximos, branching y no aplica."
-      steps={["General","Secciones","Preguntas","Pesos","Branching","Preview","Publicación","Campaña"]}
-      resultCode="F5_5_SURVEY_SCORE"
-      primaryHref="/encuestas"
-    />
-  );
+  return <OperationalBuilder kind="survey" title="Constructor de scoring de encuestas" description="Crea encuesta, versión, secciones, preguntas, pesos, branching, campaña y scoring oficial con cobertura y propuestas GRC." domain="survey" defaultResultCode="survey.score" />;
 }

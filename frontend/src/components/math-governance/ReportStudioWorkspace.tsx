@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function ReportStudioWorkspace() {
-  return (
-    <BuilderSurface
-      title="Report Studio Workspace"
-      description="Genera PDF, DOCX y XLSX con snapshot, checksum, metodología, aprobación y descarga."
-      steps={["Definición","Secciones","Resultados","Preview","Generación","Aprobación","Descarga","Historial"]}
-      resultCode="report_studio"
-      primaryHref="/reportes/studio"
-    />
-  );
+  return <OperationalBuilder kind="report" title="Report Studio Workspace" description="Crea definiciones, selecciona resultados oficiales, genera PDF/DOCX/XLSX, aprueba y expone snapshot, checksum, explicación y lineage." defaultResultCode="health.grc" />;
 }

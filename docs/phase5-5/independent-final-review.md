@@ -17,9 +17,16 @@ Paquetes 0 a 7 fueron implementados dentro del worktree actual. No se hizo merge
 - Paquete 6: completed.
 - Paquete 7: completed.
 
+## Evidence reviewed
+
+- `npm run phase5-5:browser-e2e`: Chromium real, local backend/frontend, PostgreSQL Docker fixture, 9/9 scenarios passed.
+- `npm run phase5-5:artifact-validation`: PDF/DOCX/XLSX generated and opened by format-aware checks.
+- `npm run phase5-5:package6-check`: operational contract check passed.
+- `npm run phase5-5:full-e2e` and `npm run phase5-5:cross-view-consistency`: evidence validators passed.
+
 ## Decision
 
-La capa matematica oficial, contratos fuente, persistencia, dominios operacionales, BI/reporting, UX operativa, checks y evidencia documental quedan listos para PR review.
+APPROVED_FOR_REVIEW. La capa matematica oficial, contratos fuente, persistencia, dominios operacionales, BI/reporting, UX operativa, browser E2E y evidencia de artefactos quedan listos para PR review.
 
 ## Condiciones no ejecutadas
 

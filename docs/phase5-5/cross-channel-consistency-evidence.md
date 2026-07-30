@@ -1,6 +1,6 @@
 # Cross-channel Consistency Evidence
 
-Status: completed.
+Status: completed with browser evidence.
 
 ## Contract
 
@@ -24,4 +24,5 @@ The same official analytical result contract is used by Portal GRC, BI widgets, 
 
 ## Command
 
-`npm run phase5-5:cross-view-consistency`
+1. `npm run phase5-5:browser-e2e` executes Chromium against local frontend/backend/PostgreSQL and validates the cross-channel scenario.
+2. `npm run phase5-5:cross-view-consistency` verifies that the specific Playwright scenario passed in the current evidence file produced by the browser run.

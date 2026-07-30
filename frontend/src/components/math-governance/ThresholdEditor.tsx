@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function ThresholdEditor() {
-  return (
-    <BuilderSurface
-      title="Umbrales oficiales"
-      description="Define umbrales versionados sin alterar fórmulas publicadas."
-      steps={["Rango","Severidad","Unidad","Vigencia","Publicación"]}
-      resultCode="thresholds"
-      primaryHref="/metricas"
-    />
-  );
+  return <OperationalBuilder kind="metric" title="Editor de thresholds" description="Define umbrales warning/crítico dentro de la configuración gobernada de la métrica y valida preview antes de publicar." domain="data_quality" defaultResultCode="data.completeness" />;
 }

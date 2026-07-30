@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function MetricBuilder() {
-  return (
-    <BuilderSurface
-      title="Constructor de métricas"
-      description="Experiencia principal para definir, validar, publicar y ejecutar métricas oficiales."
-      steps={["Definición","Fuente","Variables","Fórmula","Umbrales","Preview","Publicación","Ejecución"]}
-      resultCode="metric_builder"
-      primaryHref="/metricas"
-    />
-  );
+  return <OperationalBuilder kind="metric" title="Constructor de métricas" description="Crea, valida, versiona, publica y ejecuta métricas oficiales con fórmula, variables, source contract, thresholds, historial, explicación y lineage." domain="data_quality" defaultResultCode="data.completeness" />;
 }

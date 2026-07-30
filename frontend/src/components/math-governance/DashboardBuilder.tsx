@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function DashboardBuilder() {
-  return (
-    <BuilderSurface
-      title="Dashboard Builder"
-      description="Crea widgets solo desde resultados oficiales, con período, tendencia, comparación y snapshot."
-      steps={["Plantilla","Resultado oficial","Widget","Filtros","Preview","Permisos","Publicar","Snapshot"]}
-      resultCode="dashboard_builder"
-      primaryHref="/bi"
-    />
-  );
+  return <OperationalBuilder kind="dashboard" title="Dashboard Builder" description="Crea dashboards, agrega widgets de resultados oficiales, guarda, publica, renderiza y genera snapshots trazables." defaultResultCode="health.grc" />;
 }

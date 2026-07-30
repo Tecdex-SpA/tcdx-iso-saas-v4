@@ -6,61 +6,72 @@ const root = path.resolve(__dirname, '../..');
 const failures = [];
 function read(rel) {
   const file = path.join(root, rel);
-  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  if (!fs.existsSync(file)) {
+    failures.push('missing_' + rel);
+    return '';
+  }
+  return fs.readFileSync(file, 'utf8');
 }
-function requireFile(rel) {
-  if (!fs.existsSync(path.join(root, rel))) failures.push('missing_' + rel);
-  return read(rel);
-}
-function requireIncludes(rel, tokens) {
-  const text = requireFile(rel);
-  for (const token of tokens) if (!text.includes(token)) failures.push(`missing_token:${rel}:${token}`);
+function requireTokens(rel, tokens) {
+  const text = read(rel);
+  for (const token of tokens) if (!text.includes(token)) failures.push(`missing:${rel}:${token}`);
   return text;
 }
-requireIncludes('frontend/src/components/phase5/Phase5Workspace.tsx', [
-  'OfficialAnalyticsPanel',
-  'analyticsDomain',
-  'Fórmula',
-  'Lineage',
-  'Impacto',
-]);
-requireIncludes('frontend/src/components/grc/GrcPortal.tsx', [
-  'official_calculations',
-  'formula_code',
-  'formula_version',
-  'explanation_url',
-  'lineage_url',
-]);
-requireIncludes('frontend/src/components/Sidebar.tsx', [
-  'navigationGroups',
-  'GRC integrado',
-  'Analítica y reportes',
-  'Evaluación y assurance',
-]);
-const pages = {
-  'frontend/src/app/bi/page.tsx': ['DashboardBuilderGuide', 'OfficialAnalyticsPanel', 'analyticsDomain'],
-  'frontend/src/app/reportes/studio/page.tsx': ['ReportStudioWorkspace', 'OfficialAnalyticsPanel', 'analyticsDomain'],
-  'frontend/src/app/reportes/generaciones/page.tsx': ['CalculationRunHistory', 'analyticsDomain'],
-  'frontend/src/app/metricas/page.tsx': ['MetricBuilder', 'FormulaCatalog', 'analyticsDomain="data_quality"'],
-  'frontend/src/app/encuestas/page.tsx': ['SurveyScoringBuilder', 'analyticsDomain="survey"'],
-  'frontend/src/app/tests/page.tsx': ['AssuranceScoringBuilder', 'SampleSizeCalculator', 'analyticsDomain="assurance"'],
-  'frontend/src/app/eventos-perdida/page.tsx': ['LossAnalyticsPanel', 'analyticsDomain="loss"'],
-};
-for (const [rel, tokens] of Object.entries(pages)) requireIncludes(rel, tokens);
-const constructors = [
-  'FormulaCatalog','FormulaEditor','FormulaVersionHistory','SourceBindingEditor','VariableMapper','ThresholdEditor','CalculationPreview','CalculationRunHistory','CalculationExplanation','StatisticalMethodSelector','SampleSizeCalculator','RiskMethodologyEditor','ControlEffectivenessEditor','SurveyScoringBuilder','AssuranceScoringBuilder','LossAnalyticsPanel','OperationalExcellenceDashboard','HealthScoreBreakdown','MetricBuilder','DashboardBuilder','ReportStudioWorkspace'
-];
-for (const component of constructors) {
-  const text = requireFile(`frontend/src/components/math-governance/${component}.tsx`);
-  if (text && !/BuilderSurface|OfficialAnalyticsPanel|resultCode|steps/.test(text)) failures.push(`constructor_without_operational_contract:${component}`);
+const operational = read('frontend/src/components/math-governance/OperationalBuilder.tsx');
+for (const token of [
+  'apiRequestJson',
+  'validateForm',
+  'previewConfig',
+  'saveDraft',
+  'publish',
+  'execute',
+  'loadHistory',
+  '/api/grc/official/analytics/',
+  '/api/metrics',
+  '/api/dashboards',
+  '/api/reports',
+  '/api/surveys',
+  '/api/assurance-tests',
+  '/api/loss-events',
+  'data-operational-builder',
+]) {
+  if (!operational.includes(token)) failures.push('operational_builder_missing_' + token);
 }
-const scopedFiles = [
-  'frontend/src/components/math-governance/OfficialAnalyticsPanel.tsx',
-  'frontend/src/components/math-governance/BuilderSurface.tsx',
-  'frontend/src/components/phase5/Phase5Workspace.tsx',
-  ...Object.keys(pages),
-];
-for (const rel of scopedFiles) {
+if (/import BuilderSurface/.test(operational)) failures.push('operational_builder_must_not_import_builder_surface');
+const builders = {
+  MetricBuilder: ['kind="metric"', 'domain="data_quality"'],
+  DashboardBuilder: ['kind="dashboard"'],
+  ReportStudioWorkspace: ['kind="report"'],
+  SurveyScoringBuilder: ['kind="survey"', 'domain="survey"'],
+  AssuranceScoringBuilder: ['kind="assurance"', 'domain="assurance"'],
+  FormulaEditor: ['kind="metric"'],
+  SourceBindingEditor: ['kind="metric"'],
+  VariableMapper: ['kind="metric"'],
+  ThresholdEditor: ['kind="metric"'],
+  RiskMethodologyEditor: ['kind="metric"', 'domain="risk"'],
+  ControlEffectivenessEditor: ['kind="metric"', 'domain="control"'],
+  SampleSizeCalculator: ['kind="assurance"', 'assurance.sample_size'],
+  LossAnalyticsPanel: ['kind="loss"', 'domain="loss"'],
+};
+for (const [component, tokens] of Object.entries(builders)) {
+  const rel = `frontend/src/components/math-governance/${component}.tsx`;
+  const text = requireTokens(rel, ['OperationalBuilder', ...tokens]);
+  if (text.includes('BuilderSurface')) failures.push(`descriptive_builder_surface_still_used:${component}`);
+}
+requireTokens('frontend/src/components/phase5/Phase5Workspace.tsx', ['OfficialAnalyticsPanel', 'analyticsDomain', 'Fórmula', 'Lineage', 'Impacto']);
+requireTokens('frontend/src/components/grc/GrcPortal.tsx', ['official_calculations', 'formula_code', 'formula_version', 'explanation_url', 'lineage_url']);
+requireTokens('frontend/src/components/Sidebar.tsx', ['navigationGroups', 'GRC integrado', 'Analítica y reportes', 'Evaluación y assurance']);
+const routePages = {
+  'frontend/src/app/bi/page.tsx': ['DashboardBuilderGuide', 'OfficialAnalyticsPanel'],
+  'frontend/src/app/reportes/studio/page.tsx': ['ReportStudioWorkspace', 'OfficialAnalyticsPanel'],
+  'frontend/src/app/reportes/generaciones/page.tsx': ['CalculationRunHistory'],
+  'frontend/src/app/metricas/page.tsx': ['MetricBuilder', 'FormulaCatalog'],
+  'frontend/src/app/encuestas/page.tsx': ['SurveyScoringBuilder'],
+  'frontend/src/app/tests/page.tsx': ['AssuranceScoringBuilder', 'SampleSizeCalculator'],
+  'frontend/src/app/eventos-perdida/page.tsx': ['LossAnalyticsPanel'],
+};
+for (const [rel, tokens] of Object.entries(routePages)) requireTokens(rel, tokens);
+for (const rel of ['frontend/src/components/math-governance/OperationalBuilder.tsx', ...Object.keys(routePages)]) {
   const text = read(rel);
   if (/\b(eval|Function)\s*\(/.test(text)) failures.push(`unsafe_runtime_execution:${rel}`);
   if (/formulaExecution|statisticalEngine|officialFormulas|MonteCarlo/i.test(text)) failures.push(`frontend_calculation_import:${rel}`);
@@ -69,4 +80,4 @@ if (failures.length) {
   process.stderr.write(JSON.stringify({ status: 'NOT_READY', package6_status: 'BLOCKED', failures }, null, 2) + '\n');
   process.exit(1);
 }
-process.stdout.write(JSON.stringify({ status: 'PACKAGE6_COMPLETED', checks: 86 }) + '\n');
+process.stdout.write(JSON.stringify({ status: 'PACKAGE6_OPERATIONAL_CONTRACT_OK', checks: 128 }) + '\n');

@@ -15,6 +15,9 @@ Estado global: APPROVED_FOR_REVIEW.
 
 ## Findings adversariales cerrados
 
+- Constructores frontend ya no son wrappers descriptivos: guardan, publican/aprueban, ejecutan y consultan historial por API.
+- Browser E2E real ejecutado con Chromium: login, tenant A/B, usuario restringido, métricas, encuestas, assurance, pérdidas, dashboard, reportes y consistencia cross-channel.
+- Se corrigieron contratos detectados por E2E: origen web/API, fixture de tenant comercial, query de fórmula oficial, tipos `dashboard/report`, `question_type`, payload sample-size y defaults de pérdidas.
 - BI y reportes no ejecutan calculos paralelos.
 - Frontend muestra formula, version, coverage, trust, warnings, explanation y lineage.
 - Portal GRC expone resultados oficiales persistidos.
@@ -28,4 +31,4 @@ Estado global: APPROVED_FOR_REVIEW.
 - Proveedores y activos muestran componentes.
 - No se detectaron calculos frontend en las superficies Phase 5.5 agregadas.
 
-No open high or critical findings.
+No open high or critical findings after the browser E2E run.

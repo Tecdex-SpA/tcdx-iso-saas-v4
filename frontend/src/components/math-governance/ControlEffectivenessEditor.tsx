@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function ControlEffectivenessEditor() {
-  return (
-    <BuilderSurface
-      title="Efectividad de controles"
-      description="Configura diseño, implementación, operación, evidencia y dependencia."
-      steps={["Diseño","Implementación","Operación","Evidencia","Combinación","Dependencia"]}
-      resultCode="F5_5_CONTROL_EFFECTIVENESS"
-      primaryHref="/controles"
-    />
-  );
+  return <OperationalBuilder kind="metric" title="Efectividad de controles" description="Configura D/I/O/E, source contract, thresholds y ejecución oficial para efectividad individual o combinada." domain="control" defaultResultCode="control.effectiveness" />;
 }

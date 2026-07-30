@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function SampleSizeCalculator() {
-  return (
-    <BuilderSurface
-      title="Tamaño de muestra"
-      description="Calcula muestra con confianza, error y corrección finita."
-      steps={["Población","Confianza","Error","Método","Resultado"]}
-      resultCode="F5_5_SAMPLE_SIZE"
-      primaryHref="/evaluaciones"
-    />
-  );
+  return <OperationalBuilder kind="assurance" testId="assurance-sample" title="Calculadora de muestra" description="Calcula tamaño de muestra, crea test de assurance, registra ejecución, revisión y explanation/lineage oficial." domain="assurance" defaultResultCode="assurance.sample_size" />;
 }

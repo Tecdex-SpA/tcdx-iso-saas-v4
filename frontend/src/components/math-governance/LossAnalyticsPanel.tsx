@@ -1,13 +1,5 @@
-import BuilderSurface from './BuilderSurface';
+import OperationalBuilder from './OperationalBuilder';
 
 export default function LossAnalyticsPanel() {
-  return (
-    <BuilderSurface
-      title="Analítica de pérdidas"
-      description="Opera pérdida neta, expected loss, VaR, Monte Carlo, KRI y concentración."
-      steps={["Alta","Clasificación","Recuperación","Net loss","Estadística","VaR","Monte Carlo","Cierre"]}
-      resultCode="F5_5_EXPECTED_LOSS"
-      primaryHref="/eventos-perdida"
-    />
-  );
+  return <OperationalBuilder kind="loss" title="Analítica de pérdidas" description="Crea evento, valida recuperaciones, confirma pérdida, ejecuta net loss, expected loss, VaR y Monte Carlo oficial." domain="loss" defaultResultCode="loss.net" />;
 }
