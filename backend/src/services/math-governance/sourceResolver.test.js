@@ -1,9 +1,9 @@
- 'use strict';
+'use strict';
 const assert = require('assert');
 const { FORMULAS } = require('./formulaRegistry.service');
 const { listFormulaSourceBindings, listSourceContracts } = require('./sourceContracts.service');
 const { validateDataset } = require('./datasetValidation.service');
-const { resolveFormulaSource } = require('./sourceResolver.service');
+const { resolveFormulaSource, mapFormulaInput } = require('./sourceResolver.service');
 
 async function main() {
   const bindings = listFormulaSourceBindings();
@@ -11,19 +11,16 @@ async function main() {
   assert.strictEqual(FORMULAS.filter((formula) => formula.source_contract === 'pending_package_2').length, 0, 'package 2 must replace pending source markers');
   const contracts = listSourceContracts();
   assert.ok(contracts.some((contract) => contract.availability === 'available'), 'available operational adapters expected');
-  assert.ok(contracts.some((contract) => contract.availability === 'source_unavailable'), 'explicit unavailable sources expected');
+  assert.deepStrictEqual(contracts.filter((contract) => contract.availability === 'source_unavailable').map((contract) => contract.source_code), ['external_fx_rates']);
+  assert.strictEqual(contracts.filter((contract) => ['legacy_adapter_required','partially_available'].includes(contract.availability)).length, 0, 'internal contracts must be resolved');
   for (const contract of contracts) {
     assert.ok(contract.checksum && contract.checksum.length === 64, `contract checksum missing for ${contract.source_code}`);
     assert.ok(!/;\s*(drop|delete|update|insert|alter)\b/i.test(contract.query || ''), `contract must not contain mutable SQL: ${contract.source_code}`);
+    assert.ok(contract.variable_map && typeof contract.variable_map === 'object', `variable equivalence missing for ${contract.source_code}`);
   }
 
   const dataset = validateDataset({
-    tenantId: 'tenant-a',
-    sourceKey: 'unit-test',
-    requiredFields: ['id', 'tenant_id', 'value'],
-    minimumSampleSize: 1,
-    naturalKey: 'id',
-    rangeRules: { value: { min: 0, max: 100 } },
+    tenantId: 'tenant-a', sourceKey: 'unit-test', requiredFields: ['id', 'tenant_id', 'value'], minimumSampleSize: 1, naturalKey: 'id', rangeRules: { value: { min: 0, max: 100 } },
     rows: [
       { id: 'a', tenant_id: 'tenant-a', value: 10, measured_at: '2026-01-01T00:00:00Z' },
       { id: 'b', tenant_id: 'tenant-b', value: 20, measured_at: '2026-01-01T00:00:00Z' },
@@ -36,18 +33,21 @@ async function main() {
   assert.ok(dataset.exclusions.some((item) => item.code === 'tenant_mismatch'));
   assert.ok(dataset.exclusions.some((item) => item.code === 'duplicate_natural_key'));
 
-  const unavailableContract = contracts.find((contract) => contract.source_code === 'external_fx_rates');
-  assert.strictEqual(unavailableContract.availability, 'source_unavailable');
+  assert.deepStrictEqual(mapFormulaInput('F5_5_INHERENT_RISK', [{ probability: 4, impact: 5 }]), { probability: 4, impact: 5 });
+  assert.deepStrictEqual(mapFormulaInput('F5_5_RESIDUAL_RISK', [{ exposure: 20, assurance_score: 65 }]), { inherentRisk: 20, controlEffectiveness: 0.65 });
+  assert.deepStrictEqual(mapFormulaInput('F5_5_COVERAGE', [{ status: 'conform', applicability: true }, { status: 'pending', applicability: true }, { status: 'not_applicable', applicability: false }]), { evaluated: 2, applicable: 2 });
+  const complianceInput = mapFormulaInput('F5_5_COMPLIANCE_WEIGHTED', [{ status: 'conform', weight: 2, applicability: true }, { status: 'not_applicable', weight: 1, applicability: false }]);
+  assert.strictEqual(complianceInput.assessments.length, 2);
+  assert.strictEqual(complianceInput.assessments[1].notApplicable, true);
+  const controlInput = mapFormulaInput('F5_5_CONTROL_EFFECTIVENESS', [{ design_score: 80, implementation_score: 70, operation_score: 90, evidence_score: 60 }]);
+  assert.deepStrictEqual(controlInput, { design: 0.8, implementation: 0.7, operation: 0.9, evidence: 0.6 });
+  const severity = mapFormulaInput('F5_5_SEVERITY_INDEX', [{ severity: 'low' }, { severity: 'critical' }, { severity: 'high' }]);
+  assert.deepStrictEqual(severity, { low: 1, medium: 0, high: 1, critical: 1 });
 
-  const fakeClient = {
-    async query(sql) {
-      if (sql.includes('to_regclass')) return { rows: [{ exists: false }] };
-      throw new Error('unexpected query');
-    },
-  };
+  const fakeClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
   const missingTables = await resolveFormulaSource({ client: fakeClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
   assert.strictEqual(missingTables.status, 'source_unavailable');
   assert.ok(missingTables.reason.includes('not present'));
-  process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_RESOLVER_TESTS_OK', formulas: FORMULAS.length, contracts: contracts.length }) + '\n');
+  process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_RESOLVER_TESTS_OK', formulas: FORMULAS.length, contracts: contracts.length, unresolved_internal: 0, equivalence_assertions: 6 }) + '\n');
 }
 main().catch((error) => { console.error(error); process.exit(1); });
