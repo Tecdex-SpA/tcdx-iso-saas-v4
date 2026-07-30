@@ -82,7 +82,7 @@ async function queryOperationalRows({ client, contract, tenantId, period = {} })
 function mapFormulaInput(formulaCode, rows) {
   const first = rows[0] || {};
   const statuses = rows.map((row) => String(row.status || '').toLowerCase());
-  const severityLevels = rows.map((row) => String(row.severity ?? row.risk_level ?? row.level ?? row.status ?? '').toLowerCase());
+  const severities = rows.map((row) => String(row.severity ?? row.risk_level ?? row.level ?? row.status ?? '').toLowerCase());
   const usableScores = rows.map((row) => number(row.score)).filter((value) => value !== null);
   const dates = rows.map((row) => row.event_date || row.measured_at || row.assessed_at).filter(Boolean);
 
@@ -105,7 +105,7 @@ function mapFormulaInput(formulaCode, rows) {
   if (formulaCode === 'F5_5_CONTROL_COVERAGE') return { risksWithControl: rows.filter((row) => number(row.score) !== null || number(row.control_effectiveness) !== null).length, relevantRisks: rows.length };
   if (formulaCode === 'F5_5_FREQUENCY_COMPLIANCE') return { onTimeExecutions: statuses.filter((status) => ['effective', 'completed', 'on_time', 'compliant'].includes(status)).length, scheduledExecutions: rows.length };
   if (formulaCode === 'F5_5_FAILURE_RATE') return { failedTests: statuses.filter((status) => ['fail', 'failed', 'non_compliant'].includes(status)).length, executedTests: rows.length };
-  if (formulaCode === 'F5_5_SEVERITY_INDEX') return { low: severityLevels.filter((level) => level === 'low').length, medium: severityLevels.filter((level) => level === 'medium').length, high: severityLevels.filter((level) => level === 'high').length, critical: severityLevels.filter((level) => level === 'critical').length };
+  if (formulaCode === 'F5_5_SEVERITY_INDEX') return { low: severities.filter((severity) => severity === 'low').length, medium: severities.filter((severity) => severity === 'medium').length, high: severities.filter((severity) => severity === 'high').length, critical: severities.filter((severity) => severity === 'critical').length };
   if (['F5_5_MTTC', 'F5_5_AGE', 'F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((row) => ({ openedAt: row.opened_at, closedAt: row.closed_at, createdAt: row.opened_at, progress: number(row.progress), weight: number(row.weight, 1) })).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
   if (formulaCode === 'F5_5_CLOSURE_RATE') return { closed: statuses.filter((status) => ['closed', 'completed', 'resolved'].includes(status)).length, openAtStart: statuses.filter((status) => !['closed', 'completed', 'resolved'].includes(status)).length, created: 0 };
   if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((row) => !['closed', 'completed', 'resolved'].includes(String(row.status))); return { overdueOpen: open.filter((row) => row.due_at && new Date(row.due_at) < new Date()).length, openActions: open.length, items: open.map((row) => ({ overdue: row.due_at && new Date(row.due_at) < new Date() ? 1 : 0, weight: number(row.weight, 1) })) }; }
@@ -164,4 +164,4 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }
-module.exports = { SOURCE_STATES, buildSourceContract, sourceUnavailable, listSourceContracts, listFormulaSourceBindings, resolveFormulaSource, resolveFormulaSources, getSourceContract, tableExists, mapFormulaInput, queryOperationalRows, firstPopulated: firstPopulatedTables };
+module.exports = { SOURCE_STATES, buildSourceContract, sourceUnavailable, listSourceContracts, listFormulaSourceBindings, resolveFormulaSource, resolveFormulaSources, getSourceContract, tableExists, mapFormulaInput, queryOperationalRows, firstPopulated, firstPopulatedTables };
