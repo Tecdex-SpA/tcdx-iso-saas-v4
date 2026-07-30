@@ -39,7 +39,7 @@
     "multer": "^2.2.0",
     "openai": "^6.45.0",
     "pdf-parse": "^1.1.1",
-    "pdfkit": "^0.18.2",
+    "pdfkit": "^0.18.0",
     "pg": "^8.20.0",
     "puppeteer": "^25.2.1",
     "puppeteer-core": "^25.2.1",
