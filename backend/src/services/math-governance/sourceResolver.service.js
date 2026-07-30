@@ -55,7 +55,15 @@ async function queryCompliance(client, tenantId, period) {
 }
 async function queryRisk(client, tenantId, period) { return firstPopulatedTables(client, ['grc_quantitative_risk_assessments','iso_risk_matrix_items','asset_risks','privacy_dpia_risks'], tenantId, period); }
 async function queryControls(client, tenantId, period) { return firstPopulatedTables(client, ['grc_control_assurance','control_soa_assessments','control_health_scores','tenant_controls'], tenantId, period); }
-async function queryAuditActions(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_findings','action_plans','findings'], tenantId, period); }
+async function queryAuditActions(client, tenantId, period, formulaCode) {
+  const severityFormula = formulaCode === 'F5_5_SEVERITY_INDEX';
+  const tables = severityFormula
+    ? ['grc_readiness_findings', 'findings', 'action_plans']
+    : ['action_plans', 'findings', 'grc_readiness_findings'];
+  const rows = await firstPopulatedTables(client, tables, tenantId, period);
+  if (!rows || !severityFormula) return rows;
+  return rows.map((row) => ({ ...row, status: row.status || 'open' }));
+}
 async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period); }
 async function queryHealth(client, tenantId, period) { return firstPopulatedTables(client, ['calculation_outputs'], tenantId, period); }
 async function queryMaturity(client, tenantId, period) { return firstPopulatedTables(client, ['survey_evaluations','metric_measurements','grc_metric_measurements'], tenantId, period); }
@@ -69,10 +77,10 @@ const ADAPTER_BY_SOURCE = Object.freeze({
   maturity_assessments: queryMaturity,
 });
 
-async function queryOperationalRows({ client, contract, tenantId, period = {} }) {
+async function queryOperationalRows({ client, contract, tenantId, period = {}, formulaCode = null }) {
   const adapter = ADAPTER_BY_SOURCE[contract.source_code];
   if (adapter) {
-    const rows = await adapter(client, tenantId, period);
+    const rows = await adapter(client, tenantId, period, formulaCode);
     return rows === null ? { rows: [], unavailable: true, reason: `No existen tablas operacionales para ${contract.source_code}.` } : { rows, unavailable: false, reason: null };
   }
   const rows = await firstPopulatedTables(client, contract.tables || [], tenantId, period);
@@ -152,7 +160,7 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   if (!contract) return sourceUnavailable(resolvedSourceCode, 'No existe contrato de fuente para la fórmula.');
   if (contract.availability === 'source_unavailable') return sourceUnavailable(contract.source_code, contract.limitations || 'Fuente no disponible.');
   let queried;
-  try { queried = await queryOperationalRows({ client, contract, tenantId, period }); }
+  try { queried = await queryOperationalRows({ client, contract, tenantId, period, formulaCode }); }
   catch (error) { const wrapped = new MathGovernanceError('SOURCE_SCHEMA_INCOMPATIBLE', 'La estructura física de la fuente no coincide con el contrato analítico.', { source_code: contract.source_code, original_code: error.code || null }); wrapped.cause = error; throw wrapped; }
   if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason);
   const rows = normalizeRows(queried.rows, contract);
