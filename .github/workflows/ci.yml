@@ -7,7 +7,7 @@ jobs:
   validate:
     name: Validate backend and frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -39,11 +39,22 @@ jobs:
         working-directory: backend
         run: npm run check
 
+      - name: Phase 5 migration syntax and checksum
+        run: |
+          node --check scripts/phase5/apply-phase5-migration.js
+          node scripts/phase5/apply-phase5-migration.js --checksum
+
       - name: Phase 5.5 source bindings and equivalence
         run: npm run phase5-5:source-binding-check
 
       - name: Phase 5.5 PostgreSQL source adapters
         run: bash scripts/phase5-5/check-source-adapters-postgres-ci.sh
+
+      - name: Phase 5.5 50 formulas with production snapshot constraint
+        run: bash scripts/phase5-5/check-50-formulas-snapshot-postgres-ci.sh
+
+      - name: Phase 5.5 production acceptance contract
+        run: node scripts/phase5-5/check-production-acceptance-contract.js
 
       - name: Phase 1 contracts
         run: npm run phase1:contracts:check
