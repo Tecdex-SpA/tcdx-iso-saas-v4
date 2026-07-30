@@ -24,16 +24,24 @@ type AnalyticsItem = {
 
 type Props = { title?: string; domain?: string; compact?: boolean; limit?: number };
 type EvidenceState = { kind: EvidenceKind; runId: string; formulaName: string } | null;
+type UnknownRecord = Record<string, unknown>;
 
-function stringId(value: AnalyticsItem['latest_calculation_run'] | AnalyticsItem['latest_snapshot']) {
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringId(value: unknown) {
   if (typeof value === 'string') return value;
-  if (!value || typeof value !== 'object') return '';
-  return value.run_id || value.id || value.snapshot_id || '';
+  if (!isRecord(value)) return '';
+  for (const key of ['run_id', 'id', 'snapshot_id', 'calculation_run_id']) {
+    if (typeof value[key] === 'string' && String(value[key]).trim()) return String(value[key]);
+  }
+  return '';
 }
 
 function runStatus(item: AnalyticsItem) {
   const run = item.latest_calculation_run;
-  return typeof run === 'object' && run ? String(run.run_status || '').toLowerCase() : '';
+  return isRecord(run) ? String(run.run_status || '').toLowerCase() : '';
 }
 
 function cardTone(item: AnalyticsItem) {
