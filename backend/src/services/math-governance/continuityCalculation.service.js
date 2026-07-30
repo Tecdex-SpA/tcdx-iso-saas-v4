@@ -1,0 +1,17 @@
+ 'use strict';
+const { MathGovernanceError, number } = require('./statisticalEngine.service');
+const { officialResult } = require('./officialCalculation.service');
+function availability(input = {}) { if (input.mtbf !== undefined && input.mtbf !== null) return (number(input.mtbf,'mtbf')/(number(input.mtbf,'mtbf')+number(input.mttr,'mttr')))*100; const total = number(input.totalTime,'totalTime'); if (total <= 0) throw new MathGovernanceError('AVAILABILITY_TOTAL_TIME_INVALID','Tiempo total debe ser positivo.'); const down = number(input.downtime,'downtime'); if (down < 0) throw new MathGovernanceError('AVAILABILITY_DOWNTIME_INVALID','Downtime no puede ser negativo.'); return ((total-down)/total)*100; }
+function mtbf({ operatingTime, failures }) { const f = number(failures,'failures'); if (f <= 0) throw new MathGovernanceError('MTBF_ZERO_FAILURES','MTBF requiere fallas positivas.'); return number(operatingTime,'operatingTime')/f; }
+function mttr({ repairTimes = [], incidents = null }) { const total = repairTimes.reduce((s,v)=>s+number(v,'repairTime'),0); const count = incidents ?? repairTimes.length; if (number(count,'incidents') <= 0) throw new MathGovernanceError('MTTR_ZERO_INCIDENTS','MTTR requiere incidentes.'); return total/number(count,'incidents'); }
+function slaCompliance({ withinSla, applicableCases }) { const d = number(applicableCases,'applicableCases'); if (d <= 0) throw new MathGovernanceError('SLA_NO_APPLICABLE_CASES','SLA requiere casos aplicables.'); return (number(withinSla,'withinSla')/d)*100; }
+function rtoGap({ recoveryActual, rtoObjective }) { return number(recoveryActual,'recoveryActual')-number(rtoObjective,'rtoObjective'); }
+function rpoGap({ dataLossActual, rpoObjective }) { return number(dataLossActual,'dataLossActual')-number(rpoObjective,'rpoObjective'); }
+function continuityHealth(input = {}) { const components = [input.availabilityScore, input.slaScore, input.testScore, input.actionScore, input.trustScore].filter((v)=>v!==null&&v!==undefined); return components.length ? components.reduce((s,v)=>s+number(v,'component'),0)/components.length : null; }
+function officialAvailability(input={}) { return officialResult('F5_5_AVAILABILITY', input, { period: input.period||{}, source: input.source||null, components: { method: input.mtbf !== undefined ? 'mtbf_mttr' : 'total_downtime', unit: input.unit || 'hours' } }); }
+function officialMtbf(input={}) { return officialResult('F5_5_MTBF', input, { period: input.period||{}, source: input.source||null, components: { unit: input.unit || 'hours' } }); }
+function officialMttr(input={}) { return officialResult('F5_5_MTTR', input, { period: input.period||{}, source: input.source||null, components: { unit: input.unit || 'hours' } }); }
+function officialSla(input={}) { return officialResult('F5_5_SLA_COMPLIANCE', input, { period: input.period||{}, source: input.source||null, components: { timezone: input.timezone || 'tenant_timezone' } }); }
+function officialRtoGap(input={}) { return officialResult('F5_5_RTO_GAP', input, { period: input.period||{}, source: input.source||null, components: { unit: input.unit || 'hours' } }); }
+function officialRpoGap(input={}) { return officialResult('F5_5_RPO_GAP', input, { period: input.period||{}, source: input.source||null, components: { unit: input.unit || 'hours' } }); }
+module.exports = { availability, mtbf, mttr, slaCompliance, rtoGap, rpoGap, continuityHealth, officialAvailability, officialMtbf, officialMttr, officialSla, officialRtoGap, officialRpoGap };

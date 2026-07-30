@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
+import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
 
 type Phase5Item = Record<string, unknown>;
 
@@ -14,6 +15,8 @@ type Phase5WorkspaceProps = {
   columns: Array<{ key: string; label: string }>;
   emptyMessage: string;
   capabilityLabel?: string;
+  analyticsDomain?: string;
+  children?: ReactNode;
 };
 
 function text(value: unknown) {
@@ -62,6 +65,8 @@ export default function Phase5Workspace({
   columns,
   emptyMessage,
   capabilityLabel,
+  analyticsDomain,
+  children,
 }: Phase5WorkspaceProps) {
   const [rows, setRows] = useState<Phase5Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,6 +138,23 @@ export default function Phase5Workspace({
           </div>
         </div>
 
+        {children && (
+          <div className="mt-6 grid gap-4">
+            {children}
+          </div>
+        )}
+
+        {analyticsDomain !== undefined && (
+          <div className="mt-6">
+            <OfficialAnalyticsPanel
+              title="Resultados oficiales disponibles para esta vista"
+              domain={analyticsDomain || undefined}
+              compact
+              limit={6}
+            />
+          </div>
+        )}
+
         {loading && (
           <div className="mt-6 rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] p-6 text-sm">
             Cargando información gobernada…
@@ -185,6 +207,7 @@ export default function Phase5Workspace({
                     </th>
                   ))}
                   <th scope="col" className="px-4 py-3 text-left font-semibold">Confianza</th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold">Fórmula</th>
                   <th scope="col" className="px-4 py-3 text-left font-semibold">Análisis</th>
                 </tr>
               </thead>
@@ -206,6 +229,11 @@ export default function Phase5Workspace({
                           Sin alerta visible
                         </span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 align-top text-xs">
+                      <div className="font-semibold">{text(row.formula_code || row.official_formula_code || row.result_code)}</div>
+                      <div className="text-[var(--tcdx-color-text-secondary)]">v{text(row.formula_version || row.official_formula_version || row.version_number)}</div>
+                      <div className="text-[var(--tcdx-color-text-secondary)]">{text(row.coverage ?? row.trust_status ?? row.source_status)}</div>
                     </td>
                     <td className="px-4 py-3 align-top">
                       {row.id ? (

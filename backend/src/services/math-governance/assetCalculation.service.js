@@ -1,0 +1,10 @@
+ 'use strict';
+const { MathGovernanceError, number } = require('./statisticalEngine.service');
+const { officialResult, clamp } = require('./officialCalculation.service');
+function assertWeights(weights) { const total = Object.values(weights).reduce((s,v)=>s+number(v,'weight'),0); if (Math.abs(total-1)>.0001) throw new MathGovernanceError('ASSET_WEIGHTS_SUM_INVALID','Pesos de activo deben sumar 1.'); }
+function normalize(value, scale = { min: 1, max: 5 }) { return clamp((number(value,'value')-scale.min)/(scale.max-scale.min),0,1); }
+function assetCriticality({ confidentiality, integrity, availability, legal, weights = { confidentiality:.25, integrity:.25, availability:.25, legal:.25 }, scale = { min:1, max:5 } } = {}) { assertWeights(weights); const components = { confidentiality: normalize(confidentiality, scale), integrity: normalize(integrity, scale), availability: normalize(availability, scale), legal: normalize(legal, scale) }; const value = Object.entries(weights).reduce((s,[k,w])=>s+w*components[k],0)*100; return { value, components, weights, scale }; }
+function classify(value) { if (value >= 80) return 'critical'; if (value >= 60) return 'high'; if (value >= 35) return 'medium'; return 'low'; }
+function relations(input={}) { return { risk: input.risk_id || input.riskId || null, control: input.control_id || input.controlId || null, process: input.process_id || input.processId || null, supplier: input.supplier_id || input.supplierId || null, continuity: input.continuity_id || input.continuityId || null, incident: input.incident_id || input.incidentId || null, evidence: input.evidence_id || input.evidenceId || null }; }
+function officialAssetCriticality(input={}) { const c = assetCriticality(input); return officialResult('F5_5_ASSET_CRITICALITY', input, { period: input.period||{}, source: input.source||null, components: { ...c, classification: classify(c.value), relations: relations(input) }, explanation: 'Criticidad oficial de activo con desglose C/I/A/legal, pesos visibles y escala normalizada.' }); }
+module.exports = { assetCriticality, classify, relations, officialAssetCriticality };

@@ -24,6 +24,10 @@ const MIGRATIONS = [
     id: '20260730_phase5_tenant_shell_grc_data_integration',
     file: path.join(root, 'database/migrations/20260730_phase5_tenant_shell_grc_data_integration.sql'),
   },
+  {
+    id: '20260730_phase5_5_official_math_governance',
+    file: path.join(root, 'database/migrations/20260730_phase5_5_official_math_governance.sql'),
+  },
 ];
 
 function sanitizeError(error) {

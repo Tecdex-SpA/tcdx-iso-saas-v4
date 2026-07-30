@@ -1,3 +1,4 @@
+import LossAnalyticsPanel from '@/components/math-governance/LossAnalyticsPanel';
 import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 
 export default function LossEventManager() {
@@ -8,6 +9,7 @@ export default function LossEventManager() {
       endpoint="/api/loss-events"
       primaryLabel="eventos de pérdida"
       emptyMessage="No hay eventos de pérdida registrados."
+      analyticsDomain="loss"
       columns={[
         { key: 'event_code', label: 'Evento' },
         { key: 'event_type', label: 'Tipo' },
@@ -15,6 +17,8 @@ export default function LossEventManager() {
         { key: 'net_loss', label: 'Pérdida neta' },
         { key: 'status', label: 'Estado' },
       ]}
-    />
+    >
+      <LossAnalyticsPanel />
+    </Phase5Workspace>
   );
 }

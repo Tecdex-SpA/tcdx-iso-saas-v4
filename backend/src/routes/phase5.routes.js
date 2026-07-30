@@ -186,6 +186,36 @@ reportSchedulesRouter.post('/:id/resume', route((req) => service.updateReportSch
 
 const grcRouter = express.Router();
 grcRouter.get('/overview', requireTenant, requireCommercialCapability('data.governance'), route((req) => service.getGrcOverview(scope(req), req.requestId)));
+
+grcRouter.get('/official/analytics/catalog', requireTenant, requireCommercialCapability('metrics.catalog'), route((req) => service.listOfficialAnalyticsCatalog(scope(req))));
+grcRouter.get('/official/analytics/health-catalog', requireTenant, requireCommercialCapability('metrics.catalog'), route((req) => service.listOfficialHealthCatalog(scope(req))));
+grcRouter.get('/official/analytics/:resultCode', requireTenant, requireCommercialCapability('metrics.catalog'), route((req) => service.getOfficialAnalyticsResult(scope(req), req.params.resultCode, { filters: req.query, period: req.query })));
+grcRouter.post('/official/analytics/:resultCode', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.getOfficialAnalyticsResult(scope(req), req.params.resultCode, req.body)));
+
+grcRouter.get('/official/package4/jobs', requireTenant, requireCommercialCapability('metrics.catalog'), route((req) => service.listOfficialPackage4Jobs(scope(req))));
+grcRouter.post('/official/package4/jobs/:jobKey', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.runOfficialPackage4Job(scope(req), req.params.jobKey, req.body, req.requestId)));
+grcRouter.post('/official/surveys/scoring', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'survey-score', req.body, req.requestId)));
+grcRouter.post('/official/surveys/campaign-analytics', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'survey-response-rate', req.body, req.requestId)));
+grcRouter.post('/official/surveys/cronbach', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'survey-cronbach', req.body, req.requestId)));
+grcRouter.post('/official/assurance/sample-size', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'assurance-sample-size', req.body, req.requestId)));
+grcRouter.post('/official/assurance/execution-score', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'assurance-score', req.body, req.requestId)));
+grcRouter.post('/official/losses/net-loss', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'loss-net', req.body, req.requestId)));
+grcRouter.post('/official/losses/expected-loss', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'loss-expected', req.body, req.requestId)));
+grcRouter.post('/official/losses/var', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'loss-var', req.body, req.requestId)));
+grcRouter.post('/official/losses/monte-carlo', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'loss-monte-carlo', req.body, req.requestId)));
+grcRouter.post('/official/continuity/availability', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'continuity-availability', req.body, req.requestId)));
+grcRouter.post('/official/continuity/mtbf', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'continuity-mtbf', req.body, req.requestId)));
+grcRouter.post('/official/continuity/mttr', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'continuity-mttr', req.body, req.requestId)));
+grcRouter.post('/official/continuity/sla', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'continuity-sla', req.body, req.requestId)));
+grcRouter.post('/official/continuity/rto-gap', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'continuity-rto-gap', req.body, req.requestId)));
+grcRouter.post('/official/continuity/rpo-gap', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'continuity-rpo-gap', req.body, req.requestId)));
+grcRouter.post('/official/assets/criticality', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'asset-criticality', req.body, req.requestId)));
+grcRouter.post('/official/suppliers/risk', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), 'supplier-risk', req.body, req.requestId)));
+
+grcRouter.get('/official/health/definitions', requireTenant, requireCommercialCapability('metrics.catalog'), route(() => require('../services/math-governance/grcHealthCalculation.service').listHealthDefinitions()));
+grcRouter.get('/official/calculations/:runId/explanation', requireTenant, requireCommercialCapability('metrics.catalog'), route((req) => service.getOfficialCalculationExplanation(scope(req), req.params.runId)));
+grcRouter.get('/official/calculations/:runId/lineage', requireTenant, requireCommercialCapability('metrics.catalog'), route((req) => service.getOfficialCalculationLineage(scope(req), req.params.runId)));
+grcRouter.post('/official/:metricKey', requireTenant, requireCommercialCapability('metrics.engine'), route((req) => service.calculateOfficialGrcMetric(scope(req), req.params.metricKey, { ...req.body, period: req.body?.period || req.query || {} }, req.requestId)));
 grcRouter.get('/impact/:entityType/:entityId', requireTenant, requireCommercialCapability('data.impact_graph'), route((req) => service.graph(scope(req), req.params.entityType, req.params.entityId, 'impact')));
 
 module.exports = {

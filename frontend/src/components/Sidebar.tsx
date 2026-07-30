@@ -289,6 +289,25 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       }));
   }, [canSeeAiCompliance, hasModule, iconClass, normalizedRole]);
 
+  const navigationGroups = useMemo(() => {
+    const sections = [
+      { label: t('sidebar.general'), hrefs: ['/dashboard', '/cumplimiento-auditoria', '/evidencias', '/riesgos', '/planes-accion', '/exportes'] },
+      { label: 'GRC integrado', hrefs: ['/grc-global', '/operaciones-grc', '/grc', '/datos'] },
+      { label: 'Analítica y reportes', hrefs: ['/metricas', '/bi', '/reportes/studio'] },
+      { label: 'Evaluación y assurance', hrefs: ['/encuestas', '/tests', '/eventos-perdida'] },
+      { label: 'Sistema', hrefs: ['/ia-compliance', '/configuracion'] },
+    ];
+
+    return sections
+      .map((section) => ({
+        ...section,
+        items: section.hrefs
+          .map((href) => generalItems.find((item) => item.href === href))
+          .filter(Boolean) as typeof generalItems,
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [generalItems, t]);
+
   const platformItems = [
     {
       href: '/admin-saas',
@@ -454,19 +473,23 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
         {!isPlatformAdmin && !isDealer && (
           <>
-            {sectionLabel(t('sidebar.general'))}
-            <div className="space-y-1.5">
-              {generalItems.map((item) => (
-                <NavItem
-                  key={item.href}
-                  href={item.href}
-                  label={item.label}
-                  collapsed={collapsed}
-                  active={isActive(item.href)}
-                  icon={item.icon}
-                />
-              ))}
-            </div>
+            {navigationGroups.map((group) => (
+              <div key={group.label}>
+                {sectionLabel(group.label)}
+                <div className="space-y-1.5">
+                  {group.items.map((item) => (
+                    <NavItem
+                      key={item.href}
+                      href={item.href}
+                      label={item.label}
+                      collapsed={collapsed}
+                      active={isActive(item.href)}
+                      icon={item.icon}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
 
           </>
         )}

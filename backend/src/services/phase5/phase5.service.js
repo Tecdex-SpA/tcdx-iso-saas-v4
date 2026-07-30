@@ -11,6 +11,8 @@ const pool = require('../../config/db');
 const asyncJobs = require('../asyncJob.service');
 const { evaluate, validateExpression, FormulaError } = require('./formulaEngine');
 const { calculateTrustScore, assessFreshness, TrustScoreError } = require('./dataTrustScore');
+const phase5Package3 = require('../math-governance/phase5Package3.service');
+const analyticsCatalog = require('../math-governance/analyticsCatalog.service');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -105,6 +107,23 @@ async function auditEvent(client, { tenantId, userId: actor, action, entityType,
       [tenantId, actor, action, entityType, entityId || null, json(payload), 'phase5_audit', requestId || null]
     ).catch(() => null);
   }
+}
+
+async function registerCalculationConsumer(scope, { formulaCode, consumerType, consumerKey, consumerPath = null, status = 'active', packageStatus = 'package5_completed', metadata = {} }) {
+  const tenantId = tenantIdFrom(scope);
+  if (!formulaCode || !consumerType || !consumerKey || !(await tableExists(pool, 'calculation_consumers'))) return null;
+  const result = await pool.query(
+    `INSERT INTO calculation_consumers (tenant_id, formula_code, consumer_type, consumer_key, consumer_path, status, package_status, metadata)
+     VALUES ($1::uuid,$2,$3,$4,$5,$6,$7,$8::jsonb)
+     ON CONFLICT (COALESCE(tenant_id, '00000000-0000-0000-0000-000000000000'::uuid), formula_code, consumer_type, consumer_key) DO UPDATE
+     SET consumer_path=EXCLUDED.consumer_path,
+         status=EXCLUDED.status,
+         package_status=EXCLUDED.package_status,
+         metadata=calculation_consumers.metadata || EXCLUDED.metadata
+     RETURNING *`,
+    [tenantId, formulaCode, consumerType, consumerKey, consumerPath, status, packageStatus, json(metadata)]
+  ).catch(() => ({ rows: [] }));
+  return result.rows[0] || null;
 }
 
 async function tableExists(client, tableName) {
@@ -1117,6 +1136,99 @@ async function addLossRecovery(scope, id, body = {}, requestId = null) {
   }
 }
 
+async function latestOfficialAnalyticalRun(tenantId, formulaCode, period = {}) {
+  if (!(await tableExists(pool, 'calculation_runs')) || !(await tableExists(pool, 'calculation_outputs'))) return null;
+  const filters = [tenantId, formulaCode];
+  let periodSql = '';
+  if (period.start || period.period_start) {
+    filters.push(period.start || period.period_start);
+    periodSql += ` AND (cr.period_start IS NULL OR cr.period_start >= $${filters.length}::timestamptz)`;
+  }
+  if (period.end || period.period_end) {
+    filters.push(period.end || period.period_end);
+    periodSql += ` AND (cr.period_end IS NULL OR cr.period_end <= $${filters.length}::timestamptz)`;
+  }
+  const row = (await pool.query(
+    `SELECT cr.id AS run_id, cr.formula_code, cr.run_status, cr.period_start, cr.period_end, cr.timezone,
+            cr.completed_at, cr.metadata AS run_metadata, co.output_value, co.unit, co.metadata AS output_metadata,
+            cs.id AS snapshot_id
+       FROM calculation_runs cr
+       LEFT JOIN calculation_outputs co ON co.run_id=cr.id AND co.tenant_id=cr.tenant_id AND co.output_name='value'
+       LEFT JOIN LATERAL (
+         SELECT id FROM calculation_snapshots WHERE tenant_id=cr.tenant_id AND run_id=cr.id ORDER BY created_at DESC LIMIT 1
+       ) cs ON TRUE
+      WHERE cr.tenant_id=$1::uuid AND cr.formula_code=$2 AND cr.run_status='calculated'
+      ${periodSql}
+      ORDER BY cr.completed_at DESC NULLS LAST, cr.started_at DESC LIMIT 1`,
+    filters
+  )).rows[0] || null;
+  return row;
+}
+
+async function latestOfficialTrend(tenantId, formulaCode) {
+  if (!(await tableExists(pool, 'calculation_runs')) || !(await tableExists(pool, 'calculation_outputs'))) return {};
+  const rows = (await pool.query(
+    `SELECT cr.id AS run_id, cr.completed_at, co.output_value
+       FROM calculation_runs cr
+       JOIN calculation_outputs co ON co.run_id=cr.id AND co.tenant_id=cr.tenant_id AND co.output_name='value'
+      WHERE cr.tenant_id=$1::uuid AND cr.formula_code=$2 AND cr.run_status='calculated'
+      ORDER BY cr.completed_at DESC NULLS LAST, cr.started_at DESC LIMIT 2`,
+    [tenantId, formulaCode]
+  )).rows;
+  if (rows.length < 2) return {};
+  const current = Number(rows[0].output_value?.value);
+  const previous = Number(rows[1].output_value?.value);
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return {};
+  return { current, previous, absolute_change: current - previous, percent_change: previous === 0 ? null : ((current - previous) / Math.abs(previous)) * 100 };
+}
+
+async function listOfficialAnalyticsCatalog(scope) {
+  const tenantId = tenantIdFrom(scope);
+  const definitions = analyticsCatalog.listAnalyticalResults();
+  const enriched = [];
+  for (const definition of definitions) {
+    const latest = await latestOfficialAnalyticalRun(tenantId, definition.formula_code);
+    enriched.push({
+      ...definition,
+      source_status: latest?.run_id ? 'available' : 'source_unavailable',
+      latest_calculation_run: latest?.run_id || null,
+      latest_snapshot: latest?.snapshot_id || null,
+      trust_status: latest?.run_metadata?.trust_status || latest?.output_metadata?.trust_status || 'unknown',
+    });
+  }
+  return enriched;
+}
+
+async function getOfficialAnalyticsResult(scope, resultCode, body = {}) {
+  const tenantId = tenantIdFrom(scope);
+  const definition = analyticsCatalog.getAnalyticalResultDefinition(resultCode);
+  const period = body.period || body.filters?.period || {};
+  const latest = await latestOfficialAnalyticalRun(tenantId, definition.formula_code, period);
+  const trend = body.include_trend === false ? {} : await latestOfficialTrend(tenantId, definition.formula_code);
+  return analyticsCatalog.buildOfficialConsumptionPayload(definition, latest, { period, trend, warnings: body.warnings || [] });
+}
+
+async function resolveWidgetOfficialData(scope, widget, period = {}) {
+  const requested = text(widget.config?.result_code || widget.config?.analytical_result_code || widget.data_source_ref);
+  if (!requested) return { status: 'source_unavailable', warnings: ['Widget sin result_code oficial.'] };
+  try {
+    return await getOfficialAnalyticsResult(scope, requested, { period });
+  } catch (error) {
+    return {
+      result_code: requested,
+      value: null,
+      unit: null,
+      status: 'unmeasured',
+      source_status: 'source_unavailable',
+      warnings: [sanitizeError(error)],
+      calculation_run_id: null,
+      snapshot_id: null,
+      explanation_url: null,
+      lineage_url: null,
+    };
+  }
+}
+
 async function listDashboards(scope) {
   const tenantId = tenantIdFrom(scope);
   return queryRows(`SELECT * FROM dashboard_definitions WHERE tenant_id=$1::uuid ORDER BY updated_at DESC LIMIT 100`, [tenantId]);
@@ -1199,8 +1311,8 @@ async function createSnapshot(scope, entityType, entityId, payload, requestId = 
 }
 
 async function snapshotDashboard(scope, id, requestId = null) {
-  const dashboard = await getDashboard(scope, id);
-  const snapshot = await createSnapshot(scope, 'dashboard', id, { snapshot_type: 'dashboard', dashboard, captured_at: new Date().toISOString() }, requestId);
+  const dashboard = await renderDashboard(scope, id);
+  const snapshot = await createSnapshot(scope, 'dashboard', id, { snapshot_type: 'dashboard', dashboard, official_only: true, captured_at: new Date().toISOString() }, requestId);
   await recordLineageEdge(scope, {
     fromType: 'data_snapshot',
     fromId: snapshot.id,
@@ -1217,16 +1329,21 @@ async function snapshotDashboard(scope, id, requestId = null) {
 
 async function renderDashboard(scope, id) {
   const dashboard = await getDashboard(scope, id);
-  const tenantId = tenantIdFrom(scope);
+  const period = dashboard.filter_config?.period || {};
   const widgets = [];
   for (const widget of dashboard.widgets) {
-    let data = null;
-    if (widget.data_source_type === 'metric' && UUID_RE.test(String(widget.data_source_ref))) {
-      data = (await queryRows(`SELECT * FROM metric_measurements WHERE tenant_id=$1::uuid AND metric_definition_id=$2::uuid ORDER BY period_end DESC LIMIT 1`, [tenantId, widget.data_source_ref]))[0] || null;
-    }
-    widgets.push({ ...widget, data, warning: data ? ['stale', 'expired', 'unavailable', 'unknown'].includes(data.freshness_status) || ['rejected', 'unknown'].includes(data.quality_status) : true });
+    const data = await resolveWidgetOfficialData(scope, widget, period);
+    const warning = data.source_status !== 'available' || ['unknown', 'attention', 'untrusted'].includes(String(data.trust?.status || '').toLowerCase()) || (data.warnings || []).length > 0;
+    await registerCalculationConsumer(scope, {
+      formulaCode: data.formula?.code || null,
+      consumerType: 'dashboard',
+      consumerKey: widget.widget_key,
+      consumerPath: `/api/dashboards/${dashboard.id}/render`,
+      metadata: { dashboard_id: dashboard.id, widget_id: widget.id, result_code: data.result_code || widget.data_source_ref },
+    });
+    widgets.push({ ...widget, data, warning });
   }
-  return { ...dashboard, widgets };
+  return { ...dashboard, widgets, official_only: true };
 }
 
 async function listReports(scope) {
@@ -1303,9 +1420,28 @@ async function generateReport(scope, reportId, body = {}, requestId = null) {
   const format = text(body.format, 'pdf').toLowerCase();
   if (!['pdf', 'docx', 'xlsx'].includes(format)) throw new Phase5Error('PHASE5_REPORT_FORMAT_INVALID', 'Formato de reporte no soportado.', 422);
   const generationKey = text(body.generation_key, `${report.report_key}_${format}_${Date.now()}`);
+  const sectionConfig = Array.isArray(report.section_config) ? report.section_config : [];
+  const resultCodes = Array.from(new Set([
+    ...(body.result_codes || []),
+    ...sectionConfig.map((section) => section.result_code || section.analytical_result_code).filter(Boolean),
+    ...(body.result_codes || sectionConfig.length ? [] : ['health.grc', 'compliance.weighted', 'risk.residual', 'actions.progress']),
+  ]));
+  const officialResults = [];
+  for (const resultCode of resultCodes) {
+    const result = await getOfficialAnalyticsResult(scope, resultCode, { period: body.period || body.filters?.period || {}, include_trend: true });
+    officialResults.push(result);
+    await registerCalculationConsumer(scope, {
+      formulaCode: result.formula?.code,
+      consumerType: 'report',
+      consumerKey: report.report_key,
+      consumerPath: `/api/reports/${report.id}/generate`,
+      metadata: { report_id: report.id, result_code: result.result_code, generation_key: generationKey },
+    });
+  }
   const snapshotPayload = {
     report_definition: report,
     filters: body.filters || report.filter_config || {},
+    official_results: officialResults,
     generated_at: new Date().toISOString(),
     request_id: requestId || null,
   };
@@ -1340,8 +1476,10 @@ async function generateReport(scope, reportId, body = {}, requestId = null) {
     `Clasificacion: ${report.classification}`,
     `Identificador de emision: ${generation.id}`,
     `Fuentes: snapshot ${snapshot.id}`,
-    `Confianza: calculada por Data Trust Score deterministico cuando existe medicion.`,
-    `Freshness: datos stale/expired/rejected/unknown se reportan con advertencia en API/UI.`,
+    `Resultados oficiales: ${officialResults.length}`,
+    ...officialResults.map((item) => `${item.result_code}: ${item.value ?? 'unmeasured'} ${item.unit || ''} | formula=${item.formula.code}@v${item.formula.version} | run=${item.calculation_run_id || 'sin-run'} | trust=${item.trust.status}`),
+    `Confianza: proviene de Data Trust oficial asociado al calculation run.`,
+    `Freshness: resultados sin calculation_run oficial se reportan como source_unavailable.`,
   ];
 
   let buffer;
@@ -1513,6 +1651,121 @@ function statusForCount(value, warningMessage) {
   if (value === null) return { status: 'unmeasured', warnings: ['Sin datos configurados.'] };
   if (Number(value) > 0) return { status: 'attention', warnings: [warningMessage] };
   return { status: 'ok', warnings: [] };
+}
+
+
+async function runOfficialPackage4Job(scope, jobKey, body = {}, requestId = null) {
+  const tenantId = tenantIdFrom(scope);
+  const jobs = require('../math-governance/phase5Package4Jobs.service');
+  const job = jobs.runPackage4Job({ tenantId, userId: userId(scope.user), jobKey, period: body.period || {}, input: body.input || body, correlationId: requestId });
+  if (job.result) job.result = await persistOfficialCalculation(scope, job.result, requestId);
+  return job;
+}
+
+async function listOfficialPackage4Jobs(scope) {
+  tenantIdFrom(scope);
+  return require('../math-governance/phase5Package4Jobs.service').listPackage4Jobs();
+}
+
+async function calculateOfficialGrcMetric(scope, metricKey, body = {}, requestId = null) {
+  tenantIdFrom(scope);
+  const result = phase5Package3.calculateOfficialByKey(metricKey, body);
+  return persistOfficialCalculation(scope, result, requestId);
+}
+
+
+
+async function persistOfficialCalculation(scope, result, requestId = null) {
+  const tenantId = tenantIdFrom(scope);
+  if (!result || !result.formula_code) return result;
+  if (!(await tableExists(pool, 'calculation_runs')) || !(await tableExists(pool, 'calculation_outputs'))) {
+    return { ...result, warnings: [...(result.warnings || []), 'calculation_persistence_unavailable'] };
+  }
+  const outputHash = hashPayload({ value: result.value, unit: result.unit, status: result.status, formula_code: result.formula_code, formula_version: result.formula_version });
+  const inputHash = /^[0-9a-f]{64}$/i.test(String(result.input_hash || '')) ? result.input_hash : hashPayload({ formula_code: result.formula_code, period: result.period || {}, components: result.components || {} });
+  const formulaVersion = (await pool.query(
+    `SELECT id FROM official_formula_versions
+     WHERE tenant_id IS NULL AND formula_code=$1 AND version_number=$2 AND status='published'
+     ORDER BY published_at DESC NULLS LAST, created_at DESC LIMIT 1`,
+    [result.formula_code, result.formula_version || 1]
+  )).rows[0] || null;
+  const runStatus = result.status === 'completed' ? 'calculated' : result.status === 'unmeasured' ? 'not_calculable' : 'calculated';
+  const period = result.period || {};
+  const run = (await pool.query(
+    `INSERT INTO calculation_runs (tenant_id, formula_version_id, formula_code, run_status, period_start, period_end, timezone, input_hash, output_hash, correlation_id, requested_by, completed_at, metadata)
+     VALUES ($1::uuid,$2::uuid,$3,$4,$5::timestamptz,$6::timestamptz,$7,$8,$9,$10,$11::uuid,now(),$12::jsonb)
+     RETURNING id`,
+    [tenantId, formulaVersion?.id || null, result.formula_code, runStatus, period.start || period.period_start || null, period.end || period.period_end || null, period.timezone || 'UTC', inputHash, outputHash, requestId || null, userId(scope.user), json({ source_status: result.source_status, trust_score: result.trust_score, trust_status: result.trust_status, package: 'phase5_5_package3' })]
+  )).rows[0];
+  await pool.query(
+    `INSERT INTO calculation_inputs (run_id, tenant_id, variable_name, input_value, unit, input_hash, metadata)
+     VALUES ($1::uuid,$2::uuid,'official_payload',$3::jsonb,$4,$5,$6::jsonb)
+     ON CONFLICT (run_id, variable_name) DO NOTHING`,
+    [run.id, tenantId, json({ components: result.components || {}, details: result.details || {}, period }), result.unit || null, inputHash, json({ source_status: result.source_status })]
+  );
+  await pool.query(
+    `INSERT INTO calculation_outputs (run_id, tenant_id, output_name, output_value, unit, precision, rounding_policy, output_hash, metadata)
+     VALUES ($1::uuid,$2::uuid,'value',$3::jsonb,$4,$5,$6,$7,$8::jsonb)
+     ON CONFLICT (run_id, output_name) DO NOTHING`,
+    [run.id, tenantId, json({ value: result.value, status: result.status }), result.unit || null, 4, 'formula_default', outputHash, json({ formula_code: result.formula_code, formula_version: result.formula_version })]
+  );
+  if (await tableExists(pool, 'calculation_explanations')) {
+    await pool.query(
+      `INSERT INTO calculation_explanations (run_id, tenant_id, explanation_type, explanation, variables, lineage, metadata)
+       VALUES ($1::uuid,$2::uuid,'formula',$3,$4::jsonb,$5::jsonb,$6::jsonb)`,
+      [run.id, tenantId, result.explanation || 'Calculo oficial ejecutado.', json(result.components || {}), json(result.lineage || []), json({ package: 'phase5_5_package3' })]
+    );
+  }
+  return {
+    ...result,
+    calculation_run_id: run.id,
+    explanation_url: `/api/grc/official/calculations/${run.id}/explanation`,
+    lineage_url: `/api/grc/official/calculations/${run.id}/lineage`,
+  };
+}
+
+async function getOfficialCalculationExplanation(scope, runId) {
+  const tenantId = tenantIdFrom(scope);
+  if (!runId || typeof runId !== 'string') throw badRequest('INVALID_CALCULATION_RUN', 'calculation_run_id requerido.');
+  if (UUID_RE.test(runId) && await tableExists(pool, 'calculation_explanations')) {
+    const row = (await pool.query(
+      `SELECT ce.explanation_type, ce.explanation, ce.variables, ce.metadata, cr.formula_code, cr.run_status, cr.started_at, cr.completed_at
+       FROM calculation_explanations ce
+       JOIN calculation_runs cr ON cr.id = ce.run_id AND cr.tenant_id = ce.tenant_id
+       WHERE ce.tenant_id=$1::uuid AND ce.run_id=$2::uuid
+       ORDER BY ce.created_at ASC LIMIT 1`,
+      [tenantId, runId]
+    )).rows[0];
+    if (row) return { calculation_run_id: runId, status: 'available', ...row };
+  }
+  return { calculation_run_id: runId, status: 'available', explanation_type: 'formula', explanation: 'Explicacion oficial disponible en el payload del calculo.', variables: {}, metadata: { package: 'phase5_5_package3', persisted_history: false } };
+}
+
+async function getOfficialCalculationLineage(scope, runId) {
+  const tenantId = tenantIdFrom(scope);
+  if (!runId || typeof runId !== 'string') throw badRequest('INVALID_CALCULATION_RUN', 'calculation_run_id requerido.');
+  if (UUID_RE.test(runId) && await tableExists(pool, 'calculation_explanations')) {
+    const row = (await pool.query(
+      `SELECT ce.lineage, ce.metadata, cr.formula_code, cr.run_status, cr.input_hash, cr.output_hash, cr.source_snapshot_hash, cr.started_at, cr.completed_at
+       FROM calculation_explanations ce
+       JOIN calculation_runs cr ON cr.id = ce.run_id AND cr.tenant_id = ce.tenant_id
+       WHERE ce.tenant_id=$1::uuid AND ce.run_id=$2::uuid
+       ORDER BY ce.created_at ASC LIMIT 1`,
+      [tenantId, runId]
+    )).rows[0];
+    if (row) return { calculation_run_id: runId, status: 'available', ...row };
+  }
+  return {
+    calculation_run_id: runId,
+    status: 'available',
+    lineage: [
+      { step: 'source_contract', status: 'resolved_by_official_service' },
+      { step: 'dataset_snapshot', status: 'validated_or_unmeasured' },
+      { step: 'formula_version', status: 'official_registry' },
+      { step: 'calculation_run', status: 'dto_emitted' },
+    ],
+    metadata: { package: 'phase5_5_package3', persisted_history: false },
+  };
 }
 
 async function getGrcOverview(scope, requestId = null) {
@@ -1695,8 +1948,13 @@ async function getGrcOverview(scope, requestId = null) {
   const alerts = Object.entries(overview)
     .flatMap(([block, value]) => (value.warnings || []).map((message) => ({ block, severity: value.status === 'error' ? 'high' : 'medium', message })))
     .slice(0, 50);
+  const officialCalculations = phase5Package3.buildOverviewOfficialCalculations(overview, { period: { generated_at: now }, requestId });
+  for (const [key, result] of Object.entries(officialCalculations)) {
+    officialCalculations[key] = await persistOfficialCalculation(scope, result, requestId);
+  }
   return {
     ...overview,
+    official_calculations: officialCalculations,
     alerts,
     request_id: requestId || null,
     generated_at: now,
@@ -1710,6 +1968,15 @@ module.exports = {
   sanitizeError,
   recordLineageEdge,
   getGrcOverview,
+  calculateOfficialGrcMetric,
+  persistOfficialCalculation,
+  runOfficialPackage4Job,
+  listOfficialPackage4Jobs,
+  getOfficialCalculationExplanation,
+  getOfficialCalculationLineage,
+  listOfficialAnalyticsCatalog,
+  getOfficialAnalyticsResult,
+  listOfficialHealthCatalog: analyticsCatalog.buildHealthCatalog,
   listDataDomains,
   createDataDomain,
   listDataElements,
