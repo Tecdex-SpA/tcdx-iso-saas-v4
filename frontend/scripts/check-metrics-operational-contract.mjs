@@ -3,21 +3,13 @@ import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-
-function read(relativePath) {
-  return fs.readFileSync(path.join(root, relativePath), 'utf8');
-}
-
-function assert(condition, message) {
-  if (!condition) {
-    console.error(`METRICS_OPERATIONAL_CONTRACT_FAILED: ${message}`);
-    process.exitCode = 1;
-  }
-}
+function read(relativePath) { return fs.readFileSync(path.join(root, relativePath), 'utf8'); }
+function assert(condition, message) { if (!condition) { console.error(`METRICS_OPERATIONAL_CONTRACT_FAILED: ${message}`); process.exitCode = 1; } }
 
 const page = read('src/app/metricas/page.tsx');
 const tenantContext = read('src/components/math-governance/MetricsTenantContext.tsx');
 const formulaCatalog = read('src/components/math-governance/FormulaCatalog.tsx');
+const evidenceDialog = read('src/components/math-governance/OfficialEvidenceDialog.tsx');
 const sectionBoundary = read('src/components/math-governance/MetricsSectionBoundary.tsx');
 const apiClient = read('src/utils/apiClient.ts');
 
@@ -29,9 +21,10 @@ assert(!page.includes('analyticsDomain='), 'La vista no debe duplicar el catálo
 assert(tenantContext.includes("'/api/admin-saas/tenants'"), 'El superadministrador debe cargar empresas desde el endpoint oficial.');
 assert(tenantContext.includes('PLATFORM_ROLES.has(role)'), 'La selección de empresas debe limitarse a roles de plataforma.');
 assert(tenantContext.includes('Alcance limitado a su propia empresa'), 'El administrador tenant debe ver un alcance fijo.');
-assert(tenantContext.includes('setActiveTenantId(nextTenantId || null)'), 'El selector debe actualizar el tenant activo validado.');
+assert(/setActiveTenantId\(nextTenantId\s*\|\|\s*null\)/.test(tenantContext), 'El selector debe actualizar el tenant activo validado.');
 assert(tenantContext.includes('clearTenantEntitlementsCache()'), 'El cambio de empresa debe invalidar capacidades cacheadas.');
 assert(tenantContext.includes("window.location.assign('/metricas')"), 'El cambio de empresa debe reinicializar todos los estados de la vista.');
+assert(tenantContext.includes("'/api/auth/validate'"), 'El administrador tenant debe resolver el nombre real mediante sesión autenticada.');
 
 assert(apiClient.includes("'X-Tenant-Id': context.tenantId"), 'Las solicitudes deben enviar el tenant efectivo al backend.');
 assert(apiClient.includes('if (platform)'), 'El cliente API debe separar plataforma y tenant admin.');
@@ -43,10 +36,13 @@ assert(formulaCatalog.includes('tenantReady'), 'El recálculo debe exigir contex
 assert(formulaCatalog.includes("'/api/grc/official/recalculate'"), 'El botón debe invocar el orquestador oficial.');
 assert(formulaCatalog.includes('normalizeCatalog'), 'El catálogo debe normalizar respuestas para evitar React child inválidos.');
 assert(formulaCatalog.includes('normalizeRecalculation'), 'El resultado del recálculo debe validarse antes de renderizar.');
-assert(formulaCatalog.includes('<ExplanationEvidence'), 'La explicación debe renderizarse como interfaz gobernada.');
-assert(formulaCatalog.includes('<LineageEvidence'), 'El lineage debe renderizarse como tabla gobernada.');
+assert(formulaCatalog.includes('OfficialEvidenceDialog'), 'Métricas debe usar el diálogo de evidencia común.');
+assert(evidenceDialog.includes('Explicación del cálculo'), 'La explicación debe renderizarse como interfaz gobernada.');
+assert(evidenceDialog.includes('Lineage del cálculo'), 'El lineage debe renderizarse como interfaz gobernada.');
+assert(evidenceDialog.includes('<table'), 'El lineage debe renderizarse como tabla gobernada.');
 assert(!formulaCatalog.includes('<pre className='), 'La evidencia no debe exponerse como JSON crudo.');
 assert(!formulaCatalog.includes('href={`/api/grc/official/calculations/'), 'No deben existir enlaces de navegador a endpoints protegidos.');
+assert(evidenceDialog.includes('apiRequestJson(`/api/grc/official/calculations/${runId}/${kind}`'), 'La evidencia debe consultar endpoints protegidos con el cliente autenticado.');
 
 assert(sectionBoundary.includes('METRICS_SECTION_ERROR'), 'Los fallos de sección deben registrar diagnóstico controlado.');
 assert(sectionBoundary.includes('El resto de la vista continúa operativo'), 'Un fallo parcial no debe reemplazar toda la ruta.');
@@ -66,12 +62,5 @@ for (const scenario of roleScenarios) {
 }
 
 if (!process.exitCode) {
-  console.log(JSON.stringify({
-    status: 'METRICS_OPERATIONAL_CONTRACT_OK',
-    scenarios: roleScenarios.length,
-    tenant_isolation: true,
-    recalculation_visible: true,
-    evidence_authenticated: true,
-    section_isolation: true,
-  }));
+  console.log(JSON.stringify({ status: 'METRICS_OPERATIONAL_CONTRACT_OK', scenarios: roleScenarios.length, tenant_isolation: true, recalculation_visible: true, evidence_authenticated: true, section_isolation: true }));
 }
