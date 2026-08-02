@@ -216,13 +216,13 @@ FROM runs r
 JOIN versions v ON v.formula_code = r.formula_code;
 SQL
 
-(cd "$REPO_ROOT/backend" && \
+(cd "$REPO_ROOT/backend" && exec env \
   DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" DB_USER=postgres DB_NAME="$DATABASE_NAME" \
   DB_POOL_MAX=5 NODE_ENV=test PORT="$BACKEND_PORT" JWT_SECRET="phase5_5_browser_local_secret" \
   CORS_ORIGINS="http://127.0.0.1:$FRONTEND_PORT,http://localhost:$FRONTEND_PORT" \
-  SECURITY_RATE_LIMIT_MAX=5000 AUTH_RATE_LIMIT_MAX=500 SECURITY_RATE_LIMIT_WINDOW_MS=60000 \
+  SECURITY_RATE_LIMIT_MAX=5000 AUTH_RATE_LIMIT_MAX=500 AI_RATE_LIMIT_MAX=5000 SECURITY_RATE_LIMIT_WINDOW_MS=60000 \
   GRC_PHASE1_SCHEDULER_ENABLED=false DISABLE_PHASE2_SCHEDULER=1 \
-  npm run start >"$BACKEND_LOG" 2>&1) &
+  node src/app.js >"$BACKEND_LOG" 2>&1) &
 BACKEND_PID=$!
 
 backend_ready=0
@@ -236,9 +236,9 @@ if (( backend_ready != 1 )); then
   exit 1
 fi
 
-(cd "$REPO_ROOT/frontend" && \
+(cd "$REPO_ROOT/frontend" && exec env \
   PORT="$FRONTEND_PORT" NEXT_PUBLIC_API_URL="http://127.0.0.1:$BACKEND_PORT" \
-  npm run dev >"$FRONTEND_LOG" 2>&1) &
+  ./node_modules/.bin/next dev -H 0.0.0.0 -p "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1) &
 FRONTEND_PID=$!
 
 frontend_ready=0

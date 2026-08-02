@@ -18,6 +18,7 @@ const requiredTitles = [
   'crear reporte, generar PDF DOCX XLSX, aprobar y descargar artefactos',
   'consistencia entre Portal GRC, dominio, dashboard y reporte por cálculo oficial',
   'usuario restringido no puede persistir y Tenant B no ve datos de Tenant A',
+  'accesibilidad WCAG AA en login y rutas críticas',
 ];
 
 function readJson(file) {
@@ -48,7 +49,7 @@ if (payload.stats?.unexpected !== 0 || payload.stats?.skipped !== 0 || missing.l
 const evidence = fs.existsSync(evidencePath) ? fs.readFileSync(evidencePath, 'utf8') : '';
 const requiredEvidencePatterns = [
   /Status:\s*COMPLETED\./,
-  /Branch:\s*codex\/fase-5-5-math-governance-operational-excellence\./,
+  /Branch:\s*(?!unavailable\.)[^\r\n]+\./,
   /Commit:\s*[0-9a-f]{40}\./,
   /Chromium via Playwright/,
   /postgres:16-alpine/,
@@ -57,13 +58,13 @@ const requiredEvidencePatterns = [
   /DOCX: downloaded through backend, status 200/,
   /XLSX: downloaded through backend, status 200/,
   /Content-Disposition and filename are validated/,
-  /All 9 browser E2E scenarios passed/,
+  /All \d+ browser E2E scenarios passed/,
 ];
 const missingEvidence = requiredEvidencePatterns.filter((pattern) => !pattern.test(evidence)).map(String);
 if (missingEvidence.length) {
   throw new Error(`Browser E2E markdown evidence is incomplete: ${missingEvidence.join('; ')}`);
 }
-if (!/Status:\s*COMPLETED\./.test(evidence) || !/All 9 browser E2E scenarios passed/.test(evidence)) {
+if (!/Status:\s*COMPLETED\./.test(evidence) || !/All \d+ browser E2E scenarios passed/.test(evidence)) {
   throw new Error('Browser E2E markdown evidence does not reflect the passing Playwright run.');
 }
 

@@ -135,3 +135,7 @@ Cada ítem se considera terminado únicamente con código integrado en su rama, 
 ## 7. Trazabilidad con prompts
 
 Los archivos `docs/final-phases/prompts/01_...` a `20_...` ejecutan estos bloques en el mismo orden. Cada prompt exige base `main` actual, worktree limpio, rama propia, PR sin merge y sin deploy.
+
+## Evidencia de entrada a 5-C2
+
+5-C1 aporta una baseline local reproducible con inventario generado, PostgreSQL, browser E2E, artefactos, RBAC/tenant isolation y accesibilidad crítica. No sustituye los bloques de arquitectura de 5-C2 ni traslada a Fase 6/7 defectos del producto base; las limitaciones puramente remotas están registradas como `NO_VERIFICADO_RUNTIME` en `runtime/10_blockers_and_dispositions.md`.

@@ -544,14 +544,14 @@ export default function OperationalBuilder({ kind, title, description, domain, d
         </article>
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
           <div className="font-semibold">Historial</div>
-          <div className="mt-2 max-h-48 space-y-2 overflow-auto text-xs">
+          <div className="mt-2 max-h-48 space-y-2 overflow-auto text-xs" tabIndex={0} aria-label="Historial de operaciones">
             {history.slice(0, 8).map((item, index) => <div key={String(item.id || index)} className="rounded border border-[var(--tcdx-color-border)] p-2">{compact(item.display_name || item.metric_code || item.dashboard_key || item.report_key || item.survey_key || item.test_code || item.event_code || item.generation_key || item.id)}</div>)}
             {!history.length && <div className="text-[var(--tcdx-color-text-secondary)]">Sin historial cargado.</div>}
           </div>
         </article>
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
           <div className="font-semibold">Bitácora</div>
-          <div className="mt-2 max-h-48 space-y-2 overflow-auto text-xs">
+          <div className="mt-2 max-h-48 space-y-2 overflow-auto text-xs" tabIndex={0} aria-label="Bitácora de operaciones">
             {log.map((item) => <div key={`${item.at}-${item.step}`} className="rounded border border-[var(--tcdx-color-border)] p-2"><span className="font-semibold">{item.step}</span> · {item.status}<br />{item.message}</div>)}
             {!log.length && <div className="text-[var(--tcdx-color-text-secondary)]">Sin operaciones ejecutadas.</div>}
           </div>

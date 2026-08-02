@@ -149,6 +149,10 @@ Fecha: 2026-08-02. SHA base: `d08997d4be9ea994812441ba2aba488220c5c703`.
 
 La advertencia de lint se registra como brecha de higiene de línea base y no se corrige en esta rama documental. Estas validaciones no sustituyen runtime QA, bases remotas, UAT ni validación productiva.
 
+## Reconciliación runtime 5-C1
+
+La baseline local 5-C1 cerró la advertencia `latestSnapshot`, verificó PostgreSQL descartable, artefactos, RBAC/tenant A-B y browser E2E real. El resultado actualizado está en `docs/final-phases/runtime/`; los hallazgos de contraste y foco de teclado se corrigieron con prueba Axe WCAG 2 A/AA. Las limitaciones de producción, VM, backup/restore, conectores live y MSP permanecen `NO_VERIFICADO_RUNTIME`; no se reclasifican como operativas.
+
 ## Límites de esta auditoría
 
 - Producción, VMs, secretos, jobs activos, datos, `schema_migrations`, systemd, alertas, backups y restore: `NO_VERIFICADO_RUNTIME`.
