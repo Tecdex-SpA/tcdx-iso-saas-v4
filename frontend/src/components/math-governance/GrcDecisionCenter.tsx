@@ -42,7 +42,6 @@ function priority(value: DecisionItem['severity']) { return value === 'red' ? 4 
 function deriveDecision(catalogItem: UnknownRecord, detailPayload: unknown): DecisionItem {
   const detail = isRecord(unwrap(detailPayload)) ? unwrap(detailPayload) as UnknownRecord : {};
   const latestRun = isRecord(catalogItem.latest_calculation_run) ? catalogItem.latest_calculation_run : {};
-  const latestSnapshot = isRecord(catalogItem.latest_snapshot) ? catalogItem.latest_snapshot : {};
   const decision = isRecord(detail.decision) ? detail.decision : isRecord(detail.details) && isRecord(detail.details.decision) ? detail.details.decision : {};
   const result = isRecord(decision.result) ? decision.result : {};
   const interpretation = isRecord(decision.interpretation) ? decision.interpretation : {};

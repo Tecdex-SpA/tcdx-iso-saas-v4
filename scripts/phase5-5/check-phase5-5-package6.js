@@ -62,7 +62,7 @@ requireTokens('frontend/src/components/phase5/Phase5Workspace.tsx', ['OfficialAn
 requireTokens('frontend/src/components/grc/GrcPortal.tsx', ['official_calculations', 'formula_code', 'formula_version', 'explanation_url', 'lineage_url']);
 requireTokens('frontend/src/components/Sidebar.tsx', ['navigationGroups', 'GRC integrado', 'Analítica y reportes', 'Evaluación y assurance']);
 const routePages = {
-  'frontend/src/app/bi/page.tsx': ['DashboardBuilderGuide', 'OfficialAnalyticsPanel'],
+  'frontend/src/app/bi/page.tsx': ['DashboardBuilderGuide', 'Phase5Workspace'],
   'frontend/src/app/reportes/studio/page.tsx': ['ReportStudioWorkspace', 'OfficialAnalyticsPanel'],
   'frontend/src/app/reportes/generaciones/page.tsx': ['CalculationRunHistory'],
   'frontend/src/app/metricas/page.tsx': ['MetricBuilder', 'FormulaCatalog'],

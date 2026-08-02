@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 const tenantA = process.env.PHASE5_5_TENANT_A_ID || '70000000-0000-0000-0000-000000000701';
@@ -10,11 +11,22 @@ const apiBaseUrl = (process.env.API_BASE_URL || '').replace(/\/+$/, '');
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const nonce = `P55_${Date.now()}`;
+const axeScriptPath = path.resolve(process.cwd(), 'node_modules/axe-core/axe.min.js');
 
 type LoginResult = { token: string };
 
 function apiUrl(path: string) {
   return `${apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+async function expectNoSeriousAxeViolations(page: Page) {
+  await page.addScriptTag({ path: axeScriptPath });
+  const result = await page.evaluate(async () => {
+    const axe = (window as unknown as { axe: { run: (context: Document, options: Record<string, unknown>) => Promise<{ violations: Array<{ id: string; impact?: string | null; nodes: unknown[] }> }> } }).axe;
+    return axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa"] } });
+  });
+  const blocking = result.violations.filter((violation) => violation.impact === "critical" || violation.impact === "serious");
+  expect(blocking, JSON.stringify(blocking.map((violation) => ({ id: violation.id, impact: violation.impact, nodes: violation.nodes.length })))).toEqual([]);
 }
 
 async function login(page: Page, email = adminEmail): Promise<LoginResult> {
@@ -127,6 +139,16 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
     await expect(page.getByText(/Estado operativo y analítico/i)).toBeVisible();
     const overview = await page.request.get(apiUrl('/api/grc/overview'), { headers: headers(token) });
     expect(overview.ok(), await overview.text()).toBeTruthy();
+  });
+
+  test('accesibilidad WCAG AA en login y rutas críticas', async ({ page }) => {
+    await page.goto('/login');
+    await expectNoSeriousAxeViolations(page);
+    await login(page);
+    for (const route of ['/grc', '/metricas', '/bi', '/reportes/studio']) {
+      await page.goto(route);
+      await expectNoSeriousAxeViolations(page);
+    }
   });
 
   test('crear métrica, configurar fuente, preview, publicar, ejecutar, resultado, explicación y lineage', async ({ page }) => {

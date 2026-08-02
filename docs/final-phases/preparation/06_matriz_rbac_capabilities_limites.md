@@ -100,3 +100,7 @@ El frontend comunica disponibilidad; el backend decide. Un engagement MSP nunca 
 ## Pruebas obligatorias
 
 Por cada endpoint mutable: rol permitido, rol denegado, capability off, entitlement off, límite alcanzado, tenant A/B, partner A/B cuando corresponda, vigencia expirada e idempotencia. Archivos, reportes, snapshots, runs y secrets requieren además IDOR y acceso directo por ID.
+
+## Evidencia 5-C1
+
+Se verificaron en navegador local los casos administrador permitido, usuario restringido con `403`, tenant A/B, creación de métrica/dashboard/reporte y descarga autorizada. El inventario reproducible de rutas y consumidores está en `runtime/02_endpoint_consumer_inventory.json`; las rutas no cubiertas por la muestra crítica no se consideran verificadas por esta evidencia.

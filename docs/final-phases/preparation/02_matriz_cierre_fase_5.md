@@ -55,3 +55,7 @@ Estado de planificación: `NOT_READY`. La implementación actual contiene una ba
 ## Orden de ejecución
 
 5-C1 bloquea decisiones de schema. 5-C2 bloquea indicadores, grafo e integraciones. 5-C3 bloquea UX y reporting. 5-C4/C5 y 5-C6/C7 pueden desarrollarse en ramas separadas después de estabilizar contratos. 5-C8 usa las mismas mediciones y acciones. 5-C9/C10 son gates transversales. 5-C11 no repara deuda: solo valida y cierra.
+
+## Estado reconciliado de 5-C1
+
+La baseline local está documentada en `docs/final-phases/runtime/11_phase5_c1_closeout.md`: PostgreSQL efímero, 50 fórmulas, snapshots, lineage, artefactos, browser E2E, RBAC y tenant A/B tienen evidencia ejecutada. Los ítems que requieren VMs, producción, UAT de Credex/Tecdex/Demo, restore, conectores live o MSP siguen en sus fases de cierre; 5-C1 no los marca como completos.

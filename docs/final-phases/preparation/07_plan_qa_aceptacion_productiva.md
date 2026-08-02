@@ -82,6 +82,10 @@ Los SLO definitivos se fijan después de medir baseline; no se relajan para apro
 
 Cada tenant valida solo sus datos y roles. El acta registra SHA, fecha, ambiente, usuario/rol, caso, resultado, evidencia, defecto y aprobación. Fase 5 exige Credex, Tecdex y Demo; Fase 6 exige al menos un sandbox autorizado por provider implementado; Fase 7 exige partner A/B y tenant A/B sintéticos antes de cualquier cliente real.
 
+## Baseline 5-C1 completada localmente
+
+La ejecución local usó PostgreSQL descartable, tenants sintéticos A/B, Chromium real y artefactos reales. La evidencia no sustituye UAT productiva ni pruebas de VM. Los resultados, escenarios y límites están en `docs/final-phases/runtime/` y deben usarse como precondición, no como reemplazo, de 5-C11.
+
 ## Criterio de cierre
 
 150/150 casos aplicables pasan; cero skipped/retry oculto; todos los findings P0/P1 cerrados; cleanup exitoso; credenciales temporales revocadas; CI verde; UAT aprobada; backup/restore medido; documentación coincide con resultados reales.

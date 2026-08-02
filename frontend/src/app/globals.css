@@ -84,11 +84,11 @@
   --tcdx-shadow-card: var(--shadow-card);
 
   /* TECDEX Design System tokens, sourced from Tecdex-SpA/tecdex-design-system. */
-  --tcdx-color-primary: #F0721D;
-  --tcdx-color-primary-hover: #D5630F;
-  --tcdx-color-primary-active: #B8540B;
-  --tcdx-color-secondary: #51ABA8;
-  --tcdx-color-secondary-hover: #438E8B;
+  --tcdx-color-primary: #A4460D;
+  --tcdx-color-primary-hover: #873800;
+  --tcdx-color-primary-active: #652600;
+  --tcdx-color-secondary: #24736F;
+  --tcdx-color-secondary-hover: #1C5F5B;
   --tcdx-color-navy: #2B3944;
   --tcdx-color-navy-deep: #00133B;
   --tcdx-color-background: #FFFFFF;
@@ -97,7 +97,7 @@
   --tcdx-color-border: #D8D8D8;
   --tcdx-color-white: #FFFFFF;
   --tcdx-color-text-primary: #444444;
-  --tcdx-color-text-secondary: #777777;
+  --tcdx-color-text-secondary: #545454;
   --tcdx-color-text-muted: #54595F;
   --tcdx-color-text-ink: #161616;
   --tcdx-color-text-on-dark: #FFFFFF;
