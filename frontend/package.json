@@ -16,7 +16,9 @@
     "test:e2e:phase1:list": "playwright test --config=playwright.phase1.config.ts --list --reporter=line",
     "test:e2e:phase2": "playwright test --config=playwright.phase2.config.ts",
     "test:e2e:phase2:list": "playwright test --config=playwright.phase2.config.ts --list --reporter=line",
-    "test:e2e:phase2:full": "PHASE2_INCLUDE_PHASE1=1 playwright test --config=playwright.phase2.config.ts"
+    "test:e2e:phase2:full": "PHASE2_INCLUDE_PHASE1=1 playwright test --config=playwright.phase2.config.ts",
+    "test:e2e:demo-visual": "playwright test --config=playwright.demo-visual.config.ts",
+    "test:e2e:demo-visual:list": "playwright test --config=playwright.demo-visual.config.ts --list --reporter=line"
   },
   "dependencies": {
     "next": "^16.2.12",

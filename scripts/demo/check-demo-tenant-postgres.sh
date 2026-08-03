@@ -307,6 +307,63 @@ hash_check="$(MIGRATION_DATABASE_URL="$DATABASE_URL" node -e "const {Client}=req
 auth_check="$(DB_HOST=127.0.0.1 DB_PORT="$PORT" DB_USER=postgres DB_NAME="$DATABASE_NAME" JWT_SECRET=demo-check-secret node -e "const jwt=require('./backend/node_modules/jsonwebtoken'); const { login }=require('./backend/src/services/auth.service'); (async()=>{const p=Buffer.from('RGVtby4xMjM0NTY=','base64').toString('utf8'); const admin=await login('admin.demo@tcdx.demo',p); const auditor=await login('auditor.demo@tcdx.demo',p); const decoded=[jwt.decode(admin),jwt.decode(auditor)]; process.stdout.write(JSON.stringify({tokens:decoded.length,tenant_match:decoded.every(d=>d.tenant_id==='${DEMO_TENANT_ID}'),roles:decoded.map(d=>d.role).sort()})); process.exit(0);})().catch(e=>{process.stderr.write(e.message);process.exit(1);})")"
 [[ "$auth_check" == '{"tokens":2,"tenant_match":true,"roles":["admin","auditor"]}' ]] || { echo "Auth service login failed: $auth_check" >&2; exit 1; }
 
+if [[ "${DEMO_VISUAL_COMPLETION_CHECK:-0}" == "1" ]]; then
+  VISUAL_ATTESTATION_FILE="$RUN_DIR/visual-completion-attestation.json"
+  run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260506_iso_operational_execution.sql" >/dev/null
+  run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/tests/fixtures/demo-visual-legacy-schema.sql" >/dev/null
+  run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260522_tenant_applicability_universe.sql" >/dev/null
+  run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260623_create_control_soa_assessments.sql" >/dev/null
+  run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260616_operational_risk_montecarlo.sql" >/dev/null
+
+  visual_checksum="$(node "$REPO_ROOT/scripts/demo/apply-demo-visual-completion.js" --checksum | awk -F= '/^20260803_demo_tenant_visual_completion checksum=/ {print $2}')"
+  run_psql -v ON_ERROR_STOP=1 -c "
+    INSERT INTO schema_migrations (migration_id,checksum,applied_by,duration_ms,status,details)
+    VALUES ('20260803_demo_tenant_visual_completion',repeat('e',64),current_user,1,'failed','{\"fixture\":\"failed-retry\"}'::jsonb)
+    ON CONFLICT (migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,status='failed',details=EXCLUDED.details;
+  " >/dev/null
+
+  if MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_VISUAL_ATTESTATION_FILE="$VISUAL_ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-visual-completion.js" --apply >"$RUN_DIR/visual-missing-dry-run.txt" 2>&1; then
+    echo "Visual completion apply unexpectedly ran without dry-run" >&2
+    exit 1
+  fi
+  grep -q "dry-run attestation is missing" "$RUN_DIR/visual-missing-dry-run.txt" || { echo "Visual completion did not explain the missing attestation" >&2; exit 1; }
+
+  MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_VISUAL_ATTESTATION_FILE="$VISUAL_ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-visual-completion.js" --preflight >"$RUN_DIR/visual-preflight.txt"
+  MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_VISUAL_ATTESTATION_FILE="$VISUAL_ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-visual-completion.js" --dry-run >"$RUN_DIR/visual-dry-run.txt"
+  dry_run_visual_count="$(run_psql -Atqc "SELECT count(*) FROM control_health_scores WHERE tenant_id='$DEMO_TENANT_ID'")"
+  [[ "$dry_run_visual_count" == "0" ]] || { echo "Visual completion dry-run did not roll back: $dry_run_visual_count" >&2; exit 1; }
+
+  MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_VISUAL_ATTESTATION_FILE="$VISUAL_ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-visual-completion.js" --apply >"$RUN_DIR/visual-apply-1.txt"
+  MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_VISUAL_ATTESTATION_FILE="$VISUAL_ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-visual-completion.js" --apply >"$RUN_DIR/visual-apply-2.txt"
+
+  visual_counts="$(run_psql -Atqc "SELECT jsonb_build_object(
+    'applicable_controls',(SELECT count(*) FROM tenant_applicable_controls WHERE tenant_id='$DEMO_TENANT_ID'),
+    'control_health',(SELECT count(*) FROM control_health_scores WHERE tenant_id='$DEMO_TENANT_ID'),
+    'kpi_points',(SELECT count(*) FROM kpi_snapshots WHERE tenant_id='$DEMO_TENANT_ID'),
+    'audit_workpapers',(SELECT count(*) FROM grc_audit_workpapers WHERE tenant_id='$DEMO_TENANT_ID'),
+    'incidents',(SELECT count(*) FROM grc_incidents WHERE tenant_id='$DEMO_TENANT_ID'),
+    'incident_events',(SELECT count(*) FROM grc_incident_timeline WHERE tenant_id='$DEMO_TENANT_ID'),
+    'connector_runs',(SELECT count(*) FROM grc_connector_runs WHERE tenant_id='$DEMO_TENANT_ID'),
+    'services',(SELECT count(*) FROM grc_operational_services WHERE tenant_id='$DEMO_TENANT_ID'),
+    'continuity_tests',(SELECT count(*) FROM grc_continuity_tests WHERE tenant_id='$DEMO_TENANT_ID'),
+    'quality_assessments',(SELECT count(*) FROM data_quality_assessments WHERE tenant_id='$DEMO_TENANT_ID'),
+    'survey_answers',(SELECT count(*) FROM survey_response_items WHERE tenant_id='$DEMO_TENANT_ID'),
+    'assurance_samples',(SELECT count(*) FROM assurance_test_samples WHERE tenant_id='$DEMO_TENANT_ID'),
+    'operational_suggestions',(SELECT count(*) FROM iso_operational_suggestions WHERE tenant_id='$DEMO_TENANT_ID'),
+    'report_exports',(SELECT count(*) FROM report_exports WHERE tenant_id='$DEMO_TENANT_ID'),
+    'iso_risks',(SELECT count(*) FROM iso_risk_matrix_items WHERE tenant_id='$DEMO_TENANT_ID'),
+    'risk_simulations',(SELECT count(*) FROM operational_risk_simulations WHERE tenant_id='$DEMO_TENANT_ID'))")"
+  visual_ledger="$(run_psql -Atqc "SELECT status||':'||checksum FROM schema_migrations WHERE migration_id='20260803_demo_tenant_visual_completion'")"
+  foreign_visual_rows="$(run_psql -Atqc "SELECT (SELECT count(*) FROM control_health_scores WHERE tenant_id='$TENANT_B_ID')+(SELECT count(*) FROM kpi_snapshots WHERE tenant_id='$TENANT_B_ID')+(SELECT count(*) FROM grc_incidents WHERE tenant_id='$TENANT_B_ID')")"
+  [[ "$visual_ledger" == "applied:$visual_checksum" ]] || { echo "Visual completion ledger mismatch: $visual_ledger" >&2; exit 1; }
+  [[ "$foreign_visual_rows" == "0" ]] || { echo "Visual completion affected Tenant B: $foreign_visual_rows" >&2; exit 1; }
+  grep -q "Visual completion dry-run OK rollback=verified" "$RUN_DIR/visual-dry-run.txt" || { echo "Visual completion dry-run did not attest rollback" >&2; exit 1; }
+  grep -q "Visual completion applied: 20260803_demo_tenant_visual_completion" "$RUN_DIR/visual-apply-1.txt" || { echo "Visual completion did not retry from failed" >&2; exit 1; }
+  grep -q "Visual completion apply: already_applied" "$RUN_DIR/visual-apply-2.txt" || { echo "Visual completion second apply was not idempotent" >&2; exit 1; }
+  printf '{"status":"VERIFIED_DEMO_VISUAL_POSTGRES","postgres":"16-alpine","counts":%s,"tenant_isolation":"verified","preflight":"verified","dry_run_rollback":"verified","idempotence":"verified","failed_retry":"verified"}\n' "$visual_counts"
+  exit 0
+fi
+
 MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/remove-demo-tenant.js" >"$RUN_DIR/remove.txt"
 removed_count="$(run_psql -Atqc "SELECT count(*) FROM tenants WHERE id='$DEMO_TENANT_ID'")"
 tenant_b_remaining="$(run_psql -Atqc "SELECT count(*) FROM tenants WHERE id='$TENANT_B_ID'")"

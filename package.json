@@ -136,6 +136,12 @@
     "demo:migration:apply": "node scripts/demo/apply-demo-tenant-migration.js --apply",
     "demo:remove": "node scripts/demo/remove-demo-tenant.js",
     "demo:postgres-check": "bash scripts/demo/check-demo-tenant-postgres.sh",
-    "demo:validate": "node --check scripts/demo/apply-demo-tenant-migration.js && node --check scripts/demo/remove-demo-tenant.js && node -e \"JSON.parse(require('fs').readFileSync('scripts/demo/demo-seed-compatibility.manifest.json','utf8'))\" && bash -n scripts/demo/check-demo-tenant-postgres.sh && npm run demo:migration:checksum"
+    "demo:validate": "node --check scripts/demo/apply-demo-tenant-migration.js && node --check scripts/demo/remove-demo-tenant.js && node -e \"JSON.parse(require('fs').readFileSync('scripts/demo/demo-seed-compatibility.manifest.json','utf8'))\" && bash -n scripts/demo/check-demo-tenant-postgres.sh && npm run demo:migration:checksum",
+    "demo:visual:preflight": "node scripts/demo/apply-demo-visual-completion.js --preflight",
+    "demo:visual:dry-run": "node scripts/demo/apply-demo-visual-completion.js --dry-run",
+    "demo:visual:apply": "node scripts/demo/apply-demo-visual-completion.js --apply",
+    "demo:visual:validate": "node --check scripts/demo/apply-demo-visual-completion.js && node --check scripts/demo/check-demo-visual-api.js && node --check scripts/demo/write-demo-browser-evidence.js && node --check scripts/demo/validate-demo-visual-coverage.js && node -e \"JSON.parse(require('fs').readFileSync('scripts/demo/demo-visual-completion.manifest.json','utf8')); JSON.parse(require('fs').readFileSync('scripts/demo/demo-visual-routes.json','utf8'))\" && bash -n scripts/demo/check-demo-tenant-postgres.sh scripts/demo/check-demo-visual-postgres.sh scripts/demo/run-demo-visual-browser-e2e.sh && node scripts/demo/validate-demo-visual-coverage.js && node scripts/demo/apply-demo-visual-completion.js --checksum",
+    "demo:visual:postgres-check": "bash scripts/demo/check-demo-visual-postgres.sh",
+    "demo:visual:browser-e2e": "bash scripts/demo/run-demo-visual-browser-e2e.sh"
   }
 }
