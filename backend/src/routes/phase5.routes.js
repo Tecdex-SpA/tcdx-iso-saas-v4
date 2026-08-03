@@ -2,12 +2,16 @@
 
 const express = require('express');
 const service = require('../services/phase5/phase5.service');
+const semanticService = require('../services/semantic/semanticLayer.service');
 const officialCalculationOrchestrator = require('../services/math-governance/officialCalculationOrchestrator.service');
 const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 const { resolveEffectiveTenant } = require('../utils/effectiveTenant');
 
 function scope(req) {
-  return { tenant_id: req.resolvedTenantId || req.tenantId, user: req.user };
+  return {
+    tenant_id: req.resolvedTenantId || req.tenantId || req.user?.tenant_id,
+    user: req.user,
+  };
 }
 
 function send(res, data, req) {
@@ -74,6 +78,43 @@ dataRouter.get('/quality', requireCommercialCapability('metrics.data_trust'), ro
 dataRouter.post('/quality/assess', requireCommercialCapability('metrics.data_trust'), route((req) => service.assessDataQuality(scope(req), req.body, req.requestId)));
 dataRouter.get('/lineage/:entityType/:entityId', requireCommercialCapability('data.lineage'), route((req) => service.graph(scope(req), req.params.entityType, req.params.entityId, 'lineage')));
 dataRouter.get('/impact/:entityType/:entityId', requireCommercialCapability('data.impact_graph'), route((req) => service.graph(scope(req), req.params.entityType, req.params.entityId, 'impact')));
+
+const semanticRouter = express.Router();
+semanticRouter.use(requireCommercialCapability('data.semantic_layer'));
+const semanticPermission = (permission, mode) => requireCommercialCapability('data.semantic_layer', { requiredPermission: permission, mode });
+semanticRouter.get('/source-contracts', semanticPermission('semantic.contracts.read', 'read'), route((req) => semanticService.listContracts(scope(req), req.query)));
+semanticRouter.get('/reconciliation', semanticPermission('semantic.contracts.read', 'read'), route((req) => semanticService.reconcileLegacyContracts(scope(req))));
+semanticRouter.post('/source-contracts', semanticPermission('semantic.contracts.manage', 'write'), route((req) => semanticService.createContract(scope(req), req.body, req.requestId)));
+semanticRouter.get('/source-contracts/:id', semanticPermission('semantic.contracts.read', 'read'), route((req) => semanticService.getContract(scope(req), req.params.id)));
+semanticRouter.patch('/source-contracts/:id', semanticPermission('semantic.contracts.manage', 'write'), route((req) => semanticService.updateContract(scope(req), req.params.id, req.body, req.requestId)));
+semanticRouter.post('/source-contracts/:id/versions', semanticPermission('semantic.contracts.manage', 'write'), route((req) => semanticService.createVersion(scope(req), req.params.id, req.body, req.requestId)));
+semanticRouter.get('/versions/:versionId', semanticPermission('semantic.contracts.read', 'read'), route((req) => semanticService.getVersion(scope(req), req.params.versionId)));
+semanticRouter.patch('/versions/:versionId', semanticPermission('semantic.contracts.manage', 'write'), route((req) => semanticService.updateVersion(scope(req), req.params.versionId, req.body, req.requestId)));
+semanticRouter.post('/versions/:versionId/review', semanticPermission('semantic.contracts.review', 'write'), route((req) => semanticService.transitionVersion(scope(req), req.params.versionId, 'reviewed', req.requestId)));
+semanticRouter.post('/versions/:versionId/approve', semanticPermission('semantic.contracts.review', 'write'), route((req) => semanticService.transitionVersion(scope(req), req.params.versionId, 'approved', req.requestId)));
+semanticRouter.post('/versions/:versionId/publish', semanticPermission('semantic.contracts.publish', 'write'), route((req) => semanticService.transitionVersion(scope(req), req.params.versionId, 'published', req.requestId)));
+semanticRouter.post('/versions/:versionId/preview', semanticPermission('semantic.mappings.validate', 'write'), route((req) => semanticService.previewVersion(scope(req), req.params.versionId, req.body)));
+semanticRouter.get('/versions/:versionId/mappings', semanticPermission('semantic.mappings.read', 'read'), route((req) => semanticService.listMappings(scope(req), req.params.versionId)));
+semanticRouter.post('/versions/:versionId/mappings', semanticPermission('semantic.mappings.manage', 'write'), route((req) => semanticService.upsertMapping(scope(req), req.params.versionId, req.body, req.requestId)));
+semanticRouter.patch('/mappings/:mappingId', semanticPermission('semantic.mappings.manage', 'write'), route((req) => semanticService.updateMapping(scope(req), req.params.mappingId, req.body, req.requestId)));
+semanticRouter.post('/mappings/:mappingId/validate', semanticPermission('semantic.mappings.validate', 'write'), route((req) => semanticService.validateMapping(scope(req), req.params.mappingId)));
+semanticRouter.get('/versions/:versionId/assessment', semanticPermission('semantic.contracts.read', 'read'), route((req) => semanticService.versionAssessment(scope(req), req.params.versionId, req.query)));
+semanticRouter.post('/versions/:versionId/ingest', semanticPermission('semantic.observations.ingest', 'write'), route((req) => semanticService.ingestVersion(scope(req), req.params.versionId, req.body, req.requestId)));
+semanticRouter.get('/observations', semanticPermission('semantic.observations.read', 'read'), route((req) => semanticService.listObservations(scope(req), req.query)));
+semanticRouter.get('/observations/:observationId', semanticPermission('semantic.observations.read', 'read'), route((req) => semanticService.getObservation(scope(req), req.params.observationId)));
+semanticRouter.get('/observations/:observationId/lineage', semanticPermission('semantic.lineage.read', 'read'), route((req) => semanticService.observationLineage(scope(req), req.params.observationId)));
+semanticRouter.get('/observations/:observationId/quality', semanticPermission('semantic.observations.read', 'read'), route((req) => semanticService.observationAssessment(scope(req), req.params.observationId)));
+semanticRouter.post('/observations/:observationId/relations', semanticPermission('semantic.observations.ingest', 'write'), route((req) => semanticService.createObservationRelation(scope(req), req.params.observationId, req.body, req.requestId)));
+semanticRouter.get('/sufficiency-rules', semanticPermission('semantic.sufficiency.read', 'read'), route((req) => semanticService.listSufficiencyRules(scope(req), req.query)));
+semanticRouter.post('/sufficiency-rules', semanticPermission('semantic.sufficiency.manage', 'write'), route((req) => semanticService.createSufficiencyRule(scope(req), req.body, req.requestId)));
+semanticRouter.get('/sufficiency-rules/:ruleId', semanticPermission('semantic.sufficiency.read', 'read'), route((req) => semanticService.getSufficiencyRule(scope(req), req.params.ruleId)));
+semanticRouter.post('/sufficiency-rules/:ruleId/review', semanticPermission('semantic.sufficiency.manage', 'write'), route((req) => semanticService.transitionSufficiencyRule(scope(req), req.params.ruleId, 'reviewed', req.requestId)));
+semanticRouter.post('/sufficiency-rules/:ruleId/approve', semanticPermission('semantic.sufficiency.manage', 'write'), route((req) => semanticService.transitionSufficiencyRule(scope(req), req.params.ruleId, 'approved', req.requestId)));
+semanticRouter.post('/sufficiency-rules/:ruleId/publish', semanticPermission('semantic.sufficiency.publish', 'write'), route((req) => semanticService.publishSufficiencyRule(scope(req), req.params.ruleId, req.requestId)));
+semanticRouter.get('/jobs', semanticPermission('semantic.observations.read', 'read'), route((req) => semanticService.listJobs(scope(req), req.query)));
+semanticRouter.post('/jobs/:jobType', semanticPermission('semantic.observations.ingest', 'write'), route((req) => semanticService.runJob(scope(req), req.params.jobType, req.body, req.requestId)));
+semanticRouter.post('/jobs/id/:jobId/execute', semanticPermission('semantic.observations.ingest', 'write'), route((req) => semanticService.executeJob(scope(req), req.params.jobId)));
+dataRouter.use('/semantic', semanticRouter);
 
 const metricsRouter = express.Router();
 metricsRouter.use(requireTenant);

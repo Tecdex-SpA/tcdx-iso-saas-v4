@@ -12,3 +12,7 @@ La validación de rutas críticas aplica el contrato: autenticación + tenant + 
 | Fórmula o fuente sin disponibilidad | contratos y source resolver 5.5 | `source_unavailable`, no cero artificial |
 
 Los inventarios declarativos se regeneran desde rutas y consumidores mediante `scripts/phase5-c1/generate-runtime-inventory.js`. Las rutas fuera de la muestra crítica no se presentan como validadas por esta evidencia; se clasifican mediante el inventario y el plan 5-C11.
+
+## Evidencia 5-C2
+
+`data.semantic_layer` se exige en backend junto con permisos separados y límites `semantic_contracts`, `semantic_mappings` y `semantic_observations_monthly`. Chromium verificó administración Tenant A, 403 para rol restringido y ausencia del contrato A en Tenant B.

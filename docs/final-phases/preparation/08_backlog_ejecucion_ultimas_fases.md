@@ -139,3 +139,7 @@ Los archivos `docs/final-phases/prompts/01_...` a `20_...` ejecutan estos bloque
 ## Evidencia de entrada a 5-C2
 
 5-C1 aporta una baseline local reproducible con inventario generado, PostgreSQL, browser E2E, artefactos, RBAC/tenant isolation y accesibilidad crítica. No sustituye los bloques de arquitectura de 5-C2 ni traslada a Fase 6/7 defectos del producto base; las limitaciones puramente remotas están registradas como `NO_VERIFICADO_RUNTIME` en `runtime/10_blockers_and_dispositions.md`.
+
+## Disposición 5-C2
+
+La capa semántica canónica queda implementada localmente. 5-C3 recibe únicamente la migración de consumidores de indicadores, trust y comparativas sobre contratos/observaciones ya existentes; no recibe deuda de contratos, mappings, suficiencia, snapshots, lineage o aislamiento tenant.
