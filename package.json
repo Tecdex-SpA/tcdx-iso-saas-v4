@@ -132,9 +132,10 @@
     "phase5-c2:full-check": "npm run phase5-c2:check && npm run phase5-c2:browser-e2e",
     "demo:migration:checksum": "node scripts/demo/apply-demo-tenant-migration.js --checksum",
     "demo:migration:preflight": "node scripts/demo/apply-demo-tenant-migration.js --preflight",
+    "demo:migration:dry-run": "node scripts/demo/apply-demo-tenant-migration.js --dry-run",
     "demo:migration:apply": "node scripts/demo/apply-demo-tenant-migration.js --apply",
     "demo:remove": "node scripts/demo/remove-demo-tenant.js",
     "demo:postgres-check": "bash scripts/demo/check-demo-tenant-postgres.sh",
-    "demo:validate": "node --check scripts/demo/apply-demo-tenant-migration.js && node --check scripts/demo/remove-demo-tenant.js && bash -n scripts/demo/check-demo-tenant-postgres.sh && npm run demo:migration:checksum"
+    "demo:validate": "node --check scripts/demo/apply-demo-tenant-migration.js && node --check scripts/demo/remove-demo-tenant.js && node -e \"JSON.parse(require('fs').readFileSync('scripts/demo/demo-seed-compatibility.manifest.json','utf8'))\" && bash -n scripts/demo/check-demo-tenant-postgres.sh && npm run demo:migration:checksum"
   }
 }

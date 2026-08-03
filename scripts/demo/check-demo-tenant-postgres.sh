@@ -7,6 +7,8 @@ DATABASE_NAME="tcdx_demo_check_$(date +%s)_$$"
 CONTAINER_NAME="tcdx-demo-tenant-$$-$RANDOM"
 DEMO_TENANT_ID="76c44a0e-6041-8bda-99c7-b740fccea001"
 TENANT_B_ID="70000000-0000-0000-0000-000000000702"
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/tcdx-demo-check.XXXXXX")"
+ATTESTATION_FILE="$RUN_DIR/dry-run-attestation.json"
 
 cleanup() {
   local code=$?
@@ -14,6 +16,7 @@ cleanup() {
   if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
     docker rm -f "$CONTAINER_NAME" >/dev/null
   fi
+  rm -rf "$RUN_DIR"
   exit "$code"
 }
 trap cleanup EXIT
@@ -66,6 +69,8 @@ run_psql -v ON_ERROR_STOP=1 -c "
   ALTER TABLE users ADD COLUMN IF NOT EXISTS name text;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title text;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now();
+  ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
+  ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
   ALTER TABLE app_roles ADD COLUMN IF NOT EXISTS display_name text;
   ALTER TABLE app_roles ADD COLUMN IF NOT EXISTS description text;
   ALTER TABLE app_roles ADD COLUMN IF NOT EXISTS role_level integer NOT NULL DEFAULT 100;
@@ -162,23 +167,63 @@ run_psql -v ON_ERROR_STOP=1 -c "
   ALTER TABLE tenants DROP CONSTRAINT IF EXISTS tenants_ai_plan_check;
   ALTER TABLE tenants ADD CONSTRAINT tenants_ai_plan_check CHECK (ai_plan = ANY (ARRAY['none'::text, 'basic'::text, 'standard'::text, 'pro'::text, 'premium'::text, 'enterprise'::text]));
   ALTER TABLE tenants ADD CONSTRAINT tenants_ai_enabled_plan_consistency_check CHECK ((ai_enabled = false AND ai_plan = 'none'::text) OR (ai_enabled = true AND ai_plan <> 'none'::text));
+  ALTER TABLE tenant_standards DROP CONSTRAINT IF EXISTS chk_tenant_standards_catalog_mode;
+  ALTER TABLE tenant_standards ADD CONSTRAINT chk_tenant_standards_catalog_mode CHECK (catalog_mode = ANY (ARRAY['generic'::text, 'personalized'::text, 'mixed'::text]));
+  ALTER TABLE tenant_standards DROP CONSTRAINT IF EXISTS tenant_standards_tenant_id_standard_code_key;
+  ALTER TABLE tenant_standards ADD CONSTRAINT tenant_standards_tenant_id_standard_code_key UNIQUE (tenant_id, standard_code);
+  ALTER TABLE controls_catalog DROP CONSTRAINT IF EXISTS chk_controls_catalog_source_type;
+  ALTER TABLE controls_catalog ADD CONSTRAINT chk_controls_catalog_source_type CHECK (source_type = ANY (ARRAY['generic'::text, 'personalized'::text]));
+  UPDATE findings SET finding_type=COALESCE(finding_type,'observacion'), severity=COALESCE(severity,'media'), status=COALESCE(status,'abierto'), source_type=COALESCE(source_type,'manual');
+  ALTER TABLE findings ALTER COLUMN finding_type SET NOT NULL, ALTER COLUMN severity SET NOT NULL, ALTER COLUMN status SET NOT NULL, ALTER COLUMN source_type SET NOT NULL;
+  ALTER TABLE findings DROP CONSTRAINT IF EXISTS chk_findings_type;
+  ALTER TABLE findings DROP CONSTRAINT IF EXISTS chk_findings_severity;
+  ALTER TABLE findings DROP CONSTRAINT IF EXISTS chk_findings_status;
+  ALTER TABLE findings DROP CONSTRAINT IF EXISTS chk_findings_source_type;
+  ALTER TABLE findings ADD CONSTRAINT chk_findings_type CHECK (finding_type = ANY (ARRAY['no conformidad'::text, 'observacion'::text, 'oportunidad de mejora'::text, 'fortaleza'::text]));
+  ALTER TABLE findings ADD CONSTRAINT chk_findings_severity CHECK (severity = ANY (ARRAY['alta'::text, 'media'::text, 'baja'::text]));
+  ALTER TABLE findings ADD CONSTRAINT chk_findings_status CHECK (status = ANY (ARRAY['abierto'::text, 'en revision'::text, 'accion definida'::text, 'cerrado'::text]));
+  ALTER TABLE findings ADD CONSTRAINT chk_findings_source_type CHECK (source_type = ANY (ARRAY['manual'::text, 'audit'::text, 'diagnostic'::text, 'risk'::text, 'soa'::text, 'ia'::text, 'evidence'::text]));
+  UPDATE action_plans SET source_type=COALESCE(source_type,'manual'), priority=COALESCE(priority,'media'), status=COALESCE(status,'abierto'), approval_status=COALESCE(approval_status,'no_requerida');
+  ALTER TABLE action_plans ALTER COLUMN source_type SET NOT NULL, ALTER COLUMN priority SET NOT NULL, ALTER COLUMN status SET NOT NULL, ALTER COLUMN approval_status SET NOT NULL;
+  ALTER TABLE action_plans DROP CONSTRAINT IF EXISTS chk_action_plans_source_type;
+  ALTER TABLE action_plans DROP CONSTRAINT IF EXISTS chk_action_plans_priority;
+  ALTER TABLE action_plans DROP CONSTRAINT IF EXISTS chk_action_plans_status;
+  ALTER TABLE action_plans DROP CONSTRAINT IF EXISTS chk_action_plans_approval_status;
+  ALTER TABLE action_plans ADD CONSTRAINT chk_action_plans_source_type CHECK (source_type = ANY (ARRAY['manual'::text, 'nonconformity'::text, 'risk'::text, 'audit'::text, 'control'::text, 'ia'::text, 'finding'::text]));
+  ALTER TABLE action_plans ADD CONSTRAINT chk_action_plans_priority CHECK (priority = ANY (ARRAY['alta'::text, 'media'::text, 'baja'::text]));
+  ALTER TABLE action_plans ADD CONSTRAINT chk_action_plans_status CHECK (status = ANY (ARRAY['abierto'::text, 'en progreso'::text, 'bloqueado'::text, 'completado'::text, 'cancelado'::text]));
+  ALTER TABLE action_plans ADD CONSTRAINT chk_action_plans_approval_status CHECK (approval_status = ANY (ARRAY['no_requerida'::text, 'pendiente_aprobacion'::text, 'aprobada'::text, 'devuelta'::text]));
+" >/dev/null
+
+# The phase fixture provides a test-only assignment table. Production authorization
+# resolves the role stored on users, so the disposable database mirrors that contract.
+run_psql -v ON_ERROR_STOP=1 -c "
+  CREATE OR REPLACE FUNCTION user_has_permission(requested_user_id uuid, requested_permission text)
+  RETURNS boolean LANGUAGE sql STABLE AS \$\$
+    SELECT EXISTS (
+      SELECT 1 FROM users u
+      JOIN role_permissions rp ON rp.role_key=u.role AND rp.permission_key=requested_permission AND rp.is_allowed=true
+      WHERE u.id=requested_user_id
+    );
+  \$\$;
 " >/dev/null
 
 run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260729_phase4_commercial_product.sql" >/dev/null
 DATABASE_URL="postgresql://postgres@127.0.0.1:$PORT/$DATABASE_NAME"
-MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5/apply-phase5-migration.js" --apply >/tmp/tcdx-demo-phase5.txt
-MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5-5/bootstrap-official-math-governance.js" >/tmp/tcdx-demo-formulas.txt
-MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5-c2/apply-phase5-c2-migration.js" --apply >/tmp/tcdx-demo-c2.txt
-MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --preflight >/tmp/tcdx-demo-preflight.txt
+MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5/apply-phase5-migration.js" --apply >"$RUN_DIR/phase5.txt"
+MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5-5/bootstrap-official-math-governance.js" >"$RUN_DIR/formulas.txt"
+MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5-c2/apply-phase5-c2-migration.js" --apply >"$RUN_DIR/c2.txt"
 
-run_psql -v ON_ERROR_STOP=1 -c '\d+ schema_migrations' >/tmp/tcdx-demo-schema-migrations-describe.txt
+run_psql -v ON_ERROR_STOP=1 -c '\d+ schema_migrations' >"$RUN_DIR/schema-migrations-describe.txt"
 ledger_columns="$(run_psql -Atqc "SELECT string_agg(column_name || ':' || data_type, ',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='schema_migrations'")"
 constraint_def="$(run_psql -Atqc "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='public.tenants'::regclass AND conname='tenants_ai_plan_check'")"
 [[ "$ledger_columns" == *"migration_id:"* && "$ledger_columns" == *"checksum:"* && "$ledger_columns" == *"status:"* && "$ledger_columns" == *"details:"* ]] || { echo "schema_migrations ledger shape is incompatible: $ledger_columns" >&2; exit 1; }
 [[ "$ledger_columns" != *"error_message:"* ]] || { echo "schema_migrations unexpectedly contains error_message" >&2; exit 1; }
 [[ "$constraint_def" == *"'enterprise'"* && "$constraint_def" != *"demo_enterprise"* ]] || { echo "tenants_ai_plan_check does not allow enterprise exactly: $constraint_def" >&2; exit 1; }
+catalog_constraint_def="$(run_psql -Atqc "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='public.tenant_standards'::regclass AND conname='chk_tenant_standards_catalog_mode'")"
+[[ "$catalog_constraint_def" == *"'mixed'"* && "$catalog_constraint_def" != *"demo_integrated"* ]] || { echo "chk_tenant_standards_catalog_mode does not allow mixed exactly: $catalog_constraint_def" >&2; exit 1; }
 
-demo_checksum="$(node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --checksum | awk -F= '/checksum=/ {print $2; exit}')"
+demo_checksum="$(node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --checksum | awk -F= '/^20260803_demo_tenant_iso_grc checksum=/ {print $2}')"
 run_psql -v ON_ERROR_STOP=1 -c "
   INSERT INTO schema_migrations (migration_id, checksum, applied_by, duration_ms, status, details)
   VALUES ('20260803_demo_tenant_iso_grc', repeat('f',64), current_user, 1, 'failed', '{\"fixture\":\"failed-retry\"}'::jsonb)
@@ -190,23 +235,71 @@ run_psql -v ON_ERROR_STOP=1 -c "
     details = EXCLUDED.details;
 " >/dev/null
 
-MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --apply >/tmp/tcdx-demo-apply-1.txt
-MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --apply >/tmp/tcdx-demo-apply-2.txt
+if MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_DRY_RUN_ATTESTATION_FILE="$ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --apply >"$RUN_DIR/missing-dry-run-apply.txt" 2>&1; then
+  echo "Apply unexpectedly ran without a dry-run attestation" >&2
+  exit 1
+fi
+grep -q "dry-run attestation is missing" "$RUN_DIR/missing-dry-run-apply.txt" || { echo "Apply did not explain missing dry-run attestation" >&2; exit 1; }
 
-counts="$(run_psql -Atqc "SELECT jsonb_build_object('users',(SELECT count(*) FROM users WHERE tenant_id='$DEMO_TENANT_ID'),'standards',(SELECT count(*) FROM tenant_standards WHERE tenant_id='$DEMO_TENANT_ID'),'risks',(SELECT count(*) FROM asset_risks ar JOIN assets a ON a.id=ar.asset_id WHERE a.tenant_id='$DEMO_TENANT_ID'),'controls',(SELECT count(*) FROM tenant_controls WHERE tenant_id='$DEMO_TENANT_ID'),'evidences',(SELECT count(*) FROM evidences WHERE tenant_id='$DEMO_TENANT_ID'),'measurements',(SELECT count(*) FROM metric_measurements WHERE tenant_id='$DEMO_TENANT_ID'),'dashboards',(SELECT count(*) FROM dashboard_definitions WHERE tenant_id='$DEMO_TENANT_ID'),'reports',(SELECT count(*) FROM report_definitions WHERE tenant_id='$DEMO_TENANT_ID'))")"
+MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_DRY_RUN_ATTESTATION_FILE="$ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --preflight >"$RUN_DIR/preflight.txt"
+MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_DRY_RUN_ATTESTATION_FILE="$ATTESTATION_FILE" npm --prefix "$REPO_ROOT" run demo:migration:dry-run >"$RUN_DIR/dry-run-1.txt"
+dry_run_presence="$(run_psql -Atqc "SELECT (SELECT count(*) FROM tenants WHERE id='$DEMO_TENANT_ID') || ':' || (SELECT count(*) FROM users WHERE tenant_id='$DEMO_TENANT_ID') || ':' || (SELECT status FROM schema_migrations WHERE migration_id='20260803_demo_tenant_iso_grc')")"
+[[ "$dry_run_presence" == "0:0:failed" ]] || { echo "Dry-run did not roll back tenant/users/ledger: $dry_run_presence" >&2; exit 1; }
+
+run_psql -v ON_ERROR_STOP=1 -c "ALTER TABLE tenants ADD CONSTRAINT demo_fixture_schema_drift_check CHECK (name <> '');" >/dev/null
+if MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_DRY_RUN_ATTESTATION_FILE="$ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --apply >"$RUN_DIR/schema-drift-apply.txt" 2>&1; then
+  echo "Apply unexpectedly ignored schema drift after dry-run" >&2
+  exit 1
+fi
+grep -q "schema changed after dry-run" "$RUN_DIR/schema-drift-apply.txt" || { echo "Apply did not explain schema-signature mismatch" >&2; exit 1; }
+run_psql -v ON_ERROR_STOP=1 -c "ALTER TABLE tenants DROP CONSTRAINT demo_fixture_schema_drift_check;" >/dev/null
+
+MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_DRY_RUN_ATTESTATION_FILE="$ATTESTATION_FILE" npm --prefix "$REPO_ROOT" run demo:migration:dry-run >"$RUN_DIR/dry-run-2.txt"
+MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_DRY_RUN_ATTESTATION_FILE="$ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --apply >"$RUN_DIR/apply-1.txt"
+MIGRATION_DATABASE_URL="$DATABASE_URL" DEMO_DRY_RUN_ATTESTATION_FILE="$ATTESTATION_FILE" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --apply >"$RUN_DIR/apply-2.txt"
+
+counts="$(run_psql -Atqc "SELECT jsonb_build_object(
+  'tenant',(SELECT count(*) FROM tenants WHERE id='$DEMO_TENANT_ID'),
+  'users',(SELECT count(*) FROM users WHERE tenant_id='$DEMO_TENANT_ID'),
+  'standards',(SELECT count(*) FROM tenant_standards WHERE tenant_id='$DEMO_TENANT_ID'),
+  'processes',(SELECT count(*) FROM tenant_processes WHERE tenant_id='$DEMO_TENANT_ID'),
+  'risks',(SELECT count(*) FROM asset_risks ar JOIN assets a ON a.id=ar.asset_id WHERE a.tenant_id='$DEMO_TENANT_ID'),
+  'controls',(SELECT count(*) FROM tenant_controls WHERE tenant_id='$DEMO_TENANT_ID'),
+  'evidences',(SELECT count(*) FROM evidences WHERE tenant_id='$DEMO_TENANT_ID'),
+  'audits',(SELECT count(*) FROM audits WHERE tenant_id='$DEMO_TENANT_ID'),
+  'findings',(SELECT count(*) FROM findings WHERE tenant_id='$DEMO_TENANT_ID'),
+  'actions',(SELECT count(*) FROM action_plans WHERE tenant_id='$DEMO_TENANT_ID'),
+  'metrics',(SELECT count(*) FROM metric_definitions WHERE tenant_id='$DEMO_TENANT_ID'),
+  'measurements',(SELECT count(*) FROM metric_measurements WHERE tenant_id='$DEMO_TENANT_ID'),
+  'metric_snapshots',(SELECT count(*) FROM metric_snapshots WHERE tenant_id='$DEMO_TENANT_ID'),
+  'data_snapshots',(SELECT count(*) FROM data_snapshots WHERE tenant_id='$DEMO_TENANT_ID'),
+  'contracts',(SELECT count(*) FROM data_source_contracts WHERE tenant_id='$DEMO_TENANT_ID'),
+  'mappings',(SELECT count(*) FROM data_source_field_mappings WHERE tenant_id='$DEMO_TENANT_ID'),
+  'observations',(SELECT count(*) FROM grc_observations WHERE tenant_id='$DEMO_TENANT_ID'),
+  'lineage',(SELECT count(*) FROM data_lineage_edges WHERE tenant_id='$DEMO_TENANT_ID'),
+  'dashboards',(SELECT count(*) FROM dashboard_definitions WHERE tenant_id='$DEMO_TENANT_ID'),
+  'widgets',(SELECT count(*) FROM dashboard_widgets WHERE tenant_id='$DEMO_TENANT_ID'),
+  'reports',(SELECT count(*) FROM report_definitions WHERE tenant_id='$DEMO_TENANT_ID'),
+  'report_generations',(SELECT count(*) FROM report_generations WHERE tenant_id='$DEMO_TENANT_ID'),
+  'surveys',(SELECT count(*) FROM survey_definitions WHERE tenant_id='$DEMO_TENANT_ID'),
+  'assurance',(SELECT count(*) FROM assurance_test_definitions WHERE tenant_id='$DEMO_TENANT_ID'),
+  'losses',(SELECT count(*) FROM loss_events WHERE tenant_id='$DEMO_TENANT_ID'))")"
 semantic_allowed="$(run_psql -Atqc "SELECT count(*) FROM v_commercial_tenant_capabilities WHERE tenant_id='$DEMO_TENANT_ID' AND capability_key='data.semantic_layer' AND enabled=true")"
 user_roles_count="$(run_psql -Atqc "SELECT count(*) FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE tenant_id='$DEMO_TENANT_ID')")"
+rbac_check="$(run_psql -Atqc "SELECT jsonb_build_object('admin_semantic_manage',user_has_permission((SELECT id FROM users WHERE email='admin.demo@tcdx.demo'),'semantic.contracts.manage'),'auditor_semantic_read',user_has_permission((SELECT id FROM users WHERE email='auditor.demo@tcdx.demo'),'semantic.contracts.read'),'auditor_semantic_manage',user_has_permission((SELECT id FROM users WHERE email='auditor.demo@tcdx.demo'),'semantic.contracts.manage'))")"
 tenant_b_count="$(run_psql -Atqc "INSERT INTO tenants (id,name,rut,service_status) VALUES ('$TENANT_B_ID','Tenant B Fixture','FIXTURE-B','active') ON CONFLICT (id) DO NOTHING; SELECT count(*) FROM metric_measurements WHERE tenant_id='$TENANT_B_ID'")"
 tenant_ai_plan="$(run_psql -Atqc "SELECT ai_plan FROM tenants WHERE id='$DEMO_TENANT_ID'")"
 ledger_state="$(run_psql -Atqc "SELECT status || ':' || checksum FROM schema_migrations WHERE migration_id='20260803_demo_tenant_iso_grc'")"
 
 [[ "$semantic_allowed" -ge 1 ]] || { echo "data.semantic_layer is not enabled" >&2; exit 1; }
 [[ "$user_roles_count" -ge 2 ]] || { echo "Demo users have no real user_roles assignments" >&2; exit 1; }
+[[ "$rbac_check" == '{"admin_semantic_manage": true, "auditor_semantic_read": true, "auditor_semantic_manage": false}' ]] || { echo "Demo RBAC contract failed: $rbac_check" >&2; exit 1; }
 [[ "$tenant_b_count" == "0" ]] || { echo "Tenant B saw demo measurements" >&2; exit 1; }
 [[ "$tenant_ai_plan" == "enterprise" ]] || { echo "Demo tenant ai_plan is not enterprise: $tenant_ai_plan" >&2; exit 1; }
 [[ "$ledger_state" == "applied:$demo_checksum" ]] || { echo "Retry from failed did not converge to applied checksum: $ledger_state" >&2; exit 1; }
-grep -q "Demo tenant migration applied: 20260803_demo_tenant_iso_grc" /tmp/tcdx-demo-apply-1.txt || { echo "First demo apply did not execute migration from failed ledger" >&2; exit 1; }
-grep -q "Demo tenant migration applied: already_applied" /tmp/tcdx-demo-apply-2.txt || { echo "Second demo apply was not already_applied" >&2; exit 1; }
+grep -q "Demo tenant migration dry-run OK: rollback=verified" "$RUN_DIR/dry-run-2.txt" || { echo "Demo dry-run did not verify rollback" >&2; exit 1; }
+grep -q "Demo tenant migration applied: 20260803_demo_tenant_iso_grc" "$RUN_DIR/apply-1.txt" || { echo "First demo apply did not execute migration from failed ledger" >&2; exit 1; }
+grep -q "Demo tenant migration applied: already_applied" "$RUN_DIR/apply-2.txt" || { echo "Second demo apply was not already_applied" >&2; exit 1; }
 
 hash_check="$(MIGRATION_DATABASE_URL="$DATABASE_URL" node -e "const {Client}=require('./backend/node_modules/pg'); const bcrypt=require('./backend/node_modules/bcrypt'); (async()=>{const c=new Client({connectionString:process.env.MIGRATION_DATABASE_URL}); await c.connect(); const r=await c.query(\"SELECT password_hash FROM users WHERE tenant_id='${DEMO_TENANT_ID}'::uuid ORDER BY email\"); const p=Buffer.from('RGVtby4xMjM0NTY=','base64').toString('utf8'); const checks=[]; for (const row of r.rows) checks.push(await bcrypt.compare(p,row.password_hash)); await c.end(); process.stdout.write(JSON.stringify({users:r.rowCount,bcrypt:checks.every(Boolean)}));})().catch(e=>{process.stderr.write(e.message);process.exit(1);})")"
 [[ "$hash_check" == '{"users":2,"bcrypt":true}' ]] || { echo "Bcrypt compatibility failed: $hash_check" >&2; exit 1; }
@@ -214,8 +307,12 @@ hash_check="$(MIGRATION_DATABASE_URL="$DATABASE_URL" node -e "const {Client}=req
 auth_check="$(DB_HOST=127.0.0.1 DB_PORT="$PORT" DB_USER=postgres DB_NAME="$DATABASE_NAME" JWT_SECRET=demo-check-secret node -e "const jwt=require('./backend/node_modules/jsonwebtoken'); const { login }=require('./backend/src/services/auth.service'); (async()=>{const p=Buffer.from('RGVtby4xMjM0NTY=','base64').toString('utf8'); const admin=await login('admin.demo@tcdx.demo',p); const auditor=await login('auditor.demo@tcdx.demo',p); const decoded=[jwt.decode(admin),jwt.decode(auditor)]; process.stdout.write(JSON.stringify({tokens:decoded.length,tenant_match:decoded.every(d=>d.tenant_id==='${DEMO_TENANT_ID}'),roles:decoded.map(d=>d.role).sort()})); process.exit(0);})().catch(e=>{process.stderr.write(e.message);process.exit(1);})")"
 [[ "$auth_check" == '{"tokens":2,"tenant_match":true,"roles":["admin","auditor"]}' ]] || { echo "Auth service login failed: $auth_check" >&2; exit 1; }
 
-MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/remove-demo-tenant.js" >/tmp/tcdx-demo-remove.txt
+MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/remove-demo-tenant.js" >"$RUN_DIR/remove.txt"
 removed_count="$(run_psql -Atqc "SELECT count(*) FROM tenants WHERE id='$DEMO_TENANT_ID'")"
+tenant_b_remaining="$(run_psql -Atqc "SELECT count(*) FROM tenants WHERE id='$TENANT_B_ID'")"
 [[ "$removed_count" == "0" ]] || { echo "Demo tenant removal failed" >&2; exit 1; }
+[[ "$tenant_b_remaining" == "1" ]] || { echo "Demo removal affected Tenant B" >&2; exit 1; }
+MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/remove-demo-tenant.js" >"$RUN_DIR/remove-again.txt"
+grep -q "demo_tenant_remove=not_found" "$RUN_DIR/remove-again.txt" || { echo "Demo removal is not idempotent when tenant is absent" >&2; exit 1; }
 
-printf '{"status":"VERIFIED_DEMO_TENANT_POSTGRES","postgres":"16-alpine","constraint":"tenants_ai_plan_check","ai_plan":"%s","ledger_columns":"%s","counts":%s,"semantic_allowed":%s,"user_roles":%s,"tenant_b_measurements":%s,"bcrypt":"verified","auth_login":"verified","idempotence":"verified","failed_retry":"verified","removal":"verified"}\n' "$tenant_ai_plan" "$ledger_columns" "$counts" "$semantic_allowed" "$user_roles_count" "$tenant_b_count"
+printf '{"status":"VERIFIED_DEMO_TENANT_POSTGRES","postgres":"16-alpine","constraints":["tenants_ai_plan_check","chk_tenant_standards_catalog_mode","chk_controls_catalog_source_type","chk_findings_type","chk_findings_status","chk_action_plans_status"],"ai_plan":"%s","catalog_mode":"mixed","ledger_columns":"%s","counts":%s,"semantic_allowed":%s,"user_roles":%s,"rbac":%s,"tenant_b_measurements":%s,"bcrypt":"verified","auth_login":"verified","preflight":"verified","apply_without_dry_run":"blocked","dry_run_rollback":"verified","schema_signature_guard":"verified","idempotence":"verified","failed_retry":"verified","removal":"verified"}\n' "$tenant_ai_plan" "$ledger_columns" "$counts" "$semantic_allowed" "$user_roles_count" "$rbac_check" "$tenant_b_count"

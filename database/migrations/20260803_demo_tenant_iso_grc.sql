@@ -211,7 +211,7 @@ FROM (VALUES ('ISO9001','ISO 9001:2015'), ('ISO27001','ISO/IEC 27001:2022')) AS 
 WHERE NOT EXISTS (SELECT 1 FROM standards existing WHERE existing.code = s.code);
 
 INSERT INTO tenant_standards (id, tenant_id, standard_code, is_active, initialized_at, catalog_mode, contracted_at, lifecycle_status)
-SELECT pg_temp.demo_uuid('tenant-standard-' || s.code), c.tenant_id, s.code, true, now(), 'demo_integrated', now(), 'active'
+SELECT pg_temp.demo_uuid('tenant-standard-' || s.code), c.tenant_id, s.code, true, now(), 'mixed', now(), 'active'
 FROM demo_seed_context c
 CROSS JOIN (VALUES ('ISO9001'), ('ISO27001')) s(code)
 ON CONFLICT (id) DO UPDATE SET
@@ -415,7 +415,7 @@ SELECT pg_temp.demo_uuid('control-catalog-' || gs), CASE WHEN gs <= 28 THEN 'ISO
        CASE WHEN gs <= 28 THEN 'control integrado del SGC para proceso, evidencia, hallazgo y mejora.'
             ELSE 'control integrado del SGSI para activo, riesgo, evidencia y tratamiento.' END,
        c.tenant_id,
-       'tenant_demo',
+       'personalized',
        true
 FROM demo_seed_context c CROSS JOIN generate_series(1,55) gs
 WHERE NOT EXISTS (SELECT 1 FROM controls_catalog cc WHERE cc.id = pg_temp.demo_uuid('control-catalog-' || gs));
@@ -510,9 +510,9 @@ SELECT pg_temp.demo_uuid('finding-' || gs), c.tenant_id,
        CASE WHEN gs <= 9 THEN 'ISO9001' ELSE 'ISO27001' END,
        'Hallazgo demo ' || gs,
        'Hallazgo sintético trazable a auditoría, control, evidencia y plan de acción.',
-       CASE WHEN gs <= 2 THEN 'no_conformidad_menor' WHEN gs <= 7 THEN 'observacion' WHEN gs <= 14 THEN 'oportunidad_mejora' ELSE 'conformidad_destacada' END,
+       CASE WHEN gs <= 2 THEN 'no conformidad' WHEN gs <= 7 THEN 'observacion' WHEN gs <= 14 THEN 'oportunidad de mejora' ELSE 'fortaleza' END,
        CASE WHEN gs <= 2 THEN 'alta' WHEN gs <= 7 THEN 'media' ELSE 'baja' END,
-       CASE WHEN gs IN (1,3,6,9,12) THEN 'abierto' WHEN gs IN (2,4,8) THEN 'en_progreso' ELSE 'cerrado' END,
+       CASE WHEN gs IN (1,3,6,9,12) THEN 'abierto' WHEN gs IN (2,4,8) THEN 'en revision' ELSE 'cerrado' END,
        'audit',
        pg_temp.demo_uuid('audit-' || (((gs - 1) % 5) + 1)),
        CASE WHEN gs % 2 = 0 THEN 'Seguridad de la Informacion' ELSE 'Calidad' END,
@@ -542,7 +542,7 @@ SELECT pg_temp.demo_uuid('action-' || gs), c.tenant_id,
        'finding',
        pg_temp.demo_uuid('finding-' || (((gs - 1) % 18) + 1)),
        CASE WHEN gs <= 6 THEN 'alta' WHEN gs <= 18 THEN 'media' ELSE 'baja' END,
-       CASE WHEN gs <= 8 THEN 'cerrado' WHEN gs <= 16 THEN 'en_progreso' WHEN gs <= 20 THEN 'abierto' ELSE 'planificado' END,
+       CASE WHEN gs <= 8 THEN 'completado' WHEN gs <= 16 THEN 'en progreso' ELSE 'abierto' END,
        CASE WHEN gs % 2 = 0 THEN 'Seguridad de la Informacion' ELSE 'Calidad' END,
        current_date + CASE WHEN gs <= 8 THEN -30 WHEN gs <= 16 THEN 45 WHEN gs <= 20 THEN -7 ELSE 90 END,
        c.admin_id,

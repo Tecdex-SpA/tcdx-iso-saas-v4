@@ -53,10 +53,13 @@ El override queda limitado al tenant demo:
 
 ```bash
 MIGRATION_DATABASE_URL='postgres://...' npm run demo:migration:preflight
+MIGRATION_DATABASE_URL='postgres://...' npm run demo:migration:dry-run
 MIGRATION_DATABASE_URL='postgres://...' npm run demo:migration:apply
 ```
 
 La migración usa ledger `schema_migrations`, checksum SHA-256, advisory lock y postcondiciones. El runner inspecciona la estructura real de `schema_migrations` mediante `information_schema.columns`; el ledger esperado contiene `migration_id`, `checksum`, `applied_at`, `applied_by`, `duration_ms`, `status` y `details`. No usa ni consulta una columna `error_message`.
+
+El apply exige una atestación reciente de dry-run para el mismo checksum, la misma base y la misma firma del esquema. El dry-run ejecuta el SQL completo, valida postcondiciones dentro de la transacción, hace rollback y confirma desde otra conexión que no quedaron tenant, usuarios ni cambios en ledger o esquema.
 
 ## Reversibilidad
 
@@ -72,6 +75,7 @@ La reversa elimina solo datos cuyo `tenant_id` o relación pertenece al tenant D
 - `npm run demo:postgres-check`.
 - `npm run demo:migration:checksum`.
 - `MIGRATION_DATABASE_URL=... npm run demo:migration:preflight`.
+- `MIGRATION_DATABASE_URL=... npm run demo:migration:dry-run`.
 - `MIGRATION_DATABASE_URL=... npm run demo:migration:apply`.
 - Segunda ejecución de `apply` debe resolver como aplicada/idempotente.
 - Retry desde ledger `failed`: el check PostgreSQL inserta un estado `failed` sintético en la DB efímera, ejecuta la migración y exige convergencia a `applied` con el checksum real.
@@ -83,15 +87,20 @@ La reversa elimina solo datos cuyo `tenant_id` o relación pertenece al tenant D
 - `npm run demo:postgres-check`: OK sobre `postgres:16-alpine`.
 - `tenants_ai_plan_check`: reproducido en fixture efímero con allowlist `none`, `basic`, `standard`, `pro`, `premium`, `enterprise`.
 - `tenants.ai_plan`: verificado como `enterprise`.
+- `tenant_standards.catalog_mode`: verificado como `mixed`; `demo_integrated` queda rechazado antes de ejecutar SQL.
+- Constraints productivos reproducidos para catálogo de normas, catálogo de controles, hallazgos y acciones.
 - `schema_migrations`: estructura real inspeccionada; sin columna `error_message`.
-- Conteos verificados por el check: 2 usuarios, 2 normas, 24 riesgos, 55 controles, 80 evidencias, 144 mediciones, 4 dashboards, 4 reportes.
+- Conteos verificados por el check: 1 tenant, 2 usuarios, 2 normas, 10 procesos, 24 riesgos, 55 controles, 80 evidencias, 5 auditorías, 18 hallazgos, 24 acciones, 12 métricas, 144 mediciones, 24 snapshots, 6 contratos, 24 mappings, 12 observaciones, 140 edges de lineage, 4 dashboards, 18 widgets, 4 reportes, 12 generaciones, 1 encuesta, 12 tests de assurance y 6 pérdidas.
 - `data.semantic_layer`: permitido por vista comercial (`plan` y `override` en el entorno de prueba).
 - `user_roles`: 2 asignaciones reales verificadas.
+- RBAC: administrador con escritura semántica; auditor con lectura y sin escritura semántica.
 - Tenant B sintético: 0 mediciones demo visibles.
 - Hash bcrypt: compatible con backend para ambos usuarios.
 - Login backend: `auth.service.login` emitió tokens válidos para admin y auditor con `tenant_id` demo.
 - Idempotencia: segunda ejecución detectó migración aplicada.
 - Retry desde `failed`: verificado con ledger real y checksum final aplicado.
-- Reversa: eliminó el tenant demo y datos asociados en DB efímera.
+- Dry-run: migración completa y postcondiciones ejecutadas, rollback confirmado y ledger `failed` preservado.
+- Firma de esquema: apply bloqueado ante drift sintético y habilitado tras un nuevo dry-run.
+- Reversa: eliminó el tenant demo y datos asociados, preservó Tenant B y fue segura al repetirse con el demo ya ausente.
 
 No se agregó esta carga al deploy oficial.
