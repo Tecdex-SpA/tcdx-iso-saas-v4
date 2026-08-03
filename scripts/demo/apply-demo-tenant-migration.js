@@ -12,6 +12,8 @@ const MIGRATION_ID = '20260803_demo_tenant_iso_grc';
 const MIGRATION_FILE = path.join(root, 'database/migrations/20260803_demo_tenant_iso_grc.sql');
 const ADVISORY_LOCK_NAMESPACE = 844332;
 const ADVISORY_LOCK_KEY = 2026080303;
+const DEMO_AI_PLAN = 'enterprise';
+const REQUIRED_LEDGER_COLUMNS = ['migration_id', 'checksum', 'applied_at', 'applied_by', 'duration_ms', 'status', 'details'];
 
 function sanitizeError(error) {
   return String(error?.message || 'demo tenant migration error')
@@ -25,6 +27,12 @@ function sanitizeError(error) {
 function readMigration() {
   if (!fs.existsSync(MIGRATION_FILE)) throw new Error('Demo tenant migration file is missing');
   const sql = fs.readFileSync(MIGRATION_FILE, 'utf8');
+  if (sql.includes('demo_enterprise')) {
+    throw new Error('Demo tenant migration contains invalid ai_plan value demo_enterprise');
+  }
+  if (!new RegExp(`ai_plan\\s*=\\s*'${DEMO_AI_PLAN}'`).test(sql) && !sql.includes(`'${DEMO_AI_PLAN}'`)) {
+    throw new Error(`Demo tenant migration does not contain required ai_plan value ${DEMO_AI_PLAN}`);
+  }
   return { sql, checksum: crypto.createHash('sha256').update(sql).digest('hex') };
 }
 
@@ -58,6 +66,37 @@ async function ensureLedger(client) {
   )`);
 }
 
+async function getLedgerColumns(client) {
+  const result = await client.query(`SELECT column_name, data_type, is_nullable
+    FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='schema_migrations'
+    ORDER BY ordinal_position`);
+  return result.rows;
+}
+
+function assertLedgerShape(rows) {
+  const names = new Set(rows.map((row) => row.column_name));
+  const missing = REQUIRED_LEDGER_COLUMNS.filter((name) => !names.has(name));
+  if (missing.length) throw new Error(`schema_migrations missing required columns: ${missing.join(', ')}`);
+  if (names.has('error_message')) {
+    throw new Error('schema_migrations unexpectedly contains error_message; demo runner must use details jsonb');
+  }
+}
+
+async function getTenantAiPlanConstraint(client) {
+  const result = await client.query(`SELECT pg_get_constraintdef(c.oid) AS definition
+    FROM pg_constraint c
+    WHERE c.conrelid='public.tenants'::regclass
+      AND c.conname='tenants_ai_plan_check'
+      AND c.contype='c'`);
+  if (!result.rowCount) throw new Error('tenants_ai_plan_check constraint is missing');
+  return String(result.rows[0].definition || '');
+}
+
+function parseAllowedTextValues(definition) {
+  return Array.from(definition.matchAll(/'([^']+)'(?:::text)?/g)).map((match) => match[1]);
+}
+
 async function acquireLock(client) {
   const result = await client.query('SELECT pg_try_advisory_lock($1,$2) AS acquired', [ADVISORY_LOCK_NAMESPACE, ADVISORY_LOCK_KEY]);
   if (result.rows[0]?.acquired !== true) throw new Error('Another demo tenant migration process holds the advisory lock');
@@ -68,6 +107,13 @@ async function releaseLock(client) {
 }
 
 async function preflight(client) {
+  const ledgerColumns = await getLedgerColumns(client);
+  assertLedgerShape(ledgerColumns);
+  const constraintDefinition = await getTenantAiPlanConstraint(client);
+  const aiPlanAllowlist = parseAllowedTextValues(constraintDefinition);
+  if (!aiPlanAllowlist.includes(DEMO_AI_PLAN)) {
+    throw new Error(`Configured demo ai_plan ${DEMO_AI_PLAN} is not allowed by tenants_ai_plan_check`);
+  }
   const result = await client.query(`SELECT
     current_database() AS database_name,
     current_user AS migration_user,
@@ -95,6 +141,9 @@ async function preflight(client) {
   for (const key of ['database_name', 'migration_user', ...required]) {
     process.stdout.write(`${key}=${row[key]}\n`);
   }
+  process.stdout.write(`schema_migrations_columns=${ledgerColumns.map((column) => `${column.column_name}:${column.data_type}`).join(',')}\n`);
+  process.stdout.write(`tenants_ai_plan_check=${constraintDefinition}\n`);
+  process.stdout.write(`demo_ai_plan=${DEMO_AI_PLAN}\n`);
   const failed = required.filter((key) => row[key] !== true);
   if (failed.length) throw new Error(`Demo tenant migration preflight failed: ${failed.join(', ')}`);
 }
@@ -116,6 +165,7 @@ async function postconditions(client) {
   const tenantId = '76c44a0e-6041-8bda-99c7-b740fccea001';
   const result = await client.query(`SELECT jsonb_build_object(
     'tenant', (SELECT count(*) FROM tenants WHERE id=$1::uuid AND service_status='active'),
+    'ai_plan', (SELECT ai_plan FROM tenants WHERE id=$1::uuid),
     'users', (SELECT count(*) FROM users WHERE tenant_id=$1::uuid AND email IN ('admin.demo@tcdx.demo','auditor.demo@tcdx.demo')),
     'semantic_layer', (SELECT count(*) FROM tenant_feature_overrides WHERE tenant_id=$1::uuid AND capability_key='data.semantic_layer' AND enabled=true AND status='active'),
     'standards', (SELECT count(*) FROM tenant_standards WHERE tenant_id=$1::uuid AND is_active),
@@ -130,6 +180,7 @@ async function postconditions(client) {
     'reports', (SELECT count(*) FROM report_definitions WHERE tenant_id=$1::uuid AND status='published')
   ) AS checks`, [tenantId]);
   const checks = result.rows[0].checks;
+  if (checks.ai_plan !== DEMO_AI_PLAN) throw new Error(`Demo tenant postcondition failed: ai_plan=${checks.ai_plan}`);
   const minimums = {
     tenant: 1,
     users: 2,

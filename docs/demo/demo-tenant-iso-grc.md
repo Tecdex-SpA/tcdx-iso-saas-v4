@@ -17,6 +17,8 @@ La migración `database/migrations/20260803_demo_tenant_iso_grc.sql` crea datos 
 
 El tenant queda con suscripción activa al plan publicado `enterprise`. La capability `data.semantic_layer` se habilita además con un override tenant-scoped activo y auditable en `tenant_feature_overrides`, porque el resolver comercial admite plan, override y trial y la capacidad observada estaba bloqueada por resolución backend.
 
+El campo `tenants.ai_plan` usa el valor `enterprise`. El valor `demo_enterprise` no pertenece al constraint real `tenants_ai_plan_check` y está rechazado por el preflight del runner antes de ejecutar SQL.
+
 El override queda limitado al tenant demo:
 
 - `tenant_id`: UUID determinístico del tenant Demo Tecdex.
@@ -54,7 +56,7 @@ MIGRATION_DATABASE_URL='postgres://...' npm run demo:migration:preflight
 MIGRATION_DATABASE_URL='postgres://...' npm run demo:migration:apply
 ```
 
-La migración usa ledger `schema_migrations`, checksum SHA-256, advisory lock y postcondiciones.
+La migración usa ledger `schema_migrations`, checksum SHA-256, advisory lock y postcondiciones. El runner inspecciona la estructura real de `schema_migrations` mediante `information_schema.columns`; el ledger esperado contiene `migration_id`, `checksum`, `applied_at`, `applied_by`, `duration_ms`, `status` y `details`. No usa ni consulta una columna `error_message`.
 
 ## Reversibilidad
 
@@ -72,12 +74,16 @@ La reversa elimina solo datos cuyo `tenant_id` o relación pertenece al tenant D
 - `MIGRATION_DATABASE_URL=... npm run demo:migration:preflight`.
 - `MIGRATION_DATABASE_URL=... npm run demo:migration:apply`.
 - Segunda ejecución de `apply` debe resolver como aplicada/idempotente.
+- Retry desde ledger `failed`: el check PostgreSQL inserta un estado `failed` sintético en la DB efímera, ejecuta la migración y exige convergencia a `applied` con el checksum real.
 - `MIGRATION_DATABASE_URL=... npm run demo:remove` debe borrar solo `Demo Tecdex`.
 
 ## Evidencia local 2026-08-03
 
 - `npm run demo:validate`: OK.
 - `npm run demo:postgres-check`: OK sobre `postgres:16-alpine`.
+- `tenants_ai_plan_check`: reproducido en fixture efímero con allowlist `none`, `basic`, `standard`, `pro`, `premium`, `enterprise`.
+- `tenants.ai_plan`: verificado como `enterprise`.
+- `schema_migrations`: estructura real inspeccionada; sin columna `error_message`.
 - Conteos verificados por el check: 2 usuarios, 2 normas, 24 riesgos, 55 controles, 80 evidencias, 144 mediciones, 4 dashboards, 4 reportes.
 - `data.semantic_layer`: permitido por vista comercial (`plan` y `override` en el entorno de prueba).
 - `user_roles`: 2 asignaciones reales verificadas.
@@ -85,6 +91,7 @@ La reversa elimina solo datos cuyo `tenant_id` o relación pertenece al tenant D
 - Hash bcrypt: compatible con backend para ambos usuarios.
 - Login backend: `auth.service.login` emitió tokens válidos para admin y auditor con `tenant_id` demo.
 - Idempotencia: segunda ejecución detectó migración aplicada.
+- Retry desde `failed`: verificado con ledger real y checksum final aplicado.
 - Reversa: eliminó el tenant demo y datos asociados en DB efímera.
 
 No se agregó esta carga al deploy oficial.

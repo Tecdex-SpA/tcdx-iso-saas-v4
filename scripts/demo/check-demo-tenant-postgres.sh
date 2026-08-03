@@ -158,6 +158,10 @@ run_psql -v ON_ERROR_STOP=1 -c "
   ALTER TABLE action_plans ADD COLUMN IF NOT EXISTS approval_reviewed_by uuid;
   ALTER TABLE action_plans ADD COLUMN IF NOT EXISTS approval_reviewed_at timestamp;
   ALTER TABLE action_plans ADD COLUMN IF NOT EXISTS approval_comment text;
+  ALTER TABLE tenants DROP CONSTRAINT IF EXISTS tenants_ai_enabled_plan_consistency_check;
+  ALTER TABLE tenants DROP CONSTRAINT IF EXISTS tenants_ai_plan_check;
+  ALTER TABLE tenants ADD CONSTRAINT tenants_ai_plan_check CHECK (ai_plan = ANY (ARRAY['none'::text, 'basic'::text, 'standard'::text, 'pro'::text, 'premium'::text, 'enterprise'::text]));
+  ALTER TABLE tenants ADD CONSTRAINT tenants_ai_enabled_plan_consistency_check CHECK ((ai_enabled = false AND ai_plan = 'none'::text) OR (ai_enabled = true AND ai_plan <> 'none'::text));
 " >/dev/null
 
 run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260729_phase4_commercial_product.sql" >/dev/null
@@ -166,6 +170,26 @@ MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5/apply-pha
 MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5-5/bootstrap-official-math-governance.js" >/tmp/tcdx-demo-formulas.txt
 MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5-c2/apply-phase5-c2-migration.js" --apply >/tmp/tcdx-demo-c2.txt
 MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --preflight >/tmp/tcdx-demo-preflight.txt
+
+run_psql -v ON_ERROR_STOP=1 -c '\d+ schema_migrations' >/tmp/tcdx-demo-schema-migrations-describe.txt
+ledger_columns="$(run_psql -Atqc "SELECT string_agg(column_name || ':' || data_type, ',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='schema_migrations'")"
+constraint_def="$(run_psql -Atqc "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='public.tenants'::regclass AND conname='tenants_ai_plan_check'")"
+[[ "$ledger_columns" == *"migration_id:"* && "$ledger_columns" == *"checksum:"* && "$ledger_columns" == *"status:"* && "$ledger_columns" == *"details:"* ]] || { echo "schema_migrations ledger shape is incompatible: $ledger_columns" >&2; exit 1; }
+[[ "$ledger_columns" != *"error_message:"* ]] || { echo "schema_migrations unexpectedly contains error_message" >&2; exit 1; }
+[[ "$constraint_def" == *"'enterprise'"* && "$constraint_def" != *"demo_enterprise"* ]] || { echo "tenants_ai_plan_check does not allow enterprise exactly: $constraint_def" >&2; exit 1; }
+
+demo_checksum="$(node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --checksum | awk -F= '/checksum=/ {print $2; exit}')"
+run_psql -v ON_ERROR_STOP=1 -c "
+  INSERT INTO schema_migrations (migration_id, checksum, applied_by, duration_ms, status, details)
+  VALUES ('20260803_demo_tenant_iso_grc', repeat('f',64), current_user, 1, 'failed', '{\"fixture\":\"failed-retry\"}'::jsonb)
+  ON CONFLICT (migration_id) DO UPDATE SET
+    checksum = EXCLUDED.checksum,
+    applied_by = current_user,
+    duration_ms = EXCLUDED.duration_ms,
+    status = 'failed',
+    details = EXCLUDED.details;
+" >/dev/null
+
 MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --apply >/tmp/tcdx-demo-apply-1.txt
 MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/apply-demo-tenant-migration.js" --apply >/tmp/tcdx-demo-apply-2.txt
 
@@ -173,10 +197,16 @@ counts="$(run_psql -Atqc "SELECT jsonb_build_object('users',(SELECT count(*) FRO
 semantic_allowed="$(run_psql -Atqc "SELECT count(*) FROM v_commercial_tenant_capabilities WHERE tenant_id='$DEMO_TENANT_ID' AND capability_key='data.semantic_layer' AND enabled=true")"
 user_roles_count="$(run_psql -Atqc "SELECT count(*) FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE tenant_id='$DEMO_TENANT_ID')")"
 tenant_b_count="$(run_psql -Atqc "INSERT INTO tenants (id,name,rut,service_status) VALUES ('$TENANT_B_ID','Tenant B Fixture','FIXTURE-B','active') ON CONFLICT (id) DO NOTHING; SELECT count(*) FROM metric_measurements WHERE tenant_id='$TENANT_B_ID'")"
+tenant_ai_plan="$(run_psql -Atqc "SELECT ai_plan FROM tenants WHERE id='$DEMO_TENANT_ID'")"
+ledger_state="$(run_psql -Atqc "SELECT status || ':' || checksum FROM schema_migrations WHERE migration_id='20260803_demo_tenant_iso_grc'")"
 
 [[ "$semantic_allowed" -ge 1 ]] || { echo "data.semantic_layer is not enabled" >&2; exit 1; }
 [[ "$user_roles_count" -ge 2 ]] || { echo "Demo users have no real user_roles assignments" >&2; exit 1; }
 [[ "$tenant_b_count" == "0" ]] || { echo "Tenant B saw demo measurements" >&2; exit 1; }
+[[ "$tenant_ai_plan" == "enterprise" ]] || { echo "Demo tenant ai_plan is not enterprise: $tenant_ai_plan" >&2; exit 1; }
+[[ "$ledger_state" == "applied:$demo_checksum" ]] || { echo "Retry from failed did not converge to applied checksum: $ledger_state" >&2; exit 1; }
+grep -q "Demo tenant migration applied: 20260803_demo_tenant_iso_grc" /tmp/tcdx-demo-apply-1.txt || { echo "First demo apply did not execute migration from failed ledger" >&2; exit 1; }
+grep -q "Demo tenant migration applied: already_applied" /tmp/tcdx-demo-apply-2.txt || { echo "Second demo apply was not already_applied" >&2; exit 1; }
 
 hash_check="$(MIGRATION_DATABASE_URL="$DATABASE_URL" node -e "const {Client}=require('./backend/node_modules/pg'); const bcrypt=require('./backend/node_modules/bcrypt'); (async()=>{const c=new Client({connectionString:process.env.MIGRATION_DATABASE_URL}); await c.connect(); const r=await c.query(\"SELECT password_hash FROM users WHERE tenant_id='${DEMO_TENANT_ID}'::uuid ORDER BY email\"); const p=Buffer.from('RGVtby4xMjM0NTY=','base64').toString('utf8'); const checks=[]; for (const row of r.rows) checks.push(await bcrypt.compare(p,row.password_hash)); await c.end(); process.stdout.write(JSON.stringify({users:r.rowCount,bcrypt:checks.every(Boolean)}));})().catch(e=>{process.stderr.write(e.message);process.exit(1);})")"
 [[ "$hash_check" == '{"users":2,"bcrypt":true}' ]] || { echo "Bcrypt compatibility failed: $hash_check" >&2; exit 1; }
@@ -188,4 +218,4 @@ MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/demo/remove-demo
 removed_count="$(run_psql -Atqc "SELECT count(*) FROM tenants WHERE id='$DEMO_TENANT_ID'")"
 [[ "$removed_count" == "0" ]] || { echo "Demo tenant removal failed" >&2; exit 1; }
 
-printf '{"status":"VERIFIED_DEMO_TENANT_POSTGRES","postgres":"16-alpine","counts":%s,"semantic_allowed":%s,"user_roles":%s,"tenant_b_measurements":%s,"bcrypt":"verified","auth_login":"verified","idempotence":"verified","removal":"verified"}\n' "$counts" "$semantic_allowed" "$user_roles_count" "$tenant_b_count"
+printf '{"status":"VERIFIED_DEMO_TENANT_POSTGRES","postgres":"16-alpine","constraint":"tenants_ai_plan_check","ai_plan":"%s","ledger_columns":"%s","counts":%s,"semantic_allowed":%s,"user_roles":%s,"tenant_b_measurements":%s,"bcrypt":"verified","auth_login":"verified","idempotence":"verified","failed_retry":"verified","removal":"verified"}\n' "$tenant_ai_plan" "$ledger_columns" "$counts" "$semantic_allowed" "$user_roles_count" "$tenant_b_count"
