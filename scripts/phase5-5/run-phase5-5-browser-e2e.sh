@@ -4,7 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
 BASE_FIXTURE="$REPO_ROOT/tests/fixtures/phase1-base-schema.sql"
-PHASE2_MASTER="$REPO_ROOT/tests/fixtures/phase2-master-schema.sql"
+PHASE2_MASTER="$REPO_ROOT/scripts/phase5-c2/fixtures/phase2-master-schema.fixture"
 PHASE3_MASTER="$REPO_ROOT/tests/fixtures/phase3-master-schema.sql"
 PHASE1_MIGRATION="$REPO_ROOT/database/migrations/20260722_phase1_grc_core.sql"
 PHASE1R_MIGRATION="$REPO_ROOT/database/migrations/20260723_phase1r_operational_closeout.sql"
@@ -13,8 +13,9 @@ PHASE3_MIGRATION="$REPO_ROOT/database/migrations/20260728_phase3_operational_grc
 PHASE4_MIGRATION="$REPO_ROOT/database/migrations/20260729_phase4_commercial_product.sql"
 PHASE5_RUNNER="$REPO_ROOT/scripts/phase5/apply-phase5-migration.js"
 BOOTSTRAP="$REPO_ROOT/scripts/phase5-5/bootstrap-official-math-governance.js"
+C2_RUNNER="$REPO_ROOT/scripts/phase5-c2/apply-phase5-c2-migration.js"
 
-for file in "$BASE_FIXTURE" "$PHASE2_MASTER" "$PHASE3_MASTER" "$PHASE1_MIGRATION" "$PHASE1R_MIGRATION" "$PHASE2_MIGRATION" "$PHASE3_MIGRATION" "$PHASE4_MIGRATION" "$PHASE5_RUNNER" "$BOOTSTRAP"; do
+for file in "$BASE_FIXTURE" "$PHASE2_MASTER" "$PHASE3_MASTER" "$PHASE1_MIGRATION" "$PHASE1R_MIGRATION" "$PHASE2_MIGRATION" "$PHASE3_MIGRATION" "$PHASE4_MIGRATION" "$PHASE5_RUNNER" "$BOOTSTRAP" "$C2_RUNNER"; do
   [[ -r "$file" ]] || { echo "Required Phase 5.5 E2E input is not readable: $file" >&2; exit 1; }
 done
 
@@ -33,14 +34,25 @@ VIEWER_A="70000000-0000-0000-0000-000000000712"
 ADMIN_B="70000000-0000-0000-0000-000000000721"
 BACKEND_PID=""
 FRONTEND_PID=""
+PLAYWRIGHT_CONFIG="${PHASE5_5_PLAYWRIGHT_CONFIG:-playwright.phase5-5.config.ts}"
+RESULTS_FILE="${PHASE5_5_E2E_RESULTS_FILE:-../artifacts/phase5-5/browser-e2e-results.json}"
+REPORT_DIR="${PHASE5_5_PLAYWRIGHT_REPORT_DIR:-../artifacts/phase5-5/playwright-report}"
+EVIDENCE_FILE="${PHASE5_5_EVIDENCE_FILE:-$REPO_ROOT/docs/phase5-5/browser-e2e-evidence.md}"
+EVIDENCE_WRITER="${PHASE5_5_EVIDENCE_WRITER:-$SCRIPT_DIR/write-phase5-5-browser-evidence.js}"
 
 mkdir -p "$ARTIFACT_DIR"
 
 cleanup() {
   local code=$?
   trap - EXIT INT TERM
-  if [[ -n "${FRONTEND_PID:-}" ]]; then kill "$FRONTEND_PID" >/dev/null 2>&1 || true; fi
-  if [[ -n "${BACKEND_PID:-}" ]]; then kill "$BACKEND_PID" >/dev/null 2>&1 || true; fi
+  for process_id in "${FRONTEND_PID:-}" "${BACKEND_PID:-}"; do
+    if [[ -n "$process_id" ]] && kill -0 "$process_id" >/dev/null 2>&1; then
+      kill "$process_id" >/dev/null 2>&1
+      if ! wait "$process_id" 2>/dev/null; then
+        : # SIGTERM is the expected result for local test servers.
+      fi
+    fi
+  done
   if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then docker rm -f "$CONTAINER_NAME" >/dev/null; fi
   exit "$code"
 }
@@ -91,6 +103,7 @@ WHERE t.id IN ('$TENANT_A'::uuid, '$TENANT_B'::uuid)
 SQL
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$PHASE5_RUNNER" --apply >/dev/null
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$BOOTSTRAP" >/dev/null
+MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$C2_RUNNER" --apply >/dev/null
 
 PASSWORD_HASH="$(cd "$REPO_ROOT/backend" && PHASE5_5_PASSWORD="$PASSWORD" node - <<'NODE'
 const bcrypt = require('bcrypt');
@@ -126,7 +139,11 @@ FROM (VALUES
   ('data.catalog.read'),('data.quality.read'),('data.lineage.read'),
   ('metrics.read'),('metrics.measure'),('surveys.read'),('surveys.respond'),
   ('assurance_tests.read'),('assurance_tests.execute'),('loss_events.read'),
-  ('dashboards.read'),('reports.read'),('reports.generate'),('reports.download'),('reports.schedule')
+  ('dashboards.read'),('reports.read'),('reports.generate'),('reports.download'),('reports.schedule'),
+  ('semantic.contracts.read'),('semantic.contracts.manage'),('semantic.contracts.review'),('semantic.contracts.publish'),
+  ('semantic.mappings.read'),('semantic.mappings.manage'),('semantic.mappings.validate'),
+  ('semantic.observations.read'),('semantic.observations.ingest'),('semantic.lineage.read'),
+  ('semantic.sufficiency.read'),('semantic.sufficiency.manage'),('semantic.sufficiency.publish')
 ) AS p(permission_key)
 ON CONFLICT (permission_key) DO UPDATE SET is_active=true;
 
@@ -159,10 +176,27 @@ FROM commercial_technical_capabilities
 WHERE capability_key IN (
   'data.governance','metrics.catalog','metrics.engine','metrics.data_trust','data.lineage','data.impact_graph',
   'surveys.engine','assurance.testing','loss.events','bi.dashboard_builder','bi.executive_dashboards',
-  'reporting.studio','reporting.pdf','reporting.docx','reporting.xlsx','reporting.scheduled'
+  'reporting.studio','reporting.pdf','reporting.docx','reporting.xlsx','reporting.scheduled','data.semantic_layer'
 )
 ON CONFLICT (tenant_id, capability_key) DO UPDATE
 SET enabled=true, read_only=false, status='active', updated_at=now(), metadata=tenant_feature_overrides.metadata || EXCLUDED.metadata;
+
+INSERT INTO tenant_feature_overrides (tenant_id, capability_key, enabled, read_only, status, reason, created_by, metadata)
+SELECT '$TENANT_B'::uuid, capability_key, true, false, 'active', 'phase5_c2_tenant_isolation', '$ADMIN_B'::uuid, '{"source":"phase5_c2_browser_e2e"}'::jsonb
+FROM commercial_technical_capabilities
+WHERE capability_key IN ('data.governance','data.semantic_layer')
+ON CONFLICT (tenant_id, capability_key) DO UPDATE
+SET enabled=true, read_only=false, status='active', updated_at=now(), metadata=tenant_feature_overrides.metadata || EXCLUDED.metadata;
+
+CREATE TABLE IF NOT EXISTS semantic_browser_source (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  observed_at timestamptz NOT NULL,
+  value_numeric numeric NOT NULL,
+  status text NOT NULL
+);
+INSERT INTO semantic_browser_source (tenant_id,observed_at,value_numeric,status)
+VALUES ('$TENANT_A',now(),88,'valid'),('$TENANT_B',now(),31,'attention');
 
 WITH seeded(formula_code, value_num, unit_text) AS (
   VALUES
@@ -255,13 +289,11 @@ fi
 (cd "$REPO_ROOT/frontend" && \
   WEB_BASE_URL="http://localhost:$FRONTEND_PORT" \
   API_BASE_URL="http://127.0.0.1:$BACKEND_PORT" \
-  PHASE5_5_E2E_RESULTS_FILE="../artifacts/phase5-5/browser-e2e-results.json" \
-  PHASE5_5_PLAYWRIGHT_REPORT_DIR="../artifacts/phase5-5/playwright-report" \
+  PHASE5_5_E2E_RESULTS_FILE="$RESULTS_FILE" \
+  PHASE5_5_PLAYWRIGHT_REPORT_DIR="$REPORT_DIR" \
   PHASE5_5_TENANT_A_ID="$TENANT_A" \
   PHASE5_5_TENANT_B_ID="$TENANT_B" \
   PHASE5_5_PASSWORD="$PASSWORD" \
-  npx playwright test --config=playwright.phase5-5.config.ts)
+  env -u FORCE_COLOR -u NO_COLOR npx playwright test --config="$PLAYWRIGHT_CONFIG")
 
-node "$SCRIPT_DIR/write-phase5-5-browser-evidence.js" \
-  "$ARTIFACT_DIR/browser-e2e-results.json" \
-  "$REPO_ROOT/docs/phase5-5/browser-e2e-evidence.md"
+node "$EVIDENCE_WRITER" "$REPO_ROOT/frontend/$RESULTS_FILE" "$EVIDENCE_FILE"

@@ -20,3 +20,7 @@
 | Aislamiento PostgreSQL de fórmulas, runs, snapshots y lineage | integración PostgreSQL 5.5 | PASS |
 
 No se elevaron roles ni se desactivaron gates para pasar pruebas. No se usa una cuenta real ni una URL remota.
+
+## Fase 5-C2
+
+La migración registra 13 permisos `semantic.*`. El E2E local verificó publicación por administrador A, rechazo 403 de lectura semántica al rol restringido configurado y 404/listado aislado al consultar el identificador de A desde Tenant B. Catálogo global permanece reservado a platform admin.

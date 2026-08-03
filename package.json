@@ -118,6 +118,17 @@
     "phase5-5:accessibility-check": "node scripts/phase5-5/check-phase5-5-package6.js",
     "phase5-5:security-check": "node scripts/phase5-5/check-phase5-5-final.js",
     "phase5-5:performance-check": "node scripts/phase5-5/check-phase5-5-final.js",
-    "phase5-5:final-check": "npm run phase5-5:package5-check && npm run phase5-5:package6-check && npm run phase5-5:check && npm run phase5-5:artifact-validation"
+    "phase5-5:final-check": "npm run phase5-5:package5-check && npm run phase5-5:package6-check && npm run phase5-5:check && npm run phase5-5:artifact-validation",
+    "phase5-c2:migration:checksum": "node scripts/phase5-c2/apply-phase5-c2-migration.js --checksum",
+    "phase5-c2:migration:preflight": "node scripts/phase5-c2/apply-phase5-c2-migration.js --preflight",
+    "phase5-c2:migration:apply": "node scripts/phase5-c2/apply-phase5-c2-migration.js --apply",
+    "phase5-c2:contracts-check": "node scripts/phase5-c2/check-phase5-c2-contracts.js",
+    "phase5-c2:security-check": "node scripts/phase5-c2/check-phase5-c2-security.js",
+    "phase5-c2:unit": "node backend/src/services/semantic/semanticLayer.test.js",
+    "phase5-c2:postgres": "bash scripts/phase5-c2/check-phase5-c2-postgres.sh",
+    "phase5-c2:browser-e2e": "bash scripts/phase5-c2/run-phase5-c2-browser-e2e.sh",
+    "phase5-c2:scripts-check": "bash -n scripts/phase5-c2/check-phase5-c2-postgres.sh scripts/phase5-c2/run-phase5-c2-browser-e2e.sh scripts/phase5-5/run-phase5-5-browser-e2e.sh scripts/deploy-vms.sh && node --check scripts/phase5-c2/apply-phase5-c2-migration.js && node --check scripts/phase5-c2/check-phase5-c2-contracts.js && node --check scripts/phase5-c2/check-phase5-c2-security.js && node --check scripts/phase5-c2/write-phase5-c2-browser-evidence.js && node --check backend/src/services/semantic/semanticBootstrap.service.js && node --check backend/src/services/semantic/typedTransformations.js && node --check backend/src/services/semantic/semanticEvaluation.service.js && node --check backend/src/services/semantic/semanticLayer.service.js",
+    "phase5-c2:check": "npm run phase5-c2:contracts-check && npm run phase5-c2:security-check && npm run phase5-c2:scripts-check && npm run phase5-c2:migration:checksum && npm run phase5-c2:unit && npm run phase5-c2:postgres && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend run build && git diff --check",
+    "phase5-c2:full-check": "npm run phase5-c2:check && npm run phase5-c2:browser-e2e"
   }
 }

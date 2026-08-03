@@ -724,3 +724,28 @@ La evidencia positiva, negativa y cross-tenant de las rutas críticas está en `
 | POST | `/workpapers` | `backend/src/routes/admin-saas-commercial.routes.js` | `frontend/src/components/grc/GrcPhase1Panel.tsx` | not_proven_by_static_scan | consumer_detected |
 
 El inventario máquina-legible completo, incluidos los literales API del frontend, está en `02_endpoint_consumer_inventory.json`.
+
+## Endpoints incorporados por 5-C2
+
+Todos se montan en `backend/src/routes/phase5.routes.js`, bajo `/api/data/semantic`, y aplican tenant efectivo, `data.semantic_layer` y permiso específico. `SemanticLayerWorkspace` consume contratos, reconciliación, versiones, mappings, preview, transiciones, ingesta y observaciones. Los endpoints de detalle, relaciones, suficiencia y jobs son técnicos para administración, automatización y diagnóstico; su consumidor es el workspace técnico o el scheduler compartido, no una vista de negocio.
+
+| Método | Ruta | Permiso | Capability | Consumidor/acción | Prueba |
+| --- | --- | --- | --- | --- | --- |
+| GET/POST | `/source-contracts` | `semantic.contracts.read/manage` | `data.semantic_layer` | listar/crear fuente | Chromium 5-C2 |
+| GET/PATCH | `/source-contracts/:id` | `semantic.contracts.read/manage` | `data.semantic_layer` | detalle/editar metadatos | integración y workspace |
+| POST | `/source-contracts/:id/versions` | `semantic.contracts.manage` | `data.semantic_layer` | crear versión | Chromium 5-C2 |
+| GET/PATCH | `/versions/:versionId` | `semantic.contracts.read/manage` | `data.semantic_layer` | consultar/editar borrador | integración |
+| POST | `/versions/:versionId/review` | `semantic.contracts.review` | `data.semantic_layer` | enviar a revisión | Chromium 5-C2 |
+| POST | `/versions/:versionId/approve` | `semantic.contracts.review` | `data.semantic_layer` | aprobar | Chromium 5-C2 |
+| POST | `/versions/:versionId/publish` | `semantic.contracts.publish` | `data.semantic_layer` | publicar inmutable | Chromium 5-C2 |
+| POST/GET | `/versions/:versionId/preview`, `/assessment` | `semantic.mappings.validate/contracts.read` | `data.semantic_layer` | validar quality/freshness/sufficiency | Chromium 5-C2 |
+| GET/POST | `/versions/:versionId/mappings` | `semantic.mappings.read/manage` | `data.semantic_layer` | listar/crear mapping | Chromium 5-C2 |
+| PATCH/POST | `/mappings/:mappingId`, `/mappings/:mappingId/validate` | `semantic.mappings.manage/validate` | `data.semantic_layer` | editar/validar mapping | integración |
+| POST | `/versions/:versionId/ingest` | `semantic.observations.ingest` | `data.semantic_layer` | ingerir observaciones | Chromium 5-C2 |
+| GET | `/observations`, `/observations/:observationId` | `semantic.observations.read` | `data.semantic_layer` | listar/detalle | Chromium 5-C2 |
+| GET | `/observations/:observationId/lineage`, `/quality` | `semantic.lineage.read/observations.read` | `data.semantic_layer` | trazabilidad/evaluación | Chromium 5-C2 |
+| POST | `/observations/:observationId/relations` | `semantic.observations.ingest` | `data.semantic_layer` | vincular entidad GRC | integración |
+| GET/POST | `/sufficiency-rules` | `semantic.sufficiency.read/manage` | `data.semantic_layer` | catálogo técnico | integración PostgreSQL |
+| GET/POST | `/sufficiency-rules/:ruleId`, transiciones | `semantic.sufficiency.read/manage/publish` | `data.semantic_layer` | revisar/aprobar/publicar | integración PostgreSQL |
+| GET | `/reconciliation` | `semantic.contracts.read` | `data.semantic_layer` | verificar compatibilidad legacy | workspace técnico |
+| GET/POST | `/jobs`, `/jobs/:jobType`, `/jobs/id/:jobId/execute` | `semantic.observations.read/ingest` | `data.semantic_layer` | scheduler compartido | integración backend |

@@ -1,0 +1,44 @@
+-- Synthetic pre-existing masters required by disposable Phase 5-C2 runtimes.
+-- Apply after phase1-base-schema.sql and before Phase 1/Phase 2 migrations.
+
+CREATE TABLE tenant_processes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  name text NOT NULL
+);
+
+ALTER TABLE users ADD COLUMN full_name text;
+
+CREATE TABLE tenant_operations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  process_id uuid REFERENCES tenant_processes(id),
+  name text NOT NULL
+);
+
+CREATE TABLE assets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid REFERENCES tenants(id),
+  name text
+);
+
+CREATE TABLE tenant_integrations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  provider varchar(80) NOT NULL,
+  status varchar(40) NOT NULL DEFAULT 'prepared',
+  display_name varchar(180),
+  connected_by_user_id uuid REFERENCES users(id),
+  encrypted_access_token text,
+  encrypted_refresh_token text,
+  token_expires_at timestamp,
+  scopes text,
+  provider_account_email varchar(255),
+  metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now(),
+  last_sync_at timestamp,
+  disconnected_at timestamp,
+  CONSTRAINT tenant_integrations_provider_check
+    CHECK (provider IN ('google_drive', 'microsoft_graph', 'onedrive', 'sharepoint'))
+);

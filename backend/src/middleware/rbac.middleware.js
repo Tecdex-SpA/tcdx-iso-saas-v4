@@ -613,6 +613,11 @@ const API_RULES = [
 
   // Fase 5: datos, métricas, encuestas, assurance, pérdidas, BI y reporting gobernado
   {
+    prefix: '/api/data/semantic',
+    read: TENANT_READ_ROLES,
+    write: TENANT_ADMIN_ROLES,
+  },
+  {
     prefix: '/api/data',
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,

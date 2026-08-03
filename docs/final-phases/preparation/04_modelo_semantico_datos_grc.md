@@ -111,3 +111,7 @@ Cada tabla usa `id uuid` como PK, `created_at/updated_at timestamptz`, `created_
 - Retención se parametriza por clase de dato y contrato; el cleanup genera auditoría.
 - `metadata jsonb` no almacena claves, estados, permisos, fechas, owners o relaciones esenciales.
 - Migraciones son aditivas, con preflight, checksum, advisory lock, ledger, postconditions e idempotencia.
+
+## Implementación 5-C2
+
+La decisión ejecutada reutiliza `data_snapshots` y `data_lineage_edges`, y crea `data_source_contracts`, `data_source_contract_versions`, `data_source_field_mappings`, `grc_observations`, `grc_observation_relations` y `metric_sufficiency_rules`. La migración aditiva es `20260803_phase5_c2_semantic_layer`; no reemplaza tablas operacionales ni históricos.

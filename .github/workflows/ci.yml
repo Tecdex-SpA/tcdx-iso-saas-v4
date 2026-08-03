@@ -56,6 +56,17 @@ jobs:
       - name: Phase 5.5 production acceptance contract
         run: node scripts/phase5-5/check-production-acceptance-contract.js
 
+      - name: Phase 5-C2 semantic contracts and security
+        run: |
+          npm run phase5-c2:contracts-check
+          npm run phase5-c2:security-check
+          npm run phase5-c2:scripts-check
+          npm run phase5-c2:migration:checksum
+          npm run phase5-c2:unit
+
+      - name: Phase 5-C2 disposable PostgreSQL integration
+        run: npm run phase5-c2:postgres
+
       - name: Phase 1 contracts
         run: npm run phase1:contracts:check
 
@@ -81,6 +92,10 @@ jobs:
       - name: Discover Phase 1 Playwright tests
         run: npm run phase1:e2e:discovery
 
+      - name: Discover Phase 5-C2 Playwright tests
+        working-directory: frontend
+        run: npx playwright test --config=playwright.phase5-c2.config.ts --list
+
       - name: Validate Phase 1 Playwright contracts
         run: node scripts/phase1/check-phase1-e2e-contracts.js
 
@@ -99,3 +114,10 @@ jobs:
       - name: Frontend build
         working-directory: frontend
         run: npm run build
+
+      - name: Install Chromium for Phase 5-C2 E2E
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Phase 5-C2 browser E2E
+        run: npm run phase5-c2:browser-e2e
