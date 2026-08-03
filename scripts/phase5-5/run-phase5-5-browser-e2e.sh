@@ -4,7 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
 BASE_FIXTURE="$REPO_ROOT/tests/fixtures/phase1-base-schema.sql"
-PHASE2_MASTER="$REPO_ROOT/tests/fixtures/phase2-master-schema.sql"
+PHASE2_MASTER="$REPO_ROOT/scripts/phase5-c2/fixtures/phase2-master-schema.fixture"
 PHASE3_MASTER="$REPO_ROOT/tests/fixtures/phase3-master-schema.sql"
 PHASE1_MIGRATION="$REPO_ROOT/database/migrations/20260722_phase1_grc_core.sql"
 PHASE1R_MIGRATION="$REPO_ROOT/database/migrations/20260723_phase1r_operational_closeout.sql"

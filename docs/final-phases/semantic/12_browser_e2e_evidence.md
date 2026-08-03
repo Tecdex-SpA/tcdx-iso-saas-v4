@@ -1,7 +1,7 @@
 # Evidencia browser E2E - Fase 5-C2
 
 Estado: COMPLETED.
-Fecha: 2026-08-03T16:31:00.066Z.
+Fecha: 2026-08-03T16:36:39.373Z.
 
 ## Runtime
 
@@ -11,7 +11,7 @@ Fecha: 2026-08-03T16:31:00.066Z.
 
 ## Escenarios
 
-- passed · contrato semántico se configura, publica, ingiere y queda aislado por tenant · passed/4072ms
+- passed · contrato semántico se configura, publica, ingiere y queda aislado por tenant · passed/5394ms
 
 ## Cobertura
 
