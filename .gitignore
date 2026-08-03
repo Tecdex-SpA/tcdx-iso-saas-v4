@@ -91,6 +91,7 @@ texto.txt
 # QA generated reports
 qa-results/
 artifacts/phase5-5/playwright-report/
+.demo-migration/
 frontend/test-results/
 .env.local
 .env.production

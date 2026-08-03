@@ -39,6 +39,11 @@ jobs:
         working-directory: backend
         run: npm run check
 
+      - name: Demo tenant production contracts and disposable PostgreSQL
+        run: |
+          npm run demo:validate
+          npm run demo:postgres-check
+
       - name: Phase 5 migration syntax and checksum
         run: |
           node --check scripts/phase5/apply-phase5-migration.js
