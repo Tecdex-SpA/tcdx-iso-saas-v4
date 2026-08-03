@@ -129,6 +129,12 @@
     "phase5-c2:browser-e2e": "bash scripts/phase5-c2/run-phase5-c2-browser-e2e.sh",
     "phase5-c2:scripts-check": "bash -n scripts/phase5-c2/check-phase5-c2-postgres.sh scripts/phase5-c2/run-phase5-c2-browser-e2e.sh scripts/phase5-5/run-phase5-5-browser-e2e.sh scripts/deploy-vms.sh && node --check scripts/phase5-c2/apply-phase5-c2-migration.js && node --check scripts/phase5-c2/check-phase5-c2-contracts.js && node --check scripts/phase5-c2/check-phase5-c2-security.js && node --check scripts/phase5-c2/write-phase5-c2-browser-evidence.js && node --check backend/src/services/semantic/semanticBootstrap.service.js && node --check backend/src/services/semantic/typedTransformations.js && node --check backend/src/services/semantic/semanticEvaluation.service.js && node --check backend/src/services/semantic/semanticLayer.service.js",
     "phase5-c2:check": "npm run phase5-c2:contracts-check && npm run phase5-c2:security-check && npm run phase5-c2:scripts-check && npm run phase5-c2:migration:checksum && npm run phase5-c2:unit && npm run phase5-c2:postgres && npm --prefix backend test && npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend run build && git diff --check",
-    "phase5-c2:full-check": "npm run phase5-c2:check && npm run phase5-c2:browser-e2e"
+    "phase5-c2:full-check": "npm run phase5-c2:check && npm run phase5-c2:browser-e2e",
+    "demo:migration:checksum": "node scripts/demo/apply-demo-tenant-migration.js --checksum",
+    "demo:migration:preflight": "node scripts/demo/apply-demo-tenant-migration.js --preflight",
+    "demo:migration:apply": "node scripts/demo/apply-demo-tenant-migration.js --apply",
+    "demo:remove": "node scripts/demo/remove-demo-tenant.js",
+    "demo:postgres-check": "bash scripts/demo/check-demo-tenant-postgres.sh",
+    "demo:validate": "node --check scripts/demo/apply-demo-tenant-migration.js && node --check scripts/demo/remove-demo-tenant.js && bash -n scripts/demo/check-demo-tenant-postgres.sh && npm run demo:migration:checksum"
   }
 }
