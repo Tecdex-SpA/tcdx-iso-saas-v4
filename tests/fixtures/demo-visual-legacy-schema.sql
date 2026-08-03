@@ -1,2 +1,0 @@
--- Placeholder legacy schema fixture.
--- This file was intentionally added to keep the demo visual validation fixture under version control.
