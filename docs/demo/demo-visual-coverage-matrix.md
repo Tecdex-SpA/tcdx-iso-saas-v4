@@ -1,6 +1,6 @@
 # Matriz de cobertura visual del tenant Demo Tecdex
 
-Fecha de inventario: 2026-08-03  
+Fecha de inventario: 2026-08-03
 Tenant: `76c44a0e-6041-8bda-99c7-b740fccea001` / `DEMO-TECDX-ISO-GRC`
 
 Esta matriz traza los componentes visibles contra el endpoint, el servicio y la fuente SQL reales. El estado `POSTGRES_VERIFIED_QA_PENDING` significa que la migración, la idempotencia, las postcondiciones y el aislamiento fueron verificados en PostgreSQL efímero, pero que la ruta todavía debe comprobarse en un ambiente QA desplegado con ambos usuarios demo. No equivale a cierre visual.

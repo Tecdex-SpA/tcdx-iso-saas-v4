@@ -1,6 +1,6 @@
 # Resumen cuantitativo de cobertura visual — Demo Tecdex
 
-Fecha: 2026-08-03  
+Fecha: 2026-08-03
 Estado global: **POSTGRES_VERIFIED_QA_PENDING**
 
 Los conteos “base” son las anclas observadas después del seed existente. “Enriquecido” enumera las filas operativas adicionales verificadas por el gate PostgreSQL efímero; no es una suma de tablas heterogéneas. Endpoints y elementos visuales provienen del inventario de componentes reales.
