@@ -15,6 +15,7 @@ import {
   isTokenExpired,
 } from '@/utils/auth';
 import { getApiBaseUrl } from '@/utils/apiClient';
+import { fetchAccessBootstrap } from '@/utils/accessBootstrap';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import {
@@ -67,13 +68,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { loading: entitlementsLoading, aiEnabled, canUseAiFeature } = useTenantEntitlements();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('sidebar-collapsed') === 'true';
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setSidebarCollapsed(localStorage.getItem('sidebar-collapsed') === 'true');
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {
@@ -208,53 +214,29 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return routeRules.moduleProtected.find((item) => isRoute(item.routes)) || null;
   }, [isRoute, routeRules.moduleProtected]);
 
-  const getModuleAccess = useCallback(async (token: string): Promise<ModuleAccessResponse> => {
-    const res = await fetch(`${API_URL}/api/me/modules`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+  const getModuleAccess = useCallback(
+    async (token: string): Promise<ModuleAccessResponse> =>
+      fetchAccessBootstrap<ModuleAccessResponse>({
+        token,
+        url: `${API_URL}/api/me/modules`,
+        fallbackError: t('app.modulesError'),
+        invalidResponseError: (status) =>
+          t('app.invalidModulesResponse', { status }),
+      }),
+    [t]
+  );
 
-    const text = await res.text();
-
-    let json: ModuleAccessResponse | null = null;
-
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      throw new Error(t('app.invalidModulesResponse', { status: res.status }));
-    }
-
-    if (!res.ok || !json || json.ok === false) {
-      throw new Error(json?.error || t('app.modulesError'));
-    }
-
-    return json;
-  }, [t]);
-
-  const getPermissions = useCallback(async (token: string): Promise<PermissionsResponse> => {
-    const res = await fetch(`${API_URL}/api/me/permissions`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const text = await res.text();
-
-    let json: PermissionsResponse | null = null;
-
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      throw new Error(t('app.invalidModulesResponse', { status: res.status }));
-    }
-
-    if (!res.ok || !json || json.ok === false) {
-      throw new Error(json?.error || t('app.permissionsError'));
-    }
-
-    return json;
-  }, [t]);
+  const getPermissions = useCallback(
+    async (token: string): Promise<PermissionsResponse> =>
+      fetchAccessBootstrap<PermissionsResponse>({
+        token,
+        url: `${API_URL}/api/me/permissions`,
+        fallbackError: t('app.permissionsError'),
+        invalidResponseError: (status) =>
+          t('app.invalidModulesResponse', { status }),
+      }),
+    [t]
+  );
 
   function moduleIsEnabled(
     moduleMap: ModuleAccessResponse['module_map'],

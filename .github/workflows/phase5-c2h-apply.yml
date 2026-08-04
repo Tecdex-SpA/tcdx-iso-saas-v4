@@ -1,0 +1,81 @@
+name: Phase 5 C2H Apply Stabilization
+
+on:
+  push:
+    branches:
+      - fix/phase5-c2h-rate-limit-hydration
+    paths:
+      - scripts/phase5-c2h/apply-app-rate-limit-patch.js
+      - scripts/phase5-c2h/apply-frontend-access-cache-patch.js
+      - scripts/phase5-c2h/apply-dynamic-page-props-patch.js
+      - scripts/phase5-c2h/apply-hydration-lint-patch.js
+      - .github/workflows/phase5-c2h-apply.yml
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Apply deterministic backend patch
+        run: node scripts/phase5-c2h/apply-app-rate-limit-patch.js
+
+      - name: Apply deterministic frontend access patch
+        run: node scripts/phase5-c2h/apply-frontend-access-cache-patch.js
+
+      - name: Apply deterministic dynamic page props patch
+        run: node scripts/phase5-c2h/apply-dynamic-page-props-patch.js
+
+      - name: Apply deterministic hydration lint patch
+        run: node scripts/phase5-c2h/apply-hydration-lint-patch.js
+
+      - name: Validate backend syntax and limiter tests
+        run: |
+          node -c backend/src/app.js
+          node -c backend/src/middleware/auth.js
+          node -c backend/src/middleware/authenticatedRateLimit.middleware.js
+          node -c backend/src/middleware/publicRateLimit.middleware.js
+          node backend/src/middleware/authenticatedRateLimit.middleware.test.js
+          node backend/src/middleware/publicRateLimit.middleware.test.js
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Validate frontend lint and typecheck
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm run typecheck
+
+      - name: Commit generated integration
+        run: |
+          if git diff --quiet -- backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/context/LanguageContext.tsx frontend/src/app; then
+            echo "No generated changes required."
+            exit 0
+          fi
+
+          branch_name="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/context/LanguageContext.tsx frontend/src/app
+          git commit -m "fix(phase5): integrate limiter, access cache and hydration stability"
+          git push origin "HEAD:${branch_name}"

@@ -4,6 +4,9 @@ const {
   getJwtSecret,
   getJwtVerifyOptions,
 } = require('../config/security');
+const {
+  authenticatedRateLimit,
+} = require('./authenticatedRateLimit.middleware');
 
 function getBearerToken(req) {
   const header =
@@ -178,7 +181,7 @@ module.exports = async function auth(req, res, next) {
             is_internal_ai: true,
             tenant_id: null,
           };
-          return next();
+          return authenticatedRateLimit(req, res, next);
         }
 
         if (incomingToken) {
@@ -221,7 +224,7 @@ module.exports = async function auth(req, res, next) {
       return;
     }
 
-    return next();
+    return authenticatedRateLimit(req, res, next);
   } catch (error) {
     console.error('AUTH ERROR:', error.message);
 
