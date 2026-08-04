@@ -74,7 +74,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
 
   useEffect(() => {
-    setSidebarCollapsed(localStorage.getItem('sidebar-collapsed') === 'true');
+    const frame = window.requestAnimationFrame(() => {
+      setSidebarCollapsed(localStorage.getItem('sidebar-collapsed') === 'true');
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   const toggleSidebar = () => {

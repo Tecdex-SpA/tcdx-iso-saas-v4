@@ -100,7 +100,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<SupportedLocale>(DEFAULT_LOCALE);
 
   useEffect(() => {
-    setLocaleState(resolveClientLocale());
+    const frame = window.requestAnimationFrame(() => {
+      setLocaleState(resolveClientLocale());
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
