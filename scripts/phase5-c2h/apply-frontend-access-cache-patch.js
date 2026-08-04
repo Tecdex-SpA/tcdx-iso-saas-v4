@@ -13,6 +13,16 @@ const appLayoutPath = path.join(
 );
 let source = fs.readFileSync(appLayoutPath, 'utf8');
 
+const alreadyPatched =
+  source.includes("import { fetchAccessBootstrap } from '@/utils/accessBootstrap';") &&
+  source.includes('fetchAccessBootstrap<ModuleAccessResponse>') &&
+  source.includes('fetchAccessBootstrap<PermissionsResponse>');
+
+if (alreadyPatched) {
+  console.log(`AppLayout ya se encuentra actualizado: ${appLayoutPath}`);
+  process.exit(0);
+}
+
 function replaceOnce(label, from, to) {
   if (!source.includes(from)) {
     throw new Error(`No se encontró bloque esperado: ${label}`);
