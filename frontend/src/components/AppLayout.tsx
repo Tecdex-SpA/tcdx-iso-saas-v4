@@ -67,13 +67,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { loading: entitlementsLoading, aiEnabled, canUseAiFeature } = useTenantEntitlements();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('sidebar-collapsed') === 'true';
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
+
+  useEffect(() => {
+    setSidebarCollapsed(localStorage.getItem('sidebar-collapsed') === 'true');
+  }, []);
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {
