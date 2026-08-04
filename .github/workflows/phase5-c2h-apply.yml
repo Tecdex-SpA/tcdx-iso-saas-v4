@@ -1,0 +1,53 @@
+name: Phase 5 C2H Apply Stabilization
+
+on:
+  push:
+    branches:
+      - fix/phase5-c2h-rate-limit-hydration
+    paths:
+      - scripts/phase5-c2h/apply-app-rate-limit-patch.js
+      - .github/workflows/phase5-c2h-apply.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/phase5-c2h-rate-limit-hydration
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Apply deterministic app patch
+        run: node scripts/phase5-c2h/apply-app-rate-limit-patch.js
+
+      - name: Validate backend syntax and limiter tests
+        run: |
+          node -c backend/src/app.js
+          node -c backend/src/middleware/auth.js
+          node -c backend/src/middleware/authenticatedRateLimit.middleware.js
+          node -c backend/src/middleware/publicRateLimit.middleware.js
+          node backend/src/middleware/authenticatedRateLimit.middleware.test.js
+          node backend/src/middleware/publicRateLimit.middleware.test.js
+
+      - name: Commit generated app integration
+        run: |
+          if git diff --quiet -- backend/src/app.js; then
+            echo "No generated changes required."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/src/app.js
+          git commit -m "fix(backend): replace global IP limiter with scoped policies"
+          git push origin HEAD:fix/phase5-c2h-rate-limit-hydration
