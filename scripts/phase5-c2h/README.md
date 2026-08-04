@@ -10,7 +10,9 @@ Este bloque se ejecuta antes de Fase 5-C3 y corrige las brechas detectadas por l
 - Headers `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` y `X-RateLimit-Policy`.
 - Métricas Prometheus para solicitudes permitidas y bloqueadas.
 - Correcciones de hidratación para idioma y estado del sidebar.
+- Restauración de preferencias cliente mediante `requestAnimationFrame`, sin alterar el primer render SSR y sin infringir `react-hooks/set-state-in-effect`.
 - Cache de corta duración y single-flight para bootstrap de módulos y permisos.
+- Normalización de tipos de páginas dinámicas para Next.js.
 
 ## Variables de entorno
 
@@ -34,7 +36,9 @@ npm --prefix backend run check
 node backend/src/middleware/authenticatedRateLimit.middleware.test.js
 node backend/src/middleware/publicRateLimit.middleware.test.js
 npm --prefix frontend ci
+npm --prefix frontend run lint
 npm --prefix frontend run typecheck
+npm --prefix frontend run build
 ```
 
 Después del despliegue controlado se debe ejecutar Playwright v2 con los dos tenants demo y confirmar:
