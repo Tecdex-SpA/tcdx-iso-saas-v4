@@ -8,6 +8,7 @@ on:
       - scripts/phase5-c2h/apply-app-rate-limit-patch.js
       - scripts/phase5-c2h/apply-frontend-access-cache-patch.js
       - scripts/phase5-c2h/apply-dynamic-page-props-patch.js
+      - scripts/phase5-c2h/apply-hydration-lint-patch.js
       - .github/workflows/phase5-c2h-apply.yml
   pull_request:
     branches:
@@ -43,6 +44,9 @@ jobs:
       - name: Apply deterministic dynamic page props patch
         run: node scripts/phase5-c2h/apply-dynamic-page-props-patch.js
 
+      - name: Apply deterministic hydration lint patch
+        run: node scripts/phase5-c2h/apply-hydration-lint-patch.js
+
       - name: Validate backend syntax and limiter tests
         run: |
           node -c backend/src/app.js
@@ -56,13 +60,15 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Validate frontend typecheck
+      - name: Validate frontend lint and typecheck
         working-directory: frontend
-        run: npm run typecheck
+        run: |
+          npm run lint
+          npm run typecheck
 
       - name: Commit generated integration
         run: |
-          if git diff --quiet -- backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/app; then
+          if git diff --quiet -- backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/context/LanguageContext.tsx frontend/src/app; then
             echo "No generated changes required."
             exit 0
           fi
@@ -70,6 +76,6 @@ jobs:
           branch_name="${{ github.event.pull_request.head.ref || github.ref_name }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/app
-          git commit -m "fix(phase5): integrate limiter, access cache and page props"
+          git add backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/context/LanguageContext.tsx frontend/src/app
+          git commit -m "fix(phase5): integrate limiter, access cache and hydration stability"
           git push origin "HEAD:${branch_name}"
