@@ -39,7 +39,7 @@ export async function fetchAccessBootstrap<T>({
   const pending = pendingRequests.get(cacheKey) as Promise<T> | undefined;
   if (pending) return pending;
 
-  const request = (async () => {
+  const request = (async (): Promise<T> => {
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -47,7 +47,12 @@ export async function fetchAccessBootstrap<T>({
     });
 
     const text = await response.text();
-    let payload: (T & { ok?: boolean; error?: string; message?: string; code?: string }) | null = null;
+    let payload: (T & {
+      ok?: boolean;
+      error?: string;
+      message?: string;
+      code?: string;
+    }) | null = null;
 
     try {
       payload = text ? JSON.parse(text) : null;
