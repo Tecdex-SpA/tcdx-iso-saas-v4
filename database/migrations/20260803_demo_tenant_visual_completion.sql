@@ -2308,10 +2308,19 @@ BEGIN
   END IF;
 
   IF EXISTS (
-    SELECT 1 FROM kpi_snapshots
-    WHERE tenant_id=demo_id GROUP BY kpi_id HAVING count(*)<12 OR count(DISTINCT value)<4
+    SELECT 1
+    FROM demo_visual_kpis expected
+    LEFT JOIN kpi_definitions kd
+      ON kd.code = expected.code
+     AND kd.tenant_id = demo_id
+    LEFT JOIN kpi_snapshots ks
+      ON ks.kpi_id = kd.id
+     AND ks.tenant_id = demo_id
+    GROUP BY expected.seq, expected.code
+    HAVING count(ks.id) <> 12
+       OR count(DISTINCT ks.value) < 4
   ) THEN
-    RAISE EXCEPTION 'Demo visual completion postconditions failed: legacy KPI series are flat or incomplete';
+    RAISE EXCEPTION 'Demo visual completion postconditions failed: generated KPI series are flat or incomplete';
   END IF;
 END $$;
 
