@@ -21,9 +21,10 @@ jobs:
   apply-and-validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
+      - name: Checkout source branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -59,25 +60,16 @@ jobs:
         working-directory: frontend
         run: npm run typecheck
 
-      - name: Ensure generated files are committed in pull requests
-        if: github.event_name == 'pull_request'
-        run: |
-          if ! git diff --quiet -- backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/app; then
-            echo 'ERROR: los parches deterministas generan cambios no comprometidos.'
-            git diff -- backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/app
-            exit 1
-          fi
-
-      - name: Commit generated integration on branch push
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      - name: Commit generated integration
         run: |
           if git diff --quiet -- backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/app; then
             echo "No generated changes required."
             exit 0
           fi
 
+          branch_name="${{ github.event.pull_request.head.ref || github.ref_name }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/app
           git commit -m "fix(phase5): integrate limiter, access cache and page props"
-          git push origin HEAD:fix/phase5-c2h-rate-limit-hydration
+          git push origin "HEAD:${branch_name}"
