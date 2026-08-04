@@ -217,18 +217,18 @@ CREATE TEMP TABLE demo_visual_kpis (
 ) ON COMMIT DROP;
 
 INSERT INTO demo_visual_kpis VALUES
-  (1,'KPI-HLT-001','Salud global integrada','estrategico','automatico','higher_is_better',82,'demo_tecdex.grc_health'),
-  (2,'KPI-HLT-002','Cumplimiento de controles','cumplimiento','automatico','higher_is_better',85,'demo_tecdex.control_effectiveness'),
-  (3,'KPI-HLT-003','Cobertura de evidencia','cumplimiento','automatico','higher_is_better',90,'demo_tecdex.evidence_coverage'),
-  (4,'KPI-HLT-004','Controles deteriorados','riesgo','automatico','lower_is_better',8,'demo_tecdex.failed_controls'),
-  (5,'KPI-DEM-005','Riesgos fuera de apetito','riesgo','hibrido','lower_is_better',4,'demo_tecdex.out_of_appetite'),
-  (6,'KPI-DEM-006','Acciones cerradas a tiempo','operacional','hibrido','higher_is_better',88,'demo_tecdex.action_completion'),
-  (7,'KPI-DEM-007','Readiness de auditoría','cumplimiento','hibrido','higher_is_better',85,'demo_tecdex.audit_readiness'),
-  (8,'KPI-DEM-008','Calidad del dato GRC','estrategico','automatico','higher_is_better',90,'demo_tecdex.data_quality'),
-  (9,'KPI-DEM-009','Incidentes críticos abiertos','riesgo','manual','lower_is_better',2,'demo_tecdex.critical_incidents'),
-  (10,'KPI-DEM-010','Continuidad probada','operacional','hibrido','higher_is_better',90,'demo_tecdex.continuity_test_success'),
-  (11,'KPI-DEM-011','Efectividad de terceros críticos','riesgo','hibrido','higher_is_better',82,'demo_tecdex.supplier_assurance'),
-  (12,'KPI-DEM-012','Suficiencia semántica','estrategico','automatico','higher_is_better',88,'demo_tecdex.semantic_sufficiency');
+  (1,'DEMO-KPI-HLT-001','Salud global integrada','estrategico','automatico','higher_is_better',82,'demo_tecdex.grc_health'),
+  (2,'DEMO-KPI-HLT-002','Cumplimiento de controles','cumplimiento','automatico','higher_is_better',85,'demo_tecdex.control_effectiveness'),
+  (3,'DEMO-KPI-HLT-003','Cobertura de evidencia','cumplimiento','automatico','higher_is_better',90,'demo_tecdex.evidence_coverage'),
+  (4,'DEMO-KPI-HLT-004','Controles deteriorados','riesgo','automatico','lower_is_better',8,'demo_tecdex.failed_controls'),
+  (5,'DEMO-KPI-005','Riesgos fuera de apetito','riesgo','hibrido','lower_is_better',4,'demo_tecdex.out_of_appetite'),
+  (6,'DEMO-KPI-006','Acciones cerradas a tiempo','operacional','hibrido','higher_is_better',88,'demo_tecdex.action_completion'),
+  (7,'DEMO-KPI-007','Readiness de auditoría','cumplimiento','hibrido','higher_is_better',85,'demo_tecdex.audit_readiness'),
+  (8,'DEMO-KPI-008','Calidad del dato GRC','estrategico','automatico','higher_is_better',90,'demo_tecdex.data_quality'),
+  (9,'DEMO-KPI-009','Incidentes críticos abiertos','riesgo','manual','lower_is_better',2,'demo_tecdex.critical_incidents'),
+  (10,'DEMO-KPI-010','Continuidad probada','operacional','hibrido','higher_is_better',90,'demo_tecdex.continuity_test_success'),
+  (11,'DEMO-KPI-011','Efectividad de terceros críticos','riesgo','hibrido','higher_is_better',82,'demo_tecdex.supplier_assurance'),
+  (12,'DEMO-KPI-012','Suficiencia semántica','estrategico','automatico','higher_is_better',88,'demo_tecdex.semantic_sufficiency');
 
 INSERT INTO kpi_definitions (
   id, code, name, description, category, kpi_type, unit, base_formula, formula_expression,
@@ -286,7 +286,9 @@ SELECT pg_temp.demo_visual_uuid('legacy-kpi-snapshot-' || k.seq || '-' || month_
        now() - ((12-month_no) || ' months')::interval
 FROM demo_visual_context c
 CROSS JOIN demo_visual_kpis k
-JOIN kpi_definitions kd ON kd.code = k.code
+JOIN kpi_definitions kd
+  ON kd.code = k.code
+ AND kd.tenant_id = c.tenant_id
 CROSS JOIN generate_series(1,12) month_no
 ON CONFLICT (id) DO UPDATE SET
   value=EXCLUDED.value, numerator_value=EXCLUDED.numerator_value, denominator_value=EXCLUDED.denominator_value,
