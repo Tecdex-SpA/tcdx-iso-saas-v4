@@ -2247,7 +2247,7 @@ INSERT INTO report_exports (
 )
 SELECT pg_temp.demo_visual_uuid('legacy-report-export-'||gs), c.tenant_id,
        CASE WHEN gs%3=0 THEN c.auditor_id ELSE c.admin_id END,
-       (ARRAY['executive_iso_status','risk_register','compliance_status','audit_summary'])[((gs-1)%4)+1],
+       (ARRAY['executive_iso_status','iso_risk_report','control_health_report','internal_audit_report'])[((gs-1)%4)+1],
        (ARRAY['Estado ejecutivo SGI','Registro de riesgos','Cumplimiento integrado','Resumen de auditoría'])[((gs-1)%4)+1]
          ||' · '||to_char(date_trunc('month',now())-((12-gs)||' months')::interval,'Mon YYYY'),
        (ARRAY['pdf','xlsx','pdf','docx'])[((gs-1)%4)+1], 'generated',
