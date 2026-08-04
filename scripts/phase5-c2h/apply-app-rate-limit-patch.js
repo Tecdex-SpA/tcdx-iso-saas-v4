@@ -7,6 +7,18 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const appPath = path.join(repoRoot, 'backend', 'src', 'app.js');
 let source = fs.readFileSync(appPath, 'utf8');
 
+const alreadyPatched =
+  source.includes("require('./middleware/publicRateLimit.middleware')") &&
+  source.includes('publicRateLimitPrometheusLines()') &&
+  source.includes('authenticatedRateLimitPrometheusLines()') &&
+  source.includes("publicAuthLimiter, authRoutes") &&
+  !source.includes('const defaultLimiter = createMemoryRateLimiter');
+
+if (alreadyPatched) {
+  console.log(`app.js ya se encuentra actualizado: ${appPath}`);
+  process.exit(0);
+}
+
 function replaceOnce(label, from, to) {
   if (!source.includes(from)) {
     throw new Error(`No se encontró bloque esperado: ${label}`);
