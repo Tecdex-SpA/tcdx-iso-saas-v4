@@ -1,6 +1,6 @@
 import Phase3Workspace from '@/components/phase3/Phase3Workspace';
 
-export default async function Process360Page({ params }: PageProps<'/procesos/[id]'>) {
+export default async function Process360Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return <Phase3Workspace view="processes" entityId={id} />;
 }
