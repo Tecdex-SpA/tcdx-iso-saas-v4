@@ -6,6 +6,7 @@ on:
       - fix/phase5-c2h-rate-limit-hydration
     paths:
       - scripts/phase5-c2h/apply-app-rate-limit-patch.js
+      - scripts/phase5-c2h/apply-frontend-access-cache-patch.js
       - .github/workflows/phase5-c2h-apply.yml
   workflow_dispatch:
 
@@ -26,9 +27,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Apply deterministic app patch
+      - name: Apply deterministic backend patch
         run: node scripts/phase5-c2h/apply-app-rate-limit-patch.js
+
+      - name: Apply deterministic frontend patch
+        run: node scripts/phase5-c2h/apply-frontend-access-cache-patch.js
 
       - name: Validate backend syntax and limiter tests
         run: |
@@ -39,15 +45,23 @@ jobs:
           node backend/src/middleware/authenticatedRateLimit.middleware.test.js
           node backend/src/middleware/publicRateLimit.middleware.test.js
 
-      - name: Commit generated app integration
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Validate frontend typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Commit generated integration
         run: |
-          if git diff --quiet -- backend/src/app.js; then
+          if git diff --quiet -- backend/src/app.js frontend/src/components/AppLayout.tsx; then
             echo "No generated changes required."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/src/app.js
-          git commit -m "fix(backend): replace global IP limiter with scoped policies"
+          git add backend/src/app.js frontend/src/components/AppLayout.tsx
+          git commit -m "fix(phase5): integrate scoped limiter and cached access bootstrap"
           git push origin HEAD:fix/phase5-c2h-rate-limit-hydration
