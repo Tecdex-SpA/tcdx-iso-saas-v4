@@ -2160,20 +2160,40 @@ CROSS JOIN (VALUES ('pdf'),('docx'),('xlsx')) f(format)
 ON CONFLICT (tenant_id, template_key, version_number, format) DO NOTHING;
 
 INSERT INTO report_schedules (
-  id, tenant_id, report_definition_id, schedule_key, frequency, timezone,
-  next_run_at, last_run_at, status, created_by, created_at, updated_at, metadata
+  id, tenant_id, report_type_code, frequency, day_of_month, recipients,
+  is_active, created_by, last_sent_at, next_run_at, notes, metadata,
+  created_at, updated_at
 )
 SELECT pg_temp.demo_visual_uuid('report-schedule-'||report_key), c.tenant_id,
-       pg_temp.demo_base_uuid('report-'||report_key), 'demo_schedule_'||report_key,
-       CASE WHEN report_key='executive_grc' THEN 'monthly' WHEN report_key='risks' THEN 'quarterly' ELSE 'monthly' END,
-       'America/Santiago', date_trunc('month',now())+interval '1 month 8 hours',
-       date_trunc('month',now())+interval '8 hours', 'active', c.admin_id,
-       now()-interval '8 months', now(),
-       jsonb_build_object('source','demo_visual_completion','recipients',jsonb_build_array('admin','auditor'))
-FROM demo_visual_context c CROSS JOIN (VALUES ('executive_grc'),('risks'),('compliance'),('data_quality')) r(report_key)
-ON CONFLICT (tenant_id, schedule_key) DO UPDATE SET frequency=EXCLUDED.frequency,
-  next_run_at=EXCLUDED.next_run_at, last_run_at=EXCLUDED.last_run_at,
-  status='active', metadata=EXCLUDED.metadata, updated_at=now();
+       CASE report_key
+         WHEN 'executive_grc' THEN 'executive_iso_status'
+         WHEN 'risks' THEN 'iso_risk_report'
+         WHEN 'compliance' THEN 'control_health_report'
+         WHEN 'data_quality' THEN 'maturity_gap_diagnostic'
+       END,
+       CASE WHEN report_key='risks' THEN 'quarterly' ELSE 'monthly' END,
+       CASE WHEN report_key='executive_grc' THEN 1 WHEN report_key='risks' THEN 15 ELSE 5 END,
+       jsonb_build_array('admin.demo@tcdx.demo','auditor.demo@tcdx.demo'),
+       true, c.admin_id,
+       date_trunc('month',now())+interval '8 hours',
+       date_trunc('month',now())+interval '1 month 8 hours',
+       'Programación demo determinística para cobertura comercial.',
+       jsonb_build_object('source','demo_visual_completion','report_key',report_key,'timezone','America/Santiago'),
+       now()-interval '8 months', now()
+FROM demo_visual_context c
+CROSS JOIN (VALUES ('executive_grc'),('risks'),('compliance'),('data_quality')) r(report_key)
+ON CONFLICT (id) DO UPDATE SET
+  report_type_code=EXCLUDED.report_type_code,
+  frequency=EXCLUDED.frequency,
+  day_of_month=EXCLUDED.day_of_month,
+  recipients=EXCLUDED.recipients,
+  is_active=true,
+  created_by=EXCLUDED.created_by,
+  last_sent_at=EXCLUDED.last_sent_at,
+  next_run_at=EXCLUDED.next_run_at,
+  notes=EXCLUDED.notes,
+  metadata=EXCLUDED.metadata,
+  updated_at=now();
 
 -- Filas consumidas por las dos entradas operacionales que aún usan read models legacy.
 INSERT INTO iso_operational_suggestions (
