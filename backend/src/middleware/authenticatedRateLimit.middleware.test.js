@@ -52,9 +52,17 @@ function run() {
 
   assert.strictEqual(classifyPolicy(buildRequest()).name, 'authenticated_read');
   assert.strictEqual(classifyPolicy(buildRequest({ method: 'POST' })).name, 'authenticated_write');
-  assert.strictEqual(classifyPolicy(buildRequest({ originalUrl: '/api/ai/answer' })).name, 'authenticated_ai');
+  assert.strictEqual(
+    classifyPolicy(buildRequest({ method: 'POST', originalUrl: '/api/ai/answer' })).name,
+    'authenticated_ai'
+  );
 
   for (const path of [
+    '/api/search/history/tenant-a',
+    '/api/search/history/tenant-a?limit=20',
+    '/api/search/suggestions?q=iso',
+    '/api/ai/models',
+    '/api/ai/jobs/job-1',
     '/api/reports/types?locale=es',
     '/api/reports/clients?locale=es',
     '/api/reports/exports?locale=en&limit=100',
@@ -67,6 +75,20 @@ function run() {
       classifyPolicy(buildRequest({ method: 'GET', originalUrl: path })).name,
       'authenticated_read',
       `${path} debe usar authenticated_read`
+    );
+  }
+
+  for (const path of [
+    '/api/ai/answer',
+    '/api/search/semantic',
+    '/api/search/query',
+    '/ai-feedback',
+    '/ai-external-lookup',
+  ]) {
+    assert.strictEqual(
+      classifyPolicy(buildRequest({ method: 'POST', originalUrl: path })).name,
+      'authenticated_ai',
+      `${path} debe usar authenticated_ai`
     );
   }
 
@@ -99,9 +121,12 @@ function run() {
 
   resetForTests();
   for (let i = 0; i < DEFAULT_POLICIES.ai.max; i += 1) {
-    assert.strictEqual(invoke(buildRequest({ originalUrl: '/api/ai/answer' })).nextCalled, true);
+    assert.strictEqual(
+      invoke(buildRequest({ method: 'POST', originalUrl: '/api/ai/answer' })).nextCalled,
+      true
+    );
   }
-  const blocked = invoke(buildRequest({ originalUrl: '/api/ai/answer' }));
+  const blocked = invoke(buildRequest({ method: 'POST', originalUrl: '/api/ai/answer' }));
   assert.strictEqual(blocked.nextCalled, false);
   assert.strictEqual(blocked.res.statusCode, 429);
   assert.strictEqual(blocked.res.body.code, 'RATE_LIMITED');

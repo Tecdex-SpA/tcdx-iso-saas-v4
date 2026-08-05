@@ -68,18 +68,20 @@ function isHeavyReportOperation(method, path) {
   );
 }
 
-function classifyPolicy(req) {
-  const path = getRequestPath(req).toLowerCase();
-  const method = String(req.method || '').toUpperCase();
+function isAiOperation(method, path) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return false;
 
-  if (
+  return (
     path.startsWith('/api/ai') ||
     path.startsWith('/api/search') ||
     path.startsWith('/ai-feedback') ||
     path.startsWith('/ai-external-lookup')
-  ) {
-    return DEFAULT_POLICIES.ai;
-  }
+  );
+}
+
+function classifyPolicy(req) {
+  const path = getRequestPath(req).toLowerCase();
+  const method = String(req.method || '').toUpperCase();
 
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     return DEFAULT_POLICIES.read;
@@ -87,6 +89,10 @@ function classifyPolicy(req) {
 
   if (isHeavyReportOperation(method, path)) {
     return DEFAULT_POLICIES.report;
+  }
+
+  if (isAiOperation(method, path)) {
+    return DEFAULT_POLICIES.ai;
   }
 
   return DEFAULT_POLICIES.write;
