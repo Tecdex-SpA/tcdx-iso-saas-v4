@@ -4,11 +4,15 @@ const crypto = require('crypto');
 
 const DEFAULT_WINDOW_MS = Math.max(
   1000,
-  Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000)
+  Number(process.env.PUBLIC_LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000)
 );
-const DEFAULT_MAX = Math.max(
+const DEFAULT_ACCOUNT_MAX = Math.max(
   1,
-  Number(process.env.AUTH_RATE_LIMIT_MAX || 10)
+  Number(process.env.PUBLIC_LOGIN_RATE_LIMIT_MAX || 10)
+);
+const DEFAULT_IP_MAX = Math.max(
+  DEFAULT_ACCOUNT_MAX,
+  Number(process.env.PUBLIC_LOGIN_IP_RATE_LIMIT_MAX || 30)
 );
 
 const store = new Map();
@@ -33,12 +37,23 @@ function getClientIp(req) {
   return forwardedFor || req.ip || req.socket?.remoteAddress || 'unknown';
 }
 
-function normalizeEmail(req) {
+function normalizeLoginIdentity(req) {
   return sanitizeKeyPart(req.body?.email || req.body?.username || 'unknown-user');
 }
 
 function hashIdentity(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 32);
+}
+
+function getOrCreateBucket(key, now, windowMs) {
+  let bucket = store.get(key);
+
+  if (!bucket || bucket.resetAt <= now) {
+    bucket = { count: 0, resetAt: now + windowMs };
+    store.set(key, bucket);
+  }
+
+  return bucket;
 }
 
 function setHeaders(res, max, remaining, resetAt, policy) {
@@ -53,39 +68,46 @@ function setHeaders(res, max, remaining, resetAt, policy) {
 }
 
 function createPublicAuthRateLimiter({
-  max = DEFAULT_MAX,
+  max = DEFAULT_ACCOUNT_MAX,
+  ipMax = DEFAULT_IP_MAX,
   windowMs = DEFAULT_WINDOW_MS,
   policy = 'public_auth_login',
 } = {}) {
   const safeMax = Math.max(1, Number(max));
+  const safeIpMax = Math.max(safeMax, Number(ipMax));
   const safeWindowMs = Math.max(1000, Number(windowMs));
 
   return function publicAuthRateLimit(req, res, next) {
-    if (String(req.path || '') !== '/login') {
+    if (String(req.path || '') !== '/login' || String(req.method || 'POST').toUpperCase() !== 'POST') {
       return next();
     }
 
-    const identity = `${sanitizeKeyPart(getClientIp(req))}:${normalizeEmail(req)}`;
-    const key = `${policy}:${hashIdentity(identity)}`;
+    const clientIp = sanitizeKeyPart(getClientIp(req));
+    const loginIdentity = normalizeLoginIdentity(req);
+    const accountKey = `${policy}:account:${hashIdentity(`${clientIp}:${loginIdentity}`)}`;
+    const ipKey = `${policy}:ip:${hashIdentity(clientIp)}`;
     const now = Date.now();
-    let bucket = store.get(key);
 
-    if (!bucket || bucket.resetAt <= now) {
-      bucket = { count: 0, resetAt: now + safeWindowMs };
-      store.set(key, bucket);
-    }
+    const accountBucket = getOrCreateBucket(accountKey, now, safeWindowMs);
+    const ipBucket = getOrCreateBucket(ipKey, now, safeWindowMs);
 
-    bucket.count += 1;
-    const remaining = safeMax - bucket.count;
+    accountBucket.count += 1;
+    ipBucket.count += 1;
+
+    const accountExceeded = accountBucket.count > safeMax;
+    const ipExceeded = ipBucket.count > safeIpMax;
+    const activeMax = ipExceeded ? safeIpMax : safeMax;
+    const activeBucket = ipExceeded ? ipBucket : accountBucket;
+    const remaining = activeMax - activeBucket.count;
     const retryAfterSeconds = setHeaders(
       res,
-      safeMax,
+      activeMax,
       remaining,
-      bucket.resetAt,
+      activeBucket.resetAt,
       policy
     );
 
-    if (bucket.count > safeMax) {
+    if (accountExceeded || ipExceeded) {
       metrics.blocked += 1;
       res.locals.errorCode = 'RATE_LIMITED';
       res.setHeader('Retry-After', String(retryAfterSeconds));
@@ -137,4 +159,7 @@ module.exports = {
   createPublicAuthRateLimiter,
   prometheusLines,
   resetForTests,
+  DEFAULT_WINDOW_MS,
+  DEFAULT_ACCOUNT_MAX,
+  DEFAULT_IP_MAX,
 };
