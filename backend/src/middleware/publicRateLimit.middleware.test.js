@@ -86,7 +86,7 @@ const loginGet = invoke(accountLimiter, loginRequest({ method: 'GET' }));
 assert.strictEqual(loginGet.nextCalled, true);
 
 resetForTests();
-const ipLimiter = createPublicAuthRateLimiter({ max: 10, ipMax: 3, windowMs: 60000 });
+const ipLimiter = createPublicAuthRateLimiter({ max: 2, ipMax: 3, windowMs: 60000 });
 
 for (let index = 0; index < 3; index += 1) {
   const result = invoke(
@@ -103,6 +103,7 @@ const ipBlocked = invoke(
 assert.strictEqual(ipBlocked.nextCalled, false);
 assert.strictEqual(ipBlocked.res.statusCode, 429);
 assert.ok(Number(ipBlocked.res.headers.get('retry-after')) >= 1);
+assert.strictEqual(ipBlocked.res.headers.get('x-ratelimit-limit'), '3');
 
 resetForTests();
 const defaultLimiter = createPublicAuthRateLimiter();
