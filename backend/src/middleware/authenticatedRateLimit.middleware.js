@@ -44,30 +44,33 @@ function sanitizeKeyPart(value) {
 }
 
 function getTenantId(req) {
-  return (
-    req.user?.tenant_id ||
-    req.user?.tenantId ||
-    req.tenantId ||
-    'platform'
-  );
+  return req.user?.tenant_id || req.user?.tenantId || req.tenantId || 'platform';
 }
 
 function getUserId(req) {
-  return (
-    req.user?.id ||
-    req.user?.user_id ||
-    req.user?.sub ||
-    req.user?.email ||
-    'unknown-user'
-  );
+  return req.user?.id || req.user?.user_id || req.user?.sub || req.user?.email || 'unknown-user';
 }
 
 function getRequestPath(req) {
   return String(req.originalUrl || req.url || req.path || '').split('?')[0];
 }
 
+function isHeavyReportOperation(method, path) {
+  if (!['POST', 'PUT', 'PATCH'].includes(method)) return false;
+
+  return (
+    /^\/api\/reports\/generate(?:\/|$)/.test(path) ||
+    /^\/api\/reports\/export(?:\/|$)/.test(path) ||
+    /^\/api\/reports\/render(?:\/|$)/.test(path) ||
+    /^\/api\/reports\/bulk-export(?:\/|$)/.test(path) ||
+    /^\/api\/reports\/schedules\/[^/]+\/run(?:\/|$)/.test(path) ||
+    /^\/api\/report-studio\/(?:generate|export|render)(?:\/|$)/.test(path)
+  );
+}
+
 function classifyPolicy(req) {
   const path = getRequestPath(req).toLowerCase();
+  const method = String(req.method || '').toUpperCase();
 
   if (
     path.startsWith('/api/ai') ||
@@ -78,16 +81,12 @@ function classifyPolicy(req) {
     return DEFAULT_POLICIES.ai;
   }
 
-  if (
-    path.includes('/report') ||
-    path.includes('/export') ||
-    path.includes('/download')
-  ) {
-    return DEFAULT_POLICIES.report;
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    return DEFAULT_POLICIES.read;
   }
 
-  if (['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || '').toUpperCase())) {
-    return DEFAULT_POLICIES.read;
+  if (isHeavyReportOperation(method, path)) {
+    return DEFAULT_POLICIES.report;
   }
 
   return DEFAULT_POLICIES.write;
@@ -112,30 +111,17 @@ function setRateLimitHeaders(res, policy, remaining, resetAt) {
 function authenticatedRateLimit(req, res, next) {
   const policy = classifyPolicy(req);
   const now = Date.now();
-  const key = [
-    policy.name,
-    sanitizeKeyPart(getTenantId(req)),
-    sanitizeKeyPart(getUserId(req)),
-  ].join(':');
+  const key = [policy.name, sanitizeKeyPart(getTenantId(req)), sanitizeKeyPart(getUserId(req))].join(':');
 
   let bucket = store.get(key);
-
   if (!bucket || bucket.resetAt <= now) {
-    bucket = {
-      count: 0,
-      resetAt: now + policy.windowMs,
-    };
+    bucket = { count: 0, resetAt: now + policy.windowMs };
     store.set(key, bucket);
   }
 
   bucket.count += 1;
   const remaining = policy.max - bucket.count;
-  const retryAfterSeconds = setRateLimitHeaders(
-    res,
-    policy,
-    remaining,
-    bucket.resetAt
-  );
+  const retryAfterSeconds = setRateLimitHeaders(res, policy, remaining, bucket.resetAt);
 
   if (bucket.count > policy.max) {
     incrementMetric(metrics.blocked, policy.name);
@@ -160,35 +146,22 @@ function authenticatedRateLimit(req, res, next) {
 
 function cleanupExpiredBuckets() {
   const now = Date.now();
-
   for (const [key, bucket] of store.entries()) {
-    if (!bucket || bucket.resetAt <= now) {
-      store.delete(key);
-    }
+    if (!bucket || bucket.resetAt <= now) store.delete(key);
   }
 }
 
-const cleanupTimer = setInterval(
-  cleanupExpiredBuckets,
-  Math.max(DEFAULT_WINDOW_MS, 60000)
-);
+const cleanupTimer = setInterval(cleanupExpiredBuckets, Math.max(DEFAULT_WINDOW_MS, 60000));
 cleanupTimer.unref?.();
 
 function prometheusLines() {
   const lines = [];
-
   for (const [policy, count] of metrics.allowed.entries()) {
-    lines.push(
-      `tcdx_rate_limit_allowed_total{policy="${sanitizeKeyPart(policy)}"} ${count}`
-    );
+    lines.push(`tcdx_rate_limit_allowed_total{policy="${sanitizeKeyPart(policy)}"} ${count}`);
   }
-
   for (const [policy, count] of metrics.blocked.entries()) {
-    lines.push(
-      `tcdx_rate_limit_blocked_total{policy="${sanitizeKeyPart(policy)}"} ${count}`
-    );
+    lines.push(`tcdx_rate_limit_blocked_total{policy="${sanitizeKeyPart(policy)}"} ${count}`);
   }
-
   return lines;
 }
 

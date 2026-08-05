@@ -9,6 +9,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText } from '@/i18n/displayText';
 import PremiumReportsPanel from '@/components/reports/PremiumReportsPanel';
+import { fetchReportCatalogBootstrap } from '@/utils/reportCatalogBootstrap';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -685,27 +686,22 @@ export default function ExportesPage() {
           return;
         }
 
-        const [typesRes, clientsRes] = await Promise.all([
-          fetch(`${API_URL}/api/reports/types?locale=${encodeURIComponent(locale)}`, {
-            headers: buildLocaleHeaders(token, locale),
-          }),
-          fetch(`${API_URL}/api/reports/clients?locale=${encodeURIComponent(locale)}`, {
-            headers: buildLocaleHeaders(token, locale),
-          }),
-        ]);
+        const { typesJson, clientsJson, typesStatus, clientsStatus } =
+          await fetchReportCatalogBootstrap({
+            apiUrl: API_URL,
+            token,
+            locale,
+          });
 
-        const typesJson = await typesRes.json();
-        const clientsJson = await clientsRes.json();
-
-        if (!typesRes.ok || typesJson?.ok === false) {
+        if (typesStatus < 200 || typesStatus >= 300 || (typesJson as { ok?: boolean; error?: string })?.ok === false) {
           throw new Error(
-            typesJson?.error || t('exports.loadTypesError')
+            (typesJson as { error?: string })?.error || t('exports.loadTypesError')
           );
         }
 
-        if (!clientsRes.ok || clientsJson?.ok === false) {
+        if (clientsStatus < 200 || clientsStatus >= 300 || (clientsJson as { ok?: boolean; error?: string })?.ok === false) {
           throw new Error(
-            clientsJson?.error || t('exports.loadClientsError')
+            (clientsJson as { error?: string })?.error || t('exports.loadClientsError')
           );
         }
 
