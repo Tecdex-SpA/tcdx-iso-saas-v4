@@ -1,20 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { CLIENT_MVP_NAV_ITEMS, PLATFORM_ROLES, canAccessMvpFeature, isPathInRoutes } from '@/utils/mvpPermissions';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const TECDEX_LOGO_FALLBACK = '/tecdex.png';
 const SERVICE_LOGO_SRC = process.env.NEXT_PUBLIC_TECDX_LOGO_URL || TECDEX_LOGO_FALLBACK;
 const PLATFORM_WORDMARK_SRC = process.env.NEXT_PUBLIC_TECDX_WORDMARK_URL || TECDEX_LOGO_FALLBACK;
 const POWERED_BY_LOGO_SRC = process.env.NEXT_PUBLIC_TECDX_POWERED_LOGO_URL || TECDEX_LOGO_FALLBACK;
 
-type SidebarProps = { collapsed?: boolean; onToggle?: () => void };
+type SidebarProps = { collapsed?: boolean; onToggle?: () => void; moduleMap?: ModuleMap; role?: string };
 type NavItemProps = { href: string; label: string; icon: ReactNode; collapsed?: boolean; active?: boolean };
 type ModuleMap = Record<string, { module_key: string; module_name?: string; is_enabled: boolean }>;
 
@@ -29,8 +27,6 @@ const CAPABILITY_BY_PATH: Record<string, string> = {
   '/eventos-perdida': 'loss.events',
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
-
 function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
   return <a href={href} title={label} aria-current={active ? 'page' : undefined} className={[
     'enterprise-sidebar-item group flex w-full items-center rounded-[var(--tcdx-radius-tecdex-sm)] text-sm font-medium transition-all duration-150 focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
@@ -38,8 +34,6 @@ function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
     active ? 'bg-[var(--tcdx-color-primary)] text-white shadow-[var(--shadow-sidebar-active)] ring-1 ring-white/12' : 'text-white/76 hover:bg-white/10 hover:text-white hover:ring-1 hover:ring-white/10',
   ].join(' ')}><span className={['shrink-0 transition-colors', active ? 'text-white' : 'text-white/64 group-hover:text-white'].join(' ')}>{icon}</span>{!collapsed && <span className="block min-w-0 flex-1 truncate text-left">{label}</span>}</a>;
 }
-
-function resolveRole(user: unknown): string { if (!isRecord(user)) return ''; return String(user.role || user.user_role || user.userRole || '').toLowerCase(); }
 
 function NavIcon({ kind, className }: { kind: 'platform'|'metrics'|'dealer'|'quote'|'billing'|'generic'; className: string }) {
   if (kind === 'platform') return <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 8h2a2 2 0 0 1 2 2v11"/><path d="M3 21h18"/><circle cx="19" cy="5" r="2"/></svg>;
@@ -52,30 +46,12 @@ function NavIcon({ kind, className }: { kind: 'platform'|'metrics'|'dealer'|'quo
 
 function MvpIcon({ href, className }: { href: string; className: string }) { return href === '/metricas' ? <NavIcon kind="metrics" className={className}/> : <NavIcon kind="generic" className={className}/>; }
 
-export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed = false, onToggle, moduleMap = {}, role = '' }: SidebarProps) {
   const pathname = usePathname(); const { t } = useTranslation();
   const { loading: entitlementsLoading, aiEnabled, canUseAiFeature, hasCapability } = useTenantEntitlements();
-  const [role,setRole] = useState<string|null>(null); const [moduleMap,setModuleMap] = useState<ModuleMap|null>(null); const [modulesLoaded,setModulesLoaded] = useState(false);
-
-  useEffect(() => {
-    const user = getUserFromToken(); const resolvedRole = resolveRole(user) || null; setRole(resolvedRole);
-    const loadModules = async () => {
-      const token = localStorage.getItem('token');
-      if (resolvedRole === 'dealer' || PLATFORM_ROLES.includes(resolvedRole || '') || !token) { setModuleMap({}); setModulesLoaded(true); return; }
-      try {
-        const res = await fetch(`${API_URL}/api/me/modules`, { headers: { Authorization: `Bearer ${token}` } });
-        const json = await res.json();
-        if (!res.ok || json?.ok === false) { console.error('ERROR LOAD SIDEBAR MODULES:', json); setModuleMap({}); return; }
-        setModuleMap(json?.module_map || {});
-      } catch (err) { console.error('ERROR LOAD SIDEBAR MODULES:', err); setModuleMap({}); }
-      finally { setModulesLoaded(true); }
-    };
-    void loadModules();
-  }, []);
-
   const normalizedRole=String(role||'').toLowerCase(); const isDealer=normalizedRole==='dealer'; const isPlatformAdmin=PLATFORM_ROLES.includes(normalizedRole); const canSeeAiCompliance=!entitlementsLoading&&aiEnabled&&canUseAiFeature('suggestions'); const iconClass='h-5 w-5';
   const isActive=(href:string)=>{if(href==='/cumplimiento-auditoria')return isPathInRoutes(pathname,['/cumplimiento-auditoria','/diagnostico','/iso-health','/health','/controles','/soa','/ciclo-vida','/auditorias','/hallazgos','/no-conformidades']);if(href==='/riesgos')return isPathInRoutes(pathname,['/riesgos','/matriz-riesgo','/activos']);if(href==='/planes-accion')return isPathInRoutes(pathname,['/planes-accion','/plan-accion','/acciones-recomendadas']);if(href==='/configuracion')return isPathInRoutes(pathname,['/configuracion','/usuarios','/perfil','/perfil-empresa']);return pathname===href||pathname.startsWith(`${href}/`);};
-  const hasModule=useCallback((moduleKey:string)=>{if(isPlatformAdmin||isDealer)return true;if(!modulesLoaded||!moduleMap)return false;if(!Object.prototype.hasOwnProperty.call(moduleMap,moduleKey))return true;return moduleMap[moduleKey]?.is_enabled===true;},[isDealer,isPlatformAdmin,moduleMap,modulesLoaded]);
+  const hasModule=useCallback((moduleKey:string)=>{if(isPlatformAdmin||isDealer)return true;if(!Object.prototype.hasOwnProperty.call(moduleMap,moduleKey))return true;return moduleMap[moduleKey]?.is_enabled===true;},[isDealer,isPlatformAdmin,moduleMap]);
   const hasRouteCapability=useCallback((href:string)=>{if(isPlatformAdmin)return true;const capability=CAPABILITY_BY_PATH[href];return !capability || (!entitlementsLoading && hasCapability(capability));},[entitlementsLoading,hasCapability,isPlatformAdmin]);
 
   const generalItems=useMemo(()=>CLIENT_MVP_NAV_ITEMS.filter((item)=>{if(!canAccessMvpFeature(normalizedRole,item.feature))return false;if(item.href==='/ia-compliance'&&!canSeeAiCompliance)return false;if(item.moduleKey&&!hasModule(item.moduleKey))return false;if(!hasRouteCapability(item.href))return false;return true;}).map((item)=>({...item,icon:<MvpIcon href={item.href} className={iconClass}/> })),[canSeeAiCompliance,hasModule,hasRouteCapability,normalizedRole]);

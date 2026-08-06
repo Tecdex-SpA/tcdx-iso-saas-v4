@@ -4,6 +4,7 @@ type CacheEntry<T> = {
 };
 
 type AccessBootstrapRegistry = {
+  generation: number;
   responseCache: Map<string, CacheEntry<unknown>>;
   pendingRequests: Map<string, Promise<unknown>>;
 };
@@ -18,6 +19,7 @@ function getRegistry(): AccessBootstrapRegistry {
 
   if (!globalScope[REGISTRY_KEY]) {
     globalScope[REGISTRY_KEY] = {
+      generation: 0,
       responseCache: new Map<string, CacheEntry<unknown>>(),
       pendingRequests: new Map<string, Promise<unknown>>(),
     };
@@ -27,7 +29,7 @@ function getRegistry(): AccessBootstrapRegistry {
 }
 
 function makeCacheKey(token: string, url: string) {
-  return `${token.slice(-24)}:${url}`;
+  return `${token}:${url}`;
 }
 
 function getRetryAfterSeconds(response: Response) {
@@ -48,7 +50,9 @@ export async function fetchAccessBootstrap<T>({
   fallbackError: string;
   invalidResponseError: (status: number) => string;
 }): Promise<T> {
-  const { responseCache, pendingRequests } = getRegistry();
+  const registry = getRegistry();
+  const { responseCache, pendingRequests } = registry;
+  const requestGeneration = registry.generation;
   const cacheKey = makeCacheKey(token, url);
   const cached = responseCache.get(cacheKey) as CacheEntry<T> | undefined;
 
@@ -90,10 +94,12 @@ export async function fetchAccessBootstrap<T>({
       throw new Error(payload?.error || payload?.message || fallbackError);
     }
 
-    responseCache.set(cacheKey, {
-      value: payload,
-      expiresAt: Date.now() + Math.max(1_000, ttlMs),
-    });
+    if (registry.generation === requestGeneration) {
+      responseCache.set(cacheKey, {
+        value: payload,
+        expiresAt: Date.now() + Math.max(1_000, ttlMs),
+      });
+    }
 
     return payload;
   })();
@@ -108,7 +114,9 @@ export async function fetchAccessBootstrap<T>({
 }
 
 export function clearAccessBootstrapCache() {
-  const { responseCache, pendingRequests } = getRegistry();
+  const registry = getRegistry();
+  const { responseCache, pendingRequests } = registry;
+  registry.generation += 1;
   responseCache.clear();
   pendingRequests.clear();
 }
