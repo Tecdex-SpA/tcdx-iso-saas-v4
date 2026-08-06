@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import OfficialEvidenceDialog, { type EvidenceKind } from './OfficialEvidenceDialog';
-import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
+import { ApiClientError, apiRequestJson, apiRequestJsonSingleFlight } from '@/utils/apiClient';
 
 type UnknownRecord = Record<string, unknown>;
 type EvidenceState = { kind: EvidenceKind; runId: string; formulaName: string } | null;
@@ -92,7 +92,7 @@ export default function GrcDecisionCenter({ compact = false, limit = 12, title =
     async function load() {
       setLoading(true); setError('');
       try {
-        const catalogPayload = await apiRequestJson('/api/grc/official/analytics/catalog', { fallbackMessage: 'No fue posible cargar los indicadores oficiales.' });
+        const catalogPayload = await apiRequestJsonSingleFlight('/api/grc/official/analytics/catalog', { fallbackMessage: 'No fue posible cargar los indicadores oficiales.' });
         const raw = unwrap(catalogPayload);
         const catalog = Array.isArray(raw) ? raw.filter(isRecord).slice(0, limit) : [];
         const resolved = await Promise.all(catalog.map(async (item) => {

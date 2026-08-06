@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -282,6 +282,7 @@ export default function UsuariosPage() {
 
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string>('');
+  const initialUsersLoadKey = useRef('');
 
   const [form, setForm] = useState({
     name: '',
@@ -383,6 +384,11 @@ export default function UsuariosPage() {
 
   useEffect(() => {
     if (!token || !user) return;
+    if (!isSuperAdmin && !isAdmin) {
+      setUsers([]);
+      setLoading(false);
+      return;
+    }
 
     const run = async () => {
       try {
@@ -397,7 +403,6 @@ export default function UsuariosPage() {
         } else {
           const tenantId = resolveTenantId(user);
           setSelectedTenantId(tenantId);
-          await loadUsers(token, tenantId, isSuperAdmin);
         }
       } finally {
         setLoading(false);
@@ -405,13 +410,16 @@ export default function UsuariosPage() {
     };
 
     run();
-  }, [isSuperAdmin, loadTenants, loadUsers, token, user]);
+  }, [isAdmin, isSuperAdmin, loadTenants, token, user]);
 
   useEffect(() => {
-    if (!token || !selectedTenantId) return;
+    if (!token || !selectedTenantId || (!isSuperAdmin && !isAdmin)) return;
+    const loadKey = `${token}:${selectedTenantId}:${isSuperAdmin ? 'platform' : 'tenant'}`;
+    if (initialUsersLoadKey.current === loadKey) return;
+    initialUsersLoadKey.current = loadKey;
 
     void loadUsers(token, selectedTenantId, isSuperAdmin);
-  }, [isSuperAdmin, loadUsers, selectedTenantId, token]);
+  }, [isAdmin, isSuperAdmin, loadUsers, selectedTenantId, token]);
 
   const createUser = async () => {
     if (!token) return;

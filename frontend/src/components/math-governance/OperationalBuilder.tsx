@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { ApiClientError, apiRequestJson, isUuid } from '@/utils/apiClient';
+import { ApiClientError, apiRequestJson, apiRequestJsonSingleFlight, isUuid } from '@/utils/apiClient';
 import { getUserIdFromToken } from '@/utils/auth';
 
 type BuilderKind = 'metric' | 'dashboard' | 'report' | 'survey' | 'assurance' | 'loss';
@@ -293,14 +293,14 @@ export default function OperationalBuilder({ kind, title, description, domain, d
   const patch = (key: keyof BuilderForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
 
   const loadHistory = async () => {
-    const payload = await apiRequestJson(listEndpoint(kind), { fallbackMessage: `No fue posible cargar historial de ${title}.` });
+    const payload = await apiRequestJsonSingleFlight(listEndpoint(kind), { fallbackMessage: `No fue posible cargar historial de ${title}.` });
     const rows = dataOf<Entity[]>(payload);
     setHistory(Array.isArray(rows) ? rows : []);
   };
 
   useEffect(() => {
     let cancelled = false;
-    apiRequestJson<{ data?: OfficialResult[] }>('/api/grc/official/analytics/catalog', { fallbackMessage: 'No fue posible cargar resultados oficiales.' })
+    apiRequestJsonSingleFlight<{ data?: OfficialResult[] }>('/api/grc/official/analytics/catalog', { fallbackMessage: 'No fue posible cargar resultados oficiales.' })
       .then((payload) => {
         if (cancelled) return;
         const rows = Array.isArray(payload.data) ? payload.data : [];

@@ -11,6 +11,7 @@ export function getApiBaseUrl() {
 type ApiJsonObject = Record<string, unknown>;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
+const pendingJsonRequests = new Map<string, Promise<unknown>>();
 
 export class ApiClientError extends Error {
   code: string;
@@ -182,4 +183,27 @@ export async function apiRequestJson<T = ApiJsonObject>(
     headers: requestHeaders,
   });
   return readJsonResponse<T>(response, { fallbackMessage, locale });
+}
+
+export function apiRequestJsonSingleFlight<T = ApiJsonObject>(
+  path: string,
+  options: RequestInit & { tenantRequired?: boolean; fallbackMessage?: string; locale?: string } = {}
+) {
+  const method = String(options.method || 'GET').toUpperCase();
+  if (method !== 'GET' || options.body) return apiRequestJson<T>(path, options);
+
+  const token = getStoredValidToken() || '';
+  const tenant = getTenantIdFromToken() || '';
+  const activeTenant = typeof window === 'undefined' ? '' : localStorage.getItem('activeTenantId') || '';
+  const key = `${token}:${tenant}:${activeTenant}:${path}`;
+  const pending = pendingJsonRequests.get(key) as Promise<T> | undefined;
+  if (pending) return pending;
+
+  const request = apiRequestJson<T>(path, options);
+  pendingJsonRequests.set(key, request);
+  const clearPending = () => {
+    if (pendingJsonRequests.get(key) === request) pendingJsonRequests.delete(key);
+  };
+  void request.then(clearPending, clearPending);
+  return request;
 }
