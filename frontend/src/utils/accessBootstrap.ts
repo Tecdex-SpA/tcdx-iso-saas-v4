@@ -3,9 +3,28 @@ type CacheEntry<T> = {
   value: T;
 };
 
+type AccessBootstrapRegistry = {
+  responseCache: Map<string, CacheEntry<unknown>>;
+  pendingRequests: Map<string, Promise<unknown>>;
+};
+
 const DEFAULT_TTL_MS = 30_000;
-const responseCache = new Map<string, CacheEntry<unknown>>();
-const pendingRequests = new Map<string, Promise<unknown>>();
+const REGISTRY_KEY = '__tcdxAccessBootstrapRegistry__';
+
+function getRegistry(): AccessBootstrapRegistry {
+  const globalScope = globalThis as typeof globalThis & {
+    [REGISTRY_KEY]?: AccessBootstrapRegistry;
+  };
+
+  if (!globalScope[REGISTRY_KEY]) {
+    globalScope[REGISTRY_KEY] = {
+      responseCache: new Map<string, CacheEntry<unknown>>(),
+      pendingRequests: new Map<string, Promise<unknown>>(),
+    };
+  }
+
+  return globalScope[REGISTRY_KEY];
+}
 
 function makeCacheKey(token: string, url: string) {
   return `${token.slice(-24)}:${url}`;
@@ -29,6 +48,7 @@ export async function fetchAccessBootstrap<T>({
   fallbackError: string;
   invalidResponseError: (status: number) => string;
 }): Promise<T> {
+  const { responseCache, pendingRequests } = getRegistry();
   const cacheKey = makeCacheKey(token, url);
   const cached = responseCache.get(cacheKey) as CacheEntry<T> | undefined;
 
@@ -88,6 +108,7 @@ export async function fetchAccessBootstrap<T>({
 }
 
 export function clearAccessBootstrapCache() {
+  const { responseCache, pendingRequests } = getRegistry();
   responseCache.clear();
   pendingRequests.clear();
 }
