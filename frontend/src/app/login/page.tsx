@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import {
+  clearToken,
   decodeJwtPayload,
   getHomePathByRole,
   getHomePathFromToken,
   isTokenExpired,
+  setToken,
 } from '@/utils/auth';
 import LanguageSelector from '@/components/language/LanguageSelector';
 import TcdxIcon from '@/components/icons/TcdxIcon';
@@ -46,7 +48,7 @@ export default function LoginPage() {
     if (!token) return;
 
     if (isTokenExpired(token)) {
-      localStorage.removeItem('token');
+      clearToken();
       return;
     }
 
@@ -100,7 +102,7 @@ export default function LoginPage() {
         return;
       }
 
-      localStorage.setItem('token', token);
+      setToken(token);
 
       const payload = decodeJwtPayload(token);
 

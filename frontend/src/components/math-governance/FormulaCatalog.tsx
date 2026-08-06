@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import OfficialEvidenceDialog, { type EvidenceKind } from './OfficialEvidenceDialog';
-import { ApiClientError, apiRequestJson, getActiveTenantId } from '@/utils/apiClient';
+import { ApiClientError, apiRequestJson, apiRequestJsonSingleFlight, getActiveTenantId } from '@/utils/apiClient';
 import { getUserRoleFromToken } from '@/utils/auth';
 
 type UnknownRecord = Record<string, unknown>;
@@ -100,7 +100,7 @@ export default function FormulaCatalog() {
   const { loading: entitlementsLoading, entitlements } = useTenantEntitlements(); const engineDecision = entitlements.capabilities['metrics.engine']; const engineAllowed = !engineDecision || (engineDecision.enabled === true && engineDecision.read_only !== true);
   const [start,setStart] = useState(isoDate(yearStart)); const [end,setEnd] = useState(isoDate(now)); const [domain,setDomain] = useState(''); const [catalog,setCatalog] = useState<CatalogItem[]>([]); const [lastRun,setLastRun] = useState<RecalculationPayload|null>(null); const [loading,setLoading] = useState(true); const [running,setRunning] = useState(false); const [error,setError] = useState<string|null>(null); const [evidence,setEvidence] = useState<EvidenceState>(null); const [query,setQuery] = useState(''); const [statusFilter,setStatusFilter] = useState(''); const [page,setPage] = useState(1); const [selectedDecision,setSelectedDecision] = useState<string>('');
 
-  const loadCatalog = useCallback(async () => { setLoading(true); setError(null); try { setCatalog(normalizeCatalog(await apiRequestJson('/api/grc/official/analytics/catalog', { fallbackMessage:'No fue posible cargar las fórmulas oficiales.' }))); } catch (err) { setCatalog([]); setError(err instanceof ApiClientError || err instanceof Error ? err.message : 'No fue posible cargar las fórmulas oficiales.'); } finally { setLoading(false); } }, []);
+  const loadCatalog = useCallback(async () => { setLoading(true); setError(null); try { setCatalog(normalizeCatalog(await apiRequestJsonSingleFlight('/api/grc/official/analytics/catalog', { fallbackMessage:'No fue posible cargar las fórmulas oficiales.' }))); } catch (err) { setCatalog([]); setError(err instanceof ApiClientError || err instanceof Error ? err.message : 'No fue posible cargar las fórmulas oficiales.'); } finally { setLoading(false); } }, []);
   useEffect(() => { if (tenantReady) void loadCatalog(); else { setCatalog([]); setLoading(false); setError('Selecciona una empresa para cargar el catálogo y habilitar el recálculo.'); } }, [loadCatalog, tenantReady]);
   const domains = useMemo(() => Array.from(new Set(catalog.map((item) => item.domain).filter(Boolean))).sort(), [catalog]);
   const runMap = useMemo(() => new Map((lastRun?.results || []).map((item) => [item.formula_code,item])), [lastRun]);

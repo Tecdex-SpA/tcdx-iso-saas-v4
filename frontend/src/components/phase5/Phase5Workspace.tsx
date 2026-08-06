@@ -16,6 +16,7 @@ type Phase5WorkspaceProps = {
   emptyMessage: string;
   capabilityLabel?: string;
   analyticsDomain?: string;
+  loadCollection?: boolean;
   children?: ReactNode;
 };
 
@@ -66,10 +67,11 @@ export default function Phase5Workspace({
   emptyMessage,
   capabilityLabel,
   analyticsDomain,
+  loadCollection = true,
   children,
 }: Phase5WorkspaceProps) {
   const [rows, setRows] = useState<Phase5Item[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(loadCollection);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [lastLoadedAt, setLastLoadedAt] = useState('');
 
@@ -77,6 +79,12 @@ export default function Phase5Workspace({
   const entityType = useMemo(() => entityTypeFromEndpoint(endpoint), [endpoint]);
 
   useEffect(() => {
+    if (!loadCollection) {
+      setRows([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     const load = async () => {
       try {
@@ -102,7 +110,7 @@ export default function Phase5Workspace({
     return () => {
       cancelled = true;
     };
-  }, [primaryLabel, requestEndpoint]);
+  }, [loadCollection, primaryLabel, requestEndpoint]);
 
   const retry = () => {
     setLastLoadedAt('');
@@ -190,13 +198,13 @@ export default function Phase5Workspace({
           </div>
         )}
 
-        {!loading && !error && rows.length === 0 && (
+        {loadCollection && !loading && !error && rows.length === 0 && (
           <div className="mt-6 rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
             {emptyMessage}
           </div>
         )}
 
-        {!loading && !error && rows.length > 0 && (
+        {loadCollection && !loading && !error && rows.length > 0 && (
           <div className="mt-6 overflow-x-auto rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)]">
             <table className="min-w-full divide-y divide-[var(--tcdx-color-border)] text-sm">
               <thead className="bg-[var(--tcdx-color-surface)]">

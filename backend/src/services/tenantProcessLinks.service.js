@@ -21,7 +21,10 @@ const MANAGE_ROLES = new Set(['admin', 'tenant_admin']);
 const TARGET_TYPES = new Set(['control', 'evidence', 'risk', 'action']);
 const RELATION_TYPES = new Set(['associated', 'primary', 'supporting', 'impacted', 'mitigates', 'requires_evidence']);
 const SOURCES = new Set(['manual', 'system', 'import', 'ai_suggested']);
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// PostgreSQL's uuid input accepts the canonical 8-4-4-4-12 hexadecimal form
+// independently of RFC version/variant bits. Keep the HTTP contract aligned
+// with the persisted column type while rejecting non-UUID-shaped input early.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const schemaCache = new Map();
 
@@ -716,4 +719,5 @@ module.exports = {
   listCandidates,
   createLink,
   setLinkStatus,
+  isUuid,
 };

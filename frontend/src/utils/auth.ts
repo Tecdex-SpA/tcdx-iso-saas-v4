@@ -1,4 +1,5 @@
 import { getMvpHomePathByRole } from './mvpPermissions';
+import { clearAccessBootstrapCache } from './accessBootstrap';
 
 export function decodeJwtPayload(token: string) {
   try {
@@ -25,11 +26,13 @@ export function getToken() {
 
 export function setToken(token: string) {
   if (typeof window === 'undefined') return;
+  if (localStorage.getItem('token') !== token) clearAccessBootstrapCache();
   localStorage.setItem('token', token);
 }
 
 export function clearToken() {
   if (typeof window === 'undefined') return;
+  clearAccessBootstrapCache();
   localStorage.removeItem('token');
 }
 

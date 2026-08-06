@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useId, useMemo, useState } from 'react';
 import OfficialEvidenceDialog, { type EvidenceKind } from './OfficialEvidenceDialog';
-import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
+import { ApiClientError, apiRequestJsonSingleFlight } from '@/utils/apiClient';
 
 type AnalyticsItem = {
   analytical_result_code?: string;
@@ -81,7 +81,7 @@ export default function OfficialAnalyticsPanel({ title = 'Resultados analíticos
 
   useEffect(() => {
     let cancelled = false;
-    apiRequestJson<{ data?: AnalyticsItem[] }>('/api/grc/official/analytics/catalog', { fallbackMessage: 'No fue posible cargar el catálogo analítico oficial.' })
+    apiRequestJsonSingleFlight<{ data?: AnalyticsItem[] }>('/api/grc/official/analytics/catalog', { fallbackMessage: 'No fue posible cargar el catálogo analítico oficial.' })
       .then((payload) => {
         const rows = Array.isArray(payload.data) ? payload.data : Array.isArray(payload as unknown) ? payload as unknown as AnalyticsItem[] : [];
         if (!cancelled) setItems(rows);

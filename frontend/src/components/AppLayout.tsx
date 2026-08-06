@@ -10,6 +10,7 @@ import EnglishDbDisplayTextGuard from '@/components/EnglishDbDisplayTextGuard';
 import EnglishFindingsTextGuard from './EnglishFindingsTextGuard';
 import EnglishAdminSaasTextGuard from './EnglishAdminSaasTextGuard';
 import {
+  clearToken,
   getHomePathByRole,
   getUserFromToken,
   isTokenExpired,
@@ -72,6 +73,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
+  const [moduleMap, setModuleMap] = useState<NonNullable<ModuleAccessResponse['module_map']>>({});
+  const [accessRole, setAccessRole] = useState('');
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -265,7 +268,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         }
 
         if (isTokenExpired(token)) {
-          localStorage.removeItem('token');
+          clearToken();
           window.location.href = '/login';
           return;
         }
@@ -273,7 +276,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         const user = getUserFromToken();
 
         if (!user) {
-          localStorage.removeItem('token');
+          clearToken();
           window.location.href = '/login';
           return;
         }
@@ -281,6 +284,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         const role = String(
           user?.role || user?.user_role || user?.userRole || ''
         ).toLowerCase();
+        if (!cancelled) setAccessRole(role);
 
         const isPlatform = PLATFORM_ROLES.includes(role);
 
@@ -353,6 +357,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         if (!isPlatform && !isDealer) {
           const moduleAccess = await getModuleAccess(token);
+          if (!cancelled) setModuleMap(moduleAccess.module_map || {});
 
           const serviceStatus = String(
             moduleAccess?.scope?.service_status || 'active'
@@ -405,6 +410,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               }
             }
           }
+        } else if (!cancelled) {
+          setModuleMap({});
         }
 
         if (!cancelled) {
@@ -486,7 +493,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => {
-              localStorage.removeItem('token');
+              clearToken();
               localStorage.removeItem('authToken');
               localStorage.removeItem('user');
               localStorage.removeItem('tenant');
@@ -518,7 +525,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {pathname.startsWith('/hallazgos') && <EnglishFindingsTextGuard />}
       {pathname.startsWith('/admin-saas') && <EnglishAdminSaasTextGuard />}
       <div className="hidden lg:block">
-        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} moduleMap={moduleMap} role={accessRole} />
       </div>
 
       {mobileSidebarOpen && (
@@ -531,7 +538,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           />
 
           <div className="absolute inset-y-0 left-0 max-w-[86vw]">
-            <Sidebar collapsed={false} onToggle={() => setMobileSidebarOpen(false)} />
+            <Sidebar collapsed={false} onToggle={() => setMobileSidebarOpen(false)} moduleMap={moduleMap} role={accessRole} />
           </div>
         </div>
       )}
