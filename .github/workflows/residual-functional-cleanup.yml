@@ -1,0 +1,62 @@
+name: Residual Functional Cleanup
+
+on:
+  push:
+    branches:
+      - fix/residual-functional-cleanup
+    paths:
+      - scripts/phase5-c2h/apply-residual-functional-cleanup.js
+      - frontend/src/utils/accessBootstrap.ts
+      - .github/workflows/residual-functional-cleanup.yml
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Apply deterministic residual cleanup
+        run: node scripts/phase5-c2h/apply-residual-functional-cleanup.js
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Validate frontend lint, typecheck and build
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run build
+
+      - name: Commit generated integration
+        run: |
+          if git diff --quiet -- frontend/src/app/usuarios/page.tsx frontend/src/app/bi/page.tsx frontend/src/components/configuracion/ProcessesOperationsPanel.tsx; then
+            echo "No generated changes required."
+            exit 0
+          fi
+
+          branch_name="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/app/usuarios/page.tsx frontend/src/app/bi/page.tsx frontend/src/components/configuracion/ProcessesOperationsPanel.tsx
+          git commit -m "fix(frontend): remove residual unauthorized and duplicate requests"
+          git push origin "HEAD:${branch_name}"
