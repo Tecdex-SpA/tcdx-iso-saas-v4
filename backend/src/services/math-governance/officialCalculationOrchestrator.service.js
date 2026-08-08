@@ -53,6 +53,9 @@ const FORMULA_PRIORITY = Object.freeze({
   F5_5_COMPLETENESS: 11,
   F5_5_READINESS: 90,
   F5_5_GRC_HEALTH: 100,
+  F5_C3_DATA_TRUST: 105,
+  F5_C3_OPERATIONAL_PERFORMANCE: 110,
+  F5_C3_SUPPLIER_HEALTH: 110,
 });
 
 function selectedFormulas(body = {}) {
