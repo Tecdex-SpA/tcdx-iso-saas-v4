@@ -8,7 +8,7 @@ jobs:
   validate:
     name: Validate backend and frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -26,7 +26,9 @@ jobs:
             frontend/package-lock.json
 
       - name: Git diff hygiene
-        run: git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
+        run: |
+          BASE_REF="${{ github.event.pull_request.base.sha || 'origin/main' }}"
+          git diff --check "$BASE_REF...HEAD"
 
       - name: Install backend dependencies
         working-directory: backend
@@ -56,7 +58,7 @@ jobs:
       - name: Phase 5.5 PostgreSQL source adapters
         run: bash scripts/phase5-5/check-source-adapters-postgres-ci.sh
 
-      - name: Phase 5.5 50 formulas with production snapshot constraint
+      - name: Phase 5.5 formula snapshot contract
         run: bash scripts/phase5-5/check-50-formulas-snapshot-postgres-ci.sh
 
       - name: Phase 5.5 production acceptance contract
@@ -72,6 +74,16 @@ jobs:
 
       - name: Phase 5-C2 disposable PostgreSQL integration
         run: npm run phase5-c2:postgres
+
+      - name: Phase 5-C3 contracts, security, checksum and unit
+        run: |
+          npm run phase5-c3:contracts-check
+          npm run phase5-c3:security-check
+          npm run phase5-c3:migration:checksum
+          npm run phase5-c3:unit
+
+      - name: Phase 5-C3 disposable PostgreSQL integration
+        run: npm run phase5-c3:postgres
 
       - name: Phase 1 contracts
         run: npm run phase1:contracts:check
@@ -105,6 +117,9 @@ jobs:
       - name: Validate Phase 1 Playwright contracts
         run: node scripts/phase1/check-phase1-e2e-contracts.js
 
+      - name: Phase 5-C3 script and Playwright discovery validation
+        run: npm run phase5-c3:scripts-check
+
       - name: Frontend Phase 1 UI contracts
         working-directory: frontend
         run: npm test
@@ -121,9 +136,12 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Install Chromium for Phase 5-C2 E2E
+      - name: Install Chromium for Phase 5-C2/C3 E2E
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
       - name: Phase 5-C2 browser E2E
         run: npm run phase5-c2:browser-e2e
+
+      - name: Phase 5-C3 browser E2E
+        run: npm run phase5-c3:browser-e2e

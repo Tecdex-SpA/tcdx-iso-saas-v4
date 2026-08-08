@@ -67,7 +67,7 @@ package5_consumers_count="$(run_psql -Atqc "SELECT COUNT(*) FROM calculation_con
 package5_comparisons_count="$(run_psql -Atqc "SELECT COUNT(*) FROM calculation_comparisons WHERE metadata->>'package'='phase5_5_package5'")"
 [[ "$package5_consumers_count" == "3" && "$package5_comparisons_count" == "1" ]] || { echo "Package 5 BI/report consumption verification failed: consumers=$package5_consumers_count comparisons=$package5_comparisons_count" >&2; exit 1; }
 [[ "$tables_count" == "22" ]] || { echo "Expected 22 Phase 5.5 tables, got $tables_count" >&2; exit 1; }
-[[ "$formulas_count" == "50" && "$versions_count" == "50" ]] || { echo "Expected 50 official formulas/versions, got $formulas_count/$versions_count" >&2; exit 1; }
+[[ "$formulas_count" == "53" && "$versions_count" == "53" ]] || { echo "Expected 53 official formulas/versions, got $formulas_count/$versions_count" >&2; exit 1; }
 [[ "$contracts_count" -ge "16" ]] || { echo "Expected source contracts, got $contracts_count" >&2; exit 1; }
 [[ "$ledger_status" == "applied" ]] || { echo "Phase 5.5 ledger status not applied: $ledger_status" >&2; exit 1; }
 [[ "$trigger_enabled" == "O" ]] || { echo "Official formula immutability trigger is not enabled" >&2; exit 1; }

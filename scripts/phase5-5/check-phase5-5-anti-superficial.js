@@ -8,8 +8,8 @@ function read(rel) { return exists(rel) ? fs.readFileSync(path.join(root, rel), 
 const failures = [];
 const futurePackagePending = [];
 const trace = read('docs/phase5-5/formula-traceability-matrix.md');
-const formulas = new Set([...trace.matchAll(/`(F5_5_[A-Z0-9_]+)`/g)].map((m) => m[1]));
-if (formulas.size !== 50) failures.push('formula_traceability_matrix_must_register_50_formulas');
+const formulas = new Set([...trace.matchAll(/`(F5_(?:5|C3)_[A-Z0-9_]+)`/g)].map((m) => m[1]));
+if (formulas.size !== 53) failures.push('formula_traceability_matrix_must_register_53_formulas');
 const requiredDocs = [
   'docs/phase5-5/current-calculation-inventory.md',
   'docs/phase5-5/calculation-consumer-map.md',

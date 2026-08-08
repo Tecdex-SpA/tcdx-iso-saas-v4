@@ -9,7 +9,7 @@ const JSZip = require('jszip');
 const XLSX = require('xlsx');
 const pool = require('../../config/db');
 const asyncJobs = require('../asyncJob.service');
-const { evaluate, validateExpression, FormulaError } = require('./formulaEngine');
+const { validateExpression } = require('./formulaEngine');
 const { calculateTrustScore, assessFreshness, TrustScoreError } = require('./dataTrustScore');
 const phase5Package3 = require('../math-governance/phase5Package3.service');
 const analyticsCatalog = require('../math-governance/analyticsCatalog.service');
@@ -591,40 +591,19 @@ async function recordMeasurement(scope, metricId, body = {}, requestId = null) {
 }
 
 async function calculateMetric(scope, metricId, body = {}, requestId = null) {
-  const tenantId = tenantIdFrom(scope);
   const metric = await getMetric(scope, metricId);
-  const formula = (await queryRows(
-    `SELECT * FROM metric_formula_versions WHERE metric_definition_id=$1::uuid AND status='published' ORDER BY version_number DESC LIMIT 1`,
-    [metric.id]
-  ))[0];
-  if (!formula) throw new Phase5Error('PHASE5_FORMULA_NOT_PUBLISHED', 'La metrica no tiene formula publicada.', 409);
-  let value = null;
   try {
-    value = evaluate(formula.expression, { inputs: body.inputs || {} });
+    const official = await require('../indicators/indicatorGovernance.service').calculateIndicator(scope, metric.metric_code, {
+      ...body,
+      period: body.period || { start: body.period_start, end: body.period_end, key: body.period_key, timezone: body.timezone },
+    }, requestId);
+    return { ...official, deprecated_dsl_execution: false, official_binding_required: true };
   } catch (error) {
-    if (error instanceof FormulaError) throw error;
-    throw new Phase5Error('PHASE5_FORMULA_FAILED', 'No fue posible calcular la formula.', 422);
+    if (error?.code === 'INDICATOR_NOT_FOUND') {
+      throw new Phase5Error('PHASE5_OFFICIAL_BINDING_REQUIRED', 'La métrica requiere un binding publicado al registro matemático oficial.', 409);
+    }
+    throw error;
   }
-  const job = await asyncJobs.createJob({
-    tenant_id: tenantId,
-    user_id: userId(scope.user),
-    job_type: body.recalculate ? 'metric.recalculate' : 'metric.calculate',
-    source_module: 'phase5',
-    payload: { metric_id: metric.id, period_start: body.period_start, period_end: body.period_end },
-    request_id: requestId,
-  }).catch(() => null);
-  const measurement = await recordMeasurement(scope, metric.id, {
-    ...body,
-    value_numeric: typeof value === 'number' ? value : null,
-    value_text: typeof value === 'number' ? null : value === null ? 'sin_medicion' : String(value),
-    formula_version_id: formula.id,
-    calculated_at: new Date().toISOString(),
-    quality_status: value === null ? 'unknown' : 'valid',
-    correlation_id: body.correlation_id || requestId,
-    metadata: { ...(body.metadata || {}), formula_snapshot: formula.expression, job_id: job?.id || null },
-  }, requestId);
-  if (job) await asyncJobs.markCompleted(job.id, { result_json: { measurement_id: measurement.id } }).catch(() => null);
-  return { measurement, formula_version: formula.version_number, job };
 }
 
 async function listMeasurements(scope, metricId, filters = {}) {
@@ -1969,7 +1948,6 @@ async function getGrcOverview(scope, requestId = null) {
 
 module.exports = {
   Phase5Error,
-  FormulaError,
   TrustScoreError,
   sanitizeError,
   recordLineageEdge,

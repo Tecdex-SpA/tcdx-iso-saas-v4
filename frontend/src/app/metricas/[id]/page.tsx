@@ -1,20 +1,12 @@
-import Phase5Workspace from '@/components/phase5/Phase5Workspace';
+import FunctionalIndicatorCatalog from '@/components/indicators/FunctionalIndicatorCatalog';
+import MetricsTenantContext from '@/components/math-governance/MetricsTenantContext';
 
 export default async function MetricDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return (
-    <Phase5Workspace
-      title="Detalle de métrica"
-      description="Definición, fórmula versionada, fuentes, mediciones, tendencia y Data Trust Score."
-      endpoint={`/api/metrics/${id}`}
-      primaryLabel="detalle de métrica"
-      emptyMessage="Métrica no encontrada o sin acceso."
-      columns={[
-        { key: 'metric_code', label: 'Código' },
-        { key: 'display_name', label: 'Nombre' },
-        { key: 'metric_type', label: 'Tipo' },
-        { key: 'status', label: 'Estado' },
-      ]}
-    />
+    <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+      <MetricsTenantContext />
+      <FunctionalIndicatorCatalog metricCode={id} />
+    </main>
   );
 }

@@ -8,9 +8,6 @@ on:
       - scripts/phase5-c2h/apply-residual-functional-cleanup.js
       - frontend/src/utils/accessBootstrap.ts
       - .github/workflows/residual-functional-cleanup.yml
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -23,7 +20,7 @@ jobs:
       - name: Checkout source branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -54,7 +51,7 @@ jobs:
             exit 0
           fi
 
-          branch_name="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          branch_name="${{ github.ref_name }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend/src/app/usuarios/page.tsx frontend/src/app/bi/page.tsx frontend/src/components/configuracion/ProcessesOperationsPanel.tsx

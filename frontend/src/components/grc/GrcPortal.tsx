@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
+import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
 
 type Block = {
   status: string;
@@ -12,21 +13,6 @@ type Block = {
   source_count: number;
   warnings: string[];
   last_updated_at: string | null;
-};
-
-type OfficialCalculation = {
-  value?: number | string | null;
-  unit?: string | null;
-  status?: string;
-  formula_code?: string;
-  formula_version?: number;
-  coverage?: number | null;
-  trust_score?: number | null;
-  trust_status?: string;
-  warnings?: string[];
-  explanation_url?: string | null;
-  lineage_url?: string | null;
-  calculation_run_id?: string | null;
 };
 
 type GrcOverview = {
@@ -51,7 +37,6 @@ type GrcOverview = {
   alerts?: Array<{ block: string; severity: string; message: string }>;
   request_id?: string | null;
   generated_at?: string;
-  official_calculations?: Record<string, OfficialCalculation>;
 };
 
 const MODULES = [
@@ -206,44 +191,7 @@ export default function GrcPortal() {
             )}
 
 
-            {overview.official_calculations && Object.keys(overview.official_calculations).length > 0 && (
-              <section className="mt-6 rounded-md border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-4" aria-labelledby="official-grc-results">
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--tcdx-color-primary)]">Capa matemática oficial</p>
-                    <h2 id="official-grc-results" className="mt-1 text-lg font-semibold">Resultados operativos trazables</h2>
-                    <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
-                      Cada resultado conserva fórmula, versión, cobertura, confianza, warnings, explicación y lineage.
-                    </p>
-                  </div>
-                  <Link href="/datos/lineage" className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-3 text-sm font-semibold text-[var(--tcdx-color-primary)]">
-                    Ver lineage
-                  </Link>
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {Object.entries(overview.official_calculations).map(([key, result]) => (
-                    <article key={key} className="rounded-md border border-[var(--tcdx-color-border)] bg-white p-4 text-sm">
-                      <div className="font-semibold">{key.replaceAll('_', ' ')}</div>
-                      <div className="mt-2 text-2xl font-semibold text-[var(--tcdx-color-navy)]">
-                        {displayValue(result.value)}{result.unit ? ` ${result.unit}` : ''}
-                      </div>
-                      <dl className="mt-3 space-y-1 text-xs text-[var(--tcdx-color-text-secondary)]">
-                        <div className="flex justify-between gap-3"><dt>Estado</dt><dd className="font-semibold">{displayValue(result.status)}</dd></div>
-                        <div className="flex justify-between gap-3"><dt>Fórmula</dt><dd className="font-semibold">{displayValue(result.formula_code)}@v{displayValue(result.formula_version)}</dd></div>
-                        <div className="flex justify-between gap-3"><dt>Cobertura</dt><dd>{displayValue(result.coverage)}</dd></div>
-                        <div className="flex justify-between gap-3"><dt>Confianza</dt><dd>{displayValue(result.trust_score)} · {displayValue(result.trust_status)}</dd></div>
-                      </dl>
-                      {result.warnings?.[0] && <div className="mt-3 rounded-md bg-amber-50 p-2 text-xs text-amber-950">{result.warnings[0]}</div>}
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[var(--tcdx-color-primary)]">
-                        {result.explanation_url && <Link href={result.explanation_url}>Explicación</Link>}
-                        {result.lineage_url && <Link href={result.lineage_url}>Lineage</Link>}
-                        {result.calculation_run_id && <span>Run {String(result.calculation_run_id).slice(0, 8)}</span>}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            )}
+            <div className="mt-6"><OfficialAnalyticsPanel title="Indicadores funcionales oficiales del portal GRC" limit={8} /></div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {blocks.map(({ label, href, block }) => (

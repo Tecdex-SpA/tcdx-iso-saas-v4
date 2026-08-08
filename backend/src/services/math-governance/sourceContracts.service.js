@@ -56,6 +56,9 @@ const FORMULA_SOURCE_MAP = Object.freeze({
   F5_5_CONFIDENCE_INTERVAL: 'statistical_metric_measurements',
   F5_5_GRC_HEALTH: 'grc_health_components',
   F5_5_MATURITY: 'maturity_assessments',
+  F5_C3_DATA_TRUST: 'indicator_data_trust_assessments',
+  F5_C3_OPERATIONAL_PERFORMANCE: 'grc_health_components',
+  F5_C3_SUPPLIER_HEALTH: 'supplier_tprm_assessments',
 });
 
 function checksum(value) {
@@ -143,6 +146,14 @@ const SOURCE_CONTRACTS = Object.freeze([
   contract({ source_code: 'data_quality_observations', entity: 'data_quality', tables: ['data_quality_rules','data_quality_assessments','metric_validations'], columns: ['tenant_id','rule_type','expected_count','valid_count','invalid_count','coverage','assessed_at'], required_fields: ['id','tenant_id'], availability: 'available' }),
   contract({ source_code: 'data_lineage_observations', entity: 'data_lineage', tables: ['data_lineage_edges','data_sources','data_elements'], columns: ['tenant_id','source_entity_type','source_entity_id','target_entity_type','target_entity_id','relation_type','created_at'], required_fields: ['id','tenant_id','relation_type'], availability: 'available' }),
   contract({ source_code: 'statistical_metric_measurements', entity: 'statistics', tables: ['metric_measurements','metric_definitions','metric_dimensions'], columns: ['tenant_id','metric_id','numeric_value','measured_at','unit','dimension_values','status'], required_fields: ['id','tenant_id','numeric_value'], cardinality: 'time_series', availability: 'available' }),
+  contract({
+    source_code: 'indicator_data_trust_assessments', entity: 'data_trust',
+    tables: ['metric_trust_assessments'], columns: ['tenant_id','dimensions','trust_status','assessed_at','assessment_checksum'],
+    required_fields: ['id','tenant_id','dimensions'],
+    variable_map: { completeness:'dimensions.completeness.score',accuracy:'dimensions.accuracy.score',consistency:'dimensions.consistency.score',freshness:'dimensions.freshness.score',lineage:'dimensions.lineage.score',validation:'dimensions.validation.score',stability:'dimensions.stability.score',coverage:'dimensions.coverage.score' },
+    availability: 'available', version: 1,
+    limitations: 'Compone únicamente las ocho dimensiones persistidas; una dimensión desconocida impide calcular y nunca se renormaliza.'
+  }),
   contract({
     source_code: 'grc_health_components', entity: 'health',
     tables: ['calculation_runs','calculation_outputs','data_trust_scores'],

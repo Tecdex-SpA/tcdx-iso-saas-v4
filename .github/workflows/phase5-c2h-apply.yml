@@ -10,9 +10,6 @@ on:
       - scripts/phase5-c2h/apply-dynamic-page-props-patch.js
       - scripts/phase5-c2h/apply-hydration-lint-patch.js
       - .github/workflows/phase5-c2h-apply.yml
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -25,7 +22,7 @@ jobs:
       - name: Checkout source branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -73,7 +70,7 @@ jobs:
             exit 0
           fi
 
-          branch_name="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          branch_name="${{ github.ref_name }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add backend/src/app.js frontend/src/components/AppLayout.tsx frontend/src/context/LanguageContext.tsx frontend/src/app

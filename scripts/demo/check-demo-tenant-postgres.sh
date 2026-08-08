@@ -55,6 +55,8 @@ run_psql -v ON_ERROR_STOP=1 -c "
   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS service_status text NOT NULL DEFAULT 'active';
   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS deleted_at timestamp;
   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS suspended_at timestamp;
+  ALTER TABLE tenants ADD COLUMN IF NOT EXISTS suspension_reason text;
+  ALTER TABLE tenants ADD COLUMN IF NOT EXISTS deletion_reason text;
   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS ai_enabled boolean NOT NULL DEFAULT false;
   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS ai_plan text NOT NULL DEFAULT 'none';
   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS ai_web_enabled boolean NOT NULL DEFAULT false;
@@ -68,6 +70,8 @@ run_psql -v ON_ERROR_STOP=1 -c "
   ALTER TABLE users ADD COLUMN IF NOT EXISTS role text DEFAULT 'user';
   ALTER TABLE users ADD COLUMN IF NOT EXISTS name text;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title text;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar text;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now();
   ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
   ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
@@ -104,6 +108,7 @@ run_psql -v ON_ERROR_STOP=1 -c "
   ALTER TABLE tenant_controls ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
   ALTER TABLE tenant_controls ADD COLUMN IF NOT EXISTS operation_id uuid REFERENCES tenant_operations(id);
   ALTER TABLE tenant_controls ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now();
+  ALTER TABLE tenant_operations ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
   ALTER TABLE tenant_controls ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
   ALTER TABLE evidences ADD COLUMN IF NOT EXISTS control_id uuid;
   ALTER TABLE evidences ADD COLUMN IF NOT EXISTS description text;
@@ -307,10 +312,58 @@ hash_check="$(MIGRATION_DATABASE_URL="$DATABASE_URL" node -e "const {Client}=req
 auth_check="$(DB_HOST=127.0.0.1 DB_PORT="$PORT" DB_USER=postgres DB_NAME="$DATABASE_NAME" JWT_SECRET=demo-check-secret node -e "const jwt=require('./backend/node_modules/jsonwebtoken'); const { login }=require('./backend/src/services/auth.service'); (async()=>{const p=Buffer.from('RGVtby4xMjM0NTY=','base64').toString('utf8'); const admin=await login('admin.demo@tcdx.demo',p); const auditor=await login('auditor.demo@tcdx.demo',p); const decoded=[jwt.decode(admin),jwt.decode(auditor)]; process.stdout.write(JSON.stringify({tokens:decoded.length,tenant_match:decoded.every(d=>d.tenant_id==='${DEMO_TENANT_ID}'),roles:decoded.map(d=>d.role).sort()})); process.exit(0);})().catch(e=>{process.stderr.write(e.message);process.exit(1);})")"
 [[ "$auth_check" == '{"tokens":2,"tenant_match":true,"roles":["admin","auditor"]}' ]] || { echo "Auth service login failed: $auth_check" >&2; exit 1; }
 
+if [[ "${PHASE5_C3_BROWSER_CHECK:-0}" == "1" ]]; then
+  MIGRATION_DATABASE_URL="$DATABASE_URL" node "$REPO_ROOT/scripts/phase5-c3/apply-phase5-c3-migration.js" --apply >"$RUN_DIR/c3.txt"
+  run_psql -v ON_ERROR_STOP=1 -c "
+    CREATE OR REPLACE VIEW v_tenant_modules AS SELECT t.id AS tenant_id,t.name AS tenant_name,cm.module_key,cm.display_name AS module_name,cm.description AS module_description,cm.sort_order,true AS is_enabled,now() AS enabled_at,NULL::timestamptz AS disabled_at,'phase5_c3_browser'::text AS notes,'{\"source\":\"phase5_c3_browser\"}'::jsonb AS metadata FROM tenants t CROSS JOIN commercial_modules cm WHERE cm.status='active';
+    CREATE TABLE IF NOT EXISTS notifications(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,type text NOT NULL,title text NOT NULL,description text,href text,level text NOT NULL DEFAULT 'info',dedupe_key text NOT NULL,is_read boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(tenant_id,dedupe_key));
+    CREATE TABLE IF NOT EXISTS search_history(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,user_id uuid REFERENCES users(id) ON DELETE SET NULL,query text NOT NULL,result_type text,result_title text,result_href text,clicked_at timestamptz NOT NULL DEFAULT now());
+    CREATE TABLE IF NOT EXISTS tenant_standard_operations(tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,standard_code text NOT NULL,operation_id uuid NOT NULL REFERENCES tenant_operations(id) ON DELETE CASCADE,is_active boolean NOT NULL DEFAULT true,PRIMARY KEY(tenant_id,standard_code,operation_id));
+    CREATE TABLE IF NOT EXISTS controls_catalog_standards(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),control_id uuid NOT NULL REFERENCES controls_catalog(id) ON DELETE CASCADE,standard_code text NOT NULL,clause text,is_primary boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(control_id,standard_code));
+    CREATE TABLE IF NOT EXISTS tenant_applicable_controls(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,tenant_control_id uuid,control_catalog_id uuid,standard_code text,control_code text,control_name text NOT NULL,applicability_status text NOT NULL DEFAULT 'applicable',applicability_reason text,applicability_score numeric,priority text,profile_drivers jsonb NOT NULL DEFAULT '{}'::jsonb,calculation_weight numeric NOT NULL DEFAULT 1,must_exist boolean NOT NULL DEFAULT true,visible_to_tenant boolean NOT NULL DEFAULT true,active boolean NOT NULL DEFAULT true,source text NOT NULL DEFAULT 'phase5_c3_browser',created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
+    CREATE TABLE IF NOT EXISTS control_health_scores(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,tenant_control_id uuid NOT NULL UNIQUE REFERENCES tenant_controls(id) ON DELETE CASCADE,standard_code varchar(50),catalog_control_id uuid,health_score numeric NOT NULL DEFAULT 0,health_status text NOT NULL DEFAULT 'sin_datos',evidence_score numeric NOT NULL DEFAULT 0,compliance_score numeric NOT NULL DEFAULT 0,findings_score numeric NOT NULL DEFAULT 0,risk_score numeric NOT NULL DEFAULT 0,action_score numeric NOT NULL DEFAULT 0,review_score numeric NOT NULL DEFAULT 0,evidence_count integer NOT NULL DEFAULT 0,approved_evidence_count integer NOT NULL DEFAULT 0,pending_evidence_count integer NOT NULL DEFAULT 0,rejected_evidence_count integer NOT NULL DEFAULT 0,open_findings_count integer NOT NULL DEFAULT 0,open_actions_count integer NOT NULL DEFAULT 0,overdue_actions_count integer NOT NULL DEFAULT 0,high_risks_count integer NOT NULL DEFAULT 0,calculated_at timestamptz NOT NULL DEFAULT now(),metadata jsonb NOT NULL DEFAULT '{}'::jsonb);
+    CREATE TABLE IF NOT EXISTS action_plan_updates(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),action_plan_id uuid NOT NULL REFERENCES action_plans(id) ON DELETE CASCADE,tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,comment text NOT NULL,progress_percent integer NOT NULL DEFAULT 0 CHECK(progress_percent BETWEEN 0 AND 100),status_after text NOT NULL DEFAULT 'abierto',blocked_reason text,created_by uuid,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
+    ALTER TABLE action_plans ADD COLUMN IF NOT EXISTS nonconformity_id uuid REFERENCES tenant_nonconformities(id);
+    ALTER TABLE evidences ADD COLUMN IF NOT EXISTS rejection_reason text;
+    CREATE OR REPLACE FUNCTION normalize_status_for_audits(value text) RETURNS text LANGUAGE sql IMMUTABLE AS \$\$ SELECT CASE lower(COALESCE(value,'')) WHEN 'completed' THEN 'completada' WHEN 'complete' THEN 'completada' WHEN 'closed' THEN 'completada' WHEN 'cerrada' THEN 'completada' ELSE lower(COALESCE(value,'')) END \$\$;
+    CREATE OR REPLACE VIEW v_iso_effective_kpi_summary AS SELECT NULL::uuid AS tenant_id,NULL::text AS iso,NULL::uuid AS operation_id,NULL::text AS operation_name,NULL::text AS operation_code,NULL::text AS operation_type,0::bigint AS total_controls,0::bigint AS active_scope_controls,0::bigint AS out_of_scope_controls,0::bigint AS complies_controls,0::bigint AS partial_controls,0::bigint AS non_compliant_or_no_data_controls,0::bigint AS healthy_controls,0::bigint AS attention_controls,0::bigint AS deteriorated_controls,0::bigint AS controls_with_official_evidence,0::bigint AS controls_with_approved_non_official_evidence,0::bigint AS controls_without_evidence,0::bigint AS approved_evidence_count,0::bigint AS official_evidence_count,0::bigint AS open_findings_count,0::bigint AS open_nonconformities_count,0::bigint AS open_action_plans_count,0::bigint AS overdue_action_plans_count,NULL::numeric AS avg_effective_health_score,NULL::numeric AS compliance_percentage,NULL::numeric AS official_evidence_percentage,'sin_datos'::text AS kpi_health_status,'{}'::jsonb AS kpi_trace_json WHERE false;
+    UPDATE tenants SET service_status='active',ai_enabled=true,ai_plan='enterprise' WHERE id='$TENANT_B_ID';
+    INSERT INTO tenant_subscriptions(id,tenant_id,plan_version_id,plan_key,status,started_at,metadata)
+    SELECT '70000000-0000-0000-0000-000000003001'::uuid,'$TENANT_B_ID'::uuid,plan_version_id,plan_key,'active',now(),'{\"fixture\":\"phase5-c3-browser\"}'
+    FROM tenant_subscriptions WHERE tenant_id='$DEMO_TENANT_ID' AND status='active' LIMIT 1 ON CONFLICT(id) DO NOTHING;
+    INSERT INTO users(id,tenant_id,name,full_name,email,password_hash,role,created_at)
+    SELECT '70000000-0000-0000-0000-000000003011'::uuid,'$TENANT_B_ID'::uuid,'Admin C3 Tenant B','Admin C3 Tenant B','admin.c3@tenant-b.local',password_hash,'admin',now() FROM users WHERE email='admin.demo@tcdx.demo'
+    UNION ALL SELECT '70000000-0000-0000-0000-000000003012'::uuid,'$TENANT_B_ID'::uuid,'Auditor C3 Tenant B','Auditor C3 Tenant B','auditor.c3@tenant-b.local',password_hash,'auditor',now() FROM users WHERE email='admin.demo@tcdx.demo'
+    UNION ALL SELECT '70000000-0000-0000-0000-000000003013'::uuid,'$TENANT_B_ID'::uuid,'Viewer C3 Tenant B','Viewer C3 Tenant B','viewer.c3@tenant-b.local',password_hash,'viewer',now() FROM users WHERE email='admin.demo@tcdx.demo'
+    ON CONFLICT(id) DO UPDATE SET password_hash=EXCLUDED.password_hash,role=EXCLUDED.role;
+    INSERT INTO roles(name) VALUES('viewer') ON CONFLICT(name) DO NOTHING;
+    INSERT INTO user_roles(user_id,role_id) SELECT u.id,r.id FROM users u JOIN roles r ON r.name=u.role WHERE u.tenant_id='$TENANT_B_ID' ON CONFLICT DO NOTHING;
+    INSERT INTO app_roles(role_key,display_name,description,role_level,is_system,is_active) VALUES('viewer','Viewer de negocio','Lectura funcional tenant.',30,true,true) ON CONFLICT(role_key) DO UPDATE SET is_active=true;
+    INSERT INTO role_permissions(role_key,permission_key,is_allowed) SELECT 'viewer',permission_key,true FROM permissions WHERE permission_key IN ('metrics.read','data.lineage.read') ON CONFLICT(role_key,permission_key) DO UPDATE SET is_allowed=true,updated_at=now();
+    INSERT INTO metric_snapshots(id,tenant_id,metric_definition_id,period_key,snapshot_payload,content_hash,effective_at,snapshot_status,published_at)
+    SELECT '70000000-0000-0000-0000-000000003021','$DEMO_TENANT_ID',md.id,'2026-08',jsonb_build_object('metric_code','COMPLIANCE','formula_code','F5_5_COMPLIANCE_WEIGHTED','formula_version',1,'methodology_version','1','period',jsonb_build_object('key','2026-08','start','2026-08-01','end','2026-08-31'),'effective_at','2026-08-31','result',jsonb_build_object('status','calculated','value',82),'unit','%','coverage',0.91,'trust',jsonb_build_object('score',88,'status','acceptable'),'freshness',jsonb_build_object('status','fresh'),'sufficiency',jsonb_build_object('status','sufficient'),'interpretation',jsonb_build_object('classification',jsonb_build_object('code','positive','label','Objetivo alcanzado','positive',true),'trend','increase'),'checksum',repeat('7',64)),repeat('7',64),'2026-08-31','published',now()
+    FROM metric_definitions md JOIN metric_definition_versions v ON v.metric_definition_id=md.id WHERE v.functional_code='COMPLIANCE' AND v.status='published' LIMIT 1;
+    INSERT INTO metric_snapshots(id,tenant_id,metric_definition_id,period_key,snapshot_payload,content_hash,effective_at,snapshot_status,published_at)
+    SELECT '70000000-0000-0000-0000-000000003022','$TENANT_B_ID',md.id,'2026-08',jsonb_build_object('metric_code','COMPLIANCE','formula_code','F5_5_COMPLIANCE_WEIGHTED','formula_version',1,'methodology_version','1','period',jsonb_build_object('key','2026-08','start','2026-08-01','end','2026-08-31'),'effective_at','2026-08-31','result',jsonb_build_object('status','calculated','value',64),'unit','%','coverage',0.72,'trust',jsonb_build_object('score',71,'status','attention'),'freshness',jsonb_build_object('status','aging'),'sufficiency',jsonb_build_object('status','partial'),'interpretation',jsonb_build_object('classification',jsonb_build_object('code','attention','label','Requiere atención','positive',false),'trend','decrease'),'checksum',repeat('8',64)),repeat('8',64),'2026-08-31','published',now()
+    FROM metric_definitions md JOIN metric_definition_versions v ON v.metric_definition_id=md.id WHERE v.functional_code='COMPLIANCE' AND v.status='published' LIMIT 1;
+  " >/dev/null
+  PHASE5_C3_DB_PORT="$PORT" PHASE5_C3_DB_NAME="$DATABASE_NAME" bash "$REPO_ROOT/scripts/phase5-c3/run-phase5-c3-browser-e2e.sh"
+fi
+
 if [[ "${DEMO_VISUAL_COMPLETION_CHECK:-0}" == "1" ]]; then
   VISUAL_ATTESTATION_FILE="$RUN_DIR/visual-completion-attestation.json"
   run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260506_iso_operational_execution.sql" >/dev/null
   run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/tests/fixtures/demo-visual-legacy-schema.sql" >/dev/null
+  run_psql -v ON_ERROR_STOP=1 -c "
+    ALTER TABLE report_schedules ALTER COLUMN report_definition_id DROP NOT NULL;
+    ALTER TABLE report_schedules ALTER COLUMN schedule_key DROP NOT NULL;
+    ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS report_type_code text;
+    ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS day_of_month integer;
+    ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS recipients jsonb NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
+    ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS last_sent_at timestamptz;
+    ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS notes text;
+  " >/dev/null
   run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260522_tenant_applicability_universe.sql" >/dev/null
   run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260623_create_control_soa_assessments.sql" >/dev/null
   run_psql -v ON_ERROR_STOP=1 -f "$REPO_ROOT/database/migrations/20260616_operational_risk_montecarlo.sql" >/dev/null

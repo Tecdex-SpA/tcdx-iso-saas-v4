@@ -15,6 +15,7 @@ const reportTemplates = require('../services/reportTemplates.service');
 const reportBuilder = require('../services/reportBuilder.service');
 const reportAiNarrative = require('../services/reportAiNarrative.service');
 const reportPremiumExport = require('../services/reportPremiumExport.service');
+const indicatorGovernance = require('../services/indicators/indicatorGovernance.service');
 const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
 const {
   renderExecutivePremiumTemplate,
@@ -3178,6 +3179,7 @@ router.post('/generate', auth, async (req, res) => {
       requesterRole: role,
       aiOptions: reportAiOptions,
     });
+    reportData.official_indicators = await indicatorGovernance.listCatalog({ tenant_id: targetTenantId, user: req.user }, { limit: 250 });
 
     reportData.lifecycle_history = await getLifecycleHistoryForReport(targetTenantId);
     reportData.ai_report_addendum = await buildAiReportAddendum(reportData, reportAiOptions);

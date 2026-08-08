@@ -297,6 +297,7 @@ type KpiDashboardResponse = {
     gray: number;
     measured_kpis?: number;
     data_coverage_pct?: number;
+    official_score?: number | null;
     health_kpis?: number;
   };
   items?: KpiDashboardItem[];
@@ -355,22 +356,6 @@ function buildTrend(value?: number | null, delta?: number | null) {
     { name: 't-1', value: value - d },
     { name: 't', value },
   ];
-}
-
-function calculateExecutiveScore(summary?: KpiDashboardResponse['summary']) {
-  if (!summary) return 0;
-
-  const green = Number(summary.green || 0);
-  const yellow = Number(summary.yellow || 0);
-  const red = Number(summary.red || 0);
-
-  const measuredTotal = green + yellow + red;
-
-  if (measuredTotal <= 0) return 0;
-
-  return Math.round(
-    (((green * 1) + (yellow * 0.6) + (red * 0.2)) / measuredTotal) * 100
-  );
 }
 
 function normalizeActionStatus(value?: string | null) {
@@ -524,7 +509,7 @@ function normalizeKpiDashboardResponse(payload: unknown): KpiDashboardResponse {
   const finalRed = Number(summary.red ?? red);
   const finalGray = Number(summary.gray ?? gray);
   const finalTotal = Number(summary.total_kpis ?? items.length);
-  const measuredKpis = finalGreen + finalYellow + finalRed;
+  const measuredKpis = Number(summary.measured_kpis ?? 0);
 
   return {
     summary: {
@@ -535,7 +520,9 @@ function normalizeKpiDashboardResponse(payload: unknown): KpiDashboardResponse {
       gray: finalGray,
       measured_kpis: measuredKpis,
       data_coverage_pct:
-        finalTotal > 0 ? Math.round((measuredKpis / finalTotal) * 100) : 0,
+        summary.data_coverage_pct === null ? undefined : Number(summary.data_coverage_pct ?? 0),
+      official_score:
+        summary.official_score === null ? null : Number(summary.official_score ?? 0),
       health_kpis: Number(
         summary.health_kpis ??
         items.filter((item: KpiDashboardItem) => item.is_health_kpi).length
@@ -543,18 +530,6 @@ function normalizeKpiDashboardResponse(payload: unknown): KpiDashboardResponse {
     },
     items,
   };
-}
-
-function getHealthRefreshCount(json: unknown) {
-  const data = asRecord(json);
-  if (Array.isArray(data.health_kpi_refresh)) {
-    return data.health_kpi_refresh.reduce((acc: number, row) => {
-      const item = asRecord(row);
-      return acc + Number(item.snapshots_inserted || item.inserted || 0);
-    }, 0);
-  }
-
-  return Number(data.health_recalculated || 0);
 }
 
 function isHealthKpiItem(item?: KpiDashboardItem | null) {
@@ -837,15 +812,13 @@ function DashboardPageContent() {
 
   const loadKpiDashboard = useCallback(async () => {
     const token = localStorage.getItem('token');
-    const user = getUserFromToken();
-
-    if (!token || !user?.tenant_id) return;
+    if (!token) return;
 
     try {
       setLoadingKpis(true);
 
       const json = await fetchJson(
-        `${API_URL}/api/kpis/dashboard/${user.tenant_id}`,
+        `${API_URL}/api/metrics/official/dashboard`,
         token
       );
 
@@ -896,16 +869,17 @@ function DashboardPageContent() {
     }
 
     const token = localStorage.getItem('token');
-    const user = getUserFromToken();
-
-    if (!token || !user?.tenant_id) return;
+    if (!token) return;
 
     try {
       setRecalculatingKpis(true);
 
-      const res = await fetch(`${API_URL}/api/kpis/recalculate/${user.tenant_id}`, {
+      const now = new Date();
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const res = await fetch(`${API_URL}/api/metrics/official/dashboard/recalculate`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period: { key: now.toISOString().slice(0, 7), start: start.toISOString(), end: now.toISOString(), timezone: 'America/Santiago' } }),
       });
 
       const json = await res.json();
@@ -921,7 +895,7 @@ function DashboardPageContent() {
         json?.snapshots_created ?? json?.recalculated ?? 0
       );
 
-      const healthRecalculated = getHealthRefreshCount(json);
+      const healthRecalculated = 0;
 
       alert(
         t('dashboardKpi.recalculateSuccess', { count: kpisRecalculated, healthCount: healthRecalculated })
@@ -1017,7 +991,7 @@ function DashboardPageContent() {
     return kpiItems.filter((item) => isHealthKpiItem(item));
   }, [kpiItems]);
 
-  const scoreKpiGlobal = calculateExecutiveScore(kpiSummary);
+  const scoreKpiGlobal = Number(kpiSummary?.official_score ?? 0);
 
   const measuredKpis = Number(
     kpiSummary?.measured_kpis ??
@@ -1029,24 +1003,22 @@ function DashboardPageContent() {
   const totalKpis = Number(kpiSummary?.total_kpis || kpiItems.length || 0);
   const pendingKpis = Number(kpiSummary?.gray || 0);
 
-  const kpiCoveragePct =
-    Number(kpiSummary?.data_coverage_pct) ||
-    (totalKpis > 0 ? Math.round((measuredKpis / totalKpis) * 100) : 0);
+  const kpiCoveragePct = Number(kpiSummary?.data_coverage_pct ?? 0);
 
   const kpiCoverageTone =
     kpiCoveragePct >= 90 ? 'green' : kpiCoveragePct >= 70 ? 'amber' : 'red';
 
 
   const healthMainKpi = useMemo(() => {
-    return healthKpiItems.find((item) => item.code === 'KPI-HLT-001') || null;
+    return healthKpiItems.find((item) => item.code === 'GRC-HEALTH') || null;
   }, [healthKpiItems]);
 
   const healthCoverageKpi = useMemo(() => {
-    return healthKpiItems.find((item) => item.code === 'KPI-HLT-003') || null;
+    return healthKpiItems.find((item) => item.code === 'EVIDENCE-COVERAGE') || null;
   }, [healthKpiItems]);
 
   const healthDeterioratedKpi = useMemo(() => {
-    return healthKpiItems.find((item) => item.code === 'KPI-HLT-004') || null;
+    return healthKpiItems.find((item) => item.code === 'DATA-TRUST') || null;
   }, [healthKpiItems]);
 
   const kpiStatusData = useMemo(() => {
