@@ -33,9 +33,9 @@ assert(formulaCatalog.includes('Contrato') && formulaCatalog.includes('Fuente y 
 assert(formulaCatalog.includes('OfficialEvidenceDialog'), 'metrics must use shared evidence dialog');
 assert(!formulaCatalog.includes('href={`/api/grc/official/calculations/'), 'metrics must not expose protected API links');
 
-assert(analyticsPanel.includes('OfficialEvidenceDialog'), 'BI must use shared evidence dialog');
-assert(!analyticsPanel.includes('href={`/api/grc/official/calculations/'), 'BI must not expose protected API links');
-assert(analyticsPanel.includes('Sin ejecución oficial') && analyticsPanel.includes('Resultado oficial disponible'), 'BI must distinguish execution availability');
+assert(analyticsPanel.includes('/api/metrics/official/catalog'), 'BI must consume functional indicator snapshots');
+assert(!analyticsPanel.includes('/api/grc/official/analytics/catalog'), 'BI must not retain the pre-5-C3 catalog consumer');
+assert(analyticsPanel.includes('Sin medición oficial') && analyticsPanel.includes('snapshot inmutable'), 'BI must distinguish snapshot availability');
 assert(analyticsPanel.includes("return 'border-slate-200 bg-slate-50"), 'BI must render non-executed cards neutral');
 
 assert(evidenceDialog.includes('apiRequestJson(`/api/grc/official/calculations/${runId}/${kind}`'), 'shared evidence must use authenticated API client');
@@ -58,7 +58,7 @@ for (const tenant of ['Servicios tecnologicos tecdex SPA','Servicios de Informac
   assert(postgresTest.includes(tenant), `integration scenario missing tenant: ${tenant}`);
 }
 assert(postgresTest.includes('cross_tenant_rows: 0'), 'tenant contamination assertion missing');
-assert(postgresTest.includes('formulas_per_tenant: 50'), 'all 50 formulas must be validated per tenant');
+assert(postgresTest.includes('formulas_per_tenant: 53'), 'all 53 formulas must be validated per tenant');
 
 const directProtectedLinks = [formulaCatalog, analyticsPanel, evidenceDialog].join('\n').match(/href=.*\/api\/grc\/official\/calculations/g) || [];
 assert.strictEqual(directProtectedLinks.length, 0, 'direct protected calculation links are forbidden');
@@ -66,9 +66,9 @@ assert.strictEqual(directProtectedLinks.length, 0, 'direct protected calculation
 process.stdout.write(JSON.stringify({
   status: 'PHASE5_5_PRODUCTION_ACCEPTANCE_CONTRACT_OK',
   snapshot_type: 'source_dataset',
-  formulas_per_tenant: 50,
+  formulas_per_tenant: 53,
   tenants: 3,
   roles: ['superadmin','platform_admin','admin','viewer'],
-  shared_evidence: true,
+  functional_snapshot_consistency: true,
   capability_navigation: true,
 }) + '\n');

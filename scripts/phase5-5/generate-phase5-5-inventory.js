@@ -22,10 +22,10 @@ if (missing.length) {
   process.exit(1);
 }
 const trace = fs.readFileSync(path.join(docs, 'formula-traceability-matrix.md'), 'utf8');
-const formulaCodes = [...trace.matchAll(/`(F5_5_[A-Z0-9_]+)`/g)].map((match) => match[1]);
+const formulaCodes = [...trace.matchAll(/`(F5_(?:5|C3)_[A-Z0-9_]+)`/g)].map((match) => match[1]);
 const unique = new Set(formulaCodes);
-if (unique.size !== 50) {
-  process.stderr.write('Expected 50 Phase 5.5 formulas in traceability matrix; found ' + unique.size + '.\n');
+if (unique.size !== 53) {
+  process.stderr.write('Expected 53 official formulas in traceability matrix; found ' + unique.size + '.\n');
   process.exit(1);
 }
 const inventory = fs.readFileSync(path.join(docs, 'current-calculation-inventory.md'), 'utf8');

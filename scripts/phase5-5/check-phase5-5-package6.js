@@ -59,13 +59,13 @@ for (const [component, tokens] of Object.entries(builders)) {
   if (text.includes('BuilderSurface')) failures.push(`descriptive_builder_surface_still_used:${component}`);
 }
 requireTokens('frontend/src/components/phase5/Phase5Workspace.tsx', ['OfficialAnalyticsPanel', 'analyticsDomain', 'Fórmula', 'Lineage', 'Impacto']);
-requireTokens('frontend/src/components/grc/GrcPortal.tsx', ['official_calculations', 'formula_code', 'formula_version', 'explanation_url', 'lineage_url']);
+requireTokens('frontend/src/components/grc/GrcPortal.tsx', ['OfficialAnalyticsPanel', 'Indicadores funcionales oficiales del portal GRC']);
 requireTokens('frontend/src/components/Sidebar.tsx', ['navigationGroups', 'GRC integrado', 'Analítica y reportes', 'Evaluación y assurance']);
 const routePages = {
   'frontend/src/app/bi/page.tsx': ['DashboardBuilderGuide', 'Phase5Workspace'],
   'frontend/src/app/reportes/studio/page.tsx': ['ReportStudioWorkspace', 'OfficialAnalyticsPanel'],
   'frontend/src/app/reportes/generaciones/page.tsx': ['CalculationRunHistory'],
-  'frontend/src/app/metricas/page.tsx': ['MetricBuilder', 'FormulaCatalog'],
+  'frontend/src/app/metricas/page.tsx': ['FunctionalIndicatorCatalog'],
   'frontend/src/app/encuestas/page.tsx': ['SurveyScoringBuilder'],
   'frontend/src/app/tests/page.tsx': ['AssuranceScoringBuilder', 'SampleSizeCalculator'],
   'frontend/src/app/eventos-perdida/page.tsx': ['LossAnalyticsPanel'],

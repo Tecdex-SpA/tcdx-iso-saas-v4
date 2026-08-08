@@ -29,7 +29,7 @@ for (const route of requiredRoutes) {
   const filePath = path.join(root, route);
   if (!fs.existsSync(filePath)) throw new Error(`Missing frontend route: ${route}`);
   const source = fs.readFileSync(filePath, 'utf8');
-  if (!source.includes('Phase5Workspace') && !source.includes('GrcPortal') && !source.includes('LineageExplorer')) throw new Error(`Route does not render governed workspace: ${route}`);
+  if (!source.includes('Phase5Workspace') && !source.includes('GrcPortal') && !source.includes('LineageExplorer') && !source.includes('FunctionalIndicatorCatalog')) throw new Error(`Route does not render governed workspace: ${route}`);
 }
 
 const workspace = fs.readFileSync(path.join(root, 'frontend/src/components/phase5/Phase5Workspace.tsx'), 'utf8');

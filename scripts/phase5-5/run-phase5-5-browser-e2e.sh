@@ -270,9 +270,10 @@ if (( backend_ready != 1 )); then
   exit 1
 fi
 
+(cd "$REPO_ROOT/frontend" && env NEXT_PUBLIC_API_URL="http://127.0.0.1:$BACKEND_PORT" npm run build >"$ARTIFACT_DIR/frontend-browser-build.log" 2>&1)
 (cd "$REPO_ROOT/frontend" && exec env \
   PORT="$FRONTEND_PORT" NEXT_PUBLIC_API_URL="http://127.0.0.1:$BACKEND_PORT" \
-  ./node_modules/.bin/next dev -H 0.0.0.0 -p "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1) &
+  ./node_modules/.bin/next start -H 0.0.0.0 -p "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1) &
 FRONTEND_PID=$!
 
 frontend_ready=0

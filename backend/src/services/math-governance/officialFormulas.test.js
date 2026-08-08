@@ -5,12 +5,12 @@ function close(actual, expected, tolerance = 0.01) {
   if (expected === null) return assert.strictEqual(actual, null);
   assert.ok(Math.abs(Number(actual) - Number(expected)) <= tolerance, `${actual} != ${expected}`);
 }
-assert.strictEqual(FORMULAS.length, 50, 'deben existir 50 formulas oficiales');
+assert.strictEqual(FORMULAS.length, 53, 'deben existir 53 formulas oficiales');
 const registry = new OfficialFormulaRegistry();
 const codes = new Set();
 let assertions = 0;
 for (const formula of FORMULAS) {
-  assert.ok(formula.formula_code.startsWith('F5_5_'));
+  assert.ok(/^F5_(?:5|C3)_/.test(formula.formula_code));
   assert.ok(!codes.has(formula.formula_code), `formula duplicada ${formula.formula_code}`);
   codes.add(formula.formula_code);
   assert.strictEqual(formula.version, 1);
@@ -40,4 +40,5 @@ for (const formula of FORMULAS) {
   assertions += 1;
 }
 for (const code of ['F5_5_MONTE_CARLO','F5_5_PARAMETRIC_VAR','F5_5_CRONBACH_ALPHA','F5_5_CONFIDENCE_INTERVAL']) assert.ok(codes.has(code));
+assert.throws(() => executeFormula('F5_C3_DATA_TRUST', { completeness:90,accuracy:null,consistency:85,freshness:75,lineage:100,validation:90,stability:70,coverage:80 }), (error) => error?.code === 'FORMULA_VARIABLE_REQUIRED');
 process.stdout.write(JSON.stringify({ status: 'PHASE5_5_FORMULA_TESTS_OK', formulas: FORMULAS.length, assertions }) + '\n');

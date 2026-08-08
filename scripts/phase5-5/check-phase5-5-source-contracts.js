@@ -7,7 +7,7 @@ const { validateDataset } = require('../../backend/src/services/math-governance/
 const failures = [];
 const bindings = listFormulaSourceBindings();
 const bindingMap = new Map(bindings.map((item) => [item.formula_code, item.source_code]));
-if (bindings.length !== 50) failures.push(`expected_50_bindings_found_${bindings.length}`);
+if (bindings.length !== 53) failures.push(`expected_53_bindings_found_${bindings.length}`);
 for (const formula of FORMULAS) {
   if (formula.source_contract === 'pending_package_2') failures.push(`${formula.formula_code}_source_contract_still_pending`);
   const bound = bindingMap.get(formula.formula_code);

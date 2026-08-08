@@ -7,7 +7,7 @@ const { resolveFormulaSource, mapFormulaInput, firstPopulated } = require('./sou
 
 async function main() {
   const bindings = listFormulaSourceBindings();
-  assert.strictEqual(bindings.length, 50, 'every official formula must have a source binding');
+  assert.strictEqual(bindings.length, 53, 'every official formula must have a source binding');
   assert.strictEqual(FORMULAS.filter((formula) => formula.source_contract === 'pending_package_2').length, 0, 'package 2 must replace pending source markers');
   const contracts = listSourceContracts();
   assert.ok(contracts.some((contract) => contract.availability === 'available'), 'available operational adapters expected');
@@ -68,6 +68,11 @@ async function main() {
   const maturityInput = mapFormulaInput('F5_5_MATURITY', [{ level: 2, weight: 1 }, { level: 4, weight: 3 }]);
   assert.deepStrictEqual(maturityInput, { levels: [{ level: 2, weight: 1 }, { level: 4, weight: 3 }] });
   assert.strictEqual(executeFormula('F5_5_MATURITY', maturityInput).value, 3.5);
+
+  const trustInput = mapFormulaInput('F5_C3_DATA_TRUST', [{ dimensions: { completeness:{score:90},accuracy:{score:80},consistency:{score:85},freshness:{score:75},lineage:{score:100},validation:{score:90},stability:{score:70},coverage:{score:80} } }]);
+  assert.strictEqual(executeFormula('F5_C3_DATA_TRUST', trustInput).value, 84.75);
+  const partialTrust = mapFormulaInput('F5_C3_DATA_TRUST', [{ dimensions: { completeness:{score:90} } }]);
+  assert.throws(() => executeFormula('F5_C3_DATA_TRUST', partialTrust), (error) => error?.code === 'FORMULA_VARIABLE_REQUIRED', 'unknown trust dimensions must not be renormalized');
 
   const calls = [];
   const fallbackClient = { async query(sql, params) {

@@ -5,7 +5,7 @@ const { buildSourceContract } = require('../../backend/src/services/math-governa
 const { getSourceContract } = require('../../backend/src/services/math-governance/sourceContracts.service');
 const requiredFields = ['formula_code','display_name','category','version','expression','methodology','variables','units','source_contract','frequency','minimum_sample_size','null_policy','zero_division_policy','rounding_policy','precision','thresholds','confidence_method','applicability','limitations','owner','reviewer','approved_by','effective_from','status','checksum'];
 const failures = [];
-if (FORMULAS.length !== 50) failures.push(`expected_50_formulas_found_${FORMULAS.length}`);
+if (FORMULAS.length !== 53) failures.push(`expected_53_formulas_found_${FORMULAS.length}`);
 const codes = new Set();
 for (const formula of FORMULAS) {
   for (const field of requiredFields) if (formula[field] === undefined) failures.push(`${formula.formula_code || 'unknown'}_missing_${field}`);
