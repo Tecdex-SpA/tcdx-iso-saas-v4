@@ -11,6 +11,9 @@ const { bootstrapIndicators } = require(path.join(root, 'backend/src/services/in
 const { syncMathGovernanceCatalog } = require(
   path.join(root, 'backend/src/services/math-governance/formulaBootstrap.service')
 );
+const { bootstrapSemanticRegistry } = require(
+  path.join(root, 'backend/src/services/semantic/semanticBootstrap.service')
+);
 const MIGRATION_ID = '20260807_phase5_c3_indicators_trust_snapshots';
 const MIGRATION_FILE = path.join(root, 'database/migrations/20260807_phase5_c3_indicators_trust_snapshots.sql');
 const LOCK_NAMESPACE = 844332;
@@ -96,10 +99,12 @@ async function run(mode) {
       await client.query(unwrap(source.sql));
     }
     const mathGovernance = await syncMathGovernanceCatalog(client, {});
+    const semanticRegistry = await bootstrapSemanticRegistry(client);
     const bootstrap = await bootstrapIndicators(client);
     const details = {
       ...(await postconditions(client)),
       math_governance: mathGovernance,
+      semantic_registry: semanticRegistry,
       bootstrap,
     };
     await client.query(`INSERT INTO schema_migrations(migration_id,checksum,applied_at,applied_by,duration_ms,status,details) VALUES($1,$2,now(),current_user,$3,'applied',$4::jsonb)
