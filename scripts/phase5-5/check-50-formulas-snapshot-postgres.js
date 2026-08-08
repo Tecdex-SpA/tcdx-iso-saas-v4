@@ -65,15 +65,17 @@ async function main() {
       }
     }
 
+    const formulasPerTenant = FORMULAS.length;
+    const expectedPersisted = TENANTS.length * formulasPerTenant;
     const snapshotRows = await client.query('SELECT tenant_id::text, snapshot_type, count(*)::int AS count FROM calculation_snapshots GROUP BY tenant_id,snapshot_type ORDER BY tenant_id');
     for (const tenant of TENANTS) {
       const row = snapshotRows.rows.find((item) => item.tenant_id === tenant.id && item.snapshot_type === SOURCE_DATASET_SNAPSHOT_TYPE);
-      if (row?.count !== 53) throw new Error(`Tenant isolation failed for ${tenant.name}: expected 53 snapshots, got ${row?.count || 0}`);
+      if (row?.count !== formulasPerTenant) throw new Error(`Tenant isolation failed for ${tenant.name}: expected ${formulasPerTenant} snapshots, got ${row?.count || 0}`);
     }
     const crossTenant = await client.query(`SELECT count(*)::int AS count FROM calculation_snapshots s JOIN calculation_runs r ON r.id=s.run_id WHERE s.tenant_id<>r.tenant_id`);
     if (crossTenant.rows[0].count !== 0) throw new Error('Cross-tenant snapshot contamination detected');
-    if (persisted !== 150) throw new Error(`Expected 150 persisted calculations, got ${persisted}`);
-    process.stdout.write(JSON.stringify({ status: 'PHASE5_5_50_FORMULA_SNAPSHOT_POSTGRES_OK', tenants: TENANTS.map((item) => item.name), formulas_per_tenant: 53, snapshots: persisted, snapshot_type: SOURCE_DATASET_SNAPSHOT_TYPE, cross_tenant_rows: 0 }) + '\n');
+    if (persisted !== expectedPersisted) throw new Error(`Expected ${expectedPersisted} persisted calculations, got ${persisted}`);
+    process.stdout.write(JSON.stringify({ status: 'PHASE5_5_50_FORMULA_SNAPSHOT_POSTGRES_OK', tenants: TENANTS.map((item) => item.name), formulas_per_tenant: formulasPerTenant, snapshots: persisted, snapshot_type: SOURCE_DATASET_SNAPSHOT_TYPE, cross_tenant_rows: 0 }) + '\n');
   } finally {
     await client.end();
   }
