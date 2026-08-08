@@ -8,7 +8,7 @@ function assert(condition, message) { if (!condition) { console.error(`METRICS_O
 
 const page = read('src/app/metricas/page.tsx');
 const tenantContext = read('src/components/math-governance/MetricsTenantContext.tsx');
-const formulaCatalog = read('src/components/math-governance/FormulaCatalog.tsx');
+const functionalCatalog = read('src/components/indicators/FunctionalIndicatorCatalog.tsx');
 const evidenceDialog = read('src/components/math-governance/OfficialEvidenceDialog.tsx');
 const decisionCenter = read('src/components/math-governance/GrcDecisionCenter.tsx');
 const biPage = read('src/app/bi/page.tsx');
@@ -17,8 +17,8 @@ const sectionBoundary = read('src/components/math-governance/MetricsSectionBound
 const apiClient = read('src/utils/apiClient.ts');
 
 assert(page.includes('<MetricsTenantContext />'), 'La vista debe exponer el contexto de empresa antes del catálogo.');
-assert(page.includes('MetricsSectionBoundary title="Catálogo y recálculo oficial"'), 'El catálogo debe estar aislado de errores de otras secciones.');
-assert(page.includes('MetricsSectionBoundary title="Constructor de métricas"'), 'El constructor debe estar aislado del catálogo.');
+assert(page.includes('<FunctionalIndicatorCatalog />'), 'La vista debe usar el catálogo funcional 5-C3.');
+assert(!page.includes('<MetricBuilder />') && !page.includes('<FormulaCatalog />'), 'La vista no debe montar motores o catálogos legacy paralelos.');
 assert(!page.includes('analyticsDomain='), 'La vista no debe duplicar el catálogo mediante OfficialAnalyticsPanel.');
 assert(tenantContext.includes("'/api/admin-saas/tenants'"), 'El superadministrador debe cargar empresas desde el endpoint oficial.');
 assert(tenantContext.includes('PLATFORM_ROLES.has(role)'), 'La selección de empresas debe limitarse a roles de plataforma.');
@@ -31,21 +31,17 @@ assert(apiClient.includes("'X-Tenant-Id': context.tenantId"), 'Las solicitudes d
 assert(apiClient.includes('if (platform)'), 'El cliente API debe separar plataforma y tenant admin.');
 assert(apiClient.includes('tokenTenantId'), 'El tenant admin debe usar exclusivamente el tenant del token.');
 
-assert(formulaCatalog.includes('Recalcular desde datos existentes'), 'El botón de recálculo debe existir en el render principal.');
-assert(formulaCatalog.includes("entitlements.capabilities['metrics.engine']"), 'El recálculo debe respetar la capacidad metrics.engine.');
-assert(formulaCatalog.includes("'/api/grc/official/recalculate'"), 'El botón debe invocar el orquestador oficial.');
-assert(formulaCatalog.includes('max-h-[620px] overflow-auto'), 'El catálogo debe tener scroll vertical controlado.');
-assert(formulaCatalog.includes('sticky top-0'), 'El catálogo debe mantener encabezado fijo.');
-assert(formulaCatalog.includes('PAGE_SIZE'), 'El catálogo debe paginar resultados.');
-assert(formulaCatalog.includes('Datos insuficientes'), 'Los errores deben expresarse en lenguaje funcional.');
-assert(formulaCatalog.includes('Dependencia pendiente'), 'Las dependencias deben clasificarse explícitamente.');
-assert(formulaCatalog.includes('Fuente incompatible'), 'Las incompatibilidades de fuente deben clasificarse explícitamente.');
-assert(formulaCatalog.includes('Crear plan de acción'), 'Un indicador deficiente debe permitir iniciar un plan de acción.');
-assert(formulaCatalog.includes('Responsable'), 'La decisión debe mostrar responsable.');
-assert(formulaCatalog.includes('Fecha objetivo'), 'La decisión debe mostrar fecha objetivo.');
-assert(formulaCatalog.includes('OfficialEvidenceDialog'), 'Métricas debe usar el diálogo de evidencia común.');
-assert(!formulaCatalog.includes('<pre className='), 'La evidencia no debe exponerse como JSON crudo.');
-assert(!formulaCatalog.includes('href={`/api/grc/official/calculations/'), 'No deben existir enlaces de navegador a endpoints protegidos.');
+assert(functionalCatalog.includes('/api/metrics/official/catalog'), 'El catálogo debe consumir el API funcional autoritativo.');
+assert(functionalCatalog.includes('/calculate'), 'El recálculo gobernado debe existir para roles autorizados.');
+assert(functionalCatalog.includes('/snapshots'), 'El flujo draft/publicación de snapshot debe estar conectado.');
+assert(functionalCatalog.includes('/history?limit=24'), 'La vista debe cargar historial oficial.');
+assert(functionalCatalog.includes('/comparisons?limit=24'), 'La vista debe cargar comparaciones versionadas.');
+assert(functionalCatalog.includes('Data Trust'), 'La vista debe mostrar confianza del dato.');
+assert(functionalCatalog.includes('Freshness'), 'La vista debe mostrar freshness.');
+assert(functionalCatalog.includes('Suficiencia'), 'La vista debe mostrar suficiencia.');
+assert(functionalCatalog.includes('Proponer acción'), 'Un resultado debe permitir registrar una propuesta gobernada.');
+assert(functionalCatalog.includes('No existe evidencia suficiente'), 'La UI no debe inventar causa o impacto.');
+assert(!functionalCatalog.includes('<pre className='), 'La evidencia no debe exponerse como JSON crudo.');
 
 assert(evidenceDialog.includes('Interpretación ejecutiva del cálculo'), 'La explicación debe estar orientada a decisión.');
 assert(evidenceDialog.includes('Impacto para el negocio'), 'La explicación debe exponer impacto.');
@@ -57,7 +53,8 @@ assert(evidenceDialog.includes('apiRequestJson(`/api/grc/official/calculations/$
 assert(decisionCenter.includes('Centro de decisiones GRC'), 'Debe existir un cockpit de decisiones reutilizable.');
 assert(decisionCenter.includes('Prioridades de gestión'), 'El cockpit debe priorizar indicadores.');
 assert(decisionCenter.includes('Sin medición'), 'El cockpit no debe convertir ausencia de datos en cero.');
-assert(decisionCenter.includes('Crear plan de acción'), 'El cockpit debe transformar indicadores en acciones.');
+assert(decisionCenter.includes('Abrir indicador y propuesta'), 'El cockpit debe dirigir a la propuesta gobernada sin ejecutar una acción irreversible.');
+assert(!decisionCenter.includes('Crear plan de acción'), 'El cockpit no debe transformar automáticamente una recomendación en plan de acción.');
 assert(biPage.includes('<GrcDecisionCenter'), 'Business Intelligence debe mostrar el cockpit de decisiones.');
 assert(dashboardLayout.includes('<GrcDecisionCenter'), 'El dashboard debe reflejar decisiones oficiales.');
 
@@ -78,4 +75,4 @@ for (const scenario of roleScenarios) {
   assert(scenario.tenantSource === (scenario.platform ? 'active-selection' : 'token'), `Fuente de tenant incorrecta para ${scenario.role}.`);
 }
 
-if (!process.exitCode) console.log(JSON.stringify({ status: 'METRICS_OPERATIONAL_CONTRACT_OK', scenarios: roleScenarios.length, tenant_isolation: true, decision_center: true, dashboard_integration: true, recalculation_visible: true, evidence_authenticated: true, section_isolation: true }));
+if (!process.exitCode) console.log(JSON.stringify({ status: 'METRICS_OPERATIONAL_CONTRACT_OK', scenarios: roleScenarios.length, tenant_isolation: true, decision_center: true, dashboard_integration: true, functional_catalog: true, snapshots: true, comparisons: true }));

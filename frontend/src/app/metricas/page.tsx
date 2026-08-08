@@ -1,32 +1,12 @@
-import FormulaCatalog from '@/components/math-governance/FormulaCatalog';
-import MetricBuilder from '@/components/math-governance/MetricBuilder';
-import MetricsSectionBoundary from '@/components/math-governance/MetricsSectionBoundary';
+import FunctionalIndicatorCatalog from '@/components/indicators/FunctionalIndicatorCatalog';
 import MetricsTenantContext from '@/components/math-governance/MetricsTenantContext';
-import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 
 export default function MetricCatalog() {
   return (
-    <Phase5Workspace
-      title="Métricas y fórmulas"
-      description="Opera la capa matemática oficial y administra el catálogo versionado de KPI, KRI, KCI, KQI, SLA y métricas de calidad."
-      endpoint="/api/metrics"
-      primaryLabel="métricas"
-      emptyMessage="No hay métricas visibles. Revisa el catálogo oficial y los datos operacionales de la empresa seleccionada."
-      columns={[
-        { key: 'metric_code', label: 'Código' },
-        { key: 'display_name', label: 'Nombre' },
-        { key: 'metric_type', label: 'Tipo' },
-        { key: 'unit', label: 'Unidad' },
-        { key: 'status', label: 'Estado' },
-      ]}
-    >
+    <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+      <header><p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">Gobierno de indicadores</p><h1 className="mt-2 text-3xl font-bold text-slate-950">Indicadores oficiales</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Conceptos de negocio respaldados por fuentes semánticas, cálculo oficial, Data Trust y snapshots reproducibles.</p></header>
       <MetricsTenantContext />
-      <MetricsSectionBoundary title="Catálogo y recálculo oficial">
-        <FormulaCatalog />
-      </MetricsSectionBoundary>
-      <MetricsSectionBoundary title="Constructor de métricas">
-        <MetricBuilder />
-      </MetricsSectionBoundary>
-    </Phase5Workspace>
+      <FunctionalIndicatorCatalog />
+    </main>
   );
 }
