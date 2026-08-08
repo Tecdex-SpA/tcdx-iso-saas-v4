@@ -6,6 +6,7 @@ const path = require('path');
 const assert = require('assert');
 const root = path.resolve(__dirname, '../..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
+const { FORMULAS } = require(path.join(root, 'backend/src/services/math-governance/formulaRegistry.service'));
 
 const orchestrator = read('backend/src/services/math-governance/officialCalculationOrchestrator.service.js');
 const migration = read('database/migrations/20260730_phase5_5_snapshot_contract_hotfix.sql');
@@ -18,6 +19,7 @@ const authRoutes = read('backend/src/routes/auth.routes.js');
 const sidebar = read('frontend/src/components/Sidebar.tsx');
 const permissions = read('frontend/src/utils/mvpPermissions.ts');
 const postgresTest = read('scripts/phase5-5/check-50-formulas-snapshot-postgres.js');
+const formulaCount = FORMULAS.length;
 
 assert(orchestrator.includes("SOURCE_DATASET_SNAPSHOT_TYPE = 'source_dataset'"), 'orchestrator must use source_dataset');
 assert(!orchestrator.includes("'source',$4"), 'legacy snapshot_type=source must be absent');
@@ -58,7 +60,9 @@ for (const tenant of ['Servicios tecnologicos tecdex SPA','Servicios de Informac
   assert(postgresTest.includes(tenant), `integration scenario missing tenant: ${tenant}`);
 }
 assert(postgresTest.includes('cross_tenant_rows: 0'), 'tenant contamination assertion missing');
-assert(postgresTest.includes('formulas_per_tenant: 53'), 'all 53 formulas must be validated per tenant');
+assert(postgresTest.includes('const formulasPerTenant = FORMULAS.length'), 'snapshot integration must derive formula count from registry');
+assert(postgresTest.includes('const expectedPersisted = TENANTS.length * formulasPerTenant'), 'snapshot integration must derive total persisted count dynamically');
+assert(formulaCount > 0, 'formula registry must not be empty');
 
 const directProtectedLinks = [formulaCatalog, analyticsPanel, evidenceDialog].join('\n').match(/href=.*\/api\/grc\/official\/calculations/g) || [];
 assert.strictEqual(directProtectedLinks.length, 0, 'direct protected calculation links are forbidden');
@@ -66,7 +70,7 @@ assert.strictEqual(directProtectedLinks.length, 0, 'direct protected calculation
 process.stdout.write(JSON.stringify({
   status: 'PHASE5_5_PRODUCTION_ACCEPTANCE_CONTRACT_OK',
   snapshot_type: 'source_dataset',
-  formulas_per_tenant: 53,
+  formulas_per_tenant: formulaCount,
   tenants: 3,
   roles: ['superadmin','platform_admin','admin','viewer'],
   functional_snapshot_consistency: true,
