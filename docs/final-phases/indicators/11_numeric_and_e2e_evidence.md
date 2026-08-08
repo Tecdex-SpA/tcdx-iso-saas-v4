@@ -3,7 +3,7 @@
 Evidencia local registrada el 2026-08-07:
 
 - `indicatorCore.test.js`: cálculo Data Trust, unknown, lineage, stale/rejected, suficiencia, cero real, null prohibido, thresholds, interpretación, checksum, comparación compatible/incompatible y propuesta idempotente: verde.
-- PostgreSQL 16 efímero: catálogo 22, bindings 22, ocho dimensiones, failed retry, reaplicación, checksum mismatch rechazado, cero real preservado, null-to-zero rechazado, snapshot publicado inmutable y aislamiento Tenant A/B: verde.
+- PostgreSQL 16 efímero: catálogo 22, bindings 22, ocho dimensiones, dos writers concurrentes convergen a un snapshot lógico, failed retry, reaplicación, checksum mismatch rechazado, cero real preservado, null-to-zero rechazado, snapshot publicado inmutable y aislamiento Tenant A/B: verde.
 - Browser real local: 6/6, cuatro perfiles, dos tenants, backend/Next/PostgreSQL reales, `api_interception=false`, `/metricas`, `/bi` y `/dashboard` autorizado; Tenant A=82 y Tenant B=64 coinciden en API, export, UI y snapshot; cross-tenant=404; 0 5xx, 0 hydration/RBAC inesperado y máximo un catálogo/bootstrap por carga.
 - Backend completo: verde, incluidas RBAC y políticas `authenticatedRateLimit`, `publicRateLimit` y anti-bruteforce.
 - Frontend: lint, typecheck, contratos y build de 84 rutas verdes.
