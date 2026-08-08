@@ -8,6 +8,9 @@ const path = require('path');
 const root = path.resolve(__dirname, '../..');
 const { Client } = require(path.join(root, 'backend/node_modules/pg'));
 const { bootstrapIndicators } = require(path.join(root, 'backend/src/services/indicators/indicatorBootstrap.service'));
+const { syncMathGovernanceCatalog } = require(
+  path.join(root, 'backend/src/services/math-governance/formulaBootstrap.service')
+);
 const MIGRATION_ID = '20260807_phase5_c3_indicators_trust_snapshots';
 const MIGRATION_FILE = path.join(root, 'database/migrations/20260807_phase5_c3_indicators_trust_snapshots.sql');
 const LOCK_NAMESPACE = 844332;
@@ -92,8 +95,13 @@ async function run(mode) {
         ON CONFLICT(migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,applied_by=current_user,status='running',details=EXCLUDED.details`,[MIGRATION_ID,source.checksum,JSON.stringify({file:path.relative(root,MIGRATION_FILE)})]);
       await client.query(unwrap(source.sql));
     }
+    const mathGovernance = await syncMathGovernanceCatalog(client, {});
     const bootstrap = await bootstrapIndicators(client);
-    const details = { ...(await postconditions(client)), bootstrap };
+    const details = {
+      ...(await postconditions(client)),
+      math_governance: mathGovernance,
+      bootstrap,
+    };
     await client.query(`INSERT INTO schema_migrations(migration_id,checksum,applied_at,applied_by,duration_ms,status,details) VALUES($1,$2,now(),current_user,$3,'applied',$4::jsonb)
       ON CONFLICT(migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,applied_at=now(),applied_by=current_user,duration_ms=EXCLUDED.duration_ms,status='applied',details=EXCLUDED.details`,[MIGRATION_ID,source.checksum,Date.now()-started,JSON.stringify(details)]);
     await client.query('COMMIT');
