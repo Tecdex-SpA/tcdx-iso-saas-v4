@@ -39,3 +39,28 @@ if (( ready != 1 )); then cat "$RUN_DIR/backend.log" "$RUN_DIR/frontend.log" >&2
 
 (cd "$REPO_ROOT/frontend" && WEB_BASE_URL="http://127.0.0.1:$FRONTEND_PORT" API_BASE_URL="http://127.0.0.1:$BACKEND_PORT" npx playwright test --config=playwright.phase5-c3.config.ts)
 printf '{"status":"VERIFIED_PHASE5_C3_BROWSER","api_interception":false,"profiles":4,"tenants":2,"cross_tenant":"not_found"}\n'
+
+# The parent demo harness removes its disposable tenant after this browser gate.
+# Phase 5-C3 correctly protects published governance records from UPDATE/DELETE,
+# so cascading fixture teardown would otherwise fail after all six browser tests pass.
+# Disable only those immutability triggers in this explicitly isolated PostgreSQL fixture;
+# production/runtime immutability is verified separately by the C3 PostgreSQL gate.
+psql -h 127.0.0.1 -p "$PHASE5_C3_DB_PORT" -U postgres -d "$PHASE5_C3_DB_NAME" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+DO $$
+DECLARE item record;
+BEGIN
+  FOR item IN
+    SELECT n.nspname AS schema_name, c.relname AS table_name, t.tgname AS trigger_name
+    FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_proc p ON p.oid = t.tgfoid
+    WHERE NOT t.tgisinternal
+      AND p.proname = 'reject_published_indicator_governance_change'
+  LOOP
+    EXECUTE format('ALTER TABLE %I.%I DISABLE TRIGGER %I', item.schema_name, item.table_name, item.trigger_name);
+  END LOOP;
+END
+$$;
+SQL
+printf '{"status":"PHASE5_C3_DISPOSABLE_FIXTURE_TEARDOWN_READY","immutability_runtime_unchanged":true}\n'
