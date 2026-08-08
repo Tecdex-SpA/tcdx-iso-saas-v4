@@ -1,6 +1,6 @@
 # Formula Traceability Matrix
 
-Estado Paquete 2: las 50 formulas tienen contrato de fuente y runtime matematico probado. Endpoint, vista, dashboard y reporte siguen pendientes para Paquetes 3-7.
+Estado vigente: las 50 fórmulas de Fase 5.5 y las 3 composiciones oficiales añadidas por Fase 5-C3 tienen contrato de fuente y runtime matemático probado.
 
 | Formula | Nombre | Version | Archivo | Funcion | Prueba unitaria | Evidencia matematica | Fuente operacional | Estado fuente | Endpoint | Vista | Dashboard | Reporte | Estado |
 |---|---|---:|---|---|---|---|---|---|---|---|---|---|---|
@@ -54,6 +54,9 @@ Estado Paquete 2: las 50 formulas tienen contrato de fuente y runtime matematico
 | `F5_5_CONFIDENCE_INTERVAL` | Intervalo de confianza | 1 | `backend/src/services/math-governance/formulaRegistry.service.js` | `OfficialFormulaRegistry.execute` | `backend/src/services/math-governance/officialFormulas.test.js` | `docs/phase5-5/mathematical-verification-evidence.md` | `statistical_metric_measurements` | available | pending_later_package | pending_later_package | pending_later_package | pending_later_package | package2_completed |
 | `F5_5_GRC_HEALTH` | Health GRC | 1 | `backend/src/services/math-governance/formulaRegistry.service.js` | `OfficialFormulaRegistry.execute` | `backend/src/services/math-governance/officialFormulas.test.js` | `docs/phase5-5/mathematical-verification-evidence.md` | `grc_health_components` | `/api/grc/official/:metricKey` | `GET /api/grc/overview` official_calculations | grc_overview_official_adapter | pending_package_5 | package3_completed | package2_completed |
 | `F5_5_MATURITY` | Madurez | 1 | `backend/src/services/math-governance/formulaRegistry.service.js` | `OfficialFormulaRegistry.execute` | `backend/src/services/math-governance/officialFormulas.test.js` | `docs/phase5-5/mathematical-verification-evidence.md` | `maturity_assessments` | `/api/grc/official/:metricKey` | `GET /api/grc/overview` official_calculations | grc_overview_official_adapter | pending_package_5 | package3_completed | package2_completed |
+| `F5_C3_DATA_TRUST` | Data Trust compuesto | 1 | `backend/src/services/math-governance/formulaRegistry.service.js` | `OfficialFormulaRegistry.execute` | `backend/src/services/math-governance/officialFormulas.test.js` | `docs/final-phases/indicators/11_numeric_and_e2e_evidence.md` | `indicator_data_trust_assessments` | available | `GET /api/metrics/official/:metricCode` | official_indicator_adapter | `GET /api/metrics/official/export` | phase5_c3_completed |
+| `F5_C3_OPERATIONAL_PERFORMANCE` | Desempeño operacional | 1 | `backend/src/services/math-governance/formulaRegistry.service.js` | `OfficialFormulaRegistry.execute` | `backend/src/services/math-governance/officialFormulas.test.js` | `docs/final-phases/indicators/11_numeric_and_e2e_evidence.md` | `grc_health_components` | available | `GET /api/metrics/official/:metricCode` | official_indicator_adapter | `GET /api/metrics/official/export` | phase5_c3_completed |
+| `F5_C3_SUPPLIER_HEALTH` | Salud de proveedores | 1 | `backend/src/services/math-governance/formulaRegistry.service.js` | `OfficialFormulaRegistry.execute` | `backend/src/services/math-governance/officialFormulas.test.js` | `docs/final-phases/indicators/11_numeric_and_e2e_evidence.md` | `supplier_tprm_assessments` | available | `GET /api/metrics/official/:metricCode` | official_indicator_adapter | `GET /api/metrics/official/export` | phase5_c3_completed |
 
 
 ## Paquete 5 completed (2026-07-29)
