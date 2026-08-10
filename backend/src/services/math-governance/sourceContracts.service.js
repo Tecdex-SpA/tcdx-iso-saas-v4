@@ -4,6 +4,44 @@ const crypto = require('crypto');
 
 const AVAILABILITY = new Set(['available', 'partially_available', 'source_unavailable', 'legacy_adapter_required']);
 const SOURCE_STATUSES = new Set(['draft', 'reviewed', 'approved', 'published', 'retired']);
+const ROUTE_TO_FIX_BY_ENTITY = Object.freeze({
+  compliance: '/cumplimiento',
+  readiness: '/diagnostico',
+  risk: '/riesgos',
+  control: '/controles',
+  audit: '/auditorias',
+  loss: '/eventos-perdida',
+  continuity: '/continuidad',
+  asset: '/activos',
+  supplier: '/proveedores',
+  survey: '/encuestas',
+  assurance: '/tests',
+  data_quality: '/datos/calidad',
+  data_lineage: '/datos/lineage',
+  statistics: '/metricas',
+  health: '/metricas',
+  maturity: '/evaluaciones',
+  currency_conversion: null,
+});
+const CAPABILITY_BY_ENTITY = Object.freeze({
+  compliance: 'compliance.management',
+  readiness: 'metrics.indicators.read',
+  risk: 'risk.management',
+  control: 'controls.management',
+  audit: 'audit.management',
+  loss: 'loss.events',
+  continuity: 'continuity.management',
+  asset: 'assets.management',
+  supplier: 'tprm.suppliers',
+  survey: 'surveys.engine',
+  assurance: 'assurance.testing',
+  data_quality: 'metrics.data_trust',
+  data_lineage: 'data.lineage',
+  statistics: 'metrics.engine',
+  health: 'metrics.indicators.read',
+  maturity: 'surveys.engine',
+  currency_conversion: null,
+});
 
 const FORMULA_SOURCE_MAP = Object.freeze({
   F5_5_COMPLIANCE_WEIGHTED: 'compliance_requirements_assessments',
@@ -90,6 +128,8 @@ function contract(definition) {
     variable_map: Object.freeze(definition.variable_map || {}),
     query: definition.query || null,
     limitations: definition.limitations || null,
+    route_to_fix: definition.route_to_fix === undefined ? ROUTE_TO_FIX_BY_ENTITY[definition.entity] || null : definition.route_to_fix,
+    required_capability: definition.required_capability === undefined ? CAPABILITY_BY_ENTITY[definition.entity] || null : definition.required_capability,
   });
   return Object.freeze({ ...normalized, checksum: checksum(normalized) });
 }

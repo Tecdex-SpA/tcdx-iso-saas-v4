@@ -13,35 +13,50 @@ function sum(values) { const usable = values.map((value) => number(value)).filte
 function average(values) { const usable = values.map((value) => number(value)).filter((value) => value !== null); return usable.length ? usable.reduce((total, value) => total + value, 0) / usable.length : null; }
 function score(value) { const normalized = ratio(value); return normalized === null ? null : normalized * 100; }
 function buildSourceContract({ sourceKey, entityType, requiredFields = [], tenantScoped = true, status = 'source_unavailable', unit = null } = {}) { if (!sourceKey || !entityType) throw new MathGovernanceError('SOURCE_CONTRACT_INVALID', 'sourceKey y entityType son obligatorios.'); if (!SOURCE_STATES.has(status) && status !== 'available') throw new MathGovernanceError('SOURCE_STATUS_INVALID', 'Estado de fuente inválido.'); return Object.freeze({ sourceKey, entityType, requiredFields, tenantScoped, status, unit, lineageRequired: true }); }
-function sourceUnavailable(sourceKey, reason = 'La fuente operacional no está disponible para esta fórmula.') { return Object.freeze({ sourceKey, source_code: sourceKey, status: 'source_unavailable', rows: [], reason, warnings: [reason], inputHash: null, source_snapshot: null, lineage: [], formula_input: null }); }
+function sourceUnavailable(sourceKey, reason = 'La fuente operacional no está disponible para esta fórmula.', options = {}) { return Object.freeze({ sourceKey, source_code: sourceKey, status: 'source_unavailable', rows: [], reason, warnings: [reason], inputHash: null, source_snapshot: null, lineage: [], formula_input: null, data_requirements: { status: 'source_unavailable', missing_fields: options.required_fields || [], missing_entities: options.missing_entities || [sourceKey].filter(Boolean), incomplete_records: [], required_population: options.minimum_sample_size || null, current_population: 0, coverage_gap: null, freshness_gap: null, route_to_fix: options.route_to_fix || null, required_capability: options.required_capability || null, reason } }); }
 async function tableExists(client, tableName) { if (!client || typeof client.query !== 'function') return false; const result = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [`public.${tableName}`]); return result.rows[0]?.exists === true; }
 function assertTenant(tenantId) { if (!tenantId) throw new MathGovernanceError('SOURCE_TENANT_REQUIRED', 'Resolver de fuentes requiere tenant efectivo.'); }
 function assertPermission(permission) { if (permission && permission.allowed === false) throw new MathGovernanceError('SOURCE_PERMISSION_DENIED', 'Permiso insuficiente para resolver dataset matemático.', { required: permission.required }); }
 function normalizeRows(rows, contract) { return rows.map((row) => { const normalized = {}; for (const [key, value] of Object.entries(row)) normalized[key] = typeof value === 'string' ? value.trim() : value; normalized.__source_code = contract.source_code; return normalized; }); }
 function buildLineage({ rows, contract, formula, runId = null, snapshotHash = null }) { return rows.slice(0, 1000).map((row) => ({ source_record: row.id || row.source_entity_id || null, physical_source: row.__physical_source || null, source_contract: contract.source_code, dataset_snapshot: snapshotHash, formula_version: `${formula.formula_code}@${formula.version}`, calculation_run: runId })); }
 function tagRows(rows, physicalSource) { return (rows || []).map((row) => ({ ...row, __physical_source: physicalSource })); }
+function tagWarnings(rows, warnings = []) { return (rows || []).map((row) => ({ ...row, __source_warnings: warnings })); }
 
 function safeTimestampExpression(alias = 'x') {
   return `COALESCE(NULLIF(to_jsonb(${alias})->>'event_date','')::timestamptz,NULLIF(to_jsonb(${alias})->>'occurred_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'measured_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'updated_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'created_at','')::timestamptz)`;
 }
 async function firstPopulatedTables(client, tables, tenantId, period = {}) {
   let existing = false;
+  let primaryExisting = null;
   for (const table of tables) {
     if (!(await tableExists(client, table))) continue;
+    if (!primaryExisting) primaryExisting = table;
     existing = true;
     const timestamp = safeTimestampExpression('x');
     const result = await client.query(`SELECT x.*, ${timestamp} AS __event_time FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid AND ($2::timestamptz IS NULL OR ${timestamp}>=$2) AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`, [tenantId, period.start || null, period.end || null]);
-    if (result.rows?.length) return tagRows(result.rows, table);
+    if (result.rows?.length) {
+      const warnings = primaryExisting && table !== primaryExisting
+        ? [`Fuente primaria ${primaryExisting} sin filas utilizables; se usó fallback legacy explícito ${table}.`]
+        : [];
+      return tagWarnings(tagRows(result.rows, table), warnings);
+    }
   }
   return existing ? [] : null;
 }
 async function firstPopulated(client, candidates) {
   let available = false;
+  let primaryExisting = null;
   for (const candidate of candidates) {
     if (!(await tableExists(client, candidate.table))) continue;
+    if (!primaryExisting) primaryExisting = candidate.table;
     available = true;
     const result = await client.query(candidate.sql, candidate.params || []);
-    if (result.rows?.length) return tagRows(result.rows, candidate.table);
+    if (result.rows?.length) {
+      const warnings = primaryExisting && candidate.table !== primaryExisting
+        ? [`Fuente primaria ${primaryExisting} sin filas utilizables; se usó fallback legacy explícito ${candidate.table}.`]
+        : [];
+      return tagWarnings(tagRows(result.rows, candidate.table), warnings);
+    }
   }
   return available ? [] : null;
 }
@@ -165,18 +180,19 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   assertTenant(tenantId); assertPermission(permission);
   const formula = FORMULA_MAP.get(formulaCode); if (!formula) throw new MathGovernanceError('SOURCE_FORMULA_NOT_FOUND', 'Fórmula no registrada para resolver fuente.', { formulaCode });
   const resolvedSourceCode = sourceCode || getSourceCodeForFormula(formulaCode); const contract = getSourceContract(resolvedSourceCode);
-  if (!contract) return sourceUnavailable(resolvedSourceCode, 'No existe contrato de fuente para la fórmula.');
-  if (contract.availability === 'source_unavailable') return sourceUnavailable(contract.source_code, contract.limitations || 'Fuente no disponible.');
+  if (!contract) return sourceUnavailable(resolvedSourceCode, 'No existe contrato de fuente para la fórmula.', { missing_entities: ['source_contract'] });
+  if (contract.availability === 'source_unavailable') return sourceUnavailable(contract.source_code, contract.limitations || 'Fuente no disponible.', contract);
   let queried;
   try { queried = await queryOperationalRows({ client, contract, tenantId, period, formulaCode }); }
   catch (error) { const wrapped = new MathGovernanceError('SOURCE_SCHEMA_INCOMPATIBLE', 'La estructura física de la fuente no coincide con el contrato analítico.', { source_code: contract.source_code, original_code: error.code || null }); wrapped.cause = error; throw wrapped; }
-  if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason);
+  if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason, contract);
   const rows = normalizeRows(queried.rows, contract);
   const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null });
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
+  const sourceWarnings = [...new Set(rows.flatMap((row) => Array.isArray(row.__source_warnings) ? row.__source_warnings : []))];
   const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: rows.length, usable_rows: validation.usable_rows.length, exclusions: validation.exclusions.length, period, timezone };
   const snapshotHash = hash(sourceSnapshot);
-  return { source_code: contract.source_code, physical_sources: physicalSources, status: validation.status, rows: validation.usable_rows, warnings: validation.warnings, exclusions: validation.exclusions, invalid_rows: validation.invalid_rows, counts: { received: rows.length, usable: validation.usable_rows.length, excluded: validation.exclusions.length }, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: validation.usable_rows, contract, formula, runId, snapshotHash }), formula_input: mapFormulaInput(formulaCode, validation.usable_rows), equivalence: contract.variable_map, contract };
+  return { source_code: contract.source_code, physical_sources: physicalSources, status: validation.status, rows: validation.usable_rows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: validation.exclusions, invalid_rows: validation.invalid_rows, counts: { received: rows.length, usable: validation.usable_rows.length, excluded: validation.exclusions.length }, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: validation.usable_rows, contract, formula, runId, snapshotHash }), formula_input: mapFormulaInput(formulaCode, validation.usable_rows), equivalence: contract.variable_map, contract };
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }

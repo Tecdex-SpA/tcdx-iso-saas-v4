@@ -55,6 +55,8 @@ async function run() {
     }
   );
   assert.equal(unavailable.summary.source_unavailable, 1);
+  assert.equal(unavailable.results[0].data_requirements.status, 'source_unavailable');
+  assert.ok(unavailable.results[0].data_requirements.route_to_fix);
 
   const unmeasured = await recalculateOfficialAnalytics(
     { tenant_id: '70000000-0000-0000-0000-000000000701', user: { id: '70000000-0000-0000-0000-000000000711' } },
@@ -68,8 +70,10 @@ async function run() {
     }
   );
   assert.equal(unmeasured.summary.unmeasured, 1);
+  assert.equal(unmeasured.results[0].data_requirements.status, 'insufficient');
+  assert.equal(unmeasured.results[0].data_requirements.current_population, 0);
 
-  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 11 }));
+  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 15 }));
 }
 
 run().catch((error) => {
