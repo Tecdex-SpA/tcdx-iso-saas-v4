@@ -14,8 +14,9 @@ PHASE4_MIGRATION="$REPO_ROOT/database/migrations/20260729_phase4_commercial_prod
 PHASE5_RUNNER="$REPO_ROOT/scripts/phase5/apply-phase5-migration.js"
 BOOTSTRAP="$REPO_ROOT/scripts/phase5-5/bootstrap-official-math-governance.js"
 C2_RUNNER="$REPO_ROOT/scripts/phase5-c2/apply-phase5-c2-migration.js"
+C3_RUNNER="$REPO_ROOT/scripts/phase5-c3/apply-phase5-c3-migration.js"
 
-for file in "$BASE_FIXTURE" "$PHASE2_MASTER" "$PHASE3_MASTER" "$PHASE1_MIGRATION" "$PHASE1R_MIGRATION" "$PHASE2_MIGRATION" "$PHASE3_MIGRATION" "$PHASE4_MIGRATION" "$PHASE5_RUNNER" "$BOOTSTRAP" "$C2_RUNNER"; do
+for file in "$BASE_FIXTURE" "$PHASE2_MASTER" "$PHASE3_MASTER" "$PHASE1_MIGRATION" "$PHASE1R_MIGRATION" "$PHASE2_MIGRATION" "$PHASE3_MIGRATION" "$PHASE4_MIGRATION" "$PHASE5_RUNNER" "$BOOTSTRAP" "$C2_RUNNER" "$C3_RUNNER"; do
   [[ -r "$file" ]] || { echo "Required Phase 5.5 E2E input is not readable: $file" >&2; exit 1; }
 done
 
@@ -104,6 +105,7 @@ SQL
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$PHASE5_RUNNER" --apply >/dev/null
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$BOOTSTRAP" >/dev/null
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$C2_RUNNER" --apply >/dev/null
+MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$C3_RUNNER" --apply >/dev/null
 
 PASSWORD_HASH="$(cd "$REPO_ROOT/backend" && PHASE5_5_PASSWORD="$PASSWORD" node - <<'NODE'
 const bcrypt = require('bcrypt');
