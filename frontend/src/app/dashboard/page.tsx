@@ -474,9 +474,11 @@ function normalizeKpiDashboardItem(item: unknown): KpiDashboardItem {
 }
 
 function normalizeKpiDashboardResponse(payload: unknown): KpiDashboardResponse {
-  const raw = asRecord(payload);
-  const rawItems: unknown[] = Array.isArray(payload)
-    ? payload
+  const rawRoot = asRecord(payload);
+  const rawPayload = isRecord(rawRoot.data) ? rawRoot.data : payload;
+  const raw = asRecord(rawPayload);
+  const rawItems: unknown[] = Array.isArray(rawPayload)
+    ? rawPayload
     : Array.isArray(raw.items)
     ? raw.items
     : [];

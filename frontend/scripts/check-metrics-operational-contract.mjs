@@ -13,6 +13,7 @@ const evidenceDialog = read('src/components/math-governance/OfficialEvidenceDial
 const decisionCenter = read('src/components/math-governance/GrcDecisionCenter.tsx');
 const biPage = read('src/app/bi/page.tsx');
 const dashboardLayout = read('src/app/dashboard/layout.tsx');
+const dashboardPage = read('src/app/dashboard/page.tsx');
 const sectionBoundary = read('src/components/math-governance/MetricsSectionBoundary.tsx');
 const apiClient = read('src/utils/apiClient.ts');
 
@@ -57,6 +58,8 @@ assert(decisionCenter.includes('Abrir indicador y propuesta'), 'El cockpit debe 
 assert(!decisionCenter.includes('Crear plan de acción'), 'El cockpit no debe transformar automáticamente una recomendación en plan de acción.');
 assert(biPage.includes('<GrcDecisionCenter'), 'Business Intelligence debe mostrar el cockpit de decisiones.');
 assert(dashboardLayout.includes('<GrcDecisionCenter'), 'El dashboard debe reflejar decisiones oficiales.');
+assert(dashboardPage.includes('const rawPayload = isRecord(rawRoot.data) ? rawRoot.data : payload;'), 'Dashboard KPI debe desempaquetar respuestas oficiales { ok, data } antes de normalizar items.');
+assert(dashboardPage.includes('Array.isArray(rawPayload)'), 'Dashboard KPI debe preservar compatibilidad con respuestas legacy en arreglo.');
 
 assert(sectionBoundary.includes('METRICS_SECTION_ERROR'), 'Los fallos de sección deben registrar diagnóstico controlado.');
 assert(sectionBoundary.includes('El resto de la vista continúa operativo'), 'Un fallo parcial no debe reemplazar toda la ruta.');
