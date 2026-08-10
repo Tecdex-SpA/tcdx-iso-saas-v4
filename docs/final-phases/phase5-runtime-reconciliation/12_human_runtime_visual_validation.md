@@ -234,3 +234,144 @@ Runtime result remains pending until deployment because the production instance 
 No production DB was manually modified.
 No merge was performed.
 No deploy was performed.
+
+## Dashboard KPI vs Administrar KPIs
+
+Date: 2026-08-10
+Runtime commit deployed: `65d901a937689420bd5dd53fa2bcda8b64b41836`
+Tenant: tcdx.local / Empresa Demo TCDX Compliance
+User role used: tenant administrator
+
+### Screenshots
+
+Evidence is stored under:
+
+`artifacts/phase5-human-runtime/tenant-1/`
+
+Required captures:
+
+- `30_admin_kpis_after_deploy.png`
+- `31_dashboard_kpi_after_deploy.png`
+- `32_admin_kpis_network.json`
+- `33_dashboard_kpi_network.json`
+- `34_crossview_after_fix_admin.png`
+- `35_crossview_after_fix_dashboard.png`
+- `34_crossview_after_fix_admin_network.json`
+- `35_crossview_after_fix_dashboard_network.json`
+
+### Observed visual divergence
+
+`/administrar-kpis` showed:
+
+- KPI total: 24.
+- KPI with value: 8 / 24.
+- Enabled: 4.
+- Health KPI: 4.
+- Score KPI: 65%.
+- Semaphores: 4 green, 1 yellow, 3 red, 16 without data.
+
+`/dashboard?view=kpi` showed at the same time:
+
+- Score KPI Global: `Sin medicion`.
+- KPI coverage: `N/A`.
+- Critical KPI: 0.
+- Without data: 0.
+- Enabled KPI: 0.
+- Health KPI: 0.
+- Overall KPI status: 0 KPI(s).
+
+After waiting explicitly for `/api/metrics/official/dashboard`, the visual state still showed zeroes.
+
+### Endpoints and sources
+
+Admin KPI view:
+
+- Endpoint: `GET /api/kpis/admin/70000000-0000-0000-0000-000000000701`
+- Status: 200.
+- Response shape: array.
+- Items: 24.
+- Source: administrative KPI catalog plus tenant settings and latest administrative snapshots.
+- Supplemental endpoint: `GET /api/kpi/effective-health-summary/70000000-0000-0000-0000-000000000701`
+- Supplemental source: `public.v_iso_effective_kpi_summary`.
+
+Dashboard KPI view:
+
+- Endpoint: `GET /api/metrics/official/dashboard`
+- Status: 200.
+- Response shape: `{ ok, data, request_id }`.
+- `data.summary.total_kpis`: 22.
+- `data.summary.measured_kpis`: 0.
+- `data.summary.gray`: 22.
+- `data.summary.health_kpis`: 2.
+- `data.items.length`: 22.
+- `data.items[0].is_enabled`: true.
+- Source: official functional indicator catalog, `metric_definitions`, published `metric_definition_versions`, `metric_source_bindings`, latest published `metric_snapshots`.
+
+### Cause
+
+Two different KPI universes are intentionally present:
+
+- Administrative KPI universe: standard/custom/health operational KPIs managed in `/administrar-kpis`.
+- Official functional indicator universe: 22 Phase 5 official indicators consumed by `/api/metrics/official/dashboard`.
+
+That difference is acceptable only if the UI names the scope clearly.
+
+The blocking runtime bug was in the Dashboard frontend mapping:
+
+`/api/metrics/official/dashboard` returns the official dashboard payload wrapped as `{ ok, data, request_id }`, but `normalizeKpiDashboardResponse()` read `payload.summary` and `payload.items` at the root. The page discarded the 22 official items already returned by the backend and rendered an empty local state, producing `0 KPI(s)`, `0 enabled`, `0 health`, and `0 without data`.
+
+Classification:
+
+- `FRONTEND_MAPPING_BUG`
+- `LEGACY_VS_OFFICIAL_PIPELINE`
+- `DIFFERENT_KPI_UNIVERSES`
+
+Not confirmed:
+
+- `TENANT_FILTER_MISMATCH`
+- `BACKEND_QUERY_BUG`
+- `SQL constraint error`
+- `HTTP 5xx`
+
+### Fix
+
+Files changed:
+
+- `frontend/src/app/dashboard/page.tsx`
+- `frontend/scripts/check-metrics-operational-contract.mjs`
+
+The Dashboard KPI normalizer now unwraps official responses through `payload.data` before normalizing `summary` and `items`, while preserving compatibility with legacy array responses.
+
+The frontend metrics operational contract check now asserts that Dashboard KPI explicitly handles `{ ok, data }` official responses and legacy arrays.
+
+### Validation
+
+Passed:
+
+- `npm --prefix frontend run lint`
+- `npm --prefix frontend run typecheck`
+- `npm --prefix frontend test`
+- `npm --prefix frontend run build`
+- `npm --prefix backend test`
+- `npm run phase5:functional-closure`
+- `npm run phase5-c3:contracts-check`
+- `npm run phase5-c3:security-check`
+- `npm run phase5-5:source-binding-check`
+- `git diff --check`
+
+### Runtime retest status
+
+Not rerun after code fix because no deploy was performed from Codex. The next runtime pass must begin by revisiting:
+
+- `/administrar-kpis`
+- `/dashboard?view=kpi`
+
+Expected after deploy:
+
+- Dashboard KPI must show 22 official indicators, 22 without data, 22 enabled, 2 health KPI and 0 measured, unless new official snapshots are created before validation.
+- Admin KPI must continue to show 24 administrative KPIs.
+- The UI must not present those two universes as identical.
+
+### Stop condition
+
+The runtime audit stopped here because this is a Tenant 1 P0 dashboard mapping issue requiring deploy. LOSSES, ACTIONS, RISK-INHERENT and COMPLIANCE were not continued in this pass to avoid validating subsequent flows against a frontend state that is already known to be stale in production.
