@@ -62,6 +62,8 @@ check(executeFormula('F5_5_CONTROL_EFFECTIVENESS', controlExact).value === 0.75,
 
 const loss = mapFormulaInput('F5_5_NET_LOSS', [{ gross_loss_amount: 1000, recovery_amount: 300 }]);
 check(executeFormula('F5_5_NET_LOSS', loss).value === 700, 'LOSSES_net_loss_value_mismatch');
+const lossUiColumns = mapFormulaInput('F5_5_NET_LOSS', [{ gross_loss: 100000, recoveries: 25000, net_loss: 75000 }]);
+check(executeFormula('F5_5_NET_LOSS', lossUiColumns).value === 75000, 'LOSSES_ui_loss_events_columns_must_feed_net_loss');
 
 const continuityRto = mapFormulaInput('F5_5_RTO_GAP', [{ actual_recovery_hours: 9, rto_hours: 4 }]);
 const continuityRpo = mapFormulaInput('F5_5_RPO_GAP', [{ actual_data_loss_hours: 3, rpo_hours: 1 }]);

@@ -136,6 +136,40 @@ async function queryIncidents(client, tenantId, period) {
   );
   return tagRows(result.rows, 'grc_incidents');
 }
+async function queryLossEvents(client, tenantId, period) {
+  if (!(await tableExists(client, 'loss_events'))) return null;
+  const rawEventTime = `COALESCE(NULLIF(to_jsonb(e)->>'event_date','')::timestamptz,NULLIF(to_jsonb(e)->>'occurred_at','')::timestamptz)`;
+  const effectiveEventTime = `COALESCE(
+    CASE WHEN ${rawEventTime} IS NOT NULL AND ${rawEventTime} <= now() THEN ${rawEventTime} END,
+    NULLIF(to_jsonb(e)->>'created_at','')::timestamptz,
+    NULLIF(to_jsonb(e)->>'updated_at','')::timestamptz,
+    ${rawEventTime}
+  )`;
+  const result = await client.query(
+    `SELECT e.id,
+            e.tenant_id,
+            COALESCE(NULLIF(to_jsonb(e)->>'status',''),'draft') AS status,
+            NULLIF(to_jsonb(e)->>'currency','') AS currency,
+            ${rawEventTime} AS raw_event_date,
+            ${effectiveEventTime} AS event_date,
+            ${effectiveEventTime} AS __event_time,
+            COALESCE(NULLIF(to_jsonb(e)->>'gross_loss_amount','')::numeric,NULLIF(to_jsonb(e)->>'gross_loss','')::numeric) AS gross_loss_amount,
+            COALESCE(NULLIF(to_jsonb(e)->>'recovery_amount','')::numeric,NULLIF(to_jsonb(e)->>'recoveries','')::numeric) AS recovery_amount,
+            COALESCE(NULLIF(to_jsonb(e)->>'net_loss_amount','')::numeric,NULLIF(to_jsonb(e)->>'net_loss','')::numeric) AS net_loss_amount,
+            CASE WHEN ${rawEventTime} IS NOT NULL AND ${rawEventTime} > now() THEN true ELSE false END AS raw_event_date_was_future
+     FROM loss_events e
+     WHERE e.tenant_id=$1::uuid
+       AND COALESCE(NULLIF(to_jsonb(e)->>'status',''),'draft') NOT IN ('cancelled','rejected')
+       AND ($2::timestamptz IS NULL OR ${effectiveEventTime}>=$2)
+       AND ($3::timestamptz IS NULL OR ${effectiveEventTime}<=$3)`,
+    [tenantId, period.start || null, period.end || null]
+  );
+  const rows = result.rows.map((row) => ({
+    ...row,
+    __source_warnings: row.raw_event_date_was_future ? ['loss_events.occurred_at viene en el futuro; se usó created_at como fecha efectiva para el cálculo oficial.'] : [],
+  }));
+  return tagRows(rows, 'loss_events');
+}
 async function queryEvidenceFreshness(client, tenantId, period) {
   const candidates = [];
   if (await tableExists(client, 'evidences')) {
@@ -173,6 +207,7 @@ const ADAPTER_BY_SOURCE = Object.freeze({
   audit_findings_actions: queryAuditActions,
   incident_operational_events: queryIncidents,
   evidence_freshness_records: queryEvidenceFreshness,
+  loss_events_operational: queryLossEvents,
   grc_health_components: queryHealth,
   maturity_assessments: queryMaturity,
 });
@@ -220,11 +255,20 @@ function mapFormulaInput(formulaCode, rows) {
   }).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
   if (formulaCode === 'F5_5_CLOSURE_RATE') return { closed: statuses.filter((status) => ['closed', 'completed', 'resolved'].includes(status)).length, openAtStart: statuses.filter((status) => !['closed', 'completed', 'resolved'].includes(status)).length, created: 0 };
   if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((row) => !['closed', 'completed', 'resolved'].includes(String(row.status ?? row.latest_status_after).toLowerCase())); return { overdueOpen: open.filter((row) => (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date()).length, openActions: open.length, items: open.map((row) => ({ overdue: (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date() ? 1 : 0, weight: number(row.weight, 1) })) }; }
-  if (formulaCode === 'F5_5_EXPECTED_LOSS') return { probability: number(first.probability), impact: number(first.impact ?? first.gross_loss_amount) };
-  if (formulaCode === 'F5_5_NET_LOSS') return { grossLoss: sum(rows.map((row) => row.gross_loss_amount)), recoveries: sum(rows.map((row) => row.recovery_amount)) };
-  if (formulaCode === 'F5_5_LOSS_SEVERITY') return { netLosses: rows.map((row) => number(row.net_loss_amount, number(row.gross_loss_amount) !== null ? number(row.gross_loss_amount) - number(row.recovery_amount, 0) : null)).filter((value) => value !== null) };
-  if (formulaCode === 'F5_5_PARAMETRIC_VAR') { const losses = rows.map((row) => number(row.net_loss_amount ?? row.gross_loss_amount)).filter((value) => value !== null); const mean = average(losses); const variance = mean === null || losses.length < 2 ? null : losses.reduce((total, value) => total + ((value - mean) ** 2), 0) / (losses.length - 1); return { mean, z: 1.65, sigma: variance === null ? null : Math.sqrt(variance) }; }
-  if (formulaCode === 'F5_5_MONTE_CARLO') { const losses = rows.map((row) => number(row.net_loss_amount ?? row.gross_loss_amount)).filter((value) => value !== null); return losses.length ? { iterations: 1000, seed: 42, frequency: { type: 'poisson', lambda: Math.max(0.01, losses.length / 12) }, severity: { type: 'fixed', value: average(losses) }, threshold: Math.max(...losses) } : null; }
+  const grossLossValue = (row) => number(row.gross_loss_amount ?? row.gross_loss);
+  const recoveryValue = (row) => number(row.recovery_amount ?? row.recoveries);
+  const netLossValue = (row) => {
+    const direct = number(row.net_loss_amount ?? row.net_loss);
+    if (direct !== null) return direct;
+    const gross = grossLossValue(row);
+    const recovery = recoveryValue(row);
+    return gross !== null && recovery !== null ? gross - recovery : null;
+  };
+  if (formulaCode === 'F5_5_EXPECTED_LOSS') return { probability: number(first.probability), impact: number(first.impact ?? first.gross_loss_amount ?? first.gross_loss) };
+  if (formulaCode === 'F5_5_NET_LOSS') return { grossLoss: sum(rows.map(grossLossValue)), recoveries: sum(rows.map(recoveryValue)) };
+  if (formulaCode === 'F5_5_LOSS_SEVERITY') return { netLosses: rows.map(netLossValue).filter((value) => value !== null) };
+  if (formulaCode === 'F5_5_PARAMETRIC_VAR') { const losses = rows.map(netLossValue).filter((value) => value !== null); const mean = average(losses); const variance = mean === null || losses.length < 2 ? null : losses.reduce((total, value) => total + ((value - mean) ** 2), 0) / (losses.length - 1); return { mean, z: 1.65, sigma: variance === null ? null : Math.sqrt(variance) }; }
+  if (formulaCode === 'F5_5_MONTE_CARLO') { const losses = rows.map(netLossValue).filter((value) => value !== null); return losses.length ? { iterations: 1000, seed: 42, frequency: { type: 'poisson', lambda: Math.max(0.01, losses.length / 12) }, severity: { type: 'fixed', value: average(losses) }, threshold: Math.max(...losses) } : null; }
   if (formulaCode === 'F5_5_AVAILABILITY') return { totalTime: number(first.total_time ?? first.totalTime), downtime: number(first.downtime ?? first.downtime_hours), mtbf: number(first.mtbf), mttr: number(first.mttr) };
   if (formulaCode === 'F5_5_MTBF') return { operatingTime: number(first.operating_time ?? first.total_time), failures: number(first.failures ?? rows.filter((row) => ['failed', 'failure'].includes(String(row.status))).length) };
   if (formulaCode === 'F5_5_MTTR') return { repairTimes: rows.map((row) => number(row.repair_time ?? row.actual_recovery_hours)).filter((value) => value !== null) };

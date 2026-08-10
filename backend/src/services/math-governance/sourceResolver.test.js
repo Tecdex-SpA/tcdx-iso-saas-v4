@@ -81,6 +81,12 @@ async function main() {
   assert.deepStrictEqual(actionInput.items.map((item) => item.progress), [0.25, 0.5, 1]);
   assert.strictEqual(executeFormula('F5_5_WEIGHTED_PROGRESS', actionInput).value, 68.75);
 
+  const lossInputFromUiColumns = mapFormulaInput('F5_5_NET_LOSS', [
+    { gross_loss: '100000.00', recoveries: '25000.00', net_loss: '75000.00' },
+  ]);
+  assert.deepStrictEqual(lossInputFromUiColumns, { grossLoss: 100000, recoveries: 25000 });
+  assert.strictEqual(executeFormula('F5_5_NET_LOSS', lossInputFromUiColumns).value, 75000);
+
   const maturityInput = mapFormulaInput('F5_5_MATURITY', [{ level: 2, weight: 1 }, { level: 4, weight: 3 }]);
   assert.deepStrictEqual(maturityInput, { levels: [{ level: 2, weight: 1 }, { level: 4, weight: 3 }] });
   assert.strictEqual(executeFormula('F5_5_MATURITY', maturityInput).value, 3.5);
@@ -105,6 +111,40 @@ async function main() {
   assert.strictEqual(calls.length, 2, 'empty primary source must continue to legacy source');
   assert.strictEqual(fallback.length, 1);
   assert.strictEqual(fallback[0].__physical_source, 'legacy_table');
+
+  const lossQueries = [];
+  const lossClient = { async query(sql, params) {
+    if (sql.includes('to_regclass')) return { rows: [{ exists: true }] };
+    lossQueries.push({ sql, params });
+    if (sql.includes('FROM loss_events e')) {
+      return { rows: [{
+        id: 'loss-1',
+        tenant_id: 'tenant-a',
+        status: 'confirmed',
+        currency: 'CLP',
+        raw_event_date: '2999-08-31T23:59:59.999Z',
+        event_date: '2026-08-10T12:00:00.000Z',
+        __event_time: '2026-08-10T12:00:00.000Z',
+        gross_loss_amount: '100000.00',
+        recovery_amount: '25000.00',
+        net_loss_amount: '75000.00',
+        raw_event_date_was_future: true,
+      }] };
+    }
+    throw new Error(`unexpected loss query: ${sql}`);
+  } };
+  const lossSource = await resolveFormulaSource({
+    client: lossClient,
+    tenantId: 'tenant-a',
+    formulaCode: 'F5_5_NET_LOSS',
+    sourceCode: 'loss_events_operational',
+  });
+  assert.strictEqual(lossQueries.length, 1);
+  assert.strictEqual(lossSource.status, 'ready');
+  assert.strictEqual(lossSource.rows.length, 1);
+  assert.deepStrictEqual(lossSource.formula_input, { grossLoss: 100000, recoveries: 25000 });
+  assert.strictEqual(executeFormula('F5_5_NET_LOSS', lossSource.formula_input).value, 75000);
+  assert.ok(lossSource.warnings.some((warning) => String(warning).includes('occurred_at viene en el futuro')), 'future occurrence warning expected');
 
   const missingClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
   const missingTables = await resolveFormulaSource({ client: missingClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
