@@ -20,7 +20,8 @@ const MIGRATIONS = [
   ['20260730_phase5_tenant_shell_grc_data_integration', 'database/migrations/20260730_phase5_tenant_shell_grc_data_integration.sql'],
   ['20260730_phase5_5_official_math_governance', 'database/migrations/20260730_phase5_5_official_math_governance.sql'],
   ['20260730_phase5_5_snapshot_contract_hotfix', 'database/migrations/20260730_phase5_5_snapshot_contract_hotfix.sql'],
-].map(([id, relative]) => ({ id, file: path.join(root, relative) }));
+  ['20260810_phase5_official_measurement_null_states', 'database/migrations/20260810_phase5_official_measurement_null_states.sql'],
+].map(([id, relative]) => ({ id, file: path.join(root, relative), requiresC3MeasurementContract: id === '20260810_phase5_official_measurement_null_states' }));
 
 function sanitizeError(error) {
   return String(error?.message || 'phase5 migration error')
@@ -117,6 +118,32 @@ async function alreadyApplied(client, migrationId, checksum) {
   return false;
 }
 
+async function hasC3MeasurementContract(client) {
+  const result = await client.query(`SELECT
+    to_regclass('public.metric_measurements') IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.metric_measurements')
+        AND conname = 'metric_measurements_legacy_or_official_value_check'
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.metric_measurements')
+        AND conname = 'metric_measurements_official_value_contract'
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.metric_measurements')
+        AND conname = 'metric_measurements_official_state_check'
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.metric_measurements')
+        AND conname = 'metric_measurements_coverage_ratio_check'
+    ) AS ready`);
+  return result.rows[0]?.ready === true;
+}
+
 async function postconditions(client) {
   const requiredTables = [
     'data_domains','data_elements','data_definitions','data_owners','data_sources','data_quality_rules','data_quality_assessments','data_lineage_edges','data_snapshots','data_comparisons','data_trust_scores',
@@ -134,6 +161,39 @@ async function postconditions(client) {
   const snapshotConstraint = await client.query(`SELECT pg_get_constraintdef(c.oid) AS definition FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid WHERE t.relname='calculation_snapshots' AND c.conname='calculation_snapshots_snapshot_type_check' LIMIT 1`);
   const definition = String(snapshotConstraint.rows[0]?.definition || '');
   if (!definition.includes('source_dataset') || definition.includes("'source'::text")) throw new Error('Phase 5 snapshot_type constraint is not aligned with source_dataset');
+  let measurementContractState = 'deferred_until_phase5_c3';
+  if (await hasC3MeasurementContract(client)) {
+    const measurementContract = await client.query(`SELECT
+      NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.metric_measurements'::regclass
+          AND conname = 'metric_measurements_check1'
+      ) AS legacy_value_check_removed,
+      EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.metric_measurements'::regclass
+          AND conname = 'metric_measurements_legacy_or_official_value_check'
+      ) AS legacy_or_official_contract,
+      EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.metric_measurements'::regclass
+          AND conname = 'metric_measurements_official_value_contract'
+      ) AS official_value_contract,
+      EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.metric_measurements'::regclass
+          AND conname = 'metric_measurements_official_state_check'
+      ) AS official_state_contract,
+      EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.metric_measurements'::regclass
+          AND conname = 'metric_measurements_coverage_ratio_check'
+      ) AS coverage_ratio_contract`);
+    const contract = measurementContract.rows[0] || {};
+    const broken = Object.entries(contract).filter(([, value]) => value !== true).map(([key]) => key);
+    if (broken.length) throw new Error(`Phase 5 metric_measurements contract drift: ${broken.join(', ')}`);
+    measurementContractState = 'official_null_states';
+  }
 
   const catalog = await client.query(`SELECT COUNT(*)::int AS count FROM metric_definitions WHERE tenant_id IS NULL AND status='published'`);
   const permissions = await client.query(`SELECT COUNT(*)::int AS count FROM permissions WHERE permission_group IN ('data','metrics','surveys','assurance','loss','bi','reports')`);
@@ -141,7 +201,7 @@ async function postconditions(client) {
   if (Number(catalog.rows[0]?.count || 0) < 20) throw new Error('Phase 5 postcondition missing initial metric catalog');
   if (Number(permissions.rows[0]?.count || 0) < 30) throw new Error('Phase 5 postcondition missing permissions');
   if (Number(capabilities.rows[0]?.count || 0) < 16) throw new Error('Phase 5 postcondition missing capabilities');
-  return { tables: requiredTables.length, global_metrics: Number(catalog.rows[0].count), permissions: Number(permissions.rows[0].count), capabilities: Number(capabilities.rows[0].count), snapshot_contract: 'source_dataset' };
+  return { tables: requiredTables.length, global_metrics: Number(catalog.rows[0].count), permissions: Number(permissions.rows[0].count), capabilities: Number(capabilities.rows[0].count), snapshot_contract: 'source_dataset', metric_measurements_contract: measurementContractState };
 }
 
 async function run(mode) {
@@ -159,6 +219,10 @@ async function run(mode) {
     const readable = MIGRATIONS.map((migration) => ({ ...migration, ...readMigration(migration) }));
     const pending = [];
     for (const migration of readable) {
+      if (migration.requiresC3MeasurementContract && !(await hasC3MeasurementContract(client))) {
+        process.stdout.write(`Phase 5 migration deferred until Phase 5-C3 contract exists: ${migration.id}\n`);
+        continue;
+      }
       if (await alreadyApplied(client, migration.id, migration.checksum)) process.stdout.write(`Phase 5 migration already applied: ${migration.id}\n`);
       else pending.push(migration);
     }
