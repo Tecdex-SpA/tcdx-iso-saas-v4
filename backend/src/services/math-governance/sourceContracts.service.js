@@ -207,7 +207,17 @@ const SOURCE_CONTRACTS = Object.freeze([
     availability: 'available', version: 1,
     limitations: 'Freshness de evidencia usa evidencia real, revisión y expiración; data quality freshness conserva su contrato separado.'
   }),
-  contract({ source_code: 'loss_events_operational', entity: 'loss', tables: ['loss_events','loss_recoveries'], columns: ['tenant_id','event_date','gross_loss_amount','net_loss_amount','currency','recovery_amount','status'], required_fields: ['id','tenant_id','event_date'], unit: 'currency', availability: 'available' }),
+  contract({
+    source_code: 'loss_events_operational', entity: 'loss',
+    tables: ['loss_events','loss_recoveries'],
+    columns: ['tenant_id','occurred_at','event_date','gross_loss','gross_loss_amount','recoveries','recovery_amount','net_loss','net_loss_amount','currency','status','created_at','updated_at'],
+    required_fields: ['id','tenant_id','event_date'],
+    variable_map: { grossLoss: 'gross_loss_amount|gross_loss', recoveries: 'recovery_amount|recoveries', netLosses: 'net_loss_amount|net_loss|gross-recoveries', eventDate: 'occurred_at|event_date|created_at' },
+    unit: 'currency',
+    availability: 'available',
+    version: 2,
+    limitations: 'Normaliza columnas reales de loss_events usadas por la UI. Si occurred_at queda en el futuro por el período visual, el adaptador conserva raw_event_date y usa created_at como fecha efectiva para no descartar el input confirmado.'
+  }),
   contract({ source_code: 'continuity_resilience_tests', entity: 'continuity', tables: ['grc_bia_assessments','grc_continuity_plans','grc_continuity_tests'], columns: ['tenant_id','rto_hours','rpo_hours','actual_recovery_hours','actual_data_loss_hours','result','tested_at','status'], required_fields: ['id','tenant_id'], unit: 'hours', availability: 'available' }),
   contract({ source_code: 'asset_inventory_security', entity: 'asset', tables: ['data_elements'], columns: ['tenant_id','name','classification','owner_user_id','metadata','status'], required_fields: ['id','tenant_id'], availability: 'available', limitations: 'Package 4 binds asset criticality to data_elements until a dedicated asset inventory table supersedes it.' }),
   contract({ source_code: 'supplier_tprm_assessments', entity: 'supplier', tables: ['grc_suppliers','grc_supplier_assessments','grc_supplier_answers','grc_supplier_contracts'], columns: ['tenant_id','supplier_id','criticality','security_score','dependency_score','resilience_score','privacy_score','status'], required_fields: ['id','tenant_id','status'], availability: 'available' }),

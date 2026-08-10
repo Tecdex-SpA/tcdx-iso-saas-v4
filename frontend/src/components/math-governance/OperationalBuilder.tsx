@@ -266,6 +266,12 @@ function createPayload(kind: BuilderKind, form: BuilderForm) {
       metadata: { result_code: form.resultCode, dimension: form.dimension },
     };
   }
+  const effectiveOccurredAt = () => {
+    const end = new Date(form.periodEnd).getTime();
+    const now = Date.now();
+    if (!Number.isFinite(end)) return new Date(now).toISOString();
+    return new Date(Math.min(end, now)).toISOString();
+  };
   if (kind === 'assurance') {
     return {
       test_code: code,
@@ -283,7 +289,7 @@ function createPayload(kind: BuilderKind, form: BuilderForm) {
   return {
     event_code: code,
     event_type: form.type,
-    occurred_at: form.periodEnd,
+    occurred_at: effectiveOccurredAt(),
     cause: `Evento registrado desde ${name}`,
     impact_description: `Pérdida operacional ${name}`,
     gross_loss: Number(form.numerator),

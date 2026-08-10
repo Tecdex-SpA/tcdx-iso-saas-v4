@@ -1,0 +1,314 @@
+[
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/auth/login"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/dashboard/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/audits/next-all/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/assets/risk-summary/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/audits/summary/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/modules"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/dashboard-controls/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/action-plans/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/entitlements"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/kpi/effective-health-summary/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/user/me"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/metrics/official/catalog"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/health/dashboard"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/tenants/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/metrics/official/dashboard"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/search/history/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/meta"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/summary"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/readiness/latest"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/notifications/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/company-profile/impact/module/dashboard"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/modules"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/entitlements"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/user/me"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/tenants/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/search/history/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/notifications/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/loss-events"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/metrics/official/catalog"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/official/analytics/catalog"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/loss-events"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/official/analytics/loss.net"
+  },
+  {
+    "status": 401,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/official/calculations/749c15e3-e3c9-412f-9569-71cbc169584f/lineage?_rsc=yuxsw9J1hXzbOOCD"
+  },
+  {
+    "status": 401,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/official/calculations/749c15e3-e3c9-412f-9569-71cbc169584f/explanation?_rsc=yuxsw9J1hXzbOOCD"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/loss-events"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/loss-events"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/loss-events/03cd8d9a-60e1-4d7c-8c49-b1cea8d2c5ac/confirm"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/loss-events"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/loss-events"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/modules"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/user/me"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/auth/validate"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/entitlements"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/tenants/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/search/history/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/metrics/official/LOSSES/history?limit=24"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/notifications/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/metrics/official/LOSSES"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/metrics/official/LOSSES/comparisons?limit=24"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/modules"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/assets/risk-summary/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/audits/next-all/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/dashboard-controls/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/dashboard/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/entitlements"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/kpi/effective-health-summary/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/action-plans/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/metrics/official/catalog"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/health/dashboard"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/user/me"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/search/history/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/tenants/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/audits/summary/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/meta"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/metrics/official/dashboard"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/notifications/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/readiness/latest"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/summary"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/company-profile/impact/module/dashboard"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/modules"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/tenants/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/user/me"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/me/entitlements"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/search/history/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/dashboards"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/notifications/70000000-0000-0000-0000-000000000701"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/metrics/official/catalog"
+  },
+  {
+    "status": 200,
+    "url": "https://tcdx-iso.tecdex.net/api/grc/official/analytics/catalog"
+  }
+]
