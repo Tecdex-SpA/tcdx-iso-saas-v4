@@ -1,0 +1,4076 @@
+{
+  "tenant": "tenant-1",
+  "route": "/dashboard?view=kpi",
+  "network": [
+    {
+      "url": "/api/me/modules",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "ok": true,
+        "scope": {
+          "user_id": "70000000-0000-0000-0000-000000000712",
+          "role": "admin",
+          "tenant_id": "70000000-0000-0000-0000-000000000701",
+          "tenant_name": "Empresa Demo TCDX Compliance",
+          "service_status": "active",
+          "suspended_at": null,
+          "suspension_reason": null,
+          "deleted_at": null,
+          "deletion_reason": null,
+          "is_platform": false,
+          "is_dealer": false
+        },
+        "data": [
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "health",
+            "module_name": "Health ISO",
+            "module_description": "Dashboard de salud ISO, KPIs y remediación.",
+            "sort_order": 10,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "controls",
+            "module_name": "Controles",
+            "module_description": "Gestión y revisión de controles ISO.",
+            "sort_order": 20,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "evidences",
+            "module_name": "Evidencias",
+            "module_description": "Carga, revisión y aprobación de evidencias.",
+            "sort_order": 30,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "action_plans",
+            "module_name": "Plan de Acción",
+            "module_description": "Gestión de acciones correctivas y remediación.",
+            "sort_order": 40,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "grc_phase1_core",
+            "module_name": "Nucleo GRC Fase 1",
+            "module_description": "Workflows, evidencia continua, readiness, cruces normativos y auditoria avanzada.",
+            "sort_order": 45,
+            "is_enabled": true,
+            "enabled_at": "2026-07-24T17:38:38.331Z",
+            "disabled_at": null,
+            "notes": "Phase 1 Runtime QA controlled activation",
+            "metadata": {
+              "source": "phase1_runtime_qa",
+              "purpose": "phase1_validation",
+              "updated_by": "fe817e07-3a80-4fa9-8175-05be003b140a",
+              "environment": "demo",
+              "updated_from": "admin_saas",
+              "enabled_at_iso": "2026-07-23T13:34:46.420Z",
+              "enabled_manually": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "grc_phase2_integrated",
+            "module_name": "GRC integrado Fase 2",
+            "module_description": "Privacidad, incidentes, terceros, conectores y vista GRC global.",
+            "sort_order": 46,
+            "is_enabled": true,
+            "enabled_at": "2026-07-28T13:22:46.995Z",
+            "disabled_at": null,
+            "notes": "Habilitación operativa TPRM para tcdx.local",
+            "metadata": {
+              "updated_by": "fe817e07-3a80-4fa9-8175-05be003b140a",
+              "updated_from": "phase2_closeout",
+              "tenant_domain": "tcdx.local",
+              "contract_limit_checked": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "grc_phase3_operations",
+            "module_name": "Operación y continuidad GRC",
+            "module_description": "Unidades, procesos, servicios, BIA, continuidad, KPI/KRI y riesgo cuantitativo.",
+            "sort_order": 47,
+            "is_enabled": true,
+            "enabled_at": "2026-07-28T17:18:51.694Z",
+            "disabled_at": null,
+            "notes": "Fase 3 operacional habilitada para tcdx.local.",
+            "metadata": {
+              "source": "phase3_migration",
+              "tenant_domain": "tcdx.local",
+              "capability_scope": "operations_continuity_metrics"
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "nonconformities",
+            "module_name": "No Conformidades",
+            "module_description": "Gestión de no conformidades.",
+            "sort_order": 50,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "risk_matrix",
+            "module_name": "Matriz de Riesgo",
+            "module_description": "Análisis de riesgo por control y norma.",
+            "sort_order": 60,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "audits",
+            "module_name": "Auditorías",
+            "module_description": "Gestión de auditorías internas o externas.",
+            "sort_order": 70,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "assets",
+            "module_name": "Activos",
+            "module_description": "Gestión de activos asociados a riesgo y cumplimiento.",
+            "sort_order": 80,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "reports",
+            "module_name": "Reportes",
+            "module_description": "Reportes ejecutivos y exportación.",
+            "sort_order": 90,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "ai",
+            "module_name": "IA",
+            "module_description": "Asistencia inteligente y recomendaciones automáticas.",
+            "sort_order": 100,
+            "is_enabled": true,
+            "enabled_at": "2026-06-09T19:22:53.581Z",
+            "disabled_at": null,
+            "notes": "Módulo habilitado desde Administración SaaS",
+            "metadata": {
+              "source": "admin_saas_frontend",
+              "feature": "tenant_modules_contract_limit",
+              "updated_by": "fe817e07-3a80-4fa9-8175-05be003b140a",
+              "updated_from": "admin_saas",
+              "contract_limit_checked": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "dealer_portal",
+            "module_name": "Portal Dealer",
+            "module_description": "Vista para partners o dealers comerciales.",
+            "sort_order": 110,
+            "is_enabled": false,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "tenant_name": "Empresa Demo TCDX Compliance",
+            "module_key": "admin_saas",
+            "module_name": "Administración SaaS",
+            "module_description": "Panel de gobierno SaaS para TECDEX.",
+            "sort_order": 120,
+            "is_enabled": false,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": null
+          }
+        ],
+        "module_map": {
+          "health": {
+            "module_key": "health",
+            "module_name": "Health ISO",
+            "module_description": "Dashboard de salud ISO, KPIs y remediación.",
+            "sort_order": 10,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "controls": {
+            "module_key": "controls",
+            "module_name": "Controles",
+            "module_description": "Gestión y revisión de controles ISO.",
+            "sort_order": 20,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "evidences": {
+            "module_key": "evidences",
+            "module_name": "Evidencias",
+            "module_description": "Carga, revisión y aprobación de evidencias.",
+            "sort_order": 30,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "action_plans": {
+            "module_key": "action_plans",
+            "module_name": "Plan de Acción",
+            "module_description": "Gestión de acciones correctivas y remediación.",
+            "sort_order": 40,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "grc_phase1_core": {
+            "module_key": "grc_phase1_core",
+            "module_name": "Nucleo GRC Fase 1",
+            "module_description": "Workflows, evidencia continua, readiness, cruces normativos y auditoria avanzada.",
+            "sort_order": 45,
+            "is_enabled": true,
+            "enabled_at": "2026-07-24T17:38:38.331Z",
+            "disabled_at": null,
+            "notes": "Phase 1 Runtime QA controlled activation",
+            "metadata": {
+              "source": "phase1_runtime_qa",
+              "purpose": "phase1_validation",
+              "updated_by": "fe817e07-3a80-4fa9-8175-05be003b140a",
+              "environment": "demo",
+              "updated_from": "admin_saas",
+              "enabled_at_iso": "2026-07-23T13:34:46.420Z",
+              "enabled_manually": true
+            }
+          },
+          "grc_phase2_integrated": {
+            "module_key": "grc_phase2_integrated",
+            "module_name": "GRC integrado Fase 2",
+            "module_description": "Privacidad, incidentes, terceros, conectores y vista GRC global.",
+            "sort_order": 46,
+            "is_enabled": true,
+            "enabled_at": "2026-07-28T13:22:46.995Z",
+            "disabled_at": null,
+            "notes": "Habilitación operativa TPRM para tcdx.local",
+            "metadata": {
+              "updated_by": "fe817e07-3a80-4fa9-8175-05be003b140a",
+              "updated_from": "phase2_closeout",
+              "tenant_domain": "tcdx.local",
+              "contract_limit_checked": true
+            }
+          },
+          "grc_phase3_operations": {
+            "module_key": "grc_phase3_operations",
+            "module_name": "Operación y continuidad GRC",
+            "module_description": "Unidades, procesos, servicios, BIA, continuidad, KPI/KRI y riesgo cuantitativo.",
+            "sort_order": 47,
+            "is_enabled": true,
+            "enabled_at": "2026-07-28T17:18:51.694Z",
+            "disabled_at": null,
+            "notes": "Fase 3 operacional habilitada para tcdx.local.",
+            "metadata": {
+              "source": "phase3_migration",
+              "tenant_domain": "tcdx.local",
+              "capability_scope": "operations_continuity_metrics"
+            }
+          },
+          "nonconformities": {
+            "module_key": "nonconformities",
+            "module_name": "No Conformidades",
+            "module_description": "Gestión de no conformidades.",
+            "sort_order": 50,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "risk_matrix": {
+            "module_key": "risk_matrix",
+            "module_name": "Matriz de Riesgo",
+            "module_description": "Análisis de riesgo por control y norma.",
+            "sort_order": 60,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "audits": {
+            "module_key": "audits",
+            "module_name": "Auditorías",
+            "module_description": "Gestión de auditorías internas o externas.",
+            "sort_order": 70,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "assets": {
+            "module_key": "assets",
+            "module_name": "Activos",
+            "module_description": "Gestión de activos asociados a riesgo y cumplimiento.",
+            "sort_order": 80,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "reports": {
+            "module_key": "reports",
+            "module_name": "Reportes",
+            "module_description": "Reportes ejecutivos y exportación.",
+            "sort_order": 90,
+            "is_enabled": true,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "ai": {
+            "module_key": "ai",
+            "module_name": "IA",
+            "module_description": "Asistencia inteligente y recomendaciones automáticas.",
+            "sort_order": 100,
+            "is_enabled": true,
+            "enabled_at": "2026-06-09T19:22:53.581Z",
+            "disabled_at": null,
+            "notes": "Módulo habilitado desde Administración SaaS",
+            "metadata": {
+              "source": "admin_saas_frontend",
+              "feature": "tenant_modules_contract_limit",
+              "updated_by": "fe817e07-3a80-4fa9-8175-05be003b140a",
+              "updated_from": "admin_saas",
+              "contract_limit_checked": true
+            }
+          },
+          "dealer_portal": {
+            "module_key": "dealer_portal",
+            "module_name": "Portal Dealer",
+            "module_description": "Vista para partners o dealers comerciales.",
+            "sort_order": 110,
+            "is_enabled": false,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          },
+          "admin_saas": {
+            "module_key": "admin_saas",
+            "module_name": "Administración SaaS",
+            "module_description": "Panel de gobierno SaaS para TECDEX.",
+            "sort_order": 120,
+            "is_enabled": false,
+            "enabled_at": null,
+            "disabled_at": null,
+            "notes": null,
+            "metadata": {}
+          }
+        }
+      }
+    },
+    {
+      "url": "/api/dashboard-controls/70000000-0000-0000-0000-000000000701",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": []
+    },
+    {
+      "url": "/api/audits/next-all/70000000-0000-0000-0000-000000000701",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": [
+        {
+          "id": "92791ece-19c1-406d-8c0a-281256febc69",
+          "tenant_id": "70000000-0000-0000-0000-000000000701",
+          "iso": "ISO27001",
+          "start_date": "2026-06-02T00:00:00.000Z",
+          "end_date": "2026-06-30T00:00:00.000Z",
+          "requester_name": "Admin Cumplimiento",
+          "auditor_type": "interno",
+          "auditor_name": "Auditor Demo ISO 27001",
+          "created_at": "2026-06-09T18:36:43.622Z",
+          "status": "pendiente",
+          "report_file": null,
+          "audit_result": null,
+          "audit_result_notes": null,
+          "audit_result_at": null
+        }
+      ]
+    },
+    {
+      "url": "/api/dashboard/70000000-0000-0000-0000-000000000701",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "total": 500,
+        "cumple": 285,
+        "parcial": 117,
+        "noCumple": 49,
+        "pendientes": 49,
+        "porcentaje": 57,
+        "riesgo": 10,
+        "nivel_riesgo": "Bajo",
+        "open_findings": 2,
+        "closed_findings": 0,
+        "open_nonconformities": 1,
+        "closed_nonconformities": 0
+      }
+    },
+    {
+      "url": "/api/user/me",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "id": "70000000-0000-0000-0000-000000000712",
+        "tenant_id": "70000000-0000-0000-0000-000000000701",
+        "email": "admin.demo@tcdx.local",
+        "full_name": "Admin Cumplimiento",
+        "name": "Admin Cumplimiento",
+        "role": "admin",
+        "phone": null,
+        "job_title": null,
+        "avatar": "1782228821112-alfonso.png",
+        "created_at": "2026-06-09T18:36:43.622Z"
+      }
+    },
+    {
+      "url": "/api/assets/risk-summary/70000000-0000-0000-0000-000000000701",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": [
+        {
+          "level": "alto",
+          "total": "2"
+        },
+        {
+          "level": "medio",
+          "total": "3"
+        },
+        {
+          "level": "critico",
+          "total": "1"
+        }
+      ]
+    },
+    {
+      "url": "/api/kpi/effective-health-summary/70000000-0000-0000-0000-000000000701",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "ok": true,
+        "tenant_id": "70000000-0000-0000-0000-000000000701",
+        "source": "public.v_iso_effective_kpi_summary",
+        "total_rows": 10,
+        "active_rows": 10,
+        "summary": [
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "02cecf53-1130-4c79-b483-5260f93d9751",
+            "operation_name": "Continuidad Operacional",
+            "operation_code": "ISMS-08-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 0,
+            "partial_controls": 50,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 0,
+            "attention_controls": 50,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 62,
+            "compliance_percentage": 0,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "3641f2f6-102f-4c35-a452-6c4a52603c8a",
+            "operation_name": "Desarrollo de Software",
+            "operation_code": "ISMS-05-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "f41b91e9-9246-4380-b545-75384e2dfc7a",
+            "operation_name": "Gestión de Accesos",
+            "operation_code": "ISMS-03-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "d2d1dde9-914b-485d-b4fa-19f62fe29df9",
+            "operation_name": "Gestión de Activos de Información",
+            "operation_code": "ISMS-02-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "e0b68942-5806-46ec-93d7-834c69715405",
+            "operation_name": "Gestión de Incidentes de Seguridad",
+            "operation_code": "ISMS-06-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 40,
+            "partial_controls": 10,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 40,
+            "attention_controls": 10,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 78,
+            "compliance_percentage": 80,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "2a6fb8c8-1f96-4eb6-82d4-34f9e5588407",
+            "operation_name": "Gestión de Vulnerabilidades",
+            "operation_code": "ISMS-10-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 0,
+            "partial_controls": 0,
+            "non_compliant_or_no_data_controls": 50,
+            "healthy_controls": 0,
+            "attention_controls": 0,
+            "deteriorated_controls": 1,
+            "controls_with_official_evidence": 0,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 50,
+            "approved_evidence_count": 0,
+            "official_evidence_count": 0,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 8,
+            "compliance_percentage": 0,
+            "official_evidence_percentage": 0,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "4e1f5088-33df-4cdd-b8d7-2fa6063923c0",
+            "operation_name": "Gobierno de Seguridad de la Información",
+            "operation_code": "ISMS-01-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 57,
+            "official_evidence_count": 57,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "b4fe9092-347c-4331-939f-04c9f8173482",
+            "operation_name": "Infraestructura TI",
+            "operation_code": "ISMS-04-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "501f00af-0eef-483e-8703-af1ff394395c",
+            "operation_name": "Proveedores Tecnológicos",
+            "operation_code": "ISMS-09-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 0,
+            "partial_controls": 0,
+            "non_compliant_or_no_data_controls": 50,
+            "healthy_controls": 0,
+            "attention_controls": 0,
+            "deteriorated_controls": 50,
+            "controls_with_official_evidence": 0,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 0,
+            "official_evidence_count": 0,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 35,
+            "compliance_percentage": 0,
+            "official_evidence_percentage": 0,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "5813ffe1-42d5-41bf-baaf-e5a1136d4899",
+            "operation_name": "Respaldo y Restauración",
+            "operation_code": "ISMS-07-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 0,
+            "partial_controls": 50,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 0,
+            "attention_controls": 50,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 62,
+            "compliance_percentage": 0,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          }
+        ],
+        "active_summary": [
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "02cecf53-1130-4c79-b483-5260f93d9751",
+            "operation_name": "Continuidad Operacional",
+            "operation_code": "ISMS-08-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 0,
+            "partial_controls": 50,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 0,
+            "attention_controls": 50,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 62,
+            "compliance_percentage": 0,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "3641f2f6-102f-4c35-a452-6c4a52603c8a",
+            "operation_name": "Desarrollo de Software",
+            "operation_code": "ISMS-05-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "f41b91e9-9246-4380-b545-75384e2dfc7a",
+            "operation_name": "Gestión de Accesos",
+            "operation_code": "ISMS-03-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "d2d1dde9-914b-485d-b4fa-19f62fe29df9",
+            "operation_name": "Gestión de Activos de Información",
+            "operation_code": "ISMS-02-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "e0b68942-5806-46ec-93d7-834c69715405",
+            "operation_name": "Gestión de Incidentes de Seguridad",
+            "operation_code": "ISMS-06-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 40,
+            "partial_controls": 10,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 40,
+            "attention_controls": 10,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 78,
+            "compliance_percentage": 80,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "2a6fb8c8-1f96-4eb6-82d4-34f9e5588407",
+            "operation_name": "Gestión de Vulnerabilidades",
+            "operation_code": "ISMS-10-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 0,
+            "partial_controls": 0,
+            "non_compliant_or_no_data_controls": 50,
+            "healthy_controls": 0,
+            "attention_controls": 0,
+            "deteriorated_controls": 1,
+            "controls_with_official_evidence": 0,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 50,
+            "approved_evidence_count": 0,
+            "official_evidence_count": 0,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 8,
+            "compliance_percentage": 0,
+            "official_evidence_percentage": 0,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "4e1f5088-33df-4cdd-b8d7-2fa6063923c0",
+            "operation_name": "Gobierno de Seguridad de la Información",
+            "operation_code": "ISMS-01-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 57,
+            "official_evidence_count": 57,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "b4fe9092-347c-4331-939f-04c9f8173482",
+            "operation_name": "Infraestructura TI",
+            "operation_code": "ISMS-04-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 49,
+            "partial_controls": 1,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 49,
+            "attention_controls": 1,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 81.94,
+            "compliance_percentage": 98,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "501f00af-0eef-483e-8703-af1ff394395c",
+            "operation_name": "Proveedores Tecnológicos",
+            "operation_code": "ISMS-09-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 0,
+            "partial_controls": 0,
+            "non_compliant_or_no_data_controls": 50,
+            "healthy_controls": 0,
+            "attention_controls": 0,
+            "deteriorated_controls": 50,
+            "controls_with_official_evidence": 0,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 0,
+            "official_evidence_count": 0,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 35,
+            "compliance_percentage": 0,
+            "official_evidence_percentage": 0,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          },
+          {
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "operation_id": "5813ffe1-42d5-41bf-baaf-e5a1136d4899",
+            "operation_name": "Respaldo y Restauración",
+            "operation_code": "ISMS-07-OP",
+            "operation_type": "proceso",
+            "total_controls": 50,
+            "active_scope_controls": 50,
+            "out_of_scope_controls": 0,
+            "complies_controls": 0,
+            "partial_controls": 50,
+            "non_compliant_or_no_data_controls": 0,
+            "healthy_controls": 0,
+            "attention_controls": 50,
+            "deteriorated_controls": 0,
+            "controls_with_official_evidence": 50,
+            "controls_with_approved_non_official_evidence": 0,
+            "controls_without_evidence": 0,
+            "approved_evidence_count": 50,
+            "official_evidence_count": 50,
+            "open_findings_count": 0,
+            "open_nonconformities_count": 1,
+            "open_action_plans_count": 0,
+            "overdue_action_plans_count": 0,
+            "avg_effective_health_score": 62,
+            "compliance_percentage": 0,
+            "official_evidence_percentage": 100,
+            "kpi_health_status": "critico",
+            "kpi_trace_json": {
+              "source": "public.v_iso_control_effective_health",
+              "generated_at": "2026-08-10T23:10:36.359464+00:00",
+              "calculation_policy": "effective_iso_health_v1",
+              "excludes_out_of_scope": true,
+              "uses_official_evidence": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "url": "/api/action-plans/70000000-0000-0000-0000-000000000701",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": [
+        {
+          "id": "99a3764f-0c46-4454-aa23-8e03bc97e486",
+          "tenant_id": "70000000-0000-0000-0000-000000000701",
+          "iso_code": "ISO27001",
+          "title": "Completar evaluación de proveedor cloud crítico.",
+          "description": "Evaluacion de seguridad en curso; pendiente revision contractual.",
+          "source_type": "risk",
+          "source_id": null,
+          "priority": "alta",
+          "status": "completado",
+          "owner": "Responsable TI",
+          "due_date": "2026-06-21T00:00:00.000Z",
+          "created_by": "70000000-0000-0000-0000-000000000712",
+          "completed_at": "2026-06-22T21:15:47.517Z",
+          "created_at": "2026-06-09T19:18:26.771Z",
+          "updated_at": "2026-06-22T21:15:47.512Z",
+          "tenant_control_id": "08a6d453-c8e6-4901-b545-be9b3c52604a",
+          "finding_id": null,
+          "nonconformity_id": null,
+          "audit_id": null,
+          "asset_id": null,
+          "approval_status": "no_requerida",
+          "approval_requested_at": null,
+          "approval_requested_by": null,
+          "approval_reviewed_at": null,
+          "approval_reviewed_by": null,
+          "approval_comment": null,
+          "ai_trace_id": null,
+          "ai_source_level": null,
+          "ai_source_label": null,
+          "ai_confidence": null,
+          "ai_confidence_score": null,
+          "ai_orchestration_json": {},
+          "ai_enhanced_answer_json": {},
+          "finding_title": null,
+          "finding_type": null,
+          "finding_severity": null,
+          "nonconformity_title": null,
+          "nonconformity_status": null,
+          "audit_iso": null,
+          "audit_start_date": null,
+          "audit_end_date": null,
+          "audit_auditor_name": null,
+          "audit_auditor_type": null,
+          "asset_name": null,
+          "asset_type": null,
+          "asset_owner": null,
+          "tenant_control_status": "pendiente",
+          "tenant_control_operation_id": "2a6fb8c8-1f96-4eb6-82d4-34f9e5588407",
+          "control_iso": "ISO27001",
+          "control_clause": "GENERAL",
+          "control_description": "Se gestionan accesos de usuarios",
+          "control_category": "General",
+          "evidence_count": 0,
+          "approved_evidence_count": 0,
+          "pending_evidence_count": 0,
+          "rejected_evidence_count": 0,
+          "latest_evidence_at": null,
+          "latest_evidence_status": null,
+          "evidences_json": [],
+          "updates_count": 1,
+          "latest_update_at": "2026-06-22T21:15:47.512Z",
+          "latest_progress_percent": 100,
+          "latest_update_comment": "Plan marcado como completado.",
+          "latest_status_after": "completado",
+          "latest_blocked_reason": null,
+          "updates_json": [
+            {
+              "id": "9a0a4dab-aa4a-4e35-8bff-f7571c957a06",
+              "comment": "Plan marcado como completado.",
+              "tenant_id": "70000000-0000-0000-0000-000000000701",
+              "created_at": "2026-06-22T21:15:47.512755",
+              "created_by": "70000000-0000-0000-0000-000000000712",
+              "updated_at": "2026-06-22T21:15:47.512755",
+              "status_after": "completado",
+              "action_plan_id": "99a3764f-0c46-4454-aa23-8e03bc97e486",
+              "blocked_reason": null,
+              "progress_percent": 100
+            }
+          ]
+        },
+        {
+          "id": "04f4fc70-6de9-4653-9a57-47455363d2d0",
+          "tenant_id": "70000000-0000-0000-0000-000000000701",
+          "iso_code": "ISO27001",
+          "title": "Actualizar inventario de activos de información.",
+          "description": "Inventario actualizado en 80%; falta propietario para activos de integraciones.",
+          "source_type": "risk",
+          "source_id": null,
+          "priority": "alta",
+          "status": "completado",
+          "owner": "Responsable TI",
+          "due_date": "2026-07-03T00:00:00.000Z",
+          "created_by": "70000000-0000-0000-0000-000000000712",
+          "completed_at": "2026-06-22T21:16:01.940Z",
+          "created_at": "2026-06-09T18:36:43.622Z",
+          "updated_at": "2026-06-22T21:16:01.936Z",
+          "tenant_control_id": "08a6d453-c8e6-4901-b545-be9b3c52604a",
+          "finding_id": null,
+          "nonconformity_id": null,
+          "audit_id": null,
+          "asset_id": null,
+          "approval_status": "no_requerida",
+          "approval_requested_at": null,
+          "approval_requested_by": null,
+          "approval_reviewed_at": null,
+          "approval_reviewed_by": null,
+          "approval_comment": null,
+          "ai_trace_id": null,
+          "ai_source_level": null,
+          "ai_source_label": null,
+          "ai_confidence": null,
+          "ai_confidence_score": null,
+          "ai_orchestration_json": {},
+          "ai_enhanced_answer_json": {},
+          "finding_title": null,
+          "finding_type": null,
+          "finding_severity": null,
+          "nonconformity_title": null,
+          "nonconformity_status": null,
+          "audit_iso": null,
+          "audit_start_date": null,
+          "audit_end_date": null,
+          "audit_auditor_name": null,
+          "audit_auditor_type": null,
+          "asset_name": null,
+          "asset_type": null,
+          "asset_owner": null,
+          "tenant_control_status": "pendiente",
+          "tenant_control_operation_id": "2a6fb8c8-1f96-4eb6-82d4-34f9e5588407",
+          "control_iso": "ISO27001",
+          "control_clause": "GENERAL",
+          "control_description": "Se gestionan accesos de usuarios",
+          "control_category": "General",
+          "evidence_count": 0,
+          "approved_evidence_count": 0,
+          "pending_evidence_count": 0,
+          "rejected_evidence_count": 0,
+          "latest_evidence_at": null,
+          "latest_evidence_status": null,
+          "evidences_json": [],
+          "updates_count": 1,
+          "latest_update_at": "2026-06-22T21:16:01.936Z",
+          "latest_progress_percent": 100,
+          "latest_update_comment": "Plan marcado como completado.",
+          "latest_status_after": "completado",
+          "latest_blocked_reason": null,
+          "updates_json": [
+            {
+              "id": "348662b5-9751-4e34-a41b-f0e5b31c6ad1",
+              "comment": "Plan marcado como completado.",
+              "tenant_id": "70000000-0000-0000-0000-000000000701",
+              "created_at": "2026-06-22T21:16:01.936134",
+              "created_by": "70000000-0000-0000-0000-000000000712",
+              "updated_at": "2026-06-22T21:16:01.936134",
+              "status_after": "completado",
+              "action_plan_id": "04f4fc70-6de9-4653-9a57-47455363d2d0",
+              "blocked_reason": null,
+              "progress_percent": 100
+            }
+          ]
+        },
+        {
+          "id": "0f45b3d0-62f5-4a08-9e43-e03ebb6bc6c4",
+          "tenant_id": "70000000-0000-0000-0000-000000000701",
+          "iso_code": "ISO27001",
+          "title": "Actualizar matriz de riesgos ISO 27001.",
+          "description": "Matriz actualizada con tratamiento de accesos, backups y proveedor cloud.",
+          "source_type": "risk",
+          "source_id": null,
+          "priority": "alta",
+          "status": "completado",
+          "owner": "Responsable TI",
+          "due_date": "2026-06-03T00:00:00.000Z",
+          "created_by": "70000000-0000-0000-0000-000000000712",
+          "completed_at": null,
+          "created_at": "2026-06-09T18:36:43.622Z",
+          "updated_at": "2026-06-09T18:36:43.622Z",
+          "tenant_control_id": "08a6d453-c8e6-4901-b545-be9b3c52604a",
+          "finding_id": null,
+          "nonconformity_id": null,
+          "audit_id": null,
+          "asset_id": null,
+          "approval_status": "aprobada",
+          "approval_requested_at": null,
+          "approval_requested_by": null,
+          "approval_reviewed_at": null,
+          "approval_reviewed_by": null,
+          "approval_comment": null,
+          "ai_trace_id": null,
+          "ai_source_level": null,
+          "ai_source_label": null,
+          "ai_confidence": null,
+          "ai_confidence_score": null,
+          "ai_orchestration_json": {},
+          "ai_enhanced_answer_json": {},
+          "finding_title": null,
+          "finding_type": null,
+          "finding_severity": null,
+          "nonconformity_title": null,
+          "nonconformity_status": null,
+          "audit_iso": null,
+          "audit_start_date": null,
+          "audit_end_date": null,
+          "audit_auditor_name": null,
+          "audit_auditor_type": null,
+          "asset_name": null,
+          "asset_type": null,
+          "asset_owner": null,
+          "tenant_control_status": "pendiente",
+          "tenant_control_operation_id": "2a6fb8c8-1f96-4eb6-82d4-34f9e5588407",
+          "control_iso": "ISO27001",
+          "control_clause": "GENERAL",
+          "control_description": "Se gestionan accesos de usuarios",
+          "control_category": "General",
+          "evidence_count": 0,
+          "approved_evidence_count": 0,
+          "pending_evidence_count": 0,
+          "rejected_evidence_count": 0,
+          "latest_evidence_at": null,
+          "latest_evidence_status": null,
+          "evidences_json": [],
+          "updates_count": 0,
+          "latest_update_at": null,
+          "latest_progress_percent": 100,
+          "latest_update_comment": null,
+          "latest_status_after": null,
+          "latest_blocked_reason": null,
+          "updates_json": []
+        },
+        {
+          "id": "cc11d9cb-4ff9-4227-84e7-ae0219e6f80e",
+          "tenant_id": "70000000-0000-0000-0000-000000000701",
+          "iso_code": "ISO27001",
+          "title": "Ejecutar revisión trimestral de accesos.",
+          "description": "Recertificacion ejecutada parcialmente; falta evidencia de dos perfiles privilegiados.",
+          "source_type": "risk",
+          "source_id": null,
+          "priority": "alta",
+          "status": "completado",
+          "owner": "Responsable TI",
+          "due_date": "2026-06-19T00:00:00.000Z",
+          "created_by": "70000000-0000-0000-0000-000000000712",
+          "completed_at": "2026-06-22T21:16:14.440Z",
+          "created_at": "2026-06-09T18:36:43.622Z",
+          "updated_at": "2026-06-22T21:16:14.436Z",
+          "tenant_control_id": "08a6d453-c8e6-4901-b545-be9b3c52604a",
+          "finding_id": null,
+          "nonconformity_id": null,
+          "audit_id": null,
+          "asset_id": null,
+          "approval_status": "pendiente_aprobacion",
+          "approval_requested_at": null,
+          "approval_requested_by": null,
+          "approval_reviewed_at": null,
+          "approval_reviewed_by": null,
+          "approval_comment": null,
+          "ai_trace_id": null,
+          "ai_source_level": null,
+          "ai_source_label": null,
+          "ai_confidence": null,
+          "ai_confidence_score": null,
+          "ai_orchestration_json": {},
+          "ai_enhanced_answer_json": {},
+          "finding_title": null,
+          "finding_type": null,
+          "finding_severity": null,
+          "nonconformity_title": null,
+          "nonconformity_status": null,
+          "audit_iso": null,
+          "audit_start_date": null,
+          "audit_end_date": null,
+          "audit_auditor_name": null,
+          "audit_auditor_type": null,
+          "asset_name": null,
+          "asset_type": null,
+          "asset_owner": null,
+          "tenant_control_status": "pendiente",
+          "tenant_control_operation_id": "2a6fb8c8-1f96-4eb6-82d4-34f9e5588407",
+          "control_iso": "ISO27001",
+          "control_clause": "GENERAL",
+          "control_description": "Se gestionan accesos de usuarios",
+          "control_category": "General",
+          "evidence_count": 0,
+          "approved_evidence_count": 0,
+          "pending_evidence_count": 0,
+          "rejected_evidence_count": 0,
+          "latest_evidence_at": null,
+          "latest_evidence_status": null,
+          "evidences_json": [],
+          "updates_count": 1,
+          "latest_update_at": "2026-06-22T21:16:14.436Z",
+          "latest_progress_percent": 100,
+          "latest_update_comment": "Plan marcado como completado.",
+          "latest_status_after": "completado",
+          "latest_blocked_reason": null,
+          "updates_json": [
+            {
+              "id": "763b4e20-a671-4eae-a7f1-44a2f80f0d57",
+              "comment": "Plan marcado como completado.",
+              "tenant_id": "70000000-0000-0000-0000-000000000701",
+              "created_at": "2026-06-22T21:16:14.436219",
+              "created_by": "70000000-0000-0000-0000-000000000712",
+              "updated_at": "2026-06-22T21:16:14.436219",
+              "status_after": "completado",
+              "action_plan_id": "cc11d9cb-4ff9-4227-84e7-ae0219e6f80e",
+              "blocked_reason": null,
+              "progress_percent": 100
+            }
+          ]
+        },
+        {
+          "id": "a1336f83-321c-4f18-a5ea-ccd87015ade9",
+          "tenant_id": "70000000-0000-0000-0000-000000000701",
+          "iso_code": "ISO27001",
+          "title": "Ejecutar prueba de restauración.",
+          "description": "Prueba vencida; se mantiene como brecha prioritaria del SGSI.",
+          "source_type": "risk",
+          "source_id": null,
+          "priority": "alta",
+          "status": "completado",
+          "owner": "Responsable TI",
+          "due_date": "2026-06-04T00:00:00.000Z",
+          "created_by": "70000000-0000-0000-0000-000000000712",
+          "completed_at": "2026-06-22T21:16:19.676Z",
+          "created_at": "2026-06-09T18:36:43.622Z",
+          "updated_at": "2026-06-22T21:16:19.672Z",
+          "tenant_control_id": "08a6d453-c8e6-4901-b545-be9b3c52604a",
+          "finding_id": null,
+          "nonconformity_id": null,
+          "audit_id": null,
+          "asset_id": null,
+          "approval_status": "no_requerida",
+          "approval_requested_at": null,
+          "approval_requested_by": null,
+          "approval_reviewed_at": null,
+          "approval_reviewed_by": null,
+          "approval_comment": null,
+          "ai_trace_id": null,
+          "ai_source_level": null,
+          "ai_source_label": null,
+          "ai_confidence": null,
+          "ai_confidence_score": null,
+          "ai_orchestration_json": {},
+          "ai_enhanced_answer_json": {},
+          "finding_title": null,
+          "finding_type": null,
+          "finding_severity": null,
+          "nonconformity_title": null,
+          "nonconformity_status": null,
+          "audit_iso": null,
+          "audit_start_date": null,
+          "audit_end_date": null,
+          "audit_auditor_name": null,
+          "audit_auditor_type": null,
+          "asset_name": null,
+          "asset_type": null,
+          "asset_owner": null,
+          "tenant_control_status": "pendiente",
+          "tenant_control_operation_id": "2a6fb8c8-1f96-4eb6-82d4-34f9e5588407",
+          "control_iso": "ISO27001",
+          "control_clause": "GENERAL",
+          "control_description": "Se gestionan accesos de usuarios",
+          "control_category": "General",
+          "evidence_count": 0,
+          "approved_evidence_count": 0,
+          "pending_evidence_count": 0,
+          "rejected_evidence_count": 0,
+          "latest_evidence_at": null,
+          "latest_evidence_status": null,
+          "evidences_json": [],
+          "updates_count": 1,
+          "latest_update_at": "2026-06-22T21:16:19.672Z",
+          "latest_progress_percent": 100,
+          "latest_update_comment": "Plan marcado como completado.",
+          "latest_status_after": "completado",
+          "latest_blocked_reason": null,
+          "updates_json": [
+            {
+              "id": "8af7cf41-0d5c-4b2d-909b-5c221765fe6d",
+              "comment": "Plan marcado como completado.",
+              "tenant_id": "70000000-0000-0000-0000-000000000701",
+              "created_at": "2026-06-22T21:16:19.672224",
+              "created_by": "70000000-0000-0000-0000-000000000712",
+              "updated_at": "2026-06-22T21:16:19.672224",
+              "status_after": "completado",
+              "action_plan_id": "a1336f83-321c-4f18-a5ea-ccd87015ade9",
+              "blocked_reason": null,
+              "progress_percent": 100
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "/api/health/dashboard",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "ok": true,
+        "data": {
+          "global_score": 88.96,
+          "label": "Salud alta",
+          "status": "high",
+          "color": "green",
+          "explanation": "La salud bajó principalmente por 50 controles sin evidencia, 991 recomendaciones pendientes de revisión.",
+          "standards": [
+            {
+              "id": "ce4b94bd-9c10-4352-a93c-98b55a37f23b",
+              "name": "ISO27001",
+              "score": 88.96,
+              "status": "high",
+              "label": "Salud alta"
+            }
+          ],
+          "critical_processes": [
+            {
+              "id": "fab49230-3ae7-44b5-82b2-d5492f35aac8",
+              "process_id": "fab49230-3ae7-44b5-82b2-d5492f35aac8",
+              "operation_id": "2a6fb8c8-1f96-4eb6-82d4-34f9e5588407",
+              "name": "Gestión de Vulnerabilidades",
+              "standard_code": "ISO27001",
+              "score": 46.8,
+              "status": "low",
+              "main_issue": "50 controles sin evidencia"
+            },
+            {
+              "id": "636d3d47-4031-4cc9-988e-143815eb6a1e",
+              "process_id": "636d3d47-4031-4cc9-988e-143815eb6a1e",
+              "operation_id": "501f00af-0eef-483e-8703-af1ff394395c",
+              "name": "Proveedores Tecnológicos",
+              "standard_code": "ISO27001",
+              "score": 82.55,
+              "status": "acceptable",
+              "main_issue": "12 riesgos altos o críticos pendientes"
+            },
+            {
+              "id": "bdb1ee1f-a1f4-41fe-af28-1c4db3415a55",
+              "process_id": "bdb1ee1f-a1f4-41fe-af28-1c4db3415a55",
+              "operation_id": "5813ffe1-42d5-41bf-baaf-e5a1136d4899",
+              "name": "Respaldo y Restauración",
+              "standard_code": "ISO27001",
+              "score": 83.75,
+              "status": "acceptable",
+              "main_issue": "222 recomendaciones pendientes de revisión"
+            }
+          ],
+          "alerts": {
+            "critical_gaps": 0,
+            "overdue_actions": 0,
+            "missing_evidence": 50
+          },
+          "data_quality_warnings": []
+        }
+      }
+    },
+    {
+      "url": "/api/metrics/official/catalog",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "definition": {
+              "id": "d7507ff0-542c-4b76-a1aa-931282659bdf",
+              "code": "ACTIONS",
+              "name": "Ejecución de acciones",
+              "definition": "Progreso ponderado de acciones con cierre verificable.",
+              "domain": "actions",
+              "objective": "Ejecutar y cerrar acciones oportunamente.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "weekly",
+              "population": "Acciones con owner, fechas, estado y evidencia.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "9be392f9-6e47-4fb3-9be9-e5caec1e8292",
+              "period": {
+                "end": "2026-08-10T21:05:03.311Z",
+                "key": "2026-08",
+                "start": "2026-08-01T00:00:00.000Z",
+                "timezone": "America/Santiago"
+              },
+              "effective_at": "2026-08-10T21:05:03.311Z",
+              "result": {
+                "value": null,
+                "status": "insufficient_data",
+                "warnings": [
+                  {
+                    "code": "minimum_sample_size_not_met",
+                    "sampleSize": 0,
+                    "minimumSampleSize": 1
+                  }
+                ]
+              },
+              "value": null,
+              "unit": "%",
+              "state": "insufficient_data",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": 100,
+                "status": "attention",
+                "checksum": "929c48a34554c71f90e06187eabec2b8e64104d8bc6f04caed354edb2a1cd41a",
+                "dimensions": {
+                  "lineage": {
+                    "rule": "source_snapshot_required",
+                    "score": null,
+                    "status": "unknown",
+                    "version": 1,
+                    "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+                    "evidence": {
+                      "source_snapshot_ids": []
+                    },
+                    "warnings": [],
+                    "dimension": "lineage",
+                    "numerator": 0,
+                    "population": null,
+                    "denominator": 1,
+                    "sample_size": null,
+                    "evaluated_at": "2026-08-10T21:05:03.722Z"
+                  },
+                  "accuracy": {
+                    "rule": "requires_explicit_accuracy_validation",
+                    "score": null,
+                    "status": "unknown",
+                    "version": 1,
+                    "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+                    "evidence": {
+                      "validation_records": 0
+                    },
+                    "warnings": [
+                      "Exactitud no inferida sin validación específica."
+                    ],
+                    "dimension": "accuracy",
+                    "numerator": null,
+                    "population": null,
+                    "denominator": null,
+                    "sample_size": null,
+                    "evaluated_at": "2026-08-10T21:05:03.722Z"
+                  },
+                  "coverage": {
+                    "rule": "usable_population_coverage",
+                    "score": null,
+                    "status": "unknown",
+                    "version": 1,
+                    "checksum": "0f43df9563292c2e26977ca5c76c61f8661602cd276c314b13879e039ff792b6",
+                    "evidence": {
+                      "usable": 0,
+                      "received": 0
+                    },
+                    "warnings": [],
+                    "dimension": "coverage",
+                    "numerator": 0,
+                    "population": null,
+                    "denominator": 0,
+                    "sample_size": null,
+                    "evaluated_at": "2026-08-10T21:05:03.722Z"
+                  },
+                  "freshness": {
+                    "rule": "effective_date_vs_frequency_sla",
+                    "score": 100,
+                    "status": "trusted",
+                    "version": 1,
+                    "checksum": "1c2ecf02f81d6ab4cafa91d491c49199b48f0a31560d5aaa1ff3b90b3cd8052c",
+                    "evidence": {
+                      "reason": "Edad evaluada contra frecuencia weekly.",
+                      "status": "fresh",
+                      "timezone": "America/Santiago",
+                      "age_seconds": 0,
+                      "effective_at": "2026-08-10T21:05:03.311Z",
+                      "policy_version": 1
+                    },
+                    "warnings": [],
+                    "dimension": "freshness",
+                    "numerator": null,
+                    "population": null,
+                    "denominator": null,
+                    "sample_size": null,
+                    "evaluated_at": "2026-08-10T21:05:03.722Z"
+                  },
+                  "stability": {
+                    "rule": "coefficient_of_variation_last_6",
+                    "score": null,
+                    "status": "unknown",
+                    "version": 1,
+                    "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+                    "evidence": {
+                      "history_points": 0
+                    },
+                    "warnings": [
+                      "Historia insuficiente para estabilidad."
+                    ],
+                    "dimension": "stability",
+                    "numerator": 0,
+                    "population": null,
+                    "denominator": 6,
+                    "sample_size": null,
+                    "evaluated_at": "2026-08-10T21:05:03.722Z"
+                  },
+                  "validation": {
+                    "rule": "official_run_without_error_validation",
+                    "score": null,
+                    "status": "unknown",
+                    "version": 1,
+                    "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+                    "evidence": {
+                      "calculation_run_id": null,
+                      "validation_records": 0
+                    },
+                    "warnings": [],
+                    "dimension": "validation",
+                    "numerator": 1,
+                    "population": null,
+                    "denominator": 1,
+                    "sample_size": null,
+                    "evaluated_at": "2026-08-10T21:05:03.722Z"
+                  },
+                  "consistency": {
+                    "rule": "non_excluded_rows/received_rows",
+                    "score": null,
+                    "status": "unknown",
+                    "version": 1,
+                    "checksum": "62a7a524b23b1199f7fb5ff7fb842d3304a191a6f7d285ea3b9c7ad999a3e4f0",
+                    "evidence": {
+                      "excluded": 0,
+                      "received": 0
+                    },
+                    "warnings": [],
+                    "dimension": "consistency",
+                    "numerator": 0,
+                    "population": null,
+                    "denominator": 0,
+                    "sample_size": null,
+                    "evaluated_at": "2026-08-10T21:05:03.722Z"
+                  },
+                  "completeness": {
+                    "rule": "usable_rows/received_rows",
+                    "score": null,
+                    "status": "unknown",
+                    "version": 1,
+                    "checksum": "9bd90687a15b554418a0dd0652cff4edd436aa1a3dbf8e54a07f2ffb43c2abb8",
+                    "evidence": {
+                      "usable": 0,
+                      "excluded": 0,
+                      "received": 0
+                    },
+                    "warnings": [],
+                    "dimension": "completeness",
+                    "numerator": 0,
+                    "population": null,
+                    "denominator": 0,
+                    "sample_size": null,
+                    "evaluated_at": "2026-08-10T21:05:03.722Z"
+                  }
+                }
+              },
+              "freshness": {
+                "status": "fresh"
+              },
+              "sufficiency": {
+                "status": "insufficient",
+                "sample_size": 0,
+                "population_size": 0
+              },
+              "threshold": {
+                "unit": "%",
+                "bands": [
+                  {
+                    "max": 79.999999,
+                    "min": 60,
+                    "code": "attention",
+                    "label": "Requiere atención",
+                    "positive": false
+                  },
+                  {
+                    "max": 59.999999,
+                    "min": null,
+                    "code": "critical",
+                    "label": "Crítico",
+                    "positive": false
+                  },
+                  {
+                    "max": null,
+                    "min": 80,
+                    "code": "positive",
+                    "label": "Objetivo alcanzado",
+                    "positive": true
+                  }
+                ],
+                "version": 1,
+                "checksum": "88ebb8f8bfb13bb275ff159dbfeea7273898e6740e324baeb9af6ef364d7dfc2",
+                "direction": "higher_is_better"
+              },
+              "interpretation": {
+                "cause": null,
+                "trend": "unknown",
+                "impact": null,
+                "priority": "attention",
+                "warnings": [
+                  {
+                    "code": "minimum_sample_size_not_met",
+                    "sampleSize": 0,
+                    "minimumSampleSize": 1
+                  },
+                  {
+                    "code": "minimum_sample_size_not_met",
+                    "sampleSize": 0,
+                    "minimumSampleSize": 1
+                  }
+                ],
+                "limitations": [],
+                "result_status": "insufficient_data",
+                "classification": {
+                  "code": "insufficient_data",
+                  "label": "Sin medición oficial",
+                  "positive": false
+                },
+                "recommendation": "Resolver la causa indicada antes de usar el indicador para decidir.",
+                "proposed_action": null,
+                "suggested_owner": null,
+                "evidence_checksum": "2d11811d2e4888f46f852a3371fdc217447f1698fa59360faa1dad1849a21b41"
+              },
+              "updated_at": "2026-08-10T21:07:42.278Z",
+              "checksum": "6e4446ceef6aa2238767ae99424b6749eaad645cfc705d4fae970b04074417a5"
+            }
+          },
+          {
+            "definition": {
+              "id": "36b171b0-4bc0-4648-9ff2-3c0777bdc22c",
+              "code": "REMEDIATION",
+              "name": "Remediación efectiva",
+              "definition": "Progreso ponderado y verificado de remediaciones.",
+              "domain": "actions",
+              "objective": "Reducir brechas dentro de plazo y con re-test.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "weekly",
+              "population": "Acciones con owner, plazo, evidencia y verificación.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "36b171b0-4bc0-4648-9ff2-3c0777bdc22c",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "5befe729-a856-4265-83fa-489d436b37f9",
+              "code": "AUDIT-ASSURANCE",
+              "name": "Cobertura de assurance",
+              "definition": "Resultado ponderado de pruebas con muestra, excepciones y evidencia.",
+              "domain": "assurance",
+              "objective": "Aumentar confianza en la operación de controles.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "on_demand",
+              "population": "Ejecuciones de assurance concluyentes y revisadas.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "5befe729-a856-4265-83fa-489d436b37f9",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "98f032a4-da67-4021-9976-71ff86012f62",
+              "code": "COVERAGE",
+              "name": "Cobertura de evaluación",
+              "definition": "Proporción del universo aplicable que cuenta con evaluación válida.",
+              "domain": "compliance",
+              "objective": "Evitar conclusiones sobre universos insuficientemente evaluados.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "weekly",
+              "population": "Universo aplicable validado, excluyendo no aplica aprobado.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "98f032a4-da67-4021-9976-71ff86012f62",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "787ddd25-02b5-4aab-9731-f9be31abc736",
+              "code": "COMPLIANCE",
+              "name": "Cumplimiento evaluado",
+              "definition": "Proporción ponderada de requisitos aplicables evaluados como conformes.",
+              "domain": "compliance",
+              "objective": "Gestionar brechas de cumplimiento con evidencia.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "monthly",
+              "population": "Requisitos aplicables con evaluación válida.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "787ddd25-02b5-4aab-9731-f9be31abc736",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "a3b76674-d73a-4f90-bdb7-f7045e898a2e",
+              "code": "SLA-COMPLIANCE",
+              "name": "Cumplimiento de SLA",
+              "definition": "Casos aplicables resueltos dentro del compromiso y timezone publicados.",
+              "domain": "continuity",
+              "objective": "Cumplir compromisos de servicio.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "daily",
+              "population": "Casos con objetivo, calendario, timezone y resolución.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "a3b76674-d73a-4f90-bdb7-f7045e898a2e",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "3536f3ba-c17a-422a-8e65-461b00d67180",
+              "code": "CONTINUITY",
+              "name": "Resiliencia operativa",
+              "definition": "Cumplimiento de objetivos de servicio y recuperación.",
+              "domain": "continuity",
+              "objective": "Demostrar recuperación dentro de SLA, RTO y RPO.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "monthly",
+              "population": "Servicios con objetivos, incidentes y pruebas vigentes.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "3536f3ba-c17a-422a-8e65-461b00d67180",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "74e84712-a6f8-4bbb-a0c0-33168049b8b5",
+              "code": "CONTROL-COVERAGE",
+              "name": "Cobertura de controles",
+              "definition": "Riesgos y requisitos relevantes con control activo aplicable.",
+              "domain": "control",
+              "objective": "Eliminar exposición sin mitigación asignada.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "monthly",
+              "population": "Universo de riesgos/requisitos y controles vinculados.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "74e84712-a6f8-4bbb-a0c0-33168049b8b5",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "9cfbe28a-6e88-4d5e-b8fc-b4b97c77a60d",
+              "code": "CONTROL-EFFECT",
+              "name": "Efectividad de controles",
+              "definition": "Efectividad de diseño, implementación, operación y evidencia.",
+              "domain": "control",
+              "objective": "Fortalecer controles degradados y verificar su operación.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "monthly",
+              "population": "Controles activos con evidencia y assurance aplicables.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "9cfbe28a-6e88-4d5e-b8fc-b4b97c77a60d",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "ab7008e2-fe33-4c74-9869-9d9c014853d7",
+              "code": "DATA-TRUST",
+              "name": "Confianza del dato",
+              "definition": "Confianza compuesta desde ocho dimensiones verificables.",
+              "domain": "data_quality",
+              "objective": "Habilitar decisiones sustentadas por evidencia trazable.",
+              "unit": "score",
+              "direction": "higher_is_better",
+              "frequency": "on_demand",
+              "population": "Evaluaciones por dimensión con evidencia y política publicada.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "ab7008e2-fe33-4c74-9869-9d9c014853d7",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "b85525fe-45fd-4c25-afd8-0068f7e360d9",
+              "code": "EVIDENCE-FRESH",
+              "name": "Evidencia vigente",
+              "definition": "Cobertura y vigencia de la evidencia requerida.",
+              "domain": "evidence",
+              "objective": "Mantener evidencia aprobada y vigente.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "daily",
+              "population": "Relaciones de evidencia requeridas y su fecha efectiva.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "b85525fe-45fd-4c25-afd8-0068f7e360d9",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "53b5b035-b574-43d5-b3cf-f02e925b9c2c",
+              "code": "FINDINGS",
+              "name": "Exposición por hallazgos",
+              "definition": "Severidad y exposición asociada a hallazgos vigentes.",
+              "domain": "findings",
+              "objective": "Eliminar hallazgos críticos vencidos.",
+              "unit": "index",
+              "direction": "lower_is_better",
+              "frequency": "weekly",
+              "population": "Hallazgos clasificados con fechas y estado.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "53b5b035-b574-43d5-b3cf-f02e925b9c2c",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "98d20b97-dd7f-4667-bdd4-3364b4c38e91",
+              "code": "GRC-HEALTH",
+              "name": "Salud GRC",
+              "definition": "Síntesis de exposición GRC, cumplimiento, acciones, controles, evidencia y confianza.",
+              "domain": "health",
+              "objective": "Controlar la exposición GRC con una lectura reproducible.",
+              "unit": "score",
+              "direction": "higher_is_better",
+              "frequency": "monthly",
+              "population": "Componentes GRC con snapshot oficial.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "98d20b97-dd7f-4667-bdd4-3364b4c38e91",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "4042cf15-d62d-4ac3-ba75-0e4e4247ddd1",
+              "code": "INCIDENTS",
+              "name": "Gestión de incidentes",
+              "definition": "Exposición por severidad de incidentes durante el período.",
+              "domain": "incidents",
+              "objective": "Contener incidentes críticos y prevenir reincidencia.",
+              "unit": "index",
+              "direction": "lower_is_better",
+              "frequency": "daily",
+              "population": "Incidentes clasificados con owner, timeline y estado.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "4042cf15-d62d-4ac3-ba75-0e4e4247ddd1",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "8336c88d-c93d-4759-b25a-0710508f0b0a",
+              "code": "LOSSES",
+              "name": "Exposición por pérdidas",
+              "definition": "Pérdida neta confirmada por moneda y período.",
+              "domain": "loss",
+              "objective": "Reducir pérdida neta y concentración de eventos.",
+              "unit": "currency",
+              "direction": "lower_is_better",
+              "frequency": "monthly",
+              "population": "Eventos confirmados y recuperaciones de una misma moneda.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "8336c88d-c93d-4759-b25a-0710508f0b0a",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "c9edae48-6b42-45a8-a355-bf59d141e6fa",
+              "code": "MATURITY",
+              "name": "Madurez de gestión",
+              "definition": "Nivel de institucionalización de prácticas y evidencia.",
+              "domain": "maturity",
+              "objective": "Avanzar capacidades prioritarias bajo modelo publicado.",
+              "unit": "level",
+              "direction": "higher_is_better",
+              "frequency": "quarterly",
+              "population": "Assessments vigentes con evidencia suficiente.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "c9edae48-6b42-45a8-a355-bf59d141e6fa",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "5300b764-320b-498f-8420-d6f98eae2b6b",
+              "code": "OP-PERFORMANCE",
+              "name": "Desempeño operacional",
+              "definition": "Desempeño compuesto oficial de eficacia, estabilidad, calidad, riesgo y cumplimiento.",
+              "domain": "operations",
+              "objective": "Actuar sobre el componente causal de degradación.",
+              "unit": "score",
+              "direction": "higher_is_better",
+              "frequency": "monthly",
+              "population": "Componentes operacionales oficiales compatibles.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "5300b764-320b-498f-8420-d6f98eae2b6b",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "21f05ffa-3d80-4e47-8931-7c454aa2ffee",
+              "code": "ISO-READINESS",
+              "name": "Preparación del sistema ISO",
+              "definition": "Preparación documentada para evaluación, sin afirmar certificación.",
+              "domain": "readiness",
+              "objective": "Priorizar brechas materiales de preparación.",
+              "unit": "%",
+              "direction": "higher_is_better",
+              "frequency": "monthly",
+              "population": "Requisitos aplicables, evaluaciones, evidencia, hallazgos y acciones.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "21f05ffa-3d80-4e47-8931-7c454aa2ffee",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "24fea52e-d84e-431c-9689-6ad37e5b241c",
+              "code": "RISK-INHERENT",
+              "name": "Riesgo inherente",
+              "definition": "Exposición anterior a controles bajo metodología publicada.",
+              "domain": "risk",
+              "objective": "Mantener la exposición base dentro del apetito definido.",
+              "unit": "score",
+              "direction": "lower_is_better",
+              "frequency": "monthly",
+              "population": "Riesgos con probabilidad e impacto válidos.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "24fea52e-d84e-431c-9689-6ad37e5b241c",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "695dc0b1-c999-4978-8054-44c506a94493",
+              "code": "RISK-RESIDUAL",
+              "name": "Riesgo residual",
+              "definition": "Exposición remanente después de efectividad de controles demostrada.",
+              "domain": "risk",
+              "objective": "Confirmar que la mitigación reduce el riesgo dentro del apetito.",
+              "unit": "score",
+              "direction": "lower_is_better",
+              "frequency": "monthly",
+              "population": "Riesgos con controles y efectividad oficial.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "695dc0b1-c999-4978-8054-44c506a94493",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "0d269962-d22d-4035-b0d6-36ff65f3b6ec",
+              "code": "SUPPLIER-RISK",
+              "name": "Riesgo de proveedores",
+              "definition": "Exposición de terceros por criticidad, seguridad, privacidad y resiliencia.",
+              "domain": "supplier",
+              "objective": "Mantener terceros dentro del apetito aprobado.",
+              "unit": "score",
+              "direction": "lower_is_better",
+              "frequency": "monthly",
+              "population": "Proveedores críticos con evaluación vigente.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "0d269962-d22d-4035-b0d6-36ff65f3b6ec",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          },
+          {
+            "definition": {
+              "id": "a3e3fdc8-68c6-45ce-a3ed-67352d44ac1a",
+              "code": "SUPPLIER-HEALTH",
+              "name": "Salud de proveedores",
+              "definition": "Salud del portafolio de terceros desde componentes oficiales disponibles.",
+              "domain": "supplier",
+              "objective": "Mantener el portafolio de terceros estable y controlado.",
+              "unit": "score",
+              "direction": "higher_is_better",
+              "frequency": "monthly",
+              "population": "Proveedores con riesgo, desempeño y assurance compatibles.",
+              "version": 1,
+              "status": "published"
+            },
+            "latest_snapshot": {
+              "snapshot_id": "a3e3fdc8-68c6-45ce-a3ed-67352d44ac1a",
+              "period": {
+                "key": null
+              },
+              "effective_at": null,
+              "result": null,
+              "value": null,
+              "unit": null,
+              "state": "unmeasured",
+              "target": null,
+              "coverage": null,
+              "trust": {
+                "score": null,
+                "status": "unknown"
+              },
+              "freshness": {
+                "status": "unknown"
+              },
+              "sufficiency": {
+                "status": "source_unavailable"
+              },
+              "threshold": null,
+              "interpretation": null,
+              "updated_at": null,
+              "checksum": null
+            }
+          }
+        ],
+        "request_id": "web-1786403436284-39a68e289eb1c8"
+      }
+    },
+    {
+      "url": "/api/audits/summary/70000000-0000-0000-0000-000000000701",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "ok": true,
+        "tenant_id": "70000000-0000-0000-0000-000000000701",
+        "iso": null,
+        "summary": {
+          "total": 1,
+          "pendientes": 1,
+          "en_ejecucion": 0,
+          "completadas": 0,
+          "con_informe": 0,
+          "sin_informe": 1,
+          "hallazgos": 0,
+          "acciones": 0
+        },
+        "next_audit": {
+          "id": "92791ece-19c1-406d-8c0a-281256febc69",
+          "tenant_id": "70000000-0000-0000-0000-000000000701",
+          "iso": "ISO27001",
+          "start_date": "2026-06-02T00:00:00.000Z",
+          "end_date": "2026-06-30T00:00:00.000Z",
+          "requester_name": "Admin Cumplimiento",
+          "auditor_type": "interno",
+          "auditor_name": "Auditor Demo ISO 27001",
+          "created_at": "2026-06-09T18:36:43.622Z",
+          "status": "pendiente",
+          "report_file": null,
+          "audit_result": null,
+          "audit_result_notes": null,
+          "audit_result_at": null,
+          "normalized_status": "pendiente"
+        },
+        "recent_audits": [
+          {
+            "id": "92791ece-19c1-406d-8c0a-281256febc69",
+            "tenant_id": "70000000-0000-0000-0000-000000000701",
+            "iso": "ISO27001",
+            "start_date": "2026-06-02T00:00:00.000Z",
+            "end_date": "2026-06-30T00:00:00.000Z",
+            "requester_name": "Admin Cumplimiento",
+            "auditor_type": "interno",
+            "auditor_name": "Auditor Demo ISO 27001",
+            "created_at": "2026-06-09T18:36:43.622Z",
+            "status": "pendiente",
+            "report_file": null,
+            "audit_result": null,
+            "audit_result_notes": null,
+            "audit_result_at": null,
+            "normalized_status": "pendiente"
+          }
+        ],
+        "note": "Las auditorías en ejecución son trazabilidad operativa y no deterioran KPI hasta existir resultado formal."
+      }
+    },
+    {
+      "url": "/api/metrics/official/dashboard",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "ok": true,
+        "data": {
+          "summary": {
+            "total_kpis": 22,
+            "green": 0,
+            "yellow": 0,
+            "red": 0,
+            "gray": 22,
+            "measured_kpis": 0,
+            "data_coverage_pct": null,
+            "official_score": null,
+            "health_kpis": 2
+          },
+          "items": [
+            {
+              "id": "d7507ff0-542c-4b76-a1aa-931282659bdf",
+              "code": "ACTIONS",
+              "name": "Ejecución de acciones",
+              "description": "Progreso ponderado de acciones con cierre verificable.",
+              "category": "actions",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "weekly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "9be392f9-6e47-4fb3-9be9-e5caec1e8292",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "weekly",
+                "period_start": "2026-08-01T00:00:00.000Z",
+                "period_end": "2026-08-10T21:05:03.311Z",
+                "calculated_at": "2026-08-10T21:07:42.278Z",
+                "breakdown_json": {
+                  "state": "insufficient_data",
+                  "coverage": null,
+                  "trust": {
+                    "score": 100,
+                    "status": "attention",
+                    "checksum": "929c48a34554c71f90e06187eabec2b8e64104d8bc6f04caed354edb2a1cd41a",
+                    "dimensions": {
+                      "lineage": {
+                        "rule": "source_snapshot_required",
+                        "score": null,
+                        "status": "unknown",
+                        "version": 1,
+                        "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+                        "evidence": {
+                          "source_snapshot_ids": []
+                        },
+                        "warnings": [],
+                        "dimension": "lineage",
+                        "numerator": 0,
+                        "population": null,
+                        "denominator": 1,
+                        "sample_size": null,
+                        "evaluated_at": "2026-08-10T21:05:03.722Z"
+                      },
+                      "accuracy": {
+                        "rule": "requires_explicit_accuracy_validation",
+                        "score": null,
+                        "status": "unknown",
+                        "version": 1,
+                        "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+                        "evidence": {
+                          "validation_records": 0
+                        },
+                        "warnings": [
+                          "Exactitud no inferida sin validación específica."
+                        ],
+                        "dimension": "accuracy",
+                        "numerator": null,
+                        "population": null,
+                        "denominator": null,
+                        "sample_size": null,
+                        "evaluated_at": "2026-08-10T21:05:03.722Z"
+                      },
+                      "coverage": {
+                        "rule": "usable_population_coverage",
+                        "score": null,
+                        "status": "unknown",
+                        "version": 1,
+                        "checksum": "0f43df9563292c2e26977ca5c76c61f8661602cd276c314b13879e039ff792b6",
+                        "evidence": {
+                          "usable": 0,
+                          "received": 0
+                        },
+                        "warnings": [],
+                        "dimension": "coverage",
+                        "numerator": 0,
+                        "population": null,
+                        "denominator": 0,
+                        "sample_size": null,
+                        "evaluated_at": "2026-08-10T21:05:03.722Z"
+                      },
+                      "freshness": {
+                        "rule": "effective_date_vs_frequency_sla",
+                        "score": 100,
+                        "status": "trusted",
+                        "version": 1,
+                        "checksum": "1c2ecf02f81d6ab4cafa91d491c49199b48f0a31560d5aaa1ff3b90b3cd8052c",
+                        "evidence": {
+                          "reason": "Edad evaluada contra frecuencia weekly.",
+                          "status": "fresh",
+                          "timezone": "America/Santiago",
+                          "age_seconds": 0,
+                          "effective_at": "2026-08-10T21:05:03.311Z",
+                          "policy_version": 1
+                        },
+                        "warnings": [],
+                        "dimension": "freshness",
+                        "numerator": null,
+                        "population": null,
+                        "denominator": null,
+                        "sample_size": null,
+                        "evaluated_at": "2026-08-10T21:05:03.722Z"
+                      },
+                      "stability": {
+                        "rule": "coefficient_of_variation_last_6",
+                        "score": null,
+                        "status": "unknown",
+                        "version": 1,
+                        "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+                        "evidence": {
+                          "history_points": 0
+                        },
+                        "warnings": [
+                          "Historia insuficiente para estabilidad."
+                        ],
+                        "dimension": "stability",
+                        "numerator": 0,
+                        "population": null,
+                        "denominator": 6,
+                        "sample_size": null,
+                        "evaluated_at": "2026-08-10T21:05:03.722Z"
+                      },
+                      "validation": {
+                        "rule": "official_run_without_error_validation",
+                        "score": null,
+                        "status": "unknown",
+                        "version": 1,
+                        "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+                        "evidence": {
+                          "calculation_run_id": null,
+                          "validation_records": 0
+                        },
+                        "warnings": [],
+                        "dimension": "validation",
+                        "numerator": 1,
+                        "population": null,
+                        "denominator": 1,
+                        "sample_size": null,
+                        "evaluated_at": "2026-08-10T21:05:03.722Z"
+                      },
+                      "consistency": {
+                        "rule": "non_excluded_rows/received_rows",
+                        "score": null,
+                        "status": "unknown",
+                        "version": 1,
+                        "checksum": "62a7a524b23b1199f7fb5ff7fb842d3304a191a6f7d285ea3b9c7ad999a3e4f0",
+                        "evidence": {
+                          "excluded": 0,
+                          "received": 0
+                        },
+                        "warnings": [],
+                        "dimension": "consistency",
+                        "numerator": 0,
+                        "population": null,
+                        "denominator": 0,
+                        "sample_size": null,
+                        "evaluated_at": "2026-08-10T21:05:03.722Z"
+                      },
+                      "completeness": {
+                        "rule": "usable_rows/received_rows",
+                        "score": null,
+                        "status": "unknown",
+                        "version": 1,
+                        "checksum": "9bd90687a15b554418a0dd0652cff4edd436aa1a3dbf8e54a07f2ffb43c2abb8",
+                        "evidence": {
+                          "usable": 0,
+                          "excluded": 0,
+                          "received": 0
+                        },
+                        "warnings": [],
+                        "dimension": "completeness",
+                        "numerator": 0,
+                        "population": null,
+                        "denominator": 0,
+                        "sample_size": null,
+                        "evaluated_at": "2026-08-10T21:05:03.722Z"
+                      }
+                    }
+                  },
+                  "freshness": {
+                    "status": "fresh"
+                  },
+                  "sufficiency": {
+                    "status": "insufficient",
+                    "sample_size": 0,
+                    "population_size": 0
+                  },
+                  "interpretation": {
+                    "cause": null,
+                    "trend": "unknown",
+                    "impact": null,
+                    "priority": "attention",
+                    "warnings": [
+                      {
+                        "code": "minimum_sample_size_not_met",
+                        "sampleSize": 0,
+                        "minimumSampleSize": 1
+                      },
+                      {
+                        "code": "minimum_sample_size_not_met",
+                        "sampleSize": 0,
+                        "minimumSampleSize": 1
+                      }
+                    ],
+                    "limitations": [],
+                    "result_status": "insufficient_data",
+                    "classification": {
+                      "code": "insufficient_data",
+                      "label": "Sin medición oficial",
+                      "positive": false
+                    },
+                    "recommendation": "Resolver la causa indicada antes de usar el indicador para decidir.",
+                    "proposed_action": null,
+                    "suggested_owner": null,
+                    "evidence_checksum": "2d11811d2e4888f46f852a3371fdc217447f1698fa59360faa1dad1849a21b41"
+                  },
+                  "snapshot_id": "9be392f9-6e47-4fb3-9be9-e5caec1e8292"
+                }
+              }
+            },
+            {
+              "id": "36b171b0-4bc0-4648-9ff2-3c0777bdc22c",
+              "code": "REMEDIATION",
+              "name": "Remediación efectiva",
+              "description": "Progreso ponderado y verificado de remediaciones.",
+              "category": "actions",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "weekly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "36b171b0-4bc0-4648-9ff2-3c0777bdc22c",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "weekly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "36b171b0-4bc0-4648-9ff2-3c0777bdc22c"
+                }
+              }
+            },
+            {
+              "id": "5befe729-a856-4265-83fa-489d436b37f9",
+              "code": "AUDIT-ASSURANCE",
+              "name": "Cobertura de assurance",
+              "description": "Resultado ponderado de pruebas con muestra, excepciones y evidencia.",
+              "category": "assurance",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "on_demand",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "5befe729-a856-4265-83fa-489d436b37f9",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "on_demand",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "5befe729-a856-4265-83fa-489d436b37f9"
+                }
+              }
+            },
+            {
+              "id": "98f032a4-da67-4021-9976-71ff86012f62",
+              "code": "COVERAGE",
+              "name": "Cobertura de evaluación",
+              "description": "Proporción del universo aplicable que cuenta con evaluación válida.",
+              "category": "compliance",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "weekly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "98f032a4-da67-4021-9976-71ff86012f62",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "weekly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "98f032a4-da67-4021-9976-71ff86012f62"
+                }
+              }
+            },
+            {
+              "id": "787ddd25-02b5-4aab-9731-f9be31abc736",
+              "code": "COMPLIANCE",
+              "name": "Cumplimiento evaluado",
+              "description": "Proporción ponderada de requisitos aplicables evaluados como conformes.",
+              "category": "compliance",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "monthly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "787ddd25-02b5-4aab-9731-f9be31abc736",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "787ddd25-02b5-4aab-9731-f9be31abc736"
+                }
+              }
+            },
+            {
+              "id": "a3b76674-d73a-4f90-bdb7-f7045e898a2e",
+              "code": "SLA-COMPLIANCE",
+              "name": "Cumplimiento de SLA",
+              "description": "Casos aplicables resueltos dentro del compromiso y timezone publicados.",
+              "category": "continuity",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "daily",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "a3b76674-d73a-4f90-bdb7-f7045e898a2e",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "daily",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "a3b76674-d73a-4f90-bdb7-f7045e898a2e"
+                }
+              }
+            },
+            {
+              "id": "3536f3ba-c17a-422a-8e65-461b00d67180",
+              "code": "CONTINUITY",
+              "name": "Resiliencia operativa",
+              "description": "Cumplimiento de objetivos de servicio y recuperación.",
+              "category": "continuity",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "monthly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "3536f3ba-c17a-422a-8e65-461b00d67180",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "3536f3ba-c17a-422a-8e65-461b00d67180"
+                }
+              }
+            },
+            {
+              "id": "74e84712-a6f8-4bbb-a0c0-33168049b8b5",
+              "code": "CONTROL-COVERAGE",
+              "name": "Cobertura de controles",
+              "description": "Riesgos y requisitos relevantes con control activo aplicable.",
+              "category": "control",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "monthly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "74e84712-a6f8-4bbb-a0c0-33168049b8b5",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "74e84712-a6f8-4bbb-a0c0-33168049b8b5"
+                }
+              }
+            },
+            {
+              "id": "9cfbe28a-6e88-4d5e-b8fc-b4b97c77a60d",
+              "code": "CONTROL-EFFECT",
+              "name": "Efectividad de controles",
+              "description": "Efectividad de diseño, implementación, operación y evidencia.",
+              "category": "control",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "monthly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "9cfbe28a-6e88-4d5e-b8fc-b4b97c77a60d",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "9cfbe28a-6e88-4d5e-b8fc-b4b97c77a60d"
+                }
+              }
+            },
+            {
+              "id": "ab7008e2-fe33-4c74-9869-9d9c014853d7",
+              "code": "DATA-TRUST",
+              "name": "Confianza del dato",
+              "description": "Confianza compuesta desde ocho dimensiones verificables.",
+              "category": "data_quality",
+              "kpi_type": "official_indicator",
+              "unit": "score",
+              "frequency": "on_demand",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": true,
+              "latest_snapshot": {
+                "id": "ab7008e2-fe33-4c74-9869-9d9c014853d7",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "on_demand",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "ab7008e2-fe33-4c74-9869-9d9c014853d7"
+                }
+              }
+            },
+            {
+              "id": "b85525fe-45fd-4c25-afd8-0068f7e360d9",
+              "code": "EVIDENCE-FRESH",
+              "name": "Evidencia vigente",
+              "description": "Cobertura y vigencia de la evidencia requerida.",
+              "category": "evidence",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "daily",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "b85525fe-45fd-4c25-afd8-0068f7e360d9",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "daily",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "b85525fe-45fd-4c25-afd8-0068f7e360d9"
+                }
+              }
+            },
+            {
+              "id": "53b5b035-b574-43d5-b3cf-f02e925b9c2c",
+              "code": "FINDINGS",
+              "name": "Exposición por hallazgos",
+              "description": "Severidad y exposición asociada a hallazgos vigentes.",
+              "category": "findings",
+              "kpi_type": "official_indicator",
+              "unit": "index",
+              "frequency": "weekly",
+              "direction": "lower_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "53b5b035-b574-43d5-b3cf-f02e925b9c2c",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "weekly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "53b5b035-b574-43d5-b3cf-f02e925b9c2c"
+                }
+              }
+            },
+            {
+              "id": "98d20b97-dd7f-4667-bdd4-3364b4c38e91",
+              "code": "GRC-HEALTH",
+              "name": "Salud GRC",
+              "description": "Síntesis de exposición GRC, cumplimiento, acciones, controles, evidencia y confianza.",
+              "category": "health",
+              "kpi_type": "official_indicator",
+              "unit": "score",
+              "frequency": "monthly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": true,
+              "latest_snapshot": {
+                "id": "98d20b97-dd7f-4667-bdd4-3364b4c38e91",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "98d20b97-dd7f-4667-bdd4-3364b4c38e91"
+                }
+              }
+            },
+            {
+              "id": "4042cf15-d62d-4ac3-ba75-0e4e4247ddd1",
+              "code": "INCIDENTS",
+              "name": "Gestión de incidentes",
+              "description": "Exposición por severidad de incidentes durante el período.",
+              "category": "incidents",
+              "kpi_type": "official_indicator",
+              "unit": "index",
+              "frequency": "daily",
+              "direction": "lower_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "4042cf15-d62d-4ac3-ba75-0e4e4247ddd1",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "daily",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "4042cf15-d62d-4ac3-ba75-0e4e4247ddd1"
+                }
+              }
+            },
+            {
+              "id": "8336c88d-c93d-4759-b25a-0710508f0b0a",
+              "code": "LOSSES",
+              "name": "Exposición por pérdidas",
+              "description": "Pérdida neta confirmada por moneda y período.",
+              "category": "loss",
+              "kpi_type": "official_indicator",
+              "unit": "currency",
+              "frequency": "monthly",
+              "direction": "lower_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "8336c88d-c93d-4759-b25a-0710508f0b0a",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "8336c88d-c93d-4759-b25a-0710508f0b0a"
+                }
+              }
+            },
+            {
+              "id": "c9edae48-6b42-45a8-a355-bf59d141e6fa",
+              "code": "MATURITY",
+              "name": "Madurez de gestión",
+              "description": "Nivel de institucionalización de prácticas y evidencia.",
+              "category": "maturity",
+              "kpi_type": "official_indicator",
+              "unit": "level",
+              "frequency": "quarterly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "c9edae48-6b42-45a8-a355-bf59d141e6fa",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "quarterly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "c9edae48-6b42-45a8-a355-bf59d141e6fa"
+                }
+              }
+            },
+            {
+              "id": "5300b764-320b-498f-8420-d6f98eae2b6b",
+              "code": "OP-PERFORMANCE",
+              "name": "Desempeño operacional",
+              "description": "Desempeño compuesto oficial de eficacia, estabilidad, calidad, riesgo y cumplimiento.",
+              "category": "operations",
+              "kpi_type": "official_indicator",
+              "unit": "score",
+              "frequency": "monthly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "5300b764-320b-498f-8420-d6f98eae2b6b",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "5300b764-320b-498f-8420-d6f98eae2b6b"
+                }
+              }
+            },
+            {
+              "id": "21f05ffa-3d80-4e47-8931-7c454aa2ffee",
+              "code": "ISO-READINESS",
+              "name": "Preparación del sistema ISO",
+              "description": "Preparación documentada para evaluación, sin afirmar certificación.",
+              "category": "readiness",
+              "kpi_type": "official_indicator",
+              "unit": "%",
+              "frequency": "monthly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "21f05ffa-3d80-4e47-8931-7c454aa2ffee",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "21f05ffa-3d80-4e47-8931-7c454aa2ffee"
+                }
+              }
+            },
+            {
+              "id": "24fea52e-d84e-431c-9689-6ad37e5b241c",
+              "code": "RISK-INHERENT",
+              "name": "Riesgo inherente",
+              "description": "Exposición anterior a controles bajo metodología publicada.",
+              "category": "risk",
+              "kpi_type": "official_indicator",
+              "unit": "score",
+              "frequency": "monthly",
+              "direction": "lower_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "24fea52e-d84e-431c-9689-6ad37e5b241c",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "24fea52e-d84e-431c-9689-6ad37e5b241c"
+                }
+              }
+            },
+            {
+              "id": "695dc0b1-c999-4978-8054-44c506a94493",
+              "code": "RISK-RESIDUAL",
+              "name": "Riesgo residual",
+              "description": "Exposición remanente después de efectividad de controles demostrada.",
+              "category": "risk",
+              "kpi_type": "official_indicator",
+              "unit": "score",
+              "frequency": "monthly",
+              "direction": "lower_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "695dc0b1-c999-4978-8054-44c506a94493",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "695dc0b1-c999-4978-8054-44c506a94493"
+                }
+              }
+            },
+            {
+              "id": "0d269962-d22d-4035-b0d6-36ff65f3b6ec",
+              "code": "SUPPLIER-RISK",
+              "name": "Riesgo de proveedores",
+              "description": "Exposición de terceros por criticidad, seguridad, privacidad y resiliencia.",
+              "category": "supplier",
+              "kpi_type": "official_indicator",
+              "unit": "score",
+              "frequency": "monthly",
+              "direction": "lower_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "0d269962-d22d-4035-b0d6-36ff65f3b6ec",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "0d269962-d22d-4035-b0d6-36ff65f3b6ec"
+                }
+              }
+            },
+            {
+              "id": "a3e3fdc8-68c6-45ce-a3ed-67352d44ac1a",
+              "code": "SUPPLIER-HEALTH",
+              "name": "Salud de proveedores",
+              "description": "Salud del portafolio de terceros desde componentes oficiales disponibles.",
+              "category": "supplier",
+              "kpi_type": "official_indicator",
+              "unit": "score",
+              "frequency": "monthly",
+              "direction": "higher_is_better",
+              "target_value": null,
+              "applicable_standards": [],
+              "is_enabled": true,
+              "is_health_kpi": false,
+              "latest_snapshot": {
+                "id": "a3e3fdc8-68c6-45ce-a3ed-67352d44ac1a",
+                "value": null,
+                "status_color": "gray",
+                "period_type": "monthly",
+                "period_start": null,
+                "period_end": null,
+                "calculated_at": null,
+                "breakdown_json": {
+                  "state": "unmeasured",
+                  "coverage": null,
+                  "trust": {
+                    "score": null,
+                    "status": "unknown"
+                  },
+                  "freshness": {
+                    "status": "unknown"
+                  },
+                  "sufficiency": {
+                    "status": "source_unavailable"
+                  },
+                  "interpretation": null,
+                  "snapshot_id": "a3e3fdc8-68c6-45ce-a3ed-67352d44ac1a"
+                }
+              }
+            }
+          ]
+        },
+        "request_id": "req-1786403436370-9wa5xo3s"
+      }
+    }
+  ],
+  "console_errors": []
+}

@@ -129,10 +129,31 @@ async function dashboard(scope){
 async function recalculateCatalog(scope,body={},requestId=null){
   const catalog=await listCatalog(scope,{limit:250}); const results=[];
   for(const item of catalog){
-    try{results.push({metric_code:item.definition.code,status:'completed',result:await calculateIndicator(scope,item.definition.code,body,requestId)});}
+    try{
+      const result=await calculateIndicator(scope,item.definition.code,body,requestId);
+      const entry={metric_code:item.definition.code,status:'completed',result};
+      if(body.publish_snapshots!==false&&result.measurement?.id){
+        try{
+          const snapshotResult=await createSnapshot(scope,item.definition.code,{measurement_id:result.measurement.id,timezone:body.period?.timezone||body.timezone||'America/Santiago'},requestId);
+          const snapshotId=snapshotResult?.snapshot?.snapshot_id;
+          if(snapshotId){
+            const published=await publishSnapshot(scope,snapshotId,requestId);
+            entry.snapshot={status:published.status,snapshot:published.snapshot};
+          }else{
+            entry.snapshot={status:'failed',error_code:'INDICATOR_SNAPSHOT_ID_MISSING',message:'Snapshot sin identificador publicable.'};
+          }
+        }catch(snapshotError){
+          entry.snapshot={status:'failed',error_code:snapshotError.code||'INDICATOR_SNAPSHOT_FAILED',message:serializeError(snapshotError)};
+        }
+      }
+      results.push(entry);
+    }
     catch(error){results.push({metric_code:item.definition.code,status:'failed',error_code:error.code||'INDICATOR_CALCULATION_FAILED',message:serializeError(error)});}
   }
-  return {recalculated:results.filter((item)=>item.status==='completed').length,failed:results.filter((item)=>item.status==='failed').length,results};
+  const snapshotResults=results.map((item)=>item.snapshot).filter(Boolean);
+  return {recalculated:results.filter((item)=>item.status==='completed').length,failed:results.filter((item)=>item.status==='failed').length,
+    snapshots_created:snapshotResults.filter((item)=>['published','already_published'].includes(item.status)).length,
+    snapshots_failed:snapshotResults.filter((item)=>item.status==='failed').length,results};
 }
 async function getIndicator(scope,metricCode,{technical=false}={}){
   const definition=await resolveIndicator(scope,metricCode); const snapshot=await latestSnapshot(pool,scope,definition.id);
@@ -155,6 +176,12 @@ function mappedState(item){
 function buildOfficialMeasurementPersistence(finalState,value){
   if(finalState==='calculated') return {value_numeric:Number(value),value_text:null};
   return {value_numeric:null,value_text:null};
+}
+function reconcileSufficiencyWithOfficialState(officialState,sufficiency,item={}){
+  if(officialState==='calculated'||sufficiency.status!=='sufficient') return sufficiency;
+  const requirements=item.data_requirements||{};
+  const missingInputs=Array.isArray(requirements.missing_fields)?requirements.missing_fields:[];
+  return {...sufficiency,status:'insufficient',reason:missingInputs.length?'missing_inputs':officialState,missing_inputs:missingInputs};
 }
 async function buildTrustEvidence(client,scope,indicator,item,runId,periodValue,sourceSnapshotIds){
   const counts=item?.source_counts||{}; const received=Number(counts.received||0); const usable=Number(counts.usable||0); const excluded=Number(counts.excluded||Math.max(0,received-usable));
@@ -193,7 +220,8 @@ async function calculateIndicator(scope,metricCode,body={},requestId=null){
     const sourceSnapshotIds=item.snapshot_id?[item.snapshot_id]:[];
     const [trustPolicy,sufficiencyRule]=await Promise.all([trustPolicyFor(client,scope,indicator.id),sufficiencyRuleFor(client,scope,indicator)]);
     const evidence=await buildTrustEvidence(client,scope,indicator,item,item.calculation_run_id||null,currentPeriod,sourceSnapshotIds);
-    const sufficiency=evaluateSufficiency({sourceStatus:officialState==='source_unavailable'?'source_unavailable':officialState==='mapping_required'?'mapping_required':officialState==='source_incompatible'?'source_incompatible':'source_ready',requiredInputs:sufficiencyRule.required_inputs||[],availableInputs:officialState==='calculated'?{value}:{},sampleSize:Number(item.source_counts?.usable||0),populationSize:Number(item.source_counts?.received||0)||null,coverage:evidence.coverage,rule:sufficiencyRule});
+    let sufficiency=evaluateSufficiency({sourceStatus:officialState==='source_unavailable'?'source_unavailable':officialState==='mapping_required'?'mapping_required':officialState==='source_incompatible'?'source_incompatible':'source_ready',requiredInputs:sufficiencyRule.required_inputs||[],availableInputs:officialState==='calculated'?{value}:{},sampleSize:Number(item.source_counts?.usable||0),populationSize:Number(item.source_counts?.received||0)||null,coverage:evidence.coverage,rule:sufficiencyRule});
+    sufficiency=reconcileSufficiencyWithOfficialState(officialState,sufficiency,item);
     let finalState=officialState;
     if(officialState==='calculated'&&sufficiency.status==='insufficient') finalState=sufficiency.reason==='minimum_coverage'?'insufficient_coverage':'insufficient_data';
     if(officialState==='calculated'&&evidence.freshness.status==='stale') finalState='stale_source';
@@ -339,4 +367,4 @@ async function executeJob(scope,jobId){const job=await asyncJobs.getJobScoped(uu
 }
 async function listJobs(scope,filters={}){return asyncJobs.listJobsScoped({tenant_id:tenantId(scope),is_platform:false},{job_type:filters.job_type||null,status:filters.status||null,limit:limit(filters.limit,25,100)});}
 
-module.exports={ IndicatorGovernanceError, resolveIndicator, listCatalog, dashboard, recalculateCatalog, getIndicator, calculateIndicator, createSnapshot, publishSnapshot, history, createComparison, comparisons, methodology, createMethodologyDraft, transitionMethodology, exportCatalog, createProposal, reviewProposal, createJob, executeJob, listJobs, buildOfficialMeasurementPersistence };
+module.exports={ IndicatorGovernanceError, resolveIndicator, listCatalog, dashboard, recalculateCatalog, getIndicator, calculateIndicator, createSnapshot, publishSnapshot, history, createComparison, comparisons, methodology, createMethodologyDraft, transitionMethodology, exportCatalog, createProposal, reviewProposal, createJob, executeJob, listJobs, buildOfficialMeasurementPersistence, reconcileSufficiencyWithOfficialState };

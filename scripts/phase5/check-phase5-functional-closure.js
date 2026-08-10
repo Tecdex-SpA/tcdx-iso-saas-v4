@@ -89,6 +89,8 @@ const indicatorService = read('backend/src/services/indicators/indicatorGovernan
 for (const token of ['snapshot_id', 'checksum', 'trust', 'coverage', 'sufficiency']) {
   check(indicatorService.includes(token), `Official_export_missing_${token}`);
 }
+check(indicatorService.includes('snapshots_created'), 'Dashboard_recalculate_must_report_snapshot_publication_count');
+check(indicatorService.includes('publishSnapshot(scope,snapshotId,requestId)'), 'Dashboard_recalculate_must_publish_snapshots_consumed_by_official_surfaces');
 
 if (failures.length) {
   process.stderr.write(JSON.stringify({ status: 'PHASE5_FUNCTIONAL_CLOSURE_CHECK_FAILED', failures }, null, 2) + '\n');

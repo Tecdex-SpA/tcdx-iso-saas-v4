@@ -81,4 +81,12 @@ assert.deepStrictEqual(
   governance.buildOfficialMeasurementPersistence('unmeasured', undefined),
   { value_numeric: null, value_text: null }
 );
+assert.strictEqual(
+  governance.reconcileSufficiencyWithOfficialState('calculated', { status: 'sufficient' }).status,
+  'sufficient'
+);
+assert.deepStrictEqual(
+  governance.reconcileSufficiencyWithOfficialState('insufficient_data', { status: 'sufficient', missing_inputs: [] }, { data_requirements: { missing_fields: ['controlEffectiveness'] } }),
+  { status: 'insufficient', reason: 'missing_inputs', missing_inputs: ['controlEffectiveness'] }
+);
 process.stdout.write('indicatorCore tests passed\n');

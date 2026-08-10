@@ -184,7 +184,7 @@ function classifyError(error) {
   const code = String(error?.code || 'OFFICIAL_RECALC_FORMULA_FAILED');
   const message = String(error?.message || error || 'Error procesando la fórmula.').slice(0, 320);
   if (['FORMULA_VARIABLE_REQUIRED', 'FORMULA_ZERO_DENOMINATOR', 'FORMULA_DIVISION_BY_ZERO', 'FORMULA_ZERO_WEIGHTS', 'AVAILABILITY_METHOD_REQUIRED'].includes(code)) {
-    return { status: 'unmeasured', failureType: 'insufficient_data', code, message };
+    return { status: 'unmeasured', failureType: 'insufficient_data', code, message, missingFields: [error?.details?.variable].filter(Boolean) };
   }
   if (['42703', '42P01', '42883', '22P02', 'SOURCE_SCHEMA_INCOMPATIBLE'].includes(code) || /column .* does not exist|relation .* does not exist|invalid input syntax/i.test(message)) {
     return { status: 'source_incompatible', failureType: 'source_incompatible', code, message: 'La fuente operacional existe, pero su estructura no es compatible con el contrato analítico vigente.' };
@@ -328,7 +328,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
       results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'calculated', ...sourceContext, value: persistedValue, unit: persisted.unit, calculation_run_id: persisted.calculation_run_id || null, snapshot_id: snapshotId, warnings: persisted.warnings || [], decision });
     } catch (error) {
       const classified = classifyError(error);
-      results.push(functionalFailure({ formula, sourceContext, status: classified.status, failureType: classified.failureType, code: classified.code, message: classified.message }));
+      results.push(functionalFailure({ formula, sourceContext, status: classified.status, failureType: classified.failureType, code: classified.code, message: classified.message, missingFields: classified.missingFields || [] }));
     }
   }
 
