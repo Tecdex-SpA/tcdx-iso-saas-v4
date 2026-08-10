@@ -154,7 +154,8 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
   test('crear métrica, configurar fuente, preview, publicar, ejecutar, resultado, explicación y lineage', async ({ page }) => {
     await login(page);
     metricId = await operateBuilder(page, 'metric', '/metricas/constructor', `${nonce}_METRIC`);
-    const measurements = await page.request.get(apiUrl(`/api/metrics/${metricId}/measurements`), { headers: headers(token) });
+    expect(metricId).toMatch(uuidRe);
+    const measurements = await page.request.get(apiUrl('/api/metrics/official/COMPLIANCE/history?limit=24'), { headers: headers(token) });
     const payload = await expectApiOk(measurements);
     expect(Array.isArray(payload.data)).toBeTruthy();
     expect(payload.data.length).toBeGreaterThan(0);

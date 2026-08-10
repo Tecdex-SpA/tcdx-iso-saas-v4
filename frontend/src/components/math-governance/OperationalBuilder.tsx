@@ -10,6 +10,9 @@ type BuilderKind = 'metric' | 'dashboard' | 'report' | 'survey' | 'assurance' | 
 type OfficialResult = {
   result_code?: string;
   analytical_result_code?: string;
+  metric_key?: string;
+  metric_code?: string;
+  functional_code?: string;
   display_name?: string;
   formula_code?: string;
   formula_version?: number;
@@ -92,6 +95,15 @@ function codePrefix(kind: BuilderKind) {
     assurance: 'ASSURANCE',
     loss: 'LOSS',
   }[kind];
+}
+
+function officialMetricCode(item: OfficialResult | undefined, fallback: string) {
+  const raw = item?.functional_code || item?.metric_code || item?.metric_key || fallback;
+  return String(raw || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function listEndpoint(kind: BuilderKind) {
@@ -407,13 +419,21 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     await loadHistory();
   };
 
+  const selectedDefinition = visibleCatalog.find((item) => (item.result_code || item.analytical_result_code) === form.resultCode);
+
   const execute = async () => {
     if (!entity?.id) return setErrors(['Primero guarda un draft.']);
     let endpoint = '';
     let payload: Record<string, unknown> = {};
     if (kind === 'metric') {
-      endpoint = `/api/metrics/${entity.id}/calculate`;
-      payload = { period_start: form.periodStart, period_end: form.periodEnd, inputs: { numerator: Number(form.numerator), denominator: Number(form.denominator) }, unit: form.unit };
+      const metricCode = officialMetricCode(selectedDefinition, form.resultCode);
+      endpoint = `/api/metrics/official/${encodeURIComponent(metricCode)}/calculate`;
+      payload = {
+        period: { start: form.periodStart, end: form.periodEnd, timezone: 'America/Santiago' },
+        inputs: { numerator: Number(form.numerator), denominator: Number(form.denominator) },
+        unit: form.unit,
+        metadata: { builder_entity_id: entity.id, result_code: form.resultCode, source_contract: form.sourceContract },
+      };
     } else if (kind === 'dashboard') {
       endpoint = `/api/dashboards/${entity.id}/snapshot`;
     } else if (kind === 'report') {
@@ -440,7 +460,6 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     await loadHistory();
   };
 
-  const selectedDefinition = visibleCatalog.find((item) => (item.result_code || item.analytical_result_code) === form.resultCode);
   const runId = (preview?.calculation_run_id || result?.calculation_run_id || (result?.generation as Entity | undefined)?.id) as string | undefined;
 
   return (
