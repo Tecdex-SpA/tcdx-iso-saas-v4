@@ -255,7 +255,8 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
     });
     const officialPayload = await expectApiOk(official);
     await page.goto('/grc');
-    await expect(page.getByText(/Capa matemática oficial|Resultados operativos trazables/i).first()).toBeVisible();
+    await expect(page.locator('main').getByText('Portal GRC', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Estado operativo y analítico/i)).toBeVisible();
     await page.goto('/bi');
     await expect(page.getByTestId('operational-builder-dashboard')).toBeVisible();
     expect(officialPayload.data.formula.code).toBeTruthy();
