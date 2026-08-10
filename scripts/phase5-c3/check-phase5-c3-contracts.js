@@ -24,6 +24,7 @@ for (const state of ['calculated','unmeasured','source_unavailable','mapping_req
 const service = read('backend/src/services/indicators/indicatorGovernance.service.js');
 assert(service.includes('recalculateOfficialAnalytics'), 'Indicator calculation must call the official mathematical orchestrator');
 assert(service.includes('createMethodologyDraft') && service.includes('transitionMethodology') && service.includes('exportCatalog'), 'Methodology governance or official export is incomplete');
+assert(service.includes('snapshots_created') && service.includes('publishSnapshot(scope,snapshotId,requestId)'), 'Dashboard recalculation must publish official snapshots consumed by Dashboard, Metrics and BI');
 assert(!service.includes('new Function(') && !service.includes('eval('), 'Dynamic calculation is forbidden');
 const dashboard = read('frontend/src/app/dashboard/page.tsx');
 assert(dashboard.includes('/api/metrics/official/dashboard'), 'Dashboard must consume the official snapshot adapter');
