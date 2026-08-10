@@ -57,6 +57,18 @@ type BuilderForm = {
   format: 'pdf' | 'docx' | 'xlsx';
 };
 
+function currentMonthRange() {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
+}
+
+const DEFAULT_PERIOD = currentMonthRange();
+
 const DEFAULT_FORM: BuilderForm = {
   code: '',
   name: '',
@@ -69,8 +81,8 @@ const DEFAULT_FORM: BuilderForm = {
   thresholdCritical: '50',
   numerator: '8',
   denominator: '10',
-  periodStart: '2026-01-01T00:00:00.000Z',
-  periodEnd: '2026-01-31T23:59:59.000Z',
+  periodStart: DEFAULT_PERIOD.start,
+  periodEnd: DEFAULT_PERIOD.end,
   dimension: 'general',
   format: 'pdf',
 };

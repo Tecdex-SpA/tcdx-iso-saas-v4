@@ -217,13 +217,13 @@ INSERT INTO grc_framework_requirements (id, tenant_id, version_id, reference_cod
 ('72000000-0000-0000-0000-000000005504', '$TENANT_B', '72000000-0000-0000-0000-000000005503', 'REQ-P55-1', 'Phase 5.5 compliance requirement B', 'Tenant B isolation requirement.', 'tcdx_interpretation')
 ON CONFLICT (tenant_id, version_id, reference_code) DO UPDATE SET permitted_title=EXCLUDED.permitted_title;
 INSERT INTO grc_requirement_control_mappings (id, tenant_id, requirement_id, tenant_control_id, mapping_type, coverage_level, justification, source_type, status, created_by, created_at, updated_at) VALUES
-('71000000-0000-0000-0000-000000005505', '$TENANT_A', '71000000-0000-0000-0000-000000005504', '71000000-0000-0000-0000-000000005501', 'exact', 90, 'Phase 5.5 browser E2E official compliance source.', 'tcdx_interpretation', 'published', '$ADMIN_A', '2026-01-15T00:00:00Z', '2026-01-15T00:00:00Z'),
-('72000000-0000-0000-0000-000000005505', '$TENANT_B', '72000000-0000-0000-0000-000000005504', '72000000-0000-0000-0000-000000005501', 'exact', 20, 'Phase 5.5 browser E2E tenant isolation compliance source.', 'tcdx_interpretation', 'published', '$ADMIN_B', '2026-01-15T00:00:00Z', '2026-01-15T00:00:00Z')
+('71000000-0000-0000-0000-000000005505', '$TENANT_A', '71000000-0000-0000-0000-000000005504', '71000000-0000-0000-0000-000000005501', 'exact', 90, 'Phase 5.5 browser E2E official compliance source.', 'tcdx_interpretation', 'published', '$ADMIN_A', now() - interval '1 day', now() - interval '1 day'),
+('72000000-0000-0000-0000-000000005505', '$TENANT_B', '72000000-0000-0000-0000-000000005504', '72000000-0000-0000-0000-000000005501', 'exact', 20, 'Phase 5.5 browser E2E tenant isolation compliance source.', 'tcdx_interpretation', 'published', '$ADMIN_B', now() - interval '1 day', now() - interval '1 day')
 ON CONFLICT (tenant_id, requirement_id, tenant_control_id, catalog_control_id) DO UPDATE
 SET coverage_level=EXCLUDED.coverage_level, status='published', updated_at=EXCLUDED.updated_at;
 INSERT INTO grc_control_assurance (id, tenant_id, tenant_control_id, assurance_status, score, calculated_at, formula_version) VALUES
-('71000000-0000-0000-0000-000000005506', '$TENANT_A', '71000000-0000-0000-0000-000000005501', 'effective', 90, '2026-01-15T00:00:00Z', 'phase5_5_browser_e2e'),
-('72000000-0000-0000-0000-000000005506', '$TENANT_B', '72000000-0000-0000-0000-000000005501', 'degraded', 20, '2026-01-15T00:00:00Z', 'phase5_5_browser_e2e')
+('71000000-0000-0000-0000-000000005506', '$TENANT_A', '71000000-0000-0000-0000-000000005501', 'effective', 90, now() - interval '1 day', 'phase5_5_browser_e2e'),
+('72000000-0000-0000-0000-000000005506', '$TENANT_B', '72000000-0000-0000-0000-000000005501', 'degraded', 20, now() - interval '1 day', 'phase5_5_browser_e2e')
 ON CONFLICT (tenant_id, tenant_control_id) DO UPDATE
 SET assurance_status=EXCLUDED.assurance_status, score=EXCLUDED.score, calculated_at=EXCLUDED.calculated_at;
 
