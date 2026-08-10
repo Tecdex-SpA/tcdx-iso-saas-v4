@@ -2,7 +2,7 @@
 
 const { FUNCTIONAL_INDICATORS } = require('./functionalIndicatorCatalog');
 const { TRUST_DIMENSIONS, checksum } = require('./indicatorCore');
-const { getSourceCodeForFormula } = require('../math-governance/sourceContracts.service');
+const { getSourceCodeForIndicator } = require('../math-governance/sourceContracts.service');
 
 const TRUST_WEIGHTS = Object.freeze({ completeness:0.15,accuracy:0.15,consistency:0.10,freshness:0.15,lineage:0.15,validation:0.10,stability:0.05,coverage:0.15 });
 
@@ -27,7 +27,7 @@ async function bootstrapIndicators(client) {
     )).rows[0] || (await client.query('SELECT id FROM metric_definition_versions WHERE metric_definition_id=$1 AND version_number=$2',[definition.id,indicator.version_number])).rows[0];
     counts.versions += 1;
 
-    const sourceCode = getSourceCodeForFormula(indicator.formula_code);
+    const sourceCode = getSourceCodeForIndicator(indicator.functional_code, indicator.formula_code);
     const official = (await client.query(
       `SELECT ofv.id AS formula_version_id,ofsc.id AS source_contract_id
        FROM official_formula_versions ofv JOIN official_formula_definitions ofd ON ofd.id=ofv.formula_definition_id
@@ -41,12 +41,22 @@ async function bootstrapIndicators(client) {
        WHERE dsc.source_code=$1 AND dscv.status='published' ORDER BY dsc.tenant_id NULLS FIRST,dscv.version_number DESC LIMIT 1`,[sourceCode]
     )).rows[0];
     if (!semantic?.id) throw new Error(`Published semantic contract missing for ${indicator.functional_code}`);
-    const bindingChecksum = checksum({ code:indicator.functional_code,formula:indicator.formula_code,formula_version_id:official.formula_version_id,semantic_contract_version_id:semantic.id,unit:indicator.unit,version:1 });
+    const latestBinding = (await client.query(
+      `SELECT version_number,metadata->>'source_code' AS source_code
+       FROM metric_source_bindings
+       WHERE tenant_id IS NULL AND metric_key=$1 AND binding_status='published'
+       ORDER BY version_number DESC LIMIT 1`,
+      [indicator.functional_code]
+    )).rows[0];
+    const bindingVersion = latestBinding && latestBinding.source_code && latestBinding.source_code !== sourceCode
+      ? Number(latestBinding.version_number) + 1
+      : Number(latestBinding?.version_number || 1);
+    const bindingChecksum = checksum({ code:indicator.functional_code,formula:indicator.formula_code,formula_version_id:official.formula_version_id,semantic_contract_version_id:semantic.id,source_code:sourceCode,unit:indicator.unit,version:bindingVersion });
     await client.query(
       `INSERT INTO metric_source_bindings(tenant_id,metric_key,formula_code,source_contract_id,binding_status,effective_from,metadata,metric_definition_id,definition_version_id,official_formula_version_id,semantic_contract_version_id,version_number,methodology_version,unit,checksum,published_at)
-       VALUES(NULL,$1,$2,$3::uuid,'published','2026-08-07T00:00:00Z',$4::jsonb,$5::uuid,$6::uuid,$7::uuid,$8::uuid,1,1,$9,$10,now())
+       VALUES(NULL,$1,$2,$3::uuid,'published','2026-08-07T00:00:00Z',$4::jsonb,$5::uuid,$6::uuid,$7::uuid,$8::uuid,$9,$9,$10,$11,now())
        ON CONFLICT (COALESCE(tenant_id,'00000000-0000-0000-0000-000000000000'::uuid),metric_key,version_number) DO NOTHING`,
-      [indicator.functional_code,indicator.formula_code,official.source_contract_id,JSON.stringify({ source_code:sourceCode }),definition.id,version.id,official.formula_version_id,semantic.id,indicator.unit,bindingChecksum]
+      [indicator.functional_code,indicator.formula_code,official.source_contract_id,JSON.stringify({ source_code:sourceCode, supersedes_source_code:latestBinding?.source_code || null }),definition.id,version.id,official.formula_version_id,semantic.id,bindingVersion,indicator.unit,bindingChecksum]
     );
     counts.bindings += 1;
     const policyPayload = { frequency:indicator.frequency,minimum_sample_size:1,minimum_coverage:indicator.minimum_coverage,failure_policy:'mark_unmeasured',timeout_ms:30000,max_attempts:3,retry_backoff_seconds:30,retention_periods:24 };

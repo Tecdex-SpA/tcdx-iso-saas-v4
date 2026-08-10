@@ -13,35 +13,50 @@ function sum(values) { const usable = values.map((value) => number(value)).filte
 function average(values) { const usable = values.map((value) => number(value)).filter((value) => value !== null); return usable.length ? usable.reduce((total, value) => total + value, 0) / usable.length : null; }
 function score(value) { const normalized = ratio(value); return normalized === null ? null : normalized * 100; }
 function buildSourceContract({ sourceKey, entityType, requiredFields = [], tenantScoped = true, status = 'source_unavailable', unit = null } = {}) { if (!sourceKey || !entityType) throw new MathGovernanceError('SOURCE_CONTRACT_INVALID', 'sourceKey y entityType son obligatorios.'); if (!SOURCE_STATES.has(status) && status !== 'available') throw new MathGovernanceError('SOURCE_STATUS_INVALID', 'Estado de fuente inválido.'); return Object.freeze({ sourceKey, entityType, requiredFields, tenantScoped, status, unit, lineageRequired: true }); }
-function sourceUnavailable(sourceKey, reason = 'La fuente operacional no está disponible para esta fórmula.') { return Object.freeze({ sourceKey, source_code: sourceKey, status: 'source_unavailable', rows: [], reason, warnings: [reason], inputHash: null, source_snapshot: null, lineage: [], formula_input: null }); }
+function sourceUnavailable(sourceKey, reason = 'La fuente operacional no está disponible para esta fórmula.', options = {}) { return Object.freeze({ sourceKey, source_code: sourceKey, status: 'source_unavailable', rows: [], reason, warnings: [reason], inputHash: null, source_snapshot: null, lineage: [], formula_input: null, data_requirements: { status: 'source_unavailable', missing_fields: options.required_fields || [], missing_entities: options.missing_entities || [sourceKey].filter(Boolean), incomplete_records: [], required_population: options.minimum_sample_size || null, current_population: 0, coverage_gap: null, freshness_gap: null, route_to_fix: options.route_to_fix || null, required_capability: options.required_capability || null, reason } }); }
 async function tableExists(client, tableName) { if (!client || typeof client.query !== 'function') return false; const result = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [`public.${tableName}`]); return result.rows[0]?.exists === true; }
 function assertTenant(tenantId) { if (!tenantId) throw new MathGovernanceError('SOURCE_TENANT_REQUIRED', 'Resolver de fuentes requiere tenant efectivo.'); }
 function assertPermission(permission) { if (permission && permission.allowed === false) throw new MathGovernanceError('SOURCE_PERMISSION_DENIED', 'Permiso insuficiente para resolver dataset matemático.', { required: permission.required }); }
 function normalizeRows(rows, contract) { return rows.map((row) => { const normalized = {}; for (const [key, value] of Object.entries(row)) normalized[key] = typeof value === 'string' ? value.trim() : value; normalized.__source_code = contract.source_code; return normalized; }); }
 function buildLineage({ rows, contract, formula, runId = null, snapshotHash = null }) { return rows.slice(0, 1000).map((row) => ({ source_record: row.id || row.source_entity_id || null, physical_source: row.__physical_source || null, source_contract: contract.source_code, dataset_snapshot: snapshotHash, formula_version: `${formula.formula_code}@${formula.version}`, calculation_run: runId })); }
 function tagRows(rows, physicalSource) { return (rows || []).map((row) => ({ ...row, __physical_source: physicalSource })); }
+function tagWarnings(rows, warnings = []) { return (rows || []).map((row) => ({ ...row, __source_warnings: warnings })); }
 
 function safeTimestampExpression(alias = 'x') {
   return `COALESCE(NULLIF(to_jsonb(${alias})->>'event_date','')::timestamptz,NULLIF(to_jsonb(${alias})->>'occurred_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'measured_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'updated_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'created_at','')::timestamptz)`;
 }
 async function firstPopulatedTables(client, tables, tenantId, period = {}) {
   let existing = false;
+  let primaryExisting = null;
   for (const table of tables) {
     if (!(await tableExists(client, table))) continue;
+    if (!primaryExisting) primaryExisting = table;
     existing = true;
     const timestamp = safeTimestampExpression('x');
     const result = await client.query(`SELECT x.*, ${timestamp} AS __event_time FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid AND ($2::timestamptz IS NULL OR ${timestamp}>=$2) AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`, [tenantId, period.start || null, period.end || null]);
-    if (result.rows?.length) return tagRows(result.rows, table);
+    if (result.rows?.length) {
+      const warnings = primaryExisting && table !== primaryExisting
+        ? [`Fuente primaria ${primaryExisting} sin filas utilizables; se usó fallback legacy explícito ${table}.`]
+        : [];
+      return tagWarnings(tagRows(result.rows, table), warnings);
+    }
   }
   return existing ? [] : null;
 }
 async function firstPopulated(client, candidates) {
   let available = false;
+  let primaryExisting = null;
   for (const candidate of candidates) {
     if (!(await tableExists(client, candidate.table))) continue;
+    if (!primaryExisting) primaryExisting = candidate.table;
     available = true;
     const result = await client.query(candidate.sql, candidate.params || []);
-    if (result.rows?.length) return tagRows(result.rows, candidate.table);
+    if (result.rows?.length) {
+      const warnings = primaryExisting && candidate.table !== primaryExisting
+        ? [`Fuente primaria ${primaryExisting} sin filas utilizables; se usó fallback legacy explícito ${candidate.table}.`]
+        : [];
+      return tagWarnings(tagRows(result.rows, candidate.table), warnings);
+    }
   }
   return available ? [] : null;
 }
@@ -58,6 +73,41 @@ async function queryRisk(client, tenantId, period) { return firstPopulatedTables
 async function queryControls(client, tenantId, period) { return firstPopulatedTables(client, ['grc_control_assurance','control_soa_assessments','control_health_scores','tenant_controls'], tenantId, period); }
 async function queryAuditActions(client, tenantId, period, formulaCode) {
   const severityFormula = formulaCode === 'F5_5_SEVERITY_INDEX';
+  if (!severityFormula && await tableExists(client, 'action_plans')) {
+    const timestamp = safeTimestampExpression('a');
+    const updatesExist = await tableExists(client, 'action_plan_updates');
+    const updateJoin = updatesExist ? `LEFT JOIN LATERAL (
+         SELECT au.* FROM action_plan_updates au
+         WHERE (to_jsonb(au)->>'tenant_id')::uuid=$1::uuid
+           AND COALESCE(NULLIF(to_jsonb(au)->>'action_plan_id','')::uuid,NULLIF(to_jsonb(au)->>'plan_id','')::uuid)=a.id
+         ORDER BY COALESCE(NULLIF(to_jsonb(au)->>'created_at','')::timestamptz,NULLIF(to_jsonb(au)->>'updated_at','')::timestamptz) DESC NULLS LAST
+         LIMIT 1
+       ) u ON true` : 'LEFT JOIN LATERAL (SELECT NULL::jsonb AS row_json) u ON false';
+    const updateJson = updatesExist ? 'to_jsonb(u)' : "'{}'::jsonb";
+    const result = await client.query(
+      `SELECT a.*,
+              COALESCE(NULLIF(${updateJson}->>'progress_percent','')::numeric,NULLIF(to_jsonb(a)->>'progress_percent','')::numeric,NULLIF(to_jsonb(a)->>'latest_progress_percent','')::numeric,NULLIF(to_jsonb(a)->>'progress','')::numeric) AS normalized_progress,
+              COALESCE(NULLIF(${updateJson}->>'status_after',''),NULLIF(to_jsonb(a)->>'latest_status_after',''),NULLIF(to_jsonb(a)->>'status','')) AS normalized_status,
+              COALESCE(NULLIF(to_jsonb(a)->>'opened_at','')::timestamptz,NULLIF(to_jsonb(a)->>'created_at','')::timestamptz) AS normalized_opened_at,
+              COALESCE(NULLIF(to_jsonb(a)->>'closed_at','')::timestamptz,NULLIF(to_jsonb(a)->>'completed_at','')::timestamptz,NULLIF(${updateJson}->>'created_at','')::timestamptz) AS normalized_closed_at,
+              COALESCE(NULLIF(to_jsonb(a)->>'due_at','')::timestamptz,NULLIF(to_jsonb(a)->>'due_date','')::timestamptz) AS normalized_due_at,
+              COALESCE(NULLIF(${updateJson}->>'created_at','')::timestamptz,NULLIF(to_jsonb(a)->>'latest_update_at','')::timestamptz,${timestamp}) AS __event_time
+       FROM action_plans a
+       ${updateJoin}
+       WHERE (to_jsonb(a)->>'tenant_id')::uuid=$1::uuid
+         AND ($2::timestamptz IS NULL OR COALESCE(NULLIF(${updateJson}->>'created_at','')::timestamptz,NULLIF(to_jsonb(a)->>'latest_update_at','')::timestamptz,${timestamp})>=$2)
+         AND ($3::timestamptz IS NULL OR COALESCE(NULLIF(${updateJson}->>'created_at','')::timestamptz,NULLIF(to_jsonb(a)->>'latest_update_at','')::timestamptz,${timestamp})<=$3)`,
+      [tenantId, period.start || null, period.end || null]
+    );
+    return tagRows(result.rows.map((row) => ({
+      ...row,
+      progress: row.normalized_progress,
+      status: row.normalized_status,
+      opened_at: row.normalized_opened_at,
+      closed_at: row.normalized_closed_at,
+      due_at: row.normalized_due_at
+    })), 'action_plans');
+  }
   const tables = severityFormula
     ? ['grc_readiness_findings', 'findings', 'action_plans']
     : ['action_plans', 'findings', 'grc_readiness_findings'];
@@ -68,12 +118,61 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
 async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period); }
 async function queryHealth(client, tenantId, period) { return firstPopulatedTables(client, ['calculation_outputs'], tenantId, period); }
 async function queryMaturity(client, tenantId, period) { return firstPopulatedTables(client, ['survey_evaluations','metric_measurements','grc_metric_measurements'], tenantId, period); }
+async function queryIncidents(client, tenantId, period) {
+  if (!(await tableExists(client, 'grc_incidents'))) return null;
+  const timestamp = `COALESCE(NULLIF(to_jsonb(i)->>'reported_at','')::timestamptz,NULLIF(to_jsonb(i)->>'detected_at','')::timestamptz,NULLIF(to_jsonb(i)->>'created_at','')::timestamptz)`;
+  const result = await client.query(
+    `SELECT i.id,i.tenant_id,i.status,i.category,i.priority,
+            COALESCE(NULLIF(to_jsonb(i)->>'confirmed_severity',''),NULLIF(to_jsonb(i)->>'calculated_severity',''),NULLIF(to_jsonb(i)->>'priority','')) AS severity,
+            ${timestamp} AS __event_time,
+            NULLIF(to_jsonb(i)->>'financial_impact','')::numeric AS financial_impact,
+            NULLIF(to_jsonb(i)->>'duration_minutes','')::numeric AS duration_minutes,
+            NULLIF(to_jsonb(i)->>'customer_impact','') AS customer_impact
+     FROM grc_incidents i
+     WHERE i.tenant_id=$1::uuid
+       AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+       AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
+    [tenantId, period.start || null, period.end || null]
+  );
+  return tagRows(result.rows, 'grc_incidents');
+}
+async function queryEvidenceFreshness(client, tenantId, period) {
+  const candidates = [];
+  if (await tableExists(client, 'evidences')) {
+    const timestamp = `COALESCE(NULLIF(to_jsonb(e)->>'reviewed_at','')::timestamptz,NULLIF(to_jsonb(e)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(e)->>'created_at','')::timestamptz)`;
+    candidates.push({ table: 'evidences', params: [tenantId, period.start || null, period.end || null], sql:
+      `SELECT e.id,e.tenant_id,
+              COALESCE(NULLIF(to_jsonb(e)->>'status',''),'pending') AS status,
+              NULLIF(to_jsonb(e)->>'validated','')::boolean AS validated,
+              NULLIF(to_jsonb(e)->>'created_at','')::timestamptz AS created_at,
+              NULLIF(to_jsonb(e)->>'reviewed_at','')::timestamptz AS reviewed_at,
+              NULLIF(to_jsonb(e)->>'expires_at','')::timestamptz AS expires_at,
+              ${timestamp} AS __event_time,
+              NULLIF(to_jsonb(e)->>'freshness_score','')::numeric AS freshness_score,
+              NULLIF(to_jsonb(e)->>'appears_expired','')::boolean AS appears_expired
+       FROM evidences e WHERE e.tenant_id=$1::uuid
+         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+  }
+  if (await tableExists(client, 'grc_evidence_versions')) {
+    const timestamp = `COALESCE(NULLIF(to_jsonb(v)->>'reviewed_at','')::timestamptz,NULLIF(to_jsonb(v)->>'created_at','')::timestamptz)`;
+    candidates.push({ table: 'grc_evidence_versions', params: [tenantId, period.start || null, period.end || null], sql:
+      `SELECT v.id,v.tenant_id,v.status,NULL::boolean AS validated,v.created_at,NULL::timestamptz AS reviewed_at,NULL::timestamptz AS expires_at,${timestamp} AS __event_time,
+              NULL::numeric AS freshness_score,false AS appears_expired
+       FROM grc_evidence_versions v WHERE v.tenant_id=$1::uuid
+         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+  }
+  return firstPopulated(client, candidates);
+}
 const ADAPTER_BY_SOURCE = Object.freeze({
   compliance_requirements_assessments: queryCompliance,
   grc_readiness_operational_snapshot: queryReadiness,
   risk_register_controls: queryRisk,
   control_assurance_evidence: queryControls,
   audit_findings_actions: queryAuditActions,
+  incident_operational_events: queryIncidents,
+  evidence_freshness_records: queryEvidenceFreshness,
   grc_health_components: queryHealth,
   maturity_assessments: queryMaturity,
 });
@@ -93,12 +192,12 @@ function mapFormulaInput(formulaCode, rows) {
   const statuses = rows.map((row) => String(row.status || '').toLowerCase());
   const severities = rows.map((row) => String(row.severity ?? row.risk_level ?? row.level ?? row.status ?? '').toLowerCase());
   const usableScores = rows.map((row) => number(row.score)).filter((value) => value !== null);
-  const dates = rows.map((row) => row.event_date || row.measured_at || row.assessed_at).filter(Boolean);
+  const dates = rows.map((row) => row.event_date || row.measured_at || row.assessed_at || row.reviewed_at || row.updated_at || row.created_at || row.__event_time).filter(Boolean);
 
   if (formulaCode === 'F5_5_COMPLIANCE_WEIGHTED') return { assessments: rows.map((row) => ({ status: row.status, weight: number(row.weight, 1), notApplicable: ['not_applicable', 'na'].includes(String(row.status)) })) };
   if (formulaCode === 'F5_5_COVERAGE') return { evaluated: statuses.filter((status) => !['pending', 'not_evaluated', 'draft', ''].includes(status)).length, applicable: statuses.filter((status) => !['not_applicable', 'na'].includes(status)).length };
   if (formulaCode === 'F5_5_READINESS') { const by = Object.fromEntries(rows.map((row) => [String(row.dimension || '').toLowerCase(), ratio(row.score)])); return { compliance: by.compliance, evidence: by.evidence, health: by.health, actions: by.actions }; }
-  if (formulaCode === 'F5_5_INHERENT_RISK') return { probability: number(first.probability), impact: number(first.impact) };
+  if (formulaCode === 'F5_5_INHERENT_RISK') return { probability: number(first.probability ?? first.likelihood), impact: number(first.impact) };
   if (formulaCode === 'F5_5_RESIDUAL_RISK') {
     const inherent = number(first.exposure);
     const probability = number(first.probability);
@@ -110,14 +209,17 @@ function mapFormulaInput(formulaCode, rows) {
   }
   if (formulaCode === 'F5_5_FMEA_RPN') return { severity: number(first.impact), occurrence: number(first.occurrence ?? first.probability), detection: number(first.detection) };
   if (formulaCode === 'F5_5_COMBINED_EFFECTIVENESS') return { effectivenesses: usableScores.map(ratio).filter((value) => value !== null) };
-  if (formulaCode === 'F5_5_CONTROL_EFFECTIVENESS') return { design: ratio(first.design_score ?? first.score), implementation: ratio(first.implementation_score ?? first.score), operation: ratio(first.operation_score ?? first.score), evidence: ratio(first.evidence_score ?? first.score) };
+  if (formulaCode === 'F5_5_CONTROL_EFFECTIVENESS') return { design: ratio(first.design_score ?? first.design_effectiveness), implementation: ratio(first.implementation_score ?? first.implementation_effectiveness), operation: ratio(first.operation_score ?? first.operation_effectiveness ?? first.operating_effectiveness), evidence: ratio(first.evidence_score ?? first.evidence_effectiveness) };
   if (formulaCode === 'F5_5_CONTROL_COVERAGE') return { risksWithControl: rows.filter((row) => number(row.score) !== null || number(row.control_effectiveness) !== null).length, relevantRisks: rows.length };
   if (formulaCode === 'F5_5_FREQUENCY_COMPLIANCE') return { onTimeExecutions: statuses.filter((status) => ['effective', 'completed', 'on_time', 'compliant'].includes(status)).length, scheduledExecutions: rows.length };
   if (formulaCode === 'F5_5_FAILURE_RATE') return { failedTests: statuses.filter((status) => ['fail', 'failed', 'non_compliant'].includes(status)).length, executedTests: rows.length };
   if (formulaCode === 'F5_5_SEVERITY_INDEX') return { low: severities.filter((severity) => severity === 'low').length, medium: severities.filter((severity) => severity === 'medium').length, high: severities.filter((severity) => severity === 'high').length, critical: severities.filter((severity) => severity === 'critical').length };
-  if (['F5_5_MTTC', 'F5_5_AGE', 'F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((row) => ({ openedAt: row.opened_at, closedAt: row.closed_at, createdAt: row.opened_at, progress: number(row.progress), weight: number(row.weight, 1) })).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
+  if (['F5_5_MTTC', 'F5_5_AGE', 'F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((row) => {
+    const progressValue = number(row.progress ?? row.progress_percent ?? row.latest_progress_percent);
+    return { openedAt: row.opened_at ?? row.created_at, closedAt: row.closed_at ?? row.completed_at, dueAt: row.due_at ?? row.due_date, createdAt: row.opened_at ?? row.created_at, progress: progressValue === null ? null : (progressValue > 1 ? progressValue / 100 : progressValue), weight: number(row.weight, 1), status: row.status ?? row.latest_status_after };
+  }).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
   if (formulaCode === 'F5_5_CLOSURE_RATE') return { closed: statuses.filter((status) => ['closed', 'completed', 'resolved'].includes(status)).length, openAtStart: statuses.filter((status) => !['closed', 'completed', 'resolved'].includes(status)).length, created: 0 };
-  if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((row) => !['closed', 'completed', 'resolved'].includes(String(row.status))); return { overdueOpen: open.filter((row) => row.due_at && new Date(row.due_at) < new Date()).length, openActions: open.length, items: open.map((row) => ({ overdue: row.due_at && new Date(row.due_at) < new Date() ? 1 : 0, weight: number(row.weight, 1) })) }; }
+  if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((row) => !['closed', 'completed', 'resolved'].includes(String(row.status ?? row.latest_status_after).toLowerCase())); return { overdueOpen: open.filter((row) => (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date()).length, openActions: open.length, items: open.map((row) => ({ overdue: (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date() ? 1 : 0, weight: number(row.weight, 1) })) }; }
   if (formulaCode === 'F5_5_EXPECTED_LOSS') return { probability: number(first.probability), impact: number(first.impact ?? first.gross_loss_amount) };
   if (formulaCode === 'F5_5_NET_LOSS') return { grossLoss: sum(rows.map((row) => row.gross_loss_amount)), recoveries: sum(rows.map((row) => row.recovery_amount)) };
   if (formulaCode === 'F5_5_LOSS_SEVERITY') return { netLosses: rows.map((row) => number(row.net_loss_amount, number(row.gross_loss_amount) !== null ? number(row.gross_loss_amount) - number(row.recovery_amount, 0) : null)).filter((value) => value !== null) };
@@ -144,7 +246,15 @@ function mapFormulaInput(formulaCode, rows) {
   if (formulaCode === 'F5_5_COMPLETENESS') return { validRequired: sum(rows.map((row) => row.valid_count)), expectedRequired: sum(rows.map((row) => row.expected_count)) };
   if (formulaCode === 'F5_5_ACCURACY') return { verifiedCorrect: sum(rows.map((row) => row.valid_count)), verified: sum(rows.map((row) => number(row.valid_count, 0) + number(row.invalid_count, 0))) };
   if (formulaCode === 'F5_5_CONSISTENCY') return { contradictory: sum(rows.map((row) => row.invalid_count)), evaluated: sum(rows.map((row) => number(row.valid_count, 0) + number(row.invalid_count, 0))) };
-  if (formulaCode === 'F5_5_FRESHNESS_CONTINUOUS') { const latest = dates.length ? Math.max(...dates.map((date) => new Date(date).getTime()).filter(Number.isFinite)) : null; return { ageHours: latest === null ? null : (Date.now() - latest) / 3600000, halfLifeHours: 24 * 30 }; }
+  if (formulaCode === 'F5_5_FRESHNESS_CONTINUOUS') {
+    const scored = rows.map((row) => number(row.freshness_score)).filter((value) => value !== null);
+    if (scored.length) return { ageHours: Math.max(0, (100 - average(scored)) / 100) * 24 * 30, halfLifeHours: 24 * 30 };
+    const approvedRows = rows.filter((row) => row.validated === true || ['approved', 'aprobada', 'accepted', 'valid'].includes(String(row.status || '').toLowerCase()));
+    const effectiveRows = approvedRows.length ? approvedRows : rows;
+    const effectiveDates = effectiveRows.flatMap((row) => [row.expires_at, row.reviewed_at, row.updated_at, row.created_at, row.__event_time]).filter(Boolean);
+    const latest = effectiveDates.length ? Math.max(...effectiveDates.map((date) => new Date(date).getTime()).filter(Number.isFinite)) : null;
+    return { ageHours: latest === null ? null : Math.max(0, (Date.now() - latest) / 3600000), halfLifeHours: 24 * 30 };
+  }
   if (formulaCode === 'F5_5_LINEAGE_SCORE') return { presentRelations: rows.length, requiredRelations: rows.length || null };
   if (formulaCode === 'F5_5_GRC_HEALTH') { const values = {}; for (const row of rows) { const raw = row.output_value?.value ?? row.output_value; const value = ratio(raw); if (row.formula_code === 'F5_5_RESIDUAL_RISK') values.risk = value === null ? null : 1 - value; if (row.formula_code === 'F5_5_COMPLIANCE_WEIGHTED') values.compliance = value; if (row.formula_code === 'F5_5_WEIGHTED_PROGRESS') values.actions = value; if (row.formula_code === 'F5_5_EVIDENCE_QUALITY') values.evidence = value; if (row.formula_code === 'F5_5_COMPLETENESS') values.dataTrust = value; } return values; }
   if (formulaCode === 'F5_C3_OPERATIONAL_PERFORMANCE') { const by={};for(const row of rows){const value=score(row.output_value?.value??row.output_value);if(value!==null)by[row.formula_code]=value;}const risk=by.F5_5_RESIDUAL_RISK===undefined?null:Math.max(0,100-by.F5_5_RESIDUAL_RISK);return {efficacy:by.F5_5_COMPLIANCE_WEIGHTED??null,efficiency:by.F5_5_WEIGHTED_PROGRESS??null,stability:risk,quality:by.F5_5_CONTROL_EFFECTIVENESS??null,timeliness:by.F5_5_SLA_COMPLIANCE??null,risk,compliance:by.F5_5_COMPLIANCE_WEIGHTED??null,actions:by.F5_5_WEIGHTED_PROGRESS??null,dataTrust:by.F5_C3_DATA_TRUST??null}; }
@@ -165,18 +275,19 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   assertTenant(tenantId); assertPermission(permission);
   const formula = FORMULA_MAP.get(formulaCode); if (!formula) throw new MathGovernanceError('SOURCE_FORMULA_NOT_FOUND', 'Fórmula no registrada para resolver fuente.', { formulaCode });
   const resolvedSourceCode = sourceCode || getSourceCodeForFormula(formulaCode); const contract = getSourceContract(resolvedSourceCode);
-  if (!contract) return sourceUnavailable(resolvedSourceCode, 'No existe contrato de fuente para la fórmula.');
-  if (contract.availability === 'source_unavailable') return sourceUnavailable(contract.source_code, contract.limitations || 'Fuente no disponible.');
+  if (!contract) return sourceUnavailable(resolvedSourceCode, 'No existe contrato de fuente para la fórmula.', { missing_entities: ['source_contract'] });
+  if (contract.availability === 'source_unavailable') return sourceUnavailable(contract.source_code, contract.limitations || 'Fuente no disponible.', contract);
   let queried;
   try { queried = await queryOperationalRows({ client, contract, tenantId, period, formulaCode }); }
   catch (error) { const wrapped = new MathGovernanceError('SOURCE_SCHEMA_INCOMPATIBLE', 'La estructura física de la fuente no coincide con el contrato analítico.', { source_code: contract.source_code, original_code: error.code || null }); wrapped.cause = error; throw wrapped; }
-  if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason);
+  if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason, contract);
   const rows = normalizeRows(queried.rows, contract);
   const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null });
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
+  const sourceWarnings = [...new Set(rows.flatMap((row) => Array.isArray(row.__source_warnings) ? row.__source_warnings : []))];
   const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: rows.length, usable_rows: validation.usable_rows.length, exclusions: validation.exclusions.length, period, timezone };
   const snapshotHash = hash(sourceSnapshot);
-  return { source_code: contract.source_code, physical_sources: physicalSources, status: validation.status, rows: validation.usable_rows, warnings: validation.warnings, exclusions: validation.exclusions, invalid_rows: validation.invalid_rows, counts: { received: rows.length, usable: validation.usable_rows.length, excluded: validation.exclusions.length }, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: validation.usable_rows, contract, formula, runId, snapshotHash }), formula_input: mapFormulaInput(formulaCode, validation.usable_rows), equivalence: contract.variable_map, contract };
+  return { source_code: contract.source_code, physical_sources: physicalSources, status: validation.status, rows: validation.usable_rows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: validation.exclusions, invalid_rows: validation.invalid_rows, counts: { received: rows.length, usable: validation.usable_rows.length, excluded: validation.exclusions.length }, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: validation.usable_rows, contract, formula, runId, snapshotHash }), formula_input: mapFormulaInput(formulaCode, validation.usable_rows), equivalence: contract.variable_map, contract };
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }

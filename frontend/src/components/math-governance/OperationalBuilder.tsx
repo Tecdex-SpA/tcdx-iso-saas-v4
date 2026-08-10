@@ -10,6 +10,9 @@ type BuilderKind = 'metric' | 'dashboard' | 'report' | 'survey' | 'assurance' | 
 type OfficialResult = {
   result_code?: string;
   analytical_result_code?: string;
+  metric_key?: string;
+  metric_code?: string;
+  functional_code?: string;
   display_name?: string;
   formula_code?: string;
   formula_version?: number;
@@ -54,6 +57,18 @@ type BuilderForm = {
   format: 'pdf' | 'docx' | 'xlsx';
 };
 
+function currentMonthRange() {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
+}
+
+const DEFAULT_PERIOD = currentMonthRange();
+
 const DEFAULT_FORM: BuilderForm = {
   code: '',
   name: '',
@@ -66,8 +81,8 @@ const DEFAULT_FORM: BuilderForm = {
   thresholdCritical: '50',
   numerator: '8',
   denominator: '10',
-  periodStart: '2026-01-01T00:00:00.000Z',
-  periodEnd: '2026-01-31T23:59:59.000Z',
+  periodStart: DEFAULT_PERIOD.start,
+  periodEnd: DEFAULT_PERIOD.end,
   dimension: 'general',
   format: 'pdf',
 };
@@ -92,6 +107,15 @@ function codePrefix(kind: BuilderKind) {
     assurance: 'ASSURANCE',
     loss: 'LOSS',
   }[kind];
+}
+
+function officialMetricCode(item: OfficialResult | undefined, fallback: string) {
+  const raw = item?.functional_code || item?.metric_code || item?.metric_key || fallback;
+  return String(raw || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function listEndpoint(kind: BuilderKind) {
@@ -154,7 +178,15 @@ function officialPreviewPayload(kind: BuilderKind, form: BuilderForm) {
   if (kind === 'survey') return { ...common, items: [{ score: numerator, maxScore: denominator, weight: 1, dimension: form.dimension, section: 'general' }], validInvitations: denominator, completedResponses: numerator, started: denominator, completed: numerator };
   if (kind === 'assurance') return { ...common, results: [{ result: numerator / denominator >= 0.8 ? 'pass' : 'pass_with_observations', weight: 1 }], populationSize: denominator, confidence: 0.95, marginError: 0.05 };
   if (kind === 'loss') return { ...common, grossLoss: numerator, recoveries: denominator, expectedFrequency: 2, meanSeverity: Math.max(1, numerator - denominator), events: [{ grossLoss: numerator, recoveries: denominator, currency: 'CLP' }] };
-  return { ...common, inputs: { numerator, denominator }, include_trend: true };
+  return { ...common, value: denominator > 0 ? (numerator / denominator) * 100 : null, inputs: { numerator, denominator }, include_trend: true };
+}
+
+function previewValue(kind: BuilderKind, form: BuilderForm) {
+  const numerator = Number(form.numerator);
+  const denominator = Number(form.denominator);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null;
+  if (kind === 'loss') return Math.max(0, numerator - denominator);
+  return (numerator / denominator) * 100;
 }
 
 function createPayload(kind: BuilderKind, form: BuilderForm) {
@@ -344,7 +376,13 @@ export default function OperationalBuilder({ kind, title, description, domain, d
       body: JSON.stringify(officialPreviewPayload(kind, form)),
       fallbackMessage: 'Preview oficial no disponible.',
     }));
-    setPreview(dataOf<Entity>(payload));
+    const data = dataOf<Entity>(payload);
+    if (data?.value === null || data?.value === undefined) {
+      const value = previewValue(kind, form);
+      setPreview({ ...data, value, source_status: data?.source_status || 'preview', warnings: [...((data?.warnings as unknown[]) || []), 'preview_uses_form_inputs_until_official_run_exists'] });
+      return;
+    }
+    setPreview(data);
   };
 
   const saveDraft = async () => {
@@ -407,13 +445,21 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     await loadHistory();
   };
 
+  const selectedDefinition = visibleCatalog.find((item) => (item.result_code || item.analytical_result_code) === form.resultCode);
+
   const execute = async () => {
     if (!entity?.id) return setErrors(['Primero guarda un draft.']);
     let endpoint = '';
     let payload: Record<string, unknown> = {};
     if (kind === 'metric') {
-      endpoint = `/api/metrics/${entity.id}/calculate`;
-      payload = { period_start: form.periodStart, period_end: form.periodEnd, inputs: { numerator: Number(form.numerator), denominator: Number(form.denominator) }, unit: form.unit };
+      const metricCode = officialMetricCode(selectedDefinition, form.resultCode);
+      endpoint = `/api/metrics/official/${encodeURIComponent(metricCode)}/calculate`;
+      payload = {
+        period: { start: form.periodStart, end: form.periodEnd, timezone: 'America/Santiago' },
+        inputs: { numerator: Number(form.numerator), denominator: Number(form.denominator) },
+        unit: form.unit,
+        metadata: { builder_entity_id: entity.id, result_code: form.resultCode, source_contract: form.sourceContract },
+      };
     } else if (kind === 'dashboard') {
       endpoint = `/api/dashboards/${entity.id}/snapshot`;
     } else if (kind === 'report') {
@@ -440,7 +486,6 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     await loadHistory();
   };
 
-  const selectedDefinition = visibleCatalog.find((item) => (item.result_code || item.analytical_result_code) === form.resultCode);
   const runId = (preview?.calculation_run_id || result?.calculation_run_id || (result?.generation as Entity | undefined)?.id) as string | undefined;
 
   return (

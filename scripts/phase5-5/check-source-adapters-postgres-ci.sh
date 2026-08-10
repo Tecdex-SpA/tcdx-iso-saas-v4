@@ -60,6 +60,10 @@ CREATE TABLE grc_control_assurance (
   tenant_control_id uuid NOT NULL,
   assurance_status text NOT NULL,
   score numeric NOT NULL,
+  design_score numeric,
+  implementation_score numeric,
+  operation_score numeric,
+  evidence_score numeric,
   calculated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE grc_readiness_snapshots (
@@ -151,9 +155,9 @@ INSERT INTO grc_framework_requirements (id, tenant_id) VALUES
 INSERT INTO grc_requirement_control_mappings (id, tenant_id, requirement_id, tenant_control_id, mapping_type, coverage_level, status) VALUES
 ('71000000-0000-0000-0000-000000000011', '$TENANT_A', '71000000-0000-0000-0000-000000000001', '71000000-0000-0000-0000-000000000021', 'exact', 90, 'published'),
 ('72000000-0000-0000-0000-000000000011', '$TENANT_B', '72000000-0000-0000-0000-000000000001', '72000000-0000-0000-0000-000000000021', 'exact', 20, 'published');
-INSERT INTO grc_control_assurance (id, tenant_id, tenant_control_id, assurance_status, score) VALUES
-('71000000-0000-0000-0000-000000000031', '$TENANT_A', '71000000-0000-0000-0000-000000000021', 'effective', 80),
-('72000000-0000-0000-0000-000000000031', '$TENANT_B', '72000000-0000-0000-0000-000000000021', 'ineffective', 20);
+INSERT INTO grc_control_assurance (id, tenant_id, tenant_control_id, assurance_status, score, design_score, implementation_score, operation_score, evidence_score) VALUES
+('71000000-0000-0000-0000-000000000031', '$TENANT_A', '71000000-0000-0000-0000-000000000021', 'effective', 80, 80, 80, 80, 80),
+('72000000-0000-0000-0000-000000000031', '$TENANT_B', '72000000-0000-0000-0000-000000000021', 'ineffective', 20, 20, 20, 20, 20);
 
 INSERT INTO grc_readiness_snapshots (id, tenant_id, generated_at) VALUES
 ('71000000-0000-0000-0000-000000000041', '$TENANT_A', now()),

@@ -345,17 +345,16 @@ function numberOrZero(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function buildTrend(value?: number | null, delta?: number | null) {
-  if (value === null || value === undefined) return [];
-
-  const d = delta || 0;
-
-  return [
-    { name: 't-3', value: value - d * 3 },
-    { name: 't-2', value: value - d * 2 },
-    { name: 't-1', value: value - d },
-    { name: 't', value },
-  ];
+function buildOfficialTrend(item: KpiDashboardItem) {
+  const snapshots = item.latest_snapshots || [];
+  if (snapshots.length < 2) return [];
+  return snapshots
+    .filter((snapshot) => snapshot.value !== null && snapshot.value !== undefined)
+    .map((snapshot, index) => ({
+      name: snapshot.period_end || snapshot.period_start || snapshot.period_type || `t-${snapshots.length - index - 1}`,
+      value: Number(snapshot.value),
+    }))
+    .filter((point) => Number.isFinite(point.value));
 }
 
 function normalizeActionStatus(value?: string | null) {
@@ -520,9 +519,9 @@ function normalizeKpiDashboardResponse(payload: unknown): KpiDashboardResponse {
       gray: finalGray,
       measured_kpis: measuredKpis,
       data_coverage_pct:
-        summary.data_coverage_pct === null ? undefined : Number(summary.data_coverage_pct ?? 0),
+        summary.data_coverage_pct === null || summary.data_coverage_pct === undefined ? undefined : Number(summary.data_coverage_pct),
       official_score:
-        summary.official_score === null ? null : Number(summary.official_score ?? 0),
+        summary.official_score === null || summary.official_score === undefined ? null : Number(summary.official_score),
       health_kpis: Number(
         summary.health_kpis ??
         items.filter((item: KpiDashboardItem) => item.is_health_kpi).length
@@ -991,7 +990,10 @@ function DashboardPageContent() {
     return kpiItems.filter((item) => isHealthKpiItem(item));
   }, [kpiItems]);
 
-  const scoreKpiGlobal = Number(kpiSummary?.official_score ?? 0);
+  const scoreKpiGlobal =
+    kpiSummary?.official_score === null || kpiSummary?.official_score === undefined
+      ? null
+      : Number(kpiSummary.official_score);
 
   const measuredKpis = Number(
     kpiSummary?.measured_kpis ??
@@ -1003,10 +1005,13 @@ function DashboardPageContent() {
   const totalKpis = Number(kpiSummary?.total_kpis || kpiItems.length || 0);
   const pendingKpis = Number(kpiSummary?.gray || 0);
 
-  const kpiCoveragePct = Number(kpiSummary?.data_coverage_pct ?? 0);
+  const kpiCoveragePct =
+    kpiSummary?.data_coverage_pct === null || kpiSummary?.data_coverage_pct === undefined
+      ? null
+      : Number(kpiSummary.data_coverage_pct);
 
   const kpiCoverageTone =
-    kpiCoveragePct >= 90 ? 'green' : kpiCoveragePct >= 70 ? 'amber' : 'red';
+    kpiCoveragePct === null ? 'amber' : kpiCoveragePct >= 90 ? 'green' : kpiCoveragePct >= 70 ? 'amber' : 'red';
 
 
   const healthMainKpi = useMemo(() => {
@@ -1431,7 +1436,7 @@ function DashboardPageContent() {
                   {totalKpis > 0 && (
                     <ExecutiveKpiPulse
                       score={scoreKpiGlobal}
-                      coverage={kpiCoveragePct}
+                      coverage={kpiCoveragePct ?? 0}
                       red={kpiSummary?.red || 0}
                       gray={kpiSummary?.gray || 0}
                       health={kpiSummary?.health_kpis || healthKpiItems.length}
@@ -1514,7 +1519,7 @@ function DashboardPageContent() {
                 <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-6">
                   <TopCard
                     title={t('dashboard.kpiGlobalScore')}
-                    value={`${scoreKpiGlobal}%`}
+                    value={scoreKpiGlobal === null ? 'Sin medición' : `${scoreKpiGlobal}%`}
                     subtitle={t('dashboard.kpiGlobalScoreSubtitle')}
                     accent="green"
                     change={t('dashboardKpi.greenPlural', { count: kpiSummary?.green || 0 })}
@@ -1524,7 +1529,7 @@ function DashboardPageContent() {
 
                   <TopCard
                     title={t('dashboard.kpiCoverage')}
-                    value={`${kpiCoveragePct}%`}
+                    value={kpiCoveragePct === null ? 'N/A' : `${kpiCoveragePct}%`}
                     subtitle={`${measuredKpis}/${totalKpis} KPIs medidos`}
                     accent={kpiCoverageTone}
                     change={t('dashboardKpi.pendingNoData', { count: pendingKpis })}
@@ -2250,7 +2255,7 @@ function ExecutiveKpiPulse({
   gray,
   health,
 }: {
-  score: number;
+  score: number | null;
   coverage: number;
   red: number;
   gray: number;
@@ -2275,7 +2280,7 @@ function ExecutiveKpiPulse({
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <PriorityMiniMetric label="Score KPI" value={`${score}%`} />
+        <PriorityMiniMetric label="Score KPI" value={score === null ? 'Sin medición' : `${score}%`} />
         <PriorityMiniMetric label="Cobertura" value={`${coverage}%`} />
         <PriorityMiniMetric label="Críticos" value={String(red)} />
         <PriorityMiniMetric label="Sin datos" value={String(gray)} />
@@ -2925,13 +2930,19 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
         </div>
       ) : null}
 
-      <div className="mt-4 h-[80px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={buildTrend(numberOrZero(item.latest_snapshot?.value), item.delta)}>
-            <Line dataKey="value" stroke="var(--tcdx-color-secondary)" strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+      {buildOfficialTrend(item).length > 1 ? (
+        <div className="mt-4 h-[80px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={buildOfficialTrend(item)}>
+              <Line dataKey="value" stroke="var(--tcdx-color-secondary)" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-surface)] px-3 py-2 text-xs text-[var(--tcdx-color-text-secondary)]">
+          Sin histórico oficial comparable.
+        </div>
+      )}
     </div>
   );
 }

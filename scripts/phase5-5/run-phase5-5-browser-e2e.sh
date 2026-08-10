@@ -14,8 +14,9 @@ PHASE4_MIGRATION="$REPO_ROOT/database/migrations/20260729_phase4_commercial_prod
 PHASE5_RUNNER="$REPO_ROOT/scripts/phase5/apply-phase5-migration.js"
 BOOTSTRAP="$REPO_ROOT/scripts/phase5-5/bootstrap-official-math-governance.js"
 C2_RUNNER="$REPO_ROOT/scripts/phase5-c2/apply-phase5-c2-migration.js"
+C3_RUNNER="$REPO_ROOT/scripts/phase5-c3/apply-phase5-c3-migration.js"
 
-for file in "$BASE_FIXTURE" "$PHASE2_MASTER" "$PHASE3_MASTER" "$PHASE1_MIGRATION" "$PHASE1R_MIGRATION" "$PHASE2_MIGRATION" "$PHASE3_MIGRATION" "$PHASE4_MIGRATION" "$PHASE5_RUNNER" "$BOOTSTRAP" "$C2_RUNNER"; do
+for file in "$BASE_FIXTURE" "$PHASE2_MASTER" "$PHASE3_MASTER" "$PHASE1_MIGRATION" "$PHASE1R_MIGRATION" "$PHASE2_MIGRATION" "$PHASE3_MIGRATION" "$PHASE4_MIGRATION" "$PHASE5_RUNNER" "$BOOTSTRAP" "$C2_RUNNER" "$C3_RUNNER"; do
   [[ -r "$file" ]] || { echo "Required Phase 5.5 E2E input is not readable: $file" >&2; exit 1; }
 done
 
@@ -104,6 +105,7 @@ SQL
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$PHASE5_RUNNER" --apply >/dev/null
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$BOOTSTRAP" >/dev/null
 MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$C2_RUNNER" --apply >/dev/null
+MIGRATION_DATABASE_URL="postgresql://postgres@127.0.0.1:$DB_PORT/$DATABASE_NAME" node "$C3_RUNNER" --apply >/dev/null
 
 PASSWORD_HASH="$(cd "$REPO_ROOT/backend" && PHASE5_5_PASSWORD="$PASSWORD" node - <<'NODE'
 const bcrypt = require('bcrypt');
@@ -137,7 +139,7 @@ INSERT INTO permissions (permission_key, permission_group, display_name, is_acti
 SELECT permission_key, 'phase5_5_e2e', permission_key, true
 FROM (VALUES
   ('data.catalog.read'),('data.quality.read'),('data.lineage.read'),
-  ('metrics.read'),('metrics.measure'),('surveys.read'),('surveys.respond'),
+  ('metrics.read'),('metrics.measure'),('metrics.recalculate'),('surveys.read'),('surveys.respond'),
   ('assurance_tests.read'),('assurance_tests.execute'),('loss_events.read'),
   ('dashboards.read'),('reports.read'),('reports.generate'),('reports.download'),('reports.schedule'),
   ('semantic.contracts.read'),('semantic.contracts.manage'),('semantic.contracts.review'),('semantic.contracts.publish'),
@@ -175,6 +177,7 @@ SELECT '$TENANT_A'::uuid, capability_key, true, false, 'active', 'phase5_5_brows
 FROM commercial_technical_capabilities
 WHERE capability_key IN (
   'data.governance','metrics.catalog','metrics.engine','metrics.data_trust','data.lineage','data.impact_graph',
+  'metrics.jobs.run',
   'surveys.engine','assurance.testing','loss.events','bi.dashboard_builder','bi.executive_dashboards',
   'reporting.studio','reporting.pdf','reporting.docx','reporting.xlsx','reporting.scheduled','data.semantic_layer'
 )
@@ -197,6 +200,32 @@ CREATE TABLE IF NOT EXISTS semantic_browser_source (
 );
 INSERT INTO semantic_browser_source (tenant_id,observed_at,value_numeric,status)
 VALUES ('$TENANT_A',now(),88,'valid'),('$TENANT_B',now(),31,'attention');
+INSERT INTO tenant_controls (id, tenant_id) VALUES
+('71000000-0000-0000-0000-000000005501', '$TENANT_A'),
+('72000000-0000-0000-0000-000000005501', '$TENANT_B')
+ON CONFLICT (id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id;
+INSERT INTO grc_frameworks (id, tenant_id, code, name, publisher, content_classification, is_active) VALUES
+('71000000-0000-0000-0000-000000005502', '$TENANT_A', 'PHASE55-ISO', 'Phase 5.5 ISO control set', 'TCDX QA', 'tcdx_interpretation', true),
+('72000000-0000-0000-0000-000000005502', '$TENANT_B', 'PHASE55-ISO', 'Phase 5.5 ISO control set B', 'TCDX QA', 'tcdx_interpretation', true)
+ON CONFLICT (tenant_id, code) DO UPDATE SET name=EXCLUDED.name, is_active=true;
+INSERT INTO grc_framework_versions (id, tenant_id, framework_id, version_label, effective_from, status, published_at) VALUES
+('71000000-0000-0000-0000-000000005503', '$TENANT_A', '71000000-0000-0000-0000-000000005502', '2026.01', '2026-01-01', 'published', '2026-01-01T00:00:00Z'),
+('72000000-0000-0000-0000-000000005503', '$TENANT_B', '72000000-0000-0000-0000-000000005502', '2026.01', '2026-01-01', 'published', '2026-01-01T00:00:00Z')
+ON CONFLICT (tenant_id, framework_id, version_label) DO UPDATE SET status='published', published_at=EXCLUDED.published_at;
+INSERT INTO grc_framework_requirements (id, tenant_id, version_id, reference_code, permitted_title, tcdx_interpretation, content_classification) VALUES
+('71000000-0000-0000-0000-000000005504', '$TENANT_A', '71000000-0000-0000-0000-000000005503', 'REQ-P55-1', 'Phase 5.5 compliance requirement', 'Requirement used by browser E2E official COMPLIANCE calculation.', 'tcdx_interpretation'),
+('72000000-0000-0000-0000-000000005504', '$TENANT_B', '72000000-0000-0000-0000-000000005503', 'REQ-P55-1', 'Phase 5.5 compliance requirement B', 'Tenant B isolation requirement.', 'tcdx_interpretation')
+ON CONFLICT (tenant_id, version_id, reference_code) DO UPDATE SET permitted_title=EXCLUDED.permitted_title;
+INSERT INTO grc_requirement_control_mappings (id, tenant_id, requirement_id, tenant_control_id, mapping_type, coverage_level, justification, source_type, status, created_by, created_at, updated_at) VALUES
+('71000000-0000-0000-0000-000000005505', '$TENANT_A', '71000000-0000-0000-0000-000000005504', '71000000-0000-0000-0000-000000005501', 'exact', 90, 'Phase 5.5 browser E2E official compliance source.', 'tcdx_interpretation', 'published', '$ADMIN_A', now() - interval '1 day', now() - interval '1 day'),
+('72000000-0000-0000-0000-000000005505', '$TENANT_B', '72000000-0000-0000-0000-000000005504', '72000000-0000-0000-0000-000000005501', 'exact', 20, 'Phase 5.5 browser E2E tenant isolation compliance source.', 'tcdx_interpretation', 'published', '$ADMIN_B', now() - interval '1 day', now() - interval '1 day')
+ON CONFLICT (tenant_id, requirement_id, tenant_control_id, catalog_control_id) DO UPDATE
+SET coverage_level=EXCLUDED.coverage_level, status='published', updated_at=EXCLUDED.updated_at;
+INSERT INTO grc_control_assurance (id, tenant_id, tenant_control_id, assurance_status, score, calculated_at, formula_version) VALUES
+('71000000-0000-0000-0000-000000005506', '$TENANT_A', '71000000-0000-0000-0000-000000005501', 'effective', 90, now() - interval '1 day', 'phase5_5_browser_e2e'),
+('72000000-0000-0000-0000-000000005506', '$TENANT_B', '72000000-0000-0000-0000-000000005501', 'degraded', 20, now() - interval '1 day', 'phase5_5_browser_e2e')
+ON CONFLICT (tenant_id, tenant_control_id) DO UPDATE
+SET assurance_status=EXCLUDED.assurance_status, score=EXCLUDED.score, calculated_at=EXCLUDED.calculated_at;
 
 WITH seeded(formula_code, value_num, unit_text) AS (
   VALUES

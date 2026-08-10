@@ -409,7 +409,7 @@ async function createMetric(scope, body = {}, requestId = null) {
        valid_from, valid_until, created_by, metadata
      )
      VALUES ($1::uuid,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::uuid,$12::uuid,$13,COALESCE($14::timestamptz,now()),$15::timestamptz,$16::uuid,$17::jsonb)
-     ON CONFLICT (metric_code) DO UPDATE
+     ON CONFLICT (tenant_id, metric_code) DO UPDATE
      SET display_name=EXCLUDED.display_name, business_definition=EXCLUDED.business_definition,
          technical_definition=EXCLUDED.technical_definition, metric_type=EXCLUDED.metric_type, unit=EXCLUDED.unit,
          direction=EXCLUDED.direction, aggregation=EXCLUDED.aggregation, frequency=EXCLUDED.frequency,

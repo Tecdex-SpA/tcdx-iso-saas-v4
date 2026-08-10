@@ -46,7 +46,7 @@ async function resolveIndicator(scope,metricCode,client=pool){
       mdv.favorable_direction AS functional_direction,mdv.frequency AS functional_frequency,mdv.domain,mdv.objective,
       mdv.population_definition,mdv.numerator_definition,mdv.denominator_definition,mdv.methodology,mdv.semantic_contract_code,mdv.checksum AS definition_checksum,
       msb.id AS binding_id,msb.formula_code,msb.official_formula_version_id,msb.semantic_contract_version_id,msb.mapping_id,msb.version_number AS binding_version,
-      msb.methodology_version,msb.checksum AS binding_checksum,mcp.id AS calculation_policy_id,mcp.version_number AS calculation_policy_version,
+      msb.methodology_version,msb.metadata AS binding_metadata,msb.checksum AS binding_checksum,mcp.id AS calculation_policy_id,mcp.version_number AS calculation_policy_version,
       mcp.calculation_frequency,mcp.minimum_sample_size,mcp.timeout_ms,mcp.max_attempts,mcp.retry_backoff_seconds,mcp.retention_periods,mcp.failure_policy,mcp.metadata AS calculation_policy_metadata,mcp.checksum AS calculation_policy_checksum
     FROM metric_definitions md JOIN metric_definition_versions mdv ON mdv.metric_definition_id=md.id AND mdv.status='published'
     JOIN metric_source_bindings msb ON msb.metric_definition_id=md.id AND msb.definition_version_id=mdv.id AND msb.binding_status='published'
@@ -182,7 +182,8 @@ async function buildTrustEvidence(client,scope,indicator,item,runId,periodValue,
 async function calculateIndicator(scope,metricCode,body={},requestId=null){
   const indicator=await resolveIndicator(scope,metricCode); const currentPeriod=period(body.period||body); const client=await pool.connect();
   try{
-    const orchestration=await orchestrator.recalculateOfficialAnalytics(scope,{formula_codes:[indicator.formula_code],period:currentPeriod},requestId);
+    const bindingSourceCode=indicator.binding_metadata?.source_code||null;
+    const orchestration=await orchestrator.recalculateOfficialAnalytics(scope,{formula_codes:[indicator.formula_code],period:currentPeriod,source_overrides:bindingSourceCode?{[indicator.formula_code]:bindingSourceCode}:{}},requestId);
     const item=orchestration.results.find((entry)=>entry.formula_code===indicator.formula_code); if(!item) throw new IndicatorGovernanceError('INDICATOR_OFFICIAL_OUTPUT_MISSING','El motor oficial no devolvió el binding solicitado.',502);
     const officialState=mappedState(item); const value=officialState==='calculated'?Number(item.value):null;
     const sourceSnapshotIds=item.snapshot_id?[item.snapshot_id]:[];

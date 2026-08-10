@@ -86,7 +86,47 @@ function summarize(results) {
   });
 }
 
-function functionalFailure({ formula, sourceContext = {}, status, failureType, code, message, warnings = [] }) {
+function buildDataRequirements({ formula, sourceContext = {}, status, code, message, missingFields = [], missingEntities = [] }) {
+  const counts = sourceContext.source_counts || {};
+  const received = Number(counts.received || 0);
+  const usable = Number(counts.usable || 0);
+  const requiredPopulation = Number(formula.minimum_sample_size || 1);
+  const routeByDomain = {
+    compliance: '/cumplimiento',
+    risk: '/riesgos',
+    control: '/controles',
+    evidence: '/evidencias',
+    actions: '/planes-accion',
+    findings: '/hallazgos',
+    audit: '/auditorias',
+    supplier: '/proveedores',
+    continuity: '/continuidad',
+    incidents: '/incidentes',
+    loss: '/eventos-perdida',
+    data_quality: '/datos/calidad',
+    survey: '/encuestas',
+    assurance: '/tests',
+    health: '/metricas',
+    readiness: '/diagnostico',
+  };
+  const sourceCode = sourceContext.source_code || null;
+  return {
+    status: status === 'unmeasured' ? 'insufficient' : status,
+    missing_fields: missingFields,
+    missing_entities: missingEntities.length ? missingEntities : [sourceCode].filter(Boolean),
+    incomplete_records: [],
+    required_population: requiredPopulation,
+    current_population: usable,
+    coverage_gap: received > 0 ? Math.max(0, requiredPopulation - usable) : null,
+    freshness_gap: null,
+    route_to_fix: routeByDomain[formula.category] || '/metricas',
+    required_capability: sourceContext.required_capability || 'metrics.engine',
+    reason: message || code || 'El indicador no tiene datos suficientes para calcularse.',
+  };
+}
+
+function functionalFailure({ formula, sourceContext = {}, status, failureType, code, message, warnings = [], missingFields = [], missingEntities = [], dataRequirements = null }) {
+  const requirements = dataRequirements || buildDataRequirements({ formula, sourceContext, status, code, message, missingFields, missingEntities });
   return {
     formula_code: formula.formula_code,
     display_name: formula.display_name,
@@ -98,6 +138,7 @@ function functionalFailure({ formula, sourceContext = {}, status, failureType, c
     message,
     error: message,
     warnings,
+    data_requirements: requirements,
     ...sourceContext,
   };
 }
@@ -208,6 +249,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
   const tenantId = tenantIdFrom(scope);
   const period = normalizePeriod(body.period || {});
   const formulas = selectedFormulas(body);
+  const sourceOverrides = body.source_overrides && typeof body.source_overrides === 'object' ? body.source_overrides : {};
   if (!formulas.length) throw new OfficialCalculationOrchestratorError('OFFICIAL_RECALC_EMPTY_SCOPE', 'No hay fórmulas publicadas para el alcance solicitado.', 422);
 
   const client = dependencies.client || pool;
@@ -221,30 +263,31 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
   for (const formula of formulas) {
     let sourceContext = {};
     try {
-      const source = await resolver({ client, tenantId, formulaCode: formula.formula_code, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
+      const source = await resolver({ client, tenantId, formulaCode: formula.formula_code, sourceCode: sourceOverrides[formula.formula_code] || body.source_code || null, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
       sourceContext = {
         source_contract_status: source.contract?.availability || source.status || 'unknown',
         source_resolution_status: source.physical_sources?.length ? 'resolved' : 'not_resolved',
         source_code: source.source_code,
         physical_sources: source.physical_sources || source.source_snapshot?.physical_sources || [],
         source_counts: source.counts || { received: 0, usable: 0, excluded: 0 },
+        required_capability: source.contract?.required_capability || null,
       };
       if (source.status === 'source_unavailable') {
-        results.push(functionalFailure({ formula, sourceContext, status: 'source_unavailable', failureType: 'source_incompatible', code: 'SOURCE_UNAVAILABLE', message: source.reason || 'No existe una fuente operacional habilitada para esta fórmula.', warnings: source.warnings || [] }));
+        results.push(functionalFailure({ formula, sourceContext, status: 'source_unavailable', failureType: 'source_incompatible', code: 'SOURCE_UNAVAILABLE', message: source.reason || 'No existe una fuente operacional habilitada para esta fórmula.', warnings: source.warnings || [], dataRequirements: source.data_requirements || null }));
         continue;
       }
       if (!source.counts?.usable) {
-        results.push(functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'SOURCE_DATA_INSUFFICIENT', message: 'No hay datos utilizables para el período seleccionado.', warnings: source.warnings || [] }));
+        results.push(functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'SOURCE_DATA_INSUFFICIENT', message: 'No hay datos utilizables para el período seleccionado.', warnings: source.warnings || [], missingEntities: [source.source_code || formula.category].filter(Boolean) }));
         continue;
       }
       if (!source.formula_input) {
-        results.push(functionalFailure({ formula, sourceContext, status: 'source_incompatible', failureType: 'source_incompatible', code: 'FORMULA_SOURCE_EQUIVALENCE_MISSING', message: 'La fuente existe, pero todavía no dispone de equivalencia operacional completa para esta fórmula.' }));
+        results.push(functionalFailure({ formula, sourceContext, status: 'source_incompatible', failureType: 'source_incompatible', code: 'FORMULA_SOURCE_EQUIVALENCE_MISSING', message: 'La fuente existe, pero todavía no dispone de equivalencia operacional completa para esta fórmula.', missingFields: ['formula_input_mapping'] }));
         continue;
       }
 
       const dependency = enrichDependencies(formula.formula_code, source.formula_input, calculatedByCode);
       if (dependency.missing.length) {
-        results.push(functionalFailure({ formula, sourceContext, status: 'dependency_pending', failureType: 'dependency_pending', code: 'FORMULA_DEPENDENCY_PENDING', message: `Faltan resultados previos requeridos: ${dependency.missing.join(', ')}.` }));
+        results.push(functionalFailure({ formula, sourceContext, status: 'dependency_pending', failureType: 'dependency_pending', code: 'FORMULA_DEPENDENCY_PENDING', message: `Faltan resultados previos requeridos: ${dependency.missing.join(', ')}.`, missingFields: dependency.missing }));
         continue;
       }
 

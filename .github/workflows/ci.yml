@@ -64,6 +64,9 @@ jobs:
       - name: Phase 5.5 production acceptance contract
         run: node scripts/phase5-5/check-production-acceptance-contract.js
 
+      - name: Phase 5 functional closure gate
+        run: npm run phase5:functional-closure
+
       - name: Phase 5-C2 semantic contracts and security
         run: |
           npm run phase5-c2:contracts-check
@@ -145,3 +148,12 @@ jobs:
 
       - name: Phase 5-C3 browser E2E
         run: npm run phase5-c3:browser-e2e
+
+      - name: Phase 5.5 browser E2E and cross-view consistency
+        run: |
+          npm run phase5-5:browser-e2e
+          npm run phase5-5:full-e2e
+          npm run phase5-5:cross-view-consistency
+
+      - name: Phase 5.5 report and export artifact validation
+        run: npm run phase5-5:artifact-validation

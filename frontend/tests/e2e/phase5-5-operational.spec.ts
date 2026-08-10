@@ -64,7 +64,12 @@ async function expectApiOk(response: Awaited<ReturnType<APIRequestContext['get']
   return response.json();
 }
 
-async function operateBuilder(page: Page, kind: string, path: string, code: string, testKey = kind) {
+type BuilderRun = {
+  entityId: string;
+  executePayload: Record<string, unknown>;
+};
+
+async function operateBuilder(page: Page, kind: string, path: string, code: string, testKey = kind): Promise<BuilderRun> {
   await page.goto(path);
   await expect(page.getByTestId(`operational-builder-${testKey}`)).toBeVisible();
   await page.getByTestId(`builder-${testKey}-code`).fill(code);
@@ -101,7 +106,7 @@ async function operateBuilder(page: Page, kind: string, path: string, code: stri
     page.getByTestId(`builder-${testKey}-execute`).click(),
   ]).then(([res]) => res);
   expect(execute.ok(), await execute.text()).toBeTruthy();
-  return entityText.trim();
+  return { entityId: entityText.trim(), executePayload: await execute.json() };
 }
 
 function endpointMarker(kind: string) {
@@ -135,7 +140,7 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
     ({ token } = await login(page));
     await page.evaluate((id) => localStorage.setItem('activeTenantId', id), tenantA);
     await page.goto('/grc');
-    await expect(page.getByText('Portal GRC')).toBeVisible();
+    await expect(page.locator('main').getByText('Portal GRC', { exact: true })).toBeVisible();
     await expect(page.getByText(/Estado operativo y analítico/i)).toBeVisible();
     const overview = await page.request.get(apiUrl('/api/grc/overview'), { headers: headers(token) });
     expect(overview.ok(), await overview.text()).toBeTruthy();
@@ -153,11 +158,24 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
 
   test('crear métrica, configurar fuente, preview, publicar, ejecutar, resultado, explicación y lineage', async ({ page }) => {
     await login(page);
-    metricId = await operateBuilder(page, 'metric', '/metricas', `${nonce}_METRIC`);
-    const measurements = await page.request.get(apiUrl(`/api/metrics/${metricId}/measurements`), { headers: headers(token) });
-    const payload = await expectApiOk(measurements);
-    expect(Array.isArray(payload.data)).toBeTruthy();
-    expect(payload.data.length).toBeGreaterThan(0);
+    const metricRun = await operateBuilder(page, 'metric', '/metricas/constructor', `${nonce}_METRIC`);
+    metricId = metricRun.entityId;
+    expect(metricId).toMatch(uuidRe);
+    const payload = metricRun.executePayload as {
+      data?: {
+        measurement?: { id?: string; official_state?: string; value_numeric?: number | string | null };
+        trust?: { status?: string };
+        sufficiency?: { status?: string };
+        official_run?: { id?: string | null; source_snapshot_ids?: string[] };
+      };
+    };
+    expect(payload.data?.measurement?.id).toMatch(uuidRe);
+    expect(payload.data?.measurement?.official_state).toBe('calculated');
+    expect(Number(payload.data?.measurement?.value_numeric)).toBeGreaterThan(0);
+    expect(payload.data?.sufficiency?.status).toBe('sufficient');
+    expect(payload.data?.trust?.status).toMatch(/trusted|acceptable|attention/);
+    expect(payload.data?.official_run?.id).toMatch(uuidRe);
+    expect(payload.data?.official_run?.source_snapshot_ids?.length).toBeGreaterThan(0);
   });
 
   test('crear encuesta, publicar, campaña y scoring oficial', async ({ page }) => {
@@ -195,7 +213,7 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
 
   test('crear dashboard, agregar widget oficial, publicar y snapshot', async ({ page }) => {
     await login(page);
-    dashboardId = await operateBuilder(page, 'dashboard', '/bi', `${nonce}_DASH`);
+    dashboardId = (await operateBuilder(page, 'dashboard', '/bi', `${nonce}_DASH`)).entityId;
     const render = await page.request.get(apiUrl(`/api/dashboards/${dashboardId}/render`), { headers: headers(token) });
     const payload = await expectApiOk(render);
     expect(payload.data.official_only).toBeTruthy();
@@ -204,7 +222,7 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
 
   test('crear reporte, generar PDF DOCX XLSX, aprobar y descargar artefactos', async ({ page }) => {
     await login(page);
-    reportId = await operateBuilder(page, 'report', '/reportes/studio', `${nonce}_REPORT`);
+    reportId = (await operateBuilder(page, 'report', '/reportes/studio', `${nonce}_REPORT`)).entityId;
     for (const format of ['pdf', 'docx', 'xlsx'] as const) {
       const generationResponse = await page.request.post(apiUrl(`/api/reports/${reportId}/generate`), {
         headers: headers(token),
@@ -237,7 +255,8 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
     });
     const officialPayload = await expectApiOk(official);
     await page.goto('/grc');
-    await expect(page.getByText(/Capa matemática oficial|Resultados operativos trazables/i).first()).toBeVisible();
+    await expect(page.locator('main').getByText('Portal GRC', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Estado operativo y analítico/i)).toBeVisible();
     await page.goto('/bi');
     await expect(page.getByTestId('operational-builder-dashboard')).toBeVisible();
     expect(officialPayload.data.formula.code).toBeTruthy();
@@ -246,7 +265,7 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
 
   test('usuario restringido no puede persistir y Tenant B no ve datos de Tenant A', async ({ page }) => {
     await login(page, restrictedEmail);
-    await page.goto('/metricas');
+    await page.goto('/metricas/constructor');
     await expect(page.getByTestId('operational-builder-metric')).toBeVisible();
     await page.getByTestId('builder-metric-code').fill(`${nonce}_DENIED`);
     const denied = await Promise.all([
