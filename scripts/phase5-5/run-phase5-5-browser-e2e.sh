@@ -200,6 +200,32 @@ CREATE TABLE IF NOT EXISTS semantic_browser_source (
 );
 INSERT INTO semantic_browser_source (tenant_id,observed_at,value_numeric,status)
 VALUES ('$TENANT_A',now(),88,'valid'),('$TENANT_B',now(),31,'attention');
+INSERT INTO tenant_controls (id, tenant_id) VALUES
+('71000000-0000-0000-0000-000000005501', '$TENANT_A'),
+('72000000-0000-0000-0000-000000005501', '$TENANT_B')
+ON CONFLICT (id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id;
+INSERT INTO grc_frameworks (id, tenant_id, code, name, publisher, content_classification, is_active) VALUES
+('71000000-0000-0000-0000-000000005502', '$TENANT_A', 'PHASE55-ISO', 'Phase 5.5 ISO control set', 'TCDX QA', 'tcdx_interpretation', true),
+('72000000-0000-0000-0000-000000005502', '$TENANT_B', 'PHASE55-ISO', 'Phase 5.5 ISO control set B', 'TCDX QA', 'tcdx_interpretation', true)
+ON CONFLICT (tenant_id, code) DO UPDATE SET name=EXCLUDED.name, is_active=true;
+INSERT INTO grc_framework_versions (id, tenant_id, framework_id, version_label, effective_from, status, published_at) VALUES
+('71000000-0000-0000-0000-000000005503', '$TENANT_A', '71000000-0000-0000-0000-000000005502', '2026.01', '2026-01-01', 'published', '2026-01-01T00:00:00Z'),
+('72000000-0000-0000-0000-000000005503', '$TENANT_B', '72000000-0000-0000-0000-000000005502', '2026.01', '2026-01-01', 'published', '2026-01-01T00:00:00Z')
+ON CONFLICT (tenant_id, framework_id, version_label) DO UPDATE SET status='published', published_at=EXCLUDED.published_at;
+INSERT INTO grc_framework_requirements (id, tenant_id, version_id, reference_code, permitted_title, tcdx_interpretation, content_classification) VALUES
+('71000000-0000-0000-0000-000000005504', '$TENANT_A', '71000000-0000-0000-0000-000000005503', 'REQ-P55-1', 'Phase 5.5 compliance requirement', 'Requirement used by browser E2E official COMPLIANCE calculation.', 'tcdx_interpretation'),
+('72000000-0000-0000-0000-000000005504', '$TENANT_B', '72000000-0000-0000-0000-000000005503', 'REQ-P55-1', 'Phase 5.5 compliance requirement B', 'Tenant B isolation requirement.', 'tcdx_interpretation')
+ON CONFLICT (tenant_id, version_id, reference_code) DO UPDATE SET permitted_title=EXCLUDED.permitted_title;
+INSERT INTO grc_requirement_control_mappings (id, tenant_id, requirement_id, tenant_control_id, mapping_type, coverage_level, justification, source_type, status, created_by, created_at, updated_at) VALUES
+('71000000-0000-0000-0000-000000005505', '$TENANT_A', '71000000-0000-0000-0000-000000005504', '71000000-0000-0000-0000-000000005501', 'exact', 90, 'Phase 5.5 browser E2E official compliance source.', 'tcdx_interpretation', 'published', '$ADMIN_A', '2026-01-15T00:00:00Z', '2026-01-15T00:00:00Z'),
+('72000000-0000-0000-0000-000000005505', '$TENANT_B', '72000000-0000-0000-0000-000000005504', '72000000-0000-0000-0000-000000005501', 'exact', 20, 'Phase 5.5 browser E2E tenant isolation compliance source.', 'tcdx_interpretation', 'published', '$ADMIN_B', '2026-01-15T00:00:00Z', '2026-01-15T00:00:00Z')
+ON CONFLICT (tenant_id, requirement_id, tenant_control_id, catalog_control_id) DO UPDATE
+SET coverage_level=EXCLUDED.coverage_level, status='published', updated_at=EXCLUDED.updated_at;
+INSERT INTO grc_control_assurance (id, tenant_id, tenant_control_id, assurance_status, score, calculated_at, formula_version) VALUES
+('71000000-0000-0000-0000-000000005506', '$TENANT_A', '71000000-0000-0000-0000-000000005501', 'effective', 90, '2026-01-15T00:00:00Z', 'phase5_5_browser_e2e'),
+('72000000-0000-0000-0000-000000005506', '$TENANT_B', '72000000-0000-0000-0000-000000005501', 'degraded', 20, '2026-01-15T00:00:00Z', 'phase5_5_browser_e2e')
+ON CONFLICT (tenant_id, tenant_control_id) DO UPDATE
+SET assurance_status=EXCLUDED.assurance_status, score=EXCLUDED.score, calculated_at=EXCLUDED.calculated_at;
 
 WITH seeded(formula_code, value_num, unit_text) AS (
   VALUES
