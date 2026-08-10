@@ -140,7 +140,12 @@ function contract(definition) {
     route_to_fix: definition.route_to_fix === undefined ? ROUTE_TO_FIX_BY_ENTITY[definition.entity] || null : definition.route_to_fix,
     required_capability: definition.required_capability === undefined ? CAPABILITY_BY_ENTITY[definition.entity] || null : definition.required_capability,
   });
-  return Object.freeze({ ...normalized, checksum: checksum(normalized) });
+  const {
+    route_to_fix: _routeToFix,
+    required_capability: _requiredCapability,
+    ...governed
+  } = normalized;
+  return Object.freeze({ ...normalized, checksum: checksum(governed) });
 }
 
 const SOURCE_CONTRACTS = Object.freeze([
@@ -183,7 +188,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['action_plans', 'action_plan_updates', 'grc_readiness_findings', 'grc_effectiveness_verifications'],
     columns: ['tenant_id','severity','status','created_at','opened_at','closed_at','completed_at','due_date','due_at','progress_percent','latest_progress_percent','latest_status_after','latest_update_at','approved_evidence_count','pending_evidence_count','weight'], required_fields: ['id','tenant_id','status'],
     variable_map: { low: 'count(severity=low)', medium: 'count(severity=medium)', high: 'count(severity=high)', critical: 'count(severity=critical)', items: 'rows[{createdAt,openedAt,closedAt,dueAt,progress,weight,overdue}]' },
-    availability: 'available', version: 2,
+    availability: 'available', version: 3,
     limitations: 'Acciones y remediación usan action_plans enriquecidos con el último action_plan_updates válido; progreso ausente queda unmeasured y no se convierte en cero.'
   }),
   contract({
