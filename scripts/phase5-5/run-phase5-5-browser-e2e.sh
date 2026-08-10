@@ -137,7 +137,7 @@ INSERT INTO permissions (permission_key, permission_group, display_name, is_acti
 SELECT permission_key, 'phase5_5_e2e', permission_key, true
 FROM (VALUES
   ('data.catalog.read'),('data.quality.read'),('data.lineage.read'),
-  ('metrics.read'),('metrics.measure'),('surveys.read'),('surveys.respond'),
+  ('metrics.read'),('metrics.measure'),('metrics.recalculate'),('surveys.read'),('surveys.respond'),
   ('assurance_tests.read'),('assurance_tests.execute'),('loss_events.read'),
   ('dashboards.read'),('reports.read'),('reports.generate'),('reports.download'),('reports.schedule'),
   ('semantic.contracts.read'),('semantic.contracts.manage'),('semantic.contracts.review'),('semantic.contracts.publish'),
@@ -175,6 +175,7 @@ SELECT '$TENANT_A'::uuid, capability_key, true, false, 'active', 'phase5_5_brows
 FROM commercial_technical_capabilities
 WHERE capability_key IN (
   'data.governance','metrics.catalog','metrics.engine','metrics.data_trust','data.lineage','data.impact_graph',
+  'metrics.jobs.run',
   'surveys.engine','assurance.testing','loss.events','bi.dashboard_builder','bi.executive_dashboards',
   'reporting.studio','reporting.pdf','reporting.docx','reporting.xlsx','reporting.scheduled','data.semantic_layer'
 )
