@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, '../..');
 const requiredFiles = [
   'database/migrations/20260729_phase5_data_metrics_bi_reporting.sql',
   'database/migrations/20260730_phase5_tenant_shell_grc_data_integration.sql',
+  'database/migrations/20260810_phase5_official_measurement_null_states.sql',
   'scripts/phase5/apply-phase5-migration.js',
   'backend/src/utils/effectiveTenant.js',
   'backend/src/services/phase5/formulaEngine.js',
@@ -48,6 +49,8 @@ for (const file of requiredFiles) {
 
 const migration = fs.readFileSync(path.join(root, requiredFiles[0]), 'utf8');
 const hotfixMigration = fs.readFileSync(path.join(root, 'database/migrations/20260730_phase5_tenant_shell_grc_data_integration.sql'), 'utf8');
+const nullStateMigration = fs.readFileSync(path.join(root, 'database/migrations/20260810_phase5_official_measurement_null_states.sql'), 'utf8');
+const runner = fs.readFileSync(path.join(root, 'scripts/phase5/apply-phase5-migration.js'), 'utf8');
 for (const table of requiredTables) {
   if (!migration.includes(`CREATE TABLE IF NOT EXISTS ${table}`)) {
     throw new Error(`Migration missing table: ${table}`);
@@ -62,6 +65,21 @@ for (const table of ['grc_analytical_impact_rules','grc_analytical_impact_events
   if (!hotfixMigration.includes(`CREATE TABLE IF NOT EXISTS ${table}`)) {
     throw new Error(`Hotfix migration missing table: ${table}`);
   }
+}
+if (!nullStateMigration.includes('DROP CONSTRAINT IF EXISTS metric_measurements_check1')) {
+  throw new Error('Null-state hotfix must remove only the legacy metric_measurements_check1 constraint');
+}
+for (const constraint of [
+  'metric_measurements_legacy_or_official_value_check',
+  'metric_measurements_official_value_contract',
+  'metric_measurements_official_state_check',
+  'metric_measurements_coverage_ratio_check',
+]) {
+  if (!nullStateMigration.includes(constraint)) throw new Error(`Null-state hotfix must preserve required constraint: ${constraint}`);
+  if (!runner.includes(constraint)) throw new Error(`Phase 5 runner postcondition must verify constraint: ${constraint}`);
+}
+if (!runner.includes('20260810_phase5_official_measurement_null_states')) {
+  throw new Error('Phase 5 runner must register the official measurement null-state hotfix');
 }
 
 const rbac = fs.readFileSync(path.join(root, 'backend/src/middleware/rbac.middleware.js'), 'utf8');

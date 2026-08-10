@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const core = require('./indicatorCore');
+const governance = require('./indicatorGovernance.service');
 
 const weights = Object.fromEntries(core.TRUST_DIMENSIONS.map((key) => [key, 0.125]));
 const dimension = (score, extra = {}) => ({ score, numerator: score, denominator: 100, evidence: { source: 'qa' }, rule: 'qa_v1', ...extra });
@@ -63,4 +64,21 @@ const keyB = core.actionProposalKey({ tenant_id: 'a', metric_snapshot_id: 's', p
 assert.strictEqual(keyA, keyB);
 
 assert.throws(() => core.normalizeWeights({ ...weights, coverage: 0.5 }), /sumar 1/);
+
+assert.deepStrictEqual(
+  governance.buildOfficialMeasurementPersistence('calculated', 0),
+  { value_numeric: 0, value_text: null }
+);
+assert.deepStrictEqual(
+  governance.buildOfficialMeasurementPersistence('source_unavailable', 75),
+  { value_numeric: null, value_text: null }
+);
+assert.deepStrictEqual(
+  governance.buildOfficialMeasurementPersistence('insufficient_data', 75),
+  { value_numeric: null, value_text: null }
+);
+assert.deepStrictEqual(
+  governance.buildOfficialMeasurementPersistence('unmeasured', undefined),
+  { value_numeric: null, value_text: null }
+);
 process.stdout.write('indicatorCore tests passed\n');
