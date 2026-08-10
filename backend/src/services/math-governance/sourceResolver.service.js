@@ -86,11 +86,11 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
     const updateJson = updatesExist ? 'to_jsonb(u)' : "'{}'::jsonb";
     const result = await client.query(
       `SELECT a.*,
-              COALESCE(NULLIF(${updateJson}->>'progress_percent','')::numeric,NULLIF(to_jsonb(a)->>'progress_percent','')::numeric,NULLIF(to_jsonb(a)->>'latest_progress_percent','')::numeric) AS progress,
-              COALESCE(NULLIF(${updateJson}->>'status_after',''),NULLIF(to_jsonb(a)->>'latest_status_after',''),NULLIF(to_jsonb(a)->>'status','')) AS status,
-              COALESCE(NULLIF(to_jsonb(a)->>'opened_at','')::timestamptz,NULLIF(to_jsonb(a)->>'created_at','')::timestamptz) AS opened_at,
-              COALESCE(NULLIF(to_jsonb(a)->>'closed_at','')::timestamptz,NULLIF(to_jsonb(a)->>'completed_at','')::timestamptz,NULLIF(${updateJson}->>'created_at','')::timestamptz) AS closed_at,
-              COALESCE(NULLIF(to_jsonb(a)->>'due_at','')::timestamptz,NULLIF(to_jsonb(a)->>'due_date','')::timestamptz) AS due_at,
+              COALESCE(NULLIF(${updateJson}->>'progress_percent','')::numeric,NULLIF(to_jsonb(a)->>'progress_percent','')::numeric,NULLIF(to_jsonb(a)->>'latest_progress_percent','')::numeric,NULLIF(to_jsonb(a)->>'progress','')::numeric) AS normalized_progress,
+              COALESCE(NULLIF(${updateJson}->>'status_after',''),NULLIF(to_jsonb(a)->>'latest_status_after',''),NULLIF(to_jsonb(a)->>'status','')) AS normalized_status,
+              COALESCE(NULLIF(to_jsonb(a)->>'opened_at','')::timestamptz,NULLIF(to_jsonb(a)->>'created_at','')::timestamptz) AS normalized_opened_at,
+              COALESCE(NULLIF(to_jsonb(a)->>'closed_at','')::timestamptz,NULLIF(to_jsonb(a)->>'completed_at','')::timestamptz,NULLIF(${updateJson}->>'created_at','')::timestamptz) AS normalized_closed_at,
+              COALESCE(NULLIF(to_jsonb(a)->>'due_at','')::timestamptz,NULLIF(to_jsonb(a)->>'due_date','')::timestamptz) AS normalized_due_at,
               COALESCE(NULLIF(${updateJson}->>'created_at','')::timestamptz,NULLIF(to_jsonb(a)->>'latest_update_at','')::timestamptz,${timestamp}) AS __event_time
        FROM action_plans a
        ${updateJoin}
@@ -99,7 +99,14 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
          AND ($3::timestamptz IS NULL OR COALESCE(NULLIF(${updateJson}->>'created_at','')::timestamptz,NULLIF(to_jsonb(a)->>'latest_update_at','')::timestamptz,${timestamp})<=$3)`,
       [tenantId, period.start || null, period.end || null]
     );
-    return tagRows(result.rows, 'action_plans');
+    return tagRows(result.rows.map((row) => ({
+      ...row,
+      progress: row.normalized_progress,
+      status: row.normalized_status,
+      opened_at: row.normalized_opened_at,
+      closed_at: row.normalized_closed_at,
+      due_at: row.normalized_due_at
+    })), 'action_plans');
   }
   const tables = severityFormula
     ? ['grc_readiness_findings', 'findings', 'action_plans']
