@@ -42,15 +42,22 @@ async function bootstrapIndicators(client) {
     )).rows[0];
     if (!semantic?.id) throw new Error(`Published semantic contract missing for ${indicator.functional_code}`);
     const latestBinding = (await client.query(
-      `SELECT version_number,metadata->>'source_code' AS source_code
+      `SELECT version_number,metadata->>'source_code' AS source_code,
+              semantic_contract_version_id::text AS semantic_contract_version_id,
+              official_formula_version_id::text AS official_formula_version_id
        FROM metric_source_bindings
        WHERE tenant_id IS NULL AND metric_key=$1 AND binding_status='published'
        ORDER BY version_number DESC LIMIT 1`,
       [indicator.functional_code]
     )).rows[0];
-    const bindingVersion = latestBinding && latestBinding.source_code && latestBinding.source_code !== sourceCode
-      ? Number(latestBinding.version_number) + 1
-      : Number(latestBinding?.version_number || 1);
+    const bindingChanged = Boolean(latestBinding) && (
+      latestBinding.source_code !== sourceCode
+      || String(latestBinding.semantic_contract_version_id || '') !== String(semantic.id)
+      || String(latestBinding.official_formula_version_id || '') !== String(official.formula_version_id)
+    );
+    const bindingVersion = latestBinding
+      ? Number(latestBinding.version_number) + (bindingChanged ? 1 : 0)
+      : 1;
     const bindingChecksum = checksum({ code:indicator.functional_code,formula:indicator.formula_code,formula_version_id:official.formula_version_id,semantic_contract_version_id:semantic.id,source_code:sourceCode,unit:indicator.unit,version:bindingVersion });
     await client.query(
       `INSERT INTO metric_source_bindings(tenant_id,metric_key,formula_code,source_contract_id,binding_status,effective_from,metadata,metric_definition_id,definition_version_id,official_formula_version_id,semantic_contract_version_id,version_number,methodology_version,unit,checksum,published_at)

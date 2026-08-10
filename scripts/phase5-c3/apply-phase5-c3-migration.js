@@ -59,11 +59,42 @@ async function preflight(client) {
   const failed = Object.entries(result.rows[0]).filter(([key,value]) => key !== 'migration_user' && value !== true);
   if (failed.length) throw new Error(`Phase 5-C3 preflight failed: ${failed.map(([key]) => key).join(', ')}`);
 }
+async function c3SchemaAlreadyInstalled(client) {
+  const result = await client.query(`SELECT
+    to_regclass('public.metric_definition_versions') IS NOT NULL
+    AND to_regclass('public.metric_trust_policies') IS NOT NULL
+    AND to_regclass('public.metric_trust_assessments') IS NOT NULL
+    AND to_regclass('public.metric_interpretations') IS NOT NULL
+    AND to_regclass('public.metric_action_proposals') IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid='public.metric_measurements'::regclass
+        AND conname='metric_measurements_legacy_or_official_value_check'
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid='public.metric_measurements'::regclass
+        AND conname='metric_measurements_official_value_contract'
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_trigger
+      WHERE tgname='trg_metric_snapshot_immutable' AND tgenabled='O'
+    ) AS installed`);
+  return result.rows[0]?.installed === true;
+}
 async function applied(client, hash) {
   const result = await client.query('SELECT checksum,status FROM schema_migrations WHERE migration_id=$1',[MIGRATION_ID]);
   if (!result.rowCount) return false;
   if (result.rows[0].status === 'applied' && result.rows[0].checksum === hash) return true;
-  if (result.rows[0].status === 'applied') { const error = new Error('Phase 5-C3 migration checksum differs from applied ledger entry'); error.preserveLedger=true; throw error; }
+  if (result.rows[0].status === 'applied') {
+    const error = new Error('Phase 5-C3 migration checksum differs from applied ledger entry');
+    error.preserveLedger=true;
+    throw error;
+  }
+  if (result.rows[0].status === 'failed' && result.rows[0].checksum === hash && await c3SchemaAlreadyInstalled(client)) {
+    process.stdout.write('Phase 5-C3 recovery: schema already installed; skipping DDL and retrying registry/bootstrap\n');
+    return true;
+  }
   return false;
 }
 async function postconditions(client) {
@@ -113,7 +144,12 @@ async function run(mode) {
     process.stdout.write(`Phase 5-C3 migration applied: ${done?'already_applied':MIGRATION_ID}\n`);
   } catch (error) {
     await client.query('ROLLBACK').catch(()=>null);
-    if (!error.preserveLedger) await client.query(`INSERT INTO schema_migrations(migration_id,checksum,applied_by,duration_ms,status,details) VALUES($1,$2,current_user,$3,'failed',$4::jsonb)
+    const ledgerState = await client.query(
+      'SELECT status FROM schema_migrations WHERE migration_id=$1',
+      [MIGRATION_ID]
+    ).catch(() => ({ rows: [] }));
+    const preserveAppliedLedger = ledgerState.rows[0]?.status === 'applied';
+    if (!error.preserveLedger && !preserveAppliedLedger) await client.query(`INSERT INTO schema_migrations(migration_id,checksum,applied_by,duration_ms,status,details) VALUES($1,$2,current_user,$3,'failed',$4::jsonb)
       ON CONFLICT(migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,applied_by=current_user,duration_ms=EXCLUDED.duration_ms,status='failed',details=EXCLUDED.details`,[MIGRATION_ID,source.checksum,Date.now()-started,JSON.stringify({error:sanitize(error)})]).catch(()=>null);
     throw error;
   } finally {
