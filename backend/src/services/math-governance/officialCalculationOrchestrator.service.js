@@ -249,6 +249,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
   const tenantId = tenantIdFrom(scope);
   const period = normalizePeriod(body.period || {});
   const formulas = selectedFormulas(body);
+  const sourceOverrides = body.source_overrides && typeof body.source_overrides === 'object' ? body.source_overrides : {};
   if (!formulas.length) throw new OfficialCalculationOrchestratorError('OFFICIAL_RECALC_EMPTY_SCOPE', 'No hay fórmulas publicadas para el alcance solicitado.', 422);
 
   const client = dependencies.client || pool;
@@ -262,7 +263,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
   for (const formula of formulas) {
     let sourceContext = {};
     try {
-      const source = await resolver({ client, tenantId, formulaCode: formula.formula_code, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
+      const source = await resolver({ client, tenantId, formulaCode: formula.formula_code, sourceCode: sourceOverrides[formula.formula_code] || body.source_code || null, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
       sourceContext = {
         source_contract_status: source.contract?.availability || source.status || 'unknown',
         source_resolution_status: source.physical_sources?.length ? 'resolved' : 'not_resolved',

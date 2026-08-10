@@ -10,6 +10,8 @@ const ROUTE_TO_FIX_BY_ENTITY = Object.freeze({
   risk: '/riesgos',
   control: '/controles',
   audit: '/auditorias',
+  incident: '/incidentes',
+  evidence: '/evidencias',
   loss: '/eventos-perdida',
   continuity: '/continuidad',
   asset: '/activos',
@@ -29,6 +31,8 @@ const CAPABILITY_BY_ENTITY = Object.freeze({
   risk: 'risk.management',
   control: 'controls.management',
   audit: 'audit.management',
+  incident: 'incidents.management',
+  evidence: 'evidence.management',
   loss: 'loss.events',
   continuity: 'continuity.management',
   asset: 'assets.management',
@@ -97,6 +101,11 @@ const FORMULA_SOURCE_MAP = Object.freeze({
   F5_C3_DATA_TRUST: 'indicator_data_trust_assessments',
   F5_C3_OPERATIONAL_PERFORMANCE: 'grc_health_components',
   F5_C3_SUPPLIER_HEALTH: 'supplier_tprm_assessments',
+});
+
+const INDICATOR_SOURCE_MAP = Object.freeze({
+  'INCIDENTS': 'incident_operational_events',
+  'EVIDENCE-FRESH': 'evidence_freshness_records',
 });
 
 function checksum(value) {
@@ -171,11 +180,27 @@ const SOURCE_CONTRACTS = Object.freeze([
   }),
   contract({
     source_code: 'audit_findings_actions', entity: 'audit',
-    tables: ['grc_readiness_findings', 'action_plans', 'grc_effectiveness_verifications'],
-    columns: ['tenant_id','severity','status','created_at','opened_at','closed_at','due_at','progress','weight'], required_fields: ['id','tenant_id','status'],
-    variable_map: { low: 'count(severity=low)', medium: 'count(severity=medium)', high: 'count(severity=high)', critical: 'count(severity=critical)', items: 'rows[{createdAt,openedAt,closedAt,progress,weight,overdue}]' },
+    tables: ['action_plans', 'action_plan_updates', 'grc_readiness_findings', 'grc_effectiveness_verifications'],
+    columns: ['tenant_id','severity','status','created_at','opened_at','closed_at','completed_at','due_date','due_at','progress_percent','latest_progress_percent','latest_status_after','latest_update_at','approved_evidence_count','pending_evidence_count','weight'], required_fields: ['id','tenant_id','status'],
+    variable_map: { low: 'count(severity=low)', medium: 'count(severity=medium)', high: 'count(severity=high)', critical: 'count(severity=critical)', items: 'rows[{createdAt,openedAt,closedAt,dueAt,progress,weight,overdue}]' },
     availability: 'available', version: 2,
-    limitations: 'Unifica hallazgos de readiness y planes de acción; campos ausentes se excluyen y se registran en warnings.'
+    limitations: 'Acciones y remediación usan action_plans enriquecidos con el último action_plan_updates válido; progreso ausente queda unmeasured y no se convierte en cero.'
+  }),
+  contract({
+    source_code: 'incident_operational_events', entity: 'incident',
+    tables: ['grc_incidents', 'grc_incident_impacts', 'grc_incident_timeline'],
+    columns: ['tenant_id','incident_number','status','category','priority','calculated_severity','confirmed_severity','reported_at','contained_at','resolved_at','closed_at','financial_impact','duration_minutes','customer_impact'], required_fields: ['id','tenant_id','status'],
+    variable_map: { low: 'count(calculated_severity=low)', medium: 'count(calculated_severity=medium)', high: 'count(calculated_severity=high)', critical: 'count(calculated_severity=critical)' },
+    availability: 'available', version: 1,
+    limitations: 'El indicador INCIDENTS usa severidad de grc_incidents. Impactos financieros, cliente y duración permanecen dimensiones separadas cuando existan; no se replican desde un único campo.'
+  }),
+  contract({
+    source_code: 'evidence_freshness_records', entity: 'evidence',
+    tables: ['evidences', 'grc_evidence_submissions', 'grc_evidence_versions', 'grc_evidence_reviews'],
+    columns: ['tenant_id','status','validated','created_at','reviewed_at','expires_at','version','submitted_at','decided_at','freshness_score','appears_expired'], required_fields: ['id','tenant_id'],
+    variable_map: { ageHours: 'now - effective evidence date', halfLifeHours: '30 days default', status: 'approval/freshness eligibility' },
+    availability: 'available', version: 1,
+    limitations: 'Freshness de evidencia usa evidencia real, revisión y expiración; data quality freshness conserva su contrato separado.'
   }),
   contract({ source_code: 'loss_events_operational', entity: 'loss', tables: ['loss_events','loss_recoveries'], columns: ['tenant_id','event_date','gross_loss_amount','net_loss_amount','currency','recovery_amount','status'], required_fields: ['id','tenant_id','event_date'], unit: 'currency', availability: 'available' }),
   contract({ source_code: 'continuity_resilience_tests', entity: 'continuity', tables: ['grc_bia_assessments','grc_continuity_plans','grc_continuity_tests'], columns: ['tenant_id','rto_hours','rpo_hours','actual_recovery_hours','actual_data_loss_hours','result','tested_at','status'], required_fields: ['id','tenant_id'], unit: 'hours', availability: 'available' }),
@@ -216,8 +241,9 @@ const SOURCE_CONTRACTS = Object.freeze([
 const SOURCE_CONTRACT_MAP = new Map(SOURCE_CONTRACTS.map((item) => [item.source_code, item]));
 
 function getSourceCodeForFormula(formulaCode) { return FORMULA_SOURCE_MAP[formulaCode] || 'source_unavailable'; }
+function getSourceCodeForIndicator(indicatorCode, formulaCode) { return INDICATOR_SOURCE_MAP[indicatorCode] || getSourceCodeForFormula(formulaCode); }
 function listSourceContracts() { return SOURCE_CONTRACTS.map((item) => ({ ...item })); }
 function getSourceContract(sourceCode) { const value = SOURCE_CONTRACT_MAP.get(sourceCode); return value ? { ...value } : null; }
 function listFormulaSourceBindings() { return Object.entries(FORMULA_SOURCE_MAP).map(([formula_code, source_code]) => ({ formula_code, source_code, contract: getSourceContract(source_code) })); }
 
-module.exports = { AVAILABILITY, FORMULA_SOURCE_MAP, SOURCE_CONTRACTS, getSourceCodeForFormula, getSourceContract, listSourceContracts, listFormulaSourceBindings };
+module.exports = { AVAILABILITY, FORMULA_SOURCE_MAP, SOURCE_CONTRACTS, getSourceCodeForFormula, getSourceCodeForIndicator, getSourceContract, listSourceContracts, listFormulaSourceBindings };

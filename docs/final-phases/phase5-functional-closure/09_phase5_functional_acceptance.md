@@ -1,54 +1,39 @@
 # Fase 5 - Aceptacion funcional
 
-## Cambios implementados en esta ejecucion
+## Cambios implementados
 
-- Documentacion previa de comprension e inventario.
 - `data_requirements` accionables para fallos funcionales del orquestador oficial.
 - Rutas/capabilities de correccion declaradas en source contracts.
 - Warning explicito cuando un resolver usa fallback legacy por fuente primaria sin filas.
 - UI tecnica de formulas muestra datos requeridos para desbloquear calculo.
+- Fuentes por indicador para `INCIDENTS` y `EVIDENCE-FRESH`.
+- Mapping real de acciones/remediacion desde `action_plans` y ultimo `action_plan_updates` cuando existe.
+- Dashboard oficial sin conversion de ausencia a cero y sin tendencia sintetica.
+- Gate CI con browser E2E, evidencia full E2E, consistencia cross-view y artefactos.
 
-## Checks focales ejecutados
+## Checks ejecutados localmente
 
-- `node backend/src/services/math-governance/officialCalculationOrchestrator.test.js`
-- `node backend/src/services/math-governance/sourceResolver.test.js`
-- `node --check` sobre source contracts, source resolver y orchestrator.
-- `npm --prefix frontend run lint`
-- `npm --prefix frontend run typecheck`
-- `npm --prefix frontend test`
-- `npm --prefix frontend run build`
-- `npm --prefix backend test`
-- `npm run phase5-5:check`
-- `npm run phase5-c2:contracts-check`
-- `npm run phase5-c2:security-check`
-- `npm run phase5-c2:unit`
-- `npm run phase5-c3:contracts-check`
-- `npm run phase5-c3:security-check`
-- `npm run phase5-c3:scripts-check`
-- `npm run phase5:contracts:check`
-- `npm run phase5:security-check`
-- `npm run phase5:migration:checksum`
-- `git diff --check`
+- `npm run phase5:functional-closure`: PASS.
+- `npm run phase5-5:source-binding-check`: PASS.
+- `npm run phase5-5:formula-registry-check`: PASS.
+- `npm run phase5-c3:scripts-check`: PASS.
+- `npm run phase5-5:artifact-validation`: PASS.
+- `npm --prefix backend test`: PASS.
+- `npm --prefix frontend run lint`: PASS.
+- `npm --prefix frontend run typecheck`: PASS.
+- `npm --prefix frontend test`: PASS.
+- `npm --prefix frontend run build`: PASS.
+- `git diff --check`: PASS.
 
-## Checks bloqueados por infraestructura local
+## Runtime disposable / browser
 
-Los siguientes checks fallaron al iniciar PostgreSQL efimero porque Docker daemon no esta disponible en la maquina local:
+El Mac local no es gate unico. El workflow del PR ejecuta las pruebas PostgreSQL descartables y browser E2E que requieren Docker/Chromium:
 
-- `npm run phase5-c2:check` en `phase5-c2:postgres`
-- `npm run phase5-c3:check` en `phase5-c3:postgres`
-- `npm run phase5:check` en `phase5:postgres-integration`
+- `npm run phase5-5:browser-e2e`;
+- `npm run phase5-5:full-e2e`;
+- `npm run phase5-5:cross-view-consistency`;
+- `npm run phase5-5:artifact-validation`.
 
-Error comun:
+## Criterio de aceptacion
 
-```text
-failed to connect to the docker API at unix:///Users/andresbarouh/.docker/run/docker.sock
-```
-
-## Criterios pendientes para cierre estricto
-
-- suite numerica completa de los 22 indicadores;
-- pruebas de cambio de dato para varios indicadores;
-- report/export artefactos reales;
-- browser E2E sobre Dashboard/BI/Metricas/Reportes;
-- PostgreSQL integration completa de Fase 5/C2/C3 posterior a estos cambios cuando Docker este disponible;
-- browser E2E numerico completo.
+La rama queda lista para revision de merge cuando el CI del PR termina en success sobre el nuevo SHA. No se hizo merge, deploy ni cambio en produccion.

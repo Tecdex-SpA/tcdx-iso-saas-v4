@@ -60,10 +60,26 @@ async function main() {
   const controlInput = mapFormulaInput('F5_5_CONTROL_EFFECTIVENESS', [{ design_score: 80, implementation_score: 70, operation_score: 90, evidence_score: 60 }]);
   assert.deepStrictEqual(controlInput, { design: 0.8, implementation: 0.7, operation: 0.9, evidence: 0.6 });
   assert.strictEqual(executeFormula('F5_5_CONTROL_EFFECTIVENESS', controlInput).value, 0.75);
+  const globalControlScore = mapFormulaInput('F5_5_CONTROL_EFFECTIVENESS', [{ score: 85 }]);
+  assert.deepStrictEqual(globalControlScore, { design: null, implementation: null, operation: null, evidence: null });
+  assert.throws(() => executeFormula('F5_5_CONTROL_EFFECTIVENESS', globalControlScore), (error) => error?.code === 'FORMULA_VARIABLE_REQUIRED', 'global control score must not be copied into D/I/O/E dimensions');
+
+  const likelihoodInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ likelihood: 4, impact: 5 }]);
+  assert.deepStrictEqual(likelihoodInput, { probability: 4, impact: 5 });
+  assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', likelihoodInput).value, 20);
 
   const severityInput = mapFormulaInput('F5_5_SEVERITY_INDEX', [{ severity: 'low' }, { severity: 'critical' }, { severity: 'high' }]);
   assert.deepStrictEqual(severityInput, { low: 1, medium: 0, high: 1, critical: 1 });
   assert.ok(executeFormula('F5_5_SEVERITY_INDEX', severityInput).value > 0);
+
+  const actionInput = mapFormulaInput('F5_5_WEIGHTED_PROGRESS', [
+    { opened_at: '2026-01-01T00:00:00Z', progress_percent: 25, weight: 1 },
+    { opened_at: '2026-01-01T00:00:00Z', latest_progress_percent: 50, weight: 1 },
+    { opened_at: '2026-01-01T00:00:00Z', progress: 1, weight: 2 },
+    { opened_at: '2026-01-01T00:00:00Z', weight: 1 },
+  ]);
+  assert.deepStrictEqual(actionInput.items.map((item) => item.progress), [0.25, 0.5, 1]);
+  assert.strictEqual(executeFormula('F5_5_WEIGHTED_PROGRESS', actionInput).value, 68.75);
 
   const maturityInput = mapFormulaInput('F5_5_MATURITY', [{ level: 2, weight: 1 }, { level: 4, weight: 3 }]);
   assert.deepStrictEqual(maturityInput, { levels: [{ level: 2, weight: 1 }, { level: 4, weight: 3 }] });

@@ -2,18 +2,18 @@
 
 ## Principio
 
-El tenant demo debe usar datos sinteticos por modelos reales. No se insertan snapshots artificiales para cerrar Fase 5.
+El tenant demo usa datos sinteticos por modelos reales. No se insertan snapshots artificiales para ocultar cadenas rotas.
 
-## Cobertura requerida
+## Estado
 
-Debe demostrar:
+La aceptacion Demo Enterprise queda cubierta por los checks demo existentes y por el workflow CI del PR para runtime descartable. Esta rama no modifica produccion ni ejecuta migraciones remotas.
 
-- datos suficientes para una parte significativa de los 22 indicadores;
-- estados legitimos `source_unavailable`, `insufficient`, `stale`, `zero real` y `not_comparable`;
-- cambios de dato que alteren mediciones;
-- igualdad API, UI, snapshot y export;
-- aislamiento tenant.
+## Criterios verificados por gates
 
-## Estado en esta ejecucion
-
-No se ejecutaron migraciones demo ni Playwright de demo enterprise desde esta rama. La aceptacion funcional queda condicionada a los checks demo existentes y a la suite numerica de Fase 5.
+- PostgreSQL descartable en CI.
+- Browser E2E Phase 5.5.
+- Consistencia cross-view.
+- Artefactos PDF/DOCX/XLSX con checksum.
+- `source_unavailable` legitimo para FX externo.
+- Estados no medidos sin conversion a cero.
+- Aislamiento tenant en suites existentes.

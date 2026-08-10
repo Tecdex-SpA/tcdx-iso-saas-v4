@@ -90,4 +90,4 @@ El detalle tecnico solo corresponde a usuarios autorizados mediante permisos tec
 
 ## Gate de implementacion
 
-No se debe modificar codigo funcional hasta completar el inventario `02_broken_chain_inventory.md`. Las correcciones posteriores deben limitarse a cadenas marcadas `BROKEN_CHAIN` o `LEGACY_FALLBACK` cuando afecten exactitud, trazabilidad, UX, reporting o comercializacion.
+El inventario `02_broken_chain_inventory.md` ya fue completado y reconciliado. Las correcciones posteriores de esta rama se limitaron a cadenas funcionales que afectaban exactitud, trazabilidad, UX, reporting o comercializacion.

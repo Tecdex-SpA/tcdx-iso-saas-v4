@@ -1,35 +1,48 @@
-# Fase 5 - Closeout funcional
+# Fase 5 - Closeout funcional del PR #61
 
-Estado actual: `BLOCKED_VALIDATION_DOCKER_UNAVAILABLE`
+Estado actual: `READY_FOR_CI_VALIDATION`
 
-No se declara `PHASE5_FUNCTIONALLY_CLOSED` en esta evidencia porque faltan validaciones pesadas solicitadas por el prompt maestro: PostgreSQL efimero, E2E numerico completo, artefactos reales y pruebas de cambio de dato sobre todos los consumidores.
+Este PR no hace merge ni deploy. El cierre queda listo para revision de merge cuando el workflow de GitHub Actions actualizado termine en success.
 
-## Corregido
+## Corregido en esta pasada
 
-- Los estados no calculables ahora pueden informar `data_requirements`.
-- La ausencia de datos o fuente ya no queda reducida a mensaje generico.
-- Los fallbacks legacy del resolver quedan visibles como warning cuando se usan.
-- La UI tecnica muestra ruta de correccion y poblacion faltante.
+- `INCIDENTS` deja de compartir la fuente de hallazgos y queda vinculado a `incident_operational_events`.
+- `EVIDENCE-FRESH` deja de usar data quality como sustituto y queda vinculado a `evidence_freshness_records`.
+- `ACTIONS` y `REMEDIATION` normalizan `progress_percent`, `latest_progress_percent`, `due_date`, `latest_status_after` y `latest_update_at`.
+- `RISK-INHERENT` acepta `likelihood` como alias canonico controlado de `probability`.
+- `RISK-RESIDUAL` exige efectividad de control real; ausencia no se vuelve cero.
+- `CONTROL-EFFECT` ya no replica un score global hacia diseno, implementacion, operacion y evidencia.
+- `SUPPLIER-HEALTH` no calcula health con componentes faltantes.
+- Dashboard no convierte `official_score` faltante en 0 y no sintetiza tendencia oficial desde delta.
+- Report/export quedan amarrados a snapshot oficial con `snapshot_id` y `checksum`.
+- CI ejecuta browser E2E, consistencia cross-view y validacion de artefactos despues de generar evidencia.
 
-## Legacy conservado por compatibilidad
+## Validaciones locales ejecutadas
 
-- Dashboard conserva secciones operacionales legacy.
-- Diagnostico/SoA/auditorias conservan conteos y diagnosticos operacionales.
-- Report Studio puede incluir estadisticas operacionales, siempre que no se presenten como indicadores oficiales.
+- `npm run phase5:functional-closure`: PASS.
+- `npm run phase5-5:source-binding-check`: PASS.
+- `npm run phase5-5:formula-registry-check`: PASS.
+- `npm run phase5-c3:scripts-check`: PASS.
+- `npm run phase5-5:artifact-validation`: PASS.
 
-## Deuda funcional conocida
+## Validaciones delegadas al CI del PR
 
-- Deuda critica de implementacion introducida en esta ejecucion: 0.
-- Validaciones productivas no ejecutadas: report/export reales, browser E2E completo, demo enterprise y deploy.
-- Cierre estricto de Fase 5: pendiente hasta ejecutar y pasar la matriz completa de aceptacion.
+El Mac local no se usa como gate unico para PostgreSQL descartable ni browser E2E. GitHub Actions ejecuta el workflow con entorno Linux y Docker/servicios disponibles:
 
-## Bloqueo externo/local
+- PostgreSQL descartable de fases 5/5.5/C2/C3.
+- Browser E2E Phase 5.5.
+- Evidencia `full-e2e`.
+- Consistencia cross-view.
+- Validacion de artefactos PDF/DOCX/XLSX.
 
-Docker no esta disponible en la maquina local: `docker ps` falla por socket ausente en `/Users/andresbarouh/.docker/run/docker.sock`. Esto bloquea los checks PostgreSQL efimeros de Fase 5, C2 y C3. No se modifico produccion ni infraestructura para sortear este bloqueo.
+## Legacy permitido
 
-## Confirmaciones
+- Superficies operacionales legacy pueden seguir mostrando estadisticas no oficiales si no se etiquetan como indicadores oficiales.
+- `external_fx_rates` permanece `source_unavailable`; no se mezclan monedas sin fuente oficial.
 
+## Estado de deuda
+
+- Deuda funcional critica conocida dentro de este PR: 0.
 - Merge: no.
 - Deploy: no.
 - Produccion: no.
-- Infraestructura: no.
