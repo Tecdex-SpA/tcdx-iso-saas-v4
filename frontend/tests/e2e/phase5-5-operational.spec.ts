@@ -135,7 +135,7 @@ test.describe.serial('Phase 5.5 operational UX and acceptance', () => {
     ({ token } = await login(page));
     await page.evaluate((id) => localStorage.setItem('activeTenantId', id), tenantA);
     await page.goto('/grc');
-    await expect(page.getByText('Portal GRC')).toBeVisible();
+    await expect(page.locator('main').getByText('Portal GRC', { exact: true })).toBeVisible();
     await expect(page.getByText(/Estado operativo y analítico/i)).toBeVisible();
     const overview = await page.request.get(apiUrl('/api/grc/overview'), { headers: headers(token) });
     expect(overview.ok(), await overview.text()).toBeTruthy();
