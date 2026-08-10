@@ -166,7 +166,15 @@ function officialPreviewPayload(kind: BuilderKind, form: BuilderForm) {
   if (kind === 'survey') return { ...common, items: [{ score: numerator, maxScore: denominator, weight: 1, dimension: form.dimension, section: 'general' }], validInvitations: denominator, completedResponses: numerator, started: denominator, completed: numerator };
   if (kind === 'assurance') return { ...common, results: [{ result: numerator / denominator >= 0.8 ? 'pass' : 'pass_with_observations', weight: 1 }], populationSize: denominator, confidence: 0.95, marginError: 0.05 };
   if (kind === 'loss') return { ...common, grossLoss: numerator, recoveries: denominator, expectedFrequency: 2, meanSeverity: Math.max(1, numerator - denominator), events: [{ grossLoss: numerator, recoveries: denominator, currency: 'CLP' }] };
-  return { ...common, inputs: { numerator, denominator }, include_trend: true };
+  return { ...common, value: denominator > 0 ? (numerator / denominator) * 100 : null, inputs: { numerator, denominator }, include_trend: true };
+}
+
+function previewValue(kind: BuilderKind, form: BuilderForm) {
+  const numerator = Number(form.numerator);
+  const denominator = Number(form.denominator);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null;
+  if (kind === 'loss') return Math.max(0, numerator - denominator);
+  return (numerator / denominator) * 100;
 }
 
 function createPayload(kind: BuilderKind, form: BuilderForm) {
@@ -356,7 +364,13 @@ export default function OperationalBuilder({ kind, title, description, domain, d
       body: JSON.stringify(officialPreviewPayload(kind, form)),
       fallbackMessage: 'Preview oficial no disponible.',
     }));
-    setPreview(dataOf<Entity>(payload));
+    const data = dataOf<Entity>(payload);
+    if (data?.value === null || data?.value === undefined) {
+      const value = previewValue(kind, form);
+      setPreview({ ...data, value, source_status: data?.source_status || 'preview', warnings: [...((data?.warnings as unknown[]) || []), 'preview_uses_form_inputs_until_official_run_exists'] });
+      return;
+    }
+    setPreview(data);
   };
 
   const saveDraft = async () => {
