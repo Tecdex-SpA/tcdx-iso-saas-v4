@@ -104,6 +104,10 @@ check(isoRiskMatrixService.includes('updateItemRiskInputs'), 'RISK_INHERENT_miss
 check(isoRiskMatrixService.includes('WHERE tenant_id = $1::uuid') && isoRiskMatrixService.includes('AND id = $2::uuid'), 'RISK_INHERENT_update_must_be_tenant_scoped');
 check(isoRiskMatrixService.includes('parseRiskAxis') && isoRiskMatrixService.includes('INVALID_RISK_AXIS'), 'RISK_INHERENT_update_must_reject_out_of_range_axes');
 check(riskMatrixPage.includes('Guardar P/I') && riskMatrixPage.includes('/risk-inputs'), 'RISK_INHERENT_missing_human_ui_for_likelihood_impact');
+check(
+  !/const topMatrixItems[\s\S]*?\.slice\(0,\s*12\)[\s\S]*?\}, \[matrixItems\]\);/.test(riskMatrixPage),
+  'RISK_INHERENT_source_items_must_not_be_hidden_by_top12_ui_limit'
+);
 
 if (failures.length) {
   process.stderr.write(JSON.stringify({ status: 'PHASE5_FUNCTIONAL_CLOSURE_CHECK_FAILED', failures }, null, 2) + '\n');
