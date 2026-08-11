@@ -435,8 +435,6 @@ const ADMIN_SAAS_PHRASES: Array<[RegExp, string]> = [
   [/tecnologicos/gi, 'technology'],
   [/gestión documental/gi, 'document management'],
   [/gestion documental/gi, 'document management'],
-  [/Información Credex SPA/gi, 'Credex Information LLC'],
-  [/Servicios de Información Credex SPA/gi, 'Credex Information Services LLC'],
   // TCDX-I18N-ADMIN-SAAS-DETAIL-RESIDUALS-END
   [/Administración SaaS/gi, 'SaaS Administration'],
   [/Gobierno SaaS/gi, 'SaaS Governance'],
