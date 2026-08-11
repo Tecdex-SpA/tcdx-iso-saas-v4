@@ -27,7 +27,7 @@ export default function EnterprisePageHeader({
         <h1 className="enterprise-page-title">{title}</h1>
         {subtitle && <p className="enterprise-page-subtitle">{subtitle}</p>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
+      {actions && <div className="flex min-w-0 flex-wrap items-center gap-3 sm:justify-end">{actions}</div>}
     </section>
   );
 }

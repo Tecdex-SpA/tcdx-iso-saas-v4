@@ -10,11 +10,11 @@ import {
   LineChart,
   Pie,
   PieChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import { ResponsiveChartFrame } from '@/components/ui/enterprise';
 import type {
   DashboardV2ActionItem,
   DashboardV2Alert,
@@ -589,11 +589,11 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
       <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <h3 className="text-sm font-semibold text-slate-950">Distribucion visual KPI</h3>
-          <div className="mt-4 h-64">
+          <div className="mt-4">
             {kpiDistribution.length === 0 ? (
               <Empty text="Sin distribucion KPI calculada." />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveChartFrame height={256}>
                 <PieChart>
                   <Pie
                     data={kpiDistribution}
@@ -609,18 +609,18 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
                   </Pie>
                   <Tooltip />
                 </PieChart>
-              </ResponsiveContainer>
+              </ResponsiveChartFrame>
             )}
           </div>
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <h3 className="text-sm font-semibold text-slate-950">KPIs por norma contratada</h3>
-          <div className="mt-4 h-64">
+          <div className="mt-4">
             {kpiByStandard.length === 0 ? (
               <Empty text="Sin KPIs por norma con datos suficientes." />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveChartFrame height={256}>
                 <BarChart data={kpiByStandard}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="standard_code" tick={{ fontSize: 11 }} />
@@ -630,7 +630,7 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
                   <Bar dataKey="yellow" name="Amarillos" stackId="a" fill={KPI_COLORS.yellow} />
                   <Bar dataKey="red" name="Rojos" stackId="a" fill={KPI_COLORS.red} />
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveChartFrame>
             )}
           </div>
           <div className="mt-3 space-y-2">
@@ -654,11 +654,11 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
         <div className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
           <h3 className="text-sm font-semibold text-slate-950">Microtendencia KPI</h3>
           <p className="mt-1 text-xs text-slate-500">Serie compacta con los ultimos valores calculados disponibles.</p>
-          <div className="mt-4 h-56">
+          <div className="mt-4">
             {trendItems.length === 0 ? (
               <Empty text="Sin valores numericos suficientes para graficar tendencia." />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveChartFrame height={224}>
                 <LineChart data={trendItems}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-12} textAnchor="end" height={46} />
@@ -666,7 +666,7 @@ function KpisPanel({ data }: { data: DashboardV2Response }) {
                   <Tooltip />
                   <Line type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
-              </ResponsiveContainer>
+              </ResponsiveChartFrame>
             )}
           </div>
         </div>

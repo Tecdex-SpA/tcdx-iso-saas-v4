@@ -11,3 +11,4 @@ export { default as EnterpriseScrollPanel } from './EnterpriseScrollPanel';
 export { default as EnterpriseStatGrid } from './EnterpriseStatGrid';
 export { default as EnterpriseTableShell } from './EnterpriseTableShell';
 export { default as EnterpriseToolbar } from './EnterpriseToolbar';
+export { default as ResponsiveChartFrame } from './ResponsiveChartFrame';

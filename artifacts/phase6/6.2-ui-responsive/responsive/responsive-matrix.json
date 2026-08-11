@@ -1,0 +1,47 @@
+{
+  "captured_at": "2026-08-11T22:09:40.049Z",
+  "route_scope": [
+    "/dashboard",
+    "/dashboard-v2",
+    "/metricas",
+    "/administrar-kpis",
+    "/bi",
+    "/grc",
+    "/grc-global",
+    "/reportes/studio",
+    "/riesgos",
+    "/matriz-riesgo",
+    "/cumplimiento-auditoria",
+    "/evidencias",
+    "/planes-accion",
+    "/acciones-recomendadas",
+    "/auditorias",
+    "/hallazgos",
+    "/proveedores",
+    "/incidentes",
+    "/continuidad",
+    "/datos",
+    "/perfil-empresa",
+    "/configuracion"
+  ],
+  "breakpoints": [
+    "1440x900",
+    "1366x768",
+    "1280x720",
+    "1024x768"
+  ],
+  "status": "STRUCTURAL_LOCAL_PASS; RUNTIME_POST_DEPLOY_REQUIRED",
+  "gates": {
+    "OFFSCREEN_CRITICAL_UI": 0,
+    "CRITICAL_HORIZONTAL_OVERFLOW": 0,
+    "BROKEN_MODAL_OR_FORM": 0,
+    "INACCESSIBLE_PRIMARY_ACTION": 0,
+    "CRITICAL_CHART_LAYOUT_ERROR": 0,
+    "RAW_TECHNICAL_UI_LEAK": 0,
+    "CRITICAL_RESPONSIVE_LAYOUT_DEFECT": 0,
+    "CRITICAL_FRONTEND_EXCEPTION": 0,
+    "PHASE5_REGRESSION": 0,
+    "ZERO_HARDCODE": "PASS"
+  },
+  "note": "Numeric critical counts combine 6.1 browser baseline plus local structural/code validation. Final deployed browser pass remains the next gate after PR merge/deploy."
+}

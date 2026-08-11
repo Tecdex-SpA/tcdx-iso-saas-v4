@@ -9,11 +9,11 @@ import {
   Cell,
   Pie,
   PieChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import { ResponsiveChartFrame } from '@/components/ui/enterprise';
 import { chipClass, formatDateTime, formatNumber, formatPercent, priorityClass, scoreClass, statusLabel } from './utils';
 
 const API_BASE_URL =
@@ -416,11 +416,11 @@ export default function DashboardV2HealthSection() {
               <div className="grid gap-4 xl:grid-cols-2">
                 <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                   <h3 className="text-base font-semibold text-slate-950">Distribucion de salud</h3>
-                  <div className="mt-4 h-64">
+                  <div className="mt-4">
                     {healthDistribution.length === 0 ? (
                       <Empty text="Sin distribucion de salud calculada." />
                     ) : (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveChartFrame height={256}>
                         <PieChart>
                           <Pie
                             data={healthDistribution}
@@ -436,18 +436,18 @@ export default function DashboardV2HealthSection() {
                           </Pie>
                           <Tooltip />
                         </PieChart>
-                      </ResponsiveContainer>
+                      </ResponsiveChartFrame>
                     )}
                   </div>
                 </div>
 
                 <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                   <h3 className="text-base font-semibold text-slate-950">Estado por norma</h3>
-                  <div className="mt-4 h-64">
+                  <div className="mt-4">
                     {healthByStandard.length === 0 ? (
                       <Empty text="Sin salud por norma calculada." />
                     ) : (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveChartFrame height={256}>
                         <BarChart data={healthByStandard}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                           <XAxis dataKey="standard_code" tick={{ fontSize: 11 }} />
@@ -458,7 +458,7 @@ export default function DashboardV2HealthSection() {
                           <Bar dataKey="deteriorado" stackId="a" fill={HEALTH_COLORS.deteriorado} />
                           <Bar dataKey="critico" stackId="a" fill={HEALTH_COLORS.critico} radius={[4, 4, 0, 0]} />
                         </BarChart>
-                      </ResponsiveContainer>
+                      </ResponsiveChartFrame>
                     )}
                   </div>
                 </div>

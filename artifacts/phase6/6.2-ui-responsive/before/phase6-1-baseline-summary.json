@@ -1,0 +1,47 @@
+{
+  "captured_at": "2026-08-11T22:09:40.049Z",
+  "source": "artifacts/phase6/6.1-baseline-preflight/responsive/browser-responsive.json",
+  "baseline": {
+    "captured_at": "2026-08-11T21:25:30.140Z",
+    "routes": [
+      "/dashboard",
+      "/metricas",
+      "/bi",
+      "/grc-global",
+      "/reportes/studio",
+      "/cumplimiento-auditoria",
+      "/evidencias",
+      "/riesgos",
+      "/planes-accion",
+      "/configuracion",
+      "/exportes",
+      "/administrar-kpis"
+    ],
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 900
+      },
+      {
+        "width": 1366,
+        "height": 768
+      },
+      {
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "width": 1024,
+        "height": 768
+      }
+    ],
+    "offscreen_critical_ui": 0,
+    "critical_horizontal_overflow": 0,
+    "broken_modal_or_form": 0,
+    "raw_state_issue_count": 0,
+    "affected_routes": [],
+    "notes": "Browser read-only baseline. No export action, recalculate, create, edit, delete, publish, approve, import, or upload was executed.",
+    "vertical_below_fold_not_counted_as_critical": 42,
+    "classification_note": "Vertical below-fold controls are expected on long pages and not classified as offscreen critical unless horizontal/off-viewport inaccessible."
+  }
+}

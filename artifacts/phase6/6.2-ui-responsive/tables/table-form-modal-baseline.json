@@ -1,0 +1,11 @@
+{
+  "captured_at": "2026-08-11T22:09:40.049Z",
+  "scope": "6.2 did not redesign table/form/modal architecture; generic enterprise header/action wrapping was hardened.",
+  "fixes": [
+    "Enterprise page headers wrap at notebook widths.",
+    "Enterprise card headers wrap action groups instead of forcing horizontal pressure.",
+    "Enterprise table shell action groups wrap consistently."
+  ],
+  "critical_table_overflow_observed": 0,
+  "broken_modal_or_form_observed": 0
+}

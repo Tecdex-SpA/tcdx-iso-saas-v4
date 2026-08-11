@@ -1,0 +1,14 @@
+{
+  "captured_at": "2026-08-11T22:09:40.049Z",
+  "branch": "phase6/ui-responsive",
+  "head": "812e6a2f56dd8578aa1da1a9d4a8d2562edaa911",
+  "validation": {
+    "phase6_ui_responsive_contract": "PASS: npm --prefix frontend run test:phase6-ui-responsive",
+    "frontend_typecheck": "PASS: npm --prefix frontend run typecheck",
+    "frontend_lint": "PASS: npm --prefix frontend run lint",
+    "frontend_test": "PASS: npm --prefix frontend test",
+    "frontend_build": "PASS: npm --prefix frontend run build",
+    "git_diff_check": "PASS: git diff --check"
+  },
+  "local_browser_note": "Local browser validation used a dev proxy attempt. Authenticated app shell remained in access-validation state in dev/proxy, so final route-level post-fix browser validation requires deployed PR. No production mutations were executed."
+}

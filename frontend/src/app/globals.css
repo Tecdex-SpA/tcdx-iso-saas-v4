@@ -339,7 +339,8 @@ a[class*="flex"] {
 
 .enterprise-page-header {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1.25rem;
@@ -379,6 +380,7 @@ a[class*="flex"] {
 .enterprise-card-header {
   display: flex;
   align-items: flex-start;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
@@ -696,6 +698,18 @@ a[class*="flex"] {
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
+}
+
+.tcdx-responsive-chart-frame {
+  width: 100%;
+  height: var(--tcdx-chart-frame-height, 240px);
+  min-height: min(var(--tcdx-chart-frame-height, 240px), 100%);
+  contain: layout paint;
+}
+
+.tcdx-responsive-chart-frame .recharts-responsive-container {
+  min-width: 1px;
+  min-height: 1px;
 }
 
 .tcdx-premium-view [class*="bg-blue-50"][class*="border"],

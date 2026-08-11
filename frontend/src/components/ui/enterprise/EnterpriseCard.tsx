@@ -28,7 +28,7 @@ export default function EnterpriseCard({
             {title && <h2 className="enterprise-card-title">{title}</h2>}
             {subtitle && <p className="enterprise-card-subtitle">{subtitle}</p>}
           </div>
-          {actions && <div className="shrink-0">{actions}</div>}
+          {actions && <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">{actions}</div>}
         </div>
       )}
       <div className={bodyClassName}>{children}</div>
