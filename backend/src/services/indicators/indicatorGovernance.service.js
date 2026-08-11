@@ -3,6 +3,7 @@
 const pool = require('../../config/db');
 const asyncJobs = require('../asyncJob.service');
 const orchestrator = require('../math-governance/officialCalculationOrchestrator.service');
+const { getSourceCodeForIndicator } = require('../math-governance/sourceContracts.service');
 const {
   IndicatorContractError, checksum, calculateDataTrust, evaluateFreshness, evaluateSufficiency,
   buildInterpretation, buildSnapshotPayload, compareSnapshots, actionProposalKey,
@@ -214,7 +215,7 @@ async function buildTrustEvidence(client,scope,indicator,item,runId,periodValue,
 async function calculateIndicator(scope,metricCode,body={},requestId=null){
   const indicator=await resolveIndicator(scope,metricCode); const currentPeriod=period(body.period||body); const client=await pool.connect();
   try{
-    const bindingSourceCode=indicator.binding_metadata?.source_code||null;
+    const bindingSourceCode=indicator.binding_metadata?.source_code||getSourceCodeForIndicator(indicator.functional_code,indicator.formula_code);
     const orchestration=await orchestrator.recalculateOfficialAnalytics(scope,{formula_codes:[indicator.formula_code],period:currentPeriod,source_overrides:bindingSourceCode?{[indicator.formula_code]:bindingSourceCode}:{}},requestId);
     const item=orchestration.results.find((entry)=>entry.formula_code===indicator.formula_code); if(!item) throw new IndicatorGovernanceError('INDICATOR_OFFICIAL_OUTPUT_MISSING','El motor oficial no devolvió el binding solicitado.',502);
     const officialState=mappedState(item); const value=officialState==='calculated'?Number(item.value):null;

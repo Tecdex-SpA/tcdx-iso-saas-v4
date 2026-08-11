@@ -106,6 +106,8 @@ check(dashboard.includes('Sin histórico oficial comparable.'), 'Dashboard_must_
 const reportRoutes = read('backend/src/routes/reports.routes.js');
 check(reportRoutes.includes('reportData.official_indicators = await indicatorGovernance.listCatalog'), 'Report_must_embed_official_indicator_snapshots');
 const indicatorService = read('backend/src/services/indicators/indicatorGovernance.service.js');
+check(indicatorService.includes('getSourceCodeForIndicator'), 'Indicator_calculation_must_use_indicator_specific_source_contract');
+check(indicatorService.includes('getSourceCodeForIndicator(indicator.functional_code,indicator.formula_code)'), 'EVIDENCE_FRESH_runtime_must_resolve_evidence_source_not_formula_default');
 for (const token of ['snapshot_id', 'checksum', 'trust', 'coverage', 'sufficiency']) {
   check(indicatorService.includes(token), `Official_export_missing_${token}`);
 }

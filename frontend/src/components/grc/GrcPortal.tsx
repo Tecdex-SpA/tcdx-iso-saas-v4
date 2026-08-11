@@ -50,7 +50,7 @@ const MODULES = [
   ['Cumplimiento', '/cumplimiento-auditoria', 'compliance'],
   ['Riesgos', '/matriz-riesgo', 'risks'],
   ['Controles', '/controles', 'controls'],
-  ['Auditorías', '/auditor', 'audits'],
+  ['Auditorías', '/auditorias', 'audits'],
   ['Evidencias', '/evidencias', 'evidence'],
   ['Planes de acción', '/acciones-recomendadas', 'actions'],
   ['Terceros', '/proveedores', 'suppliers'],

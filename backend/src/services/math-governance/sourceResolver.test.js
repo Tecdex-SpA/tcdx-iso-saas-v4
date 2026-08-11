@@ -171,6 +171,14 @@ async function main() {
   assert.strictEqual(executeFormula('F5_5_NET_LOSS', lossSource.formula_input).value, 75000);
   assert.ok(lossSource.warnings.some((warning) => String(warning).includes('occurred_at viene en el futuro')), 'future occurrence warning expected');
 
+  const evidenceFreshnessInput = mapFormulaInput('F5_5_FRESHNESS_CONTINUOUS', [
+    { id: 'evidence-a', tenant_id: 'tenant-a', status: 'aprobada', reviewed_at: new Date(Date.now() - 6 * 3600000).toISOString() },
+    { id: 'evidence-b', tenant_id: 'tenant-a', status: 'pendiente', created_at: new Date(Date.now() - 72 * 3600000).toISOString() },
+  ]);
+  assert.strictEqual(evidenceFreshnessInput.halfLifeHours, 24 * 30);
+  assert.ok(evidenceFreshnessInput.ageHours >= 0 && evidenceFreshnessInput.ageHours < 24, 'EVIDENCE-FRESH must derive age from latest effective evidence date');
+  assert.ok(executeFormula('F5_5_FRESHNESS_CONTINUOUS', evidenceFreshnessInput).value > 0, 'EVIDENCE-FRESH must calculate from real evidence dates');
+
   const riskRows = [
     { id: 'risk-a', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: 4, impact: 5 },
     { id: 'risk-b', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: 2, impact: 5 },
