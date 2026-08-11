@@ -126,11 +126,18 @@ type IsoRiskMatrixItem = {
   impact?: number;
   inherent_risk_score?: number;
   inherent_risk_level?: string;
+  residual_likelihood?: number;
+  residual_impact?: number;
   residual_risk_score?: number;
   residual_risk_level?: string;
   treatment_strategy?: string;
   status?: string;
   confidence?: number | string;
+};
+
+type MatrixItemRiskInputDraft = {
+  likelihood: string;
+  impact: string;
 };
 
 type IsoRiskMatrixAction = {
@@ -320,6 +327,33 @@ function canCreateOperationalSimulation(user: AuthUser | null) {
   ].includes(resolveRole(user));
 }
 
+function canEditIsoRiskMatrix(user: AuthUser | null) {
+  return [
+    'superadmin',
+    'super_admin',
+    'platform_admin',
+    'admin_global',
+    'global_admin',
+    'owner',
+    'admin',
+    'tenant_admin',
+    'operativo',
+    'responsable_area',
+    'area_owner',
+  ].includes(resolveRole(user));
+}
+
+function buildRiskInputDrafts(items: IsoRiskMatrixItem[]) {
+  return items.reduce<Record<string, MatrixItemRiskInputDraft>>((acc, item) => {
+    if (!item.id) return acc;
+    acc[item.id] = {
+      likelihood: String(clampRiskAxis(item.likelihood || 1)),
+      impact: String(clampRiskAxis(item.impact || 1)),
+    };
+    return acc;
+  }, {});
+}
+
 export default function RiskMatrixPage() {
   const { t } = useTranslation();
 
@@ -351,6 +385,8 @@ function RiskMatrixPageContent() {
   const [matrixRun, setMatrixRun] = useState<IsoRiskMatrixRun | null>(null);
   const [matrixItems, setMatrixItems] = useState<IsoRiskMatrixItem[]>([]);
   const [matrixActions, setMatrixActions] = useState<IsoRiskMatrixAction[]>([]);
+  const [matrixItemRiskInputs, setMatrixItemRiskInputs] = useState<Record<string, MatrixItemRiskInputDraft>>({});
+  const [savingMatrixRiskInputId, setSavingMatrixRiskInputId] = useState('');
   const [loadingMatrix, setLoadingMatrix] = useState(false);
   const [generatingMatrix, setGeneratingMatrix] = useState(false);
   const [matrixError, setMatrixError] = useState('');
@@ -403,6 +439,10 @@ function RiskMatrixPageContent() {
 
   const userCanCreateOperationalSimulation = useMemo(() => {
     return canCreateOperationalSimulation(getUserFromToken() as AuthUser | null);
+  }, []);
+
+  const userCanEditIsoRiskMatrix = useMemo(() => {
+    return canEditIsoRiskMatrix(getUserFromToken() as AuthUser | null);
   }, []);
 
   const topMatrixItems = useMemo(() => {
@@ -819,13 +859,16 @@ function RiskMatrixPageContent() {
       if (!res.ok) return;
 
       if (json?.data?.run) {
+        const items = Array.isArray(json.data.items) ? json.data.items : [];
         setMatrixRun(json.data.run);
-        setMatrixItems(Array.isArray(json.data.items) ? json.data.items : []);
+        setMatrixItems(items);
+        setMatrixItemRiskInputs(buildRiskInputDrafts(items));
         setMatrixActions(Array.isArray(json.data.actions) ? json.data.actions : []);
         setMatrixDryRun(false);
       } else {
         setMatrixRun(null);
         setMatrixItems([]);
+        setMatrixItemRiskInputs({});
         setMatrixActions([]);
         setMatrixDryRun(true);
       }
@@ -869,11 +912,13 @@ function RiskMatrixPageContent() {
       }
 
       const data = json?.data || {};
+      const items = Array.isArray(data.items) ? data.items : [];
       setMatrixRun({
         ...(data.run || {}),
         summary_json: data.summary || data.run?.summary_json || {},
       });
-      setMatrixItems(Array.isArray(data.items) ? data.items : []);
+      setMatrixItems(items);
+      setMatrixItemRiskInputs(buildRiskInputDrafts(items));
       setMatrixActions(Array.isArray(data.actions) ? data.actions : []);
       setMatrixDryRun(dryRun);
 
@@ -885,6 +930,80 @@ function RiskMatrixPageContent() {
       setMatrixError(getErrorMessage(err, 'Error generando matriz de riesgos'));
     } finally {
       setGeneratingMatrix(false);
+    }
+  };
+
+  const updateMatrixRiskInputDraft = (
+    itemId: string | undefined,
+    field: keyof MatrixItemRiskInputDraft,
+    value: string
+  ) => {
+    if (!itemId) return;
+    setMatrixItemRiskInputs((prev) => ({
+      ...prev,
+      [itemId]: {
+        likelihood: prev[itemId]?.likelihood || '1',
+        impact: prev[itemId]?.impact || '1',
+        [field]: value,
+      },
+    }));
+  };
+
+  const saveMatrixRiskInputs = async (item: IsoRiskMatrixItem) => {
+    const token = localStorage.getItem('token');
+    const user = getUserFromToken() as AuthUser | null;
+    const tenantId = resolveTenantId(user);
+    const itemId = item.id;
+    const draft = itemId ? matrixItemRiskInputs[itemId] : null;
+
+    if (!token || !tenantId || !itemId || !draft) return;
+
+    try {
+      setSavingMatrixRiskInputId(itemId);
+      setMatrixError('');
+
+      const res = await fetch(`${API_URL}/api/iso-risk-matrix/${tenantId}/items/${itemId}/risk-inputs`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          likelihood: Number(draft.likelihood),
+          impact: Number(draft.impact),
+          reason: 'Ajuste de probabilidad/impacto desde matriz de riesgos.',
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || 'No fue posible guardar probabilidad/impacto');
+      }
+
+      const updatedItem = json?.data?.item as IsoRiskMatrixItem | undefined;
+      const updatedRun = json?.data?.run as IsoRiskMatrixRun | undefined;
+
+      if (updatedItem) {
+        setMatrixItems((prev) => prev.map((current) => (
+          current.id === itemId ? { ...current, ...updatedItem } : current
+        )));
+        setMatrixItemRiskInputs((prev) => ({
+          ...prev,
+          [itemId]: {
+            likelihood: String(clampRiskAxis(updatedItem.likelihood || draft.likelihood)),
+            impact: String(clampRiskAxis(updatedItem.impact || draft.impact)),
+          },
+        }));
+      }
+
+      if (updatedRun) {
+        setMatrixRun(updatedRun);
+      }
+    } catch (err) {
+      console.error('ERROR UPDATE RISK INPUTS:', err);
+      setMatrixError(getErrorMessage(err, 'Error guardando probabilidad/impacto'));
+    } finally {
+      setSavingMatrixRiskInputId('');
     }
   };
 
@@ -1484,7 +1603,18 @@ function RiskMatrixPageContent() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {topMatrixItems.map((item, index) => (
+                        {topMatrixItems.map((item, index) => {
+                          const draft = item.id ? matrixItemRiskInputs[item.id] : null;
+                          const draftLikelihood = clampRiskAxis(draft?.likelihood || item.likelihood || 1);
+                          const draftImpact = clampRiskAxis(draft?.impact || item.impact || 1);
+                          const draftScore = draftLikelihood * draftImpact;
+                          const draftChanged = Boolean(
+                            item.id &&
+                            (draftLikelihood !== clampRiskAxis(item.likelihood || 1) ||
+                              draftImpact !== clampRiskAxis(item.impact || 1))
+                          );
+
+                          return (
                           <tr key={item.id || `${item.risk_title}-${index}`} className="align-top">
                             <td className="px-4 py-3">
                               <div className="font-medium text-gray-950">{item.risk_title}</div>
@@ -1498,9 +1628,59 @@ function RiskMatrixPageContent() {
                               <div className="text-xs text-gray-500">{item.asset_type || item.asset_criticality || ''}</div>
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`inline-flex rounded px-2 py-1 text-xs font-semibold ${riskLevelClass(item.inherent_risk_level)}`}>
-                                {item.inherent_risk_score || 0} · {item.inherent_risk_level || 'bajo'}
-                              </span>
+                              <div className="space-y-2">
+                                {userCanEditIsoRiskMatrix && item.id && !matrixDryRun ? (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <label className="text-[11px] text-gray-500">
+                                      Prob.
+                                      <select
+                                        value={String(draftLikelihood)}
+                                        onChange={(event) => updateMatrixRiskInputDraft(item.id, 'likelihood', event.target.value)}
+                                        className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900"
+                                      >
+                                        {[1, 2, 3, 4, 5].map((value) => (
+                                          <option key={value} value={value}>{value} · {axisLabel(value)}</option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="text-[11px] text-gray-500">
+                                      Impacto
+                                      <select
+                                        value={String(draftImpact)}
+                                        onChange={(event) => updateMatrixRiskInputDraft(item.id, 'impact', event.target.value)}
+                                        className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900"
+                                      >
+                                        {[1, 2, 3, 4, 5].map((value) => (
+                                          <option key={value} value={value}>{value} · {axisLabel(value)}</option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] text-gray-500">
+                                    Prob. {item.likelihood || 1} · Impacto {item.impact || 1}
+                                  </div>
+                                )}
+
+                                <span className={`inline-flex rounded px-2 py-1 text-xs font-semibold ${riskLevelClass(item.inherent_risk_level)}`}>
+                                  {item.inherent_risk_score || 0} · {item.inherent_risk_level || 'bajo'}
+                                </span>
+
+                                <div className="text-[11px] text-gray-500">
+                                  Fórmula oficial: {draftLikelihood} × {draftImpact} = {draftScore}
+                                </div>
+
+                                {userCanEditIsoRiskMatrix && item.id && !matrixDryRun && (
+                                  <button
+                                    type="button"
+                                    onClick={() => saveMatrixRiskInputs(item)}
+                                    disabled={!draftChanged || savingMatrixRiskInputId === item.id}
+                                    className="text-xs px-2 py-1 rounded bg-gray-950 text-white disabled:bg-gray-300 disabled:text-gray-600"
+                                  >
+                                    {savingMatrixRiskInputId === item.id ? 'Guardando...' : 'Guardar P/I'}
+                                  </button>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex rounded px-2 py-1 text-xs font-semibold ${riskLevelClass(item.residual_risk_level)}`}>
@@ -1536,7 +1716,8 @@ function RiskMatrixPageContent() {
                               )}
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

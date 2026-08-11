@@ -157,6 +157,22 @@ router.post('/:tenantId/items/:itemId/review', async (req, res) => {
   }
 });
 
+router.patch('/:tenantId/items/:itemId/risk-inputs', async (req, res) => {
+  try {
+    const data = await isoRiskMatrix.updateItemRiskInputs(
+      req.params.tenantId,
+      req.params.itemId,
+      req.user,
+      req.body || {}
+    );
+    return sendData(res, data, {
+      success: true,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
 router.post('/:tenantId/runs/:runId/archive', async (req, res) => {
   try {
     const data = await isoRiskMatrix.archiveRun(

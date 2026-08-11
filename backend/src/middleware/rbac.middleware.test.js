@@ -127,6 +127,29 @@ const viewerDeniedMetricWrite = authorize({ method: 'POST', path: '/api/metrics'
 assert.equal(viewerDeniedMetricWrite.nextCalled, false);
 assert.equal(viewerDeniedMetricWrite.res.statusCode, 403);
 
+const riskMatrixRead = authorize({
+  method: 'GET',
+  path: `/api/iso-risk-matrix/${batchId}/latest`,
+  role: 'auditor',
+});
+assert.equal(riskMatrixRead.nextCalled, true, 'auditor can read ISO risk matrix');
+
+const riskMatrixAdminWrite = authorize({
+  method: 'PATCH',
+  path: `/api/iso-risk-matrix/${batchId}/items/${batchId}/risk-inputs`,
+  role: 'tenant_admin',
+});
+assert.equal(riskMatrixAdminWrite.nextCalled, true, 'tenant_admin can update ISO risk matrix inputs');
+
+const riskMatrixAuditorWrite = authorize({
+  method: 'PATCH',
+  path: `/api/iso-risk-matrix/${batchId}/items/${batchId}/risk-inputs`,
+  role: 'auditor',
+});
+assert.equal(riskMatrixAuditorWrite.nextCalled, false, 'auditor cannot update ISO risk matrix inputs');
+assert.equal(riskMatrixAuditorWrite.res.statusCode, 403);
+assert.equal(riskMatrixAuditorWrite.res.payload.code, 'RBAC_DENIED');
+
 const definitions = listImportDefinitions();
 assert.equal(definitions.length, 33);
 assert.equal(
