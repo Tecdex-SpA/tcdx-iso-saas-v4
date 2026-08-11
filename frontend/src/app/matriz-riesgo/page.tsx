@@ -447,8 +447,7 @@ function RiskMatrixPageContent() {
 
   const topMatrixItems = useMemo(() => {
     return [...matrixItems]
-      .sort((a, b) => Number(b.residual_risk_score || 0) - Number(a.residual_risk_score || 0))
-      .slice(0, 12);
+      .sort((a, b) => Number(b.residual_risk_score || 0) - Number(a.residual_risk_score || 0));
   }, [matrixItems]);
 
   const heatmapEntries = useMemo<HeatmapEntry[]>(() => {
