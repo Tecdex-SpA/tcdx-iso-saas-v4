@@ -1,0 +1,15 @@
+{
+  "runtime": "https://tcdx-iso.tecdex.net",
+  "checks": {
+    "health": 200,
+    "frontend": 200,
+    "login": 200,
+    "official_catalog": 200,
+    "dashboard_official": 200,
+    "grc_official_catalog": 200
+  },
+  "mutations_executed": false,
+  "recalculate_executed": false,
+  "phase5_sanity": "PASS",
+  "runtime_critical_errors": 0
+}

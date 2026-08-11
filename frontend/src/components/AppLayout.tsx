@@ -26,6 +26,7 @@ import {
   PLATFORM_ROLES,
   PLATFORM_ROUTES,
   canAccessMvpFeature,
+  getMvpRouteCapability,
   getMvpRouteRule,
   isPathInRoutes,
 } from '@/utils/mvpPermissions';
@@ -67,7 +68,12 @@ type PermissionsResponse = {
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { t } = useTranslation();
-  const { loading: entitlementsLoading, aiEnabled, canUseAiFeature } = useTenantEntitlements();
+  const {
+    loading: entitlementsLoading,
+    aiEnabled,
+    canUseAiFeature,
+    hasCapability,
+  } = useTenantEntitlements();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -355,6 +361,24 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           return;
         }
 
+        const requiredCapability = getMvpRouteCapability(pathname);
+
+        if (!isPlatform && !isDealer && requiredCapability) {
+          if (entitlementsLoading) {
+            return;
+          }
+
+          if (!hasCapability(requiredCapability)) {
+            if (!cancelled) {
+              setAccessDeniedMessage(
+                t('app.moduleDisabled', { module: requiredCapability })
+              );
+              setCheckingAccess(false);
+            }
+            return;
+          }
+        }
+
         if (!isPlatform && !isDealer) {
           const moduleAccess = await getModuleAccess(token);
           if (!cancelled) setModuleMap(moduleAccess.module_map || {});
@@ -435,7 +459,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [getModuleAccess, getPermissions, getRequiredModuleForPath, isRoute, pathname, routeRules, t]);
+  }, [
+    entitlementsLoading,
+    getModuleAccess,
+    getPermissions,
+    getRequiredModuleForPath,
+    hasCapability,
+    isRoute,
+    pathname,
+    routeRules,
+    t,
+  ]);
 
   useEffect(() => {
     if (entitlementsLoading) return;

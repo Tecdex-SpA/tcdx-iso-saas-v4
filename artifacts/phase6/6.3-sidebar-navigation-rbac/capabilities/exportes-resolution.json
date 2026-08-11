@@ -1,0 +1,26 @@
+{
+  "route": "/exportes",
+  "classification": "ACTIVE_PRODUCTIVE_REPORTING_EXPORT_SURFACE",
+  "role_contract": {
+    "feature": "reports.read",
+    "read_roles": ["admin", "auditor", "area_owner", "executive"],
+    "export_permission": "reports.export"
+  },
+  "commercial_capability_contract": {
+    "capability": "reports.premium",
+    "reason": "The page exposes premium executive exports and PDF/ZIP generation paths; the commercial catalog defines reports.premium as advanced PDF/ZIP export capability."
+  },
+  "not_selected": [
+    {
+      "capability": "reporting.studio",
+      "reason": "Reserved for /reportes/studio and report studio/report generation routes."
+    },
+    {
+      "capability": "core.reports",
+      "reason": "Catalog describes operational reports, while /exportes is the premium export surface."
+    }
+  ],
+  "source_of_truth": "frontend/src/utils/mvpPermissions.ts",
+  "sidebar_alignment": "PASS",
+  "deep_link_alignment": "PASS"
+}

@@ -1,0 +1,57 @@
+{
+  "phase": "6.3",
+  "status": "READY_FOR_INTERMEDIATE_MERGE_REVIEW",
+  "baseline": {
+    "branch_base": "main",
+    "main_head": "317284cb74710625ede4080e163089a909dee7ba",
+    "origin_main": "317284cb74710625ede4080e163089a909dee7ba",
+    "runtime": "https://tcdx-iso.tecdex.net",
+    "runtime_health": "healthy",
+    "phase5_baseline": "closed",
+    "phase6_2_baseline": "closed"
+  },
+  "navigation_architecture": {
+    "canonical_dashboard": "/dashboard",
+    "dashboard_v2": "required_compatibility_redirect",
+    "capability_source_of_truth": "frontend/src/utils/mvpPermissions.ts",
+    "sidebar_uses_shared_capability_helper": true,
+    "app_layout_uses_shared_capability_helper": true,
+    "direct_url_capability_guard": true
+  },
+  "exportes_resolution": {
+    "route": "/exportes",
+    "role_feature": "reports.read",
+    "commercial_capability": "reports.premium",
+    "rationale": "The route exposes executive/premium report generation/export and calls premium PDF/ZIP/report export APIs; Report Studio remains mapped to reporting.studio."
+  },
+  "gates": {
+    "ROLE_MENU_MISMATCH": 0,
+    "CAPABILITY_MENU_MISMATCH": 0,
+    "BROKEN_NAVIGATION": 0,
+    "LEGACY_ROUTE_EXPOSED_CRITICAL": 0,
+    "DIRECT_URL_RBAC_BYPASS": 0,
+    "UI_VISIBLE_UNAUTHORIZED_ACTION": 0,
+    "ROLE_HOME_PATH_MISMATCH": 0,
+    "REDIRECT_LOOP": 0,
+    "NAVIGATION_TENANT_LEAKAGE": 0,
+    "CRITICAL_UI_API_AUTH_MISMATCH": 0,
+    "PHASE6_2_REGRESSION": 0,
+    "PHASE5_REGRESSION": 0,
+    "ZERO_HARDCODE": "PASS"
+  },
+  "validation": {
+    "runtime_health": "PASS",
+    "runtime_official_catalog": "PASS",
+    "runtime_dashboard_official": "PASS",
+    "runtime_grc_official_catalog": "PASS",
+    "phase5_5_production_acceptance_contract": "PASS",
+    "frontend_typecheck": "PASS",
+    "frontend_lint": "PASS",
+    "frontend_test": "PASS",
+    "phase6_ui_responsive_contract": "PASS",
+    "phase6_sidebar_rbac_contract": "PASS",
+    "frontend_build": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "post_deploy_required": true
+}
