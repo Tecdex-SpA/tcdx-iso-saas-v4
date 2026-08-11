@@ -6,7 +6,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <>
       {children}
       <div className="mx-auto w-full max-w-[1680px] px-4 pb-8 md:px-6">
-        <GrcDecisionCenter compact title="Decisiones GRC derivadas del dashboard" />
+        <GrcDecisionCenter
+          compact
+          variant="summary"
+          title="Resumen ejecutivo GRC"
+          ctaHref="/grc"
+          ctaLabel="Ver análisis GRC"
+        />
       </div>
     </>
   );

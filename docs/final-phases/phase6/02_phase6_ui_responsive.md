@@ -8,6 +8,8 @@ Captured: 2026-08-11
 
 Phase 6.2 introduced generic UX/responsive hardening code. Because product code changed, final runtime closure requires PR review, merge, deploy, and post-deploy browser validation. Phase 5 was not reopened.
 
+Post-deploy validation of PR #80 confirmed the responsive/chart fix was deployed, but surfaced one additional 6.2 information-architecture defect in `/dashboard`: the extended GRC decision center made the executive dashboard too long and mixed Dashboard responsibilities with GRC Integrated responsibilities. This was handled as part of the same 6.2 UX scope, without reopening Phase 5 and without changing calculations, formulas, source contracts, snapshots, measurements, RBAC, or tenant isolation.
+
 ## Platform base
 
 | Item | Evidence |
@@ -74,6 +76,23 @@ Not every route required code changes. The implemented fix targets the shared ch
 | Added reusable chart frame CSS. | `frontend/src/app/globals.css` |
 | Hardened enterprise page/card/table headers so actions wrap instead of forcing horizontal pressure. | `EnterprisePageHeader.tsx`, `EnterpriseCard.tsx`, `EnterpriseTableShell.tsx`, `globals.css` |
 | Added structural regression test for the responsive chart/header contract. | `frontend/scripts/check-phase6-ui-responsive-contract.mjs`, `frontend/package.json` |
+| Replaced the extended GRC decision section in `/dashboard` with a compact executive GRC summary and CTA to `/grc`. | `frontend/src/app/dashboard/layout.tsx`, `frontend/src/components/math-governance/GrcDecisionCenter.tsx` |
+| Mounted the detailed decisions/priorities/interpretation experience in GRC Integrated, reusing the existing official-catalog-driven decision component. | `frontend/src/components/grc/GrcPortal.tsx` |
+
+## Dashboard GRC information architecture
+
+| Requirement | Result | Evidence |
+| --- | --- | --- |
+| `/dashboard` remains executive and compact | PASS pending deploy | Dashboard now renders `GrcDecisionCenter` with `variant="summary"` and title `Resumen ejecutivo GRC`. |
+| Extended decisions/priorities experience moves out of Dashboard main flow | PASS pending deploy | Full decision center is mounted in `/grc` as `Decisiones, prioridades e interpretación GRC`. |
+| Dashboard CTA is semantically GRC | PASS pending deploy | CTA label `Ver análisis GRC`, href `/grc`. |
+| No duplicate source of truth | PASS | Both summary and detailed modes use the same component and existing `/api/metrics/official/catalog` data path. |
+| No Phase 5 regression | PASS at code/test level | No calculation, formula, snapshot, measurement, source resolver, or tenant-isolation logic changed. |
+| Zero hardcode | PASS | No tenant, user, dataset, KPI value, or customer-specific logic was introduced. |
+
+Gate added to 6.2:
+
+`DASHBOARD_GRC_INFORMATION_ARCHITECTURE = PASS` after merge/deploy validation.
 
 ## Responsive matrix
 
@@ -133,6 +152,7 @@ No tenant IDs, QA IDs, emails, fixed KPI values, dataset-specific dimensions, fi
 | `CRITICAL_FRONTEND_EXCEPTION` | 0 |
 | `PHASE5_REGRESSION` | 0 |
 | `ZERO_HARDCODE` | PASS |
+| `DASHBOARD_GRC_INFORMATION_ARCHITECTURE` | PASS at code/test level; runtime post-deploy required |
 
 ## Remaining non-critical UX debt
 
@@ -140,6 +160,7 @@ No tenant IDs, QA IDs, emails, fixed KPI values, dataset-specific dimensions, fi
 - Sidebar/capability gaps remain intentionally scoped to 6.3.
 - KPI Admin vs Official product semantics remain intentionally scoped to 6.4.
 - End-to-end business flow polish remains intentionally scoped to 6.5.
+- Dashboard v2 remains compatibility-only and redirects to `/dashboard`; legacy decommission stays out of 6.2.
 
 ## Artifacts
 
