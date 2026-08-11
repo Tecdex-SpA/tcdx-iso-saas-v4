@@ -161,8 +161,8 @@ function enrichDependencies(formulaCode, input, calculatedByCode) {
     const dependencyMap = {
       compliance: 'F5_5_COMPLIANCE_WEIGHTED',
       actions: 'F5_5_WEIGHTED_PROGRESS',
-      evidence: 'F5_5_EVIDENCE_QUALITY',
-      dataTrust: 'F5_5_COMPLETENESS',
+      evidence: 'F5_5_FRESHNESS_CONTINUOUS',
+      dataTrust: 'F5_C3_DATA_TRUST',
       risk: 'F5_5_RESIDUAL_RISK',
     };
     for (const [key, dependencyCode] of Object.entries(dependencyMap)) {

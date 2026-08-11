@@ -62,6 +62,12 @@ async function main() {
   const residualInput = mapFormulaInput('F5_5_RESIDUAL_RISK', [{ exposure: 20, assurance_score: 65 }]);
   assert.deepStrictEqual(residualInput, { inherentRisk: 20, controlEffectiveness: 0.65 });
   assert.strictEqual(executeFormula('F5_5_RESIDUAL_RISK', residualInput).value, 7);
+  const residualPortfolioInput = mapFormulaInput('F5_5_RESIDUAL_RISK', [
+    { likelihood: 4, impact: 5, assurance_score: 60 },
+    { likelihood: 2, impact: 5, assurance_score: 80 },
+  ]);
+  assert.deepStrictEqual(residualPortfolioInput, { inherentRisk: 15, controlEffectiveness: 0.7 });
+  assert.strictEqual(executeFormula('F5_5_RESIDUAL_RISK', residualPortfolioInput).value, 4.5);
   const residualMissingControl = mapFormulaInput('F5_5_RESIDUAL_RISK', [{ exposure: 20 }]);
   assert.deepStrictEqual(residualMissingControl, { inherentRisk: 20, controlEffectiveness: null });
   assert.throws(
@@ -179,6 +185,95 @@ async function main() {
   assert.ok(evidenceFreshnessInput.ageHours >= 0 && evidenceFreshnessInput.ageHours < 24, 'EVIDENCE-FRESH must derive age from latest effective evidence date');
   assert.ok(executeFormula('F5_5_FRESHNESS_CONTINUOUS', evidenceFreshnessInput).value > 0, 'EVIDENCE-FRESH must calculate from real evidence dates');
 
+  const evidenceQueries = [];
+  const evidenceClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) {
+      const table = String(params[0] || '').replace(/^public\./, '');
+      return { rows: [{ exists: ['evidences', 'grc_evidence_versions', 'grc_evidence_submissions', 'grc_evidence_reviews'].includes(table) }] };
+    }
+    evidenceQueries.push({ sql, params });
+    if (sql.includes('FROM evidences e')) return { rows: [] };
+    if (sql.includes('FROM grc_evidence_versions v')) {
+      assert.ok(!/\bv\.status\b/.test(sql), 'grc_evidence_versions has no direct status column; adapter must derive it from submissions/reviews');
+      assert.ok(sql.includes('grc_evidence_submissions s'), 'version evidence freshness must join submission metadata when available');
+      assert.ok(sql.includes('grc_evidence_reviews r'), 'version evidence freshness must join latest review metadata when available');
+      return { rows: [{
+        id: 'version-a',
+        tenant_id: 'tenant-a',
+        status: 'approved',
+        validated: true,
+        created_at: new Date(Date.now() - 48 * 3600000).toISOString(),
+        reviewed_at: new Date(Date.now() - 3 * 3600000).toISOString(),
+        expires_at: null,
+        __event_time: new Date(Date.now() - 3 * 3600000).toISOString(),
+        freshness_score: null,
+        appears_expired: false,
+      }] };
+    }
+    throw new Error(`unexpected evidence query: ${sql}`);
+  } };
+  const evidenceSource = await resolveFormulaSource({
+    client: evidenceClient,
+    tenantId: 'tenant-a',
+    formulaCode: 'F5_5_FRESHNESS_CONTINUOUS',
+    sourceCode: 'evidence_freshness_records',
+  });
+  assert.strictEqual(evidenceQueries.length, 2, 'empty primary evidence table must continue to governed version evidence fallback');
+  assert.strictEqual(evidenceSource.status, 'ready');
+  assert.strictEqual(evidenceSource.rows.length, 1);
+  assert.strictEqual(evidenceSource.rows[0].__physical_source, 'grc_evidence_versions');
+  assert.ok(evidenceSource.formula_input.ageHours >= 0 && evidenceSource.formula_input.ageHours < 24);
+  assert.ok(executeFormula('F5_5_FRESHNESS_CONTINUOUS', evidenceSource.formula_input).value > 0);
+
+  const healthClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) {
+      const table = String(params[0] || '').replace(/^public\./, '');
+      return { rows: [{ exists: ['calculation_runs', 'calculation_outputs'].includes(table) }] };
+    }
+    assert.ok(sql.includes('FROM calculation_runs cr'), 'GRC-HEALTH source must include formula_code from calculation_runs');
+    assert.ok(sql.includes('JOIN calculation_outputs co'), 'GRC-HEALTH source must consume official calculation outputs');
+    assert.ok(Array.isArray(params[3]) && params[3].includes('F5_5_FRESHNESS_CONTINUOUS') && params[3].includes('F5_C3_DATA_TRUST'));
+    return { rows: [
+      { id: 'out-risk', tenant_id: 'tenant-a', formula_code: 'F5_5_RESIDUAL_RISK', output_value: { value: 7 }, __event_time: new Date().toISOString() },
+      { id: 'out-compliance', tenant_id: 'tenant-a', formula_code: 'F5_5_COMPLIANCE_WEIGHTED', output_value: { value: 83.33 }, __event_time: new Date().toISOString() },
+      { id: 'out-actions', tenant_id: 'tenant-a', formula_code: 'F5_5_WEIGHTED_PROGRESS', output_value: { value: 62.5 }, __event_time: new Date().toISOString() },
+      { id: 'out-evidence', tenant_id: 'tenant-a', formula_code: 'F5_5_FRESHNESS_CONTINUOUS', output_value: { value: 99 }, __event_time: new Date().toISOString() },
+      { id: 'out-trust', tenant_id: 'tenant-a', formula_code: 'F5_C3_DATA_TRUST', output_value: { value: 85 }, __event_time: new Date().toISOString() },
+    ] };
+  } };
+  const healthSource = await resolveFormulaSource({
+    client: healthClient,
+    tenantId: 'tenant-a',
+    formulaCode: 'F5_5_GRC_HEALTH',
+    sourceCode: 'grc_health_components',
+  });
+  assert.strictEqual(healthSource.status, 'ready');
+  assert.strictEqual(healthSource.formula_input.evidence, 0.99);
+  assert.strictEqual(healthSource.formula_input.dataTrust, 0.85);
+  assert.ok(executeFormula('F5_5_GRC_HEALTH', healthSource.formula_input).value > 0);
+
+  const maturityClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) {
+      const table = String(params[0] || '').replace(/^public\./, '');
+      return { rows: [{ exists: ['survey_evaluations', 'metric_measurements', 'metric_definitions', 'metric_source_bindings'].includes(table) }] };
+    }
+    if (sql.includes('FROM survey_evaluations e')) return { rows: [] };
+    if (sql.includes('FROM metric_measurements mm')) {
+      assert.ok(sql.includes("msb.formula_code='F5_5_MATURITY'"), 'maturity fallback must not consume all metric measurements');
+      return { rows: [{ id: 'maturity-mm', tenant_id: 'tenant-a', level: 3, weight: 2, status: 'calculated', __event_time: new Date().toISOString() }] };
+    }
+    throw new Error(`unexpected maturity query: ${sql}`);
+  } };
+  const maturitySource = await resolveFormulaSource({
+    client: maturityClient,
+    tenantId: 'tenant-a',
+    formulaCode: 'F5_5_MATURITY',
+    sourceCode: 'maturity_assessments',
+  });
+  assert.strictEqual(maturitySource.counts.received, 1);
+  assert.deepStrictEqual(maturitySource.formula_input, { levels: [{ level: 3, weight: 2 }] });
+  assert.strictEqual(executeFormula('F5_5_MATURITY', maturitySource.formula_input).value, 3);
+
   const riskRows = [
     { id: 'risk-a', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: 4, impact: 5 },
     { id: 'risk-b', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: 2, impact: 5 },
@@ -201,6 +296,26 @@ async function main() {
   assert.strictEqual(riskSource.lineage.length, 3);
   assert.deepStrictEqual(riskSource.formula_input.scores, [20, 10, 15]);
   assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', riskSource.formula_input).value, 15);
+
+  const findingsClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) {
+      const table = String(params[0] || '').replace(/^public\./, '');
+      return { rows: [{ exists: table === 'grc_readiness_findings' }] };
+    }
+    if (sql.includes('FROM grc_readiness_findings x')) return { rows: [
+      { id: 'finding-without-severity', tenant_id: 'tenant-a', status: 'open', __event_time: new Date().toISOString() },
+    ] };
+    throw new Error(`unexpected findings query: ${sql}`);
+  } };
+  const findingsSource = await resolveFormulaSource({
+    client: findingsClient,
+    tenantId: 'tenant-a',
+    formulaCode: 'F5_5_SEVERITY_INDEX',
+    sourceCode: 'audit_findings_actions',
+  });
+  assert.strictEqual(findingsSource.counts.received, 1);
+  assert.strictEqual(findingsSource.counts.usable, 0);
+  assert.strictEqual(findingsSource.exclusions[0].code, 'severity_missing_or_invalid');
 
   const missingClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
   const missingTables = await resolveFormulaSource({ client: missingClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
