@@ -45,6 +45,8 @@ check(JSON.stringify(incidentSeverity) === JSON.stringify({ low: 1, medium: 0, h
 
 const inherent = mapFormulaInput('F5_5_INHERENT_RISK', [{ likelihood: 4, impact: 5 }]);
 check(executeFormula('F5_5_INHERENT_RISK', inherent).value === 20, 'RISK_INHERENT_likelihood_impact_value_mismatch');
+const inherentChanged = mapFormulaInput('F5_5_INHERENT_RISK', [{ likelihood: 3, impact: 5 }]);
+check(executeFormula('F5_5_INHERENT_RISK', inherentChanged).value === 15, 'RISK_INHERENT_likelihood_impact_causal_change_mismatch');
 
 const residual = mapFormulaInput('F5_5_RESIDUAL_RISK', [{ exposure: 20, control_effectiveness: 65 }]);
 check(executeFormula('F5_5_RESIDUAL_RISK', residual).value === 7, 'RISK_RESIDUAL_expected_value_mismatch');
@@ -94,6 +96,15 @@ check(indicatorService.includes('publishSnapshot(scope,snapshotId,requestId)'), 
 check(indicatorService.includes('metricInterpretationChecksum(snapshot.id,interpretation)'), 'Metric_interpretation_checksum_must_be_scoped_by_snapshot_to_avoid_cross_indicator_duplicates');
 check(!indicatorService.includes('checksum(interpretation),actorId(scope)'), 'Metric_interpretation_checksum_must_not_be_global_interpretation_only');
 
+const isoRiskMatrixService = read('backend/src/services/isoRiskMatrix.service.js');
+const isoRiskMatrixRoutes = read('backend/src/routes/iso-risk-matrix.routes.js');
+const riskMatrixPage = read('frontend/src/app/matriz-riesgo/page.tsx');
+check(isoRiskMatrixRoutes.includes("patch('/:tenantId/items/:itemId/risk-inputs'"), 'RISK_INHERENT_missing_supported_risk_input_update_endpoint');
+check(isoRiskMatrixService.includes('updateItemRiskInputs'), 'RISK_INHERENT_missing_service_update_flow');
+check(isoRiskMatrixService.includes('WHERE tenant_id = $1::uuid') && isoRiskMatrixService.includes('AND id = $2::uuid'), 'RISK_INHERENT_update_must_be_tenant_scoped');
+check(isoRiskMatrixService.includes('parseRiskAxis') && isoRiskMatrixService.includes('INVALID_RISK_AXIS'), 'RISK_INHERENT_update_must_reject_out_of_range_axes');
+check(riskMatrixPage.includes('Guardar P/I') && riskMatrixPage.includes('/risk-inputs'), 'RISK_INHERENT_missing_human_ui_for_likelihood_impact');
+
 if (failures.length) {
   process.stderr.write(JSON.stringify({ status: 'PHASE5_FUNCTIONAL_CLOSURE_CHECK_FAILED', failures }, null, 2) + '\n');
   process.exit(1);
@@ -103,7 +114,7 @@ process.stdout.write(JSON.stringify({
   status: 'PHASE5_FUNCTIONAL_CLOSURE_CHECK_OK',
   indicators: 22,
   formulas_reconciled: 53,
-  p0_numeric_assertions: 11,
+  p0_numeric_assertions: 12,
   dashboard_synthetic_trend: 'rejected',
   report_export_snapshot_contract: 'verified',
 }) + '\n');

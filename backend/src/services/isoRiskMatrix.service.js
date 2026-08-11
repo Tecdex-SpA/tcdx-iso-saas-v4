@@ -24,6 +24,20 @@ const ALLOWED_REVIEW_STATUS = new Set([
   'archived',
 ]);
 
+const RISK_MATRIX_WRITE_ROLES = new Set([
+  'superadmin',
+  'super_admin',
+  'platform_admin',
+  'admin_global',
+  'global_admin',
+  'owner',
+  'admin',
+  'tenant_admin',
+  'operativo',
+  'responsable_area',
+  'area_owner',
+]);
+
 function publicError(status, code, message) {
   const error = new Error(message);
   error.status = status;
@@ -60,6 +74,16 @@ function assertTenantAccess(user, tenantId) {
 
   if (String(getUserTenantId(user) || '') !== String(tenantId || '')) {
     throw publicError(403, 'TENANT_ACCESS_DENIED', 'No autorizado para este tenant');
+  }
+}
+
+function canManageRiskMatrix(user) {
+  return RISK_MATRIX_WRITE_ROLES.has(normalizeRole(user?.role || user?.user_role || user?.userRole));
+}
+
+function assertCanManageRiskMatrix(user) {
+  if (!canManageRiskMatrix(user)) {
+    throw publicError(403, 'RISK_MATRIX_WRITE_DENIED', 'No autorizado para editar matriz de riesgos');
   }
 }
 
@@ -108,6 +132,14 @@ function numberValue(value, fallback = 0) {
 function clampInt(value, min = 1, max = 5) {
   const n = Math.round(numberValue(value, min));
   return Math.max(min, Math.min(max, n));
+}
+
+function parseRiskAxis(value, field) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 5) {
+    throw publicError(400, 'INVALID_RISK_AXIS', `${field} debe ser un entero entre 1 y 5`);
+  }
+  return n;
 }
 
 function round2(value) {
@@ -198,6 +230,29 @@ function residualFactor(effectiveness) {
   if (effectiveness >= 80) return 2;
   if (effectiveness >= 55) return 1;
   return 0;
+}
+
+function calculateRiskAxes({ likelihood, impact, controlEffectiveness = 0 }) {
+  const inherentRiskScore = likelihood * impact;
+  const inherentRiskLevel = riskLevel(inherentRiskScore);
+  const effectiveness = numberValue(controlEffectiveness, 0);
+  const reduction = residualFactor(effectiveness);
+  const residualLikelihood = clampInt(likelihood - reduction);
+  const residualImpact = clampInt(impact - (effectiveness >= 85 ? 1 : 0));
+  const residualRiskScore = residualLikelihood * residualImpact;
+  const residualRiskLevel = riskLevel(residualRiskScore);
+
+  return {
+    likelihood,
+    impact,
+    inherent_risk_score: inherentRiskScore,
+    inherent_risk_level: inherentRiskLevel,
+    residual_likelihood: residualLikelihood,
+    residual_impact: residualImpact,
+    residual_risk_score: residualRiskScore,
+    residual_risk_level: residualRiskLevel,
+    treatment_strategy: treatmentStrategy(residualRiskLevel),
+  };
 }
 
 function buildCoverageWarning({ standardCode, versionCode, certifiable, coveragePct }) {
@@ -710,17 +765,15 @@ function buildRiskItem({ template, asset, control, gap, assessment, standardCode
   if (String(control?.health_status || '').toLowerCase() === 'deteriorado') likelihood = clampInt(likelihood + 1);
   if (existingAssetRisk) likelihood = clampInt(likelihood + 1);
 
-  const inherentScore = likelihood * impact;
-  const inherentLevel = riskLevel(inherentScore);
   const effectiveness = controlEffectiveness(control);
-  const reduction = residualFactor(effectiveness);
-  const residualLikelihood = clampInt(likelihood - reduction);
-  const residualImpact = clampInt(impact - (effectiveness >= 85 ? 1 : 0));
-  const residualScore = residualLikelihood * residualImpact;
-  const residualLevel = riskLevel(residualScore);
+  const axes = calculateRiskAxes({
+    likelihood,
+    impact,
+    controlEffectiveness: effectiveness,
+  });
   const actions = buildSuggestedActions({
     template,
-    level: residualLevel,
+    level: axes.residual_risk_level,
     control,
     gap,
     asset,
@@ -759,16 +812,16 @@ function buildRiskItem({ template, asset, control, gap, assessment, standardCode
     asset_name: asset?.name || existingAssetRisk?.asset_name || null,
     asset_type: asset?.type || existingAssetRisk?.asset_type || null,
     asset_criticality: asset?.criticality || existingAssetRisk?.asset_criticality || null,
-    likelihood,
-    impact,
-    inherent_risk_score: inherentScore,
-    inherent_risk_level: inherentLevel,
+    likelihood: axes.likelihood,
+    impact: axes.impact,
+    inherent_risk_score: axes.inherent_risk_score,
+    inherent_risk_level: axes.inherent_risk_level,
     control_effectiveness_score: effectiveness,
-    residual_likelihood: residualLikelihood,
-    residual_impact: residualImpact,
-    residual_risk_score: residualScore,
-    residual_risk_level: residualLevel,
-    treatment_strategy: treatmentStrategy(residualLevel),
+    residual_likelihood: axes.residual_likelihood,
+    residual_impact: axes.residual_impact,
+    residual_risk_score: axes.residual_risk_score,
+    residual_risk_level: axes.residual_risk_level,
+    treatment_strategy: axes.treatment_strategy,
     suggested_controls: Array.isArray(template.suggested_controls) ? template.suggested_controls : [],
     suggested_actions: actions,
     evidence_expectations: control?.evidence_expectations || [],
@@ -1476,6 +1529,200 @@ async function getSummary(tenantId, user) {
   return result.rows;
 }
 
+async function refreshRunRiskSummary(client, runId) {
+  const counts = await client.query(
+    `
+    SELECT
+      COUNT(*)::integer AS suggested_risks_count,
+      COUNT(*) FILTER (WHERE status = 'accepted')::integer AS accepted_risks_count,
+      COUNT(*) FILTER (WHERE status = 'rejected')::integer AS rejected_risks_count,
+      COUNT(*) FILTER (WHERE residual_risk_level = 'critico')::integer AS critical_risks_count,
+      COUNT(*) FILTER (WHERE residual_risk_level = 'alto')::integer AS high_risks_count,
+      COUNT(*) FILTER (WHERE residual_risk_level = 'medio')::integer AS medium_risks_count,
+      COUNT(*) FILTER (WHERE residual_risk_level = 'bajo')::integer AS low_risks_count,
+      COALESCE(ROUND(AVG(inherent_risk_score)::numeric, 2), 0) AS inherent_risk_avg,
+      COALESCE(ROUND(AVG(residual_risk_score)::numeric, 2), 0) AS residual_risk_avg
+    FROM iso_risk_matrix_items
+    WHERE run_id = $1::uuid
+    `,
+    [runId]
+  );
+
+  const row = counts.rows[0] || {};
+  const summaryPatch = {
+    suggested_risks_count: Number(row.suggested_risks_count || 0),
+    accepted_risks_count: Number(row.accepted_risks_count || 0),
+    rejected_risks_count: Number(row.rejected_risks_count || 0),
+    critical_risks_count: Number(row.critical_risks_count || 0),
+    high_risks_count: Number(row.high_risks_count || 0),
+    medium_risks_count: Number(row.medium_risks_count || 0),
+    low_risks_count: Number(row.low_risks_count || 0),
+    inherent_risk_avg: Number(row.inherent_risk_avg || 0),
+    residual_risk_avg: Number(row.residual_risk_avg || 0),
+  };
+  const posture = riskPosture(
+    summaryPatch.residual_risk_avg,
+    summaryPatch.critical_risks_count,
+    summaryPatch.high_risks_count
+  );
+
+  const updated = await client.query(
+    `
+    UPDATE iso_risk_matrix_runs
+    SET
+      suggested_risks_count = $2,
+      accepted_risks_count = $3,
+      rejected_risks_count = $4,
+      critical_risks_count = $5,
+      high_risks_count = $6,
+      medium_risks_count = $7,
+      low_risks_count = $8,
+      inherent_risk_avg = $9,
+      residual_risk_avg = $10,
+      risk_posture = $11,
+      summary_json = COALESCE(summary_json, '{}'::jsonb) || $12::jsonb,
+      result_json = COALESCE(result_json, '{}'::jsonb) || jsonb_build_object('summary', (COALESCE(summary_json, '{}'::jsonb) || $12::jsonb)),
+      updated_at = NOW()
+    WHERE id = $1::uuid
+    RETURNING *
+    `,
+    [
+      runId,
+      summaryPatch.suggested_risks_count,
+      summaryPatch.accepted_risks_count,
+      summaryPatch.rejected_risks_count,
+      summaryPatch.critical_risks_count,
+      summaryPatch.high_risks_count,
+      summaryPatch.medium_risks_count,
+      summaryPatch.low_risks_count,
+      summaryPatch.inherent_risk_avg,
+      summaryPatch.residual_risk_avg,
+      posture,
+      JSON.stringify({ ...summaryPatch, risk_posture: posture }),
+    ]
+  );
+
+  return updated.rows[0] || null;
+}
+
+async function updateItemRiskInputs(tenantId, itemId, user, payload = {}) {
+  assertTenantAccess(user, tenantId);
+  assertCanManageRiskMatrix(user);
+
+  const likelihood = parseRiskAxis(payload.likelihood ?? payload.probability, 'likelihood');
+  const impact = parseRiskAxis(payload.impact, 'impact');
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const current = await client.query(
+      `
+      SELECT *
+      FROM iso_risk_matrix_items
+      WHERE tenant_id = $1::uuid
+        AND id = $2::uuid
+      FOR UPDATE
+      `,
+      [tenantId, itemId]
+    );
+
+    if (!current.rowCount) {
+      throw publicError(404, 'RISK_MATRIX_ITEM_NOT_FOUND', 'Riesgo sugerido no encontrado');
+    }
+
+    const before = current.rows[0];
+    const axes = calculateRiskAxes({
+      likelihood,
+      impact,
+      controlEffectiveness: before.control_effectiveness_score,
+    });
+
+    const updated = await client.query(
+      `
+      UPDATE iso_risk_matrix_items
+      SET
+        likelihood = $3,
+        impact = $4,
+        inherent_risk_score = $5,
+        inherent_risk_level = $6,
+        residual_likelihood = $7,
+        residual_impact = $8,
+        residual_risk_score = $9,
+        residual_risk_level = $10,
+        treatment_strategy = $11,
+        updated_at = NOW()
+      WHERE tenant_id = $1::uuid
+        AND id = $2::uuid
+      RETURNING *
+      `,
+      [
+        tenantId,
+        itemId,
+        axes.likelihood,
+        axes.impact,
+        axes.inherent_risk_score,
+        axes.inherent_risk_level,
+        axes.residual_likelihood,
+        axes.residual_impact,
+        axes.residual_risk_score,
+        axes.residual_risk_level,
+        axes.treatment_strategy,
+      ]
+    );
+
+    await client.query(
+      `
+      INSERT INTO iso_risk_matrix_audit_log (
+        run_id, risk_item_id, tenant_id, action, actor_user_id, old_data, new_data
+      )
+      VALUES ($1::uuid,$2::uuid,$3::uuid,'update_risk_inputs',$4::uuid,$5::jsonb,$6::jsonb)
+      `,
+      [
+        updated.rows[0].run_id,
+        itemId,
+        tenantId,
+        getUserId(user),
+        JSON.stringify({
+          likelihood: before.likelihood,
+          impact: before.impact,
+          inherent_risk_score: before.inherent_risk_score,
+          inherent_risk_level: before.inherent_risk_level,
+          residual_likelihood: before.residual_likelihood,
+          residual_impact: before.residual_impact,
+          residual_risk_score: before.residual_risk_score,
+          residual_risk_level: before.residual_risk_level,
+          treatment_strategy: before.treatment_strategy,
+        }),
+        JSON.stringify({
+          ...axes,
+          reason: payload.reason || null,
+        }),
+      ]
+    );
+
+    const run = await refreshRunRiskSummary(client, updated.rows[0].run_id);
+
+    await client.query('COMMIT');
+    return {
+      item: updated.rows[0],
+      run,
+      source_contract: 'risk_register',
+      formula_code: 'F5_5_INHERENT_RISK',
+      formula_input: {
+        probability: axes.likelihood,
+        impact: axes.impact,
+      },
+      calculated_value: axes.inherent_risk_score,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function reviewItem(tenantId, itemId, user, payload = {}) {
   assertTenantAccess(user, tenantId);
   const status = String(payload.status || '').toLowerCase().trim();
@@ -1622,6 +1869,13 @@ module.exports = {
   listRunActions,
   getLatest,
   getSummary,
+  updateItemRiskInputs,
   reviewItem,
   archiveRun,
+  _private: {
+    calculateRiskAxes,
+    canManageRiskMatrix,
+    parseRiskAxis,
+    riskLevel,
+  },
 };

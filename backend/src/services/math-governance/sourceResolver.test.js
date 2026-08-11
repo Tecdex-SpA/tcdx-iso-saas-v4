@@ -67,6 +67,9 @@ async function main() {
   const likelihoodInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ likelihood: 4, impact: 5 }]);
   assert.deepStrictEqual(likelihoodInput, { probability: 4, impact: 5 });
   assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', likelihoodInput).value, 20);
+  const updatedLikelihoodInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ likelihood: 3, impact: 5 }]);
+  assert.deepStrictEqual(updatedLikelihoodInput, { probability: 3, impact: 5 });
+  assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', updatedLikelihoodInput).value, 15);
 
   const severityInput = mapFormulaInput('F5_5_SEVERITY_INDEX', [{ severity: 'low' }, { severity: 'critical' }, { severity: 'high' }]);
   assert.deepStrictEqual(severityInput, { low: 1, medium: 0, high: 1, critical: 1 });
