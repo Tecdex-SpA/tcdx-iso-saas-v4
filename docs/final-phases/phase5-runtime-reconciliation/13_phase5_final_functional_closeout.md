@@ -1,5 +1,235 @@
 # Phase 5 final functional closeout — intermediate runtime evidence
 
+## 2026-08-10 v3 — Snapshot publication checksum fix after PR #68 deploy
+
+Environment: `https://tcdx-iso.tecdex.net`
+Branch: `fix/phase5-final-functional-closeout`
+Runtime base SHA deployed: `97e801595c95bae44d34931c7bd0d6e70f357020`
+Status: `READY_FOR_INTERMEDIATE_MERGE_REVIEW`
+
+This is not a final Phase 5 closeout. PR #68 is deployed and Portal GRC SQL/schema P0 is closed in runtime:
+
+- `/grc`: HTTP 200
+- `GET /api/grc/overview`: HTTP 200
+- Portal GRC SQL/schema alerts: 0
+
+The next Tenant 1 runtime pass found a new P0 in the official indicator publication chain. The bug is not a Portal GRC schema regression.
+
+### Runtime evidence created — v3
+
+Tenant 1 artifacts:
+
+- `artifacts/phase5-human-runtime/tenant-1/40_runtime_admin_kpis_current.png`
+- `artifacts/phase5-human-runtime/tenant-1/40_runtime_admin_kpis_current_network.json`
+- `artifacts/phase5-human-runtime/tenant-1/41_runtime_dashboard_kpi_current.png`
+- `artifacts/phase5-human-runtime/tenant-1/41_runtime_dashboard_kpi_current_network.json`
+- `artifacts/phase5-human-runtime/tenant-1/42_runtime_metricas_current_network.json`
+- `artifacts/phase5-human-runtime/tenant-1/43_runtime_bi_current_network.json`
+- `artifacts/phase5-human-runtime/tenant-1/47_runtime_grc_current.png`
+- `artifacts/phase5-human-runtime/tenant-1/47_runtime_grc_current_network.json`
+- `artifacts/phase5-human-runtime/tenant-1/50_tenant1_focus_api_snapshot.json`
+
+### Dashboard KPI vs Administrar KPI — v3 observed state
+
+| Concept | Administrar KPI | Dashboard KPI | Métricas | GRC | Endpoint / source | Consistent |
+|---|---|---|---|---|---|---|
+| KPI universe | 24 administrative KPIs | 22 official Phase 5 indicators | 22 official Phase 5 indicators | Official analytics + GRC overview | Admin: `/api/kpis/admin/:tenantId`; official: `/api/metrics/official/dashboard`, `/api/metrics/official/catalog` | Partially |
+| Enabled | 4 enabled admin KPIs | 22 enabled official indicators | Official catalog | GRC analytics blocks | Different product universes | Yes, if explicitly named |
+| Measured | 3 admin KPIs with latest value | 2/22 official measured | Same official snapshots | Depends on published snapshots | Official consumers use `metric_snapshots` | Yes for official consumers |
+| Coverage | Admin-specific score/availability | `45.47%` official data coverage | Same official catalog data | Analytics/data alerts | Official dashboard summary | Yes |
+| Critical | Admin health fallback from ISO effective health | 1 red official KPI | Same official state where snapshot exists | GRC alerts | Different semantics | Needs UX clarity |
+| Health | Effective ISO health/admin view | `health_kpis: 2` official dashboard summary | Official indicator health | GRC analytics | Admin health is not the official score | Needs UX clarity |
+| Score global | Admin score present in admin universe | `official_score: null` / “Sin medición” | Official catalog has no calculated GRC-HEALTH | GRC health incomplete | `GRC-HEALTH` latest snapshot drives official score | Yes, but UI must explain missing dependency |
+
+Product decision remains:
+
+- `Administrar KPIs` is an administrative KPI management universe.
+- `Dashboard > Vista KPI`, `Métricas`, `BI`, `GRC`, `Report` and `Export` must converge on the official Phase 5 snapshot universe.
+- Values from the two universes are not directly equivalent and must not be presented as the same “KPI score/health” without labels and dependency explanation.
+
+### New P0 — measurement exists but snapshot publication fails
+
+Runtime action:
+
+- `POST /api/metrics/official/dashboard/recalculate`
+
+Runtime result after PR #68 deploy:
+
+- `recalculated: 22`
+- `failed: 0`
+- `snapshots_created: 6`
+- `snapshots_failed: 16`
+
+All 16 snapshot failures had:
+
+- SQLSTATE: `23505`
+- Constraint: `metric_interpretations_tenant_id_checksum_key`
+- Message: `duplicate key value violates unique constraint "metric_interpretations_tenant_id_checksum_key"`
+
+Root cause:
+
+- `backend/src/services/indicators/indicatorGovernance.service.js#createSnapshot()` inserted `metric_interpretations.checksum` as `checksum(interpretation)`.
+- The database enforces `UNIQUE (tenant_id, checksum)` on `metric_interpretations`.
+- Multiple different metric snapshots can legitimately share the same interpretation payload, especially unmeasured states such as `minimum_sample_size` or `insufficient_data`.
+- The checksum was tenant-global but did not include the snapshot identity, so cross-indicator duplicate interpretations collided.
+- The insert ran in the snapshot transaction, so the metric measurement could exist while the published snapshot failed.
+
+Local fix:
+
+- Added snapshot-scoped interpretation checksum:
+  - `metricInterpretationChecksum(snapshot.id, interpretation)`
+- `metric_interpretations.checksum` is now stable/idempotent per snapshot and no longer collides across different indicators with identical interpretation text.
+- No schema change.
+- No fake columns.
+- No null-to-zero conversion.
+- No manual production DB edit.
+
+Regression added:
+
+- `scripts/phase5/check-phase5-functional-closure.js`
+  - asserts interpretation checksum is scoped by `snapshot.id`
+  - asserts the old global `checksum(interpretation)` pattern is not used
+
+### 22 official indicators — v3 runtime state before local fix deploy
+
+Source: `artifacts/phase5-human-runtime/tenant-1/50_tenant1_focus_api_snapshot.json`
+
+| Code | State | Value | Sample/Population | Snapshot publication | Classification |
+|---|---:|---:|---:|---|---|
+| ACTIONS | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed; data still needs UI smoke |
+| REMEDIATION | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| AUDIT-ASSURANCE | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| COVERAGE | insufficient_coverage | — | 51/373 | Published | EXPECTED_UNMEASURED_MIN_COVERAGE |
+| COMPLIANCE | insufficient_data | — | 51/373 | Published | EXPECTED_UNMEASURED_MIN_COVERAGE; Tenant 1 smoke pending |
+| SLA-COMPLIANCE | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| CONTINUITY | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| CONTROL-COVERAGE | insufficient_data | — | 0/51 | Published | EXPECTED_UNMEASURED |
+| CONTROL-EFFECT | insufficient_data | — | 0/51 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| DATA-TRUST | insufficient_data | — | 155/155 | Failed `23505` | BROKEN_CHAIN until fix deployed; formula/input review pending |
+| EVIDENCE-FRESH | source_incompatible | — | 0/0 | Published | SOURCE_INCOMPATIBLE pending investigation |
+| FINDINGS | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| GRC-HEALTH | insufficient_data | — | 0/0 | Failed `23505` | Blocks official score |
+| INCIDENTS | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| LOSSES | calculated | 150000 | 2/2 | Published | PARTIAL PASS; requested isolated 75000 smoke pending |
+| MATURITY | insufficient_data | — | 155/155 | Failed `23505` | BROKEN_CHAIN until fix deployed; dependency review pending |
+| OP-PERFORMANCE | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| ISO-READINESS | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| RISK-INHERENT | calculated | 25 | 77/77 | Published | PARTIAL PASS; requested 4x5→20 and 3x5→15 smoke pending |
+| RISK-RESIDUAL | insufficient_data | — | 77/77 | Failed `23505` | BROKEN_CHAIN until fix deployed; dependency/formula review pending |
+| SUPPLIER-RISK | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+| SUPPLIER-HEALTH | insufficient_data | — | 0/0 | Failed `23505` | BROKEN_CHAIN until fix deployed |
+
+### Score KPI Global — v3
+
+Contract observed in `backend/src/services/indicators/indicatorGovernance.service.js#dashboard()`:
+
+- `official_score` is derived from the latest official `GRC-HEALTH` snapshot only when that snapshot state is `calculated`.
+- Current runtime `GRC-HEALTH` is `insufficient_data` and its snapshot publication also failed with `23505` during recalculate.
+- Therefore `official_score: null` is contractually expected in the current runtime state, but the UI must explain the missing dependency instead of leaving users with unexplained “Sin medición”.
+
+No arbitrary average was introduced.
+
+### Tenant 1 priority smoke status — v3
+
+| Smoke | Expected | Runtime actual | Measurement | Snapshot | Consumers | Result |
+|---|---:|---:|---|---|---|---|
+| LOSSES | Isolated QA expected `100000 - 25000 = 75000` | Existing runtime value `150000` from two loss events | Calculated | Published | Visible in official consumers where latest snapshot is used | PARTIAL; isolated causal smoke pending |
+| ACTIONS | A1 progress 25→50→100, A2 overdue | Runtime source sample `0/0` | Not calculated | Snapshot failed `23505` | Not reliable until publication fix deploy | FAIL pending deploy + data smoke |
+| RISK-INHERENT | Formula `P*I`; 4x5→20, 3x5→15 | Existing runtime value `25` from current risk data | Calculated | Published | Visible in official consumers | PARTIAL; requested causal smoke pending |
+| COMPLIANCE | 4 applicable requirements, conceptual coverage `3/4 = 75%`; partial weight per official method | Runtime `51/373`, below minimum coverage | Not calculated | Published insufficient state | Visible as insufficient | FAIL pending focused UI smoke |
+
+Official formula/method references:
+
+- `F5_5_NET_LOSS`: `gross - recoveries`
+- `F5_5_INHERENT_RISK`: `P * I`
+- `F5_5_WEIGHTED_PROGRESS`: `sum(w*p)/sum(w)*100`
+- Compliance partial default: `0.5` in the official compliance calculation service, not assumed as full compliance.
+
+### HTTP/SQL — v3
+
+- HTTP 5xx observed in Tenant 1 focused runtime snapshot: 0
+- Portal GRC SQL/schema errors: 0
+- SQL constraint errors in official recalculate snapshot publication: 16
+- SQL constraint class fixed locally: `metric_interpretations_tenant_id_checksum_key`
+
+### Tests executed — v3
+
+Passed:
+
+- `node -c backend/src/services/indicators/indicatorGovernance.service.js`
+- `npm run phase5:functional-closure`
+- `npm --prefix backend test`
+- `npm run phase5-c3:contracts-check`
+- `npm run phase5-c3:security-check`
+- `npm run phase5-c3:unit`
+- `npm run phase5-c3:postgres`
+- `npm run phase5-c2:contracts-check`
+- `npm run phase5-c2:security-check`
+- `npm run phase5-c2:unit`
+- `npm run phase5-c2:postgres`
+- `npm run phase5-5:source-binding-check`
+- `npm --prefix frontend run lint`
+- `npm --prefix frontend run typecheck`
+- `npm --prefix frontend test`
+- `npm --prefix frontend run build`
+- `git diff --check`
+
+### Remaining gate after v3 fix is deployed
+
+Critical debt remains non-zero until runtime proves:
+
+1. `POST /api/metrics/official/dashboard/recalculate` returns `snapshots_failed: 0`.
+2. Dashboard KPI = Métricas = BI = GRC = Export for same official snapshot/period.
+3. LOSSES isolated smoke proves `100000 - 25000 = 75000`.
+4. ACTIONS causal smoke proves progress/overdue/remediation changes.
+5. RISK-INHERENT causal smoke proves 4x5→20 and 3x5→15.
+6. COMPLIANCE focused smoke proves coverage/compliance/sufficiency using official partial methodology.
+7. `EVIDENCE-FRESH` `SOURCE_INCOMPATIBLE` is resolved or classified with exact source-contract cause.
+8. Tenant 2, Credex read-only, RBAC, tenant isolation, Report and Export are completed.
+
+### Handoff técnico — v3
+
+- Repo: `Tecdex-SpA/tcdx-iso-saas-v4`
+- Runtime URL tested: `https://tcdx-iso.tecdex.net`
+- Runtime base SHA deployed: `97e801595c95bae44d34931c7bd0d6e70f357020`
+- Branch: `fix/phase5-final-functional-closeout`
+- Deploy: not executed
+- Merge: not executed
+- Tenant tested: Tenant 1 admin
+- Tenant 2: not executed in v3
+- Credex: not executed in v3
+- Main endpoints implicated:
+  - `GET /api/kpis/admin/:tenantId`
+  - `GET /api/kpi/effective-health-summary/:tenantId`
+  - `GET /api/metrics/official/dashboard`
+  - `POST /api/metrics/official/dashboard/recalculate`
+  - `GET /api/metrics/official/catalog`
+  - `GET /api/metrics/official/export`
+  - `GET /api/grc/overview`
+- Main tables implicated:
+  - `metric_measurements`
+  - `metric_snapshots`
+  - `metric_interpretations`
+  - `metric_trust_assessments`
+  - `calculation_runs`
+  - `calculation_outputs`
+  - `calculation_snapshots`
+  - `loss_events`
+  - `action_plans`
+  - risk/compliance source tables from official resolvers
+- Files modified in v3:
+  - `backend/src/services/indicators/indicatorGovernance.service.js`
+  - `scripts/phase5/check-phase5-functional-closure.js`
+  - `docs/final-phases/phase5-runtime-reconciliation/13_phase5_final_functional_closeout.md`
+  - Tenant 1 runtime artifacts under `artifacts/phase5-human-runtime/tenant-1/`
+- Migrations created/modified: none
+
+### Próxima acción exacta — v3
+
+MERGE AND DEPLOY THE INTERMEDIATE SNAPSHOT-CHECKSUM FIX, THEN RERUN TENANT 1 FULL RUNTIME CLOSEOUT FROM `POST /api/metrics/official/dashboard/recalculate`.
+
+---
+
 ## 2026-08-10 v2 — Portal GRC schema-runtime fix
 
 Environment: `https://tcdx-iso.tecdex.net`

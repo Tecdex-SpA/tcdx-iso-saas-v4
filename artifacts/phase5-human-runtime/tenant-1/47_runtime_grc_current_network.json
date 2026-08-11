@@ -461,18 +461,22 @@
         "ok": true,
         "data": {
           "tenant": {
-            "status": "error",
-            "data": null,
-            "freshness": "unknown",
-            "trust": {
-              "status": "unknown",
-              "score": null
+            "status": "ok",
+            "data": {
+              "id": "70000000-0000-0000-0000-000000000701",
+              "name": "Empresa Demo TCDX Compliance",
+              "service_status": "active",
+              "created_at": "2026-06-09T18:36:43.622Z",
+              "updated_at": null
             },
-            "source_count": 0,
-            "warnings": [
-              "tenant: column \"updated_at\" does not exist"
-            ],
-            "last_updated_at": null
+            "freshness": "current",
+            "trust": {
+              "status": "trusted",
+              "score": 100
+            },
+            "source_count": 1,
+            "warnings": [],
+            "last_updated_at": "2026-06-09T18:36:43.622Z"
           },
           "commercial": {
             "status": "ok",
@@ -676,7 +680,7 @@
                       "weight": 20
                     }
                   ],
-                  "calculated_at": "2026-08-10T23:48:41.345487+00:00",
+                  "calculated_at": "2026-08-11T00:17:45.240462+00:00",
                   "recommended_actions": []
                 }
               }
@@ -696,7 +700,7 @@
               "definitions": 51,
               "measurements": 155,
               "trusted_measurements": null,
-              "warning_measurements": 283
+              "warning_measurements": 317
             },
             "freshness": "stale",
             "trust": {
@@ -707,7 +711,7 @@
             "warnings": [
               "Existen mediciones stale, rechazadas o sin freshness confiable."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "losses": {
             "status": "attention",
@@ -727,7 +731,7 @@
             "warnings": [
               "Existen eventos de pérdida abiertos o en revisión."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "assurance": {
             "status": "unmeasured",
@@ -741,24 +745,26 @@
             "warnings": [
               "Sin ejecuciones de assurance registradas."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "reporting": {
-            "status": "error",
-            "data": null,
+            "status": "unmeasured",
+            "data": {
+              "generations": null,
+              "scheduled": null,
+              "failed": null
+            },
             "freshness": "unknown",
             "trust": {
               "status": "unknown",
               "score": null
             },
             "source_count": 0,
-            "warnings": [
-              "reporting: column \"status\" does not exist"
-            ],
-            "last_updated_at": null
+            "warnings": [],
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "data_trust": {
-            "status": "error",
+            "status": "unmeasured",
             "data": null,
             "freshness": "unknown",
             "trust": {
@@ -767,9 +773,9 @@
             },
             "source_count": 0,
             "warnings": [
-              "data_trust: column \"trust_status\" does not exist"
+              "Sin scores de confianza registrados."
             ],
-            "last_updated_at": null
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "surveys": {
             "status": "unmeasured",
@@ -781,7 +787,7 @@
             },
             "source_count": 0,
             "warnings": [],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "bi": {
             "status": "unmeasured",
@@ -795,7 +801,7 @@
             "warnings": [
               "Sin dashboards publicados."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "compliance": {
             "status": "unmeasured",
@@ -809,7 +815,7 @@
             "warnings": [
               "Sin datos configurados."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "risks": {
             "status": "unmeasured",
@@ -823,7 +829,7 @@
             "warnings": [
               "Sin datos configurados."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "controls": {
             "status": "unmeasured",
@@ -837,7 +843,7 @@
             "warnings": [
               "Sin datos configurados."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "evidence": {
             "status": "ok",
@@ -851,7 +857,7 @@
             },
             "source_count": 1,
             "warnings": [],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "audits": {
             "status": "unmeasured",
@@ -865,7 +871,7 @@
             "warnings": [
               "Sin datos configurados."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "actions": {
             "status": "unmeasured",
@@ -879,7 +885,7 @@
             "warnings": [
               "Sin datos configurados."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "suppliers": {
             "status": "unmeasured",
@@ -893,7 +899,7 @@
             "warnings": [
               "Sin datos configurados."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "incidents": {
             "status": "unmeasured",
@@ -907,7 +913,7 @@
             "warnings": [
               "Sin datos configurados."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "continuity": {
             "status": "unmeasured",
@@ -921,7 +927,7 @@
             "warnings": [
               "Sin datos configurados."
             ],
-            "last_updated_at": "2026-08-10T23:48:41.329Z"
+            "last_updated_at": "2026-08-11T00:17:45.224Z"
           },
           "official_calculations": {
             "compliance": {
@@ -931,7 +937,7 @@
               "formula_code": "F5_5_COMPLIANCE_WEIGHTED",
               "formula_version": 1,
               "period": {
-                "generated_at": "2026-08-10T23:48:41.329Z"
+                "generated_at": "2026-08-11T00:17:45.224Z"
               },
               "coverage": null,
               "trust_score": null,
@@ -940,9 +946,9 @@
               "warnings": [
                 "Overview sin dataset de cumplimiento evaluado."
               ],
-              "calculation_run_id": "b5d19067-e7cb-4fc1-96c9-01b057b78ab0",
-              "explanation_url": "/api/grc/official/calculations/b5d19067-e7cb-4fc1-96c9-01b057b78ab0/explanation",
-              "lineage_url": "/api/grc/official/calculations/b5d19067-e7cb-4fc1-96c9-01b057b78ab0/lineage",
+              "calculation_run_id": "1a39b8ce-f841-4855-ae91-401acc2772fe",
+              "explanation_url": "/api/grc/official/calculations/1a39b8ce-f841-4855-ae91-401acc2772fe/explanation",
+              "lineage_url": "/api/grc/official/calculations/1a39b8ce-f841-4855-ae91-401acc2772fe/lineage",
               "explanation": "Overview sin dataset de cumplimiento evaluado.",
               "components": {},
               "lineage": []
@@ -954,7 +960,7 @@
               "formula_code": "F5_5_CONTROL_EFFECTIVENESS",
               "formula_version": 1,
               "period": {
-                "generated_at": "2026-08-10T23:48:41.329Z"
+                "generated_at": "2026-08-11T00:17:45.224Z"
               },
               "coverage": null,
               "trust_score": null,
@@ -963,9 +969,9 @@
               "warnings": [
                 "Overview sin dimensiones oficiales de controles."
               ],
-              "calculation_run_id": "74318940-2328-4179-90b9-81aac9e03ab2",
-              "explanation_url": "/api/grc/official/calculations/74318940-2328-4179-90b9-81aac9e03ab2/explanation",
-              "lineage_url": "/api/grc/official/calculations/74318940-2328-4179-90b9-81aac9e03ab2/lineage",
+              "calculation_run_id": "c50e75c7-a8a8-46cd-a339-3f7a6c979d6a",
+              "explanation_url": "/api/grc/official/calculations/c50e75c7-a8a8-46cd-a339-3f7a6c979d6a/explanation",
+              "lineage_url": "/api/grc/official/calculations/c50e75c7-a8a8-46cd-a339-3f7a6c979d6a/lineage",
               "explanation": "Overview sin dimensiones oficiales de controles.",
               "components": {},
               "lineage": []
@@ -977,7 +983,7 @@
               "formula_code": "F5_5_WEIGHTED_PROGRESS",
               "formula_version": 1,
               "period": {
-                "generated_at": "2026-08-10T23:48:41.329Z"
+                "generated_at": "2026-08-11T00:17:45.224Z"
               },
               "coverage": null,
               "trust_score": 12,
@@ -986,9 +992,9 @@
               "warnings": [
                 "Sin datos configurados."
               ],
-              "calculation_run_id": "0710976d-d8a4-43fc-9495-a49ffec4ece2",
-              "explanation_url": "/api/grc/official/calculations/0710976d-d8a4-43fc-9495-a49ffec4ece2/explanation",
-              "lineage_url": "/api/grc/official/calculations/0710976d-d8a4-43fc-9495-a49ffec4ece2/lineage",
+              "calculation_run_id": "71b88cec-fe79-40a5-a8cb-04bb493b608b",
+              "explanation_url": "/api/grc/official/calculations/71b88cec-fe79-40a5-a8cb-04bb493b608b/explanation",
+              "lineage_url": "/api/grc/official/calculations/71b88cec-fe79-40a5-a8cb-04bb493b608b/lineage",
               "explanation": "Avance ponderado calculado con weighted progress.",
               "details": {},
               "components": {},
@@ -1002,7 +1008,7 @@
               "formula_code": "F5_5_READINESS",
               "formula_version": 1,
               "period": {
-                "generated_at": "2026-08-10T23:48:41.329Z"
+                "generated_at": "2026-08-11T00:17:45.224Z"
               },
               "coverage": null,
               "trust_score": null,
@@ -1011,9 +1017,9 @@
               "warnings": [
                 "Readiness incompleto en overview oficial."
               ],
-              "calculation_run_id": "0db99f26-e417-4115-8c10-1cd57148977b",
-              "explanation_url": "/api/grc/official/calculations/0db99f26-e417-4115-8c10-1cd57148977b/explanation",
-              "lineage_url": "/api/grc/official/calculations/0db99f26-e417-4115-8c10-1cd57148977b/lineage",
+              "calculation_run_id": "90ad69db-7371-406b-9297-ce5d3df4513d",
+              "explanation_url": "/api/grc/official/calculations/90ad69db-7371-406b-9297-ce5d3df4513d/explanation",
+              "lineage_url": "/api/grc/official/calculations/90ad69db-7371-406b-9297-ce5d3df4513d/lineage",
               "explanation": "Readiness incompleto en overview oficial.",
               "components": {},
               "lineage": [
@@ -1033,7 +1039,7 @@
               "formula_code": "F5_5_RESIDUAL_RISK",
               "formula_version": 1,
               "period": {
-                "generated_at": "2026-08-10T23:48:41.329Z"
+                "generated_at": "2026-08-11T00:17:45.224Z"
               },
               "coverage": null,
               "trust_score": null,
@@ -1042,9 +1048,9 @@
               "warnings": [
                 "Overview sin riesgo residual oficial medido."
               ],
-              "calculation_run_id": "96680026-d999-44e7-b8b0-c9dde1f18ff4",
-              "explanation_url": "/api/grc/official/calculations/96680026-d999-44e7-b8b0-c9dde1f18ff4/explanation",
-              "lineage_url": "/api/grc/official/calculations/96680026-d999-44e7-b8b0-c9dde1f18ff4/lineage",
+              "calculation_run_id": "c9fcd1b6-7300-4339-96eb-f17d9f407142",
+              "explanation_url": "/api/grc/official/calculations/c9fcd1b6-7300-4339-96eb-f17d9f407142/explanation",
+              "lineage_url": "/api/grc/official/calculations/c9fcd1b6-7300-4339-96eb-f17d9f407142/lineage",
               "explanation": "Overview sin riesgo residual oficial medido.",
               "components": {},
               "lineage": []
@@ -1056,7 +1062,7 @@
               "formula_code": "F5_5_GRC_HEALTH",
               "formula_version": 1,
               "period": {
-                "generated_at": "2026-08-10T23:48:41.329Z"
+                "generated_at": "2026-08-11T00:17:45.224Z"
               },
               "coverage": null,
               "trust_score": null,
@@ -1065,9 +1071,9 @@
               "warnings": [
                 "GRC Health incompleto por componentes unmeasured."
               ],
-              "calculation_run_id": "08612013-1dc3-4ec6-affc-aaa5436dc075",
-              "explanation_url": "/api/grc/official/calculations/08612013-1dc3-4ec6-affc-aaa5436dc075/explanation",
-              "lineage_url": "/api/grc/official/calculations/08612013-1dc3-4ec6-affc-aaa5436dc075/lineage",
+              "calculation_run_id": "7d6c73c9-10e8-4182-9741-f2eca91799a7",
+              "explanation_url": "/api/grc/official/calculations/7d6c73c9-10e8-4182-9741-f2eca91799a7/explanation",
+              "lineage_url": "/api/grc/official/calculations/7d6c73c9-10e8-4182-9741-f2eca91799a7/lineage",
               "explanation": "GRC Health incompleto por componentes unmeasured.",
               "components": {},
               "lineage": [
@@ -1101,7 +1107,7 @@
                 "formula_code": "F5_5_GRC_HEALTH",
                 "formula_version": 1,
                 "period": {
-                  "generated_at": "2026-08-10T23:48:41.329Z"
+                  "generated_at": "2026-08-11T00:17:45.224Z"
                 },
                 "coverage": null,
                 "trust_score": 89.7,
@@ -1145,20 +1151,15 @@
               },
               "snapshot": {
                 "period": {
-                  "generated_at": "2026-08-10T23:48:41.329Z"
+                  "generated_at": "2026-08-11T00:17:45.224Z"
                 },
-                "generated_at": "2026-08-10T23:48:41.346Z",
+                "generated_at": "2026-08-11T00:17:45.271Z",
                 "formula_version": 1
               },
               "explanation": "Operational Excellence consolida eficacia, eficiencia, estabilidad, calidad, oportunidad, riesgo, cumplimiento, acciones y Data Trust."
             }
           },
           "alerts": [
-            {
-              "block": "tenant",
-              "severity": "high",
-              "message": "tenant: column \"updated_at\" does not exist"
-            },
             {
               "block": "metrics",
               "severity": "medium",
@@ -1175,14 +1176,9 @@
               "message": "Sin ejecuciones de assurance registradas."
             },
             {
-              "block": "reporting",
-              "severity": "high",
-              "message": "reporting: column \"status\" does not exist"
-            },
-            {
               "block": "data_trust",
-              "severity": "high",
-              "message": "data_trust: column \"trust_status\" does not exist"
+              "severity": "medium",
+              "message": "Sin scores de confianza registrados."
             },
             {
               "block": "bi",
@@ -1230,10 +1226,10 @@
               "message": "Sin datos configurados."
             }
           ],
-          "request_id": "web-1786405721147-06e4c55766643",
-          "generated_at": "2026-08-10T23:48:41.329Z"
+          "request_id": "web-1786407465079-84d7c585e558b8",
+          "generated_at": "2026-08-11T00:17:45.224Z"
         },
-        "request_id": "web-1786405721147-06e4c55766643"
+        "request_id": "web-1786407465079-84d7c585e558b8"
       }
     },
     {
@@ -3698,7 +3694,7 @@
             }
           }
         ],
-        "request_id": "web-1786405721561-bff7e653ceb9f"
+        "request_id": "web-1786407465468-261ded0883e97"
       }
     }
   ],
