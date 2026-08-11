@@ -59,10 +59,11 @@ assert(decisionCenter.includes('Sin medición'), 'El cockpit no debe convertir a
 assert(decisionCenter.includes('Abrir indicador y propuesta'), 'El cockpit debe dirigir a la propuesta gobernada sin ejecutar una acción irreversible.');
 assert(!decisionCenter.includes('Crear plan de acción'), 'El cockpit no debe transformar automáticamente una recomendación en plan de acción.');
 assert(biPage.includes('<GrcDecisionCenter'), 'Business Intelligence debe mostrar el cockpit de decisiones.');
-assert(officialAnalyticsPanel.includes('priorityCodes'), 'El panel oficial debe soportar indicadores prioritarios para consumidores con límite visual.');
-assert(officialAnalyticsPanel.includes('const pinned=scoped.filter'), 'Los indicadores prioritarios deben quedar dentro del límite visible.');
-assert(grcPortal.includes("GRC_OFFICIAL_PRIORITY_CODES = ['RISK-INHERENT']"), 'Portal GRC debe garantizar visibilidad de RISK-INHERENT como consumidor oficial.');
-assert(grcPortal.includes('priorityCodes={[...GRC_OFFICIAL_PRIORITY_CODES]}'), 'Portal GRC debe pasar indicadores oficiales prioritarios al panel.');
+assert(officialAnalyticsPanel.includes("typeof limit==='number'?scoped.slice(0,limit):scoped"), 'El panel oficial debe mostrar todo el catálogo cuando no se define límite.');
+assert(!officialAnalyticsPanel.includes('priorityCodes'), 'El panel oficial no debe depender de una lista hardcoded de indicadores prioritarios.');
+assert(grcPortal.includes('<OfficialAnalyticsPanel title="Indicadores funcionales oficiales del portal GRC" />'), 'Portal GRC debe montar el panel oficial sin límite silencioso.');
+assert(!grcPortal.includes('RISK-INHERENT'), 'Portal GRC no debe hardcodear un indicador específico para hacerlo visible.');
+assert(!grcPortal.includes('limit={8}'), 'Portal GRC no debe depender de los primeros 8 indicadores del catálogo.');
 assert(dashboardLayout.includes('<GrcDecisionCenter'), 'El dashboard debe reflejar decisiones oficiales.');
 assert(dashboardPage.includes('const rawPayload = isRecord(rawRoot.data) ? rawRoot.data : payload;'), 'Dashboard KPI debe desempaquetar respuestas oficiales { ok, data } antes de normalizar items.');
 assert(dashboardPage.includes('Array.isArray(rawPayload)'), 'Dashboard KPI debe preservar compatibilidad con respuestas legacy en arreglo.');
