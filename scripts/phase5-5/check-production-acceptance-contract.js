@@ -49,8 +49,9 @@ for (const pair of [
   ["'/metricas': 'metrics.catalog'", 'Metrics capability'],
   ["'/bi': 'bi.executive_dashboards'", 'BI capability'],
   ["'/reportes/studio': 'reporting.studio'", 'Report Studio capability'],
-]) assert(sidebar.includes(pair[0]), `${pair[1]} must govern navigation`);
-assert(sidebar.includes('hasRouteCapability(item.href)'), 'sidebar must filter routes by capabilities');
+]) assert(permissions.includes(pair[0]), `${pair[1]} must govern navigation`);
+assert(permissions.includes('getMvpRouteCapability'), 'capability route resolver must be centralized');
+assert(sidebar.includes('getMvpRouteCapability') && sidebar.includes('hasRouteCapability(item.href)'), 'sidebar must filter routes by shared capabilities');
 
 const roleSources = tenantContext + formulaCatalog + sidebar + permissions;
 for (const role of ['superadmin','platform_admin','admin','viewer']) {

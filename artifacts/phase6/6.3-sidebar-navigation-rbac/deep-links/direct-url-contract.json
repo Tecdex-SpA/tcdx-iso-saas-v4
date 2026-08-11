@@ -1,0 +1,26 @@
+{
+  "scope": "frontend route guard contract",
+  "guard": "AppLayout",
+  "resolver": "getMvpRouteCapability(pathname)",
+  "expected_behavior": {
+    "authorized_role_and_capability": "content allowed",
+    "authorized_role_without_capability": "access denied view",
+    "unauthorized_role": "redirect to role home path",
+    "platform_role": "platform routing rules remain authoritative",
+    "dealer_role": "dealer routing rules remain authoritative"
+  },
+  "routes_with_commercial_capability_guard": [
+    "/grc",
+    "/datos",
+    "/metricas",
+    "/bi",
+    "/reportes/studio",
+    "/exportes",
+    "/encuestas",
+    "/tests",
+    "/eventos-perdida"
+  ],
+  "tenant_specific_exceptions": 0,
+  "customer_specific_exceptions": 0,
+  "demo_account_exceptions": 0
+}

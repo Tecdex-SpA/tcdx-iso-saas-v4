@@ -70,6 +70,18 @@ export type MvpNavItem = {
   moduleKey?: string;
 };
 
+export const CAPABILITY_BY_PATH: Record<string, string> = {
+  '/grc': 'data.governance',
+  '/datos': 'data.governance',
+  '/metricas': 'metrics.catalog',
+  '/bi': 'bi.executive_dashboards',
+  '/reportes/studio': 'reporting.studio',
+  '/exportes': 'reports.premium',
+  '/encuestas': 'surveys.engine',
+  '/tests': 'assurance.testing',
+  '/eventos-perdida': 'loss.events',
+};
+
 export const PLATFORM_ROLES = [
   'superadmin',
   'super_admin',
@@ -419,6 +431,14 @@ export function isPathInRoutes(pathname: string, routes: string[]) {
 
 export function getMvpRouteRule(pathname: string) {
   return MVP_ROUTE_RULES.find((rule) => isPathInRoutes(pathname, rule.routes)) || null;
+}
+
+export function getMvpRouteCapability(pathname: string) {
+  const match = Object.entries(CAPABILITY_BY_PATH).find(([route]) =>
+    isPathInRoutes(pathname, [route])
+  );
+
+  return match?.[1] || null;
 }
 
 export function getMvpHomePathByRole(role?: string | null) {

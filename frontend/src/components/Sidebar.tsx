@@ -5,7 +5,13 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
-import { CLIENT_MVP_NAV_ITEMS, PLATFORM_ROLES, canAccessMvpFeature, isPathInRoutes } from '@/utils/mvpPermissions';
+import {
+  CLIENT_MVP_NAV_ITEMS,
+  PLATFORM_ROLES,
+  canAccessMvpFeature,
+  getMvpRouteCapability,
+  isPathInRoutes,
+} from '@/utils/mvpPermissions';
 
 const TECDEX_LOGO_FALLBACK = '/tecdex.png';
 const SERVICE_LOGO_SRC = process.env.NEXT_PUBLIC_TECDX_LOGO_URL || TECDEX_LOGO_FALLBACK;
@@ -15,17 +21,6 @@ const POWERED_BY_LOGO_SRC = process.env.NEXT_PUBLIC_TECDX_POWERED_LOGO_URL || TE
 type SidebarProps = { collapsed?: boolean; onToggle?: () => void; moduleMap?: ModuleMap; role?: string };
 type NavItemProps = { href: string; label: string; icon: ReactNode; collapsed?: boolean; active?: boolean };
 type ModuleMap = Record<string, { module_key: string; module_name?: string; is_enabled: boolean }>;
-
-const CAPABILITY_BY_PATH: Record<string, string> = {
-  '/grc': 'data.governance',
-  '/datos': 'data.governance',
-  '/metricas': 'metrics.catalog',
-  '/bi': 'bi.executive_dashboards',
-  '/reportes/studio': 'reporting.studio',
-  '/encuestas': 'surveys.engine',
-  '/tests': 'assurance.testing',
-  '/eventos-perdida': 'loss.events',
-};
 
 function NavItem({ href, label, icon, collapsed, active }: NavItemProps) {
   return <a href={href} title={label} aria-current={active ? 'page' : undefined} className={[
@@ -52,7 +47,7 @@ export default function Sidebar({ collapsed = false, onToggle, moduleMap = {}, r
   const normalizedRole=String(role||'').toLowerCase(); const isDealer=normalizedRole==='dealer'; const isPlatformAdmin=PLATFORM_ROLES.includes(normalizedRole); const canSeeAiCompliance=!entitlementsLoading&&aiEnabled&&canUseAiFeature('suggestions'); const iconClass='h-5 w-5';
   const isActive=(href:string)=>{if(href==='/cumplimiento-auditoria')return isPathInRoutes(pathname,['/cumplimiento-auditoria','/diagnostico','/iso-health','/health','/controles','/soa','/ciclo-vida','/auditorias','/hallazgos','/no-conformidades']);if(href==='/riesgos')return isPathInRoutes(pathname,['/riesgos','/matriz-riesgo','/activos']);if(href==='/planes-accion')return isPathInRoutes(pathname,['/planes-accion','/plan-accion','/acciones-recomendadas']);if(href==='/configuracion')return isPathInRoutes(pathname,['/configuracion','/usuarios','/perfil','/perfil-empresa']);return pathname===href||pathname.startsWith(`${href}/`);};
   const hasModule=useCallback((moduleKey:string)=>{if(isPlatformAdmin||isDealer)return true;if(!Object.prototype.hasOwnProperty.call(moduleMap,moduleKey))return true;return moduleMap[moduleKey]?.is_enabled===true;},[isDealer,isPlatformAdmin,moduleMap]);
-  const hasRouteCapability=useCallback((href:string)=>{if(isPlatformAdmin)return true;const capability=CAPABILITY_BY_PATH[href];return !capability || (!entitlementsLoading && hasCapability(capability));},[entitlementsLoading,hasCapability,isPlatformAdmin]);
+  const hasRouteCapability=useCallback((href:string)=>{if(isPlatformAdmin)return true;const capability=getMvpRouteCapability(href);return !capability || (!entitlementsLoading && hasCapability(capability));},[entitlementsLoading,hasCapability,isPlatformAdmin]);
 
   const generalItems=useMemo(()=>CLIENT_MVP_NAV_ITEMS.filter((item)=>{if(!canAccessMvpFeature(normalizedRole,item.feature))return false;if(item.href==='/ia-compliance'&&!canSeeAiCompliance)return false;if(item.moduleKey&&!hasModule(item.moduleKey))return false;if(!hasRouteCapability(item.href))return false;return true;}).map((item)=>({...item,icon:<MvpIcon href={item.href} className={iconClass}/> })),[canSeeAiCompliance,hasModule,hasRouteCapability,normalizedRole]);
   const navigationGroups=useMemo(()=>[
