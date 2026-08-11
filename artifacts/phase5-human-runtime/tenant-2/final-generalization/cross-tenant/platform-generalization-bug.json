@@ -1,0 +1,17 @@
+{
+  "classification": "PLATFORM_GENERALIZATION_BUG",
+  "symptom": "A tenant-authenticated lineage or explanation read returned HTTP 200 for a calculation_run_id owned by another tenant.",
+  "runtime_observations": {
+    "tenant_1_reads_tenant_2_lineage": 200,
+    "tenant_2_reads_tenant_1_lineage": 200,
+    "tenant_2_publish_tenant_1_snapshot": 404,
+    "tenant_1_publish_tenant_2_snapshot": 404
+  },
+  "root_cause": "The shared official calculation read service returned a synthetic available fallback whenever no tenant-scoped explanation row existed, without first proving that the run belonged to the authenticated tenant.",
+  "affected_shared_component": "backend/src/services/phase5/phase5.service.js getOfficialCalculationLineage/getOfficialCalculationExplanation",
+  "fix": "Require a tenant-scoped calculation_runs ownership lookup before returning persisted or fallback explanation/lineage data; foreign and nonexistent run IDs return 404.",
+  "regression": "backend/src/services/phase5/phase5CalculationReadIsolation.test.js",
+  "local_tests": "PASS",
+  "deployed_runtime": "PENDING_MERGE_AND_DEPLOY",
+  "gate": "BLOCKING"
+}

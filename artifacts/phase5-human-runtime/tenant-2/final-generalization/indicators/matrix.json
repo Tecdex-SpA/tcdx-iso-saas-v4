@@ -1,0 +1,4104 @@
+[
+  {
+    "code": "ACTIONS",
+    "source": "68f74610-af3f-4998-9978-cd5993fbbaba",
+    "formula": "F5_5_WEIGHTED_PROGRESS",
+    "sample": 1,
+    "population": 1,
+    "state": "calculated",
+    "value": 100,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "8f4bbecc-ec3e-4144-835c-173877f65e95",
+    "coverage": 1,
+    "trust": {
+      "score": 100,
+      "status": "acceptable",
+      "checksum": "82f8d2945ea3bbcab2fd4e17fe27e018c470f4337763bcdf90fbe11160797ec2",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "90725eba0ebc71d0be72c588297a42d08d9a6094ad3283dff0ed2056c2b14792",
+          "evidence": {
+            "source_snapshot_ids": [
+              "4bfccdd3-df5f-48bc-a11a-c795d054a53b"
+            ]
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:18.831Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:18.831Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "020ffb291367689cf078f1a1742c2759d08f93c060e79e67a8fa998e16085473",
+          "evidence": {
+            "usable": 1,
+            "received": 1
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:18.831Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "02abefede2af23c192ad294257fc7ee64b773c547b99fd74ee549586de63e68b",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia weekly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 0,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:18.831Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:18.831Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "f0177181f0bf8db2cfcbd8fd10cbbdafc1a83803b45c615373ba28a0247d19d3",
+          "evidence": {
+            "calculation_run_id": "5dcac029-19df-4b9f-9831-96c6e64e8a8f",
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:18.831Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "b347e8a54f004a03eb980a28f5e803285b44fe1f2df840a3523b0bfe077892e9",
+          "evidence": {
+            "excluded": 0,
+            "received": 1
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:18.831Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "5fa0ff7b2d0f6cb114ed0d94e48464c99b1ac8e812127e491384558272876734",
+          "evidence": {
+            "usable": 1,
+            "excluded": 0,
+            "received": 1
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:18.831Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "sufficient",
+      "sample_size": 1,
+      "population_size": 1
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "PASS"
+  },
+  {
+    "code": "AUDIT-ASSURANCE",
+    "source": "38aac173-7826-49b1-b9b9-b5b7934430b6",
+    "formula": "F5_5_ASSURANCE_SCORE",
+    "sample": 0,
+    "population": 12,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "9dcac215-454a-4b2d-b49c-5fdd4751e93f",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "fd135ae9eb01d7c5180d47cad168cad8ca5d1043d2b632166d63e8e95713adac",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.246Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.246Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "755558c049d5b90c0e3c983f11af55f6e2f42643af39d8595a0bbd76f423078e",
+          "evidence": {
+            "usable": 0,
+            "received": 12
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 12,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.246Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "b6e67d2b2398a3ffe7226709a65af82aebb57b6cef364245fcc747ea1a8878c4",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia on_demand.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 0,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.246Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.246Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.246Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "4594253c19cf43c111f75db3d54ec3f2dbf71220338c70ab72bc4a7279ec2394",
+          "evidence": {
+            "excluded": 12,
+            "received": 12
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 12,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.246Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "be1a8d01bffab218f563385a63d549a7e1ee3a2849eba975f53cf206c879d718",
+          "evidence": {
+            "usable": 0,
+            "excluded": 12,
+            "received": 12
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 12,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.246Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 12
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "COMPLIANCE",
+    "source": "4d6ecbd8-e7a0-4016-99e3-cf3fd1463144",
+    "formula": "F5_5_COMPLIANCE_WEIGHTED",
+    "sample": 55,
+    "population": 55,
+    "state": "calculated",
+    "value": 80.91,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "d29f0bdf-fc5c-49c3-b4f2-b85961f200e6",
+    "coverage": 1,
+    "trust": {
+      "score": 100,
+      "status": "acceptable",
+      "checksum": "9ef5e47c788671ba59025d62c1c776000cf91c4c94fb1749ad5a2c133a0589b1",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "bc292949caf250781c535588c9605eb73a47000c68c04aa0afa927bbc7335a85",
+          "evidence": {
+            "source_snapshot_ids": [
+              "2e00c88c-748f-448f-b570-3159b1b521ab"
+            ]
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.548Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.548Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "1fa120fbfed7aab325194993f174fb49085ee300db0da6c3a8790573fe56065c",
+          "evidence": {
+            "usable": 55,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 55,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.548Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "1034518bdc35ad1af76a64a96bcf468d08e3ae3351e9941c0e8966cb6f565a23",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 1,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.548Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.548Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "b21dfde136928dd92f394a4c6fc9feb5da0740875286929aed47d4ad69136889",
+          "evidence": {
+            "calculation_run_id": "3a41bcec-c74d-414d-9686-cf6f64690522",
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.548Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "1691251dc9778d5c92628cec64907cec09996b0177c3c61e2fd3669a7b131dac",
+          "evidence": {
+            "excluded": 0,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 55,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.548Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "eb5966e157f0f915dfec72232eb43c072cc217a66523c4d4f110efbd115b8eea",
+          "evidence": {
+            "usable": 55,
+            "excluded": 0,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 55,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.548Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "sufficient",
+      "sample_size": 55,
+      "population_size": 55
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "PASS"
+  },
+  {
+    "code": "CONTINUITY",
+    "source": "84400c1d-cee8-4397-8f40-81dbd00b9e34",
+    "formula": "F5_5_SLA_COMPLIANCE",
+    "sample": 0,
+    "population": 8,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "c5317b66-7ece-4ca0-95c7-5acd6b0acad5",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "a021fc053814cc022815bb5036b53e6fddac7455e47aa81c007a699cdd27bcdb",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.704Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.704Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "29497c6b133d7e6511f2bb17a50d7bb9db759d1b311bfa396a172bde97027437",
+          "evidence": {
+            "usable": 0,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.704Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "1034518bdc35ad1af76a64a96bcf468d08e3ae3351e9941c0e8966cb6f565a23",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 1,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.704Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.704Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.704Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "b766cbb22839cfb49c9c6107d715ab57179aae296204eea8df5604564d0692d3",
+          "evidence": {
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.704Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "e0bcef2d1a2493acd6bdc57053e00128c6279f7d931bf290e61a3cc9102bb811",
+          "evidence": {
+            "usable": 0,
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.704Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 8
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "CONTROL-COVERAGE",
+    "source": "a03f189c-c35e-40fe-8422-aed79d837848",
+    "formula": "F5_5_CONTROL_COVERAGE",
+    "sample": 0,
+    "population": 55,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "294a9c84-2f6d-442d-99e9-d5c7407de704",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "cf77359b5047c9ab90893ba682d7a20ba0954194a1b70daff3bd24148d0dbb9a",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.892Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.892Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "9da60df67228db272cb6f8fb8062f4084ebf07bf88285b372b81b15a1685c991",
+          "evidence": {
+            "usable": 0,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.892Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "1034518bdc35ad1af76a64a96bcf468d08e3ae3351e9941c0e8966cb6f565a23",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 1,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.892Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.892Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.892Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "38b649b3e5ec34f0ec4adf7eb1a9f75977befce6d5bc819ca2aaeff2c0ddaa91",
+          "evidence": {
+            "excluded": 107,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": -52,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.892Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "227edf64c6132fa9a0331f17d4e6dea861ff461dfcb5844f6fa51684ae2b40d6",
+          "evidence": {
+            "usable": 0,
+            "excluded": 107,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.892Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 55
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "CONTROL-EFFECT",
+    "source": "a03f189c-c35e-40fe-8422-aed79d837848",
+    "formula": "F5_5_CONTROL_EFFECTIVENESS",
+    "sample": 0,
+    "population": 55,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "1c5c2451-19d5-4b92-a649-259ae380049a",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "cf77359b5047c9ab90893ba682d7a20ba0954194a1b70daff3bd24148d0dbb9a",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.051Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.051Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "9da60df67228db272cb6f8fb8062f4084ebf07bf88285b372b81b15a1685c991",
+          "evidence": {
+            "usable": 0,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.051Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "1034518bdc35ad1af76a64a96bcf468d08e3ae3351e9941c0e8966cb6f565a23",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 1,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.051Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.051Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.051Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "38b649b3e5ec34f0ec4adf7eb1a9f75977befce6d5bc819ca2aaeff2c0ddaa91",
+          "evidence": {
+            "excluded": 107,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": -52,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.051Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "227edf64c6132fa9a0331f17d4e6dea861ff461dfcb5844f6fa51684ae2b40d6",
+          "evidence": {
+            "usable": 0,
+            "excluded": 107,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.051Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 55
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "COVERAGE",
+    "source": "4d6ecbd8-e7a0-4016-99e3-cf3fd1463144",
+    "formula": "F5_5_COVERAGE",
+    "sample": 55,
+    "population": 55,
+    "state": "calculated",
+    "value": 100,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "79755463-8a7b-47f6-b495-9a85f2e0316a",
+    "coverage": 1,
+    "trust": {
+      "score": 100,
+      "status": "acceptable",
+      "checksum": "abfdf35100525a26753bc59dd29692d4046cc492fc3e7a2761e286fca5e8277d",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "e9e2e535dbd5ff2d1fa88e32d655ad22ef8e75b18046a412bbbb3c1b0fe965e0",
+          "evidence": {
+            "source_snapshot_ids": [
+              "1c7cacb9-6cbe-4205-9237-86bd0095a264"
+            ]
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.389Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.389Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "1fa120fbfed7aab325194993f174fb49085ee300db0da6c3a8790573fe56065c",
+          "evidence": {
+            "usable": 55,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 55,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.389Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "cc260f6fd63f92a6a0e577cf7758c1c871ff3c1cd2fa2886ef532043e7a11340",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia weekly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 1,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.389Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.389Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "7830e826bf2f72b180cd97e5c9c703b2b081fd7cc5ed4af692c804481aafabd9",
+          "evidence": {
+            "calculation_run_id": "07e96622-26d7-4e94-be08-30e388bf40cc",
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.389Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "1691251dc9778d5c92628cec64907cec09996b0177c3c61e2fd3669a7b131dac",
+          "evidence": {
+            "excluded": 0,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 55,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.389Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "eb5966e157f0f915dfec72232eb43c072cc217a66523c4d4f110efbd115b8eea",
+          "evidence": {
+            "usable": 55,
+            "excluded": 0,
+            "received": 55
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 55,
+          "population": null,
+          "denominator": 55,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.389Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "sufficient",
+      "sample_size": 55,
+      "population_size": 55
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "PASS"
+  },
+  {
+    "code": "DATA-TRUST",
+    "source": "19f9c895-d9ac-4656-9972-ae6d4060655f",
+    "formula": "F5_C3_DATA_TRUST",
+    "sample": 149,
+    "population": 149,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "score",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "4182460a-8c3e-4fd9-a0fc-cb924a658a63",
+    "coverage": 1,
+    "trust": {
+      "score": 100,
+      "status": "attention",
+      "checksum": "061550820e4efb7814af52edf61a61fe9db8b05662865ff0758c8f403f0c3ab0",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.347Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.347Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "c688f16c831af629f6586f4139b1bf9a6c67cbf9b28afaf62394e78bbab426ea",
+          "evidence": {
+            "usable": 149,
+            "received": 149
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 149,
+          "population": null,
+          "denominator": 149,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.347Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "8180aa18cf3e39360299640b88a75b73274ebf8baa5894cc2cab38cfc5814a99",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia on_demand.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.347Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.347Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.347Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "e05e899a934e7abd2d503b59d8fda937a80e97be6820c3f184db059509f7a8c1",
+          "evidence": {
+            "excluded": 0,
+            "received": 149
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 149,
+          "population": null,
+          "denominator": 149,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.347Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "107d7a7413914ab8d0ad9beba43e5157e31870aa2770a99f18816b485d4760bc",
+          "evidence": {
+            "usable": 149,
+            "excluded": 0,
+            "received": 149
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 149,
+          "population": null,
+          "denominator": 149,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.347Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 149,
+      "population_size": 149
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "EVIDENCE-FRESH",
+    "source": "a39e6b39-4b34-4e61-b31c-9c1502bb7d53",
+    "formula": "F5_5_FRESHNESS_CONTINUOUS",
+    "sample": 2,
+    "population": 2,
+    "state": "calculated",
+    "value": 100,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "187e794c-5be9-4524-b8fb-d5c01083a3ec",
+    "coverage": 1,
+    "trust": {
+      "score": 100,
+      "status": "acceptable",
+      "checksum": "3c21b98195b0cd526f31d768f3fad41e0bd51405b6aa682d952f45a27a42726b",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "9c442ee7c804ffb2f038d9f006c1229ec45bf2b3d69a75caac778520c437d429",
+          "evidence": {
+            "source_snapshot_ids": [
+              "2d00637f-59b6-4397-a739-b06fca57eb49"
+            ]
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.507Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.507Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "7bfdcfbb89880175631b0ef274fcfdcd0bf376139605c7f3bbc5ae67ef18948c",
+          "evidence": {
+            "usable": 2,
+            "received": 2
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 2,
+          "population": null,
+          "denominator": 2,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.507Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "4c8ae573bc19342eddc8e793fee08f78a3c5347b62dbdb13895be4562665bb1e",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia daily.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.507Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.507Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "4ddd3e13819632905b1bd05d24339bbdb5179124120b03722070117fdd00f0dd",
+          "evidence": {
+            "calculation_run_id": "fe929231-c126-41d3-9297-fc40420d0be3",
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.507Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "d11e702978f8c2d7f33930d03cff943f0ce5f336b122139ba7a555c21501abe0",
+          "evidence": {
+            "excluded": 0,
+            "received": 2
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 2,
+          "population": null,
+          "denominator": 2,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.507Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "48e6c05537b634a747eb2145665005b654305e0a56d2ad643eff773ca12f907e",
+          "evidence": {
+            "usable": 2,
+            "excluded": 0,
+            "received": 2
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 2,
+          "population": null,
+          "denominator": 2,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.507Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "sufficient",
+      "sample_size": 2,
+      "population_size": 2
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "PASS"
+  },
+  {
+    "code": "FINDINGS",
+    "source": "68f74610-af3f-4998-9978-cd5993fbbaba",
+    "formula": "F5_5_SEVERITY_INDEX",
+    "sample": 0,
+    "population": 18,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "index",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "23427346-d9ca-41c5-ac81-c1a2d4b6b3bc",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "4619b260b46fc81ed64218ed28bbe999eda37d28247c4f02affd4066a84ef9a0",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.618Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.618Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "539102f8b412c2ce8b415c2025ddd992985cec08bd9ce252f82100ed45a6e44e",
+          "evidence": {
+            "usable": 0,
+            "received": 18
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 18,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.618Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "92c1f14714e2fde9979e3b297bf4f650c2a0b9a5b05ccfd1a893b1e5d289adda",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia weekly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.618Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.618Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.618Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "552ea29db0501d277c5b2862130403c51b57e14444b660c0d5f5d3e6c87e287f",
+          "evidence": {
+            "excluded": 18,
+            "received": 18
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 18,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.618Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "04b703e97202c0733fd23871e6d34656fd643a41629f68b6478008159b6125ac",
+          "evidence": {
+            "usable": 0,
+            "excluded": 18,
+            "received": 18
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 18,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.618Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 18
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "GRC-HEALTH",
+    "source": "42fef614-6fb2-47eb-ad82-1791aca5df47",
+    "formula": "F5_5_GRC_HEALTH",
+    "sample": 3,
+    "population": 3,
+    "state": "dependency_pending",
+    "value": null,
+    "unit": "score",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "ffa6b8e4-4338-4c6d-a2a4-308f334a0c6f",
+    "coverage": 1,
+    "trust": {
+      "score": 100,
+      "status": "attention",
+      "checksum": "f07a4f2b6fda4ed1e80311d95a707969e9f5853660ac4e65863297694e0eed14",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.694Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.694Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "e1208099d912de787e500610f7d4741550af118c0c83283100db9ed25ec4c763",
+          "evidence": {
+            "usable": 3,
+            "received": 3
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 3,
+          "population": null,
+          "denominator": 3,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.694Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "dcc68eac63036dc8d3d4aea99800dfb183a29cfe3866a38aad908d8d9b85805f",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.694Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.694Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.694Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "562d4a2c0af908d10e43ca7ee5b2d3809f69f1b866371774a272760499776377",
+          "evidence": {
+            "excluded": 0,
+            "received": 3
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 3,
+          "population": null,
+          "denominator": 3,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.694Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "aecdbc552f2486456686b000121c53d416f6393a7beea94a70f0f8fe4c1bf154",
+          "evidence": {
+            "usable": 3,
+            "excluded": 0,
+            "received": 3
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 3,
+          "population": null,
+          "denominator": 3,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.694Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 3,
+      "population_size": 3
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "DEPENDENCY_PENDING"
+  },
+  {
+    "code": "INCIDENTS",
+    "source": "d00979ad-8f2b-44f2-8d8f-02337e8e322c",
+    "formula": "F5_5_SEVERITY_INDEX",
+    "sample": 0,
+    "population": 0,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "index",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "c71ed08c-db65-40aa-a1d7-490823fdaf6b",
+    "coverage": null,
+    "trust": {
+      "score": 100,
+      "status": "attention",
+      "checksum": "4687264713bbf323fe57467bad4ee6169008fd0bbec88e2446377c52ee051f7e",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.761Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.761Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "0f43df9563292c2e26977ca5c76c61f8661602cd276c314b13879e039ff792b6",
+          "evidence": {
+            "usable": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.761Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "4c8ae573bc19342eddc8e793fee08f78a3c5347b62dbdb13895be4562665bb1e",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia daily.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.761Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.761Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.761Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "62a7a524b23b1199f7fb5ff7fb842d3304a191a6f7d285ea3b9c7ad999a3e4f0",
+          "evidence": {
+            "excluded": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.761Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "9bd90687a15b554418a0dd0652cff4edd436aa1a3dbf8e54a07f2ffb43c2abb8",
+          "evidence": {
+            "usable": 0,
+            "excluded": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.761Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 0
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "ISO-READINESS",
+    "source": "3f0e01f0-2c3a-43c2-ad1a-655269e49d26",
+    "formula": "F5_5_READINESS",
+    "sample": 0,
+    "population": 0,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "e00636af-c5f8-48fd-ab11-365738901119",
+    "coverage": null,
+    "trust": {
+      "score": 100,
+      "status": "attention",
+      "checksum": "19a93006766e48c3de5fd020da8ba052775aae8a7a8ef6bb2a6a267fb0f29245",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.083Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.083Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "0f43df9563292c2e26977ca5c76c61f8661602cd276c314b13879e039ff792b6",
+          "evidence": {
+            "usable": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.083Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "dcc68eac63036dc8d3d4aea99800dfb183a29cfe3866a38aad908d8d9b85805f",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.083Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.083Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.083Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "62a7a524b23b1199f7fb5ff7fb842d3304a191a6f7d285ea3b9c7ad999a3e4f0",
+          "evidence": {
+            "excluded": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.083Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "9bd90687a15b554418a0dd0652cff4edd436aa1a3dbf8e54a07f2ffb43c2abb8",
+          "evidence": {
+            "usable": 0,
+            "excluded": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.083Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 0
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "LOSSES",
+    "source": "ef1bdcac-fca3-4f68-a822-77af37f817a1",
+    "formula": "F5_5_NET_LOSS",
+    "sample": 0,
+    "population": 0,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "currency",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "480df0d9-a0c9-4611-b20f-e01dd46107dd",
+    "coverage": null,
+    "trust": {
+      "score": 100,
+      "status": "attention",
+      "checksum": "19a93006766e48c3de5fd020da8ba052775aae8a7a8ef6bb2a6a267fb0f29245",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.831Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.831Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "0f43df9563292c2e26977ca5c76c61f8661602cd276c314b13879e039ff792b6",
+          "evidence": {
+            "usable": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.831Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "dcc68eac63036dc8d3d4aea99800dfb183a29cfe3866a38aad908d8d9b85805f",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.831Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.831Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.831Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "62a7a524b23b1199f7fb5ff7fb842d3304a191a6f7d285ea3b9c7ad999a3e4f0",
+          "evidence": {
+            "excluded": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.831Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "9bd90687a15b554418a0dd0652cff4edd436aa1a3dbf8e54a07f2ffb43c2abb8",
+          "evidence": {
+            "usable": 0,
+            "excluded": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.831Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 0
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "MATURITY",
+    "source": "69510003-9452-481d-8555-ae667c1f91fc",
+    "formula": "F5_5_MATURITY",
+    "sample": 0,
+    "population": 6,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "level",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "d723dae0-989f-4d0d-b814-f0a61ab724e5",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "39fa4020eac25187ae97315bca85999d5885d64da23fbd38eee897d098f45957",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.943Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.943Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "ea86a171c49eee843a37d45eb651d6bbf808cb169be45564790dffb8ec68e7d3",
+          "evidence": {
+            "usable": 0,
+            "received": 6
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.943Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "f5133ffa82aa8f2b19be9e2fabcd7e9d24015ecb349d7a1dcc866cdd127a25f6",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia quarterly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.943Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.943Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.943Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "3fc0f5adbd18951cab3851ebce131e155aa74abfce11fe665cd8adde484ad2d0",
+          "evidence": {
+            "excluded": 6,
+            "received": 6
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.943Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "b4b05dad9fe6bab477d9fa8a7f4fe3a2750a857a3e14e71f6623555fa070d0b3",
+          "evidence": {
+            "usable": 0,
+            "excluded": 6,
+            "received": 6
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:20.943Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 6
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "OP-PERFORMANCE",
+    "source": "42fef614-6fb2-47eb-ad82-1791aca5df47",
+    "formula": "F5_C3_OPERATIONAL_PERFORMANCE",
+    "sample": 3,
+    "population": 3,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "score",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "397804f9-98e3-4f74-a295-089501aabd78",
+    "coverage": 1,
+    "trust": {
+      "score": 100,
+      "status": "attention",
+      "checksum": "f07a4f2b6fda4ed1e80311d95a707969e9f5853660ac4e65863297694e0eed14",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.005Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.005Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "e1208099d912de787e500610f7d4741550af118c0c83283100db9ed25ec4c763",
+          "evidence": {
+            "usable": 3,
+            "received": 3
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 3,
+          "population": null,
+          "denominator": 3,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.005Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "dcc68eac63036dc8d3d4aea99800dfb183a29cfe3866a38aad908d8d9b85805f",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.005Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.005Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.005Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "562d4a2c0af908d10e43ca7ee5b2d3809f69f1b866371774a272760499776377",
+          "evidence": {
+            "excluded": 0,
+            "received": 3
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 3,
+          "population": null,
+          "denominator": 3,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.005Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "aecdbc552f2486456686b000121c53d416f6393a7beea94a70f0f8fe4c1bf154",
+          "evidence": {
+            "usable": 3,
+            "excluded": 0,
+            "received": 3
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 3,
+          "population": null,
+          "denominator": 3,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.005Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 3,
+      "population_size": 3
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "REMEDIATION",
+    "source": "68f74610-af3f-4998-9978-cd5993fbbaba",
+    "formula": "F5_5_WEIGHTED_PROGRESS",
+    "sample": 1,
+    "population": 1,
+    "state": "calculated",
+    "value": 100,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "5a9ab9f6-f80e-4f1e-8487-33d87399fda0",
+    "coverage": 1,
+    "trust": {
+      "score": 100,
+      "status": "acceptable",
+      "checksum": "ac4b9136fe62eb33fdb543eada0e6b0888f13f58deb9a7aac2213f523c5ede79",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "64050d5fd64bdfffee4d54f8d318705a5b4cf6ca2d63d7d6bf40f714ec36c7cd",
+          "evidence": {
+            "source_snapshot_ids": [
+              "f5fd7342-ed5d-4a08-8a86-bfc19632170c"
+            ]
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.171Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.171Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "020ffb291367689cf078f1a1742c2759d08f93c060e79e67a8fa998e16085473",
+          "evidence": {
+            "usable": 1,
+            "received": 1
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.171Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "02abefede2af23c192ad294257fc7ee64b773c547b99fd74ee549586de63e68b",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia weekly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 0,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.171Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.171Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "d2b4d02c6b88140155f675e11e3a5734fb00f010d081c88e44a0f1dfa69bfdee",
+          "evidence": {
+            "calculation_run_id": "ffc4c511-8e69-4fa6-b98c-3923dea03680",
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.171Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "b347e8a54f004a03eb980a28f5e803285b44fe1f2df840a3523b0bfe077892e9",
+          "evidence": {
+            "excluded": 0,
+            "received": 1
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.171Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "5fa0ff7b2d0f6cb114ed0d94e48464c99b1ac8e812127e491384558272876734",
+          "evidence": {
+            "usable": 1,
+            "excluded": 0,
+            "received": 1
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.171Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "sufficient",
+      "sample_size": 1,
+      "population_size": 1
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "PASS"
+  },
+  {
+    "code": "RISK-INHERENT",
+    "source": "c497e730-8426-4fd3-bffb-639766f8d459",
+    "formula": "F5_5_INHERENT_RISK",
+    "sample": 0,
+    "population": 0,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "score",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "7e1a05d1-3ba9-4bfe-91b2-dbbc948fd4d7",
+    "coverage": null,
+    "trust": {
+      "score": 100,
+      "status": "attention",
+      "checksum": "19a93006766e48c3de5fd020da8ba052775aae8a7a8ef6bb2a6a267fb0f29245",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.154Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.154Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "0f43df9563292c2e26977ca5c76c61f8661602cd276c314b13879e039ff792b6",
+          "evidence": {
+            "usable": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.154Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "dcc68eac63036dc8d3d4aea99800dfb183a29cfe3866a38aad908d8d9b85805f",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.154Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.154Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.154Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "62a7a524b23b1199f7fb5ff7fb842d3304a191a6f7d285ea3b9c7ad999a3e4f0",
+          "evidence": {
+            "excluded": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.154Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "9bd90687a15b554418a0dd0652cff4edd436aa1a3dbf8e54a07f2ffb43c2abb8",
+          "evidence": {
+            "usable": 0,
+            "excluded": 0,
+            "received": 0
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 0,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.154Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 0
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "RISK-RESIDUAL",
+    "source": "c497e730-8426-4fd3-bffb-639766f8d459",
+    "formula": "F5_5_RESIDUAL_RISK",
+    "sample": 0,
+    "population": 8,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "score",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "8c8a628e-6a8e-4ca8-ad51-8654afe0f60f",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "50ce7f0520a0bbdfabad34a899abefa9d3b6ed28bc8b8b77d645b13496bb0052",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.228Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.228Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "29497c6b133d7e6511f2bb17a50d7bb9db759d1b311bfa396a172bde97027437",
+          "evidence": {
+            "usable": 0,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.228Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "dcc68eac63036dc8d3d4aea99800dfb183a29cfe3866a38aad908d8d9b85805f",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 2,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.228Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.228Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.228Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "b766cbb22839cfb49c9c6107d715ab57179aae296204eea8df5604564d0692d3",
+          "evidence": {
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.228Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "e0bcef2d1a2493acd6bdc57053e00128c6279f7d931bf290e61a3cc9102bb811",
+          "evidence": {
+            "usable": 0,
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.228Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 8
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "SLA-COMPLIANCE",
+    "source": "84400c1d-cee8-4397-8f40-81dbd00b9e34",
+    "formula": "F5_5_SLA_COMPLIANCE",
+    "sample": 0,
+    "population": 8,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "%",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "112f0a1a-3227-41cb-b19d-2463b737111d",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "1a2d7f0c3eb25908a3c13e4ee7341bcb6d33e7d120de2de040c2c9f0d1b3fe3e",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.631Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.631Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "29497c6b133d7e6511f2bb17a50d7bb9db759d1b311bfa396a172bde97027437",
+          "evidence": {
+            "usable": 0,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.631Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "f1ecff0129de7cb39daea384342258e08312e5b0c6d0e5cbb5971831a2cbf670",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia daily.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 1,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.631Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.631Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.631Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "b766cbb22839cfb49c9c6107d715ab57179aae296204eea8df5604564d0692d3",
+          "evidence": {
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.631Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "e0bcef2d1a2493acd6bdc57053e00128c6279f7d931bf290e61a3cc9102bb811",
+          "evidence": {
+            "usable": 0,
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:19.631Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 8
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "SUPPLIER-HEALTH",
+    "source": "e9b17e4e-4414-4c40-8b01-3219e7e3a683",
+    "formula": "F5_C3_SUPPLIER_HEALTH",
+    "sample": 0,
+    "population": 8,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "score",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "0f0f0456-b33f-4be6-a4dc-b3b502e9ec9f",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "eaa9cce744c23224b6da72f51239632636406381e0483b4321939af901244c87",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.367Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.367Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "29497c6b133d7e6511f2bb17a50d7bb9db759d1b311bfa396a172bde97027437",
+          "evidence": {
+            "usable": 0,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.367Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "90cd83318e539f7947a44d9b976988a3f4cc774d6f88dbd0a095393a3edbbc14",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 3,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.367Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.367Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.367Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "b766cbb22839cfb49c9c6107d715ab57179aae296204eea8df5604564d0692d3",
+          "evidence": {
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.367Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "e0bcef2d1a2493acd6bdc57053e00128c6279f7d931bf290e61a3cc9102bb811",
+          "evidence": {
+            "usable": 0,
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.367Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 8
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  },
+  {
+    "code": "SUPPLIER-RISK",
+    "source": "e9b17e4e-4414-4c40-8b01-3219e7e3a683",
+    "formula": "F5_5_SUPPLIER_RISK",
+    "sample": 0,
+    "population": 8,
+    "state": "insufficient_data",
+    "value": null,
+    "unit": "score",
+    "period": "2026-08",
+    "measurement": null,
+    "snapshot": "25de12b8-5879-49eb-83b0-d72e7867e6cd",
+    "coverage": 0,
+    "trust": {
+      "score": 27.27,
+      "status": "untrusted",
+      "checksum": "eaa9cce744c23224b6da72f51239632636406381e0483b4321939af901244c87",
+      "dimensions": {
+        "lineage": {
+          "rule": "source_snapshot_required",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "82aaeb7b32e25f0cf9c9d8de57731d00a2de438c0794a8f2f6bca16eeed2b129",
+          "evidence": {
+            "source_snapshot_ids": []
+          },
+          "warnings": [],
+          "dimension": "lineage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.300Z"
+        },
+        "accuracy": {
+          "rule": "requires_explicit_accuracy_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "066ea508db042d655bad15d7b218ddae43261d7e3808b6105468e54720fe1670",
+          "evidence": {
+            "validation_records": 0
+          },
+          "warnings": [
+            "Exactitud no inferida sin validación específica."
+          ],
+          "dimension": "accuracy",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.300Z"
+        },
+        "coverage": {
+          "rule": "usable_population_coverage",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "29497c6b133d7e6511f2bb17a50d7bb9db759d1b311bfa396a172bde97027437",
+          "evidence": {
+            "usable": 0,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "coverage",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.300Z"
+        },
+        "freshness": {
+          "rule": "effective_date_vs_frequency_sla",
+          "score": 100,
+          "status": "trusted",
+          "version": 1,
+          "checksum": "90cd83318e539f7947a44d9b976988a3f4cc774d6f88dbd0a095393a3edbbc14",
+          "evidence": {
+            "reason": "Edad evaluada contra frecuencia monthly.",
+            "status": "fresh",
+            "timezone": "America/Santiago",
+            "age_seconds": 3,
+            "effective_at": "2026-08-11T19:51:18.255Z",
+            "policy_version": 1
+          },
+          "warnings": [],
+          "dimension": "freshness",
+          "numerator": null,
+          "population": null,
+          "denominator": null,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.300Z"
+        },
+        "stability": {
+          "rule": "coefficient_of_variation_last_6",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "160c57b442930c15120b07f00c2ad468a61dea01cc6c09d7976082be0a081167",
+          "evidence": {
+            "history_points": 0
+          },
+          "warnings": [
+            "Historia insuficiente para estabilidad."
+          ],
+          "dimension": "stability",
+          "numerator": 0,
+          "population": null,
+          "denominator": 6,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.300Z"
+        },
+        "validation": {
+          "rule": "official_run_without_error_validation",
+          "score": null,
+          "status": "unknown",
+          "version": 1,
+          "checksum": "709fdad5bd168de6efd7ff581abf93b7e996ee91ee8d9a923ff2e30f9ef241d5",
+          "evidence": {
+            "calculation_run_id": null,
+            "validation_records": 0
+          },
+          "warnings": [],
+          "dimension": "validation",
+          "numerator": 1,
+          "population": null,
+          "denominator": 1,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.300Z"
+        },
+        "consistency": {
+          "rule": "non_excluded_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "b766cbb22839cfb49c9c6107d715ab57179aae296204eea8df5604564d0692d3",
+          "evidence": {
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "consistency",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.300Z"
+        },
+        "completeness": {
+          "rule": "usable_rows/received_rows",
+          "score": 0,
+          "status": "untrusted",
+          "version": 1,
+          "checksum": "e0bcef2d1a2493acd6bdc57053e00128c6279f7d931bf290e61a3cc9102bb811",
+          "evidence": {
+            "usable": 0,
+            "excluded": 8,
+            "received": 8
+          },
+          "warnings": [],
+          "dimension": "completeness",
+          "numerator": 0,
+          "population": null,
+          "denominator": 8,
+          "sample_size": null,
+          "evaluated_at": "2026-08-11T19:51:21.300Z"
+        }
+      }
+    },
+    "sufficiency": {
+      "status": "insufficient",
+      "sample_size": 0,
+      "population_size": 8
+    },
+    "consumers": {
+      "dashboard": "PASS",
+      "metricas": "PASS",
+      "bi": "PASS",
+      "grc": "PASS",
+      "report": "PASS",
+      "export": "PASS"
+    },
+    "zero_hardcode": "PENDING_CODE_AUDIT",
+    "status": "EXPECTED_UNMEASURED"
+  }
+]

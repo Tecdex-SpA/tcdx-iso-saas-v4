@@ -1,0 +1,40 @@
+{
+  "collected_at": "2026-08-11T19:51:59.379Z",
+  "tenant_id": "76c44a0e-6041-8bda-99c7-b740fccea001",
+  "period": "2026-08",
+  "totals": {
+    "CALCULATED_PASS": 5,
+    "EXPECTED_UNMEASURED_VALID": 16,
+    "DEPENDENCY_PENDING_VALID": 1,
+    "BROKEN_CHAIN": 0,
+    "SOURCE_INCOMPATIBLE": 0,
+    "MAPPING_ERROR": 0,
+    "PERIOD_MISMATCH": 0,
+    "MISSING_UI_INPUT_CRITICAL": 0,
+    "DEPENDENCY_PENDING_BUG": 0
+  },
+  "indicators": [
+    {"code":"ACTIONS","sample":1,"population":1,"state":"calculated","value":100,"measurement":"002c3622-c553-4544-88f7-23f469789638","snapshot":"8f4bbecc-ec3e-4144-835c-173877f65e95","consumers":"PASS_6_OF_6","status":"CALCULATED_PASS","critical":false},
+    {"code":"AUDIT-ASSURANCE","sample":0,"population":12,"state":"insufficient_data","value":null,"measurement":"b53869de-c999-4398-9712-666d9bc9903a","snapshot":"9dcac215-454a-4b2d-b49c-5fdd4751e93f","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"COMPLIANCE","sample":55,"population":55,"state":"calculated","value":80.91,"measurement":"4f6cf012-06bb-4acd-a445-6d4407032bc4","snapshot":"d29f0bdf-fc5c-49c3-b4f2-b85961f200e6","consumers":"PASS_6_OF_6","status":"CALCULATED_PASS","critical":false},
+    {"code":"CONTINUITY","sample":0,"population":8,"state":"insufficient_data","value":null,"measurement":"3bbb14dd-d1de-4315-bd7f-93ca4162fbb7","snapshot":"c5317b66-7ece-4ca0-95c7-5acd6b0acad5","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"CONTROL-COVERAGE","sample":0,"population":55,"state":"insufficient_data","value":null,"measurement":"84a0c701-c230-4696-80db-60452899a3ca","snapshot":"294a9c84-2f6d-442d-99e9-d5c7407de704","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"CONTROL-EFFECT","sample":0,"population":55,"state":"insufficient_data","value":null,"measurement":"022cbed6-313b-440e-b3bd-dea2dd81f828","snapshot":"1c5c2451-19d5-4b92-a649-259ae380049a","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"COVERAGE","sample":55,"population":55,"state":"calculated","value":100,"measurement":"31df9de9-2d53-428a-9e1d-b8a835c31d3e","snapshot":"79755463-8a7b-47f6-b495-9a85f2e0316a","consumers":"PASS_6_OF_6","status":"CALCULATED_PASS","critical":false},
+    {"code":"DATA-TRUST","sample":149,"population":149,"state":"insufficient_data","value":null,"measurement":"14f4eab5-8764-45ef-bbb1-2316288f4938","snapshot":"4182460a-8c3e-4fd9-a0fc-cb924a658a63","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"EVIDENCE-FRESH","sample":2,"population":2,"state":"calculated","value":100,"measurement":"2703142e-0389-4823-bd9c-0b942831c467","snapshot":"187e794c-5be9-4524-b8fb-d5c01083a3ec","consumers":"PASS_6_OF_6","status":"CALCULATED_PASS","critical":false},
+    {"code":"FINDINGS","sample":0,"population":18,"state":"insufficient_data","value":null,"measurement":"48e67e46-9531-40d5-8f4f-8c0a256b84c8","snapshot":"23427346-d9ca-41c5-ac81-c1a2d4b6b3bc","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"GRC-HEALTH","sample":3,"population":3,"state":"dependency_pending","value":null,"measurement":"993df623-63db-4321-962d-56d2c8aaf7e8","snapshot":"ffa6b8e4-4338-4c6d-a2a4-308f334a0c6f","consumers":"PASS_6_OF_6","status":"DEPENDENCY_PENDING_VALID","critical":false},
+    {"code":"INCIDENTS","sample":0,"population":0,"state":"insufficient_data","value":null,"measurement":"20e2aa4f-55cc-4dd2-98ac-70db586b77a7","snapshot":"c71ed08c-db65-40aa-a1d7-490823fdaf6b","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"ISO-READINESS","sample":0,"population":0,"state":"insufficient_data","value":null,"measurement":"fe4542d2-a823-4bd0-aba8-a586254ec13f","snapshot":"e00636af-c5f8-48fd-ab11-365738901119","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"LOSSES","sample":0,"population":0,"state":"insufficient_data","value":null,"measurement":"26149fc3-49bf-4a4f-8048-64ffd5f51818","snapshot":"480df0d9-a0c9-4611-b20f-e01dd46107dd","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"MATURITY","sample":0,"population":6,"state":"insufficient_data","value":null,"measurement":"c4fed23e-f6ad-4825-8e91-ea48bfcc9537","snapshot":"d723dae0-989f-4d0d-b814-f0a61ab724e5","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"OP-PERFORMANCE","sample":3,"population":3,"state":"insufficient_data","value":null,"measurement":"b903c89d-7e2b-4396-9647-5375c56c6db0","snapshot":"397804f9-98e3-4f74-a295-089501aabd78","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"REMEDIATION","sample":1,"population":1,"state":"calculated","value":100,"measurement":"68db264d-b3f7-40ee-8e75-c0fc97c2c00c","snapshot":"5a9ab9f6-f80e-4f1e-8487-33d87399fda0","consumers":"PASS_6_OF_6","status":"CALCULATED_PASS","critical":false},
+    {"code":"RISK-INHERENT","sample":0,"population":0,"state":"insufficient_data","value":null,"measurement":"407b668c-619a-4e4b-ad10-2c8180a4572e","snapshot":"7e1a05d1-3ba9-4bfe-91b2-dbbc948fd4d7","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"RISK-RESIDUAL","sample":0,"population":8,"state":"insufficient_data","value":null,"measurement":"3226acd4-3692-4cd4-9490-79042f3f7bb9","snapshot":"8c8a628e-6a8e-4ca8-ad51-8654afe0f60f","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"SLA-COMPLIANCE","sample":0,"population":8,"state":"insufficient_data","value":null,"measurement":"3609411c-09ba-4214-904d-d9d9772e45e1","snapshot":"112f0a1a-3227-41cb-b19d-2463b737111d","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"SUPPLIER-HEALTH","sample":0,"population":8,"state":"insufficient_data","value":null,"measurement":"54322595-3c31-4a0f-86ef-591907037c6b","snapshot":"0f0f0456-b33f-4be6-a4dc-b3b502e9ec9f","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false},
+    {"code":"SUPPLIER-RISK","sample":0,"population":8,"state":"insufficient_data","value":null,"measurement":"7490b268-ef0a-4f60-8cbe-9f162b435e1b","snapshot":"25de12b8-5879-49eb-83b0-d72e7867e6cd","consumers":"PASS_6_OF_6","status":"EXPECTED_UNMEASURED_VALID","critical":false}
+  ]
+}

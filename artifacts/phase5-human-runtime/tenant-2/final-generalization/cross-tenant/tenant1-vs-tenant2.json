@@ -1,0 +1,20 @@
+{
+  "compared_at": "2026-08-11T19:51:59.379Z",
+  "same_formula_contracts": true,
+  "formula_contract_differences": [],
+  "independent_identifiers": {
+    "shared_source_snapshot_ids": [],
+    "shared_measurement_ids": [],
+    "shared_published_snapshot_ids": [],
+    "shared_calculation_run_ids": []
+  },
+  "representative_outcomes": [
+    {"code":"ACTIONS","tenant_1":{"state":"calculated","value":62.5,"sample_population":"2/2"},"tenant_2":{"state":"calculated","value":100,"sample_population":"1/1"},"same_formula":true,"different_source_rows":true,"different_correct_result":true,"result":"PASS"},
+    {"code":"COMPLIANCE","tenant_1":{"state":"calculated","value":83.33,"sample_population":"4/4"},"tenant_2":{"state":"calculated","value":80.91,"sample_population":"55/55"},"same_formula":true,"different_source_rows":true,"different_correct_result":true,"result":"PASS"},
+    {"code":"COVERAGE","tenant_1":{"state":"calculated","value":75,"sample_population":"4/4"},"tenant_2":{"state":"calculated","value":100,"sample_population":"55/55"},"same_formula":true,"different_source_rows":true,"different_correct_result":true,"result":"PASS"},
+    {"code":"EVIDENCE-FRESH","tenant_1":{"state":"insufficient_data","value":null,"sample_population":"0/0"},"tenant_2":{"state":"calculated","value":100,"sample_population":"2/2"},"same_formula":true,"different_source_rows":true,"different_correct_result":true,"result":"PASS"},
+    {"code":"LOSSES","tenant_1":{"state":"calculated","value":225000,"sample_population":"3/3"},"tenant_2":{"state":"insufficient_data","value":null,"sample_population":"0/0"},"same_formula":true,"different_source_rows":true,"different_correct_result":true,"result":"PASS"},
+    {"code":"RISK-INHERENT","tenant_1":{"state":"calculated","value":19.9091,"sample_population":"77/77"},"tenant_2":{"state":"insufficient_data","value":null,"sample_population":"0/0"},"same_formula":true,"different_source_rows":true,"different_correct_result":true,"result":"PASS"},
+    {"code":"GRC-HEALTH","tenant_1":{"state":"dependency_pending","value":null,"sample_population":"3/3"},"tenant_2":{"state":"dependency_pending","value":null,"sample_population":"3/3"},"same_formula":true,"different_source_rows":true,"different_correct_result":true,"result":"PASS"}
+  ]
+}

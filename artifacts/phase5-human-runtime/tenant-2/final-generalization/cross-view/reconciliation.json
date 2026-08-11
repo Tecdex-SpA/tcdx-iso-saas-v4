@@ -1,0 +1,18 @@
+{
+  "collected_at": "2026-08-11T19:51:59.379Z",
+  "catalog_total": 22,
+  "canonical_source": "published official snapshots",
+  "views": {
+    "dashboard": {"http":200,"count":22,"state_value_snapshot_mismatches":[]},
+    "metricas": {"http":200,"count":22,"state_value_snapshot_mismatches":[]},
+    "bi": {"http":200,"count":22,"state_value_snapshot_mismatches":[]},
+    "grc": {"http":200,"count":22,"state_value_snapshot_mismatches":[]},
+    "report": {"http":200,"count":22,"state_value_snapshot_mismatches":[]},
+    "export": {"http":200,"count":22,"state_value_snapshot_mismatches":[]}
+  },
+  "invented_zero_for_unmeasured": 0,
+  "invented_hundred_for_unmeasured": 0,
+  "stale_or_legacy_value_mismatches": 0,
+  "frontend_console_errors": 0,
+  "result": "PASS"
+}

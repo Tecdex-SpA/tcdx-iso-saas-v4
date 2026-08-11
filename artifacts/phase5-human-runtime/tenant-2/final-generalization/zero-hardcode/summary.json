@@ -1,0 +1,13 @@
+{
+  "scope": "PR diff plus targeted production-code scan for Tenant 1/Tenant 2 IDs and demo emails",
+  "business_hardcodes": 0,
+  "tenant_hardcodes": 0,
+  "qa_hardcodes": 0,
+  "fixed_runtime_values": 0,
+  "silent_first_n": 0,
+  "null_to_zero": 0,
+  "fake_fallback": 0,
+  "parallel_consumer_calculations": 0,
+  "changed_product_code_contains_tenant_or_email_special_case": false,
+  "result": "PASS"
+}
