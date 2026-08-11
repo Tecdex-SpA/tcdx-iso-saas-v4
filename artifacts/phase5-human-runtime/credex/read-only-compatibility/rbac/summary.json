@@ -1,0 +1,13 @@
+{
+  "admin_login": "PASS",
+  "auditor_login": "PASS",
+  "admin_role": "admin",
+  "auditor_role": "auditor",
+  "same_tenant_context": true,
+  "admin_catalog_http": 200,
+  "auditor_catalog_http": 200,
+  "admin_catalog_total": 22,
+  "auditor_catalog_total": 22,
+  "mutations_attempted": 0,
+  "result": "PASS"
+}

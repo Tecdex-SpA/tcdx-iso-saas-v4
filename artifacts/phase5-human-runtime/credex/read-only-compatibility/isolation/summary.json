@@ -1,0 +1,13 @@
+{
+  "tenant_context_resolved_from_session": true,
+  "tenant_scoped_indicator_details_http_200": 22,
+  "foreign_calculation_run_lineage_http": 404,
+  "foreign_calculation_run_explanation_http": 404,
+  "foreign_data_returned": false,
+  "current_own_calculation_run": "not_present",
+  "cross_tenant_rows_observed": 0,
+  "shared_measurements_observed": 0,
+  "shared_snapshots_observed": 0,
+  "shared_lineage_rows_observed": 0,
+  "result": "PASS"
+}

@@ -1,0 +1,12 @@
+{
+  "classification": "PLATFORM_GENERALIZATION_BUG",
+  "symptom": "Catalog entries without a published snapshot exposed the metric definition ID as latest_snapshot.snapshot_id.",
+  "root_cause": "The LEFT JOIN row exists even when metric_snapshots has no match, and publicSnapshot fell back from snapshot_id to the definition row id.",
+  "shared_component": "backend/src/services/indicators/indicatorGovernance.service.js listCatalog",
+  "affected_runtime_entries": 21,
+  "unaffected_real_snapshots": 1,
+  "generic_fix": "Return latest_snapshot null unless the joined snapshot_id is present.",
+  "regression": "Synthetic two-tenant test covers absence and presence of a published snapshot without customer fixtures.",
+  "credex_data_modified": false,
+  "status": "READY_FOR_INTERMEDIATE_MERGE_REVIEW"
+}

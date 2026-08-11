@@ -1,0 +1,11 @@
+{
+  "dashboard": {"result":"FAIL","codes":22,"reason":"State and value are coherent, but 21 missing snapshots carry definition IDs as snapshot IDs."},
+  "metricas": {"result":"FAIL","codes":22,"reason":"Same shared snapshot-identity defect."},
+  "bi": {"result":"FAIL","codes":22,"reason":"Same shared snapshot-identity defect; no silent first-N observed."},
+  "grc": {"result":"PASS_WITH_ENTITLEMENT_NOTE","official_analytics_http":200,"grc_ui":"NOT_APPLICABLE_BY_ENTITLEMENT","grc_global":"PASS","reason":"The data.governance capability denial is expected configuration, not a runtime error."},
+  "report": {"result":"FAIL","codes":22,"mode":"read_only_preview","reason":"Existing official data is readable, but the shared snapshot-identity defect remains."},
+  "export": {"result":"LIMITED","reason":"Read response was observed, but the GET records persistent audit telemetry and was not called again."},
+  "mismatched_state_or_value": 0,
+  "invalid_snapshot_identities": 21,
+  "overall": "FAIL"
+}

@@ -96,7 +96,7 @@ async function listCatalog(scope,filters={}){
     LEFT JOIN LATERAL(SELECT s.* FROM metric_snapshots s WHERE s.tenant_id=$1::uuid AND s.metric_definition_id=md.id AND s.snapshot_status='published' ORDER BY s.effective_at DESC NULLS LAST,s.published_at DESC LIMIT 1) ms ON true
     WHERE ($2::text IS NULL OR mdv.domain=$2) AND ($3::text IS NULL OR mdv.display_name ILIKE '%'||$3||'%' OR mdv.functional_code ILIKE '%'||$3||'%')
     ORDER BY mdv.domain,mdv.display_name LIMIT $4`,[tenantId(scope),filters.domain||null,filters.search||null,limit(filters.limit,100,250)])).rows;
-  return rows.map((row)=>({ definition:publicDefinition(row),latest_snapshot:publicSnapshot(row) }));
+  return rows.map((row)=>({ definition:publicDefinition(row),latest_snapshot:row.snapshot_id?publicSnapshot(row):null }));
 }
 function dashboardColor(snapshot){
   if(!snapshot||snapshot.state!=='calculated') return 'gray';
