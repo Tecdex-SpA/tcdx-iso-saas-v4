@@ -121,6 +121,9 @@ async function main() {
   const maturityInput = mapFormulaInput('F5_5_MATURITY', [{ level: 2, weight: 1 }, { level: 4, weight: 3 }]);
   assert.deepStrictEqual(maturityInput, { levels: [{ level: 2, weight: 1 }, { level: 4, weight: 3 }] });
   assert.strictEqual(executeFormula('F5_5_MATURITY', maturityInput).value, 3.5);
+  const invalidMaturityInput = mapFormulaInput('F5_5_MATURITY', [{ level: null, weight: 1 }, { level: 87, weight: 1 }]);
+  assert.deepStrictEqual(invalidMaturityInput, { levels: [] });
+  assert.strictEqual(executeFormula('F5_5_MATURITY', invalidMaturityInput).value, null, 'maturity rows without a 0..5 level must not become a numeric value');
 
   const trustInput = mapFormulaInput('F5_C3_DATA_TRUST', [{ dimensions: { completeness:{score:90},accuracy:{score:80},consistency:{score:85},freshness:{score:75},lineage:{score:100},validation:{score:90},stability:{score:70},coverage:{score:80} } }]);
   assert.strictEqual(executeFormula('F5_C3_DATA_TRUST', trustInput).value, 84.75);
@@ -273,6 +276,29 @@ async function main() {
   assert.strictEqual(maturitySource.counts.received, 1);
   assert.deepStrictEqual(maturitySource.formula_input, { levels: [{ level: 3, weight: 2 }] });
   assert.strictEqual(executeFormula('F5_5_MATURITY', maturitySource.formula_input).value, 3);
+
+  const invalidMaturityClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) {
+      const table = String(params[0] || '').replace(/^public\./, '');
+      return { rows: [{ exists: ['survey_evaluations'].includes(table) }] };
+    }
+    if (sql.includes('FROM survey_evaluations e')) return { rows: [
+      { id: 'maturity-missing-level', tenant_id: 'tenant-a', level: null, weight: 1, status: 'evaluated', __event_time: new Date().toISOString() },
+      { id: 'maturity-percentage-score', tenant_id: 'tenant-a', level: 87, weight: 1, status: 'evaluated', __event_time: new Date().toISOString() },
+    ] };
+    throw new Error(`unexpected invalid maturity query: ${sql}`);
+  } };
+  const invalidMaturitySource = await resolveFormulaSource({
+    client: invalidMaturityClient,
+    tenantId: 'tenant-a',
+    formulaCode: 'F5_5_MATURITY',
+    sourceCode: 'maturity_assessments',
+  });
+  assert.strictEqual(invalidMaturitySource.counts.received, 2);
+  assert.strictEqual(invalidMaturitySource.counts.usable, 0);
+  assert.deepStrictEqual(invalidMaturitySource.formula_input, { levels: [] });
+  assert.ok(invalidMaturitySource.exclusions.some((item) => item.code === 'maturity_level_missing_or_invalid'));
+  assert.ok(invalidMaturitySource.exclusions.some((item) => item.code === 'maturity_level_out_of_range'));
 
   const riskRows = [
     { id: 'risk-a', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: 4, impact: 5 },

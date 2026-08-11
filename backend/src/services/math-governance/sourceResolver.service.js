@@ -104,6 +104,44 @@ function severityPortfolio(rows = []) {
   };
 }
 
+function maturityPortfolio(rows = []) {
+  const usableRows = [];
+  const exclusions = [];
+  const levels = [];
+  rows.forEach((row, index) => {
+    const level = number(row.level ?? row.maturity_level ?? row.score ?? row.numeric_value ?? row.value_numeric);
+    const sourceRecord = row.id || row.source_entity_id || `row-${index}`;
+    if (level === null) {
+      exclusions.push({
+        code: 'maturity_level_missing_or_invalid',
+        field: 'level|maturity_level|score|numeric_value|value_numeric',
+        source_record: sourceRecord,
+        physical_source: row.__physical_source || null,
+        reason: 'F5_5_MATURITY requiere nivel numérico de madurez; filas sin nivel no se usan como proxy.',
+      });
+      return;
+    }
+    if (level < 0 || level > 5) {
+      exclusions.push({
+        code: 'maturity_level_out_of_range',
+        field: 'level',
+        source_record: sourceRecord,
+        physical_source: row.__physical_source || null,
+        value: level,
+        reason: 'F5_5_MATURITY usa escala de madurez 0..5; puntajes porcentuales u otros valores no se usan como nivel.',
+      });
+      return;
+    }
+    levels.push({ level, weight: number(row.weight, 1) });
+    usableRows.push(row);
+  });
+  return {
+    input: { levels },
+    usableRows,
+    exclusions,
+  };
+}
+
 function safeTimestampExpression(alias = 'x') {
   return `COALESCE(NULLIF(to_jsonb(${alias})->>'event_date','')::timestamptz,NULLIF(to_jsonb(${alias})->>'occurred_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'measured_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'updated_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'created_at','')::timestamptz)`;
 }
@@ -518,7 +556,7 @@ function mapFormulaInput(formulaCode, rows) {
   if (formulaCode === 'F5_5_GRC_HEALTH') { const values = {}; for (const row of rows) { const raw = row.output_value?.value ?? row.output_value; const value = ratio(raw); if (row.formula_code === 'F5_5_RESIDUAL_RISK') values.risk = value === null ? null : 1 - value; if (row.formula_code === 'F5_5_COMPLIANCE_WEIGHTED') values.compliance = value; if (row.formula_code === 'F5_5_WEIGHTED_PROGRESS') values.actions = value; if (row.formula_code === 'F5_5_FRESHNESS_CONTINUOUS') values.evidence = value; if (row.formula_code === 'F5_C3_DATA_TRUST') values.dataTrust = value; } return values; }
   if (formulaCode === 'F5_C3_OPERATIONAL_PERFORMANCE') { const by={};for(const row of rows){const value=score(row.output_value?.value??row.output_value);if(value!==null)by[row.formula_code]=value;}const risk=by.F5_5_RESIDUAL_RISK===undefined?null:Math.max(0,100-by.F5_5_RESIDUAL_RISK);return {efficacy:by.F5_5_COMPLIANCE_WEIGHTED??null,efficiency:by.F5_5_WEIGHTED_PROGRESS??null,stability:risk,quality:by.F5_5_CONTROL_EFFECTIVENESS??null,timeliness:by.F5_5_SLA_COMPLIANCE??null,risk,compliance:by.F5_5_COMPLIANCE_WEIGHTED??null,actions:by.F5_5_WEIGHTED_PROGRESS??null,dataTrust:by.F5_C3_DATA_TRUST??null}; }
   if (formulaCode === 'F5_C3_DATA_TRUST') { const dimensions=['completeness','accuracy','consistency','freshness','lineage','validation','stability','coverage'];return Object.fromEntries(dimensions.map((dimension)=>[dimension,average(rows.map((row)=>row.dimensions?.[dimension]?.score))])); }
-  if (formulaCode === 'F5_5_MATURITY') return { levels: rows.map((row) => ({ level: number(row.level ?? row.score), weight: number(row.weight, 1) })).filter((row) => row.level !== null) };
+  if (formulaCode === 'F5_5_MATURITY') return maturityPortfolio(rows).input;
   if (['F5_5_ROBUST_Z_SCORE', 'F5_5_LINEAR_TREND', 'F5_5_PERCENT_VARIATION', 'F5_5_MOVING_AVERAGE', 'F5_5_EMA', 'F5_5_CONFIDENCE_INTERVAL'].includes(formulaCode)) {
     const values = usableScores;
     if (formulaCode === 'F5_5_ROBUST_Z_SCORE') return values.length ? { x: values[values.length - 1], values } : null;
@@ -546,7 +584,9 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
     ? riskInherentPortfolio(validation.usable_rows)
     : formulaCode === 'F5_5_SEVERITY_INDEX'
       ? severityPortfolio(validation.usable_rows)
-      : null;
+      : formulaCode === 'F5_5_MATURITY'
+        ? maturityPortfolio(validation.usable_rows)
+        : null;
   const formulaRows = formulaMapping ? formulaMapping.usableRows : validation.usable_rows;
   const formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
   const formulaExclusions = formulaMapping ? [...validation.exclusions, ...formulaMapping.exclusions] : validation.exclusions;
