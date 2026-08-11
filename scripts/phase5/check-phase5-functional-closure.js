@@ -91,6 +91,8 @@ for (const token of ['snapshot_id', 'checksum', 'trust', 'coverage', 'sufficienc
 }
 check(indicatorService.includes('snapshots_created'), 'Dashboard_recalculate_must_report_snapshot_publication_count');
 check(indicatorService.includes('publishSnapshot(scope,snapshotId,requestId)'), 'Dashboard_recalculate_must_publish_snapshots_consumed_by_official_surfaces');
+check(indicatorService.includes('metricInterpretationChecksum(snapshot.id,interpretation)'), 'Metric_interpretation_checksum_must_be_scoped_by_snapshot_to_avoid_cross_indicator_duplicates');
+check(!indicatorService.includes('checksum(interpretation),actorId(scope)'), 'Metric_interpretation_checksum_must_not_be_global_interpretation_only');
 
 if (failures.length) {
   process.stderr.write(JSON.stringify({ status: 'PHASE5_FUNCTIONAL_CLOSURE_CHECK_FAILED', failures }, null, 2) + '\n');
