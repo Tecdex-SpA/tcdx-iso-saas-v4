@@ -33,9 +33,31 @@ async function main() {
   assert.ok(dataset.exclusions.some((item) => item.code === 'tenant_mismatch'));
   assert.ok(dataset.exclusions.some((item) => item.code === 'duplicate_natural_key'));
 
-  const inherentInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ probability: 4, impact: 5 }]);
-  assert.deepStrictEqual(inherentInput, { probability: 4, impact: 5 });
+  const inherentInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ id: 'risk-a', probability: 4, impact: 5 }]);
+  assert.deepStrictEqual(inherentInput.risks, [{ source_record: 'risk-a', physical_source: null, probability: 4, impact: 5, inherent_risk_score: 20 }]);
   assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', inherentInput).value, 20);
+
+  const multiRiskRows = [
+    { id: 'risk-a', likelihood: 4, impact: 5 },
+    { id: 'risk-b', likelihood: 2, impact: 5 },
+    { id: 'risk-c', likelihood: 3, impact: 5 },
+  ];
+  const multiRiskInput = mapFormulaInput('F5_5_INHERENT_RISK', multiRiskRows);
+  assert.deepStrictEqual(multiRiskInput.scores, [20, 10, 15]);
+  assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', multiRiskInput).value, 15);
+  const reorderedRiskInput = mapFormulaInput('F5_5_INHERENT_RISK', [multiRiskRows[2], multiRiskRows[0], multiRiskRows[1]]);
+  assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', reorderedRiskInput).value, 15);
+  const causalRiskInput = mapFormulaInput('F5_5_INHERENT_RISK', [
+    { id: 'risk-a', likelihood: 3, impact: 5 },
+    { id: 'risk-b', likelihood: 2, impact: 5 },
+    { id: 'risk-c', likelihood: 3, impact: 5 },
+  ]);
+  assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', causalRiskInput).value, 13.3333);
+  assert.throws(
+    () => executeFormula('F5_5_INHERENT_RISK', mapFormulaInput('F5_5_INHERENT_RISK', [{ id: 'invalid-risk', likelihood: null, impact: 5 }])),
+    (error) => error?.code === 'FORMULA_ZERO_DENOMINATOR',
+    'zero usable risks must not become zero'
+  );
 
   const residualInput = mapFormulaInput('F5_5_RESIDUAL_RISK', [{ exposure: 20, assurance_score: 65 }]);
   assert.deepStrictEqual(residualInput, { inherentRisk: 20, controlEffectiveness: 0.65 });
@@ -64,11 +86,11 @@ async function main() {
   assert.deepStrictEqual(globalControlScore, { design: null, implementation: null, operation: null, evidence: null });
   assert.throws(() => executeFormula('F5_5_CONTROL_EFFECTIVENESS', globalControlScore), (error) => error?.code === 'FORMULA_VARIABLE_REQUIRED', 'global control score must not be copied into D/I/O/E dimensions');
 
-  const likelihoodInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ likelihood: 4, impact: 5 }]);
-  assert.deepStrictEqual(likelihoodInput, { probability: 4, impact: 5 });
+  const likelihoodInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ id: 'risk-likelihood', likelihood: 4, impact: 5 }]);
+  assert.strictEqual(likelihoodInput.risks[0].probability, 4);
   assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', likelihoodInput).value, 20);
-  const updatedLikelihoodInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ likelihood: 3, impact: 5 }]);
-  assert.deepStrictEqual(updatedLikelihoodInput, { probability: 3, impact: 5 });
+  const updatedLikelihoodInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ id: 'risk-likelihood', likelihood: 3, impact: 5 }]);
+  assert.strictEqual(updatedLikelihoodInput.risks[0].probability, 3);
   assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', updatedLikelihoodInput).value, 15);
 
   const severityInput = mapFormulaInput('F5_5_SEVERITY_INDEX', [{ severity: 'low' }, { severity: 'critical' }, { severity: 'high' }]);
@@ -148,6 +170,29 @@ async function main() {
   assert.deepStrictEqual(lossSource.formula_input, { grossLoss: 100000, recoveries: 25000 });
   assert.strictEqual(executeFormula('F5_5_NET_LOSS', lossSource.formula_input).value, 75000);
   assert.ok(lossSource.warnings.some((warning) => String(warning).includes('occurred_at viene en el futuro')), 'future occurrence warning expected');
+
+  const riskRows = [
+    { id: 'risk-a', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: 4, impact: 5 },
+    { id: 'risk-b', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: 2, impact: 5 },
+    { id: 'risk-c', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: 3, impact: 5 },
+    { id: 'risk-invalid', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: null, impact: 5 },
+  ];
+  const riskClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) return { rows: [{ exists: String(params[0] || '').includes('grc_quantitative_risk_assessments') }] };
+    if (sql.includes('FROM grc_quantitative_risk_assessments x')) return { rows: riskRows };
+    throw new Error(`unexpected risk query: ${sql}`);
+  } };
+  const riskSource = await resolveFormulaSource({
+    client: riskClient,
+    tenantId: '70000000-0000-0000-0000-000000000701',
+    formulaCode: 'F5_5_INHERENT_RISK',
+  });
+  assert.strictEqual(riskSource.counts.received, 4);
+  assert.strictEqual(riskSource.counts.usable, 3);
+  assert.strictEqual(riskSource.counts.excluded, 1);
+  assert.strictEqual(riskSource.lineage.length, 3);
+  assert.deepStrictEqual(riskSource.formula_input.scores, [20, 10, 15]);
+  assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', riskSource.formula_input).value, 15);
 
   const missingClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
   const missingTables = await resolveFormulaSource({ client: missingClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });

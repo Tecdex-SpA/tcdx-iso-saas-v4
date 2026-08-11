@@ -22,6 +22,52 @@ function buildLineage({ rows, contract, formula, runId = null, snapshotHash = nu
 function tagRows(rows, physicalSource) { return (rows || []).map((row) => ({ ...row, __physical_source: physicalSource })); }
 function tagWarnings(rows, warnings = []) { return (rows || []).map((row) => ({ ...row, __source_warnings: warnings })); }
 
+function validRiskAxis(value) {
+  const parsed = number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 5 ? parsed : null;
+}
+
+function riskInherentPortfolio(rows = []) {
+  const risks = [];
+  const usableRows = [];
+  const exclusions = [];
+  rows.forEach((row, index) => {
+    const probability = validRiskAxis(row.probability ?? row.likelihood);
+    const impact = validRiskAxis(row.impact);
+    const sourceRecord = row.id || row.risk_id || row.source_entity_id || `row-${index}`;
+    if (probability === null || impact === null) {
+      exclusions.push({
+        code: 'risk_axis_invalid',
+        field: probability === null ? 'probability|likelihood' : 'impact',
+        source_record: sourceRecord,
+        physical_source: row.__physical_source || null,
+        reason: 'RISK-INHERENT requiere probability/likelihood e impact enteros entre 1 y 5.',
+      });
+      return;
+    }
+    const risk = {
+      source_record: sourceRecord,
+      physical_source: row.__physical_source || null,
+      probability,
+      impact,
+      inherent_risk_score: probability * impact,
+    };
+    risks.push(risk);
+    usableRows.push(row);
+  });
+  return {
+    input: {
+      risks,
+      aggregation_method: 'arithmetic_mean',
+      sample_size: risks.length,
+      population_size: rows.length,
+      scores: risks.map((risk) => risk.inherent_risk_score),
+    },
+    usableRows,
+    exclusions,
+  };
+}
+
 function safeTimestampExpression(alias = 'x') {
   return `COALESCE(NULLIF(to_jsonb(${alias})->>'event_date','')::timestamptz,NULLIF(to_jsonb(${alias})->>'occurred_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'measured_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'updated_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'created_at','')::timestamptz)`;
 }
@@ -232,7 +278,7 @@ function mapFormulaInput(formulaCode, rows) {
   if (formulaCode === 'F5_5_COMPLIANCE_WEIGHTED') return { assessments: rows.map((row) => ({ status: row.status, weight: number(row.weight, 1), notApplicable: ['not_applicable', 'na'].includes(String(row.status)) })) };
   if (formulaCode === 'F5_5_COVERAGE') return { evaluated: statuses.filter((status) => !['pending', 'not_evaluated', 'draft', ''].includes(status)).length, applicable: statuses.filter((status) => !['not_applicable', 'na'].includes(status)).length };
   if (formulaCode === 'F5_5_READINESS') { const by = Object.fromEntries(rows.map((row) => [String(row.dimension || '').toLowerCase(), ratio(row.score)])); return { compliance: by.compliance, evidence: by.evidence, health: by.health, actions: by.actions }; }
-  if (formulaCode === 'F5_5_INHERENT_RISK') return { probability: number(first.probability ?? first.likelihood), impact: number(first.impact) };
+  if (formulaCode === 'F5_5_INHERENT_RISK') return riskInherentPortfolio(rows).input;
   if (formulaCode === 'F5_5_RESIDUAL_RISK') {
     const inherent = number(first.exposure);
     const probability = number(first.probability);
@@ -327,11 +373,18 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason, contract);
   const rows = normalizeRows(queried.rows, contract);
   const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null });
+  const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK' ? riskInherentPortfolio(validation.usable_rows) : null;
+  const formulaRows = formulaMapping ? formulaMapping.usableRows : validation.usable_rows;
+  const formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
+  const formulaExclusions = formulaMapping ? [...validation.exclusions, ...formulaMapping.exclusions] : validation.exclusions;
+  const formulaCounts = formulaMapping
+    ? { received: validation.usable_rows.length, usable: formulaMapping.usableRows.length, excluded: formulaMapping.exclusions.length }
+    : { received: rows.length, usable: validation.usable_rows.length, excluded: validation.exclusions.length };
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
   const sourceWarnings = [...new Set(rows.flatMap((row) => Array.isArray(row.__source_warnings) ? row.__source_warnings : []))];
-  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: rows.length, usable_rows: validation.usable_rows.length, exclusions: validation.exclusions.length, period, timezone };
+  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, exclusions: formulaCounts.excluded, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
   const snapshotHash = hash(sourceSnapshot);
-  return { source_code: contract.source_code, physical_sources: physicalSources, status: validation.status, rows: validation.usable_rows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: validation.exclusions, invalid_rows: validation.invalid_rows, counts: { received: rows.length, usable: validation.usable_rows.length, excluded: validation.exclusions.length }, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: validation.usable_rows, contract, formula, runId, snapshotHash }), formula_input: mapFormulaInput(formulaCode, validation.usable_rows), equivalence: contract.variable_map, contract };
+  return { source_code: contract.source_code, physical_sources: physicalSources, status: formulaCounts.usable ? validation.status : 'empty_dataset', rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }

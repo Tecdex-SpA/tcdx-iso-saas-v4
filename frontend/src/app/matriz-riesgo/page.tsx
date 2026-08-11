@@ -116,6 +116,8 @@ type IsoRiskMatrixRun = {
 
 type IsoRiskMatrixItem = {
   id?: string;
+  run_id?: string | null;
+  risk_code?: string | null;
   risk_title: string;
   risk_description?: string | null;
   risk_category?: string | null;
@@ -288,6 +290,11 @@ function clampRiskAxis(value: unknown) {
   const n = Math.round(Number(value || 0));
   if (!Number.isFinite(n)) return 1;
   return Math.max(1, Math.min(5, n));
+}
+
+function shortId(value?: string | null) {
+  if (!value) return null;
+  return String(value).slice(0, 8);
 }
 
 function riskLevelFromScore(score: number): HeatmapEntry['level'] {
@@ -1620,6 +1627,9 @@ function RiskMatrixPageContent() {
                               <div className="text-xs text-gray-500 mt-1 line-clamp-2">{item.risk_description}</div>
                               <div className="text-xs text-gray-400 mt-1">
                                 Confianza {formatNumber(Number(item.confidence || 0) * 100)}%
+                              </div>
+                              <div className="text-[11px] text-gray-400 mt-1">
+                                Código {item.risk_code || 's/c'} · ID {shortId(item.id) || 's/i'}{item.run_id ? ` · Run ${shortId(item.run_id)}` : ''}
                               </div>
                             </td>
                             <td className="px-4 py-3 text-gray-700">

@@ -170,10 +170,10 @@ const SOURCE_CONTRACTS = Object.freeze([
   contract({
     source_code: 'risk_register_controls', entity: 'risk',
     tables: ['iso_risk_matrix_items', 'iso_risk_matrix_runs', 'grc_quantitative_risk_assessments', 'grc_control_assurance'],
-    columns: ['tenant_id','risk_id','probability','impact','exposure','severity','occurrence','detection','tenant_control_id','score','status'], required_fields: ['id','tenant_id'],
-    variable_map: { probability: 'probability', impact: 'impact', inherentRisk: 'exposure|probability*impact', controlEffectiveness: 'assurance_score/100', severity: 'severity', occurrence: 'occurrence', detection: 'detection' },
-    availability: 'available', version: 2,
-    limitations: 'Resuelve primero evaluaciones cuantitativas y usa la matriz ISO como fallback; no cruza tenants ni inventa escalas ausentes.'
+    columns: ['tenant_id','risk_id','probability','likelihood','impact','inherent_risk_score','exposure','severity','occurrence','detection','tenant_control_id','score','status'], required_fields: ['id','tenant_id'],
+    variable_map: { risks: 'rows[{source_record,probability|likelihood,impact,inherent_risk_score=probability*impact}]', aggregation_method: 'arithmetic_mean', probability: 'probability|likelihood', impact: 'impact', inherentRisk: 'mean(rows.probability*rows.impact)', controlEffectiveness: 'assurance_score/100', severity: 'severity', occurrence: 'occurrence', detection: 'detection' },
+    availability: 'available', version: 3,
+    limitations: 'RISK-INHERENT calcula el promedio aritmetico del portafolio de riesgos utilizables del tenant; excluye filas sin probabilidad/likelihood o impacto validos 1..5, no usa rows[0], no deduplica por titulo y no cruza tenants.'
   }),
   contract({
     source_code: 'control_assurance_evidence', entity: 'control',

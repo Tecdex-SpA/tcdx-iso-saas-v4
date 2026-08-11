@@ -1,5 +1,148 @@
 # Phase 5 final functional closeout — intermediate runtime evidence
 
+## 2026-08-11 v7 — RISK-INHERENT multi-risk official contract
+
+Environment: `https://tcdx-iso.tecdex.net`
+Runtime base SHA deployed: `b8d2088580d239de86965f34d463330a656cadfe`
+Branch: `fix/phase5-final-functional-closeout`
+Status: `READY_FOR_INTERMEDIATE_MERGE_REVIEW` once PR CI is green.
+
+This is not a final Phase 5 closeout and must not be validated against production until the fix is merged and deployed.
+
+### Root cause
+
+Runtime proved `RISK-INHERENT` was blocked for SaaS use even after the UI visibility fix:
+
+- Source contract cardinality was `one_to_many`.
+- The resolver returned multiple risk rows from `risk_register_controls`.
+- The mapper used the first usable row only for `F5_5_INHERENT_RISK`.
+- The query had no contractual ordering.
+- Therefore the official KPI depended on `rows[0]`, which was not a valid commercial methodology.
+
+Classification before this fix:
+
+- `NON_DETERMINISTIC_SOURCE_SELECTION`
+- `SEMANTIC_CONTRACT_UNDEFINED`
+
+### Official product contract
+
+Code: `RISK-INHERENT`
+
+Description: inherent exposure average of the tenant usable risk portfolio.
+
+Individual row formula:
+
+```text
+inherent_risk_score = probability_or_likelihood × impact
+```
+
+Valid scale:
+
+- `probability` / `likelihood`: integer `1..5`
+- `impact`: integer `1..5`
+
+Official aggregate:
+
+```text
+RISK-INHERENT = SUM(inherent_risk_score) / COUNT(usable risks)
+```
+
+Aggregation method: `arithmetic_mean`
+
+Inclusion:
+
+- same tenant;
+- source rows returned by the governed `risk_register_controls` contract;
+- inside the requested period when a period is provided;
+- valid `probability` or `likelihood`;
+- valid `impact`.
+
+Exclusion:
+
+- rows outside the tenant;
+- rows outside the requested period;
+- rows failing generic source validation;
+- rows with missing/invalid `probability` / `likelihood`;
+- rows with missing/invalid `impact`.
+
+No deduplication is applied by title, asset or display label. Distinct source records contribute once by source row identity.
+
+Sample/population:
+
+- `population_size`: rows that pass the generic source contract validation for the tenant/period.
+- `sample_size`: rows from that population with valid probability/likelihood and impact.
+- `coverage`: remains derived by official consumers from sample/population.
+
+Sufficiency:
+
+- calculated when at least one usable risk exists and the common calculation policy is satisfied;
+- `insufficient_data` when zero usable risks exist.
+
+No missing data is converted to zero.
+
+Precision:
+
+- formula precision remains the platform formula precision for score outputs.
+- consumers may format values for display, but all consumers must start from the same measurement/snapshot value.
+
+### Implementation
+
+Changed locally:
+
+- `backend/src/services/math-governance/riskCalculation.service.js`
+  - validates individual axes as integers `1..5`;
+  - supports portfolio input `risks[]`;
+  - computes arithmetic mean;
+  - rejects zero usable risks instead of returning `0`.
+- `backend/src/services/math-governance/formulaRegistry.service.js`
+  - publishes `F5_5_INHERENT_RISK` as formula version `2`;
+  - expression `mean(P_i*I_i)`;
+  - methodology `arithmetic mean of usable tenant portfolio inherent risk scores`;
+  - formula details include aggregation method, sample, population, scores and risk lineage details.
+- `backend/src/services/math-governance/sourceContracts.service.js`
+  - publishes `risk_register_controls` as source contract version `3`;
+  - declares portfolio `risks[]` mapping and `arithmetic_mean`.
+- `backend/src/services/math-governance/sourceResolver.service.js`
+  - removes the `rows[0]` mapping for `F5_5_INHERENT_RISK`;
+  - builds formula input from every valid risk row;
+  - excludes invalid P/I rows with explicit reason;
+  - adjusts counts and lineage to the rows actually included in the official formula.
+- `frontend/src/app/matriz-riesgo/page.tsx`
+  - adds short row identifiers (`risk_code`, short item ID, short run ID) to distinguish visually duplicated risk titles.
+
+### Run selection
+
+No current/published run selector was added in this iteration because no governed field currently defines that semantics for this KPI. The implemented contract treats every valid source row returned by the tenant/period source contract as one risk portfolio row.
+
+If the product later defines “latest/current/published run only”, that must be a separate source-contract version, not an implicit `ORDER BY` or title deduplication.
+
+### Regression coverage added
+
+Required examples now covered in code/tests:
+
+| Case | Dataset | Expected |
+|---|---|---:|
+| Single risk | `4×5` | `20` |
+| Single risk changed | `3×5` | `15` |
+| Multi-risk | `20, 10, 15` | `15` |
+| Reordered multi-risk | `15, 20, 10` | `15` |
+| Causal multi-risk | `15, 10, 15` | `13.3333` |
+| Tenant A | `20, 10, 15` | `15` |
+| Tenant B | `5, 10` | `7.5` |
+| Tenant A changed | `15, 10, 15` | `13.3333` |
+| Tenant B after Tenant A change | `5, 10` | `7.5` |
+| Zero usable risks | no valid P/I | error/insufficient, not `0` |
+
+Runtime validation pending after deploy:
+
+- Tenant 1 UI smoke `4×5 → 20`;
+- Tenant 1 UI smoke `3×5 → 15`;
+- official recalculate;
+- measurement;
+- published source snapshot;
+- Dashboard / Métricas / BI / GRC / Export cross-view;
+- RBAC and tenant isolation re-check.
+
 ## 2026-08-10 v3 — Snapshot publication checksum fix after PR #68 deploy
 
 Environment: `https://tcdx-iso.tecdex.net`

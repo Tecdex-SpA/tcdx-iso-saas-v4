@@ -171,7 +171,10 @@ INSERT INTO grc_readiness_results (id, tenant_id, snapshot_id, dimension, score,
 
 INSERT INTO grc_quantitative_risk_assessments (id, tenant_id, risk_id, probability, impact, exposure, occurrence, detection, status) VALUES
 ('71000000-0000-0000-0000-000000000051', '$TENANT_A', '71000000-0000-0000-0000-000000000052', 4, 5, 20, 4, 3, 'evaluated'),
-('72000000-0000-0000-0000-000000000051', '$TENANT_B', '72000000-0000-0000-0000-000000000052', 1, 1, 1, 1, 1, 'evaluated');
+('71000000-0000-0000-0000-000000000053', '$TENANT_A', '71000000-0000-0000-0000-000000000054', 2, 5, 10, 2, 3, 'evaluated'),
+('71000000-0000-0000-0000-000000000055', '$TENANT_A', '71000000-0000-0000-0000-000000000056', 3, 5, 15, 3, 3, 'evaluated'),
+('72000000-0000-0000-0000-000000000051', '$TENANT_B', '72000000-0000-0000-0000-000000000052', 1, 5, 5, 1, 1, 'evaluated'),
+('72000000-0000-0000-0000-000000000053', '$TENANT_B', '72000000-0000-0000-0000-000000000054', 2, 5, 10, 2, 1, 'evaluated');
 
 INSERT INTO grc_readiness_findings (id, tenant_id, severity) VALUES
 ('71000000-0000-0000-0000-000000000061', '$TENANT_A', 'critical'),
@@ -230,7 +233,10 @@ async function resolveAndExecute(client, tenantId, formulaCode) {
     const readiness = await resolveAndExecute(client, process.env.TENANT_A, 'F5_5_READINESS');
     assert.strictEqual(readiness.result.value, 77);
     const inherent = await resolveAndExecute(client, process.env.TENANT_A, 'F5_5_INHERENT_RISK');
-    assert.strictEqual(inherent.result.value, 20);
+    assert.strictEqual(inherent.result.value, 15);
+    assert.deepStrictEqual([...inherent.source.formula_input.scores].sort((a, b) => a - b), [10, 15, 20]);
+    assert.strictEqual(inherent.source.counts.usable, 3);
+    assert.strictEqual(inherent.source.lineage.length, 3);
     const control = await resolveAndExecute(client, process.env.TENANT_A, 'F5_5_CONTROL_EFFECTIVENESS');
     assert.strictEqual(control.result.value, 0.8);
     const severity = await resolveAndExecute(client, process.env.TENANT_A, 'F5_5_SEVERITY_INDEX');
@@ -241,13 +247,21 @@ async function resolveAndExecute(client, tenantId, formulaCode) {
     assert.strictEqual(maturity.result.value, 3.5);
 
     const tenantB = await resolveFormulaSource({ client, tenantId: process.env.TENANT_B, formulaCode: 'F5_5_INHERENT_RISK' });
-    assert.strictEqual(tenantB.rows.length, 1);
-    assert.strictEqual(Number(tenantB.rows[0].probability), 1);
+    assert.strictEqual(tenantB.rows.length, 2);
     assert.ok(tenantB.rows.every((row) => row.tenant_id === process.env.TENANT_B));
+    assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', tenantB.formula_input).value, 7.5);
 
     const tenantA = await resolveFormulaSource({ client, tenantId: process.env.TENANT_A, formulaCode: 'F5_5_INHERENT_RISK' });
     assert.ok(tenantA.rows.every((row) => row.tenant_id === process.env.TENANT_A));
     assert.ok(!tenantA.rows.some((row) => row.tenant_id === process.env.TENANT_B));
+    assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', tenantA.formula_input).value, 15);
+
+    await client.query(`UPDATE grc_quantitative_risk_assessments SET probability=3, exposure=15 WHERE id='71000000-0000-0000-0000-000000000051' AND tenant_id=$1::uuid`, [process.env.TENANT_A]);
+    const tenantAChanged = await resolveFormulaSource({ client, tenantId: process.env.TENANT_A, formulaCode: 'F5_5_INHERENT_RISK' });
+    assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', tenantAChanged.formula_input).value, 13.3333);
+    assert.deepStrictEqual([...tenantAChanged.formula_input.scores].sort((a, b) => a - b), [10, 15, 15]);
+    const tenantBAfterTenantAChange = await resolveFormulaSource({ client, tenantId: process.env.TENANT_B, formulaCode: 'F5_5_INHERENT_RISK' });
+    assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', tenantBAfterTenantAChange.formula_input).value, 7.5);
 
     process.stdout.write(JSON.stringify({
       status: 'PHASE5_5_SOURCE_ADAPTERS_POSTGRES_OK',

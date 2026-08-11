@@ -13,7 +13,7 @@ for (const formula of FORMULAS) {
   assert.ok(/^F5_(?:5|C3)_/.test(formula.formula_code));
   assert.ok(!codes.has(formula.formula_code), `formula duplicada ${formula.formula_code}`);
   codes.add(formula.formula_code);
-  assert.strictEqual(formula.version, 1);
+  assert.ok(Number.isInteger(formula.version) && formula.version >= 1, `${formula.formula_code} version invalida`);
   assert.strictEqual(formula.status, 'published');
   assert.strictEqual(formula.checksum.length, 64);
   assert.ok(Object.isFrozen(formula), `${formula.formula_code} debe estar congelada`);

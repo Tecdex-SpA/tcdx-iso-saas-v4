@@ -37,7 +37,13 @@ const sourceInputInitial = mapFormulaInput('F5_5_INHERENT_RISK', [{
   likelihood: initialAxes.likelihood,
   impact: initialAxes.impact,
 }]);
-assert.deepStrictEqual(sourceInputInitial, { probability: 4, impact: 5 });
+assert.deepStrictEqual(sourceInputInitial.risks, [{
+  source_record: 'risk-qa-1',
+  physical_source: null,
+  probability: 4,
+  impact: 5,
+  inherent_risk_score: 20,
+}]);
 assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', sourceInputInitial).value, 20);
 
 const sourceInputChanged = mapFormulaInput('F5_5_INHERENT_RISK', [{
@@ -46,7 +52,13 @@ const sourceInputChanged = mapFormulaInput('F5_5_INHERENT_RISK', [{
   likelihood: changedAxes.likelihood,
   impact: changedAxes.impact,
 }]);
-assert.deepStrictEqual(sourceInputChanged, { probability: 3, impact: 5 });
+assert.deepStrictEqual(sourceInputChanged.risks, [{
+  source_record: 'risk-qa-1',
+  physical_source: null,
+  probability: 3,
+  impact: 5,
+  inherent_risk_score: 15,
+}]);
 assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', sourceInputChanged).value, 15);
 
 process.stdout.write(JSON.stringify({

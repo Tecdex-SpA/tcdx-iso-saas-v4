@@ -43,10 +43,28 @@ const incidentSeverity = mapFormulaInput('F5_5_SEVERITY_INDEX', [
 ]);
 check(JSON.stringify(incidentSeverity) === JSON.stringify({ low: 1, medium: 0, high: 1, critical: 1 }), 'INCIDENTS_severity_mapping_invalid');
 
-const inherent = mapFormulaInput('F5_5_INHERENT_RISK', [{ likelihood: 4, impact: 5 }]);
+const inherent = mapFormulaInput('F5_5_INHERENT_RISK', [{ id: 'risk-a', likelihood: 4, impact: 5 }]);
 check(executeFormula('F5_5_INHERENT_RISK', inherent).value === 20, 'RISK_INHERENT_likelihood_impact_value_mismatch');
-const inherentChanged = mapFormulaInput('F5_5_INHERENT_RISK', [{ likelihood: 3, impact: 5 }]);
-check(executeFormula('F5_5_INHERENT_RISK', inherentChanged).value === 15, 'RISK_INHERENT_likelihood_impact_causal_change_mismatch');
+const inherentPortfolio = mapFormulaInput('F5_5_INHERENT_RISK', [
+  { id: 'risk-a', likelihood: 4, impact: 5 },
+  { id: 'risk-b', likelihood: 2, impact: 5 },
+  { id: 'risk-c', likelihood: 3, impact: 5 },
+]);
+check(executeFormula('F5_5_INHERENT_RISK', inherentPortfolio).value === 15, 'RISK_INHERENT_multi_row_average_mismatch');
+const inherentReordered = mapFormulaInput('F5_5_INHERENT_RISK', [
+  { id: 'risk-c', likelihood: 3, impact: 5 },
+  { id: 'risk-a', likelihood: 4, impact: 5 },
+  { id: 'risk-b', likelihood: 2, impact: 5 },
+]);
+check(executeFormula('F5_5_INHERENT_RISK', inherentReordered).value === 15, 'RISK_INHERENT_order_must_not_change_average');
+const inherentSingleChanged = mapFormulaInput('F5_5_INHERENT_RISK', [{ id: 'risk-a', likelihood: 3, impact: 5 }]);
+check(executeFormula('F5_5_INHERENT_RISK', inherentSingleChanged).value === 15, 'RISK_INHERENT_likelihood_impact_causal_change_mismatch');
+const inherentChanged = mapFormulaInput('F5_5_INHERENT_RISK', [
+  { id: 'risk-a', likelihood: 3, impact: 5 },
+  { id: 'risk-b', likelihood: 2, impact: 5 },
+  { id: 'risk-c', likelihood: 3, impact: 5 },
+]);
+check(executeFormula('F5_5_INHERENT_RISK', inherentChanged).value === 13.3333, 'RISK_INHERENT_multi_row_causal_average_mismatch');
 
 const residual = mapFormulaInput('F5_5_RESIDUAL_RISK', [{ exposure: 20, control_effectiveness: 65 }]);
 check(executeFormula('F5_5_RESIDUAL_RISK', residual).value === 7, 'RISK_RESIDUAL_expected_value_mismatch');
@@ -99,6 +117,8 @@ check(!indicatorService.includes('checksum(interpretation),actorId(scope)'), 'Me
 const isoRiskMatrixService = read('backend/src/services/isoRiskMatrix.service.js');
 const isoRiskMatrixRoutes = read('backend/src/routes/iso-risk-matrix.routes.js');
 const riskMatrixPage = read('frontend/src/app/matriz-riesgo/page.tsx');
+const sourceResolver = read('backend/src/services/math-governance/sourceResolver.service.js');
+const formulaRegistry = read('backend/src/services/math-governance/formulaRegistry.service.js');
 check(isoRiskMatrixRoutes.includes("patch('/:tenantId/items/:itemId/risk-inputs'"), 'RISK_INHERENT_missing_supported_risk_input_update_endpoint');
 check(isoRiskMatrixService.includes('updateItemRiskInputs'), 'RISK_INHERENT_missing_service_update_flow');
 check(isoRiskMatrixService.includes('WHERE tenant_id = $1::uuid') && isoRiskMatrixService.includes('AND id = $2::uuid'), 'RISK_INHERENT_update_must_be_tenant_scoped');
@@ -108,6 +128,8 @@ check(
   !/const topMatrixItems[\s\S]*?\.slice\(0,\s*12\)[\s\S]*?\}, \[matrixItems\]\);/.test(riskMatrixPage),
   'RISK_INHERENT_source_items_must_not_be_hidden_by_top12_ui_limit'
 );
+check(sourceResolver.includes('riskInherentPortfolio') && !sourceResolver.includes("if (formulaCode === 'F5_5_INHERENT_RISK') return { probability: number(first.probability ?? first.likelihood), impact: number(first.impact) }"), 'RISK_INHERENT_must_not_map_rows0_as_official_value');
+check(formulaRegistry.includes("'mean(P_i*I_i)'") && formulaRegistry.includes("aggregation_method:r.aggregation_method||'single_risk'"), 'RISK_INHERENT_formula_must_publish_arithmetic_mean_portfolio_methodology');
 
 if (failures.length) {
   process.stderr.write(JSON.stringify({ status: 'PHASE5_FUNCTIONAL_CLOSURE_CHECK_FAILED', failures }, null, 2) + '\n');

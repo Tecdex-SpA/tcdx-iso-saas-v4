@@ -1,7 +1,50 @@
- 'use strict';
+'use strict';
 const { MathGovernanceError, number, mean, percentile, monteCarlo } = require('./statisticalEngine.service');
 const { officialResult, unmeasured, clamp } = require('./officialCalculation.service');
-function inherentRisk({ probability, impact }) { return number(probability, 'probability') * number(impact, 'impact'); }
+
+function riskAxis(value, label) {
+  const parsed = number(value, label);
+  if (parsed === null) throw new MathGovernanceError('FORMULA_VARIABLE_REQUIRED', `Falta variable requerida: ${label}.`, { variable: label });
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+    throw new MathGovernanceError('RISK_AXIS_OUT_OF_RANGE', `${label} debe ser entero entre 1 y 5.`, { variable: label, value: parsed });
+  }
+  return parsed;
+}
+
+function inherentRiskScore({ probability, likelihood, impact }) {
+  return riskAxis(probability ?? likelihood, 'probability') * riskAxis(impact, 'impact');
+}
+
+function inherentRisk(input = {}) {
+  if (Array.isArray(input.risks)) {
+    if (!input.risks.length) {
+      throw new MathGovernanceError('FORMULA_ZERO_DENOMINATOR', 'RISK-INHERENT requiere al menos un riesgo con probabilidad e impacto válidos.', { variable: 'risks' });
+    }
+    const risks = input.risks.map((risk, index) => {
+      const probability = riskAxis(risk.probability ?? risk.likelihood, `risks[${index}].probability`);
+      const impact = riskAxis(risk.impact, `risks[${index}].impact`);
+      const score = probability * impact;
+      return {
+        source_record: risk.source_record ?? risk.id ?? null,
+        physical_source: risk.physical_source ?? null,
+        probability,
+        impact,
+        inherent_risk_score: score,
+      };
+    });
+    const scores = risks.map((risk) => risk.inherent_risk_score);
+    const value = mean(scores);
+    return {
+      value,
+      aggregation_method: 'arithmetic_mean',
+      sample_size: risks.length,
+      population_size: Number(input.population_size ?? risks.length),
+      scores,
+      risks,
+    };
+  }
+  return inherentRiskScore(input);
+}
 function residualRisk({ inherentRisk: ri, controlEffectiveness }) { return number(ri, 'inherentRisk') * (1 - number(controlEffectiveness, 'controlEffectiveness')); }
 function expectedLoss(input) { if (input.probability !== undefined && input.probability !== null) return number(input.probability, 'probability') * number(input.impact, 'impact'); if (input.expectedFrequency !== undefined && input.expectedFrequency !== null) return number(input.expectedFrequency, 'expectedFrequency') * number(input.meanSeverity, 'meanSeverity'); throw new MathGovernanceError('EXPECTED_LOSS_METHOD_REQUIRED', 'Expected loss requiere probabilidad/impacto o frecuencia/severidad.'); }
 function netLoss({ grossLoss, recoveries = 0 }) { const value = number(grossLoss, 'grossLoss') - number(recoveries, 'recoveries'); if (value < 0) throw new MathGovernanceError('NET_LOSS_NEGATIVE', 'La perdida neta no puede ser negativa.'); return value; }
@@ -16,4 +59,4 @@ function officialResidualRisk(input = {}) { return officialResult('F5_5_RESIDUAL
 function officialExpectedLoss(input = {}) { if (input.probability === undefined && input.expectedFrequency === undefined) return unmeasured('F5_5_EXPECTED_LOSS', 'No hay frecuencia/probabilidad para perdida esperada.', { unit: 'currency', period: input.period || {}, source: input.source || null }); return officialResult('F5_5_EXPECTED_LOSS', input, { period: input.period || {}, source: input.source || null, components: { method: input.expectedFrequency !== undefined ? 'frequency_severity' : 'probability_impact' } }); }
 function assetCriticality({ confidentiality, integrity, availability, legal, weights = { confidentiality: 0.25, integrity: 0.25, availability: 0.25, legal: 0.25 } }) { return number(weights.confidentiality, 'weights.confidentiality') * number(confidentiality, 'confidentiality') + number(weights.integrity, 'weights.integrity') * number(integrity, 'integrity') + number(weights.availability, 'weights.availability') * number(availability, 'availability') + number(weights.legal, 'weights.legal') * number(legal, 'legal'); }
 function supplierRisk({ compliance, security, dependency, privacy, resilience, weights = { compliance: 0.2, security: 0.2, dependency: 0.2, privacy: 0.2, resilience: 0.2 } }) { return number(weights.compliance, 'weights.compliance') * number(compliance, 'compliance') + number(weights.security, 'weights.security') * number(security, 'security') + number(weights.dependency, 'weights.dependency') * number(dependency, 'dependency') + number(weights.privacy, 'weights.privacy') * number(privacy, 'privacy') + number(weights.resilience, 'weights.resilience') * number(resilience, 'resilience'); }
-module.exports = { inherentRisk, residualRisk, expectedLoss, netLoss, lossSeverity, parametricVaR, monteCarlo, fmeaRpn, normalizeScale, classifyRisk, multidimensionalImpact, officialInherentRisk, officialResidualRisk, officialExpectedLoss, assetCriticality, supplierRisk };
+module.exports = { inherentRisk, inherentRiskScore, residualRisk, expectedLoss, netLoss, lossSeverity, parametricVaR, monteCarlo, fmeaRpn, normalizeScale, classifyRisk, multidimensionalImpact, officialInherentRisk, officialResidualRisk, officialExpectedLoss, assetCriticality, supplierRisk };
