@@ -58,13 +58,21 @@ assert(decisionCenter.includes('Prioridades de gestión'), 'El cockpit debe prio
 assert(decisionCenter.includes('Sin medición'), 'El cockpit no debe convertir ausencia de datos en cero.');
 assert(decisionCenter.includes('Abrir indicador y propuesta'), 'El cockpit debe dirigir a la propuesta gobernada sin ejecutar una acción irreversible.');
 assert(!decisionCenter.includes('Crear plan de acción'), 'El cockpit no debe transformar automáticamente una recomendación en plan de acción.');
+assert(!decisionCenter.includes('raw.slice(0,limit)'), 'El cockpit BI no debe limitar silenciosamente el catálogo oficial.');
+assert(!decisionCenter.includes('limit=12'), 'El cockpit BI no debe tener límite fijo por defecto.');
+assert(decisionCenter.includes('Abrir indicador'), 'Cada decisión debe exponer el indicador oficial de origen.');
 assert(biPage.includes('<GrcDecisionCenter'), 'Business Intelligence debe mostrar el cockpit de decisiones.');
-assert(officialAnalyticsPanel.includes("typeof limit==='number'?scoped.slice(0,limit):scoped"), 'El panel oficial debe mostrar todo el catálogo cuando no se define límite.');
+assert(!biPage.includes('limit={'), 'Business Intelligence no debe ocultar indicadores oficiales por posición.');
+assert(!officialAnalyticsPanel.includes('slice(0,limit)'), 'El panel oficial no debe ocultar indicadores oficiales por posición.');
 assert(!officialAnalyticsPanel.includes('priorityCodes'), 'El panel oficial no debe depender de una lista hardcoded de indicadores prioritarios.');
 assert(grcPortal.includes('<OfficialAnalyticsPanel title="Indicadores funcionales oficiales del portal GRC" />'), 'Portal GRC debe montar el panel oficial sin límite silencioso.');
 assert(!grcPortal.includes('RISK-INHERENT'), 'Portal GRC no debe hardcodear un indicador específico para hacerlo visible.');
 assert(!grcPortal.includes('limit={8}'), 'Portal GRC no debe depender de los primeros 8 indicadores del catálogo.');
+assert(grcPortal.includes("'/auditorias'"), 'Portal GRC debe enlazar a la ruta existente de auditorías.');
+assert(!grcPortal.includes("'/auditor'"), 'Portal GRC no debe enlazar a una ruta inexistente que genere 404.');
+assert(!read('src/app/reportes/studio/page.tsx').includes('limit={'), 'Report Studio no debe limitar silenciosamente indicadores oficiales.');
 assert(dashboardLayout.includes('<GrcDecisionCenter'), 'El dashboard debe reflejar decisiones oficiales.');
+assert(!dashboardLayout.includes('limit={'), 'El dashboard no debe limitar silenciosamente decisiones oficiales.');
 assert(dashboardPage.includes('const rawPayload = isRecord(rawRoot.data) ? rawRoot.data : payload;'), 'Dashboard KPI debe desempaquetar respuestas oficiales { ok, data } antes de normalizar items.');
 assert(dashboardPage.includes('Array.isArray(rawPayload)'), 'Dashboard KPI debe preservar compatibilidad con respuestas legacy en arreglo.');
 

@@ -45,7 +45,7 @@ export default function DashboardBuilder() {
         { key: 'status', label: 'Estado' },
       ]}
     >
-      <GrcDecisionCenter title="Cockpit ejecutivo de decisiones" limit={18} />
+      <GrcDecisionCenter title="Cockpit ejecutivo de decisiones" />
       {canManageDashboards ? <DashboardBuilderGuide /> : null}
     </Phase5Workspace>
   );

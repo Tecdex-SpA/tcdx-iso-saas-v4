@@ -158,7 +158,6 @@ export default function Phase5Workspace({
               title="Resultados oficiales disponibles para esta vista"
               domain={analyticsDomain || undefined}
               compact
-              limit={6}
             />
           </div>
         )}

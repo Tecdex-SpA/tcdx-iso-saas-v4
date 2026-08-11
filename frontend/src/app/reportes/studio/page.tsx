@@ -10,7 +10,6 @@ export default function ReportStudio() {
       endpoint="/api/reports"
       primaryLabel="reportes"
       emptyMessage="No hay definiciones de reporte configuradas."
-      analyticsDomain=""
       columns={[
         { key: 'report_key', label: 'Reporte' },
         { key: 'display_name', label: 'Nombre' },
@@ -20,7 +19,7 @@ export default function ReportStudio() {
       ]}
     >
       <ReportStudioWorkspace />
-      <OfficialAnalyticsPanel title="Resultados oficiales disponibles para reportes" compact limit={12} />
+      <OfficialAnalyticsPanel title="Resultados oficiales disponibles para reportes" compact />
     </Phase5Workspace>
   );
 }

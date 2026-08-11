@@ -728,3 +728,126 @@ Remaining blockers:
 ## Próxima acción exacta
 
 MERGE AND DEPLOY THE INTERMEDIATE SNAPSHOT-PUBLICATION FIX, THEN RERUN TENANT 1 FULL RUNTIME CLOSEOUT.
+
+---
+
+# 2026-08-11 — Tenant 1 final 22-indicator closeout batch after PR #74
+
+## Runtime base
+
+- Runtime: `https://tcdx-iso.tecdex.net`
+- Branch used for fixes: `fix/phase5-final-functional-closeout`
+- Base main HEAD: `ca18192977e0fab34c1165f32006cf6f643ca215`
+- Tenant: Tenant 1 (`70000000-0000-0000-0000-000000000701`)
+- Official catalog discovered dynamically: 22 indicators
+- Official dashboard summary: 22 total, 6 measured, 16 without calculated value, `official_score = null`
+- Services observed:
+  - Frontend: HTTP 200
+  - AI Engine: HTTP 200
+  - Backend authenticated APIs: HTTP 200
+
+Artifacts:
+
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/runtime/summary.json`
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/indicators/matrix.json`
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/evidence-fresh/calculate-current.json`
+
+## Current runtime 22/22 matrix before intermediate deploy
+
+| Code | Formula | Sample/Population | State | Value | Snapshot | Dashboard | Métricas | BI | GRC | Report | Export | Status |
+|---|---|---:|---|---:|---|---|---|---|---|---|---|---|
+| ACTIONS | F5_5_WEIGHTED_PROGRESS | 2/2 | calculated | 62.5 | 653f555b-804b-4f8-accc-a0c686ea345a | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | BROKEN_CHAIN |
+| AUDIT-ASSURANCE | F5_5_ASSURANCE_SCORE | 0/0 | insufficient_data | — | 7fd275ad-70c0-4958-a55b-9302aaee64d7 | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| COMPLIANCE | F5_5_COMPLIANCE_WEIGHTED | 4/4 | calculated | 83.33 | 54376945-07ed-401d-8cb1-1648219de606 | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | BROKEN_CHAIN |
+| CONTINUITY | F5_5_SLA_COMPLIANCE | 0/1 | insufficient_data | — | cc690bba-cb2f-4c41-a698-abfc6dc766b0 | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| CONTROL-COVERAGE | F5_5_CONTROL_COVERAGE | 0/51 | insufficient_data | — | 6ec239e4-7cc9-415b-b0c4-f2270589decf | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| CONTROL-EFFECT | F5_5_CONTROL_EFFECTIVENESS | 0/51 | insufficient_data | — | 90dc94b2-8f5f-4fcd-984e-91b64ff949bc | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| COVERAGE | F5_5_COVERAGE | 4/4 | calculated | 75 | 0c757d93-ea1d-4b01-bfc5-4a074f0f9d8e | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | BROKEN_CHAIN |
+| DATA-TRUST | F5_C3_DATA_TRUST | 555/555 | insufficient_data | — | 036fcd3c-d113-4460-b985-131e5aa18a00 | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| EVIDENCE-FRESH | F5_5_FRESHNESS_CONTINUOUS | 0/0 | source_incompatible | — | 01a382d7-bf82-45ba-a90f-cb1c32e05052 | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | SOURCE_INCOMPATIBLE |
+| FINDINGS | F5_5_SEVERITY_INDEX | 2/2 | insufficient_data | — | a6673432-8f06-425a-9ef0-260b28ff8724 | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| GRC-HEALTH | F5_5_GRC_HEALTH | 0/0 | insufficient_data | — | 7ff429b8-c0e1-4803-bd10-4309bd8be4ef | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | EXPECTED_UNMEASURED |
+| INCIDENTS | F5_5_SEVERITY_INDEX | 0/0 | insufficient_data | — | 3669ea59-b601-4837-9a63-3a91fb51beaa | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | EXPECTED_UNMEASURED |
+| ISO-READINESS | F5_5_READINESS | 0/0 | insufficient_data | — | c9c6574b-c905-4932-9ae5-498a53fd8cc8 | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | EXPECTED_UNMEASURED |
+| LOSSES | F5_5_NET_LOSS | 3/3 | calculated | 225000 | 98919712-4c7b-4420-82ac-8b0cf2a526d8 | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN |
+| MATURITY | F5_5_MATURITY | 555/555 | insufficient_data | — | 68e1a42b-5f4d-4c6a-bccf-29776e8349de | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | EXPECTED_UNMEASURED |
+| OP-PERFORMANCE | F5_C3_OPERATIONAL_PERFORMANCE | 0/0 | insufficient_data | — | 69ad38a1-28d3-4150-928f-652b538cc9d1 | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | EXPECTED_UNMEASURED |
+| REMEDIATION | F5_5_WEIGHTED_PROGRESS | 2/2 | calculated | 62.5 | 52cb1abd-bf13-4c22-ace9-4964be89d099 | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | BROKEN_CHAIN |
+| RISK-INHERENT | F5_5_INHERENT_RISK | 77/77 | calculated | 19.9091 | 8e8b799c-1069-40fd-bc09-db0a6df00b51 | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN |
+| RISK-RESIDUAL | F5_5_RESIDUAL_RISK | 77/77 | insufficient_data | — | 585e2a7f-3a0e-4913-bb86-30c6d193bd8a | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | EXPECTED_UNMEASURED |
+| SLA-COMPLIANCE | F5_5_SLA_COMPLIANCE | 0/1 | insufficient_data | — | 546a8cd3-bc62-495b-9547-7eb18c7540a5 | PASS | PASS | BROKEN_CHAIN | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| SUPPLIER-HEALTH | F5_C3_SUPPLIER_HEALTH | 0/0 | insufficient_data | — | d802b91b-39a8-409b-b94d-15e277b78305 | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | EXPECTED_UNMEASURED |
+| SUPPLIER-RISK | F5_5_SUPPLIER_RISK | 0/0 | insufficient_data | — | f984e2fc-87b2-4f0d-b1f5-69ec9fa47b82 | PASS | PASS | BROKEN_CHAIN | PASS | BROKEN_CHAIN | PASS | EXPECTED_UNMEASURED |
+
+## Root causes found and fixed locally
+
+1. BI decision center applied a silent first-N catalog limit.
+   - Root cause: `GrcDecisionCenter` defaulted to a fixed limit and `/bi` passed `limit={18}`.
+   - Fix: `GrcDecisionCenter` now consumes the full official catalog, exposes an indicator link per decision card, and `/bi` no longer passes a limit.
+
+2. Report Studio hid official indicators by position.
+   - Root cause: Report Studio mounted `OfficialAnalyticsPanel` with `limit={12}`.
+   - Fix: Report Studio now renders the complete official catalog panel without a fixed limit.
+
+3. Reusable official panel still supported silent catalog slicing.
+   - Root cause: `OfficialAnalyticsPanel` accepted `limit` and used `slice(0, limit)`.
+   - Fix: the panel now filters only by explicit domain and never hides indicators by position.
+
+4. Portal GRC emitted a frontend 404.
+   - Root cause: module navigation linked Auditorías to `/auditor`, which is not a valid route.
+   - Fix: link changed to `/auditorias`.
+
+5. `EVIDENCE-FRESH` resolved the formula-level data-quality source instead of the indicator-level evidence source.
+   - Runtime symptom: `POST /api/metrics/official/EVIDENCE-FRESH/calculate` returned `official_state = source_incompatible`, `sample_size = 0`, `population_size = 0`, no `calculation_run_id`, no source snapshot.
+   - Root cause: `calculateIndicator()` only honored `binding_metadata.source_code`; the published binding did not expose metadata in the runtime result, so the orchestrator fell back from `EVIDENCE-FRESH` to `F5_5_FRESHNESS_CONTINUOUS -> data_quality_observations`.
+   - Fix: `calculateIndicator()` derives the governed source with `getSourceCodeForIndicator(indicator.functional_code, indicator.formula_code)` when metadata is absent. This preserves formula reuse while respecting indicator-specific contracts such as `EVIDENCE-FRESH -> evidence_freshness_records`.
+
+## GRC-HEALTH and Score Global current state
+
+- `GRC-HEALTH`: `insufficient_data`, sample/population `0/0`, snapshot `7ff429b8-c0e1-4803-bd10-4309bd8be4ef`.
+- Official Score Global: `null`.
+- Contract observed in code: official dashboard derives `official_score` only from latest `GRC-HEALTH` when that snapshot state is `calculated`; it does not convert missing score to zero.
+- Blocking dependency: EVIDENCE-FRESH currently fails source resolution in deployed runtime. After this fix is deployed, rerun official recalculate to determine whether GRC-HEALTH becomes calculated or remains legitimately insufficient due other missing dependencies.
+
+## Admin KPI vs Official KPI
+
+- Admin universe: 24 administrative/legacy KPIs from `GET /api/kpis/admin/:tenantId`.
+- Official universe: 22 functional indicators from `GET /api/metrics/official/catalog`.
+- Current conclusion: different counts are expected and not automatically a bug. However, official consumers must not be blocked by Admin KPI semantics, and equivalent concepts must not show conflicting official values.
+- No code was changed to force equality between universes.
+
+## Zero-hardcode audit
+
+- Product business-data hardcodes introduced: 0.
+- Tenant-specific hardcodes introduced: 0.
+- QA-specific hardcodes introduced: 0.
+- Fixed runtime expected values introduced: 0.
+- Null-to-zero official KPI fixes introduced: 0.
+- Fake fallback values introduced: 0.
+- Silent official-catalog first-N: fixed locally.
+- Parallel frontend official calculations: 0 in modified official consumers.
+
+Remaining literal/preview findings are not official catalog visibility:
+
+- `overview.alerts.slice(0, 8)` in GRC is an alerts preview, not an official indicator catalog.
+- history/comparison limits such as `limit=24` are explicit API history windows, not indicator visibility.
+- lineage/history/log previews cap technical evidence volume, not business KPI values.
+
+## Local validation for this intermediate fix
+
+PASS:
+
+- `node backend/src/services/math-governance/sourceResolver.test.js`
+- `npm run phase5:functional-closure`
+- `node frontend/scripts/check-metrics-operational-contract.mjs`
+- `npm --prefix frontend run typecheck`
+- `npm --prefix frontend run lint`
+- `git diff --check`
+
+## Deployment requirement
+
+This batch changes production code. Runtime cannot be finally closed until the fix is merged and deployed, then Tenant 1 recalculate/cross-view is rerun.
+
+Next exact action:
+
+MERGE AND DEPLOY THIS INTERMEDIATE TENANT-1 22/22 CLOSEOUT FIX, THEN RERUN TENANT 1 FINAL 22/22 RUNTIME CLOSEOUT FROM OFFICIAL RECALCULATE.
