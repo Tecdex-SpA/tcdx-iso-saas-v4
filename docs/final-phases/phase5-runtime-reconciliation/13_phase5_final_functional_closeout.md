@@ -988,3 +988,87 @@ This grouped backend fix must be deployed before final runtime validation can co
 2. Confirm `EVIDENCE-FRESH` no longer returns `source_incompatible`.
 3. Reclassify `GRC-HEALTH`, `Score Global`, `MATURITY`, `FINDINGS`, and `RISK-RESIDUAL` from fresh runtime evidence.
 4. Confirm Dashboard, Métricas, BI, GRC, Report and Export still consume the same official snapshots.
+
+# 2026-08-11 — Post-deploy PR #76 primary platform reconciliation
+
+## Runtime base
+
+- Runtime: `https://tcdx-iso.tecdex.net`
+- PR #76 merge SHA observed on `main`: `37412131c8dc946fed040273a2d665ad8209c8a2`
+- Tenant used as primary validation dataset: Tenant 1 (`70000000-0000-0000-0000-000000000701`)
+- Official period resolved by runtime recalculate: `2026-08`
+- Official catalog discovered dynamically: 22 indicators
+- Official recalculate result: `recalculated = 22`, `failed = 0`, `snapshots_created = 22`, `snapshots_failed = 0`
+- Runtime errors observed during post-PR76 collector: 0 HTTP 5xx, 0 SQL errors, 0 constraint errors, 0 frontend exceptions, 0 snapshot failures.
+
+Artifacts:
+
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/post-pr76/runtime/summary.json`
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/post-pr76/runtime/official-recalculate.json`
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/post-pr76/indicators/matrix.json`
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/post-pr76/indicators/per-indicator-technical.json`
+
+## PR #76 runtime verification
+
+PASS:
+
+- `EVIDENCE-FRESH` physical adapter no longer fails with schema incompatibility. Runtime state is now `insufficient_data` with `sample/population = 0/0`, not `source_incompatible`.
+- `GRC-HEALTH` dependency adapter now reads official calculation outputs through `calculation_runs` formula codes. Runtime state is `dependency_pending` because `dataTrust` and `risk` are not calculated.
+- Calculation outputs are associated by `formula_code`; no raw output rows are consumed without formula identity.
+- `FINDINGS` excludes rows without valid severity; runtime `sample/population = 0/2`.
+- `RISK-RESIDUAL` now maps risk likelihood/impact; runtime remains `insufficient_data` because `controlEffectiveness` is required and absent.
+- BI and Report catalog visibility remained complete: missing codes = `[]`.
+
+Remaining platform defect found:
+
+- `MATURITY` still reports `sample/population = 28/28` with `state = insufficient_data`, but the formula has no valid `levels[]` input. Rows associated to maturity but missing a 0..5 maturity level were counted as usable formula rows.
+- Classification: `MAPPING_ERROR`.
+- Required fix: `F5_5_MATURITY` must use a formula-specific source mapping, excluding rows with missing/non-numeric/out-of-scale maturity level and reporting explicit exclusions. It must not treat percentage scores or generic measurement values as maturity levels.
+
+## Post-PR76 22/22 summary
+
+| Status | Count |
+|---|---:|
+| PASS | 6 |
+| EXPECTED_UNMEASURED | 15 |
+| DEPENDENCY_PENDING | 1 |
+| MAPPING_ERROR | 1 |
+
+The collector classifies `MATURITY` as `EXPECTED_UNMEASURED`, but the runtime evidence is not defensible until the source resolver stops counting rows without valid maturity level as usable formula sample. The effective platform classification for closeout is therefore `MAPPING_ERROR`.
+
+## Local fix after PR #76
+
+Changed locally:
+
+- `backend/src/services/math-governance/sourceResolver.service.js`
+  - adds `maturityPortfolio()` for `F5_5_MATURITY`;
+  - accepts only maturity levels on the published 0..5 scale;
+  - excludes missing/non-numeric levels with `maturity_level_missing_or_invalid`;
+  - excludes percentage/out-of-scale values with `maturity_level_out_of_range`;
+  - adjusts formula counts, formula input and lineage to usable maturity-level rows only.
+- `backend/src/services/math-governance/sourceResolver.test.js`
+  - verifies invalid maturity rows do not produce numeric output;
+  - verifies resolver counts `received`, `usable` and exclusions correctly.
+
+Local validation:
+
+- `node backend/src/services/math-governance/sourceResolver.test.js`
+- `npm run phase5:functional-closure`
+- `npm run phase5-5:source-binding-check`
+- `bash scripts/phase5-5/check-source-adapters-postgres-ci.sh`
+- `npm --prefix backend test`
+
+Zero-hardcode:
+
+- Product business-data hardcodes introduced: 0.
+- Tenant-specific hardcodes introduced: 0.
+- QA-specific hardcodes introduced: 0.
+- Fixed runtime expected values introduced: 0.
+- Silent first-N introduced: 0.
+- Null-to-zero introduced: 0.
+- Fake fallback values introduced: 0.
+- Parallel frontend calculations introduced: 0.
+
+Next exact action:
+
+OPEN INTERMEDIATE PR FOR THIS PLATFORM FIX, WAIT FOR CI, MERGE AND DEPLOY, THEN RERUN TENANT 1 FINAL 22/22 RUNTIME CLOSEOUT FROM OFFICIAL RECALCULATE.
