@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
+import GrcDecisionCenter from '@/components/math-governance/GrcDecisionCenter';
 import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
 
 type Block = {
@@ -190,6 +191,14 @@ export default function GrcPortal() {
               </div>
             )}
 
+
+            <div className="mt-6">
+              <GrcDecisionCenter
+                title="Decisiones, prioridades e interpretación GRC"
+                ctaHref="/metricas"
+                ctaLabel="Ver métricas oficiales"
+              />
+            </div>
 
             <div className="mt-6"><OfficialAnalyticsPanel title="Indicadores funcionales oficiales del portal GRC" /></div>
 

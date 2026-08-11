@@ -1,0 +1,42 @@
+{
+  "captured_at": "2026-08-11",
+  "scope": "phase6-ui-responsive-post-pr80",
+  "gate": "DASHBOARD_GRC_INFORMATION_ARCHITECTURE",
+  "status": "READY_FOR_INTERMEDIATE_MERGE_REVIEW",
+  "dashboard": {
+    "route": "/dashboard",
+    "canonical": true,
+    "grc_experience": "compact_executive_summary",
+    "cta": {
+      "label": "Ver análisis GRC",
+      "href": "/grc"
+    },
+    "long_grc_decision_section_removed_from_main_flow": true
+  },
+  "grc": {
+    "route": "/grc",
+    "grc_experience": "full_decisions_priorities_interpretation",
+    "source_of_truth": "official_catalog_existing_component"
+  },
+  "phase5": {
+    "calculation_logic_modified": false,
+    "source_contracts_modified": false,
+    "snapshots_modified": false,
+    "formulas_modified": false
+  },
+  "zero_hardcode": {
+    "tenant_specific": 0,
+    "user_specific": 0,
+    "dataset_specific": 0,
+    "fixed_kpi_values": 0,
+    "fake_values": 0
+  },
+  "validation": {
+    "eslint": "PASS",
+    "phase6_ui_responsive_contract": "PASS",
+    "typecheck": "PASS",
+    "frontend_contract_tests": "PASS",
+    "production_build": "PASS",
+    "git_diff_check": "PASS"
+  }
+}
