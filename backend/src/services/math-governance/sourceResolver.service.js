@@ -27,6 +27,15 @@ function validRiskAxis(value) {
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 5 ? parsed : null;
 }
 
+const SEVERITY_LEVELS = Object.freeze(['low', 'medium', 'high', 'critical']);
+const GRC_HEALTH_DEPENDENCY_FORMULAS = Object.freeze([
+  'F5_5_RESIDUAL_RISK',
+  'F5_5_COMPLIANCE_WEIGHTED',
+  'F5_5_WEIGHTED_PROGRESS',
+  'F5_5_FRESHNESS_CONTINUOUS',
+  'F5_C3_DATA_TRUST',
+]);
+
 function riskInherentPortfolio(rows = []) {
   const risks = [];
   const usableRows = [];
@@ -63,6 +72,33 @@ function riskInherentPortfolio(rows = []) {
       population_size: rows.length,
       scores: risks.map((risk) => risk.inherent_risk_score),
     },
+    usableRows,
+    exclusions,
+  };
+}
+
+function severityPortfolio(rows = []) {
+  const usableRows = [];
+  const exclusions = [];
+  const counts = { low: 0, medium: 0, high: 0, critical: 0 };
+  rows.forEach((row, index) => {
+    const severity = String(row.severity ?? row.risk_level ?? row.level ?? '').trim().toLowerCase();
+    const sourceRecord = row.id || row.source_entity_id || `row-${index}`;
+    if (!SEVERITY_LEVELS.includes(severity)) {
+      exclusions.push({
+        code: 'severity_missing_or_invalid',
+        field: 'severity',
+        source_record: sourceRecord,
+        physical_source: row.__physical_source || null,
+        reason: 'F5_5_SEVERITY_INDEX requiere severidad low, medium, high o critical; status operacional no se usa como severidad.',
+      });
+      return;
+    }
+    counts[severity] += 1;
+    usableRows.push(row);
+  });
+  return {
+    input: counts,
     usableRows,
     exclusions,
   };
@@ -162,8 +198,110 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
   return rows.map((row) => ({ ...row, status: row.status || 'open' }));
 }
 async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period); }
-async function queryHealth(client, tenantId, period) { return firstPopulatedTables(client, ['calculation_outputs'], tenantId, period); }
-async function queryMaturity(client, tenantId, period) { return firstPopulatedTables(client, ['survey_evaluations','metric_measurements','grc_metric_measurements'], tenantId, period); }
+async function queryHealth(client, tenantId, period) {
+  const hasRuns = await tableExists(client, 'calculation_runs');
+  const hasOutputs = await tableExists(client, 'calculation_outputs');
+  if (!hasRuns || !hasOutputs) return null;
+  const componentTimestamp = `COALESCE(cr.completed_at,cr.period_end,cr.started_at)`;
+  const result = await client.query(
+    `SELECT DISTINCT ON (cr.formula_code)
+            co.id,
+            cr.tenant_id,
+            cr.formula_code,
+            co.output_value,
+            co.unit,
+            cr.period_start,
+            cr.period_end,
+            cr.run_status,
+            ${componentTimestamp} AS __event_time
+     FROM calculation_runs cr
+     JOIN calculation_outputs co ON co.run_id=cr.id AND co.tenant_id=cr.tenant_id AND co.output_name='value'
+     WHERE cr.tenant_id=$1::uuid
+       AND cr.run_status='calculated'
+       AND cr.formula_code = ANY($4::text[])
+       AND ($2::timestamptz IS NULL OR COALESCE(cr.period_end,cr.completed_at,cr.started_at)>=$2)
+       AND ($3::timestamptz IS NULL OR COALESCE(cr.period_start,cr.started_at,cr.completed_at)<=$3)
+     ORDER BY cr.formula_code, ${componentTimestamp} DESC NULLS LAST, cr.started_at DESC`,
+    [tenantId, period.start || null, period.end || null, GRC_HEALTH_DEPENDENCY_FORMULAS]
+  );
+  return tagRows(result.rows, 'calculation_runs/calculation_outputs');
+}
+async function queryMaturity(client, tenantId, period) {
+  const candidates = [];
+  if (await tableExists(client, 'survey_evaluations')) {
+    const timestamp = safeTimestampExpression('e');
+    candidates.push({ table: 'survey_evaluations', params: [tenantId, period.start || null, period.end || null], sql:
+      `SELECT e.id,
+              (to_jsonb(e)->>'tenant_id')::uuid AS tenant_id,
+              COALESCE(NULLIF(to_jsonb(e)->>'level','')::numeric,NULLIF(to_jsonb(e)->>'maturity_level','')::numeric,NULLIF(to_jsonb(e)->>'score','')::numeric,NULLIF(to_jsonb(e)->>'total_score','')::numeric) AS level,
+              COALESCE(NULLIF(to_jsonb(e)->>'weight','')::numeric,1) AS weight,
+              COALESCE(NULLIF(to_jsonb(e)->>'evaluation_status',''),NULLIF(to_jsonb(e)->>'status',''),'evaluated') AS status,
+              ${timestamp} AS __event_time
+       FROM survey_evaluations e
+       WHERE (to_jsonb(e)->>'tenant_id')::uuid=$1::uuid
+         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+  }
+  if (await tableExists(client, 'metric_measurements') && await tableExists(client, 'metric_definitions')) {
+    const hasVersions = await tableExists(client, 'metric_definition_versions');
+    const hasBindings = await tableExists(client, 'metric_source_bindings');
+    const versionJoin = hasVersions
+      ? `LEFT JOIN LATERAL (
+           SELECT mdv.functional_code
+           FROM metric_definition_versions mdv
+           WHERE mdv.metric_definition_id=md.id AND mdv.status='published'
+           ORDER BY mdv.tenant_id DESC NULLS LAST,mdv.version_number DESC
+           LIMIT 1
+         ) mdv ON true`
+      : '';
+    const bindingJoin = hasBindings
+      ? `LEFT JOIN LATERAL (
+           SELECT msb.formula_code
+           FROM metric_source_bindings msb
+           WHERE msb.metric_definition_id=md.id AND msb.binding_status='published'
+           ORDER BY msb.tenant_id DESC NULLS LAST,msb.version_number DESC
+           LIMIT 1
+         ) msb ON true`
+      : '';
+    const maturityPredicate = [
+      `md.metric_code='MATURITY'`,
+      hasVersions ? `mdv.functional_code='MATURITY'` : null,
+      hasBindings ? `msb.formula_code='F5_5_MATURITY'` : null,
+    ].filter(Boolean).join(' OR ');
+    const timestamp = `COALESCE(NULLIF(to_jsonb(mm)->>'calculated_at','')::timestamptz,NULLIF(to_jsonb(mm)->>'period_end','')::timestamptz,NULLIF(to_jsonb(mm)->>'created_at','')::timestamptz)`;
+    candidates.push({ table: 'metric_measurements', params: [tenantId, period.start || null, period.end || null], sql:
+      `SELECT mm.id,
+              mm.tenant_id,
+              COALESCE(mm.value_numeric,NULLIF(mm.value_text,'')::numeric) AS level,
+              COALESCE(NULLIF(to_jsonb(mm)->'metadata'->>'weight','')::numeric,1) AS weight,
+              COALESCE(mm.official_state,mm.quality_status,'calculated') AS status,
+              ${timestamp} AS __event_time
+       FROM metric_measurements mm
+       JOIN metric_definitions md ON md.id=mm.metric_definition_id
+       ${versionJoin}
+       ${bindingJoin}
+       WHERE mm.tenant_id=$1::uuid
+         AND (${maturityPredicate})
+         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+  }
+  if (await tableExists(client, 'grc_metric_measurements')) {
+    const timestamp = safeTimestampExpression('gm');
+    candidates.push({ table: 'grc_metric_measurements', params: [tenantId, period.start || null, period.end || null], sql:
+      `SELECT gm.id,
+              (to_jsonb(gm)->>'tenant_id')::uuid AS tenant_id,
+              COALESCE(NULLIF(to_jsonb(gm)->>'level','')::numeric,NULLIF(to_jsonb(gm)->>'score','')::numeric,NULLIF(to_jsonb(gm)->>'numeric_value','')::numeric,NULLIF(to_jsonb(gm)->>'value_numeric','')::numeric) AS level,
+              COALESCE(NULLIF(to_jsonb(gm)->>'weight','')::numeric,1) AS weight,
+              COALESCE(NULLIF(to_jsonb(gm)->>'status',''),'calculated') AS status,
+              ${timestamp} AS __event_time
+       FROM grc_metric_measurements gm
+       WHERE (to_jsonb(gm)->>'tenant_id')::uuid=$1::uuid
+         AND lower(COALESCE(to_jsonb(gm)->>'metric_code',to_jsonb(gm)->>'functional_code',to_jsonb(gm)->>'formula_code','')) IN ('maturity','f5_5_maturity')
+         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+  }
+  return firstPopulated(client, candidates);
+}
 async function queryIncidents(client, tenantId, period) {
   if (!(await tableExists(client, 'grc_incidents'))) return null;
   const timestamp = `COALESCE(NULLIF(to_jsonb(i)->>'reported_at','')::timestamptz,NULLIF(to_jsonb(i)->>'detected_at','')::timestamptz,NULLIF(to_jsonb(i)->>'created_at','')::timestamptz)`;
@@ -235,11 +373,37 @@ async function queryEvidenceFreshness(client, tenantId, period) {
          AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
   }
   if (await tableExists(client, 'grc_evidence_versions')) {
-    const timestamp = `COALESCE(NULLIF(to_jsonb(v)->>'reviewed_at','')::timestamptz,NULLIF(to_jsonb(v)->>'created_at','')::timestamptz)`;
+    const submissionsExist = await tableExists(client, 'grc_evidence_submissions');
+    const reviewsExist = await tableExists(client, 'grc_evidence_reviews');
+    const submissionJoin = submissionsExist
+      ? `LEFT JOIN grc_evidence_submissions s ON s.tenant_id=v.tenant_id AND s.id=v.submission_id`
+      : '';
+    const reviewJoin = reviewsExist
+      ? `LEFT JOIN LATERAL (
+           SELECT r.decision,r.created_at
+           FROM grc_evidence_reviews r
+           WHERE r.tenant_id=v.tenant_id AND r.submission_id=v.submission_id
+           ORDER BY r.created_at DESC NULLS LAST
+           LIMIT 1
+         ) r ON true`
+      : '';
+    const statusExpression = submissionsExist
+      ? `COALESCE(NULLIF(to_jsonb(s)->>'status',''),'submitted')`
+      : `'submitted'`;
+    const validatedExpression = reviewsExist
+      ? `CASE WHEN lower(COALESCE(NULLIF(to_jsonb(r)->>'decision',''),''))='approved' THEN true WHEN lower(COALESCE(NULLIF(to_jsonb(r)->>'decision',''),'')) IN ('rejected','reopened') THEN false ELSE NULL END`
+      : `NULL::boolean`;
+    const reviewedAtExpression = reviewsExist
+      ? `NULLIF(to_jsonb(r)->>'created_at','')::timestamptz`
+      : `NULL::timestamptz`;
+    const timestamp = `COALESCE(${reviewedAtExpression},NULLIF(to_jsonb(v)->>'created_at','')::timestamptz)`;
     candidates.push({ table: 'grc_evidence_versions', params: [tenantId, period.start || null, period.end || null], sql:
-      `SELECT v.id,v.tenant_id,v.status,NULL::boolean AS validated,v.created_at,NULL::timestamptz AS reviewed_at,NULL::timestamptz AS expires_at,${timestamp} AS __event_time,
+      `SELECT v.id,v.tenant_id,${statusExpression} AS status,${validatedExpression} AS validated,v.created_at,${reviewedAtExpression} AS reviewed_at,NULL::timestamptz AS expires_at,${timestamp} AS __event_time,
               NULL::numeric AS freshness_score,false AS appears_expired
-       FROM grc_evidence_versions v WHERE v.tenant_id=$1::uuid
+       FROM grc_evidence_versions v
+       ${submissionJoin}
+       ${reviewJoin}
+       WHERE v.tenant_id=$1::uuid
          AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
          AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
   }
@@ -280,12 +444,17 @@ function mapFormulaInput(formulaCode, rows) {
   if (formulaCode === 'F5_5_READINESS') { const by = Object.fromEntries(rows.map((row) => [String(row.dimension || '').toLowerCase(), ratio(row.score)])); return { compliance: by.compliance, evidence: by.evidence, health: by.health, actions: by.actions }; }
   if (formulaCode === 'F5_5_INHERENT_RISK') return riskInherentPortfolio(rows).input;
   if (formulaCode === 'F5_5_RESIDUAL_RISK') {
-    const inherent = number(first.exposure);
-    const probability = number(first.probability);
-    const impact = number(first.impact);
+    const inherentScores = rows.map((row) => {
+      const direct = number(row.exposure ?? row.inherent_risk_score);
+      if (direct !== null) return direct;
+      const probability = number(row.probability ?? row.likelihood);
+      const impact = number(row.impact);
+      return probability !== null && impact !== null ? probability * impact : null;
+    }).filter((value) => value !== null);
+    const controlEffectiveness = average(rows.map((row) => row.control_effectiveness ?? row.assurance_score ?? row.control_score ?? row.effectiveness_score));
     return {
-      inherentRisk: inherent ?? (probability !== null && impact !== null ? probability * impact : null),
-      controlEffectiveness: ratio(first.control_effectiveness ?? first.assurance_score ?? first.control_score ?? first.effectiveness_score),
+      inherentRisk: average(inherentScores),
+      controlEffectiveness: ratio(controlEffectiveness),
     };
   }
   if (formulaCode === 'F5_5_FMEA_RPN') return { severity: number(first.impact), occurrence: number(first.occurrence ?? first.probability), detection: number(first.detection) };
@@ -346,7 +515,7 @@ function mapFormulaInput(formulaCode, rows) {
     return { ageHours: latest === null ? null : Math.max(0, (Date.now() - latest) / 3600000), halfLifeHours: 24 * 30 };
   }
   if (formulaCode === 'F5_5_LINEAGE_SCORE') return { presentRelations: rows.length, requiredRelations: rows.length || null };
-  if (formulaCode === 'F5_5_GRC_HEALTH') { const values = {}; for (const row of rows) { const raw = row.output_value?.value ?? row.output_value; const value = ratio(raw); if (row.formula_code === 'F5_5_RESIDUAL_RISK') values.risk = value === null ? null : 1 - value; if (row.formula_code === 'F5_5_COMPLIANCE_WEIGHTED') values.compliance = value; if (row.formula_code === 'F5_5_WEIGHTED_PROGRESS') values.actions = value; if (row.formula_code === 'F5_5_EVIDENCE_QUALITY') values.evidence = value; if (row.formula_code === 'F5_5_COMPLETENESS') values.dataTrust = value; } return values; }
+  if (formulaCode === 'F5_5_GRC_HEALTH') { const values = {}; for (const row of rows) { const raw = row.output_value?.value ?? row.output_value; const value = ratio(raw); if (row.formula_code === 'F5_5_RESIDUAL_RISK') values.risk = value === null ? null : 1 - value; if (row.formula_code === 'F5_5_COMPLIANCE_WEIGHTED') values.compliance = value; if (row.formula_code === 'F5_5_WEIGHTED_PROGRESS') values.actions = value; if (row.formula_code === 'F5_5_FRESHNESS_CONTINUOUS') values.evidence = value; if (row.formula_code === 'F5_C3_DATA_TRUST') values.dataTrust = value; } return values; }
   if (formulaCode === 'F5_C3_OPERATIONAL_PERFORMANCE') { const by={};for(const row of rows){const value=score(row.output_value?.value??row.output_value);if(value!==null)by[row.formula_code]=value;}const risk=by.F5_5_RESIDUAL_RISK===undefined?null:Math.max(0,100-by.F5_5_RESIDUAL_RISK);return {efficacy:by.F5_5_COMPLIANCE_WEIGHTED??null,efficiency:by.F5_5_WEIGHTED_PROGRESS??null,stability:risk,quality:by.F5_5_CONTROL_EFFECTIVENESS??null,timeliness:by.F5_5_SLA_COMPLIANCE??null,risk,compliance:by.F5_5_COMPLIANCE_WEIGHTED??null,actions:by.F5_5_WEIGHTED_PROGRESS??null,dataTrust:by.F5_C3_DATA_TRUST??null}; }
   if (formulaCode === 'F5_C3_DATA_TRUST') { const dimensions=['completeness','accuracy','consistency','freshness','lineage','validation','stability','coverage'];return Object.fromEntries(dimensions.map((dimension)=>[dimension,average(rows.map((row)=>row.dimensions?.[dimension]?.score))])); }
   if (formulaCode === 'F5_5_MATURITY') return { levels: rows.map((row) => ({ level: number(row.level ?? row.score), weight: number(row.weight, 1) })).filter((row) => row.level !== null) };
@@ -373,7 +542,11 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason, contract);
   const rows = normalizeRows(queried.rows, contract);
   const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null });
-  const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK' ? riskInherentPortfolio(validation.usable_rows) : null;
+  const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK'
+    ? riskInherentPortfolio(validation.usable_rows)
+    : formulaCode === 'F5_5_SEVERITY_INDEX'
+      ? severityPortfolio(validation.usable_rows)
+      : null;
   const formulaRows = formulaMapping ? formulaMapping.usableRows : validation.usable_rows;
   const formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
   const formulaExclusions = formulaMapping ? [...validation.exclusions, ...formulaMapping.exclusions] : validation.exclusions;

@@ -851,3 +851,140 @@ This batch changes production code. Runtime cannot be finally closed until the f
 Next exact action:
 
 MERGE AND DEPLOY THIS INTERMEDIATE TENANT-1 22/22 CLOSEOUT FIX, THEN RERUN TENANT 1 FINAL 22/22 RUNTIME CLOSEOUT FROM OFFICIAL RECALCULATE.
+
+# 2026-08-11 — Post-deploy PR #75 primary platform reconciliation
+
+## Runtime base
+
+- Runtime: `https://tcdx-iso.tecdex.net`
+- Base main/deployed SHA observed: `b7be7afe9341ab9353d8dad95d1b486e1c4f0374`
+- PR #75: merged and deployed
+- Tenant used as primary validation dataset: Tenant 1 (`70000000-0000-0000-0000-000000000701`)
+- Official period resolved by runtime recalculate: `2026-08`
+- Official catalog discovered dynamically: 22 indicators
+- Official recalculate result: `recalculated = 22`, `failed = 0`, `snapshots_created = 22`, `snapshots_failed = 0`
+- Runtime errors observed during post-PR75 collector: 0 HTTP 5xx, 0 SQL errors, 0 constraint errors, 0 frontend exceptions, 0 snapshot failures.
+
+Artifacts:
+
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/post-pr75/runtime/summary.json`
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/post-pr75/runtime/official-recalculate.json`
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/post-pr75/indicators/matrix.json`
+- `artifacts/phase5-human-runtime/tenant-1/final-22-indicators/post-pr75/indicators/per-indicator-technical.json`
+
+## PR #75 runtime verification
+
+PASS:
+
+- Source-selection fix deployed: `EVIDENCE-FRESH` now resolves through the indicator binding path; remaining failure is a physical adapter compatibility defect, not formula/source selection.
+- BI catalog visibility: expected official codes minus accessible BI codes = `[]`.
+- Report catalog visibility: expected official codes minus accessible Report codes = `[]`.
+- GRC auditor link: no `/grc -> /auditor` 404 reproduced after deploy.
+
+## Post-PR75 22/22 matrix
+
+| Code | Formula | Sample/Population | Sufficiency | State | Value | Snapshot | Dashboard | Métricas | BI | GRC | Report | Export | Status |
+|---|---|---:|---|---|---:|---|---|---|---|---|---|---|---|
+| ACTIONS | F5_5_WEIGHTED_PROGRESS | 2/2 | sufficient | calculated | 62.5 | 1d1730aa-b71d-49fa-a2d3-1d409581fdee | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| AUDIT-ASSURANCE | F5_5_ASSURANCE_SCORE | 0/0 | insufficient | insufficient_data | — | 6cfc7d80-29f5-49d3-8489-0304a637d602 | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| COMPLIANCE | F5_5_COMPLIANCE_WEIGHTED | 4/4 | sufficient | calculated | 83.33 | 1b11cbe1-ca5c-404e-9b5a-88e863abcd84 | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| CONTINUITY | F5_5_SLA_COMPLIANCE | 0/1 | insufficient | insufficient_data | — | fdeee28a-cec5-4136-ac70-76ce77c70b04 | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| CONTROL-COVERAGE | F5_5_CONTROL_COVERAGE | 0/51 | insufficient | insufficient_data | — | d2a5bb73-9687-4cd3-98d7-6bfe045c4be5 | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| CONTROL-EFFECT | F5_5_CONTROL_EFFECTIVENESS | 0/51 | insufficient | insufficient_data | — | e96277d9-5e98-4148-b962-993b59b3f82a | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| COVERAGE | F5_5_COVERAGE | 4/4 | sufficient | calculated | 75 | 0a88f5f6-27df-4238-be08-d3b382eb7c3c | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| DATA-TRUST | F5_C3_DATA_TRUST | 578/578 | insufficient | insufficient_data | — | d07fc251-c880-432d-a395-30395e7c9aa3 | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| EVIDENCE-FRESH | F5_5_FRESHNESS_CONTINUOUS | 0/0 | invalid | source_incompatible | — | cb04c70f-7807-469a-8f71-a08cf1c30382 | PASS | PASS | PASS | PASS | PASS | PASS | SOURCE_INCOMPATIBLE |
+| FINDINGS | F5_5_SEVERITY_INDEX | 2/2 | insufficient | insufficient_data | — | 5ed53caf-2b93-41ae-a489-114b900bbf49 | PASS | PASS | PASS | PASS | PASS | PASS | MAPPING_ERROR |
+| GRC-HEALTH | F5_5_GRC_HEALTH | 0/0 | insufficient | insufficient_data | — | aa841f56-60c9-4c3c-98d7-ed24f7601197 | PASS | PASS | PASS | PASS | PASS | PASS | DEPENDENCY_PENDING |
+| INCIDENTS | F5_5_SEVERITY_INDEX | 0/0 | insufficient | insufficient_data | — | 3fea9452-98e4-40a7-813d-c8acfa48644d | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| ISO-READINESS | F5_5_READINESS | 0/0 | insufficient | insufficient_data | — | e3960b16-4aab-46de-bab5-abc07cca6d2f | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| LOSSES | F5_5_NET_LOSS | 3/3 | sufficient | calculated | 225000 | c2ce83e8-10af-4975-9562-f8a6a8375163 | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| MATURITY | F5_5_MATURITY | 578/578 | insufficient | insufficient_data | — | 49b1e354-5e03-4cd0-8c91-95ca0988fc4b | PASS | PASS | PASS | PASS | PASS | PASS | MAPPING_ERROR |
+| OP-PERFORMANCE | F5_C3_OPERATIONAL_PERFORMANCE | 0/0 | insufficient | insufficient_data | — | 293d5d84-f116-4435-945a-175b383e47e4 | PASS | PASS | PASS | PASS | PASS | PASS | DEPENDENCY_PENDING |
+| REMEDIATION | F5_5_WEIGHTED_PROGRESS | 2/2 | sufficient | calculated | 62.5 | bf47141c-2887-4441-a99e-3925d4fa2880 | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| RISK-INHERENT | F5_5_INHERENT_RISK | 77/77 | sufficient | calculated | 19.9091 | 16e69a8c-f885-48db-892f-cabcd3cfdd32 | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| RISK-RESIDUAL | F5_5_RESIDUAL_RISK | 77/77 | insufficient | insufficient_data | — | 1b659eb1-94f7-40b3-9839-6ba999a89ac4 | PASS | PASS | PASS | PASS | PASS | PASS | MAPPING_ERROR |
+| SLA-COMPLIANCE | F5_5_SLA_COMPLIANCE | 0/1 | insufficient | insufficient_data | — | ec53141d-daae-4e9c-8b39-2cb945b0a97d | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| SUPPLIER-HEALTH | F5_C3_SUPPLIER_HEALTH | 0/0 | insufficient | insufficient_data | — | 587f0c02-3c50-4f8d-9b40-4281eb5a74dc | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+| SUPPLIER-RISK | F5_5_SUPPLIER_RISK | 0/0 | insufficient | insufficient_data | — | 04c2a69d-75ca-4472-946d-1c450f4da80f | PASS | PASS | PASS | PASS | PASS | PASS | EXPECTED_UNMEASURED |
+
+Totals before the new local fix:
+
+- PASS: 6
+- EXPECTED_UNMEASURED: 11
+- SOURCE_INCOMPATIBLE: 1
+- MAPPING_ERROR: 4
+- DEPENDENCY_PENDING: 2
+
+## Suspicious insufficient-data audit
+
+- `DATA-TRUST`: sample/population `578/578`, but formula `F5_C3_DATA_TRUST` requires all eight persisted trust dimensions. Runtime missing input: `accuracy`. Classification remains `EXPECTED_UNMEASURED` unless explicit accuracy validation is available; unknown dimensions are not renormalized.
+- `MATURITY`: sample/population `578/578` came from a generic `metric_measurements` fallback that consumed all official measurements. This is `MAPPING_ERROR` / source population bug. Fix: dedicated maturity adapter filters only survey maturity rows or metric measurements bound to `MATURITY` / `F5_5_MATURITY`.
+- `FINDINGS`: sample/population `2/2` had no recognized severity input for `F5_5_SEVERITY_INDEX`. Classification is `MAPPING_ERROR`; source rows without `low|medium|high|critical` must be excluded explicitly and must not be counted as usable formula rows.
+- `RISK-RESIDUAL`: sample/population `77/77`, missing `inherentRisk` in runtime because mapper only checked `probability` and ignored `likelihood` even though `risk_register_controls@3` declares `probability|likelihood`. Fix: derive portfolio inherent risk from `exposure|inherent_risk_score|probability|likelihood × impact`; control effectiveness remains required and is not invented.
+
+## Additional root causes fixed locally after PR #75
+
+1. `EVIDENCE-FRESH` physical fallback adapter incompatible with real GRC evidence versions.
+   - Symptom: `source_incompatible`, `sample_size = 0`, `population_size = 0`.
+   - Root cause: `queryEvidenceFreshness()` selected `v.status` from `grc_evidence_versions`; runtime schema stores status on `grc_evidence_submissions` and review decision on `grc_evidence_reviews`.
+   - Fix: derive status/validation from governed submission/review joins when available; no direct `v.status`, no fake status for calculated output.
+
+2. `GRC-HEALTH` consumed raw `calculation_outputs`.
+   - Symptom: `sample_size = 0`, `population_size = 0` for a dependency-based indicator.
+   - Root cause: raw `calculation_outputs` does not expose `formula_code`; the contract requires components by official formula.
+   - Fix: dedicated adapter joins `calculation_runs` and `calculation_outputs`, filters calculated dependency formulas, and emits rows with `formula_code` and official output value.
+
+3. `GRC-HEALTH` dependency map referenced obsolete formula codes.
+   - Root cause: evidence mapped to `F5_5_EVIDENCE_QUALITY` and data trust to `F5_5_COMPLETENESS`.
+   - Fix: evidence maps to `F5_5_FRESHNESS_CONTINUOUS`; dataTrust maps to `F5_C3_DATA_TRUST`.
+
+4. `MATURITY` source population was not scoped to maturity.
+   - Root cause: generic fallback read all `metric_measurements`.
+   - Fix: fallback reads only measurements whose metric definition/binding identifies `MATURITY` / `F5_5_MATURITY`.
+
+5. `FINDINGS` counted rows with no severity as usable.
+   - Root cause: dataset required `status`, while formula requires recognized severity buckets.
+   - Fix: formula-specific source mapping excludes rows without `low|medium|high|critical` and records explicit exclusions.
+
+6. `RISK-RESIDUAL` ignored `likelihood` from the risk matrix.
+   - Root cause: mapper only read `probability`, despite the source contract declaring `probability|likelihood`.
+   - Fix: mapper derives inherent risk from all usable rows using the published risk axes; missing control effectiveness remains insufficient data.
+
+## Local validation for this grouped fix
+
+PASS:
+
+- `node backend/src/services/math-governance/sourceResolver.test.js`
+- `node backend/src/services/math-governance/officialCalculationOrchestrator.test.js`
+- `npm run phase5:functional-closure`
+- `npm run phase5-5:source-binding-check`
+- `bash scripts/phase5-5/check-source-adapters-postgres-ci.sh`
+- `npm --prefix backend test`
+- `git diff --check`
+
+## Zero-hardcode audit
+
+- Product business-data hardcodes introduced: 0.
+- Tenant-specific hardcodes introduced: 0.
+- QA-specific hardcodes introduced: 0.
+- Fixed runtime expected values introduced: 0.
+- Silent first-N introduced: 0.
+- Null-to-zero introduced: 0.
+- Fake fallback values introduced: 0.
+- Parallel frontend calculations introduced: 0.
+
+Constants added/used are methodology constants, not product data:
+
+- GRC-HEALTH dependency formula codes.
+- Severity buckets `low`, `medium`, `high`, `critical`.
+- Data Trust dimension names already required by formula contract.
+
+## Deployment requirement
+
+This grouped backend fix must be deployed before final runtime validation can continue. Expected post-deploy checks:
+
+1. Rerun official dashboard recalculate for Tenant 1 / runtime period.
+2. Confirm `EVIDENCE-FRESH` no longer returns `source_incompatible`.
+3. Reclassify `GRC-HEALTH`, `Score Global`, `MATURITY`, `FINDINGS`, and `RISK-RESIDUAL` from fresh runtime evidence.
+4. Confirm Dashboard, Métricas, BI, GRC, Report and Export still consume the same official snapshots.
