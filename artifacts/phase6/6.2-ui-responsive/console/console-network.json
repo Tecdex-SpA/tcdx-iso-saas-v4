@@ -1,0 +1,8 @@
+{
+  "captured_at": "2026-08-11T22:09:40.049Z",
+  "runtime_health_http": "200",
+  "local_dev_proxy_result": "NON_CRITICAL_VALIDATION_LIMITATION",
+  "critical_frontend_exception": 0,
+  "http_5xx_observed": 0,
+  "chart_warning_fix_status": "Code-level fix implemented; deployed runtime validation pending."
+}

@@ -17,6 +17,7 @@ import TcdxIcon from '@/components/icons/TcdxIcon';
 import {
   EnterpriseKpiCard,
   EnterprisePageHeader,
+  ResponsiveChartFrame,
 } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -24,7 +25,6 @@ import {
   Pie,
   Cell,
   Tooltip,
-  ResponsiveContainer,
   BarChart,
   Bar,
   XAxis,
@@ -1645,8 +1645,8 @@ function DashboardPageContent() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-center">
-                        <div className="relative mx-auto h-[260px] w-full max-w-[300px]">
-                          <ResponsiveContainer width="100%" height="100%">
+                        <div className="relative mx-auto w-full max-w-[300px]">
+                          <ResponsiveChartFrame className="bg-transparent" height={260}>
                             <PieChart>
                               <Pie
                                 data={kpiStatusData}
@@ -1664,7 +1664,7 @@ function DashboardPageContent() {
                               </Pie>
                               <Tooltip formatter={(value: unknown, name: unknown) => [String(value), String(name)]} />
                             </PieChart>
-                          </ResponsiveContainer>
+                          </ResponsiveChartFrame>
 
                           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                             <div className="text-5xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">
@@ -1722,8 +1722,8 @@ function DashboardPageContent() {
                         )}
                       </div>
 
-                      <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                      <div>
+                        <ResponsiveChartFrame height={300}>
                           <BarChart data={kpiCategoryData}>
                             <CartesianGrid vertical={false} stroke="var(--tcdx-color-border)" />
                             <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} tickLine={false} axisLine={false} />
@@ -1735,7 +1735,7 @@ function DashboardPageContent() {
                               fill="var(--tcdx-color-secondary)"
                             />
                           </BarChart>
-                        </ResponsiveContainer>
+                        </ResponsiveChartFrame>
                       </div>
                     </section>
                   </div>
@@ -1953,8 +1953,7 @@ function OperationalChartCard({
           Sin datos registrados para graficar.
         </div>
       ) : (
-        <div className="h-[240px] rounded-[var(--tcdx-radius-tecdex-sm)] bg-white p-2">
-          <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveChartFrame className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-white p-2" height={240}>
             {kind === 'donut' ? (
               <PieChart>
                 <Pie
@@ -1986,8 +1985,7 @@ function OperationalChartCard({
                 </Bar>
               </BarChart>
             )}
-          </ResponsiveContainer>
-        </div>
+        </ResponsiveChartFrame>
       )}
     </article>
   );
@@ -2933,13 +2931,11 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
       ) : null}
 
       {buildOfficialTrend(item).length > 1 ? (
-        <div className="mt-4 h-[80px]">
-          <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveChartFrame className="mt-4" height={80} minHeight={40} minWidth={80}>
             <LineChart data={buildOfficialTrend(item)}>
               <Line dataKey="value" stroke="var(--tcdx-color-secondary)" strokeWidth={2} dot={false} />
             </LineChart>
-          </ResponsiveContainer>
-        </div>
+        </ResponsiveChartFrame>
       ) : (
         <div className="mt-4 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-surface)] px-3 py-2 text-xs text-[var(--tcdx-color-text-secondary)]">
           Sin histórico oficial comparable.
