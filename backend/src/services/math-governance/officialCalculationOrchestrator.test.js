@@ -16,12 +16,26 @@ async function run() {
       resolveFormulaSource: async () => ({
         status: 'ready',
         source_code: 'risk_register_controls',
-        counts: { received: 1, usable: 1, excluded: 0 },
-        formula_input: { probability: 4, impact: 5 },
+        counts: { received: 3, usable: 3, excluded: 0 },
+        formula_input: {
+          risks: [
+            { source_record: '70000000-0000-0000-0000-000000000791', probability: 4, impact: 5, inherent_risk_score: 20 },
+            { source_record: '70000000-0000-0000-0000-000000000792', probability: 2, impact: 5, inherent_risk_score: 10 },
+            { source_record: '70000000-0000-0000-0000-000000000793', probability: 3, impact: 5, inherent_risk_score: 15 },
+          ],
+          aggregation_method: 'arithmetic_mean',
+          sample_size: 3,
+          population_size: 3,
+          scores: [20, 10, 15],
+        },
         input_hash: 'a'.repeat(64),
-        source_snapshot: { row_count: 1 },
+        source_snapshot: { row_count: 3, usable_rows: 3, aggregation_method: 'arithmetic_mean' },
         source_snapshot_hash: 'b'.repeat(64),
-        lineage: [{ source_record: '70000000-0000-0000-0000-000000000799' }],
+        lineage: [
+          { source_record: '70000000-0000-0000-0000-000000000791' },
+          { source_record: '70000000-0000-0000-0000-000000000792' },
+          { source_record: '70000000-0000-0000-0000-000000000793' },
+        ],
         warnings: [],
         exclusions: [],
         equivalence: { probability: 'probability', impact: 'impact' },
@@ -37,11 +51,12 @@ async function run() {
 
   assert.equal(calculated.status, 'OFFICIAL_RECALCULATION_COMPLETED');
   assert.equal(calculated.summary.calculated, 1);
-  assert.equal(calculated.results[0].value, 20);
+  assert.equal(calculated.results[0].value, 15);
   assert.equal(calculated.results[0].snapshot_id, '70000000-0000-0000-0000-000000000798');
   assert.equal(persisted[0].source_code, 'risk_register_controls');
-  assert.equal(persisted[0].lineage.length, 1);
-  assert.deepEqual(persisted[0].components, { probability: 4, impact: 5 });
+  assert.equal(persisted[0].lineage.length, 3);
+  assert.deepEqual(persisted[0].components.scores, [20, 10, 15]);
+  assert.equal(persisted[0].details.aggregation_method, 'arithmetic_mean');
 
   const overrideCalls = [];
   await recalculateOfficialAnalytics(

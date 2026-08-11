@@ -78,7 +78,7 @@ const definitions = [
   ['F5_5_COMPLIANCE_WEIGHTED','Cumplimiento ponderado','compliance','C=sum(w_i*s_i)/sum(w_i)*100','weighted applicable assessment score', '%', 2, [{ name:'assessments', type:'array' }], (i,d)=>{ const r=compliance.weightedCompliance(i); return output(d,r.value,{coverage:r.coverage,evaluated:r.evaluated,applicable:r.applicable}); }, { assessments:[{status:'conform',weight:2},{status:'partial',weight:1},{status:'not_applicable',weight:1},{status:'non_conform',weight:1}] }, 62.5],
   ['F5_5_COVERAGE','Cobertura','compliance','evaluated/applicable*100','coverage ratio', '%', 2, [{name:'evaluated'},{name:'applicable'}], (i,d)=>output(d,compliance.coverage(i)), {evaluated:8,applicable:10}, 80],
   ['F5_5_READINESS','Readiness','readiness','100*(wc*C+we*E+wh*H+wa*A)','weighted readiness components', 'score', 2, [{name:'compliance'},{name:'evidence'},{name:'health'},{name:'actions'}], (i,d)=>output(d,readinessSvc.readiness(i)), {compliance:.8,evidence:.7,health:.9,actions:.6}, 77],
-  ['F5_5_INHERENT_RISK','Riesgo inherente','risk','P*I','probability times impact', 'score', 4, [{name:'probability'},{name:'impact'}], (i,d)=>output(d,risk.inherentRisk(i)), {probability:4,impact:5}, 20],
+  ['F5_5_INHERENT_RISK','Riesgo inherente','risk','mean(P_i*I_i)','arithmetic mean of usable tenant portfolio inherent risk scores', 'score', 4, [{name:'risks',type:'array'}], (i,d)=>{ const r=risk.inherentRisk(i); return output(d,r.value ?? r,{aggregation_method:r.aggregation_method||'single_risk',sample_size:r.sample_size??1,population_size:r.population_size??1,scores:r.scores||[r],risks:r.risks||[]}); }, {risks:[{source_record:'risk-a',probability:4,impact:5},{source_record:'risk-b',probability:2,impact:5},{source_record:'risk-c',probability:3,impact:5}],aggregation_method:'arithmetic_mean',population_size:3}, 15, {version:2}],
   ['F5_5_RESIDUAL_RISK','Riesgo residual','risk','Ri*(1-Ec)','inherent risk adjusted by control effectiveness', 'score', 4, [{name:'inherentRisk'},{name:'controlEffectiveness'}], (i,d)=>output(d,risk.residualRisk(i)), {inherentRisk:20,controlEffectiveness:.65}, 7],
   ['F5_5_COMBINED_EFFECTIVENESS','Efectividad combinada','control','1-prod(1-Ej)','complement product with dependency', 'ratio', 4, [{name:'effectivenesses'}], (i,d)=>output(d,controls.combinedEffectiveness(i)), {effectivenesses:[.4,.5],dependencyFactor:.9}, .63],
   ['F5_5_CONTROL_EFFECTIVENESS','Efectividad de control','control','wd*D+wi*I+wo*O+we*E','weighted control dimensions', 'ratio', 4, [{name:'design'},{name:'implementation'},{name:'operation'},{name:'evidence'}], (i,d)=>output(d,controls.controlEffectiveness(i)), {design:.8,implementation:.7,operation:.9,evidence:.6}, .75],
@@ -131,9 +131,9 @@ const definitions = [
 ];
 
 function buildDefinition(row) {
-  const [formula_code, display_name, category, expression, methodology, unit, precision, variables, execute, normalInputs, normalExpected] = row;
+  const [formula_code, display_name, category, expression, methodology, unit, precision, variables, execute, normalInputs, normalExpected, options = {}] = row;
   const definition = {
-    formula_code, display_name, category, version: 1, expression, methodology, variables: variables.map((variable) => !variable.unit ? { ...variable, unit: 'declared_input_unit' } : variable),
+    formula_code, display_name, category, version: options.version || 1, expression, methodology, variables: variables.map((variable) => !variable.unit ? { ...variable, unit: 'declared_input_unit' } : variable),
     units: { output: unit }, source_contract: getSourceCodeForFormula(formula_code), frequency: 'on_demand', minimum_sample_size: 1,
     null_policy: 'reject_required_nulls', zero_division_policy: 'return_not_calculable_or_error_by_formula',
     rounding_policy: 'half_up', precision, thresholds: [], confidence_method: category === 'statistics' ? 'formula_specific' : 'not_applicable',
@@ -160,6 +160,7 @@ function buildTests(formula_code, normalInputs, normalExpected, unit) {
 function zeroCase(code, inputs) {
   const clone = JSON.parse(JSON.stringify(inputs));
   if (code === 'F5_5_COVERAGE') return { inputs: { ...clone, applicable: 0 }, expectError: true };
+  if (code === 'F5_5_INHERENT_RISK') return { inputs: { ...clone, risks: [] }, expectError: true };
   if (code === 'F5_5_PERCENT_VARIATION') return { inputs: { ...clone, previous: 0 }, expected: null };
   if (code === 'F5_5_MONTE_CARLO') return { inputs: { ...clone, frequency: { type: 'fixed', value: 0 } }, expected: 0 };
   return { inputs: clone, expected: null, expectError: false };
