@@ -58,6 +58,8 @@ const MODULES = [
   ['Incidentes', '/incidentes', 'incidents'],
 ] as const;
 
+const GRC_OFFICIAL_PRIORITY_CODES = ['RISK-INHERENT'] as const;
+
 function displayValue(value: unknown) {
   if (value === null || value === undefined || value === '') return 'Sin datos';
   if (typeof value === 'number') return Number.isFinite(value) ? value.toLocaleString('es-CL') : 'Sin medición';
@@ -191,7 +193,7 @@ export default function GrcPortal() {
             )}
 
 
-            <div className="mt-6"><OfficialAnalyticsPanel title="Indicadores funcionales oficiales del portal GRC" limit={8} /></div>
+            <div className="mt-6"><OfficialAnalyticsPanel title="Indicadores funcionales oficiales del portal GRC" limit={8} priorityCodes={[...GRC_OFFICIAL_PRIORITY_CODES]} /></div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {blocks.map(({ label, href, block }) => (
