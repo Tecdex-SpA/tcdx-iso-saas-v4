@@ -1,0 +1,17 @@
+{
+  "tenant_2_admin_catalog": {"http":200,"total":22},
+  "tenant_2_auditor_catalog": {"http":200,"total":22},
+  "tenant_2_auditor_role": "auditor",
+  "protected_mutation": {
+    "action": "publish Tenant 2 official snapshot",
+    "actor": "Tenant 2 auditor",
+    "http": 403,
+    "modified": false
+  },
+  "cross_tenant_snapshot_mutations": [
+    {"actor":"Tenant 2 admin","target":"Tenant 1 snapshot","http":404,"modified":false},
+    {"actor":"Tenant 1 admin","target":"Tenant 2 snapshot","http":404,"modified":false}
+  ],
+  "rbac_result": "PASS",
+  "snapshot_mutation_isolation": "PASS"
+}

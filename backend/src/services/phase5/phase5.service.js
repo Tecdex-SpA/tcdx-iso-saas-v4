@@ -1787,39 +1787,64 @@ async function persistOfficialCalculation(scope, result, requestId = null) {
   };
 }
 
-async function getOfficialCalculationExplanation(scope, runId) {
+async function requireTenantCalculationRun(scope, runId) {
   const tenantId = tenantIdFrom(scope);
-  if (!runId || typeof runId !== 'string') throw badRequest('INVALID_CALCULATION_RUN', 'calculation_run_id requerido.');
-  if (UUID_RE.test(runId) && await tableExists(pool, 'calculation_explanations')) {
+  const calculationRunId = assertUuid(runId, 'calculation_run_id');
+  const run = (await pool.query(
+    `SELECT id, formula_code, run_status, input_hash, output_hash, source_snapshot_hash, started_at, completed_at, metadata
+     FROM calculation_runs
+     WHERE tenant_id=$1::uuid AND id=$2::uuid
+     LIMIT 1`,
+    [tenantId, calculationRunId]
+  )).rows[0];
+  if (!run) {
+    throw new Phase5Error('PHASE5_CALCULATION_RUN_NOT_FOUND', 'Calculo oficial no encontrado.', 404);
+  }
+  return { tenantId, calculationRunId, run };
+}
+
+async function getOfficialCalculationExplanation(scope, runId) {
+  const { tenantId, calculationRunId, run } = await requireTenantCalculationRun(scope, runId);
+  if (await tableExists(pool, 'calculation_explanations')) {
     const row = (await pool.query(
       `SELECT ce.explanation_type, ce.explanation, ce.variables, ce.metadata, cr.formula_code, cr.run_status, cr.started_at, cr.completed_at
        FROM calculation_explanations ce
        JOIN calculation_runs cr ON cr.id = ce.run_id AND cr.tenant_id = ce.tenant_id
        WHERE ce.tenant_id=$1::uuid AND ce.run_id=$2::uuid
        ORDER BY ce.created_at ASC LIMIT 1`,
-      [tenantId, runId]
+      [tenantId, calculationRunId]
     )).rows[0];
-    if (row) return { calculation_run_id: runId, status: 'available', ...row };
+    if (row) return { calculation_run_id: calculationRunId, status: 'available', ...row };
   }
-  return { calculation_run_id: runId, status: 'available', explanation_type: 'formula', explanation: 'Explicacion oficial disponible en el payload del calculo.', variables: {}, metadata: { package: 'phase5_5_package3', persisted_history: false } };
+  return {
+    calculation_run_id: calculationRunId,
+    status: 'available',
+    explanation_type: 'formula',
+    explanation: 'Explicacion oficial disponible en el payload del calculo.',
+    variables: {},
+    formula_code: run.formula_code,
+    run_status: run.run_status,
+    started_at: run.started_at,
+    completed_at: run.completed_at,
+    metadata: { package: 'phase5_5_package3', persisted_history: false },
+  };
 }
 
 async function getOfficialCalculationLineage(scope, runId) {
-  const tenantId = tenantIdFrom(scope);
-  if (!runId || typeof runId !== 'string') throw badRequest('INVALID_CALCULATION_RUN', 'calculation_run_id requerido.');
-  if (UUID_RE.test(runId) && await tableExists(pool, 'calculation_explanations')) {
+  const { tenantId, calculationRunId, run } = await requireTenantCalculationRun(scope, runId);
+  if (await tableExists(pool, 'calculation_explanations')) {
     const row = (await pool.query(
       `SELECT ce.lineage, ce.metadata, cr.formula_code, cr.run_status, cr.input_hash, cr.output_hash, cr.source_snapshot_hash, cr.started_at, cr.completed_at
        FROM calculation_explanations ce
        JOIN calculation_runs cr ON cr.id = ce.run_id AND cr.tenant_id = ce.tenant_id
        WHERE ce.tenant_id=$1::uuid AND ce.run_id=$2::uuid
        ORDER BY ce.created_at ASC LIMIT 1`,
-      [tenantId, runId]
+      [tenantId, calculationRunId]
     )).rows[0];
-    if (row) return { calculation_run_id: runId, status: 'available', ...row };
+    if (row) return { calculation_run_id: calculationRunId, status: 'available', ...row };
   }
   return {
-    calculation_run_id: runId,
+    calculation_run_id: calculationRunId,
     status: 'available',
     lineage: [
       { step: 'source_contract', status: 'resolved_by_official_service' },
@@ -1827,6 +1852,13 @@ async function getOfficialCalculationLineage(scope, runId) {
       { step: 'formula_version', status: 'official_registry' },
       { step: 'calculation_run', status: 'dto_emitted' },
     ],
+    formula_code: run.formula_code,
+    run_status: run.run_status,
+    input_hash: run.input_hash,
+    output_hash: run.output_hash,
+    source_snapshot_hash: run.source_snapshot_hash,
+    started_at: run.started_at,
+    completed_at: run.completed_at,
     metadata: { package: 'phase5_5_package3', persisted_history: false },
   };
 }
