@@ -131,6 +131,34 @@ async function tableExists(client, tableName) {
   return Boolean(result.rows[0]?.regclass);
 }
 
+function assertSqlIdentifier(identifier, label = 'identifier') {
+  const value = String(identifier || '').trim();
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+    throw new Phase5Error('PHASE5_INVALID_SQL_IDENTIFIER', `${label} invalido.`, 500);
+  }
+  return value;
+}
+
+async function columnExists(client, tableName, columnName) {
+  assertSqlIdentifier(tableName, 'table_name');
+  assertSqlIdentifier(columnName, 'column_name');
+  const result = await client.query(
+    `SELECT 1
+     FROM information_schema.columns
+     WHERE table_schema='public' AND table_name=$1 AND column_name=$2
+     LIMIT 1`,
+    [tableName, columnName]
+  );
+  return result.rowCount > 0;
+}
+
+async function firstExistingColumn(client, tableName, columnNames = []) {
+  for (const columnName of columnNames) {
+    if (await columnExists(client, tableName, columnName)) return columnName;
+  }
+  return null;
+}
+
 async function recordLineageEdge(scope, edge = {}) {
   const tenantId = typeof scope === 'string' ? assertUuid(scope, 'tenant_id') : tenantIdFrom(scope);
   const fromType = text(edge.fromType || edge.from_type);
@@ -1626,6 +1654,56 @@ async function sumWhere(tableName, column, tenantId, whereSql = 'TRUE', params =
   return result.rows[0]?.total === null ? null : Number(result.rows[0]?.total || 0);
 }
 
+async function buildReportingOverviewBlock(tenantId, now, deps = {}) {
+  const countRows = deps.countWhere || countWhere;
+  const pickColumn = deps.firstExistingColumn || ((tableName, columns) => firstExistingColumn(pool, tableName, columns));
+  const generationStatusColumn = await pickColumn('report_generations', ['status', 'generation_status', 'state']);
+  const scheduleStatusColumn = await pickColumn('report_schedules', ['status', 'schedule_status', 'state']);
+  const generations = await countRows('report_generations', tenantId);
+  const schedules = scheduleStatusColumn
+    ? await countRows('report_schedules', tenantId, `${assertSqlIdentifier(scheduleStatusColumn)}='active'`)
+    : await countRows('report_schedules', tenantId);
+  const failed = generationStatusColumn
+    ? await countRows('report_generations', tenantId, `${assertSqlIdentifier(generationStatusColumn)}='failed'`)
+    : 0;
+  const warnings = [];
+  if (failed) warnings.push('Existen generaciones de reporte fallidas.');
+  if (!generationStatusColumn && generations) warnings.push('Reporting sin columna de estado; se reporta volumen sin clasificar fallos.');
+  if (!scheduleStatusColumn && schedules) warnings.push('Programaciones de reporte sin columna de estado; se reporta volumen total.');
+  return {
+    status: failed ? 'attention' : generations ? 'ok' : 'unmeasured',
+    data: generations ? { generations, scheduled: schedules, failed } : { generations: null, scheduled: schedules || null, failed: null },
+    freshness: generations ? 'current' : 'unknown',
+    trust: { status: failed ? 'attention' : generations ? 'acceptable' : 'unknown', score: generations ? 85 : null },
+    source_count: generations || schedules || 0,
+    warnings,
+    last_updated_at: now,
+  };
+}
+
+async function buildDataTrustOverviewBlock(tenantId, now, deps = {}) {
+  const countRows = deps.countWhere || countWhere;
+  const pickColumn = deps.firstExistingColumn || ((tableName, columns) => firstExistingColumn(pool, tableName, columns));
+  const trustStatusColumn = await pickColumn('data_trust_scores', ['trust_status', 'status']);
+  const rows = await countRows('data_trust_scores', tenantId);
+  const untrusted = trustStatusColumn
+    ? await countRows('data_trust_scores', tenantId, `${assertSqlIdentifier(trustStatusColumn)} IN ('untrusted','unknown')`)
+    : 0;
+  const warnings = [];
+  if (untrusted) warnings.push('Existen scores no confiables o desconocidos.');
+  if (!rows) warnings.push('Sin scores de confianza registrados.');
+  if (rows && !trustStatusColumn) warnings.push('Data Trust sin columna de estado; se reporta cobertura sin clasificar confianza.');
+  return {
+    status: rows ? (untrusted ? 'attention' : 'ok') : 'unmeasured',
+    data: rows ? { scores: rows, untrusted } : null,
+    freshness: rows ? 'current' : 'unknown',
+    trust: { status: untrusted ? 'attention' : rows ? 'acceptable' : 'unknown', score: rows ? Math.round(((rows - (untrusted || 0)) / Math.max(rows, 1)) * 100) : null },
+    source_count: rows || 0,
+    warnings,
+    last_updated_at: now,
+  };
+}
+
 function statusForCount(value, warningMessage) {
   if (value === null) return { status: 'unmeasured', warnings: ['Sin datos configurados.'] };
   if (Number(value) > 0) return { status: 'attention', warnings: [warningMessage] };
@@ -1757,7 +1835,17 @@ async function getGrcOverview(scope, requestId = null) {
   const tenantId = tenantIdFrom(scope);
   const now = new Date().toISOString();
   const tenantBlock = safeBlock('tenant', async () => {
-    const tenant = (await queryRows(`SELECT id, name, service_status, created_at, updated_at FROM tenants WHERE id=$1::uuid LIMIT 1`, [tenantId]))[0];
+    const tenant = (await queryRows(
+      `SELECT id,
+              name,
+              to_jsonb(t)->>'service_status' AS service_status,
+              created_at,
+              NULLIF(to_jsonb(t)->>'updated_at','')::timestamptz AS updated_at
+       FROM tenants t
+       WHERE id=$1::uuid
+       LIMIT 1`,
+      [tenantId]
+    ))[0];
     return {
       status: tenant ? 'ok' : 'error',
       data: tenant || null,
@@ -1837,32 +1925,11 @@ async function getGrcOverview(scope, requestId = null) {
     };
   });
   const reportingBlock = safeBlock('reporting', async () => {
-    const generations = await countWhere('report_generations', tenantId);
-    const schedules = await countWhere('report_schedules', tenantId, `status='active'`);
-    const failed = await countWhere('report_generations', tenantId, `status='failed'`);
-    return {
-      status: failed ? 'attention' : generations ? 'ok' : 'unmeasured',
-      data: generations ? { generations, scheduled: schedules, failed } : { generations: null, scheduled: schedules || null, failed: null },
-      freshness: generations ? 'current' : 'unknown',
-      trust: { status: failed ? 'attention' : generations ? 'acceptable' : 'unknown', score: generations ? 85 : null },
-      source_count: generations || schedules || 0,
-      warnings: failed ? ['Existen generaciones de reporte fallidas.'] : [],
-      last_updated_at: now,
-    };
+    return buildReportingOverviewBlock(tenantId, now);
   });
   const simpleBlocks = {
     data_trust: safeBlock('data_trust', async () => {
-      const rows = await countWhere('data_trust_scores', tenantId);
-      const untrusted = await countWhere('data_trust_scores', tenantId, `trust_status IN ('untrusted','unknown')`);
-      return {
-        status: rows ? (untrusted ? 'attention' : 'ok') : 'unmeasured',
-        data: rows ? { scores: rows, untrusted } : null,
-        freshness: rows ? 'current' : 'unknown',
-        trust: { status: untrusted ? 'attention' : rows ? 'acceptable' : 'unknown', score: rows ? Math.round(((rows - (untrusted || 0)) / Math.max(rows, 1)) * 100) : null },
-        source_count: rows || 0,
-        warnings: untrusted ? ['Existen scores no confiables o desconocidos.'] : rows ? [] : ['Sin scores de confianza registrados.'],
-        last_updated_at: now,
-      };
+      return buildDataTrustOverviewBlock(tenantId, now);
     }),
     surveys: safeBlock('surveys', async () => {
       const active = await countWhere('assessment_campaigns', tenantId, `status IN ('active','launched')`);
@@ -2021,4 +2088,10 @@ module.exports = {
   approveReportGeneration,
   createReportSchedule,
   updateReportSchedule,
+  _test: {
+    assertSqlIdentifier,
+    buildDataTrustOverviewBlock,
+    buildReportingOverviewBlock,
+    firstExistingColumn,
+  },
 };

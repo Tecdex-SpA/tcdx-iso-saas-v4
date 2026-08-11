@@ -1,6 +1,6 @@
 {
   "tenant": "tenant-1",
-  "route": "/bi",
+  "route": "/grc",
   "network": [
     {
       "url": "/api/me/modules",
@@ -450,6 +450,790 @@
         "job_title": null,
         "avatar": "1782228821112-alfonso.png",
         "created_at": "2026-06-09T18:36:43.622Z"
+      }
+    },
+    {
+      "url": "/api/grc/overview",
+      "method": "GET",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "ok": true,
+        "data": {
+          "tenant": {
+            "status": "error",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "tenant: column \"updated_at\" does not exist"
+            ],
+            "last_updated_at": null
+          },
+          "commercial": {
+            "status": "ok",
+            "data": {
+              "subscription": {
+                "id": "8abcb8a2-c299-447f-acdd-7081510f63f9",
+                "tenant_id": "70000000-0000-0000-0000-000000000701",
+                "plan_version_id": "5f10adae-dc61-4596-84f4-94dccf148b27",
+                "plan_key": "enterprise",
+                "status": "active",
+                "started_at": "2026-07-29T16:44:23.387Z",
+                "ended_at": null,
+                "version": 1,
+                "created_by": "fe817e07-3a80-4fa9-8175-05be003b140a",
+                "created_at": "2026-07-29T16:44:23.387Z",
+                "updated_at": "2026-07-29T16:44:23.387Z",
+                "metadata": {
+                  "change_preview": {
+                    "tenant_id": "70000000-0000-0000-0000-000000000701",
+                    "effective_at": "2026-07-29T16:44:23.387Z",
+                    "target_limits": {
+                      "active_users": {
+                        "limit": 25,
+                        "enforcement": "block"
+                      },
+                      "storage_bytes": {
+                        "limit": 10737418240,
+                        "enforcement": "block"
+                      },
+                      "evidence_files": {
+                        "limit": 5000,
+                        "enforcement": "block"
+                      },
+                      "exports_monthly": {
+                        "limit": 50,
+                        "enforcement": "block"
+                      },
+                      "imports_monthly": {
+                        "limit": 25,
+                        "enforcement": "block"
+                      },
+                      "premium_modules": {
+                        "limit": 6,
+                        "enforcement": "block"
+                      },
+                      "active_standards": {
+                        "limit": 3,
+                        "enforcement": "block"
+                      },
+                      "api_calls_monthly": {
+                        "limit": 25000,
+                        "enforcement": "block"
+                      },
+                      "ai_requests_monthly": {
+                        "limit": 500,
+                        "enforcement": "block"
+                      },
+                      "external_lookups_monthly": {
+                        "limit": 250,
+                        "enforcement": "block"
+                      }
+                    },
+                    "previous_limits": {
+                      "active_users": {
+                        "limit": 25,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 25,
+                        "enforcement": "block",
+                        "resource_key": "active_users",
+                        "warning_threshold": 0.8
+                      },
+                      "storage_bytes": {
+                        "limit": 10737418240,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 10737418240,
+                        "enforcement": "warn",
+                        "resource_key": "storage_bytes",
+                        "warning_threshold": 0.8
+                      },
+                      "evidence_files": {
+                        "limit": 5000,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 5000,
+                        "enforcement": "warn",
+                        "resource_key": "evidence_files",
+                        "warning_threshold": 0.8
+                      },
+                      "exports_monthly": {
+                        "limit": 50,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 50,
+                        "enforcement": "block",
+                        "resource_key": "exports_monthly",
+                        "warning_threshold": 0.8
+                      },
+                      "imports_monthly": {
+                        "limit": 25,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 25,
+                        "enforcement": "block",
+                        "resource_key": "imports_monthly",
+                        "warning_threshold": 0.8
+                      },
+                      "premium_modules": {
+                        "limit": 6,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 6,
+                        "enforcement": "block",
+                        "resource_key": "premium_modules",
+                        "warning_threshold": 0.8
+                      },
+                      "active_standards": {
+                        "limit": 3,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 3,
+                        "enforcement": "block",
+                        "resource_key": "active_standards",
+                        "warning_threshold": 0.8
+                      },
+                      "api_calls_monthly": {
+                        "limit": 25000,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 25000,
+                        "enforcement": "warn",
+                        "resource_key": "api_calls_monthly",
+                        "warning_threshold": 0.8
+                      },
+                      "ai_requests_monthly": {
+                        "limit": 500,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 500,
+                        "enforcement": "block",
+                        "resource_key": "ai_requests_monthly",
+                        "warning_threshold": 0.8
+                      },
+                      "external_lookups_monthly": {
+                        "limit": 250,
+                        "usage": 0,
+                        "exhausted": false,
+                        "remaining": 250,
+                        "enforcement": "block",
+                        "resource_key": "external_lookups_monthly",
+                        "warning_threshold": 0.8
+                      }
+                    },
+                    "target_plan_key": "enterprise",
+                    "affected_modules": [
+                      "ai_compliance",
+                      "core",
+                      "core",
+                      "grc_core",
+                      "integrated_grc",
+                      "operations_grc",
+                      "operations_grc",
+                      "risk_manager",
+                      "premium_reports",
+                      "risk_manager",
+                      "integrated_grc",
+                      "audit_workpapers"
+                    ],
+                    "current_plan_key": "legacy",
+                    "post_change_mode": "active",
+                    "required_actions": [],
+                    "lost_capabilities": [],
+                    "exceeded_resources": [],
+                    "gained_capabilities": []
+                  }
+                },
+                "plan_display_name": "Enterprise",
+                "version_number": 1,
+                "plan_effective_from": "2026-07-29T16:02:36.251Z"
+              },
+              "health": {
+                "tenant_id": "70000000-0000-0000-0000-000000000701",
+                "health": {
+                  "score": 100,
+                  "status": "healthy",
+                  "factors": [
+                    {
+                      "key": "subscription_status",
+                      "status": "active",
+                      "weight": 25
+                    },
+                    {
+                      "key": "limit_pressure",
+                      "status": 0,
+                      "weight": 20
+                    },
+                    {
+                      "key": "module_activation_completion",
+                      "status": 13,
+                      "weight": 20
+                    }
+                  ],
+                  "calculated_at": "2026-08-10T23:48:41.345487+00:00",
+                  "recommended_actions": []
+                }
+              }
+            },
+            "freshness": "current",
+            "trust": {
+              "status": "trusted",
+              "score": 95
+            },
+            "source_count": 1,
+            "warnings": [],
+            "last_updated_at": "2026-07-29T16:44:23.387Z"
+          },
+          "metrics": {
+            "status": "attention",
+            "data": {
+              "definitions": 51,
+              "measurements": 155,
+              "trusted_measurements": null,
+              "warning_measurements": 283
+            },
+            "freshness": "stale",
+            "trust": {
+              "status": "attention",
+              "score": 0
+            },
+            "source_count": 155,
+            "warnings": [
+              "Existen mediciones stale, rechazadas o sin freshness confiable."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "losses": {
+            "status": "attention",
+            "data": {
+              "open": 2,
+              "confirmed": 2,
+              "gross_loss": 200000,
+              "recoveries": 50000,
+              "net_loss": 150000
+            },
+            "freshness": "current",
+            "trust": {
+              "status": "acceptable",
+              "score": 80
+            },
+            "source_count": 2,
+            "warnings": [
+              "Existen eventos de pérdida abiertos o en revisión."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "assurance": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin ejecuciones de assurance registradas."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "reporting": {
+            "status": "error",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "reporting: column \"status\" does not exist"
+            ],
+            "last_updated_at": null
+          },
+          "data_trust": {
+            "status": "error",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "data_trust: column \"trust_status\" does not exist"
+            ],
+            "last_updated_at": null
+          },
+          "surveys": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "bi": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin dashboards publicados."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "compliance": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin datos configurados."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "risks": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin datos configurados."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "controls": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin datos configurados."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "evidence": {
+            "status": "ok",
+            "data": {
+              "records": 1
+            },
+            "freshness": "current",
+            "trust": {
+              "status": "acceptable",
+              "score": 75
+            },
+            "source_count": 1,
+            "warnings": [],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "audits": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin datos configurados."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "actions": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin datos configurados."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "suppliers": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin datos configurados."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "incidents": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin datos configurados."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "continuity": {
+            "status": "unmeasured",
+            "data": null,
+            "freshness": "unknown",
+            "trust": {
+              "status": "unknown",
+              "score": null
+            },
+            "source_count": 0,
+            "warnings": [
+              "Sin datos configurados."
+            ],
+            "last_updated_at": "2026-08-10T23:48:41.329Z"
+          },
+          "official_calculations": {
+            "compliance": {
+              "value": null,
+              "unit": "%",
+              "status": "unmeasured",
+              "formula_code": "F5_5_COMPLIANCE_WEIGHTED",
+              "formula_version": 1,
+              "period": {
+                "generated_at": "2026-08-10T23:48:41.329Z"
+              },
+              "coverage": null,
+              "trust_score": null,
+              "trust_status": "unknown",
+              "source_status": "source_unavailable",
+              "warnings": [
+                "Overview sin dataset de cumplimiento evaluado."
+              ],
+              "calculation_run_id": "b5d19067-e7cb-4fc1-96c9-01b057b78ab0",
+              "explanation_url": "/api/grc/official/calculations/b5d19067-e7cb-4fc1-96c9-01b057b78ab0/explanation",
+              "lineage_url": "/api/grc/official/calculations/b5d19067-e7cb-4fc1-96c9-01b057b78ab0/lineage",
+              "explanation": "Overview sin dataset de cumplimiento evaluado.",
+              "components": {},
+              "lineage": []
+            },
+            "control_effectiveness": {
+              "value": null,
+              "unit": "ratio",
+              "status": "unmeasured",
+              "formula_code": "F5_5_CONTROL_EFFECTIVENESS",
+              "formula_version": 1,
+              "period": {
+                "generated_at": "2026-08-10T23:48:41.329Z"
+              },
+              "coverage": null,
+              "trust_score": null,
+              "trust_status": "unknown",
+              "source_status": "source_unavailable",
+              "warnings": [
+                "Overview sin dimensiones oficiales de controles."
+              ],
+              "calculation_run_id": "74318940-2328-4179-90b9-81aac9e03ab2",
+              "explanation_url": "/api/grc/official/calculations/74318940-2328-4179-90b9-81aac9e03ab2/explanation",
+              "lineage_url": "/api/grc/official/calculations/74318940-2328-4179-90b9-81aac9e03ab2/lineage",
+              "explanation": "Overview sin dimensiones oficiales de controles.",
+              "components": {},
+              "lineage": []
+            },
+            "actions": {
+              "value": 0,
+              "unit": "%",
+              "status": "completed",
+              "formula_code": "F5_5_WEIGHTED_PROGRESS",
+              "formula_version": 1,
+              "period": {
+                "generated_at": "2026-08-10T23:48:41.329Z"
+              },
+              "coverage": null,
+              "trust_score": 12,
+              "trust_status": "untrusted",
+              "source_status": "source_unavailable",
+              "warnings": [
+                "Sin datos configurados."
+              ],
+              "calculation_run_id": "0710976d-d8a4-43fc-9495-a49ffec4ece2",
+              "explanation_url": "/api/grc/official/calculations/0710976d-d8a4-43fc-9495-a49ffec4ece2/explanation",
+              "lineage_url": "/api/grc/official/calculations/0710976d-d8a4-43fc-9495-a49ffec4ece2/lineage",
+              "explanation": "Avance ponderado calculado con weighted progress.",
+              "details": {},
+              "components": {},
+              "lineage": [],
+              "input_hash": "8e23120420509b4ee82cfc2f0a22cc6b3132d8e8eec647c2509aa5c76a5e8e66"
+            },
+            "readiness": {
+              "value": null,
+              "unit": "score",
+              "status": "unmeasured",
+              "formula_code": "F5_5_READINESS",
+              "formula_version": 1,
+              "period": {
+                "generated_at": "2026-08-10T23:48:41.329Z"
+              },
+              "coverage": null,
+              "trust_score": null,
+              "trust_status": "unknown",
+              "source_status": "ready",
+              "warnings": [
+                "Readiness incompleto en overview oficial."
+              ],
+              "calculation_run_id": "0db99f26-e417-4115-8c10-1cd57148977b",
+              "explanation_url": "/api/grc/official/calculations/0db99f26-e417-4115-8c10-1cd57148977b/explanation",
+              "lineage_url": "/api/grc/official/calculations/0db99f26-e417-4115-8c10-1cd57148977b/lineage",
+              "explanation": "Readiness incompleto en overview oficial.",
+              "components": {},
+              "lineage": [
+                {
+                  "source_record": null,
+                  "source_contract": "grc_readiness_operational_snapshot",
+                  "dataset_snapshot": null,
+                  "formula_version": null,
+                  "calculation_run": null
+                }
+              ]
+            },
+            "risk": {
+              "value": null,
+              "unit": "score",
+              "status": "unmeasured",
+              "formula_code": "F5_5_RESIDUAL_RISK",
+              "formula_version": 1,
+              "period": {
+                "generated_at": "2026-08-10T23:48:41.329Z"
+              },
+              "coverage": null,
+              "trust_score": null,
+              "trust_status": "unknown",
+              "source_status": "source_unavailable",
+              "warnings": [
+                "Overview sin riesgo residual oficial medido."
+              ],
+              "calculation_run_id": "96680026-d999-44e7-b8b0-c9dde1f18ff4",
+              "explanation_url": "/api/grc/official/calculations/96680026-d999-44e7-b8b0-c9dde1f18ff4/explanation",
+              "lineage_url": "/api/grc/official/calculations/96680026-d999-44e7-b8b0-c9dde1f18ff4/lineage",
+              "explanation": "Overview sin riesgo residual oficial medido.",
+              "components": {},
+              "lineage": []
+            },
+            "health": {
+              "value": null,
+              "unit": "score",
+              "status": "unmeasured",
+              "formula_code": "F5_5_GRC_HEALTH",
+              "formula_version": 1,
+              "period": {
+                "generated_at": "2026-08-10T23:48:41.329Z"
+              },
+              "coverage": null,
+              "trust_score": null,
+              "trust_status": "unknown",
+              "source_status": "ready",
+              "warnings": [
+                "GRC Health incompleto por componentes unmeasured."
+              ],
+              "calculation_run_id": "08612013-1dc3-4ec6-affc-aaa5436dc075",
+              "explanation_url": "/api/grc/official/calculations/08612013-1dc3-4ec6-affc-aaa5436dc075/explanation",
+              "lineage_url": "/api/grc/official/calculations/08612013-1dc3-4ec6-affc-aaa5436dc075/lineage",
+              "explanation": "GRC Health incompleto por componentes unmeasured.",
+              "components": {},
+              "lineage": [
+                {
+                  "source_record": null,
+                  "source_contract": "grc_health_components",
+                  "dataset_snapshot": null,
+                  "formula_version": null,
+                  "calculation_run": null
+                }
+              ]
+            },
+            "operational_excellence": {
+              "value": 15,
+              "status": "critical",
+              "components": {
+                "efficacy": null,
+                "efficiency": 0,
+                "stability": null,
+                "quality": 75,
+                "timeliness": 0,
+                "risk": null,
+                "compliance": null,
+                "actions": 0,
+                "dataTrust": 0
+              },
+              "health": {
+                "value": 21.75,
+                "unit": "score",
+                "status": "completed",
+                "formula_code": "F5_5_GRC_HEALTH",
+                "formula_version": 1,
+                "period": {
+                  "generated_at": "2026-08-10T23:48:41.329Z"
+                },
+                "coverage": null,
+                "trust_score": 89.7,
+                "trust_status": "trusted",
+                "source_status": "ready",
+                "warnings": [
+                  "Existen mediciones stale, rechazadas o sin freshness confiable."
+                ],
+                "calculation_run_id": "local-c5d95cc35ac9f513678a66434615da18",
+                "explanation_url": "/api/grc/official/calculations/local-c5d95cc35ac9f513678a66434615da18/explanation",
+                "lineage_url": "/api/grc/official/calculations/local-c5d95cc35ac9f513678a66434615da18/lineage",
+                "explanation": "GRC Health oficial con desglose R, C, A, E y Data Trust; componentes faltantes quedan unmeasured.",
+                "details": {},
+                "components": {
+                  "weights": {
+                    "risk": 0.2,
+                    "compliance": 0.25,
+                    "actions": 0.15,
+                    "evidence": 0.2,
+                    "dataTrust": 0.2
+                  },
+                  "values": {
+                    "risk": 0.15,
+                    "compliance": 0.15,
+                    "actions": 0,
+                    "evidence": 0.75,
+                    "dataTrust": 0
+                  }
+                },
+                "lineage": [
+                  {
+                    "source_record": null,
+                    "source_contract": "grc_health_components",
+                    "dataset_snapshot": null,
+                    "formula_version": null,
+                    "calculation_run": null
+                  }
+                ],
+                "input_hash": "99e91606a5d4b9e828b278bcc9759b43bfba848959d9681c5f390044b4c29086",
+                "health_status": "critical"
+              },
+              "snapshot": {
+                "period": {
+                  "generated_at": "2026-08-10T23:48:41.329Z"
+                },
+                "generated_at": "2026-08-10T23:48:41.346Z",
+                "formula_version": 1
+              },
+              "explanation": "Operational Excellence consolida eficacia, eficiencia, estabilidad, calidad, oportunidad, riesgo, cumplimiento, acciones y Data Trust."
+            }
+          },
+          "alerts": [
+            {
+              "block": "tenant",
+              "severity": "high",
+              "message": "tenant: column \"updated_at\" does not exist"
+            },
+            {
+              "block": "metrics",
+              "severity": "medium",
+              "message": "Existen mediciones stale, rechazadas o sin freshness confiable."
+            },
+            {
+              "block": "losses",
+              "severity": "medium",
+              "message": "Existen eventos de pérdida abiertos o en revisión."
+            },
+            {
+              "block": "assurance",
+              "severity": "medium",
+              "message": "Sin ejecuciones de assurance registradas."
+            },
+            {
+              "block": "reporting",
+              "severity": "high",
+              "message": "reporting: column \"status\" does not exist"
+            },
+            {
+              "block": "data_trust",
+              "severity": "high",
+              "message": "data_trust: column \"trust_status\" does not exist"
+            },
+            {
+              "block": "bi",
+              "severity": "medium",
+              "message": "Sin dashboards publicados."
+            },
+            {
+              "block": "compliance",
+              "severity": "medium",
+              "message": "Sin datos configurados."
+            },
+            {
+              "block": "risks",
+              "severity": "medium",
+              "message": "Sin datos configurados."
+            },
+            {
+              "block": "controls",
+              "severity": "medium",
+              "message": "Sin datos configurados."
+            },
+            {
+              "block": "audits",
+              "severity": "medium",
+              "message": "Sin datos configurados."
+            },
+            {
+              "block": "actions",
+              "severity": "medium",
+              "message": "Sin datos configurados."
+            },
+            {
+              "block": "suppliers",
+              "severity": "medium",
+              "message": "Sin datos configurados."
+            },
+            {
+              "block": "incidents",
+              "severity": "medium",
+              "message": "Sin datos configurados."
+            },
+            {
+              "block": "continuity",
+              "severity": "medium",
+              "message": "Sin datos configurados."
+            }
+          ],
+          "request_id": "web-1786405721147-06e4c55766643",
+          "generated_at": "2026-08-10T23:48:41.329Z"
+        },
+        "request_id": "web-1786405721147-06e4c55766643"
       }
     },
     {
@@ -2914,1471 +3698,7 @@
             }
           }
         ],
-        "request_id": "web-1786405720231-a18dafd05118b8"
-      }
-    },
-    {
-      "url": "/api/grc/official/analytics/catalog",
-      "method": "GET",
-      "status": 200,
-      "ok": true,
-      "body": {
-        "ok": true,
-        "data": [
-          {
-            "analytical_result_code": "compliance.weighted",
-            "result_code": "compliance.weighted",
-            "display_name": "Cumplimiento ponderado",
-            "domain": "compliance",
-            "entity_type": "requirement_assessment",
-            "metric_key": "compliance",
-            "formula_code": "F5_5_COMPLIANCE_WEIGHTED",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "weighted_average",
-            "dimensions": [
-              "standard",
-              "clause",
-              "domain",
-              "process",
-              "owner"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "standard",
-              "clause",
-              "domain",
-              "process",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "compliance_requirements_assessments",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "compliance.coverage",
-            "result_code": "compliance.coverage",
-            "display_name": "Cobertura de cumplimiento",
-            "domain": "compliance",
-            "entity_type": "requirement_assessment",
-            "metric_key": "coverage",
-            "formula_code": "F5_5_COVERAGE",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "standard",
-              "domain",
-              "process",
-              "owner"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "standard",
-              "domain",
-              "process",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "compliance_requirements_assessments",
-            "source_status": "available",
-            "latest_calculation_run": "c881c470-b95c-49d5-8d28-ce9d91704acc",
-            "latest_snapshot": "9702cc0c-6bfd-47e3-851b-3f81363b8c4c",
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "readiness.iso",
-            "result_code": "readiness.iso",
-            "display_name": "Readiness ISO",
-            "domain": "readiness",
-            "entity_type": "readiness_snapshot",
-            "metric_key": "readiness",
-            "formula_code": "F5_5_READINESS",
-            "formula_version": 1,
-            "unit": "score",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "weighted_score",
-            "dimensions": [
-              "standard",
-              "process",
-              "owner"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "standard",
-              "process",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "grc_readiness_operational_snapshot",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "risk.inherent",
-            "result_code": "risk.inherent",
-            "display_name": "Riesgo inherente",
-            "domain": "risk",
-            "entity_type": "risk",
-            "metric_key": "risk-inherent",
-            "formula_code": "F5_5_INHERENT_RISK",
-            "formula_version": 1,
-            "unit": "score",
-            "precision": 4,
-            "rounding_policy": "half_up",
-            "aggregation": "formula",
-            "dimensions": [
-              "risk",
-              "process",
-              "owner"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "risk",
-              "process",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "risk_register_controls",
-            "source_status": "available",
-            "latest_calculation_run": "6d761114-5058-4d19-8cc7-daa33489328e",
-            "latest_snapshot": "2fc5f57e-f5e6-485c-9834-9b4838c4452b",
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "risk.residual",
-            "result_code": "risk.residual",
-            "display_name": "Riesgo residual",
-            "domain": "risk",
-            "entity_type": "risk",
-            "metric_key": "risk-residual",
-            "formula_code": "F5_5_RESIDUAL_RISK",
-            "formula_version": 1,
-            "unit": "score",
-            "precision": 4,
-            "rounding_policy": "half_up",
-            "aggregation": "formula",
-            "dimensions": [
-              "risk",
-              "process",
-              "owner"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "risk",
-              "process",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "risk_register_controls",
-            "source_status": "available",
-            "latest_calculation_run": "18f39767-f449-43aa-a62b-c5ae3691332b",
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "risk.expected_loss",
-            "result_code": "risk.expected_loss",
-            "display_name": "Pérdida esperada de riesgo",
-            "domain": "risk",
-            "entity_type": "risk",
-            "metric_key": "risk-expected-loss",
-            "formula_code": "F5_5_EXPECTED_LOSS",
-            "formula_version": 1,
-            "unit": "currency",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "formula",
-            "dimensions": [
-              "risk",
-              "process",
-              "supplier"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "risk",
-              "process",
-              "supplier"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "loss_events_operational",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "control.effectiveness",
-            "result_code": "control.effectiveness",
-            "display_name": "Efectividad de control",
-            "domain": "control",
-            "entity_type": "control",
-            "metric_key": "control-effectiveness",
-            "formula_code": "F5_5_CONTROL_EFFECTIVENESS",
-            "formula_version": 1,
-            "unit": "ratio",
-            "precision": 4,
-            "rounding_policy": "half_up",
-            "aggregation": "weighted_score",
-            "dimensions": [
-              "control",
-              "risk",
-              "process"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "control",
-              "risk",
-              "process"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "control_assurance_evidence",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "control.combined_effectiveness",
-            "result_code": "control.combined_effectiveness",
-            "display_name": "Efectividad combinada",
-            "domain": "control",
-            "entity_type": "control_set",
-            "metric_key": "control-combined",
-            "formula_code": "F5_5_COMBINED_EFFECTIVENESS",
-            "formula_version": 1,
-            "unit": "ratio",
-            "precision": 4,
-            "rounding_policy": "half_up",
-            "aggregation": "complement_product",
-            "dimensions": [
-              "risk",
-              "process"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "risk",
-              "process"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "control_assurance_evidence",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "actions.progress",
-            "result_code": "actions.progress",
-            "display_name": "Avance ponderado de acciones",
-            "domain": "actions",
-            "entity_type": "action",
-            "metric_key": "actions-progress",
-            "formula_code": "F5_5_WEIGHTED_PROGRESS",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "weighted_average",
-            "dimensions": [
-              "owner",
-              "severity",
-              "status"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "owner",
-              "severity",
-              "status"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "audit_findings_actions",
-            "source_status": "available",
-            "latest_calculation_run": "a7681bc5-070e-40ec-a87d-dff6ffffa9fe",
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "actions.closure_rate",
-            "result_code": "actions.closure_rate",
-            "display_name": "Tasa de cierre de acciones",
-            "domain": "actions",
-            "entity_type": "action",
-            "metric_key": "actions-closure",
-            "formula_code": "F5_5_CLOSURE_RATE",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "owner",
-              "severity",
-              "status"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "owner",
-              "severity",
-              "status"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "audit_findings_actions",
-            "source_status": "available",
-            "latest_calculation_run": "a2fb1f5f-2f9b-498f-a206-fb2da01fe94c",
-            "latest_snapshot": "c577619e-73f6-4c21-b2e5-4e8ed4bb2cb4",
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "actions.overdue_rate",
-            "result_code": "actions.overdue_rate",
-            "display_name": "Índice de atraso",
-            "domain": "actions",
-            "entity_type": "action",
-            "metric_key": "actions-overdue",
-            "formula_code": "F5_5_OVERDUE_RATE",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "owner",
-              "severity",
-              "status"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "owner",
-              "severity",
-              "status"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "audit_findings_actions",
-            "source_status": "available",
-            "latest_calculation_run": "d872bc00-b898-41a0-8067-33203fe4ba46",
-            "latest_snapshot": "10739a88-2cf7-43bf-aaa4-be47970b777c",
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "health.grc",
-            "result_code": "health.grc",
-            "display_name": "GRC Health",
-            "domain": "health",
-            "entity_type": "health_score",
-            "metric_key": "health-grc",
-            "formula_code": "F5_5_GRC_HEALTH",
-            "formula_version": 1,
-            "unit": "score",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "health_score",
-            "dimensions": [
-              "component"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "component"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "grc_health_components",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "health.iso",
-            "result_code": "health.iso",
-            "display_name": "ISO Health",
-            "domain": "health",
-            "entity_type": "health_score",
-            "metric_key": "health-iso",
-            "formula_code": "F5_5_GRC_HEALTH",
-            "formula_version": 1,
-            "unit": "score",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "health_score",
-            "dimensions": [
-              "component"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "component"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "grc_health_components",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "operational_excellence.health",
-            "result_code": "operational_excellence.health",
-            "display_name": "Operational Excellence Health",
-            "domain": "health",
-            "entity_type": "health_score",
-            "metric_key": "operational-excellence",
-            "formula_code": "F5_5_GRC_HEALTH",
-            "formula_version": 1,
-            "unit": "score",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "health_score",
-            "dimensions": [
-              "component"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "component"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "grc_health_components",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "survey.score",
-            "result_code": "survey.score",
-            "display_name": "Score de encuesta",
-            "domain": "survey",
-            "entity_type": "survey_response",
-            "metric_key": "survey-score",
-            "formula_code": "F5_5_SURVEY_SCORE",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "weighted_score",
-            "dimensions": [
-              "campaign",
-              "dimension",
-              "section"
-            ],
-            "supported_periods": [
-              "campaign",
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "campaign",
-              "dimension",
-              "section"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "survey_response_scoring",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "survey.response_rate",
-            "result_code": "survey.response_rate",
-            "display_name": "Tasa de respuesta",
-            "domain": "survey",
-            "entity_type": "assessment_campaign",
-            "metric_key": "survey-response-rate",
-            "formula_code": "F5_5_RESPONSE_RATE",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "campaign",
-              "population"
-            ],
-            "supported_periods": [
-              "campaign",
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "campaign",
-              "population"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "survey_response_scoring",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "survey.dropout_rate",
-            "result_code": "survey.dropout_rate",
-            "display_name": "Tasa de abandono",
-            "domain": "survey",
-            "entity_type": "assessment_campaign",
-            "metric_key": "survey-dropout-rate",
-            "formula_code": "F5_5_DROPOUT_RATE",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "campaign",
-              "population"
-            ],
-            "supported_periods": [
-              "campaign",
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "campaign",
-              "population"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "survey_response_scoring",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "survey.cronbach",
-            "result_code": "survey.cronbach",
-            "display_name": "Alfa de Cronbach",
-            "domain": "survey",
-            "entity_type": "survey_dimension",
-            "metric_key": "survey-cronbach",
-            "formula_code": "F5_5_CRONBACH_ALPHA",
-            "formula_version": 1,
-            "unit": "ratio",
-            "precision": 4,
-            "rounding_policy": "half_up",
-            "aggregation": "statistical",
-            "dimensions": [
-              "campaign",
-              "dimension"
-            ],
-            "supported_periods": [
-              "campaign",
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "campaign",
-              "dimension"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "survey_response_scoring",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "assurance.score",
-            "result_code": "assurance.score",
-            "display_name": "Assurance Score",
-            "domain": "assurance",
-            "entity_type": "assurance_execution",
-            "metric_key": "assurance-score",
-            "formula_code": "F5_5_ASSURANCE_SCORE",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "weighted_score",
-            "dimensions": [
-              "test",
-              "control",
-              "risk",
-              "process"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "test",
-              "control",
-              "risk",
-              "process"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "assurance_test_results",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "assurance.sample_size",
-            "result_code": "assurance.sample_size",
-            "display_name": "Tamaño de muestra",
-            "domain": "assurance",
-            "entity_type": "assurance_population",
-            "metric_key": "assurance-sample-size",
-            "formula_code": "F5_5_SAMPLE_SIZE",
-            "formula_version": 1,
-            "unit": "count",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "statistical",
-            "dimensions": [
-              "test",
-              "population"
-            ],
-            "supported_periods": [
-              "on_demand",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "test",
-              "population"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "statistical_metric_measurements",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "loss.net",
-            "result_code": "loss.net",
-            "display_name": "Pérdida neta",
-            "domain": "loss",
-            "entity_type": "loss_event",
-            "metric_key": "loss-net",
-            "formula_code": "F5_5_NET_LOSS",
-            "formula_version": 1,
-            "unit": "currency",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "formula",
-            "dimensions": [
-              "currency",
-              "process",
-              "risk",
-              "supplier"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "currency",
-              "process",
-              "risk",
-              "supplier"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "loss_events_operational",
-            "source_status": "available",
-            "latest_calculation_run": "f9de890a-f429-41d2-93b9-73eb5dbbd805",
-            "latest_snapshot": "3c80ea22-7bbe-4117-b09e-967197c9f6e3",
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "loss.expected",
-            "result_code": "loss.expected",
-            "display_name": "Pérdida esperada",
-            "domain": "loss",
-            "entity_type": "loss_event",
-            "metric_key": "loss-expected",
-            "formula_code": "F5_5_EXPECTED_LOSS",
-            "formula_version": 1,
-            "unit": "currency",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "formula",
-            "dimensions": [
-              "currency",
-              "process",
-              "risk",
-              "supplier"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "currency",
-              "process",
-              "risk",
-              "supplier"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "loss_events_operational",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "loss.severity",
-            "result_code": "loss.severity",
-            "display_name": "Severidad de pérdidas",
-            "domain": "loss",
-            "entity_type": "loss_event",
-            "metric_key": "loss-severity",
-            "formula_code": "F5_5_LOSS_SEVERITY",
-            "formula_version": 1,
-            "unit": "currency",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "statistical",
-            "dimensions": [
-              "currency",
-              "process",
-              "risk",
-              "supplier"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "currency",
-              "process",
-              "risk",
-              "supplier"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "loss_events_operational",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "loss.var",
-            "result_code": "loss.var",
-            "display_name": "VaR de pérdidas",
-            "domain": "loss",
-            "entity_type": "loss_distribution",
-            "metric_key": "loss-var",
-            "formula_code": "F5_5_PARAMETRIC_VAR",
-            "formula_version": 1,
-            "unit": "currency",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "statistical",
-            "dimensions": [
-              "currency",
-              "process",
-              "risk"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "currency",
-              "process",
-              "risk"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "loss_events_operational",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "loss.monte_carlo",
-            "result_code": "loss.monte_carlo",
-            "display_name": "Monte Carlo de pérdidas",
-            "domain": "loss",
-            "entity_type": "loss_distribution",
-            "metric_key": "loss-monte-carlo",
-            "formula_code": "F5_5_MONTE_CARLO",
-            "formula_version": 1,
-            "unit": "currency",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "simulation",
-            "dimensions": [
-              "currency",
-              "process",
-              "risk"
-            ],
-            "supported_periods": [
-              "on_demand",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "currency",
-              "process",
-              "risk"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "loss_events_operational",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "continuity.availability",
-            "result_code": "continuity.availability",
-            "display_name": "Disponibilidad",
-            "domain": "continuity",
-            "entity_type": "continuity_test",
-            "metric_key": "continuity-availability",
-            "formula_code": "F5_5_AVAILABILITY",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 4,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "service",
-              "process"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "service",
-              "process"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "continuity_resilience_tests",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "continuity.mtbf",
-            "result_code": "continuity.mtbf",
-            "display_name": "MTBF",
-            "domain": "continuity",
-            "entity_type": "continuity_incident",
-            "metric_key": "continuity-mtbf",
-            "formula_code": "F5_5_MTBF",
-            "formula_version": 1,
-            "unit": "hours",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "statistical",
-            "dimensions": [
-              "service",
-              "process"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "service",
-              "process"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "continuity_resilience_tests",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "continuity.mttr",
-            "result_code": "continuity.mttr",
-            "display_name": "MTTR",
-            "domain": "continuity",
-            "entity_type": "continuity_incident",
-            "metric_key": "continuity-mttr",
-            "formula_code": "F5_5_MTTR",
-            "formula_version": 1,
-            "unit": "hours",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "statistical",
-            "dimensions": [
-              "service",
-              "process"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "service",
-              "process"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "continuity_resilience_tests",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "continuity.sla",
-            "result_code": "continuity.sla",
-            "display_name": "Cumplimiento SLA",
-            "domain": "continuity",
-            "entity_type": "continuity_case",
-            "metric_key": "continuity-sla",
-            "formula_code": "F5_5_SLA_COMPLIANCE",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "service",
-              "process"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "service",
-              "process"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "continuity_resilience_tests",
-            "source_status": "available",
-            "latest_calculation_run": "d278166a-48ee-49fb-a60a-9965b29fbb97",
-            "latest_snapshot": "ed3aa933-4fb9-484e-bde1-3908f9460449",
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "continuity.rto_gap",
-            "result_code": "continuity.rto_gap",
-            "display_name": "Brecha RTO",
-            "domain": "continuity",
-            "entity_type": "continuity_test",
-            "metric_key": "continuity-rto-gap",
-            "formula_code": "F5_5_RTO_GAP",
-            "formula_version": 1,
-            "unit": "hours",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "formula",
-            "dimensions": [
-              "service",
-              "process"
-            ],
-            "supported_periods": [
-              "test",
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "service",
-              "process"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "continuity_resilience_tests",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "continuity.rpo_gap",
-            "result_code": "continuity.rpo_gap",
-            "display_name": "Brecha RPO",
-            "domain": "continuity",
-            "entity_type": "continuity_test",
-            "metric_key": "continuity-rpo-gap",
-            "formula_code": "F5_5_RPO_GAP",
-            "formula_version": 1,
-            "unit": "hours",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "formula",
-            "dimensions": [
-              "service",
-              "process"
-            ],
-            "supported_periods": [
-              "test",
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "service",
-              "process"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "continuity_resilience_tests",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "asset.criticality",
-            "result_code": "asset.criticality",
-            "display_name": "Criticidad de activos",
-            "domain": "asset",
-            "entity_type": "asset",
-            "metric_key": "asset-criticality",
-            "formula_code": "F5_5_ASSET_CRITICALITY",
-            "formula_version": 1,
-            "unit": "score",
-            "precision": 4,
-            "rounding_policy": "half_up",
-            "aggregation": "weighted_score",
-            "dimensions": [
-              "asset",
-              "process",
-              "supplier"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "asset",
-              "process",
-              "supplier"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "asset_inventory_security",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "supplier.risk",
-            "result_code": "supplier.risk",
-            "display_name": "Riesgo de proveedor",
-            "domain": "supplier",
-            "entity_type": "supplier",
-            "metric_key": "supplier-risk",
-            "formula_code": "F5_5_SUPPLIER_RISK",
-            "formula_version": 1,
-            "unit": "score",
-            "precision": 4,
-            "rounding_policy": "half_up",
-            "aggregation": "weighted_score",
-            "dimensions": [
-              "supplier",
-              "criticality"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "supplier",
-              "criticality"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "supplier_tprm_assessments",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "data.completeness",
-            "result_code": "data.completeness",
-            "display_name": "Completitud de datos",
-            "domain": "data_quality",
-            "entity_type": "data_element",
-            "metric_key": "data-completeness",
-            "formula_code": "F5_5_COMPLETENESS",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "domain",
-              "owner"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "domain",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "data_quality_observations",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "data.accuracy",
-            "result_code": "data.accuracy",
-            "display_name": "Exactitud de datos",
-            "domain": "data_quality",
-            "entity_type": "data_element",
-            "metric_key": "data-accuracy",
-            "formula_code": "F5_5_ACCURACY",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "domain",
-              "owner"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "domain",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "data_quality_observations",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "data.consistency",
-            "result_code": "data.consistency",
-            "display_name": "Consistencia de datos",
-            "domain": "data_quality",
-            "entity_type": "data_element",
-            "metric_key": "data-consistency",
-            "formula_code": "F5_5_CONSISTENCY",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "domain",
-              "owner"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "domain",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "data_quality_observations",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "data.freshness",
-            "result_code": "data.freshness",
-            "display_name": "Freshness continuo",
-            "domain": "data_quality",
-            "entity_type": "data_element",
-            "metric_key": "data-freshness",
-            "formula_code": "F5_5_FRESHNESS_CONTINUOUS",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "decay",
-            "dimensions": [
-              "domain",
-              "owner"
-            ],
-            "supported_periods": [
-              "hour",
-              "day",
-              "month",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "domain",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "data_quality_observations",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          },
-          {
-            "analytical_result_code": "data.lineage_score",
-            "result_code": "data.lineage_score",
-            "display_name": "Lineage Score",
-            "domain": "data_quality",
-            "entity_type": "data_lineage",
-            "metric_key": "data-lineage-score",
-            "formula_code": "F5_5_LINEAGE_SCORE",
-            "formula_version": 1,
-            "unit": "%",
-            "precision": 2,
-            "rounding_policy": "half_up",
-            "aggregation": "ratio",
-            "dimensions": [
-              "domain",
-              "owner"
-            ],
-            "supported_periods": [
-              "month",
-              "quarter",
-              "year",
-              "custom"
-            ],
-            "available_filters": [
-              "period",
-              "tenant_id",
-              "domain",
-              "owner"
-            ],
-            "tenant_scope": "tenant_scoped",
-            "source_code": "data_lineage_observations",
-            "source_status": "source_unavailable",
-            "latest_calculation_run": null,
-            "latest_snapshot": null,
-            "trust_status": "unknown",
-            "publication_status": "published"
-          }
-        ],
-        "request_id": "web-1786405720231-e0ef53c3b35d9"
+        "request_id": "web-1786405721561-bff7e653ceb9f"
       }
     }
   ],

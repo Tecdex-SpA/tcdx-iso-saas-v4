@@ -48,6 +48,8 @@ const relevantApi = [
   '/api/metrics/official/dashboard',
   '/api/metrics/official/catalog',
   '/api/metrics/official/export',
+  '/api/grc/overview',
+  '/api/grc/official/analytics/catalog',
   '/api/health/dashboard',
   '/api/dashboard/',
   '/api/dashboard-controls/',
@@ -237,6 +239,23 @@ async function main() {
         }, null, 2)
       );
 
+      const beforeGrcNetworkLength = network.length;
+      await capturePage(
+        page,
+        '/grc',
+        path.join(artifactDir, '47_runtime_grc_current.png'),
+        'Portal GRC'
+      );
+      await fs.promises.writeFile(
+        path.join(artifactDir, '47_runtime_grc_current_network.json'),
+        JSON.stringify({
+          tenant: tenant.key,
+          route: '/grc',
+          network: sanitize(network.slice(beforeGrcNetworkLength)),
+          console_errors: consoleErrors,
+        }, null, 2)
+      );
+
       if (shouldRecalculate && tenant.writable) {
         const recalculateResult = await postOfficialRecalculate(context.request, token);
         await fs.promises.writeFile(
@@ -289,12 +308,14 @@ async function main() {
           '41_runtime_dashboard_kpi_current.png',
           '42_runtime_metricas_current.png',
           '43_runtime_bi_current.png',
+          '47_runtime_grc_current.png',
         ],
         network_files: [
           '40_runtime_admin_kpis_current_network.json',
           '41_runtime_dashboard_kpi_current_network.json',
           '42_runtime_metricas_current_network.json',
           '43_runtime_bi_current_network.json',
+          '47_runtime_grc_current_network.json',
           ...(shouldRecalculate && tenant.writable
             ? [
                 '44_runtime_dashboard_recalculate_response.json',

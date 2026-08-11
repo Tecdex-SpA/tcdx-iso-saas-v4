@@ -8,16 +8,15 @@
         "40_runtime_admin_kpis_current.png",
         "41_runtime_dashboard_kpi_current.png",
         "42_runtime_metricas_current.png",
-        "43_runtime_bi_current.png"
+        "43_runtime_bi_current.png",
+        "47_runtime_grc_current.png"
       ],
       "network_files": [
         "40_runtime_admin_kpis_current_network.json",
         "41_runtime_dashboard_kpi_current_network.json",
         "42_runtime_metricas_current_network.json",
         "43_runtime_bi_current_network.json",
-        "44_runtime_dashboard_recalculate_response.json",
-        "45_runtime_dashboard_kpi_after_recalculate_network.json",
-        "46_runtime_metricas_after_recalculate_network.json"
+        "47_runtime_grc_current_network.json"
       ],
       "console_errors": 0
     }
