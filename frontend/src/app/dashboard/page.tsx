@@ -39,6 +39,11 @@ const API_URL =
 
 type DashboardView = 'executive' | 'kpi' | 'iso';
 
+type KpiRecalculateNotice = {
+  type: 'success' | 'error';
+  message: string;
+};
+
 type EffectiveIsoHealthRow = {
   tenant_id?: string;
   iso: string;
@@ -268,6 +273,24 @@ type LatestSnapshot = {
   breakdown_json?: JsonValue;
 };
 
+type OfficialActionableComponent = {
+  component?: string;
+  label?: string;
+  reason?: string | null;
+  route_to_fix?: string | null;
+  action?: string | null;
+  required_capability?: string | null;
+};
+
+type OfficialActionableState = {
+  state?: string;
+  why?: string;
+  missing_components?: OfficialActionableComponent[];
+  route_to_fix?: string | null;
+  required_capability?: string | null;
+  expected_after_resolution?: string | null;
+};
+
 type KpiDashboardItem = {
   id: string;
   code: string;
@@ -412,6 +435,36 @@ function getSnapshotOfficialState(snapshot?: LatestSnapshot | null): string {
   return normalizeOfficialState(
     breakdown.state ?? breakdown.official_state ?? breakdown.sufficiency_status
   );
+}
+
+function getSnapshotActionableState(snapshot?: LatestSnapshot | null): OfficialActionableState | null {
+  const breakdown = asRecord(snapshot?.breakdown_json);
+  const actionable = asRecord(breakdown.actionable_state);
+  if (!Object.keys(actionable).length) return null;
+  const rawMissing = Array.isArray(actionable.missing_components)
+    ? actionable.missing_components
+    : [];
+
+  return {
+    state: typeof actionable.state === 'string' ? actionable.state : undefined,
+    why: typeof actionable.why === 'string' ? actionable.why : undefined,
+    route_to_fix: typeof actionable.route_to_fix === 'string' ? actionable.route_to_fix : null,
+    required_capability: typeof actionable.required_capability === 'string' ? actionable.required_capability : null,
+    expected_after_resolution:
+      typeof actionable.expected_after_resolution === 'string'
+        ? actionable.expected_after_resolution
+        : null,
+    missing_components: rawMissing
+      .map((item) => asRecord(item))
+      .map((item) => ({
+        component: typeof item.component === 'string' ? item.component : undefined,
+        label: typeof item.label === 'string' ? item.label : undefined,
+        reason: typeof item.reason === 'string' ? item.reason : null,
+        route_to_fix: typeof item.route_to_fix === 'string' ? item.route_to_fix : null,
+        action: typeof item.action === 'string' ? item.action : null,
+        required_capability: typeof item.required_capability === 'string' ? item.required_capability : null,
+      })),
+  };
 }
 
 function buildOfficialTrend(item: KpiDashboardItem) {
@@ -744,6 +797,7 @@ function DashboardPageContent() {
   const [systemHealthLoading, setSystemHealthLoading] = useState(false);
   const [systemHealthError, setSystemHealthError] = useState('');
   const [recalculatingKpis, setRecalculatingKpis] = useState(false);
+  const [kpiRecalculateNotice, setKpiRecalculateNotice] = useState<KpiRecalculateNotice | null>(null);
   const [refreshingExecutive, setRefreshingExecutive] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -933,8 +987,13 @@ function DashboardPageContent() {
   };
 
   const handleRecalculateKpis = async () => {
+    setKpiRecalculateNotice(null);
+
     if (!canManageKpis) {
-      alert('Tu rol no permite recalcular KPIs. Esta acción está reservada para administradores.');
+      setKpiRecalculateNotice({
+        type: 'error',
+        message: 'Tu rol no permite recalcular KPIs. Esta acción está reservada para administradores.',
+      });
       return;
     }
 
@@ -955,7 +1014,10 @@ function DashboardPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error recalculando KPIs');
+        setKpiRecalculateNotice({
+          type: 'error',
+          message: typeof json.error === 'string' ? json.error : t('dashboardKpi.recalculateError'),
+        });
         return;
       }
 
@@ -963,19 +1025,23 @@ function DashboardPageContent() {
 
       const recalculateSummary = summarizeOfficialRecalculateResponse(json);
 
-      alert(
-        t('dashboardKpi.recalculateOfficialSuccess', {
+      setKpiRecalculateNotice({
+        type: 'success',
+        message: t('dashboardKpi.recalculateOfficialSuccess', {
           processed: recalculateSummary.processed,
           calculated: recalculateSummary.calculated,
           insufficient: recalculateSummary.insufficientData,
           dependencyPending: recalculateSummary.dependencyPending,
           errors: recalculateSummary.errors,
           snapshots: recalculateSummary.snapshots,
-        })
-      );
+        }),
+      });
     } catch (err) {
       console.error('ERROR RECALCULATE KPI:', err);
-      alert('Error recalculando KPIs');
+      setKpiRecalculateNotice({
+        type: 'error',
+        message: t('dashboardKpi.recalculateError'),
+      });
     } finally {
       setRecalculatingKpis(false);
     }
@@ -1084,6 +1150,9 @@ function DashboardPageContent() {
     scoreGlobalPendingItem === null
       ? 'sin_medicion'
       : getSnapshotOfficialState(scoreGlobalPendingItem.latest_snapshot) || 'sin_medicion';
+
+  const scoreGlobalActionableState = getSnapshotActionableState(scoreGlobalPendingItem?.latest_snapshot);
+  const scoreGlobalMissingComponent = scoreGlobalActionableState?.missing_components?.[0] || null;
 
   const measuredKpis = Number(
     kpiSummary?.measured_kpis ??
@@ -1606,6 +1675,19 @@ function DashboardPageContent() {
                   </div>
                 </div>
 
+                {kpiRecalculateNotice && (
+                  <div
+                    className={`mt-4 rounded-[var(--tcdx-radius-tecdex-sm)] border px-4 py-3 text-sm whitespace-pre-line ${
+                      kpiRecalculateNotice.type === 'success'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : 'border-red-200 bg-red-50 text-red-800'
+                    }`}
+                    role={kpiRecalculateNotice.type === 'error' ? 'alert' : 'status'}
+                  >
+                    {kpiRecalculateNotice.message}
+                  </div>
+                )}
+
                 <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-6">
                   <TopCard
                     title={t('dashboard.kpiGlobalScore')}
@@ -1672,13 +1754,42 @@ function DashboardPageContent() {
                   <div className="mt-4 rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                     <p className="font-semibold">{t('dashboardKpi.scoreGlobalPendingTitle')}</p>
                     <p className="mt-1 leading-6">
-                      {t('dashboardKpi.scoreGlobalPendingDescription', {
-                        indicator:
-                          scoreGlobalPendingItem?.name ||
-                          t('dashboardKpi.officialDependencyFallback'),
-                        state: scoreGlobalPendingState,
-                      })}
+                      {scoreGlobalActionableState?.why ||
+                        t('dashboardKpi.scoreGlobalPendingDescription', {
+                          indicator:
+                            scoreGlobalPendingItem?.name ||
+                            t('dashboardKpi.officialDependencyFallback'),
+                          state: scoreGlobalPendingState,
+                        })}
                     </p>
+                    {scoreGlobalMissingComponent && (
+                      <div className="mt-3 rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-200 bg-white px-3 py-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                          {t('dashboardKpi.missingOfficialComponent')}
+                        </p>
+                        <p className="mt-1 font-semibold">
+                          {scoreGlobalMissingComponent.label || scoreGlobalMissingComponent.component}
+                        </p>
+                        <p className="mt-1 text-xs leading-5">
+                          {scoreGlobalMissingComponent.reason ||
+                            scoreGlobalActionableState?.expected_after_resolution ||
+                            t('dashboardKpi.completeOfficialEvidence')}
+                        </p>
+                        {scoreGlobalMissingComponent.route_to_fix && (
+                          <a
+                            href={scoreGlobalMissingComponent.route_to_fix}
+                            className="mt-2 inline-flex min-h-8 items-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-300 px-3 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                          >
+                            {scoreGlobalMissingComponent.action || t('dashboardKpi.resolveOfficialOrigin')}
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {scoreGlobalActionableState?.expected_after_resolution && (
+                      <p className="mt-2 text-xs leading-5 text-amber-800">
+                        {scoreGlobalActionableState.expected_after_resolution}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

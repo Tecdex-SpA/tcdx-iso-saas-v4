@@ -1,0 +1,21 @@
+{
+  "phase": "6.5",
+  "runtime": "https://tcdx-iso.tecdex.net",
+  "main_head": "b3c4dc9cbc0c1e2d05219447244209c2c7567016",
+  "origin_main": "b3c4dc9cbc0c1e2d05219447244209c2c7567016",
+  "pr85": {
+    "state": "MERGED",
+    "merge_commit": "b3c4dc9cbc0c1e2d05219447244209c2c7567016",
+    "ci": "SUCCESS",
+    "runtime_behavior": "deployed bundle contains official recalculation copy"
+  },
+  "health": {
+    "frontend_root_http": 200,
+    "frontend_login_http": 200,
+    "backend_health": "healthy",
+    "database": true,
+    "storage": true,
+    "jobs": true,
+    "ai_engine": true
+  }
+}

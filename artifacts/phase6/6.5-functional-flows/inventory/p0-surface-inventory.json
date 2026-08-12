@@ -1,0 +1,51 @@
+{
+  "status": "inventoried",
+  "p0_surfaces": [
+    {
+      "flow": "Cumplimiento / Auditoria",
+      "entry": "/cumplimiento-auditoria",
+      "operational_destinations": ["/evaluacion", "/auditorias", "/hallazgos"],
+      "classification": "PASS_WITH_DELEGATED_SUBFLOWS"
+    },
+    {
+      "flow": "Evidencias",
+      "entry": "/evidencias",
+      "mutations": ["upload", "associate", "approve", "reject", "refresh_health"],
+      "classification": "PASS_WITH_LEGACY_ALERT_DEBT"
+    },
+    {
+      "flow": "Riesgos",
+      "entry": "/riesgos",
+      "operational_destinations": ["/matriz-riesgo", "/activos"],
+      "classification": "PASS_WITH_DELEGATED_SUBFLOWS"
+    },
+    {
+      "flow": "Planes de accion",
+      "entry": "/planes-accion",
+      "operational_destinations": ["/plan-accion", "/acciones-recomendadas"],
+      "classification": "PASS_WITH_DELEGATED_SUBFLOWS"
+    },
+    {
+      "flow": "KPI / Metricas oficiales",
+      "entry": "/metricas",
+      "operational_destinations": ["/metricas/:code", "/dashboard?view=kpi"],
+      "classification": "PASS"
+    },
+    {
+      "flow": "GRC integrado",
+      "entry": "/grc",
+      "operational_destinations": ["/dashboard?view=kpi", "/metricas/GRC-HEALTH"],
+      "classification": "PASS"
+    },
+    {
+      "flow": "Report / Export",
+      "entry": "/exportes",
+      "operational_destinations": ["generate", "poll", "download"],
+      "classification": "PASS"
+    }
+  ],
+  "legacy_browser_alerts": {
+    "dashboard_kpi_official_recalculate": "replaced_with_inline_status",
+    "evidencias": "remaining_non_critical_debt; mutation feedback exists but still uses browser alert in several handlers"
+  }
+}

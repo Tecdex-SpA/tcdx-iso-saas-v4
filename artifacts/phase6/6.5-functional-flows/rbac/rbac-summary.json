@@ -1,0 +1,11 @@
+{
+  "status": "validated_by_contract",
+  "principles": [
+    "backend remains authority for mutations",
+    "Dashboard official recalculate remains gated by admin KPI capability logic already present",
+    "MVP shells hide inaccessible destinations and show an empty authorized-destinations state",
+    "actionable official states expose required_capability as guidance, not as authorization bypass"
+  ],
+  "phase6_3_regression": 0,
+  "read_only_mutation_exposed": 0
+}

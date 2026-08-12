@@ -1,0 +1,95 @@
+{
+  "status": "analyzed",
+  "global_score_source": "Official dashboard summary official_score derives from the published GRC-HEALTH snapshot only when GRC-HEALTH state is calculated.",
+  "formula": {
+    "metric": "GRC-HEALTH",
+    "formula_code": "F5_5_GRC_HEALTH",
+    "expression": "100 weighted R,C,A,E,D",
+    "weights": {
+      "risk": 0.2,
+      "compliance": 0.25,
+      "actions": 0.15,
+      "evidence": 0.2,
+      "dataTrust": 0.2
+    },
+    "required_components": [
+      "risk",
+      "compliance",
+      "actions",
+      "evidence",
+      "dataTrust"
+    ]
+  },
+  "blocking_dependency": {
+    "component": "dataTrust",
+    "metric": "DATA-TRUST",
+    "formula_code": "F5_C3_DATA_TRUST",
+    "state": "insufficient_data",
+    "source_contract": "indicator_data_trust_assessments",
+    "tables": [
+      "metric_trust_assessments"
+    ],
+    "variable_map": {
+      "completeness": "dimensions.completeness.score",
+      "accuracy": "dimensions.accuracy.score",
+      "consistency": "dimensions.consistency.score",
+      "freshness": "dimensions.freshness.score",
+      "lineage": "dimensions.lineage.score",
+      "validation": "dimensions.validation.score",
+      "stability": "dimensions.stability.score",
+      "coverage": "dimensions.coverage.score"
+    }
+  },
+  "runtime_missing_inputs": [
+    {
+      "component": "accuracy",
+      "score": null,
+      "rule": "requires_explicit_accuracy_validation",
+      "evidence": {
+        "validation_records": 0
+      },
+      "route_to_fix": "/datos/calidad",
+      "required_capability": "metrics.data_trust"
+    },
+    {
+      "component": "lineage",
+      "score": null,
+      "rule": "source_snapshot_required",
+      "evidence": {
+        "source_snapshot_ids": []
+      },
+      "route_to_fix": "/datos/lineage",
+      "required_capability": "data.lineage"
+    },
+    {
+      "component": "validation",
+      "score": null,
+      "rule": "official_run_without_error_validation",
+      "evidence": {
+        "calculation_run_id": null,
+        "validation_records": 0
+      },
+      "route_to_fix": "/datos/calidad",
+      "required_capability": "metrics.data_trust"
+    },
+    {
+      "component": "stability",
+      "score": null,
+      "rule": "coefficient_of_variation_last_6",
+      "evidence": {
+        "history_points": 0
+      },
+      "route_to_fix": "/metricas",
+      "required_capability": "metrics.jobs.run"
+    }
+  ],
+  "not_missing": {
+    "received_rows": 754,
+    "usable_rows": 754,
+    "completeness": 100,
+    "consistency": 100,
+    "freshness": 100,
+    "coverage": 100
+  },
+  "expected_after_resolution": "Complete missing Data Trust dimensions, recalculate DATA-TRUST through the official pipeline, then recalculate GRC-HEALTH. official_score remains null until GRC-HEALTH is calculated."
+}
