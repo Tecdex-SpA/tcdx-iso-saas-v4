@@ -1,0 +1,42 @@
+{
+  "status": "READY_FOR_INTERMEDIATE_MERGE_REVIEW",
+  "gates": {
+    "BROKEN_P0_FUNCTIONAL_FLOW": 0,
+    "NON_ACTIONABLE_INSUFFICIENT_DATA": 0,
+    "NON_ACTIONABLE_DEPENDENCY_PENDING": 0,
+    "MUTATION_WITHOUT_USER_FEEDBACK": 0,
+    "CRITICAL_STALE_UI_AFTER_MUTATION": 0,
+    "CRITICAL_DOUBLE_SUBMIT": 0,
+    "BROKEN_EMPTY_STATE": 0,
+    "FAKE_EMPTY_STATE_DATA": 0,
+    "RAW_TECHNICAL_UI_LEAK": 0,
+    "READ_ONLY_MUTATION_EXPOSED": 0,
+    "CRITICAL_UPLOAD_FLOW_ERROR": 0,
+    "CRITICAL_REPORT_EXPORT_ERROR": 0,
+    "NEW_TENANT_CRASH": 0,
+    "CROSS_TENANT_LEAKAGE": 0,
+    "OFFICIAL_NULL_TO_ZERO": 0,
+    "ADMIN_OFFICIAL_CROSSOVER": 0,
+    "PHASE6_4_REGRESSION": 0,
+    "PHASE6_3_REGRESSION": 0,
+    "PHASE6_2_REGRESSION": 0,
+    "PHASE5_REGRESSION": 0,
+    "ZERO_HARDCODE": "PASS",
+    "SELLABLE_MULTI_TENANT": "PASS"
+  },
+  "contracts": [
+    "npm --prefix frontend run test:phase6-functional-flows",
+    "npm --prefix frontend run lint",
+    "npm --prefix frontend run typecheck",
+    "npm --prefix frontend test",
+    "node backend/src/services/indicators/indicatorCore.test.js",
+    "node backend/src/services/math-governance/sourceResolver.test.js",
+    "node backend/src/services/math-governance/officialCalculationOrchestrator.test.js",
+    "npm --prefix frontend run test:phase6-ui-responsive",
+    "npm --prefix frontend run test:phase6-sidebar-rbac",
+    "npm --prefix frontend run test:phase6-kpi-product-reconciliation",
+    "node scripts/phase5-5/check-production-acceptance-contract.js",
+    "npm --prefix frontend run build",
+    "git diff --check"
+  ]
+}

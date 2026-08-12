@@ -1,0 +1,35 @@
+{
+  "status": "implemented",
+  "official_states": {
+    "calculated": {
+      "ux": "shows calculated official value and snapshot context",
+      "actionable": false
+    },
+    "insufficient_data": {
+      "ux": "shows why the official metric cannot be calculated, missing components, source route, required capability and expected resolution",
+      "actionable": true
+    },
+    "dependency_pending": {
+      "ux": "shows the blocking official dependency and its missing components when dependency metadata is available",
+      "actionable": true
+    },
+    "no_snapshot": {
+      "ux": "shows no official snapshot state without fabricating zero or fallback values",
+      "actionable": true
+    }
+  },
+  "metadata_sources": [
+    "metric_snapshots.payload.actionable_state",
+    "metric_snapshots.payload.data_requirements",
+    "metric_snapshots.payload.source_contract",
+    "metric_snapshots.payload.trust.dimensions",
+    "official source contract route_to_fix",
+    "official source contract required_capability"
+  ],
+  "prohibited_behavior": {
+    "official_null_to_zero": 0,
+    "admin_fallback": 0,
+    "hardcoded_tenant": 0,
+    "hardcoded_customer": 0
+  }
+}

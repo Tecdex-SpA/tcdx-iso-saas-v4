@@ -3,7 +3,7 @@
 const pool = require('../../config/db');
 const asyncJobs = require('../asyncJob.service');
 const orchestrator = require('../math-governance/officialCalculationOrchestrator.service');
-const { getSourceCodeForIndicator } = require('../math-governance/sourceContracts.service');
+const { getSourceCodeForIndicator, getSourceContract } = require('../math-governance/sourceContracts.service');
 const {
   IndicatorContractError, checksum, calculateDataTrust, evaluateFreshness, evaluateSufficiency,
   buildInterpretation, buildSnapshotPayload, compareSnapshots, actionProposalKey,
@@ -28,6 +28,83 @@ function period(input={}){
   return { key:String(input.key||input.period_key||`${start||'open'}:${end||'open'}`),start,end,timezone:String(input.timezone||'America/Santiago') };
 }
 function serializeError(error){ return String(error?.message||'indicator error').replace(/postgres(?:ql)?:\/\/\S+/gi,'[redacted-database-url]').slice(0,300); }
+
+const DIMENSION_ACTIONS = Object.freeze({
+  completeness: { label:'Completitud', route_to_fix:'/datos/calidad', required_capability:'metrics.data_trust', action:'Revisar calidad de datos' },
+  accuracy: { label:'Exactitud', route_to_fix:'/datos/calidad', required_capability:'metrics.data_trust', action:'Registrar validaciones de exactitud' },
+  consistency: { label:'Consistencia', route_to_fix:'/datos/calidad', required_capability:'metrics.data_trust', action:'Revisar reglas de consistencia' },
+  freshness: { label:'Freshness', route_to_fix:'/datos/calidad', required_capability:'metrics.data_trust', action:'Actualizar evidencia o fuente vencida' },
+  lineage: { label:'Lineage', route_to_fix:'/datos/lineage', required_capability:'data.lineage', action:'Completar trazabilidad de fuente' },
+  validation: { label:'Validación', route_to_fix:'/datos/calidad', required_capability:'metrics.data_trust', action:'Ejecutar validación oficial' },
+  stability: { label:'Estabilidad', route_to_fix:'/metricas', required_capability:'metrics.jobs.run', action:'Acumular historia oficial comparable' },
+  coverage: { label:'Cobertura', route_to_fix:'/datos/calidad', required_capability:'metrics.data_trust', action:'Completar población requerida' },
+  dataTrust: { label:'Data Trust', route_to_fix:'/metricas', required_capability:'metrics.indicators.read', action:'Resolver indicador oficial dependiente' },
+  risk: { label:'Riesgo residual', route_to_fix:'/riesgos', required_capability:'risk.management', action:'Completar evaluación de riesgos' },
+  compliance: { label:'Cumplimiento', route_to_fix:'/cumplimiento-auditoria', required_capability:'compliance.management', action:'Completar evaluación de cumplimiento' },
+  actions: { label:'Planes de acción', route_to_fix:'/planes-accion', required_capability:'actions.management', action:'Actualizar acciones y remediación' },
+  evidence: { label:'Evidencia vigente', route_to_fix:'/evidencias', required_capability:'evidence.management', action:'Completar evidencia oficial vigente' },
+});
+
+function actionableForKey(key, overrides = {}) {
+  const base = DIMENSION_ACTIONS[key] || { label:key, route_to_fix:'/metricas', required_capability:'metrics.indicators.read', action:'Revisar indicador oficial' };
+  return { component:key, ...base, ...overrides };
+}
+
+function unknownTrustDimensions(trust = {}) {
+  const dimensions = trust?.dimensions && typeof trust.dimensions === 'object' ? trust.dimensions : {};
+  return Object.entries(dimensions)
+    .filter(([, value]) => value && typeof value === 'object' && (value.score === null || value.score === undefined || value.status === 'unknown'))
+    .map(([key, value]) => actionableForKey(key, {
+      rule:value.rule || null,
+      reason:Array.isArray(value.warnings) && value.warnings.length ? value.warnings[0] : value.rule || 'Componente requerido sin evidencia suficiente.',
+      evidence:value.evidence || null,
+      numerator:value.numerator ?? null,
+      denominator:value.denominator ?? null,
+    }));
+}
+
+function buildActionableState({ definition, snapshot, dataRequirements = null, sourceContract = null } = {}) {
+  const state = snapshot?.state || snapshot?.result?.status || 'no_snapshot';
+  const missingFromRequirements = Array.isArray(dataRequirements?.missing_fields)
+    ? dataRequirements.missing_fields.map((key) => actionableForKey(key, { reason:dataRequirements.reason || 'Dependencia oficial pendiente.' }))
+    : [];
+  const missingComponents = [
+    ...missingFromRequirements,
+    ...unknownTrustDimensions(snapshot?.trust),
+  ];
+  const deduped = Array.from(new Map(missingComponents.map((item) => [item.component, item])).values());
+  const primary = deduped[0] || null;
+  const route = dataRequirements?.route_to_fix || primary?.route_to_fix || sourceContract?.route_to_fix || (state === 'no_snapshot' ? '/metricas' : null);
+  const capability = dataRequirements?.required_capability || primary?.required_capability || sourceContract?.required_capability || (route ? 'metrics.indicators.read' : null);
+  const whyByState = {
+    calculated: 'Indicador calculado desde snapshot oficial publicado.',
+    insufficient_data: 'La fórmula oficial no tiene todos los componentes verificables requeridos.',
+    insufficient_coverage: 'La fuente oficial no alcanza la cobertura mínima requerida.',
+    dependency_pending: 'El indicador depende de otro resultado oficial que aún no es calculable.',
+    source_unavailable: 'No existe fuente operacional habilitada para el contrato oficial.',
+    source_incompatible: 'La fuente existe, pero no coincide con el contrato analítico vigente.',
+    stale_source: 'La fuente existe, pero su vigencia no cumple la política oficial.',
+    technical_error: 'El cálculo falló por un error técnico registrado.',
+    no_snapshot: 'Aún no existe snapshot oficial publicado para este indicador.',
+  };
+  return {
+    state,
+    label: state === 'calculated' ? 'Calculado' : state === 'no_snapshot' ? 'Sin snapshot oficial' : 'No calculable',
+    why: whyByState[state] || 'El indicador oficial no está calculable con la evidencia actual.',
+    missing_components: deduped,
+    route_to_fix: route,
+    required_capability: capability,
+    source_contract: sourceContract ? {
+      source_code: sourceContract.source_code || null,
+      entity: sourceContract.entity || null,
+      tables: sourceContract.tables || [],
+      required_fields: sourceContract.required_fields || [],
+    } : null,
+    expected_after_resolution: state === 'calculated'
+      ? 'El indicador queda disponible para decisión.'
+      : `Al completar la evidencia requerida, recalcular ${definition?.code || 'el indicador'} desde el pipeline oficial.`,
+  };
+}
 
 async function audit(client,scope,eventType,entityType,entityId,requestId,metadata={}){
   await client.query(`INSERT INTO commercial_events(tenant_id,actor_user_id,event_type,entity_type,entity_id,after_state,request_id)
@@ -78,9 +155,10 @@ async function sufficiencyRuleFor(client,scope,indicator){
 }
 
 function publicDefinition(row){ return { id:row.id,code:row.functional_code,name:row.functional_display_name||row.display_name,definition:row.functional_business_definition||row.business_definition,domain:row.domain,objective:row.objective,unit:row.functional_unit||row.unit,direction:row.functional_direction||row.direction,frequency:row.functional_frequency||row.frequency,population:row.population_definition,version:Number(row.definition_version),status:'published' }; }
-function publicSnapshot(row){
+function publicSnapshot(row, definition = null){
   if(!row) return null; const payload=row.snapshot_payload||{};
-  return { snapshot_id:row.snapshot_id||row.id,period:payload.period||{key:row.period_key},effective_at:payload.effective_at||row.effective_at,result:payload.result||null,value:payload.result?.status==='calculated'?payload.result.value:null,unit:payload.unit||null,state:payload.result?.status||'unmeasured',target:payload.target??null,coverage:payload.coverage??null,trust:payload.trust||{score:null,status:'unknown'},freshness:payload.freshness||{status:'unknown'},sufficiency:payload.sufficiency||{status:'source_unavailable'},threshold:payload.threshold||null,interpretation:payload.interpretation||null,updated_at:row.published_at||row.created_at,checksum:row.content_hash };
+  const snapshot = { snapshot_id:row.snapshot_id||row.id,period:payload.period||{key:row.period_key},effective_at:payload.effective_at||row.effective_at,result:payload.result||null,value:payload.result?.status==='calculated'?payload.result.value:null,unit:payload.unit||null,state:payload.result?.status||'unmeasured',target:payload.target??null,coverage:payload.coverage??null,trust:payload.trust||{score:null,status:'unknown'},freshness:payload.freshness||{status:'unknown'},sufficiency:payload.sufficiency||{status:'source_unavailable'},data_requirements:payload.data_requirements||null,source_contract:payload.source_contract||null,threshold:payload.threshold||null,interpretation:payload.interpretation||null,updated_at:row.published_at||row.created_at,checksum:row.content_hash };
+  return { ...snapshot, actionable_state:payload.actionable_state || buildActionableState({ definition, snapshot, dataRequirements:snapshot.data_requirements, sourceContract:snapshot.source_contract }) };
 }
 
 async function latestSnapshot(client,scope,definitionId){ return (await client.query(`SELECT * FROM metric_snapshots WHERE tenant_id=$1::uuid AND metric_definition_id=$2::uuid AND snapshot_status='published' ORDER BY effective_at DESC NULLS LAST,published_at DESC LIMIT 1`,[tenantId(scope),definitionId])).rows[0]||null; }
@@ -96,7 +174,7 @@ async function listCatalog(scope,filters={}){
     LEFT JOIN LATERAL(SELECT s.* FROM metric_snapshots s WHERE s.tenant_id=$1::uuid AND s.metric_definition_id=md.id AND s.snapshot_status='published' ORDER BY s.effective_at DESC NULLS LAST,s.published_at DESC LIMIT 1) ms ON true
     WHERE ($2::text IS NULL OR mdv.domain=$2) AND ($3::text IS NULL OR mdv.display_name ILIKE '%'||$3||'%' OR mdv.functional_code ILIKE '%'||$3||'%')
     ORDER BY mdv.domain,mdv.display_name LIMIT $4`,[tenantId(scope),filters.domain||null,filters.search||null,limit(filters.limit,100,250)])).rows;
-  return rows.map((row)=>({ definition:publicDefinition(row),latest_snapshot:row.snapshot_id?publicSnapshot(row):null }));
+  return rows.map((row)=>{ const definition=publicDefinition(row); return { definition,latest_snapshot:row.snapshot_id?publicSnapshot(row, definition):null }; });
 }
 function dashboardColor(snapshot){
   if(!snapshot||snapshot.state!=='calculated') return 'gray';
@@ -116,7 +194,7 @@ async function dashboard(scope){
       period_type:definition.frequency,period_start:latest_snapshot.period?.start||null,period_end:latest_snapshot.period?.end||null,
       calculated_at:latest_snapshot.updated_at,breakdown_json:{state:latest_snapshot.state,coverage:latest_snapshot.coverage,
         trust:latest_snapshot.trust,freshness:latest_snapshot.freshness,sufficiency:latest_snapshot.sufficiency,
-        interpretation:latest_snapshot.interpretation,snapshot_id:latest_snapshot.snapshot_id}}:null,
+        actionable_state:latest_snapshot.actionable_state,interpretation:latest_snapshot.interpretation,snapshot_id:latest_snapshot.snapshot_id}}:null,
   }));
   const counts={green:0,yellow:0,red:0,gray:0};
   for(const item of items) counts[item.latest_snapshot?.status_color||'gray']+=1;
@@ -159,7 +237,8 @@ async function recalculateCatalog(scope,body={},requestId=null){
 }
 async function getIndicator(scope,metricCode,{technical=false}={}){
   const definition=await resolveIndicator(scope,metricCode); const snapshot=await latestSnapshot(pool,scope,definition.id);
-  const result={ definition:publicDefinition(definition),latest_snapshot:publicSnapshot(snapshot) };
+  const publicDef=publicDefinition(definition);
+  const result={ definition:publicDef,latest_snapshot:publicSnapshot(snapshot, publicDef) };
   if(technical){
     const [threshold,trustPolicy,lineage]=await Promise.all([thresholdFor(pool,scope,definition.id),trustPolicyFor(pool,scope,definition.id),snapshot?pool.query(`SELECT * FROM data_lineage_edges WHERE tenant_id=$1::uuid AND (from_id=$2::uuid OR to_id=$2::uuid) ORDER BY created_at LIMIT 100`,[tenantId(scope),snapshot.id]):Promise.resolve({rows:[]})]);
     result.technical={ formula:{code:definition.formula_code,version_id:definition.official_formula_version_id},definition_version:definition.definition_version,binding:{id:definition.binding_id,version:definition.binding_version,checksum:definition.binding_checksum,semantic_contract_version_id:definition.semantic_contract_version_id,mapping_id:definition.mapping_id},calculation_policy:{id:definition.calculation_policy_id,version:definition.calculation_policy_version,checksum:definition.calculation_policy_checksum,timeout_ms:definition.timeout_ms,max_attempts:definition.max_attempts},threshold,trust_policy:{id:trustPolicy.id,version:trustPolicy.version_number,weights:trustPolicy.weights,checksum:trustPolicy.checksum},lineage:lineage.rows };
@@ -229,13 +308,23 @@ async function calculateIndicator(scope,metricCode,body={},requestId=null){
     if(officialState==='calculated'&&evidence.freshness.status==='stale') finalState='stale_source';
     const trust=calculateDataTrust({dimensions:evidence.dimensions,weights:trustPolicy.weights,policyVersion:trustPolicy.version_number,policyChecksum:trustPolicy.checksum});
     const persistedValue=buildOfficialMeasurementPersistence(finalState,value);
+    const sourceContract=getSourceContract(bindingSourceCode);
+    const dataRequirements=item.data_requirements || {
+      status:sufficiency.status,
+      missing_fields:sufficiency.missing_inputs || [],
+      current_population:Number(item.source_counts?.usable||0),
+      required_population:Number(sufficiencyRule.minimum_sample_size||1),
+      route_to_fix:sourceContract?.route_to_fix || null,
+      required_capability:sourceContract?.required_capability || null,
+      reason:sufficiency.reason || finalState,
+    };
     await client.query('BEGIN');
     const trustRow=(await client.query(`INSERT INTO metric_trust_assessments(tenant_id,metric_definition_id,calculation_run_id,trust_policy_id,score,trust_status,dimensions,evidence_checksum,assessment_checksum,correlation_id,created_by,metadata)
       VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7::jsonb,$8,$9,$10,$11::uuid,$12::jsonb) ON CONFLICT(tenant_id,metric_definition_id,correlation_id,assessment_checksum) DO UPDATE SET metadata=metric_trust_assessments.metadata RETURNING *`,[tenantId(scope),indicator.id,item.calculation_run_id||null,trustPolicy.id,trust.score,trust.status,JSON.stringify(trust.dimensions),checksum(evidence),trust.checksum,requestId||checksum({metricCode,currentPeriod,item:item.calculation_run_id}),actorId(scope),JSON.stringify({known_weight:trust.known_weight,unknown_dimensions:trust.unknown_dimensions})])).rows[0];
     const measurement=(await client.query(`INSERT INTO metric_measurements(tenant_id,metric_definition_id,period_key,period_start,period_end,value_numeric,value_text,unit,source_timestamp,calculated_at,quality_status,freshness_status,trust_score,trust_status,validation_status,correlation_id,created_by,metadata,official_state,coverage_ratio,sample_size,population_size,sufficiency_status,source_snapshot_ids,calculation_run_id,official_formula_version_id,trust_assessment_id)
       VALUES($1::uuid,$2::uuid,$3,$4::timestamptz,$5::timestamptz,$6,NULL,$7,$5::timestamptz,now(),$8,$9,$10,$11,$12,$13,$14::uuid,$15::jsonb,$16,$17,$18,$19,$20,$21::uuid[],$22::uuid,$23::uuid,$24::uuid)
       ON CONFLICT(tenant_id,metric_definition_id,period_key,COALESCE(correlation_id,'manual')) DO UPDATE SET value_numeric=EXCLUDED.value_numeric,value_text=NULL,calculated_at=now(),quality_status=EXCLUDED.quality_status,freshness_status=EXCLUDED.freshness_status,trust_score=EXCLUDED.trust_score,trust_status=EXCLUDED.trust_status,validation_status=EXCLUDED.validation_status,metadata=EXCLUDED.metadata,official_state=EXCLUDED.official_state,coverage_ratio=EXCLUDED.coverage_ratio,sample_size=EXCLUDED.sample_size,population_size=EXCLUDED.population_size,sufficiency_status=EXCLUDED.sufficiency_status,source_snapshot_ids=EXCLUDED.source_snapshot_ids,calculation_run_id=EXCLUDED.calculation_run_id,official_formula_version_id=EXCLUDED.official_formula_version_id,trust_assessment_id=EXCLUDED.trust_assessment_id RETURNING *`,
-      [tenantId(scope),indicator.id,currentPeriod.key,currentPeriod.start,currentPeriod.end,persistedValue.value_numeric,indicator.unit,finalState==='calculated'?'valid':finalState==='technical_error'?'rejected':'unknown',evidence.freshness.status==='fresh'?'current':evidence.freshness.status,trust.score,trust.status,finalState==='validation_failed'?'rejected':finalState==='calculated'?'valid':'pending',requestId||checksum({metricCode,currentPeriod}),actorId(scope),JSON.stringify({warnings:item.warnings||[],trust_checksum:trust.checksum}),finalState,evidence.coverage,Number(item.source_counts?.usable||0),Number(item.source_counts?.received||0),sufficiency.status,sourceSnapshotIds,item.calculation_run_id||null,indicator.official_formula_version_id,trustRow.id])).rows[0];
+      [tenantId(scope),indicator.id,currentPeriod.key,currentPeriod.start,currentPeriod.end,persistedValue.value_numeric,indicator.unit,finalState==='calculated'?'valid':finalState==='technical_error'?'rejected':'unknown',evidence.freshness.status==='fresh'?'current':evidence.freshness.status,trust.score,trust.status,finalState==='validation_failed'?'rejected':finalState==='calculated'?'valid':'pending',requestId||checksum({metricCode,currentPeriod}),actorId(scope),JSON.stringify({warnings:item.warnings||[],trust_checksum:trust.checksum,data_requirements:dataRequirements,source_contract:sourceContract?{source_code:sourceContract.source_code,entity:sourceContract.entity,tables:sourceContract.tables,required_fields:sourceContract.required_fields,route_to_fix:sourceContract.route_to_fix||null,required_capability:sourceContract.required_capability||null}:null}),finalState,evidence.coverage,Number(item.source_counts?.usable||0),Number(item.source_counts?.received||0),sufficiency.status,sourceSnapshotIds,item.calculation_run_id||null,indicator.official_formula_version_id,trustRow.id])).rows[0];
     await client.query('UPDATE metric_trust_assessments SET measurement_id=$3::uuid WHERE tenant_id=$1::uuid AND id=$2::uuid',[tenantId(scope),trustRow.id,measurement.id]);
     await audit(client,scope,'metric.indicator.calculated','metric_measurement',measurement.id,requestId,{metric_code:indicator.functional_code,state:finalState,calculation_run_id:item.calculation_run_id||null});
     await client.query('COMMIT');
@@ -256,11 +345,16 @@ async function createSnapshot(scope,metricCode,body={},requestId=null){
     const [trustRow,threshold]=await Promise.all([client.query(`SELECT * FROM metric_trust_assessments WHERE tenant_id=$1::uuid AND id=$2::uuid`,[tenantId(scope),measurement.trust_assessment_id]),thresholdFor(client,scope,indicator.id)]);
     const trustAssessment=trustRow.rows[0]; if(!trustAssessment) throw new IndicatorGovernanceError('INDICATOR_TRUST_ASSESSMENT_MISSING','La medición no tiene Data Trust verificable.',409);
     const previous=await latestSnapshot(client,scope,indicator.id);
-    const sourceEvidence={causes:body.causes||[],impacts:body.impacts||[],recommendation:body.recommendation||null,proposed_action:body.proposed_action||null,priority:body.priority||null,suggested_owner:body.suggested_owner||null,warnings:measurement.metadata?.warnings||[],limitations:body.limitations||[]};
+    const dataRequirements=measurement.metadata?.data_requirements || null;
+    const sourceContract=measurement.metadata?.source_contract || null;
+    const sourceEvidence={causes:body.causes||[],impacts:body.impacts||[],recommendation:body.recommendation||null,proposed_action:body.proposed_action||null,priority:body.priority||null,suggested_owner:body.suggested_owner||null,warnings:measurement.metadata?.warnings||[],limitations:body.limitations||[],data_requirements:dataRequirements};
     const provisional={metric_code:indicator.functional_code,result:{status:measurement.official_state,value:measurement.official_state==='calculated'?Number(measurement.value_numeric):null,warnings:measurement.metadata?.warnings||[]},unit:measurement.unit,trust:{score:trustAssessment.score===null?null:Number(trustAssessment.score),status:trustAssessment.trust_status,dimensions:trustAssessment.dimensions,checksum:trustAssessment.assessment_checksum},coverage:measurement.coverage_ratio===null?null:Number(measurement.coverage_ratio)};
     const priorComparison=previous?compareSnapshots(previous.snapshot_payload,{...provisional,formula_code:indicator.formula_code,formula_version:indicator.official_formula_version_id,methodology_version:indicator.methodology_version,checksum:'pending'}):null;
     const interpretation=buildInterpretation({definition:{owner:indicator.owner_user_id},result:provisional.result,threshold,comparison:priorComparison,evidence:sourceEvidence});
-    const payload=buildSnapshotPayload({tenant_id:tenantId(scope),metric_code:indicator.functional_code,metric_definition_id:indicator.id,definition_version:indicator.definition_version,formula_code:indicator.formula_code,formula_version:indicator.official_formula_version_id,semantic_contract:{version_id:indicator.semantic_contract_version_id},mapping:indicator.mapping_id?{id:indicator.mapping_id}:null,calculation_policy:{id:indicator.calculation_policy_id,version:indicator.calculation_policy_version,checksum:indicator.calculation_policy_checksum},methodology_version:indicator.methodology_version,period:{key:measurement.period_key,start:measurement.period_start,end:measurement.period_end,timezone:body.timezone||'America/Santiago'},effective_at:measurement.source_timestamp||measurement.period_end,result:provisional.result,unit:measurement.unit,target:body.target??null,coverage:provisional.coverage,trust:provisional.trust,freshness:{status:measurement.freshness_status==='current'?'fresh':measurement.freshness_status},sufficiency:{status:measurement.sufficiency_status,sample_size:measurement.sample_size,population_size:measurement.population_size},threshold,interpretation,source_snapshot_ids:measurement.source_snapshot_ids||[],lineage:body.lineage||[],calculation_run_id:measurement.calculation_run_id,correlation_id:requestId||measurement.correlation_id});
+    const publicDef=publicDefinition(indicator);
+    const snapshotForAction={state:measurement.official_state,result:provisional.result,trust:provisional.trust,sufficiency:{status:measurement.sufficiency_status,sample_size:measurement.sample_size,population_size:measurement.population_size}};
+    const actionableState=buildActionableState({definition:publicDef,snapshot:snapshotForAction,dataRequirements,sourceContract});
+    const payload=buildSnapshotPayload({tenant_id:tenantId(scope),metric_code:indicator.functional_code,metric_definition_id:indicator.id,definition_version:indicator.definition_version,formula_code:indicator.formula_code,formula_version:indicator.official_formula_version_id,semantic_contract:{version_id:indicator.semantic_contract_version_id},mapping:indicator.mapping_id?{id:indicator.mapping_id}:null,calculation_policy:{id:indicator.calculation_policy_id,version:indicator.calculation_policy_version,checksum:indicator.calculation_policy_checksum},methodology_version:indicator.methodology_version,period:{key:measurement.period_key,start:measurement.period_start,end:measurement.period_end,timezone:body.timezone||'America/Santiago'},effective_at:measurement.source_timestamp||measurement.period_end,result:provisional.result,unit:measurement.unit,target:body.target??null,coverage:provisional.coverage,trust:provisional.trust,freshness:{status:measurement.freshness_status==='current'?'fresh':measurement.freshness_status},sufficiency:{status:measurement.sufficiency_status,sample_size:measurement.sample_size,population_size:measurement.population_size},data_requirements:dataRequirements,source_contract:sourceContract,actionable_state:actionableState,threshold,interpretation,source_snapshot_ids:measurement.source_snapshot_ids||[],lineage:body.lineage||[],calculation_run_id:measurement.calculation_run_id,correlation_id:requestId||measurement.correlation_id});
     const inserted=(await client.query(`INSERT INTO metric_snapshots(tenant_id,metric_definition_id,measurement_id,formula_version_id,period_key,snapshot_payload,content_hash,created_by,metadata,definition_version_id,calculation_run_id,official_formula_version_id,trust_assessment_id,threshold_version,methodology_version,effective_at,source_snapshot_ids,correlation_id,snapshot_status)
       VALUES($1::uuid,$2::uuid,$3::uuid,NULL,$4,$5::jsonb,$6,$7::uuid,$8::jsonb,$9::uuid,$10::uuid,$11::uuid,$12::uuid,$13,$14,$15::timestamptz,$16::uuid[],$17,'draft')
       ON CONFLICT(tenant_id,metric_definition_id,period_key,content_hash) DO NOTHING RETURNING *`,[tenantId(scope),indicator.id,measurement.id,measurement.period_key,JSON.stringify(payload),payload.checksum,actorId(scope),JSON.stringify({functional_code:indicator.functional_code}),indicator.definition_version_id,measurement.calculation_run_id,indicator.official_formula_version_id,trustAssessment.id,threshold?.version||null,indicator.methodology_version,payload.effective_at,payload.source_snapshot_ids,requestId||measurement.correlation_id])).rows[0];
