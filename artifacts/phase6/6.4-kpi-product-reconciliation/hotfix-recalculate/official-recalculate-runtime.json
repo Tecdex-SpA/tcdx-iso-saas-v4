@@ -1,0 +1,162 @@
+{
+  "generated_at": "2026-08-12T13:40:19.927Z",
+  "runtime": "https://tcdx-iso.tecdex.net",
+  "profile": {
+    "role": "admin",
+    "tenant_id": "70000000-0000-0000-0000-000000000701"
+  },
+  "endpoint": "/api/metrics/official/dashboard/recalculate",
+  "payload": {
+    "period": {
+      "key": "2026-08",
+      "start": "2026-08-01T00:00:00.000Z",
+      "end": "2026-08-12T13:40:15.369Z",
+      "timezone": "America/Santiago"
+    }
+  },
+  "before": {
+    "catalog": {
+      "http": 200,
+      "count": 22
+    },
+    "dashboard": {
+      "http": 200,
+      "total_kpis": 22,
+      "measured_kpis": 6,
+      "data_coverage_pct": 62.5,
+      "official_score": null,
+      "health_kpis": 2,
+      "green": 2,
+      "yellow": 3,
+      "red": 1,
+      "gray": 16,
+      "states": {
+        "calculated": 6,
+        "insufficient_data": 15,
+        "dependency_pending": 1
+      },
+      "health_items": [
+        {
+          "code": "DATA-TRUST",
+          "name": "Confianza del dato",
+          "state": "insufficient_data",
+          "value": null,
+          "status_color": "gray"
+        },
+        {
+          "code": "GRC-HEALTH",
+          "name": "Salud GRC",
+          "state": "dependency_pending",
+          "value": null,
+          "status_color": "gray"
+        }
+      ]
+    }
+  },
+  "recalculate": {
+    "http": 200,
+    "ok": true,
+    "body_ok": true,
+    "wrapper_keys": [
+      "ok",
+      "data",
+      "request_id"
+    ],
+    "data_keys": [
+      "recalculated",
+      "failed",
+      "snapshots_created",
+      "snapshots_failed",
+      "results"
+    ],
+    "recalculated": 22,
+    "failed": 0,
+    "snapshots_created": 22,
+    "snapshots_failed": 0,
+    "results_count": 22,
+    "states": {
+      "calculated": 6,
+      "insufficient_data": 15,
+      "dependency_pending": 1
+    },
+    "calculation_run_ids_count": 6,
+    "measurement_ids_count": 22,
+    "sample_results": [
+      {
+        "metric_code": "ACTIONS",
+        "status": "completed",
+        "official_state": "calculated",
+        "value_numeric": 62.5,
+        "calculation_run_id_present": true
+      },
+      {
+        "metric_code": "REMEDIATION",
+        "status": "completed",
+        "official_state": "calculated",
+        "value_numeric": 62.5,
+        "calculation_run_id_present": true
+      },
+      {
+        "metric_code": "AUDIT-ASSURANCE",
+        "status": "completed",
+        "official_state": "insufficient_data",
+        "value_numeric": null,
+        "calculation_run_id_present": false
+      },
+      {
+        "metric_code": "COVERAGE",
+        "status": "completed",
+        "official_state": "calculated",
+        "value_numeric": 75,
+        "calculation_run_id_present": true
+      },
+      {
+        "metric_code": "COMPLIANCE",
+        "status": "completed",
+        "official_state": "calculated",
+        "value_numeric": 83.33,
+        "calculation_run_id_present": true
+      }
+    ]
+  },
+  "after": {
+    "catalog": {
+      "http": 200,
+      "count": 22
+    },
+    "dashboard": {
+      "http": 200,
+      "total_kpis": 22,
+      "measured_kpis": 6,
+      "data_coverage_pct": 62.5,
+      "official_score": null,
+      "health_kpis": 2,
+      "green": 2,
+      "yellow": 3,
+      "red": 1,
+      "gray": 16,
+      "states": {
+        "calculated": 6,
+        "insufficient_data": 15,
+        "dependency_pending": 1
+      },
+      "health_items": [
+        {
+          "code": "DATA-TRUST",
+          "name": "Confianza del dato",
+          "state": "insufficient_data",
+          "value": null,
+          "status_color": "gray"
+        },
+        {
+          "code": "GRC-HEALTH",
+          "name": "Salud GRC",
+          "state": "dependency_pending",
+          "value": null,
+          "status_color": "gray"
+        }
+      ]
+    }
+  },
+  "conclusion": "Official recalculation endpoint returned governed Phase 5 counters under body.data; frontend must unwrap data before rendering counters."
+}

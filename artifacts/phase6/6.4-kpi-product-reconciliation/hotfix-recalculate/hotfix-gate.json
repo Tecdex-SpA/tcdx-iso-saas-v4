@@ -1,0 +1,21 @@
+{
+  "status": "READY_FOR_INTERMEDIATE_MERGE_REVIEW",
+  "scope": "PHASE 6.4 focused hotfix - official recalculation counters and copy",
+  "gates": {
+    "OFFICIAL_RECALCULATE_ENDPOINT_CORRECT": "PASS",
+    "OFFICIAL_RECALCULATE_PIPELINE_EXECUTED": "PASS",
+    "OFFICIAL_RECALCULATE_RESPONSE_PARSED_CORRECTLY": "PASS",
+    "FALSE_ZERO_COUNTER": 0,
+    "OFFICIAL_NULL_TO_ZERO": 0,
+    "LEGITIMATE_ZERO_PRESERVED": "PASS",
+    "ADMIN_OFFICIAL_RECALCULATE_CROSSOVER": 0,
+    "ADMIN_SCORE_USED_AS_OFFICIAL": 0,
+    "OFFICIAL_SCORE_FAKE_FALLBACK": 0,
+    "SCORE_UX_AMBIGUITY": 0,
+    "PHASE6_4_REGRESSION": 0,
+    "ZERO_HARDCODE": "PASS",
+    "SELLABLE_MULTI_TENANT": "PASS"
+  },
+  "runtime_evidence": "artifacts/phase6/6.4-kpi-product-reconciliation/hotfix-recalculate/official-recalculate-runtime.json",
+  "trace_matrix": "artifacts/phase6/6.4-kpi-product-reconciliation/hotfix-recalculate/trace-matrix.md"
+}

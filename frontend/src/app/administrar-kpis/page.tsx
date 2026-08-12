@@ -1323,6 +1323,7 @@ export default function AdministrarKpisPage() {
             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-right">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">{t('kpiAdmin.adminScoreLabel')}</p>
               <p className="mt-1 text-3xl font-black text-slate-950">{kpiStatusOverview.score}%</p>
+              <p className="mt-1 max-w-xs text-xs leading-5 text-blue-800">{t('kpiAdmin.adminScoreDescription')}</p>
             </div>
           </div>
 

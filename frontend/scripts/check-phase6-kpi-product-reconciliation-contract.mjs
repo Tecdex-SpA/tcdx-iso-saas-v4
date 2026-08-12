@@ -56,6 +56,16 @@ assert(
 );
 
 assert(
+  dashboardPage.includes('/api/metrics/official/dashboard/recalculate') &&
+    dashboardPage.includes('summarizeOfficialRecalculateResponse(json)') &&
+    dashboardPage.includes('unwrapApiData(payload)') &&
+    dashboardPage.includes('recalculateOfficialSuccess') &&
+    !dashboardPage.includes('const healthRecalculated = 0') &&
+    !dashboardPage.includes("t('dashboardKpi.recalculateSuccess', { count: kpisRecalculated"),
+  'Dashboard official recalculation must parse the official { ok, data } response and must not display Admin/Health counters.'
+);
+
+assert(
   dashboardPage.includes('scoreKpiGlobal') &&
     /official_score\s*===\s*null/.test(dashboardPage) &&
     !/official_score[\s\S]{0,120}\?\?\s*0/.test(dashboardPage),
@@ -73,8 +83,12 @@ assert(
 assert(
   es.includes('No son la fuente de verdad de los indicadores oficiales Phase 5') &&
     es.includes('No crea un indicador oficial gobernado') &&
+    es.includes('No forma parte del Score Global oficial') &&
+    es.includes('Recálculo oficial ejecutado') &&
     en.includes('They are not the source of truth for Phase 5 official indicators') &&
-    en.includes('It does not create a governed official indicator'),
+    en.includes('It does not create a governed official indicator') &&
+    en.includes('It is not part of the official Global Score') &&
+    en.includes('Official recalculation executed'),
   'Product copy must explicitly distinguish Admin KPI from Official KPI.'
 );
 
