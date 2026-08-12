@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "imports:check": "node scripts/imports/check-universal-import.js && node backend/src/services/imports/excelWorkbook.test.js",
+    "test:prephase7-cleanup": "node scripts/pre-phase7/check-prephase7-cleanup.js",
     "phase0:inventory": "npm --prefix backend run phase0:inventory",
     "phase0:classify": "npm --prefix backend run phase0:classify",
     "phase0:contracts:check": "npm --prefix backend run phase0:contracts:check",

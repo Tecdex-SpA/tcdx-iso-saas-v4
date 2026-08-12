@@ -4,11 +4,10 @@
 
 - `/dashboard` es la entrada principal para Vista Ejecutiva, Vista KPI y Centro Control ISO.
 - `/dashboard` concentra la experiencia visible KPI y Centro Control ISO.
-- `/dashboard-v2` queda como ruta legacy con redireccion segura a `/dashboard`.
 
 ## Rutas legacy
 
-- `/dashboard-v2` redirige a `/dashboard`.
+- No queda ruta `/dashboard-v2` en la superficie QA activa.
 
 Los redirects desacoplados en B.3 dejan de ser contrato de QA y demo. Su
 historial y retiro se controlan desde `docs/cleanup/`.

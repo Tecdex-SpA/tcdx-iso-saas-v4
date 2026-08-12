@@ -1,0 +1,26 @@
+{
+  "status": "READY_FOR_INTERMEDIATE_MERGE_REVIEW",
+  "branch": "cleanup/pre-phase7-legacy",
+  "base_sha": "081686dec05658735196a8a2804c722f646ae237",
+  "gate": {
+    "DASHBOARD_CANONICAL_ONLY": "PASS",
+    "DASHBOARD_V2_ACTIVE_PRODUCT_CODE": 0,
+    "DASHBOARD_V2_DEAD_COMPONENTS": 0,
+    "DASHBOARD_V2_UNUSED_API": 0,
+    "LEGACY_ROUTE_EXPOSED_CRITICAL": 0,
+    "TEST_ONLY_ROUTE_EXPOSED_CRITICAL": 0,
+    "RECHARTS_RUNTIME_WARNING_CRITICAL": 0,
+    "UNUSED_PRODUCT_CODE_CRITICAL": 0,
+    "BROKEN_NAVIGATION": 0,
+    "RBAC_REGRESSION": 0,
+    "PHASE6_REGRESSION": 0,
+    "PHASE5_REGRESSION": 0,
+    "ZERO_HARDCODE": "PASS",
+    "SELLABLE_MULTI_TENANT": "PASS"
+  },
+  "remaining_non_critical_debt": [
+    "historical dashboard-v2 documentation remains in old phase/cleanup history files",
+    "DATABASE_LEGACY_RETAINED: user_dashboard_preferences table not dropped in pre-Phase 7 cleanup",
+    "unrelated internal/enterprise routes such as /ia, /documentos and /ejecucion-iso remain for future scoped decisions"
+  ]
+}

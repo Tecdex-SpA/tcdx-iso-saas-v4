@@ -405,7 +405,6 @@ export const INTERNAL_CLIENT_HIDDEN_ROUTES = [
   '/auditorias',
   '/auditorias/ejecucion',
   '/controles',
-  '/dashboard-v2',
   '/diagnostico',
   '/documentos',
   '/ejecucion-iso',

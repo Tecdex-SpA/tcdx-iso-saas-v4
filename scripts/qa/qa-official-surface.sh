@@ -161,7 +161,6 @@ for route in "${official_mvp_routes[@]}"; do
 done
 
 non_mvp_client_routes=(
-  /dashboard-v2
   /dashboard-kpi
   /ia
   /ia-auditor
@@ -237,7 +236,6 @@ for route in "${non_mvp_client_routes[@]}"; do
 done
 
 b7_retained_active_routes=(
-  /dashboard-v2
   /ia
   /ejecucion-iso
   /documentos
@@ -287,7 +285,7 @@ for route in /dashboard-kpi /centro-control-iso /command-center-iso /auditor-iso
   esac
 done
 
-for route in /health /dashboard-v2 /dashboard-kpi /ia-auditor /auditorias/ia /auditor-iso /command-center-iso /centro-control-iso /ejecucion-iso /documentos; do
+for route in /health /dashboard-kpi /ia-auditor /auditorias/ia /auditor-iso /command-center-iso /centro-control-iso /ejecucion-iso /documentos; do
   if route_in_mvp_rules "$route"; then
     fail "$route must not be in MVP_ROUTE_RULES"
   else

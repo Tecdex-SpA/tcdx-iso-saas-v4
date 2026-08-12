@@ -1,0 +1,31 @@
+{
+  "scope": "targeted cleanup based on known legacy/internal candidates; no full route reinventory",
+  "removed": [
+    {
+      "route": "/dashboard-v2",
+      "type": "frontend legacy compatibility route",
+      "reason": "canonical dashboard is /dashboard; no productive imports or commercial contract remained",
+      "action": "removed"
+    },
+    {
+      "route": "/api/dashboard-v2",
+      "type": "backend legacy compatibility API",
+      "reason": "consumed only by retired dashboard-v2 frontend code and legacy scripts",
+      "action": "removed"
+    }
+  ],
+  "retained": [
+    {
+      "route": "/tests",
+      "classification": "ACTIVE",
+      "reason": "mapped to assurance.testing capability, linked from GRC portal, and covered by Phase 5/demo visual contracts"
+    },
+    {
+      "route": "frontend/legacy-pages-archive/*",
+      "classification": "HISTORICAL_RETENTION",
+      "reason": "outside active App Router; no pre-Phase 7 product change required"
+    }
+  ],
+  "test_only_route_exposed_critical": 0,
+  "legacy_route_exposed_critical": 0
+}

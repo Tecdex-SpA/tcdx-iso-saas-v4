@@ -28,7 +28,6 @@ Alcance: inventario estatico. No se eliminaron rutas, no se ejecuto SQL y no se 
 | `backend/src/routes/company-profile.routes.js` | Si | `/api/company-profile` | core_mvp | JWT + RBAC global | Tenant requerido | Conservar. |
 | `backend/src/routes/controls.routes.js` | Si | `/api/controls` | core_mvp | JWT + RBAC global | Tenant requerido | Conservar; alto valor para pruebas por tamano. |
 | `backend/src/routes/dashboard-controls.routes.js` | Si | `/api/dashboard-controls` | core_mvp | JWT + RBAC global | Tenant requerido | Conservar; revisar solape con dashboard. |
-| `backend/src/routes/dashboard-v2.routes.js` | Si | `/api/dashboard-v2` | duplicada_probable | JWT + RBAC global | Tenant requerido | Conservar por compatibilidad; clasificar post-MVP/legacy con producto. |
 | `backend/src/routes/dashboard.routes.js` | Si | `/api/dashboard` | core_mvp | JWT + RBAC global | Tenant requerido | Conservar como dashboard principal. |
 | `backend/src/routes/diagnostic.routes.js` | Si | `/api/diagnostic`, `/api/diagnostics` | core_mvp | JWT + RBAC global | Tenant requerido | Conservar; alias duplicado aceptado por compatibilidad. |
 | `backend/src/routes/document-integrations-analysis.routes.js` | Si | `/api/document-integrations` | enterprise_post_mvp | JWT + RBAC global | Tenant/source requerido | Conservar; pruebas provider/tenant. |
