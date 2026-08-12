@@ -1,0 +1,60 @@
+{
+  "phase": "6.4",
+  "mapping": [
+    {
+      "concept": "Catalog count",
+      "admin_source": "GET /api/kpis/admin/:tenantId",
+      "official_source": "GET /api/metrics/official/catalog",
+      "same_identity": false,
+      "same_value_semantics": false,
+      "classification": "RELATED_BUT_DIFFERENT",
+      "required_action": "Do not force equal counts; explain distinct universes."
+    },
+    {
+      "concept": "Dashboard KPI view",
+      "admin_source": "none",
+      "official_source": "GET /api/metrics/official/dashboard",
+      "same_identity": false,
+      "same_value_semantics": false,
+      "classification": "OFFICIAL_GOVERNED_OUTPUT",
+      "required_action": "Keep official source; label as official indicators."
+    },
+    {
+      "concept": "Métricas",
+      "admin_source": "none",
+      "official_source": "GET /api/metrics/official/catalog",
+      "same_identity": false,
+      "same_value_semantics": false,
+      "classification": "OFFICIAL_GOVERNED_OUTPUT",
+      "required_action": "Clarify that values are governed snapshots, not admin config."
+    },
+    {
+      "concept": "Health summary",
+      "admin_source": "GET /api/kpi(s)/effective-health-summary/:tenantId",
+      "official_source": "GET /api/metrics/official/dashboard summary",
+      "same_identity": false,
+      "same_value_semantics": false,
+      "classification": "RELATED_BUT_DIFFERENT",
+      "required_action": "Present as administrative/Health ISO operational view, not official Global Score."
+    },
+    {
+      "concept": "Score Global",
+      "admin_source": "Admin KPI operational score",
+      "official_source": "official_score from GET /api/metrics/official/dashboard",
+      "same_identity": false,
+      "same_value_semantics": false,
+      "classification": "OFFICIAL_GOVERNED_OUTPUT",
+      "required_action": "Preserve official null when GRC-HEALTH is pending; no admin fallback."
+    },
+    {
+      "concept": "Custom KPI",
+      "admin_source": "POST /api/kpis/custom",
+      "official_source": "none",
+      "same_identity": false,
+      "same_value_semantics": false,
+      "classification": "ADMIN_ONLY",
+      "required_action": "Explain that creating custom admin KPI does not create official governed indicator."
+    }
+  ],
+  "secrets_stored": false
+}

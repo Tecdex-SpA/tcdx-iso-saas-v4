@@ -1,0 +1,50 @@
+{
+  "phase": "6.4",
+  "universe": "OFFICIAL_KPI",
+  "definition": "Governed Phase 5 official functional indicator universe.",
+  "frontend_routes": [
+    "/metricas",
+    "/metricas/:code",
+    "/dashboard?view=kpi",
+    "/bi",
+    "/grc",
+    "/reportes/studio",
+    "/exportes"
+  ],
+  "primary_api": [
+    "GET /api/metrics/official/catalog",
+    "GET /api/metrics/official/dashboard",
+    "GET /api/metrics/official/export",
+    "GET /api/metrics/official/:metricCode",
+    "GET /api/metrics/official/:metricCode/history",
+    "GET /api/metrics/official/:metricCode/technical"
+  ],
+  "backend": [
+    "backend/src/routes/phase5.routes.js",
+    "backend/src/services/indicators/indicatorGovernance.service.js",
+    "backend/src/services/math-governance/officialCalculation.service.js"
+  ],
+  "tables_observed": [
+    "metric_definitions",
+    "metric_definition_versions",
+    "metric_source_bindings",
+    "metric_measurements",
+    "metric_snapshots",
+    "calculation_runs"
+  ],
+  "responsibilities": [
+    "governed formulas and definitions",
+    "source contracts and source bindings",
+    "official calculation runs and measurements",
+    "published snapshots",
+    "official states and values",
+    "lineage and explanation"
+  ],
+  "not_responsible_for": [
+    "Admin KPI CRUD",
+    "tenant-specific KPI settings",
+    "manual administrative KPI snapshots"
+  ],
+  "classification": "OFFICIAL_GOVERNED_OUTPUT",
+  "secrets_stored": false
+}

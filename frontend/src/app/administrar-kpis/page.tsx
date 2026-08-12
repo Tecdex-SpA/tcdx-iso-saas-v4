@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import {
   EnterpriseButton,
   EnterpriseKpiCard,
@@ -10,6 +12,7 @@ import {
   EnterpriseScrollPanel,
 } from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
+import { canAccessMvpFeature } from '@/utils/mvpPermissions';
 import { useTranslation } from '@/hooks/useTranslation';
 
 const API_URL =
@@ -101,6 +104,9 @@ type EffectiveHealthRow = {
 
 type AuthUser = {
   tenant_id?: string;
+  role?: string;
+  user_role?: string;
+  userRole?: string;
 };
 
 type HealthRefreshRow = {
@@ -277,7 +283,7 @@ function enrichHealthKpis(items: KpiAdminItem[], rows: EffectiveHealthRow[]): Kp
       latest_status_color: metric.color,
       latest_snapshots: item.latest_snapshots && item.latest_snapshots.length > 0
         ? item.latest_snapshots
-        : metrics.rows.slice(0, 8).map((row) => {
+        : metrics.rows.map((row) => {
             const code = row.iso || null;
             const value =
               item.code === 'KPI-HLT-003'
@@ -313,6 +319,7 @@ function enrichHealthKpis(items: KpiAdminItem[], rows: EffectiveHealthRow[]): Kp
 
 export default function AdministrarKpisPage() {
   const { t } = useTranslation();
+  const { loading: entitlementsLoading, hasCapability } = useTenantEntitlements();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [canRefreshHealth, setCanRefreshHealth] = useState(false);
@@ -1157,6 +1164,13 @@ export default function AdministrarKpisPage() {
     };
   }, [enrichedData, filtered]);
 
+  const userRole = String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
+  const canAdministerKpis = canRefreshHealth;
+  const canViewOfficialIndicators =
+    !entitlementsLoading &&
+    canAccessMvpFeature(userRole, 'phase5.read') &&
+    hasCapability('metrics.catalog');
+
   const kpiStatusOverview = useMemo(() => {
     const counts = {
       green: 0,
@@ -1195,8 +1209,7 @@ export default function AdministrarKpisPage() {
 
     return Array.from(counts.entries())
       .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
+      .sort((a, b) => b.count - a.count);
   }, [enrichedData]);
 
   const manualPendingKpis = useMemo(() => {
@@ -1208,8 +1221,7 @@ export default function AdministrarKpisPage() {
         const color = item.latest_status_color;
         const value = item.latest_value;
         return !color || color === 'gray' || value === null || value === undefined || value === '';
-      })
-      .slice(0, 8);
+      });
   }, [enrichedData]);
 
   return (
@@ -1220,6 +1232,16 @@ export default function AdministrarKpisPage() {
           subtitle={t('kpiAdmin.subtitle')}
           actions={
             <>
+            {canViewOfficialIndicators && (
+              <EnterpriseButton
+                href="/metricas"
+                variant="secondary"
+                className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              >
+                {t('kpiAdmin.viewOfficialIndicators')}
+              </EnterpriseButton>
+            )}
+
             <EnterpriseButton
               href="/iso-health"
               variant="secondary"
@@ -1228,15 +1250,16 @@ export default function AdministrarKpisPage() {
               {t('kpiAdmin.viewHealth')}
             </EnterpriseButton>
 
-            <EnterpriseButton
-              type="button"
-              onClick={recalculateKpis}
-              disabled={saving === 'recalculate' || !canRefreshHealth}
-              title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
-              className="disabled:opacity-60"
-            >
-              {saving === 'recalculate' ? t('dashboardKpi.recalculating') : t('dashboardKpi.recalculateKpis')}
-            </EnterpriseButton>
+            {canAdministerKpis && (
+              <EnterpriseButton
+                type="button"
+                onClick={recalculateKpis}
+                disabled={saving === 'recalculate'}
+                className="disabled:opacity-60"
+              >
+                {saving === 'recalculate' ? t('dashboardKpi.recalculating') : t('dashboardKpi.recalculateAdminKpis')}
+              </EnterpriseButton>
+            )}
 
             <EnterpriseButton
               href="/dashboard"
@@ -1248,21 +1271,57 @@ export default function AdministrarKpisPage() {
           }
         />
 
+        <section className="enterprise-card border-blue-100 bg-blue-50/60">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-4xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
+                {t('kpiAdmin.adminUniverseEyebrow')}
+              </p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">
+                {t('kpiAdmin.adminUniverseTitle')}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">
+                {t('kpiAdmin.adminUniverseDescription')}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-sm">
+              <div className="font-semibold text-slate-950">{t('kpiAdmin.officialUniverseTitle')}</div>
+              <div className="mt-1 max-w-sm">{t('kpiAdmin.officialUniverseDescription')}</div>
+              {canViewOfficialIndicators && (
+                <Link
+                  href="/metricas"
+                  className="mt-3 inline-flex min-h-9 items-center rounded-lg border border-blue-200 px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50"
+                >
+                  {t('kpiAdmin.viewOfficialIndicators')}
+                </Link>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {!canAdministerKpis && (
+          <section className="enterprise-card border-amber-200 bg-amber-50/70 text-sm text-amber-900">
+            <strong>{t('kpiAdmin.readOnlyNoticeTitle')}</strong>
+            <p className="mt-1">{t('kpiAdmin.readOnlyNoticeDescription')}</p>
+          </section>
+        )}
+
         <section className="enterprise-card space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Estado general de KPI
+                {t('kpiAdmin.adminStatusEyebrow')}
               </p>
               <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-                Distribución operativa y salud de medición
+                {t('kpiAdmin.adminStatusTitle')}
               </h2>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-                Los KPI Health cargan lectura inicial desde Health ISO efectivo cuando aún no existe snapshot administrativo.
+                {t('kpiAdmin.adminStatusDescription')}
               </p>
             </div>
             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-right">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">Score KPI</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">{t('kpiAdmin.adminScoreLabel')}</p>
               <p className="mt-1 text-3xl font-black text-slate-950">{kpiStatusOverview.score}%</p>
             </div>
           </div>
@@ -1323,11 +1382,11 @@ export default function AdministrarKpisPage() {
         </section>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <MetricCard title={t('kpiAdmin.totalKpis')} value={stats.total} />
-          <MetricCard title={t('kpiAdmin.enabled')} value={stats.enabled} />
-          <MetricCard title={t('kpiAdmin.standard')} value={stats.standard} />
-          <MetricCard title={t('dashboardKpi.health')} value={stats.health} />
-          <MetricCard title={t('kpiAdmin.custom')} value={stats.custom} />
+          <MetricCard title={t('kpiAdmin.adminTotalKpis')} value={stats.total} />
+          <MetricCard title={t('kpiAdmin.adminEnabled')} value={stats.enabled} />
+          <MetricCard title={t('kpiAdmin.adminStandard')} value={stats.standard} />
+          <MetricCard title={t('kpiAdmin.adminHealth')} value={stats.health} />
+          <MetricCard title={t('kpiAdmin.adminCustom')} value={stats.custom} />
           <MetricCard title={t('kpiAdmin.filtered')} value={stats.filtered} />
         </div>
 
@@ -1337,7 +1396,7 @@ export default function AdministrarKpisPage() {
           compact
         />
 
-        {manualPendingKpis.length > 0 && (
+        {canAdministerKpis && manualPendingKpis.length > 0 && (
           <section className="enterprise-card border-amber-200 bg-amber-50/70">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -1395,6 +1454,7 @@ export default function AdministrarKpisPage() {
           </section>
         )}
 
+        {canAdministerKpis && (
         <details className="enterprise-card group">
           <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
             <div>
@@ -1596,6 +1656,7 @@ export default function AdministrarKpisPage() {
             </button>
           </div>
         </details>
+        )}
 
         <section className="enterprise-card space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1814,7 +1875,7 @@ export default function AdministrarKpisPage() {
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <div className="text-sm font-semibold text-slate-900">
-                            {t('kpiAdmin.latestCalculatedValue')}
+                            {t('kpiAdmin.latestAdminValue')}
                           </div>
                           <div className="text-xs text-slate-500">
                             {t('common.period')}: {formatDate(item.latest_period_start)} - {formatDate(item.latest_period_end)}
@@ -1886,7 +1947,7 @@ export default function AdministrarKpisPage() {
                         >
                           {t('kpiAdmin.viewHealthDashboard')}
                         </a>
-                      ) : (
+                      ) : canAdministerKpis ? (
                         <>
                           <button
                             type="button"
@@ -1943,6 +2004,10 @@ export default function AdministrarKpisPage() {
                             </button>
                           )}
                         </>
+                      ) : (
+                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 md:col-span-3 xl:col-span-5">
+                          {t('kpiAdmin.readOnlyActionsHidden')}
+                        </div>
                       )}
                     </div>
 

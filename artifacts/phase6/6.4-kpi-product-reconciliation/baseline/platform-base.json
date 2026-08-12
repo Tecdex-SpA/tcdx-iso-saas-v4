@@ -1,0 +1,20 @@
+{
+  "phase": "6.4",
+  "main_head_at_start": "aeb923953b31c3899611afc205fcec5fa2dfc388",
+  "origin_main_at_start": "aeb923953b31c3899611afc205fcec5fa2dfc388",
+  "branch": "phase6/kpi-product-reconciliation",
+  "runtime": "https://tcdx-iso.tecdex.net",
+  "services": {
+    "frontend_http": 200,
+    "backend_health_http": 200,
+    "backend_status": "healthy",
+    "ai_engine_dependency": "healthy"
+  },
+  "closed_baselines_preserved": [
+    "PHASE_5_CLOSED",
+    "PHASE_6_1_BASELINE_PREFLIGHT_PASS",
+    "PHASE_6_2_UI_RESPONSIVE_PASS",
+    "PHASE_6_3_SIDEBAR_NAVIGATION_RBAC_PASS"
+  ],
+  "secrets_stored": false
+}

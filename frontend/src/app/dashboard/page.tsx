@@ -1511,7 +1511,7 @@ function DashboardPageContent() {
                           disabled={recalculatingKpis}
                           className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--tcdx-color-primary-hover)] disabled:opacity-60"
                         >
-                          {recalculatingKpis ? 'Recalculando...' : 'Recalcular KPIs'}
+                          {recalculatingKpis ? 'Recalculando...' : t('dashboardKpi.recalculateKpis')}
                         </button>
                       </>
                     )}
@@ -1799,7 +1799,7 @@ function DashboardPageContent() {
                           href="/administrar-kpis"
                           className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--tcdx-color-primary)] transition hover:text-[var(--tcdx-color-primary-hover)]"
                         >
-                          <span>Abrir administración</span>
+                          <span>{t('dashboardKpi.administerKpis')}</span>
                           <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
                         </a>
                       )}
@@ -1807,7 +1807,7 @@ function DashboardPageContent() {
 
                     {kpiItems.length === 0 ? (
                       <div className="text-[var(--tcdx-color-text-secondary)]">
-                        No hay KPIs disponibles para este tenant.
+                        No hay indicadores oficiales disponibles para este tenant.
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -2268,19 +2268,19 @@ function ExecutiveKpiPulse({
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tcdx-color-text-muted)]">Estado KPI</p>
           <h2 className="mt-1 text-xl font-semibold text-[var(--tcdx-color-text-ink)]">Indicadores operacionales de desempeño</h2>
           <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
-            Resumen de KPIs calculados, cobertura de medición y KPIs Health.
+            Resumen de indicadores oficiales, cobertura de medición y Health.
           </p>
         </div>
         <a
           href="/dashboard?view=kpi"
           className="inline-flex w-fit rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--tcdx-color-primary-hover)]"
         >
-          Abrir vista KPI
+          Abrir indicadores oficiales
         </a>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <PriorityMiniMetric label="Score KPI" value={score === null ? 'Sin medición' : `${score}%`} />
+        <PriorityMiniMetric label="Score oficial" value={score === null ? 'Sin medición' : `${score}%`} />
         <PriorityMiniMetric label="Cobertura" value={`${coverage}%`} />
         <PriorityMiniMetric label="Críticos" value={String(red)} />
         <PriorityMiniMetric label="Sin datos" value={String(gray)} />

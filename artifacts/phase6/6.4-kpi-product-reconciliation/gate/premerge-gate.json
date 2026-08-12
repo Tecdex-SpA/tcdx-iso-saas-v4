@@ -1,0 +1,42 @@
+{
+  "phase": "6.4",
+  "status": "READY_FOR_INTERMEDIATE_MERGE_REVIEW",
+  "reason": "Product code changed; final PASS requires PR, CI, merge, deploy, and post-deploy validation.",
+  "gate": {
+    "ADMIN_OFFICIAL_CONTRADICTION": 0,
+    "KPI_CONFIGURATION_EXPECTATION_MISMATCH": 0,
+    "ADMIN_PRESENTED_AS_OFFICIAL": 0,
+    "OFFICIAL_PRESENTED_AS_ADMIN_CONFIG": 0,
+    "ADMIN_TO_OFFICIAL_VALUE_COPY": 0,
+    "OFFICIAL_TO_ADMIN_VALUE_COPY": 0,
+    "ADMIN_OFFICIAL_COUNT_FORCED_EQUALITY": 0,
+    "PARALLEL_OFFICIAL_CALCULATION": 0,
+    "OFFICIAL_SCORE_FAKE_FALLBACK": 0,
+    "OFFICIAL_NULL_TO_ZERO": 0,
+    "UNAUTHORIZED_KPI_ADMIN_ACTION": 0,
+    "KPI_CROSS_TENANT_LEAKAGE": 0,
+    "PHASE6_3_REGRESSION": 0,
+    "PHASE6_2_REGRESSION": 0,
+    "PHASE5_REGRESSION": 0,
+    "ZERO_HARDCODE": "PASS",
+    "SELLABLE_MULTI_TENANT": "PASS"
+  },
+  "tests": [
+    "npm --prefix frontend run test:phase6-kpi-product-reconciliation",
+    "npm --prefix frontend run typecheck",
+    "npm --prefix frontend run lint",
+    "npm --prefix frontend run test",
+    "npm --prefix frontend run test:phase6-ui-responsive",
+    "npm --prefix frontend run test:phase6-sidebar-rbac",
+    "node scripts/phase5-5/check-production-acceptance-contract.js",
+    "npm --prefix frontend run build",
+    "git diff --check"
+  ],
+  "runtime_errors": {
+    "HTTP_5XX": 0,
+    "SQL_SCHEMA_ERRORS": 0,
+    "FRONTEND_CRITICAL_EXCEPTIONS": 0,
+    "CROSS_TENANT_LEAKAGE": 0
+  },
+  "secrets_stored": false
+}
