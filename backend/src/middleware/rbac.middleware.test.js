@@ -127,6 +127,29 @@ const viewerDeniedMetricWrite = authorize({ method: 'POST', path: '/api/metrics'
 assert.equal(viewerDeniedMetricWrite.nextCalled, false);
 assert.equal(viewerDeniedMetricWrite.res.statusCode, 403);
 
+for (const prefix of ['/api/kpi', '/api/kpis']) {
+  for (const role of ['auditor', 'viewer', 'operativo']) {
+    const result = authorize({
+      method: 'GET',
+      path: `${prefix}/effective-health-summary/${batchId}`,
+      role,
+    });
+    assert.equal(
+      result.nextCalled,
+      true,
+      `${role} can read dashboard effective health summary from ${prefix}`
+    );
+  }
+
+  const write = authorize({
+    method: 'POST',
+    path: `${prefix}/effective-health-summary/${batchId}`,
+    role: 'viewer',
+  });
+  assert.equal(write.nextCalled, false, `viewer cannot write effective health summary from ${prefix}`);
+  assert.equal(write.res.statusCode, 403);
+}
+
 const riskMatrixRead = authorize({
   method: 'GET',
   path: `/api/iso-risk-matrix/${batchId}/latest`,

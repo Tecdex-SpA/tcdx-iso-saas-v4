@@ -1,0 +1,40 @@
+{
+  "phase": "6.3",
+  "post_deploy_pr": 82,
+  "initial_state": "POST_DEPLOY_VALIDATION",
+  "main_head": "98fa0ffe2a1b3f12c43d7a7e076f4f7caba22032",
+  "services": {
+    "backend": "healthy",
+    "ai_engine": "healthy",
+    "frontend": "healthy"
+  },
+  "validated_runtime": {
+    "canonical_dashboard": "/dashboard",
+    "dashboard_v2_redirects": true,
+    "sidebar_dashboard_v2_visible": false,
+    "admin_capability_routes_allowed": true,
+    "auditor_admin_routes_denied": true,
+    "viewer_admin_routes_denied": true,
+    "client_to_platform_denied": true,
+    "client_to_dealer_denied": true,
+    "capability_absent_routes_hidden_and_denied": true,
+    "exportes_with_reports_premium_allowed": true,
+    "exportes_without_reports_premium_denied": true,
+    "navigation_tenant_leakage": 0,
+    "critical_horizontal_overflow": 0
+  },
+  "blocking_finding": {
+    "status": "PLATFORM_GENERALIZATION_BUG",
+    "symptom": "Dashboard-visible read roles hit HTTP 403 on /api/kpi(s)/effective-health-summary/:tenantId.",
+    "root_cause": "Global RBAC matched the generic /api/kpi(s) admin-only rule before a dashboard-read health-summary exception existed.",
+    "affected_component": "backend/src/middleware/rbac.middleware.js",
+    "classification": "CRITICAL_UI_API_AUTH_MISMATCH",
+    "phase5_regression": false,
+    "phase6_2_regression": false
+  },
+  "fix": {
+    "branch": "phase6/sidebar-navigation-rbac",
+    "requires_deploy": true,
+    "status": "READY_FOR_INTERMEDIATE_MERGE_REVIEW"
+  }
+}
