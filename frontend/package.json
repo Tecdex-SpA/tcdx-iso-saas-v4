@@ -14,6 +14,7 @@
     "test:phase6-sidebar-rbac": "node scripts/check-phase6-sidebar-navigation-rbac-contract.mjs",
     "test:phase6-kpi-product-reconciliation": "node scripts/check-phase6-kpi-product-reconciliation-contract.mjs",
     "test:phase6-functional-flows": "node scripts/check-phase6-functional-flows-contract.mjs",
+    "test:phase6-commercial-multitenant": "node scripts/check-phase6-commercial-multitenant-contract.mjs",
     "lint:audit-preparation": "eslint src/components/auditorias/AuditPreparationPanel.tsx",
     "test:e2e:phase0": "playwright test --config=playwright.config.ts",
     "test:e2e:phase1": "playwright test --config=playwright.phase1.config.ts",

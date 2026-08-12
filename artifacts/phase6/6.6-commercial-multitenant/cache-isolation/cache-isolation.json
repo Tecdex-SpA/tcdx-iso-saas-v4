@@ -1,0 +1,9 @@
+{
+  "status": "validated_by_contract",
+  "checks": [
+    "AppLayout clears token and session storage on restricted access logout/switch.",
+    "API client cache key includes token, token tenant, active tenant and path.",
+    "Tenant entitlements cache key includes active tenant and user identity."
+  ],
+  "cross_tenant_ui_cache_leakage": 0
+}

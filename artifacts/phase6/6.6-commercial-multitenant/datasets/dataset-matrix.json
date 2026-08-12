@@ -1,0 +1,26 @@
+{
+  "status": "privacy_safe_structural_validation",
+  "datasets": [
+    {
+      "label": "dataset_a",
+      "role": "functional dataset with existing evidence/metrics",
+      "validation_source": "Phase 5.5 production acceptance and prior runtime artifacts",
+      "tenant_identifier_stored": false
+    },
+    {
+      "label": "dataset_b",
+      "role": "different tenant/dataset with distinct Admin/Official counts and official states",
+      "validation_source": "Phase 5.5 production acceptance and Phase 6.4/6.5 artifacts",
+      "tenant_identifier_stored": false
+    },
+    {
+      "label": "dataset_c",
+      "role": "reduced or empty commercial state",
+      "validation_source": "structural empty/unmeasured contracts",
+      "tenant_identifier_stored": false
+    }
+  ],
+  "principle": "same code plus same contracts plus different data produces different but correct results",
+  "no_customer_names": true,
+  "no_tokens_or_credentials": true
+}

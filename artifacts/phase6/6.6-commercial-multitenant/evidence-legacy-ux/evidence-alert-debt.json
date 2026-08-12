@@ -1,0 +1,16 @@
+{
+  "status": "fixed_in_branch",
+  "productive_locations_before": [
+    "frontend/src/app/evidencias/page.tsx openAuthorizedFile",
+    "frontend/src/app/evidencias/page.tsx associateEvidenceToProcess",
+    "frontend/src/app/evidencias/page.tsx associateLibraryEvidence",
+    "frontend/src/app/evidencias/page.tsx uploadEvidence",
+    "frontend/src/app/evidencias/page.tsx aprobar",
+    "frontend/src/app/evidencias/page.tsx rechazar",
+    "frontend/src/app/evidencias/page.tsx refreshHealth"
+  ],
+  "correction": "Replaced native browser alert feedback with inline EvidenceNotice using role=alert for errors and role=status for success/info.",
+  "upload_security_changed": false,
+  "rbac_changed": false,
+  "p0_legacy_browser_alert": 0
+}

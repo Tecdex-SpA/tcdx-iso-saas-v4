@@ -1,0 +1,7 @@
+{
+  "status": "preserved",
+  "source": "Phase 6.5 actionable_state/data_requirements/source_contract metadata",
+  "tenant_hardcode": 0,
+  "states": ["calculated", "insufficient_data", "dependency_pending", "no_snapshot"],
+  "score_global": "official_score remains governed by GRC-HEALTH and is not fabricated from Admin KPI or fallback averages"
+}

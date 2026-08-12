@@ -1,0 +1,30 @@
+{
+  "status": "ready_for_intermediate_merge_review",
+  "repository": "/Users/andresbarouh/repos/tcdx-iso-saas-v4",
+  "branch_started_from": "main",
+  "main_head": "ec06e98e9f9ca9cacd00777b5b3b8efd803efaf0",
+  "origin_main": "ec06e98e9f9ca9cacd00777b5b3b8efd803efaf0",
+  "pr86": {
+    "state": "MERGED",
+    "merge_commit": "ec06e98e9f9ca9cacd00777b5b3b8efd803efaf0",
+    "merged_at": "2026-08-12T14:39:03Z",
+    "ci": "SUCCESS"
+  },
+  "runtime": {
+    "frontend_http": 200,
+    "pr86_behavior_observed": {
+      "dashboard_chunks_include_missing_official_component": true,
+      "dashboard_chunks_include_official_recalculate_success": true
+    },
+    "backend_health": {
+      "ok": true,
+      "status": "healthy",
+      "database_ok": true,
+      "storage_ok": true,
+      "jobs_ok": true,
+      "ai_engine_ok": true,
+      "ai_engine_latency_ms": 9,
+      "transient_previous_error": "AI_ENGINE_UNAVAILABLE recovered on final revalidation"
+    }
+  }
+}

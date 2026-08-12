@@ -41,8 +41,7 @@ function asRecord(value: unknown): UnknownRecord {
 
 async function openAuthorizedFile(url: string, token: string | null) {
   if (!token) {
-    alert('Session unavailable. Sign in again.');
-    return;
+    throw new Error('Session unavailable. Sign in again.');
   }
 
   const res = await fetch(url, {
@@ -50,14 +49,18 @@ async function openAuthorizedFile(url: string, token: string | null) {
   });
 
   if (!res.ok) {
-    alert('Unable to open the file.');
-    return;
+    throw new Error('Unable to open the file.');
   }
 
   const blobUrl = URL.createObjectURL(await res.blob());
   window.open(blobUrl, '_blank', 'noopener,noreferrer');
   window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
+
+type EvidenceNotice = {
+  type: 'success' | 'error' | 'info';
+  message: string;
+};
 
 type EvidenceRow = {
   id: string;
@@ -494,6 +497,7 @@ function EvidenciasPageContent() {
   const [uploading, setUploading] = useState(false);
   const [reviewingId, setReviewingId] = useState('');
   const [healthRefreshing, setHealthRefreshing] = useState(false);
+  const [evidenceNotice, setEvidenceNotice] = useState<EvidenceNotice | null>(null);
 
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -531,6 +535,10 @@ function EvidenciasPageContent() {
       : undefined;
 
   const focusAppliedRef = useRef(false);
+
+  const showEvidenceNotice = (type: EvidenceNotice['type'], message: string) => {
+    setEvidenceNotice({ type, message });
+  };
 
   const role = String(user?.role || '').toLowerCase().trim();
   const isAuditor = role === 'auditor';
@@ -614,7 +622,7 @@ function EvidenciasPageContent() {
 
     const form = evidenceAssociationForms[evidence.id];
     if (!form?.process_id) {
-      alert('Selecciona un proceso antes de asociar la evidencia.');
+      showEvidenceNotice('error', 'Selecciona un proceso antes de asociar la evidencia.');
       return;
     }
 
@@ -639,10 +647,11 @@ function EvidenciasPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'No fue posible asociar la evidencia.');
+        showEvidenceNotice('error', json.error || 'No fue posible asociar la evidencia.');
         return;
       }
 
+      showEvidenceNotice('success', 'Evidencia asociada al proceso/operación correctamente.');
       setAssociationMessage('Evidencia asociada al proceso/operación correctamente.');
       setEvidenceAssociationForms((prev) => ({
         ...prev,
@@ -654,7 +663,7 @@ function EvidenciasPageContent() {
       }));
     } catch (err) {
       console.error('ERROR ASSOCIATE EVIDENCE:', err);
-      alert('No fue posible asociar la evidencia.');
+      showEvidenceNotice('error', 'No fue posible asociar la evidencia.');
     } finally {
       setAssociatingEvidenceId('');
     }
@@ -705,7 +714,7 @@ function EvidenciasPageContent() {
     if (!token || !canManageEvidenceAssociations) return;
 
     if (!libraryAssociationForm.target_id || !libraryAssociationForm.process_id) {
-      alert('Selecciona un documento/evidencia y un proceso antes de asociar.');
+      showEvidenceNotice('error', 'Selecciona un documento/evidencia y un proceso antes de asociar.');
       return;
     }
 
@@ -730,15 +739,16 @@ function EvidenciasPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'No fue posible asociar el documento/evidencia.');
+        showEvidenceNotice('error', json.error || 'No fue posible asociar el documento/evidencia.');
         return;
       }
 
+      showEvidenceNotice('success', 'Documento/evidencia asociado al proceso/operación correctamente.');
       setAssociationMessage('Documento/evidencia asociado al proceso/operación correctamente.');
       setLibraryAssociationForm((prev) => ({ ...prev, notes: '' }));
     } catch (err) {
       console.error('ERROR ASSOCIATE LIBRARY EVIDENCE:', err);
-      alert('No fue posible asociar el documento/evidencia.');
+      showEvidenceNotice('error', 'No fue posible asociar el documento/evidencia.');
     } finally {
       setLibraryAssociating(false);
     }
@@ -964,14 +974,15 @@ function EvidenciasPageContent() {
     if (!token || !tenantId) return;
 
     if (!tenantControlIdFromUrl && !actionPlanIdFromUrl) {
-      alert(
+      showEvidenceNotice(
+        'error',
         'No se recibió tenant_control_id ni action_plan_id. Entra desde un Plan de Acción o desde un control específico.'
       );
       return;
     }
 
     if (!uploadForm.file) {
-      alert('Debes seleccionar un archivo.');
+      showEvidenceNotice('error', 'Debes seleccionar un archivo.');
       return;
     }
 
@@ -1011,7 +1022,7 @@ function EvidenciasPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error subiendo evidencia');
+        showEvidenceNotice('error', json.error || 'Error subiendo evidencia');
         return;
       }
 
@@ -1027,13 +1038,14 @@ function EvidenciasPageContent() {
       ) as HTMLInputElement | null;
       if (fileInput) fileInput.value = '';
 
-      alert(
+      showEvidenceNotice(
+        'success',
         'Evidencia subida correctamente. La IA la evaluará y, si supera el 80% con evidencia completa, la dejará recomendada para aprobación humana.'
       );
       await refresh();
     } catch (err) {
       console.error('ERROR UPLOAD EVIDENCE:', err);
-      alert('Error subiendo evidencia');
+      showEvidenceNotice('error', 'Error subiendo evidencia');
     } finally {
       setUploading(false);
     }
@@ -1057,11 +1069,12 @@ function EvidenciasPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error aprobando evidencia');
+        showEvidenceNotice('error', json.error || 'Error aprobando evidencia');
         return;
       }
 
-      alert(
+      showEvidenceNotice(
+        'success',
         actionPlanIdFromUrl
           ? t('evidence.manualApprovalSuccessWithPlan')
           : t('evidence.manualApprovalSuccess')
@@ -1070,7 +1083,7 @@ function EvidenciasPageContent() {
       await refresh();
     } catch (err) {
       console.error('ERROR APPROVE EVIDENCE:', err);
-      alert('Error aprobando evidencia');
+      showEvidenceNotice('error', 'Error aprobando evidencia');
     } finally {
       setReviewingId('');
     }
@@ -1098,15 +1111,15 @@ function EvidenciasPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error rechazando evidencia');
+        showEvidenceNotice('error', json.error || 'Error rechazando evidencia');
         return;
       }
 
-      alert(t('evidence.manualRejectionSuccess'));
+      showEvidenceNotice('success', t('evidence.manualRejectionSuccess'));
       await refresh();
     } catch (err) {
       console.error('ERROR REJECT EVIDENCE:', err);
-      alert('Error rechazando evidencia');
+      showEvidenceNotice('error', 'Error rechazando evidencia');
     } finally {
       setReviewingId('');
     }
@@ -1129,15 +1142,15 @@ function EvidenciasPageContent() {
       const json = await res.json();
 
       if (!res.ok || json.ok === false) {
-        alert(json.error || 'Error recalculando salud');
+        showEvidenceNotice('error', json.error || 'Error recalculando salud');
         return;
       }
 
-      alert('Salud ISO recalculada correctamente');
+      showEvidenceNotice('success', 'Salud ISO recalculada correctamente');
       await refresh();
     } catch (err) {
       console.error('ERROR REFRESH HEALTH:', err);
-      alert('Error recalculando salud');
+      showEvidenceNotice('error', 'Error recalculando salud');
     } finally {
       setHealthRefreshing(false);
     }
@@ -1373,6 +1386,21 @@ function EvidenciasPageContent() {
             </button>
           </div>
         </div>
+
+        {evidenceNotice && (
+          <div
+            className={`rounded-2xl border px-5 py-4 text-sm font-semibold shadow-sm ${
+              evidenceNotice.type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : evidenceNotice.type === 'error'
+                  ? 'border-red-200 bg-red-50 text-red-800'
+                  : 'border-blue-200 bg-blue-50 text-blue-800'
+            }`}
+            role={evidenceNotice.type === 'error' ? 'alert' : 'status'}
+          >
+            {evidenceNotice.message}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
           <MetricCard title={t('common.all')} value={metrics.total} />
@@ -2044,9 +2072,15 @@ function EvidenciasPageContent() {
                   {e.file_path && (
                     <button
                       type="button"
-                      onClick={() =>
-                        openAuthorizedFile(`${API_URL}/api/evidences/file/${e.id}`, token)
-                      }
+                      onClick={() => {
+                        openAuthorizedFile(`${API_URL}/api/evidences/file/${e.id}`, token).catch((err) => {
+                          console.error('ERROR OPEN EVIDENCE FILE:', err);
+                          showEvidenceNotice(
+                            'error',
+                            err instanceof Error ? err.message : 'Unable to open the file.'
+                          );
+                        });
+                      }}
                       className="inline-flex rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
                     >
                       {t('controls.viewFile')}
