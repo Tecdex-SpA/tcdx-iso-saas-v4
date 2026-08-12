@@ -1,0 +1,19 @@
+{
+  "status": "validated_by_contract",
+  "capabilities_sampled_structurally": [
+    "data.governance",
+    "metrics.catalog",
+    "bi.executive_dashboards",
+    "reporting.studio",
+    "reports.premium",
+    "surveys.engine",
+    "assurance.testing",
+    "loss.events",
+    "metrics.data_trust",
+    "data.lineage",
+    "metrics.jobs.run"
+  ],
+  "ui_authority": "sidebar and route shell use module/capability gates",
+  "backend_authority": "direct URLs and API mutations remain backend-authorized",
+  "capability_commercial_mismatch": 0
+}

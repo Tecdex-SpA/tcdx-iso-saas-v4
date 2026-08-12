@@ -1,0 +1,20 @@
+{
+  "status": "local_validation_pass_runtime_healthy",
+  "checks": [
+    { "command": "npm --prefix frontend run test:phase6-commercial-multitenant", "result": "PHASE6_COMMERCIAL_MULTITENANT_CONTRACT_PASS" },
+    { "command": "npm --prefix frontend run test:phase6-functional-flows", "result": "PHASE6_FUNCTIONAL_FLOWS_UX_STATES_CONTRACT_PASS" },
+    { "command": "npm --prefix frontend run test:phase6-kpi-product-reconciliation", "result": "PHASE6_KPI_PRODUCT_RECONCILIATION_CONTRACT_PASS" },
+    { "command": "npm --prefix frontend run test:phase6-sidebar-rbac", "result": "PHASE6_SIDEBAR_NAVIGATION_RBAC_CONTRACT_PASS" },
+    { "command": "npm --prefix frontend run test:phase6-ui-responsive", "result": "PHASE6_UI_RESPONSIVE_CONTRACT_PASS" },
+    { "command": "node scripts/phase5-5/check-production-acceptance-contract.js", "result": "PHASE5_5_PRODUCTION_ACCEPTANCE_CONTRACT_OK" },
+    { "command": "npm --prefix frontend run lint", "result": "PASS" },
+    { "command": "npm --prefix frontend run typecheck", "result": "PASS" },
+    { "command": "npm --prefix frontend run build", "result": "PASS" },
+    { "command": "git diff --check", "result": "PASS" }
+  ],
+  "runtime_health": {
+    "backend": "healthy",
+    "ai_engine": "healthy",
+    "note": "Initial AI_ENGINE_UNAVAILABLE recovered on final revalidation."
+  }
+}

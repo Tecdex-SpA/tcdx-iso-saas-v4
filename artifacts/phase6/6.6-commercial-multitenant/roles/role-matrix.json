@@ -1,0 +1,11 @@
+{
+  "status": "validated_by_contract",
+  "roles_observed_in_phase5_acceptance": ["superadmin", "platform_admin", "admin", "viewer"],
+  "role_groups_covered_structurally": ["admin", "auditor", "area_owner", "executive", "dealer", "platform"],
+  "checks": [
+    "AppLayout derives access from token role, module map, MVP feature rules and capabilities.",
+    "MvpViewShell hides inaccessible delegated destinations and shows an empty authorized-destinations state.",
+    "Backend remains authority for direct URL/API authorization."
+  ],
+  "role_commercial_mismatch": 0
+}

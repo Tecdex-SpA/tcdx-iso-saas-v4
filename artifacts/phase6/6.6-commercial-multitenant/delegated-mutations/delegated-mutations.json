@@ -1,0 +1,21 @@
+{
+  "status": "validated_by_contract",
+  "flows": [
+    {
+      "origin": "/cumplimiento-auditoria",
+      "destinations": ["/diagnostico", "/controles", "/soa", "/auditorias", "/hallazgos", "/no-conformidades"],
+      "dead_end": false
+    },
+    {
+      "origin": "/riesgos",
+      "destinations": ["/matriz-riesgo", "/activos"],
+      "dead_end": false
+    },
+    {
+      "origin": "/planes-accion",
+      "destinations": ["/plan-accion", "/acciones-recomendadas"],
+      "dead_end": false
+    }
+  ],
+  "broken_delegated_mutation": 0
+}
