@@ -345,6 +345,75 @@ function numberOrZero(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function unwrapApiData(payload: unknown): unknown {
+  const raw = asRecord(payload);
+  return isRecord(raw.data) ? raw.data : payload;
+}
+
+type OfficialRecalculateSummary = {
+  processed: number;
+  calculated: number;
+  insufficientData: number;
+  dependencyPending: number;
+  errors: number;
+  snapshots: number;
+};
+
+function normalizeOfficialState(value: unknown): string {
+  return String(value || '').toLowerCase().trim();
+}
+
+function getOfficialResultState(result: unknown): string {
+  const raw = asRecord(result);
+  const nestedResult = asRecord(raw.result);
+  const measurement = asRecord(raw.measurement ?? nestedResult.measurement);
+  const breakdown = asRecord(measurement.breakdown_json);
+
+  return normalizeOfficialState(
+    measurement.official_state ??
+      measurement.sufficiency_status ??
+      breakdown.state ??
+      raw.official_state
+  );
+}
+
+function summarizeOfficialRecalculateResponse(payload: unknown): OfficialRecalculateSummary {
+  const raw = asRecord(unwrapApiData(payload));
+  const results = Array.isArray(raw.results) ? raw.results : [];
+  const states = results.map((result) => getOfficialResultState(result));
+  const hasStates = states.some(Boolean);
+  const failed = numberOrZero(raw.failed);
+  const recalculated = numberOrZero(raw.recalculated);
+
+  const calculated = hasStates
+    ? states.filter((state) => state === 'calculated').length
+    : recalculated;
+
+  const insufficientData = states.filter(
+    (state) =>
+      state === 'insufficient_data' ||
+      state === 'insufficient_coverage' ||
+      state === 'insufficient' ||
+      state === 'source_incompatible'
+  ).length;
+
+  return {
+    processed: results.length || recalculated + failed,
+    calculated,
+    insufficientData,
+    dependencyPending: states.filter((state) => state === 'dependency_pending').length,
+    errors: failed,
+    snapshots: numberOrZero(raw.snapshots_created),
+  };
+}
+
+function getSnapshotOfficialState(snapshot?: LatestSnapshot | null): string {
+  const breakdown = asRecord(snapshot?.breakdown_json);
+  return normalizeOfficialState(
+    breakdown.state ?? breakdown.official_state ?? breakdown.sufficiency_status
+  );
+}
+
 function buildOfficialTrend(item: KpiDashboardItem) {
   const snapshots = item.latest_snapshots || [];
   if (snapshots.length < 2) return [];
@@ -892,14 +961,17 @@ function DashboardPageContent() {
 
       await loadKpiDashboard();
 
-      const kpisRecalculated = Number(
-        json?.snapshots_created ?? json?.recalculated ?? 0
-      );
-
-      const healthRecalculated = 0;
+      const recalculateSummary = summarizeOfficialRecalculateResponse(json);
 
       alert(
-        t('dashboardKpi.recalculateSuccess', { count: kpisRecalculated, healthCount: healthRecalculated })
+        t('dashboardKpi.recalculateOfficialSuccess', {
+          processed: recalculateSummary.processed,
+          calculated: recalculateSummary.calculated,
+          insufficient: recalculateSummary.insufficientData,
+          dependencyPending: recalculateSummary.dependencyPending,
+          errors: recalculateSummary.errors,
+          snapshots: recalculateSummary.snapshots,
+        })
       );
     } catch (err) {
       console.error('ERROR RECALCULATE KPI:', err);
@@ -996,6 +1068,22 @@ function DashboardPageContent() {
     kpiSummary?.official_score === null || kpiSummary?.official_score === undefined
       ? null
       : Number(kpiSummary.official_score);
+
+  const scoreGlobalPendingItem = useMemo(() => {
+    if (scoreKpiGlobal !== null) return null;
+
+    return (
+      healthKpiItems.find((item) => {
+        const state = getSnapshotOfficialState(item.latest_snapshot);
+        return Boolean(state) && state !== 'calculated';
+      }) || null
+    );
+  }, [healthKpiItems, scoreKpiGlobal]);
+
+  const scoreGlobalPendingState =
+    scoreGlobalPendingItem === null
+      ? 'sin_medicion'
+      : getSnapshotOfficialState(scoreGlobalPendingItem.latest_snapshot) || 'sin_medicion';
 
   const measuredKpis = Number(
     kpiSummary?.measured_kpis ??
@@ -1579,6 +1667,20 @@ function DashboardPageContent() {
                     icon={<TcdxIcon name="heart" className="h-6 w-6" />}
                   />
                 </div>
+
+                {scoreKpiGlobal === null && (
+                  <div className="mt-4 rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <p className="font-semibold">{t('dashboardKpi.scoreGlobalPendingTitle')}</p>
+                    <p className="mt-1 leading-6">
+                      {t('dashboardKpi.scoreGlobalPendingDescription', {
+                        indicator:
+                          scoreGlobalPendingItem?.name ||
+                          t('dashboardKpi.officialDependencyFallback'),
+                        state: scoreGlobalPendingState,
+                      })}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {loadingKpis && (
