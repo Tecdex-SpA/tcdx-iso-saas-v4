@@ -1,0 +1,48 @@
+{
+  "phase": "6.4",
+  "universe": "ADMIN_KPI",
+  "definition": "Administrative tenant KPI configuration and operational tracking universe.",
+  "frontend_route": "/administrar-kpis",
+  "frontend_component": "frontend/src/app/administrar-kpis/page.tsx",
+  "primary_api": [
+    "GET /api/kpis/admin/:tenantId",
+    "POST /api/kpis/custom",
+    "PUT /api/kpis/custom/:id",
+    "DELETE /api/kpis/custom/:id",
+    "POST /api/kpis/tenant-setting",
+    "POST /api/kpis/manual-value",
+    "POST /api/kpis/recalculate/:tenantId",
+    "GET /api/kpi(s)/effective-health-summary/:tenantId"
+  ],
+  "backend": [
+    "backend/src/routes/kpi.routes.js",
+    "backend/src/controllers/kpi.controller.js",
+    "backend/src/services/kpi.engine.js"
+  ],
+  "tables_observed": [
+    "kpi_definitions",
+    "tenant_kpi_settings",
+    "kpi_thresholds",
+    "kpi_standard_mappings",
+    "kpi_snapshots",
+    "kpi_manual_values"
+  ],
+  "responsibilities": [
+    "admin configurable KPI definitions",
+    "tenant enable/disable and thresholds",
+    "manual administrative values",
+    "Health ISO administrative derived view"
+  ],
+  "not_responsible_for": [
+    "official Phase 5 catalog",
+    "official metric snapshots",
+    "official Global Score",
+    "official formula execution"
+  ],
+  "classification": [
+    "ADMIN_CONFIGURATION",
+    "LEGACY_COMPATIBILITY",
+    "RELATED_BUT_DIFFERENT"
+  ],
+  "secrets_stored": false
+}

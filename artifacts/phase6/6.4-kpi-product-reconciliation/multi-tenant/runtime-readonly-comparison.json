@@ -1,0 +1,31 @@
+{
+  "phase": "6.4",
+  "validation": "readonly-multi-tenant-admin-official-counts",
+  "tenants": [
+    {
+      "label": "tenant1_validation_dataset",
+      "admin_http": 200,
+      "official_catalog_http": 200,
+      "official_dashboard_http": 200,
+      "admin_count": 24,
+      "admin_enabled": 4,
+      "official_count": 22,
+      "official_calculated": 6,
+      "admin_official_count_equal": false
+    },
+    {
+      "label": "tenant2_generalization_dataset",
+      "admin_http": 200,
+      "official_catalog_http": 200,
+      "official_dashboard_http": 200,
+      "admin_count": 36,
+      "admin_enabled": 21,
+      "official_count": 22,
+      "official_calculated": 5,
+      "admin_official_count_equal": false
+    }
+  ],
+  "conclusion": "Admin and Official universes vary independently per tenant and must not be forced to equal counts or values.",
+  "mutations": 0,
+  "secrets_stored": false
+}
