@@ -96,6 +96,36 @@ No tenant, customer, demo account, QA ID, fixed expected value or customer-speci
 
 Current status is `READY_FOR_INTERMEDIATE_MERGE_REVIEW` because the change affects product route authorization and requires merge/deploy before declaring runtime PASS.
 
+## Post-deploy PR #82 validation
+
+PR #82 was merged and deployed at main `98fa0ffe2a1b3f12c43d7a7e076f4f7caba22032`.
+
+Runtime validation confirmed:
+
+- `/dashboard` remains canonical.
+- `/dashboard-v2` redirects to `/dashboard` and is not visible in sidebar.
+- Admin with enabled capabilities can open `/grc`, `/metricas`, `/bi`, `/reportes/studio` and `/exportes`.
+- A tenant without `reports.premium` does not show `/exportes`; direct URL shows access denied.
+- Auditor and viewer home paths are correct.
+- Auditor/viewer cannot deep-link to `/configuracion`, `/admin-saas` or `/dealer`.
+- No sidebar duplicate links or critical horizontal overflow were observed.
+
+Runtime validation also found one shared UI/API authorization mismatch:
+
+- Dashboard is visible for read roles.
+- Dashboard calls `/api/kpi/effective-health-summary/:tenantId` and `/api/kpis/effective-health-summary/:tenantId`.
+- The global RBAC middleware routed those endpoints through the generic admin-only `/api/kpi(s)` rule.
+- Result: auditor/viewer received HTTP 403 and the frontend logged `ERROR EFFECTIVE ISO HEALTH SUMMARY`.
+
+This is not a Phase 5 math/snapshot regression and does not change official indicators. It is a Phase 6.3 authorization alignment bug.
+
+Fix prepared:
+
+- Add explicit read-only RBAC rules for `/api/kpi(s)/effective-health-summary` before the generic KPI admin rule.
+- Add regression coverage for auditor, viewer and operational roles.
+
+Current status remains `READY_FOR_INTERMEDIATE_MERGE_REVIEW`; final 6.3 PASS requires post-deploy validation of this follow-up fix.
+
 | Gate | Current |
 | --- | --- |
 | ROLE_MENU_MISMATCH | 0 |

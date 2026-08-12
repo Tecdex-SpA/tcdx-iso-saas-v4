@@ -337,6 +337,16 @@ const API_RULES = [
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,
   },
+  {
+    prefix: '/api/kpis/effective-health-summary',
+    read: TENANT_READ_ROLES,
+    write: [],
+  },
+  {
+    prefix: '/api/kpi/effective-health-summary',
+    read: TENANT_READ_ROLES,
+    write: [],
+  },
 
   // KPI: dashboard sí para viewer; administración/recalcular/manual solo admin
   {
