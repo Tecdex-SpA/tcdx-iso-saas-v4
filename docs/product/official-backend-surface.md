@@ -14,7 +14,6 @@ Fuente inspeccionada: `backend/src/app.js`, `backend/src/routes/**`, `backend/sr
 | `/api/users` | `backend/src/routes/users.routes.js` | core_mvp | `/usuarios`, `/configuracion` | JWT + admin tenant RBAC | Tenant requerido | Oficial | Conservar. |
 | `/api/company-profile` | `backend/src/routes/company-profile.routes.js` | core_mvp | `/perfil-empresa`, `/configuracion` | JWT + admin tenant RBAC | Tenant requerido | Oficial | Conservar. |
 | `/api/dashboard` | `backend/src/routes/dashboard.routes.js` | core_mvp | `/dashboard` | JWT + RBAC global | Tenant requerido | Oficial | Conservar canonical. |
-| `/api/dashboard-v2` | `backend/src/routes/dashboard-v2.routes.js` | duplicate_candidate | `/dashboard-v2` oculto | JWT + RBAC global | Tenant requerido | Montado oculto | Consolidar en `/api/dashboard`. |
 | `/api/dashboard-controls` | `backend/src/routes/dashboard-controls.routes.js` | enterprise_post_mvp | Dashboard/control drilldown | JWT + RBAC global | Tenant requerido | Montado | Mantener hasta consolidacion. |
 | `/api/controls` | `backend/src/routes/controls.routes.js` | core_mvp | `/cumplimiento-auditoria` | JWT + RBAC global | Tenant requerido | Oficial core | Conservar backend aunque frontend detalle este oculto. |
 | `/api/tenant-standards` | `backend/src/routes/tenant-standards.routes.js` | core_mvp | `/cumplimiento-auditoria`, `/configuracion` | JWT + RBAC global | Tenant requerido | Oficial | Conservar. |

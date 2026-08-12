@@ -95,14 +95,9 @@ El acceso directo de clientes se redirige al home autorizado mediante
 
 ## Aliases legacy
 
-| Ruta legacy | Comportamiento actual |
-|---|---|
-| `/dashboard-v2` | Redirige a `/dashboard` |
-
-La demo cliente usa `/dashboard` para KPI y Centro Control ISO, y
-`/cumplimiento-auditoria` para el acceso agregado a auditoria. Los aliases
-retirados del contrato de demo pueden permanecer temporalmente como wrappers
-tecnicos, pero no deben ser usados por QA, deep links ni navegacion nueva.
+No hay alias dashboard legacy vigente en el contrato de demo. La demo cliente
+usa `/dashboard` para KPI y Centro Control ISO, y `/cumplimiento-auditoria`
+para el acceso agregado a auditoria.
 
 ## Navegacion y layout
 
@@ -118,8 +113,8 @@ tecnicos, pero no deben ser usados por QA, deep links ni navegacion nueva.
 - Ocultar una ruta en frontend no sustituye autorizacion backend.
 - Toda ruta privada debe mantener JWT, RBAC y aislamiento tenant.
 - Acceso directo por URL debe aplicar los mismos permisos que el sidebar.
-- Las rutas legacy se mantienen hasta tener referencias, plan de deprecacion y
-  rollback.
+- Las rutas legacy retiradas del contrato de demo no deben reintroducirse como
+  deep links, QA nuevo ni navegacion nueva.
 - La IA opera como asistente supervisado. No aprueba por si sola hallazgos, no
   conformidades, acciones ni documentos.
 - `CLIENT_MVP_NAV_ITEMS` y `MVP_ROUTE_RULES` son la fuente de gating del flujo

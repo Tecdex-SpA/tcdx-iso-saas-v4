@@ -26,7 +26,6 @@ Fuente inspeccionada: `frontend/src/app/**/page.tsx`, `frontend/src/utils/mvpPer
 | `/cumplimiento-auditoria` | `frontend/src/app/cumplimiento-auditoria/page.tsx` | visible_mvp_cliente | Si | Admin, auditor, area owner, executive | compliance.read | Agregador del flujo norma-control-brecha-auditoria. | Conservar como superficie oficial. |
 | `/dashboard` | `frontend/src/app/dashboard/page.tsx` | visible_mvp_cliente | Si | Admin, area owner, executive | dashboard.read | Dashboard oficial cliente. | Conservar como dashboard canonical. |
 | `/dashboard-kpi` | `frontend/legacy-pages-archive/dashboard-kpi/page.tsx` | duplicate_candidate | No | Fuera del App Router y de `frontend/src` | dashboard/kpi | Redirect legacy desacoplado y archivado; QA y demo usan `/dashboard`. | Conservar temporalmente para rollback; evaluar borrado definitivo en etapa posterior. |
-| `/dashboard-v2` | `frontend/src/app/dashboard-v2/page.tsx` | duplicate_candidate | No | Interno/platform por guard oculto | dashboard | Redirect puro a `/dashboard`; validadores y docs QA/demo mantienen la URL como contrato vigente. | `kept_temporarily`; desacoplar contrato QA/demo antes de cuarentena. |
 | `/dealer` | `frontend/src/app/dealer/page.tsx` | dealer_only | No | Dealer | dealer.console | Portal dealer. | Conservar dealer. |
 | `/diagnostico` | `frontend/src/app/diagnostico/page.tsx` | functional_mvp_subflow | No | Admin, auditor, area owner | compliance.functional_subflows.read | Subflujo enlazado desde `/cumplimiento-auditoria`; no es item principal del sidebar. | Mantener como subflujo controlado. |
 | `/documentos` | `frontend/src/app/documentos/page.tsx` | enterprise_post_mvp | No | Interno/platform por guard oculto | documents | Generador documental persistente con deep links vivos; no es duplicado simple de Evidencias. | `blocked_by_backend_contract_review`; mantener hasta resolver enlaces y contrato enterprise. |
@@ -89,13 +88,15 @@ independientes ni deben aparecer como items nuevos del Sidebar.
 `/dashboard-kpi`, `/centro-control-iso`, `/command-center-iso` y
 `/auditor-iso` permanecen en `frontend/legacy-pages-archive/`.
 
+### Retiradas antes de Phase 7
+
+- `/dashboard-v2`: retirada del App Router; `/dashboard` es el dashboard canonical.
+
 ### Retenidas por bloqueo explicito
 
-- `/dashboard-v2`: `kept_temporarily_qa_demo_dependency`.
 - `/ia`: `blocked_pending_ia4_read_migration_or_archive`.
 - `/ejecucion-iso`: `kept_enterprise_post_mvp`.
 - `/documentos`: `blocked_by_backend_contract_review`.
 
-El build esperado para este baseline es de 42 paginas. El control automatizado
-oficial es `scripts/qa/qa-official-surface.sh`, ejecutable con `rg` o con el
-fallback de herramientas POSIX.
+El control automatizado oficial es `scripts/qa/qa-official-surface.sh`,
+ejecutable con `rg` o con el fallback de herramientas POSIX.

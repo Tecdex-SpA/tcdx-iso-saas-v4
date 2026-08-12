@@ -208,13 +208,6 @@ si. Requiere backup previo: si si altera DB. Owner: DB/QA. Observacion:
 | `scripts/test-tcdx-system-master.sh` | validation | Suite master sistema. | lab/demo/pilot | alto | desconocido | si | no | Revisar flags; puede llamar IA/deploy checks. | QA/DevOps | NO EJECUTAR SIN APROBACION en prod. |
 | `scripts/test-tenant-ai-entitlements-flow.sh` | validation | Test entitlements IA tenant. | lab/demo/pilot | medio | desconocido | si | no | Puede alterar entitlements demo. | QA/AI | Requiere revision manual. |
 | `scripts/validate-ai-knowledge.sh` | validation | Validar knowledge IA. | lab/demo/pilot | bajo | si | no | no | Entorno seguro. | QA/AI | No destructivo inferido. |
-| `scripts/validate-dashboard-consolidated-functional-parity.sh` | validation | Validar paridad dashboard consolidado. | lab/demo/pilot | bajo | si | no | no | Entorno seguro. | QA/Frontend | No destructivo inferido. |
-| `scripts/validate-dashboard-operational-replacement.sh` | validation | Validar reemplazo operacional dashboard. | lab/demo/pilot | bajo | si | no | no | Entorno seguro. | QA/Frontend | No destructivo inferido. |
-| `scripts/validate-dashboard-v2-base.sh` | validation | Validar dashboard v2 base. | lab/demo/pilot | bajo | si | no | no | Entorno seguro. | QA/Frontend | No destructivo inferido. |
-| `scripts/validate-dashboard-v2-health-lifecycle.sh` | validation | Validar health/lifecycle dashboard v2. | lab/demo/pilot | bajo | si | no | no | Entorno seguro. | QA/Frontend | No destructivo inferido. |
-| `scripts/validate-dashboard-v2-operational-panels.sh` | validation | Validar paneles operacionales dashboard v2. | lab/demo/pilot | bajo | si | no | no | Entorno seguro. | QA/Frontend | No destructivo inferido. |
-| `scripts/validate-dashboard-v2-preferences.sh` | validation | Validar preferencias dashboard v2. | lab/demo/pilot | medio | desconocido | si | no | Puede escribir preferencias; usar tenant demo. | QA/Frontend | Requiere revision manual. |
-| `scripts/validate-dashboard-visual-kpi-salud.sh` | validation | Validar visual KPI salud. | lab/demo/pilot | bajo | si | no | no | Entorno seguro. | QA/Frontend | No destructivo inferido. |
 | `scripts/validate-iso-action-workflow.sh` | validation | Validar workflow acciones ISO. | lab/demo/pilot | medio | desconocido | si | no | Puede crear/actualizar acciones. | QA/Backend | Requiere revision manual. |
 | `scripts/validate-iso-auditor.sh` | validation | Validar ISO auditor. | lab/demo/pilot | medio | desconocido | si | no | Puede invocar IA. | QA/AI | Requiere revision manual. |
 | `scripts/validate-iso-command-center.sh` | legacy | Validar command center ISO. | lab/demo/pilot | bajo | si | no | no | Entorno seguro. | QA/Frontend | Legacy/alias. |

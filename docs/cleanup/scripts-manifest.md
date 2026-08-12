@@ -72,13 +72,6 @@ Rama: `chore/cleanup-stage-3a-official-surface`
 | `scripts/test-tcdx-system-master.sh` | qa_manual | Master smoke | Alto por amplitud | Revisar antes de ejecutar. |
 | `scripts/test-tenant-ai-entitlements-flow.sh` | security_check | Tenant AI entitlements | Medio | Conservar. |
 | `scripts/validate-ai-knowledge.sh` | legacy_candidate | Validacion fase IA knowledge | Bajo/medio | Revisar vigencia. |
-| `scripts/validate-dashboard-consolidated-functional-parity.sh` | qa_manual | Dashboard parity | Medio | Conservar mientras se consolida dashboard. |
-| `scripts/validate-dashboard-operational-replacement.sh` | legacy_candidate | Dashboard fase historica | Bajo/medio | Revisar vigencia. |
-| `scripts/validate-dashboard-v2-base.sh` | legacy_candidate | Dashboard v2 legacy | Bajo/medio | Candidato tras consolidar `/dashboard`. |
-| `scripts/validate-dashboard-v2-health-lifecycle.sh` | legacy_candidate | Dashboard v2 legacy | Bajo/medio | Candidato tras consolidar `/dashboard`. |
-| `scripts/validate-dashboard-v2-operational-panels.sh` | legacy_candidate | Dashboard v2 legacy | Bajo/medio | Candidato tras consolidar `/dashboard`. |
-| `scripts/validate-dashboard-v2-preferences.sh` | legacy_candidate | Dashboard v2 legacy | Bajo/medio | Candidato tras consolidar `/dashboard`. |
-| `scripts/validate-dashboard-visual-kpi-salud.sh` | qa_manual | Dashboard/KPI visual | Bajo/medio | Conservar si cubre `/dashboard`. |
 | `scripts/validate-iso-action-workflow.sh` | legacy_candidate | Fase ISO workflow | Bajo/medio | Revisar vigencia. |
 | `scripts/validate-iso-auditor.sh` | legacy_candidate | ISO auditor legacy | Bajo/medio | Revisar enterprise. |
 | `scripts/validate-iso-command-center.sh` | legacy_candidate | Command center legacy | Bajo/medio | Candidato 3B/4. |

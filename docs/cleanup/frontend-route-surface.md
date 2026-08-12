@@ -24,7 +24,6 @@ Alcance: inventario estatico sobre `frontend/src/app`, `Sidebar`, `AppLayout` y 
 | `/cumplimiento-auditoria` | `frontend/src/app/cumplimiento-auditoria/page.tsx` | Si cliente MVP | Si | visible_mvp_cliente | Conservar. |
 | `/dashboard` | `frontend/src/app/dashboard/page.tsx` | Si cliente MVP | Si | visible_mvp_cliente | Conservar como dashboard canonical. |
 | `/dashboard-kpi` | `frontend/src/app/dashboard-kpi/page.tsx` | No | Si oculto cliente | duplicada_probable | Mantener oculto; migrar valor a `/dashboard` si falta. |
-| `/dashboard-v2` | `frontend/src/app/dashboard-v2/page.tsx` | No | Si oculto cliente | duplicada_probable | Mantener oculto; revisar retiro o legacy. |
 | `/dealer` | `frontend/src/app/dealer/page.tsx` | Si dealer | Si | visible_superadmin | Conservar para dealer; no cliente MVP. |
 | `/diagnostico` | `frontend/src/app/diagnostico/page.tsx` | No directo | Si | visible_mvp_cliente | Conservar si es parte compliance. |
 | `/documentos` | `frontend/src/app/documentos/page.tsx` | No | Si oculto cliente | legacy_probable | Mantener oculto; revisar solape con evidencias/evidence library. |
@@ -53,7 +52,7 @@ Alcance: inventario estatico sobre `frontend/src/app`, `Sidebar`, `AppLayout` y 
 ## Hallazgos
 
 - `CLIENT_MVP_NAV_ITEMS` expone al cliente: `/dashboard`, `/cumplimiento-auditoria`, `/evidencias`, `/riesgos`, `/planes-accion`, `/exportes`, `/ia-compliance`, `/configuracion`.
-- `INTERNAL_CLIENT_HIDDEN_ROUTES` oculta rutas legacy/internas a usuarios tenant no plataforma/dealer: `/administrar-kpis`, `/centro-control-iso`, `/command-center-iso`, `/dashboard-kpi`, `/dashboard-v2`, `/documentos`, `/ejecucion-iso`, `/ia`, `/ia-auditor`, `/auditorias/ia`, `/auditor-iso`.
+- `INTERNAL_CLIENT_HIDDEN_ROUTES` oculta rutas legacy/internas a usuarios tenant no plataforma/dealer: `/administrar-kpis`, `/centro-control-iso`, `/command-center-iso`, `/dashboard-kpi`, `/documentos`, `/ejecucion-iso`, `/ia`, `/ia-auditor`, `/auditorias/ia`, `/auditor-iso`.
 - Rutas dealer visibles solo para dealer: `/dealer`, `/cotizador`, `/prefacturacion`.
 - Rutas plataforma: `/admin-saas`, `/empresas`.
 - No se eliminaron paginas; cualquier baja requiere confirmacion de producto y busqueda de referencias.

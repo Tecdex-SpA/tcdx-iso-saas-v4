@@ -1,0 +1,22 @@
+{
+  "status": "PASS",
+  "results": [
+    { "command": "npm run test:prephase7-cleanup", "status": "PASS" },
+    { "command": "npm --prefix frontend run typecheck", "status": "PASS" },
+    { "command": "npm --prefix frontend run lint", "status": "PASS" },
+    { "command": "npm --prefix frontend test", "status": "PASS" },
+    { "command": "npm --prefix frontend run build", "status": "PASS" },
+    { "command": "npm --prefix frontend run test:phase6-ui-responsive", "status": "PASS" },
+    { "command": "npm --prefix frontend run test:phase6-sidebar-rbac", "status": "PASS" },
+    { "command": "npm --prefix frontend run test:phase6-kpi-product-reconciliation", "status": "PASS" },
+    { "command": "npm --prefix frontend run test:phase6-functional-flows", "status": "PASS" },
+    { "command": "npm --prefix frontend run test:phase6-commercial-multitenant", "status": "PASS" },
+    { "command": "npm --prefix backend test", "status": "PASS" },
+    { "command": "node scripts/phase5-5/check-production-acceptance-contract.js", "status": "PASS" },
+    { "command": "npm run phase5:functional-closure", "status": "PASS" },
+    { "command": "git diff --check", "status": "PASS" }
+  ],
+  "notes": [
+    "Initial frontend typecheck failed against stale .next/dev generated types that still referenced /dashboard-v2; frontend/tsconfig.json no longer includes .next/dev/types."
+  ]
+}

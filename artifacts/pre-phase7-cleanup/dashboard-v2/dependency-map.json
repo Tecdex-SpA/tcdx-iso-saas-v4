@@ -1,0 +1,78 @@
+{
+  "status": "REMOVE_V2_AND_DEAD_CODE",
+  "canonical_dashboard": "/dashboard",
+  "assets": [
+    {
+      "asset": "frontend/src/app/dashboard-v2/",
+      "used_by": ["legacy compatibility redirect only"],
+      "can_remove": true,
+      "migration_required": false,
+      "action": "removed"
+    },
+    {
+      "asset": "frontend/src/components/dashboard-v2/",
+      "used_by": ["no productive imports outside the dashboard-v2 component directory"],
+      "can_remove": true,
+      "migration_required": false,
+      "action": "removed"
+    },
+    {
+      "asset": "backend/src/routes/dashboard-v2.routes.js",
+      "used_by": ["backend /api/dashboard-v2 mount", "legacy validation scripts"],
+      "can_remove": true,
+      "migration_required": false,
+      "action": "removed"
+    },
+    {
+      "asset": "backend/src/services/dashboardV2.service.js",
+      "used_by": ["dashboard-v2 route only"],
+      "can_remove": true,
+      "migration_required": false,
+      "action": "removed"
+    },
+    {
+      "asset": "backend /api/dashboard-v2 mount",
+      "used_by": ["legacy validation scripts"],
+      "can_remove": true,
+      "migration_required": false,
+      "action": "removed from backend/src/app.js"
+    },
+    {
+      "asset": "backend /api/dashboard-v2 RBAC rules",
+      "used_by": ["retired dashboard-v2 route"],
+      "can_remove": true,
+      "migration_required": false,
+      "action": "removed from backend/src/middleware/rbac.middleware.js"
+    },
+    {
+      "asset": "frontend route config / hidden route entry",
+      "used_by": ["retired compatibility route"],
+      "can_remove": true,
+      "migration_required": false,
+      "action": "removed from frontend/src/utils/mvpPermissions.ts"
+    },
+    {
+      "asset": "dashboard-v2 validation scripts",
+      "used_by": ["historical QA only"],
+      "can_remove": true,
+      "migration_required": false,
+      "action": "removed"
+    },
+    {
+      "asset": "user_dashboard_preferences",
+      "used_by": ["historical dashboard-v2 preferences data"],
+      "can_remove": false,
+      "migration_required": true,
+      "action": "DATABASE_LEGACY_RETAINED; no destructive DROP in pre-Phase 7 cleanup"
+    }
+  ],
+  "final_status": {
+    "frontend_route": "removed",
+    "components": "removed",
+    "apis": "removed",
+    "services": "removed",
+    "scripts": "legacy v2 scripts removed",
+    "config": "dashboard-v2 removed from active routing/RBAC/hidden-route config",
+    "db_compatibility": "DATABASE_LEGACY_RETAINED"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "target": "/dashboard",
+  "root_cause": "historical Recharts first-measurement warnings were tied to zero-size initial chart containers and legacy dashboard-v2 chart surface; active product charts now use ResponsiveChartFrame.",
+  "direct_responsive_container_productive_uses": [
+    "frontend/src/components/ui/enterprise/ResponsiveChartFrame.tsx"
+  ],
+  "removed_indirect_uses": [
+    "frontend/src/components/dashboard-v2/DashboardV2HealthSection.tsx",
+    "frontend/src/components/dashboard-v2/DashboardV2Panel.tsx"
+  ],
+  "fix": "retired dashboard-v2 chart components and enforced ResponsiveContainer usage only through ResponsiveChartFrame",
+  "warnings_before": "known Phase 6 non-critical first-measurement Recharts warning debt",
+  "warnings_after": {
+    "local_build_dashboard_console_warning_count": 0,
+    "recharts_warnings": 0,
+    "page_errors": 0
+  },
+  "recharts_runtime_warning_critical": 0
+}

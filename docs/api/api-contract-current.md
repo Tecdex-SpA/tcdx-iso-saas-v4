@@ -44,7 +44,7 @@ Convenciones usadas en las tablas:
 | Autenticacion y agentes | `/api/auth`, `/api/agent` | MVP obligatorio / interno |
 | Integraciones OAuth pre-auth | `/api/document-integrations/google`, `/api/document-integrations/zoho` | Demo-piloto / interna |
 | Usuario y tenant | `/api/user`, `/api/users`, `/api/tenants`, `/api/me`, `/api/company-profile` | MVP obligatorio / administrativo |
-| Dashboard y KPI | `/api/dashboard`, `/api/dashboard-v2`, `/api/dashboard-controls`, `/api/kpi`, `/api/kpis` | MVP obligatorio / alias |
+| Dashboard y KPI | `/api/dashboard`, `/api/dashboard-controls`, `/api/kpi`, `/api/kpis` | MVP obligatorio / alias |
 | Cumplimiento | `/api/controls`, `/api/diagnostic`, `/api/diagnostics`, `/api/policy`, `/api/soa` | MVP obligatorio / alias |
 | Auditoria y hallazgos | `/api/audits`, `/api/audit-execution`, `/api/audit-preparation`, `/api/findings`, `/api/nonconformities` | Demo-piloto |
 | Evidencias y documentos | `/api/evidences`, `/api/evidence-library`, `/api/document-integrations`, `/api/files/tenant` | MVP obligatorio / demo-piloto |
@@ -67,7 +67,6 @@ Convenciones usadas en las tablas:
 | OAuth Zoho | `/api/document-integrations/zoho` - `document-integrations-zoho.routes.js` | OAuth start/callback, folders, sources y sync | Auth propio por ruta; mount previo al RBAC global | JWT/query/body/estado OAuth | Evidencias | publica controlada / interna | demo-piloto | Revisar ruta por ruta antes de cambiar orden de mounts. |
 | Dashboard | `/api/dashboard` - `dashboard.routes.js` | `GET /:tenant_id` | JWT, RBAC, tenant scope central y auth local | JWT + path | `/dashboard` | interna autenticada | MVP obligatorio | Cubierto por tenant path central; conservar contrato. |
 | Dashboard controls | `/api/dashboard-controls` - `dashboard-controls.routes.js` | `GET /:tenant_id` | JWT, RBAC, tenant scope central | JWT + path | `/dashboard` | interna autenticada | MVP obligatorio | Cubierto por tenant path central. |
-| Dashboard V2 | `/api/dashboard-v2` - `dashboard-v2.routes.js` | summary, preferences, actions, risks, KPIs y alerts | JWT, RBAC, tenant scope por query/body cuando aplica | JWT/mixto | `/dashboard`; alias `/dashboard-v2` redirige | alias | ocultar temporalmente | Mantener compatibilidad; no crear una tercera logica de dashboard. |
 | KPI | `/api/kpi`, `/api/kpis` - `kpi.routes.js` | dashboard, effective-health-summary, catalog, admin, recalculate y CRUD KPI | JWT, RBAC, tenant scope central en rutas tenant | JWT + path/body | `/dashboard`, `/administrar-kpis` | alias compatibles | demo-piloto / administrativo | Mantener ambos mounts; administracion KPI permanece oculta al cliente. |
 | Controles | `/api/controls` - `controls.routes.js` | workbench, catalog, catalog-mode, CRUD y AI review | JWT, RBAC, tenant scope central en rutas conocidas; lookup en IDs | JWT + path/body/lookup | `/controles` | interna autenticada | MVP obligatorio | Probar path tenant y operaciones por ID por separado. |
 | Diagnostico | `/api/diagnostic`, `/api/diagnostics` - `diagnostic.routes.js` | standards, summary, processes, recommendations, `GET /:tenant_id`, `PUT /:id` | JWT, RBAC; validacion local; alias doble | JWT + path/query/body/lookup | `/diagnostico`, `/cumplimiento-auditoria` | alias | MVP obligatorio | `/:tenant_id` no esta en el patron central actual; conservar validacion local y agregar QA. |

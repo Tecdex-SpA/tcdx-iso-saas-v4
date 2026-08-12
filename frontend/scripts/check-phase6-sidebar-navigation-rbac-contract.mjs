@@ -17,7 +17,6 @@ function assert(condition, message) {
 const permissions = read(path.join(srcRoot, 'utils/mvpPermissions.ts'));
 const sidebar = read(path.join(srcRoot, 'components/Sidebar.tsx'));
 const appLayout = read(path.join(srcRoot, 'components/AppLayout.tsx'));
-const dashboardV2 = read(path.join(srcRoot, 'app/dashboard-v2/page.tsx'));
 
 assert(
   /export const CAPABILITY_BY_PATH/.test(permissions),
@@ -46,15 +45,13 @@ assert(
 );
 
 assert(
-  /'\/dashboard-v2'/.test(permissions) &&
-    /INTERNAL_CLIENT_HIDDEN_ROUTES/.test(permissions),
-  '/dashboard-v2 must remain hidden from commercial navigation.'
+  !/'\/dashboard-v2'/.test(permissions),
+  '/dashboard-v2 must be retired from navigation and hidden-route contracts.'
 );
 
 assert(
-  /redirect\(['"]\/dashboard['"]\)/.test(dashboardV2) ||
-    /replace\(['"]\/dashboard['"]\)/.test(dashboardV2),
-  '/dashboard-v2 must remain compatibility-only and redirect to /dashboard.'
+  !fs.existsSync(path.join(srcRoot, 'app/dashboard-v2/page.tsx')),
+  '/dashboard-v2 app route must remain retired; /dashboard is canonical.'
 );
 
 assert(
