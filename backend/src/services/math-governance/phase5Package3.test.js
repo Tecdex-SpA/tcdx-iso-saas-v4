@@ -8,6 +8,8 @@ const readiness = require('./readinessCalculation.service');
 const health = require('./grcHealthCalculation.service');
 const { operationalExcellence } = require('./operationalExcellence.service');
 const { buildOverviewOfficialCalculations, calculateOfficialByKey } = require('./phase5Package3.service');
+const { resolveFormulaSource } = require('./sourceResolver.service');
+const { executeFormula } = require('./formulaRegistry.service');
 
 function close(actual, expected, tolerance = 0.01) { assert.ok(Math.abs(Number(actual) - Number(expected)) <= tolerance, `${actual} != ${expected}`); }
 const assessments = [
@@ -74,4 +76,60 @@ assert.strictEqual(overview.health.formula_code, 'F5_5_GRC_HEALTH');
 assert.strictEqual(overview.readiness.formula_code, 'F5_5_READINESS');
 assert.strictEqual(calculateOfficialByKey('health-grc', { risk: .8, compliance: .9, actions: .7, evidence: .6, dataTrust: .85 }).formula_code, 'F5_5_GRC_HEALTH');
 assert.throws(() => calculateOfficialByKey('unknown', {}), /Calculo oficial no soportado/);
-process.stdout.write(JSON.stringify({ status: 'PHASE5_5_PACKAGE3_TESTS_OK' }) + '\n');
+
+function fakeTableExists(params, present) {
+  const table = String(params?.[0] || '').replace(/^public\./, '');
+  return { rows: [{ exists: present.includes(table) }] };
+}
+
+async function reconciliationTests() {
+  const controlClient = { async query(sql, params) {
+    if (sql.includes('to_regclass')) return fakeTableExists(params, ['grc_control_assurance']);
+    if (sql.includes('FROM grc_control_assurance a')) return { rows: [
+      { id: 'control-a', tenant_id: 'tenant-a', assurance_status: 'effective', status: 'effective', score: 88, calculated_at: '2026-08-10T12:00:00Z', __event_time: '2026-08-10T12:00:00Z' },
+      { id: 'control-b', tenant_id: 'tenant-a', assurance_status: 'incomplete', status: 'incomplete', score: 72, calculated_at: '2026-08-10T12:00:00Z', __event_time: '2026-08-10T12:00:00Z' },
+    ] };
+    throw new Error(`unexpected control query: ${sql}`);
+  } };
+  const controlSource = await resolveFormulaSource({ client: controlClient, tenantId: 'tenant-a', formulaCode: 'F5_5_CONTROL_EFFECTIVENESS', period: { start: '2026-08-01T00:00:00Z', end: '2026-08-13T23:59:59Z' } });
+  assert.deepStrictEqual(controlSource.formula_input, { design: 0.8, implementation: 0.8, operation: 0.8, evidence: 0.8 });
+  assert.strictEqual(executeFormula('F5_5_CONTROL_EFFECTIVENESS', controlSource.formula_input).value, 0.8);
+  assert.ok(controlSource.warnings.some((warning) => String(warning).includes('score oficial agregado')));
+
+  const riskClient = { async query(sql, params) {
+    if (sql.includes('to_regclass')) return fakeTableExists(params, ['iso_risk_matrix_items', 'iso_risk_matrix_runs']);
+    if (sql.includes('WITH latest_runs AS')) return { rows: [
+      { id: 'risk-a', tenant_id: 'tenant-a', status: 'accepted', likelihood: 4, impact: 5, __event_time: '2026-08-10T12:00:00Z' },
+      { id: 'risk-b', tenant_id: 'tenant-a', status: 'accepted', likelihood: 2, impact: 5, __event_time: '2026-08-10T12:00:00Z' },
+      { id: 'risk-ineligible', tenant_id: 'tenant-a', status: 'accepted', likelihood: null, impact: 5, __event_time: '2026-08-10T12:00:00Z' },
+    ] };
+    throw new Error(`unexpected risk query: ${sql}`);
+  } };
+  const riskSource = await resolveFormulaSource({ client: riskClient, tenantId: 'tenant-a', formulaCode: 'F5_5_INHERENT_RISK', period: { start: '2026-08-01T00:00:00Z', end: '2026-08-13T23:59:59Z' } });
+  assert.strictEqual(riskSource.counts.received, 2);
+  assert.strictEqual(riskSource.counts.usable, 2);
+  assert.strictEqual(riskSource.counts.raw_received, 3);
+  assert.strictEqual(riskSource.counts.ineligible, 1);
+  assert.strictEqual(riskSource.formula_input.population_size, 2);
+  assert.strictEqual(riskSource.formula_input.raw_population_size, 3);
+  assert.ok(riskSource.exclusions.some((item) => item.code === 'risk_axis_invalid'));
+  assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', riskSource.formula_input).value, 15);
+
+  let maturitySqlChecked = false;
+  const maturityClient = { async query(sql, params) {
+    if (sql.includes('to_regclass')) return fakeTableExists(params, ['survey_evaluations']);
+    if (sql.includes('FROM survey_evaluations e')) {
+      maturitySqlChecked = sql.includes("score','')::numeric / 20.0");
+      return { rows: [{ id: 'maturity-a', tenant_id: 'tenant-a', level: 4.2, weight: 1, status: 'confirmed', __event_time: '2026-08-10T12:00:00Z' }] };
+    }
+    throw new Error(`unexpected maturity query: ${sql}`);
+  } };
+  const maturitySource = await resolveFormulaSource({ client: maturityClient, tenantId: 'tenant-a', formulaCode: 'F5_5_MATURITY', period: { start: '2026-08-01T00:00:00Z', end: '2026-08-13T23:59:59Z' } });
+  assert.strictEqual(maturitySqlChecked, true, 'survey evaluation percentage must be explicitly normalized to maturity 0..5');
+  assert.deepStrictEqual(maturitySource.formula_input, { levels: [{ level: 4.2, weight: 1 }] });
+  assert.strictEqual(executeFormula('F5_5_MATURITY', maturitySource.formula_input).value, 4.2);
+}
+
+reconciliationTests()
+  .then(() => process.stdout.write(JSON.stringify({ status: 'PHASE5_5_PACKAGE3_TESTS_OK' }) + '\n'))
+  .catch((error) => { console.error(error); process.exitCode = 1; });
