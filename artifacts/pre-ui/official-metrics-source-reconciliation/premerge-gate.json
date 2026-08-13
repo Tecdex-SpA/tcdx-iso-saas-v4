@@ -1,0 +1,32 @@
+{
+  "phase": "pre-ui-official-metrics-source-reconciliation",
+  "status": "READY_FOR_INTERMEDIATE_MERGE_REVIEW_PENDING_FINAL_CI",
+  "branch": "fix/pre-ui-official-metrics-source-reconciliation-v2",
+  "pr": 90,
+  "gates": {
+    "SOURCE_ADAPTER_GENERALIZATION": "PASS",
+    "SOURCE_PERIOD_FILTERING": "PASS",
+    "SOURCE_STATUS_NORMALIZATION": "PASS",
+    "FALSE_ZERO_METRIC": 0,
+    "EXCLUSION_ACCOUNTING_INCONSISTENCY": 0,
+    "ADMIN_OFFICIAL_CROSSOVER": 0,
+    "OFFICIAL_NULL_TO_ZERO": 0,
+    "CROSS_TENANT_DATA_LEAKAGE": 0,
+    "CROSS_TENANT_METRIC_LEAKAGE": 0,
+    "NEW_TENANT_CODE_CHANGE_REQUIRED": "NO",
+    "NEW_TENANT_SQL_PATCH_REQUIRED": "NO",
+    "PHASE5_REGRESSION": 0,
+    "ZERO_HARDCODE": "PASS",
+    "SELLABLE_MULTI_TENANT": "PASS_PREMERGE"
+  },
+  "validation": {
+    "previous_product_commit": "6f4b8c2870f127e251efb76d9d8e25f6259b944a",
+    "previous_ci_run": 31740855531,
+    "previous_ci_conclusion": "success",
+    "runtime_postdeploy_required": true
+  },
+  "privacy_safe": true,
+  "contains_customer_identifiers": false,
+  "contains_tenant_identifiers": false,
+  "contains_credentials": false
+}
