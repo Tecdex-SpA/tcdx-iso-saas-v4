@@ -97,11 +97,7 @@ function severityPortfolio(rows = []) {
     counts[severity] += 1;
     usableRows.push(row);
   });
-  return {
-    input: counts,
-    usableRows,
-    exclusions,
-  };
+  return { input: counts, usableRows, exclusions };
 }
 
 function maturityPortfolio(rows = []) {
@@ -112,34 +108,17 @@ function maturityPortfolio(rows = []) {
     const level = number(row.level ?? row.maturity_level ?? row.score ?? row.numeric_value ?? row.value_numeric);
     const sourceRecord = row.id || row.source_entity_id || `row-${index}`;
     if (level === null) {
-      exclusions.push({
-        code: 'maturity_level_missing_or_invalid',
-        field: 'level|maturity_level|score|numeric_value|value_numeric',
-        source_record: sourceRecord,
-        physical_source: row.__physical_source || null,
-        reason: 'F5_5_MATURITY requiere nivel numérico de madurez; filas sin nivel no se usan como proxy.',
-      });
+      exclusions.push({ code: 'maturity_level_missing_or_invalid', field: 'level|maturity_level|score|numeric_value|value_numeric', source_record: sourceRecord, physical_source: row.__physical_source || null, reason: 'F5_5_MATURITY requiere nivel numérico de madurez; filas sin nivel no se usan como proxy.' });
       return;
     }
     if (level < 0 || level > 5) {
-      exclusions.push({
-        code: 'maturity_level_out_of_range',
-        field: 'level',
-        source_record: sourceRecord,
-        physical_source: row.__physical_source || null,
-        value: level,
-        reason: 'F5_5_MATURITY usa escala de madurez 0..5; puntajes porcentuales u otros valores no se usan como nivel.',
-      });
+      exclusions.push({ code: 'maturity_level_out_of_range', field: 'level', source_record: sourceRecord, physical_source: row.__physical_source || null, value: level, reason: 'F5_5_MATURITY usa escala de madurez 0..5; puntajes porcentuales u otros valores no se usan como nivel.' });
       return;
     }
     levels.push({ level, weight: number(row.weight, 1) });
     usableRows.push(row);
   });
-  return {
-    input: { levels },
-    usableRows,
-    exclusions,
-  };
+  return { input: { levels }, usableRows, exclusions };
 }
 
 function safeTimestampExpression(alias = 'x') {
@@ -156,7 +135,7 @@ async function firstPopulatedTables(client, tables, tenantId, period = {}) {
     const result = await client.query(`SELECT x.*, ${timestamp} AS __event_time FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid AND ($2::timestamptz IS NULL OR ${timestamp}>=$2) AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`, [tenantId, period.start || null, period.end || null]);
     if (result.rows?.length) {
       const warnings = primaryExisting && table !== primaryExisting
-        ? [`Fuente primaria ${primaryExisting} sin filas utilizables; se usó fallback legacy explícito ${table}.`]
+        ? [`Fuente primaria ${primaryExisting} sin filas en el período solicitado; se usó fallback legacy explícito ${table}.`]
         : [];
       return tagWarnings(tagRows(result.rows, table), warnings);
     }
@@ -173,7 +152,7 @@ async function firstPopulated(client, candidates) {
     const result = await client.query(candidate.sql, candidate.params || []);
     if (result.rows?.length) {
       const warnings = primaryExisting && candidate.table !== primaryExisting
-        ? [`Fuente primaria ${primaryExisting} sin filas utilizables; se usó fallback legacy explícito ${candidate.table}.`]
+        ? [`Fuente primaria ${primaryExisting} sin filas en el período solicitado; se usó fallback legacy explícito ${candidate.table}.`]
         : [];
       return tagWarnings(tagRows(result.rows, candidate.table), warnings);
     }
@@ -189,8 +168,48 @@ async function queryCompliance(client, tenantId, period) {
   ];
   return firstPopulated(client, candidates);
 }
-async function queryRisk(client, tenantId, period) { return firstPopulatedTables(client, ['grc_quantitative_risk_assessments','iso_risk_matrix_items','asset_risks','privacy_dpia_risks'], tenantId, period); }
-async function queryControls(client, tenantId, period) { return firstPopulatedTables(client, ['grc_control_assurance','control_soa_assessments','control_health_scores','tenant_controls'], tenantId, period); }
+
+async function queryRisk(client, tenantId, period) {
+  if (await tableExists(client, 'iso_risk_matrix_items') && await tableExists(client, 'iso_risk_matrix_runs')) {
+    const runTimestamp = `COALESCE(r.completed_at,r.updated_at,r.created_at)`;
+    const result = await client.query(
+      `WITH latest_runs AS (
+         SELECT DISTINCT ON (r.tenant_id,r.standard_code,r.version_code)
+                r.id,r.tenant_id,r.standard_code,r.version_code,${runTimestamp} AS effective_at
+         FROM iso_risk_matrix_runs r
+         WHERE r.tenant_id=$1::uuid
+           AND r.run_status IN ('completed','reviewed')
+           AND ($2::timestamptz IS NULL OR ${runTimestamp}<=$2)
+         ORDER BY r.tenant_id,r.standard_code,r.version_code,${runTimestamp} DESC NULLS LAST,r.created_at DESC
+       )
+       SELECT i.*,lr.effective_at AS __event_time
+       FROM latest_runs lr
+       JOIN iso_risk_matrix_items i ON i.run_id=lr.id AND i.tenant_id=lr.tenant_id
+       WHERE i.tenant_id=$1::uuid
+         AND i.status NOT IN ('rejected','archived')`,
+      [tenantId, period.end || null]
+    );
+    if (result.rows?.length) return tagRows(result.rows, 'iso_risk_matrix_items');
+  }
+  return firstPopulatedTables(client, ['grc_quantitative_risk_assessments','asset_risks','privacy_dpia_risks'], tenantId, period);
+}
+
+async function queryControls(client, tenantId, period) {
+  if (await tableExists(client, 'grc_control_assurance')) {
+    const timestamp = `NULLIF(to_jsonb(a)->>'calculated_at','')::timestamptz`;
+    const result = await client.query(
+      `SELECT a.id,a.tenant_id,a.tenant_control_id,a.assurance_status AS status,a.score,${timestamp} AS __event_time
+       FROM grc_control_assurance a
+       WHERE a.tenant_id=$1::uuid
+         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
+      [tenantId, period.start || null, period.end || null]
+    );
+    if (result.rows?.length) return tagRows(result.rows, 'grc_control_assurance');
+  }
+  return firstPopulatedTables(client, ['control_soa_assessments','control_health_scores','tenant_controls'], tenantId, period);
+}
+
 async function queryAuditActions(client, tenantId, period, formulaCode) {
   const severityFormula = formulaCode === 'F5_5_SEVERITY_INDEX';
   if (!severityFormula && await tableExists(client, 'action_plans')) {
@@ -219,23 +238,16 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
          AND ($3::timestamptz IS NULL OR COALESCE(NULLIF(${updateJson}->>'created_at','')::timestamptz,NULLIF(to_jsonb(a)->>'latest_update_at','')::timestamptz,${timestamp})<=$3)`,
       [tenantId, period.start || null, period.end || null]
     );
-    return tagRows(result.rows.map((row) => ({
-      ...row,
-      progress: row.normalized_progress,
-      status: row.normalized_status,
-      opened_at: row.normalized_opened_at,
-      closed_at: row.normalized_closed_at,
-      due_at: row.normalized_due_at
-    })), 'action_plans');
+    return tagRows(result.rows.map((row) => ({ ...row, progress: row.normalized_progress, status: row.normalized_status, opened_at: row.normalized_opened_at, closed_at: row.normalized_closed_at, due_at: row.normalized_due_at })), 'action_plans');
   }
-  const tables = severityFormula
-    ? ['grc_readiness_findings', 'findings', 'action_plans']
-    : ['action_plans', 'findings', 'grc_readiness_findings'];
+  const tables = severityFormula ? ['grc_readiness_findings', 'findings', 'action_plans'] : ['action_plans', 'findings', 'grc_readiness_findings'];
   const rows = await firstPopulatedTables(client, tables, tenantId, period);
   if (!rows || !severityFormula) return rows;
   return rows.map((row) => ({ ...row, status: row.status || 'open' }));
 }
+
 async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period); }
+
 async function queryHealth(client, tenantId, period) {
   const hasRuns = await tableExists(client, 'calculation_runs');
   const hasOutputs = await tableExists(client, 'calculation_outputs');
@@ -243,14 +255,7 @@ async function queryHealth(client, tenantId, period) {
   const componentTimestamp = `COALESCE(cr.completed_at,cr.period_end,cr.started_at)`;
   const result = await client.query(
     `SELECT DISTINCT ON (cr.formula_code)
-            co.id,
-            cr.tenant_id,
-            cr.formula_code,
-            co.output_value,
-            co.unit,
-            cr.period_start,
-            cr.period_end,
-            cr.run_status,
+            co.id,cr.tenant_id,cr.formula_code,co.output_value,co.unit,cr.period_start,cr.period_end,cr.run_status,
             ${componentTimestamp} AS __event_time
      FROM calculation_runs cr
      JOIN calculation_outputs co ON co.run_id=cr.id AND co.tenant_id=cr.tenant_id AND co.output_name='value'
@@ -264,13 +269,13 @@ async function queryHealth(client, tenantId, period) {
   );
   return tagRows(result.rows, 'calculation_runs/calculation_outputs');
 }
+
 async function queryMaturity(client, tenantId, period) {
   const candidates = [];
   if (await tableExists(client, 'survey_evaluations')) {
     const timestamp = safeTimestampExpression('e');
     candidates.push({ table: 'survey_evaluations', params: [tenantId, period.start || null, period.end || null], sql:
-      `SELECT e.id,
-              (to_jsonb(e)->>'tenant_id')::uuid AS tenant_id,
+      `SELECT e.id,(to_jsonb(e)->>'tenant_id')::uuid AS tenant_id,
               COALESCE(NULLIF(to_jsonb(e)->>'level','')::numeric,NULLIF(to_jsonb(e)->>'maturity_level','')::numeric,NULLIF(to_jsonb(e)->>'score','')::numeric,NULLIF(to_jsonb(e)->>'total_score','')::numeric) AS level,
               COALESCE(NULLIF(to_jsonb(e)->>'weight','')::numeric,1) AS weight,
               COALESCE(NULLIF(to_jsonb(e)->>'evaluation_status',''),NULLIF(to_jsonb(e)->>'status',''),'evaluated') AS status,
@@ -283,55 +288,29 @@ async function queryMaturity(client, tenantId, period) {
   if (await tableExists(client, 'metric_measurements') && await tableExists(client, 'metric_definitions')) {
     const hasVersions = await tableExists(client, 'metric_definition_versions');
     const hasBindings = await tableExists(client, 'metric_source_bindings');
-    const versionJoin = hasVersions
-      ? `LEFT JOIN LATERAL (
-           SELECT mdv.functional_code
-           FROM metric_definition_versions mdv
-           WHERE mdv.metric_definition_id=md.id AND mdv.status='published'
-           ORDER BY mdv.tenant_id DESC NULLS LAST,mdv.version_number DESC
-           LIMIT 1
-         ) mdv ON true`
-      : '';
-    const bindingJoin = hasBindings
-      ? `LEFT JOIN LATERAL (
-           SELECT msb.formula_code
-           FROM metric_source_bindings msb
-           WHERE msb.metric_definition_id=md.id AND msb.binding_status='published'
-           ORDER BY msb.tenant_id DESC NULLS LAST,msb.version_number DESC
-           LIMIT 1
-         ) msb ON true`
-      : '';
-    const maturityPredicate = [
-      `md.metric_code='MATURITY'`,
-      hasVersions ? `mdv.functional_code='MATURITY'` : null,
-      hasBindings ? `msb.formula_code='F5_5_MATURITY'` : null,
-    ].filter(Boolean).join(' OR ');
+    const versionJoin = hasVersions ? `LEFT JOIN LATERAL (SELECT mdv.functional_code FROM metric_definition_versions mdv WHERE mdv.metric_definition_id=md.id AND mdv.status='published' ORDER BY mdv.tenant_id DESC NULLS LAST,mdv.version_number DESC LIMIT 1) mdv ON true` : '';
+    const bindingJoin = hasBindings ? `LEFT JOIN LATERAL (SELECT msb.formula_code FROM metric_source_bindings msb WHERE msb.metric_definition_id=md.id AND msb.binding_status='published' ORDER BY msb.tenant_id DESC NULLS LAST,msb.version_number DESC LIMIT 1) msb ON true` : '';
+    const maturityPredicate = [`md.metric_code='MATURITY'`, hasVersions ? `mdv.functional_code='MATURITY'` : null, hasBindings ? `msb.formula_code='F5_5_MATURITY'` : null].filter(Boolean).join(' OR ');
     const timestamp = `COALESCE(NULLIF(to_jsonb(mm)->>'calculated_at','')::timestamptz,NULLIF(to_jsonb(mm)->>'period_end','')::timestamptz,NULLIF(to_jsonb(mm)->>'created_at','')::timestamptz)`;
     candidates.push({ table: 'metric_measurements', params: [tenantId, period.start || null, period.end || null], sql:
-      `SELECT mm.id,
-              mm.tenant_id,
-              COALESCE(mm.value_numeric,NULLIF(mm.value_text,'')::numeric) AS level,
+      `SELECT mm.id,mm.tenant_id,COALESCE(mm.value_numeric,NULLIF(mm.value_text,'')::numeric) AS level,
               COALESCE(NULLIF(to_jsonb(mm)->'metadata'->>'weight','')::numeric,1) AS weight,
-              COALESCE(mm.official_state,mm.quality_status,'calculated') AS status,
-              ${timestamp} AS __event_time
+              COALESCE(mm.official_state,mm.quality_status,'calculated') AS status,${timestamp} AS __event_time
        FROM metric_measurements mm
        JOIN metric_definitions md ON md.id=mm.metric_definition_id
        ${versionJoin}
        ${bindingJoin}
-       WHERE mm.tenant_id=$1::uuid
-         AND (${maturityPredicate})
+       WHERE mm.tenant_id=$1::uuid AND (${maturityPredicate})
          AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
          AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
   }
   if (await tableExists(client, 'grc_metric_measurements')) {
     const timestamp = safeTimestampExpression('gm');
     candidates.push({ table: 'grc_metric_measurements', params: [tenantId, period.start || null, period.end || null], sql:
-      `SELECT gm.id,
-              (to_jsonb(gm)->>'tenant_id')::uuid AS tenant_id,
+      `SELECT gm.id,(to_jsonb(gm)->>'tenant_id')::uuid AS tenant_id,
               COALESCE(NULLIF(to_jsonb(gm)->>'level','')::numeric,NULLIF(to_jsonb(gm)->>'score','')::numeric,NULLIF(to_jsonb(gm)->>'numeric_value','')::numeric,NULLIF(to_jsonb(gm)->>'value_numeric','')::numeric) AS level,
               COALESCE(NULLIF(to_jsonb(gm)->>'weight','')::numeric,1) AS weight,
-              COALESCE(NULLIF(to_jsonb(gm)->>'status',''),'calculated') AS status,
-              ${timestamp} AS __event_time
+              COALESCE(NULLIF(to_jsonb(gm)->>'status',''),'calculated') AS status,${timestamp} AS __event_time
        FROM grc_metric_measurements gm
        WHERE (to_jsonb(gm)->>'tenant_id')::uuid=$1::uuid
          AND lower(COALESCE(to_jsonb(gm)->>'metric_code',to_jsonb(gm)->>'functional_code',to_jsonb(gm)->>'formula_code','')) IN ('maturity','f5_5_maturity')
@@ -340,6 +319,7 @@ async function queryMaturity(client, tenantId, period) {
   }
   return firstPopulated(client, candidates);
 }
+
 async function queryIncidents(client, tenantId, period) {
   if (!(await tableExists(client, 'grc_incidents'))) return null;
   const timestamp = `COALESCE(NULLIF(to_jsonb(i)->>'reported_at','')::timestamptz,NULLIF(to_jsonb(i)->>'detected_at','')::timestamptz,NULLIF(to_jsonb(i)->>'created_at','')::timestamptz)`;
@@ -358,23 +338,14 @@ async function queryIncidents(client, tenantId, period) {
   );
   return tagRows(result.rows, 'grc_incidents');
 }
+
 async function queryLossEvents(client, tenantId, period) {
   if (!(await tableExists(client, 'loss_events'))) return null;
   const rawEventTime = `COALESCE(NULLIF(to_jsonb(e)->>'event_date','')::timestamptz,NULLIF(to_jsonb(e)->>'occurred_at','')::timestamptz)`;
-  const effectiveEventTime = `COALESCE(
-    CASE WHEN ${rawEventTime} IS NOT NULL AND ${rawEventTime} <= now() THEN ${rawEventTime} END,
-    NULLIF(to_jsonb(e)->>'created_at','')::timestamptz,
-    NULLIF(to_jsonb(e)->>'updated_at','')::timestamptz,
-    ${rawEventTime}
-  )`;
+  const effectiveEventTime = `COALESCE(CASE WHEN ${rawEventTime} IS NOT NULL AND ${rawEventTime} <= now() THEN ${rawEventTime} END,NULLIF(to_jsonb(e)->>'created_at','')::timestamptz,NULLIF(to_jsonb(e)->>'updated_at','')::timestamptz,${rawEventTime})`;
   const result = await client.query(
-    `SELECT e.id,
-            e.tenant_id,
-            COALESCE(NULLIF(to_jsonb(e)->>'status',''),'draft') AS status,
-            NULLIF(to_jsonb(e)->>'currency','') AS currency,
-            ${rawEventTime} AS raw_event_date,
-            ${effectiveEventTime} AS event_date,
-            ${effectiveEventTime} AS __event_time,
+    `SELECT e.id,e.tenant_id,COALESCE(NULLIF(to_jsonb(e)->>'status',''),'draft') AS status,NULLIF(to_jsonb(e)->>'currency','') AS currency,
+            ${rawEventTime} AS raw_event_date,${effectiveEventTime} AS event_date,${effectiveEventTime} AS __event_time,
             COALESCE(NULLIF(to_jsonb(e)->>'gross_loss_amount','')::numeric,NULLIF(to_jsonb(e)->>'gross_loss','')::numeric) AS gross_loss_amount,
             COALESCE(NULLIF(to_jsonb(e)->>'recovery_amount','')::numeric,NULLIF(to_jsonb(e)->>'recoveries','')::numeric) AS recovery_amount,
             COALESCE(NULLIF(to_jsonb(e)->>'net_loss_amount','')::numeric,NULLIF(to_jsonb(e)->>'net_loss','')::numeric) AS net_loss_amount,
@@ -386,26 +357,93 @@ async function queryLossEvents(client, tenantId, period) {
        AND ($3::timestamptz IS NULL OR ${effectiveEventTime}<=$3)`,
     [tenantId, period.start || null, period.end || null]
   );
-  const rows = result.rows.map((row) => ({
-    ...row,
-    __source_warnings: row.raw_event_date_was_future ? ['loss_events.occurred_at viene en el futuro; se usó created_at como fecha efectiva para el cálculo oficial.'] : [],
-  }));
-  return tagRows(rows, 'loss_events');
+  return tagRows(result.rows.map((row) => ({ ...row, __source_warnings: row.raw_event_date_was_future ? ['loss_events.occurred_at viene en el futuro; se usó created_at como fecha efectiva para el cálculo oficial.'] : [] })), 'loss_events');
 }
+
+async function queryContinuity(client, tenantId, period) {
+  if (!(await tableExists(client, 'grc_continuity_tests'))) return null;
+  const timestamp = `COALESCE(NULLIF(to_jsonb(t)->>'completed_at','')::timestamptz,NULLIF(to_jsonb(t)->>'scheduled_at','')::timestamptz,NULLIF(to_jsonb(t)->>'created_at','')::timestamptz)`;
+  const status = `lower(COALESCE(NULLIF(to_jsonb(t)->>'status',''),'planned'))`;
+  const result = await client.query(
+    `SELECT t.id,t.tenant_id,
+            CASE
+              WHEN ${status} IN ('failed','failure') THEN 'failed'
+              WHEN (NULLIF(to_jsonb(t)->>'target_rto_minutes','')::numeric IS NOT NULL AND NULLIF(to_jsonb(t)->>'observed_rto_minutes','')::numeric IS NOT NULL AND NULLIF(to_jsonb(t)->>'observed_rto_minutes','')::numeric > NULLIF(to_jsonb(t)->>'target_rto_minutes','')::numeric) THEN 'failed'
+              WHEN (NULLIF(to_jsonb(t)->>'target_rpo_minutes','')::numeric IS NOT NULL AND NULLIF(to_jsonb(t)->>'observed_rpo_minutes','')::numeric IS NOT NULL AND NULLIF(to_jsonb(t)->>'observed_rpo_minutes','')::numeric > NULLIF(to_jsonb(t)->>'target_rpo_minutes','')::numeric) THEN 'failed'
+              WHEN ${status} IN ('passed','pass','passed_with_observations','completed','successful') THEN 'within_sla'
+              ELSE ${status}
+            END AS status,
+            NULLIF(to_jsonb(t)->>'target_rto_minutes','')::numeric / 60.0 AS rto_hours,
+            NULLIF(to_jsonb(t)->>'observed_rto_minutes','')::numeric / 60.0 AS actual_recovery_hours,
+            NULLIF(to_jsonb(t)->>'target_rpo_minutes','')::numeric / 60.0 AS rpo_hours,
+            NULLIF(to_jsonb(t)->>'observed_rpo_minutes','')::numeric / 60.0 AS actual_data_loss_hours,
+            ${timestamp} AS __event_time
+     FROM grc_continuity_tests t
+     WHERE t.tenant_id=$1::uuid
+       AND NULLIF(to_jsonb(t)->>'completed_at','')::timestamptz IS NOT NULL
+       AND ${status} NOT IN ('planned','draft','scheduled','cancelled')
+       AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+       AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
+    [tenantId, period.start || null, period.end || null]
+  );
+  return tagRows(result.rows, 'grc_continuity_tests');
+}
+
+async function queryAssurance(client, tenantId, period) {
+  if (!(await tableExists(client, 'assurance_test_results'))) return null;
+  const timestamp = safeTimestampExpression('r');
+  const rawResult = `lower(COALESCE(NULLIF(to_jsonb(r)->>'result',''),NULLIF(to_jsonb(r)->>'status',''),NULLIF(to_jsonb(r)->>'outcome',''),'inconclusive'))`;
+  const result = await client.query(
+    `SELECT (to_jsonb(r)->>'id')::uuid AS id,(to_jsonb(r)->>'tenant_id')::uuid AS tenant_id,
+            CASE WHEN ${rawResult}='passed' THEN 'pass' WHEN ${rawResult}='failed' THEN 'fail' ELSE ${rawResult} END AS result,
+            COALESCE(NULLIF(to_jsonb(r)->>'weight','')::numeric,1) AS weight,${timestamp} AS __event_time
+     FROM assurance_test_results r
+     WHERE (to_jsonb(r)->>'tenant_id')::uuid=$1::uuid
+       AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+       AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
+    [tenantId, period.start || null, period.end || null]
+  );
+  return tagRows(result.rows, 'assurance_test_results');
+}
+
+async function querySupplier(client, tenantId, period) {
+  if (!(await tableExists(client, 'grc_supplier_assessments'))) return null;
+  const timestamp = `COALESCE(NULLIF(to_jsonb(a)->>'approved_at','')::timestamptz,NULLIF(to_jsonb(a)->>'submitted_at','')::timestamptz,NULLIF(to_jsonb(a)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(a)->>'created_at','')::timestamptz)`;
+  const result = await client.query(
+    `SELECT a.id,a.tenant_id,a.supplier_id,a.status,
+            NULLIF(to_jsonb(a)->>'compliance_score','')::numeric AS compliance_score,
+            NULLIF(to_jsonb(a)->>'security_score','')::numeric AS security_score,
+            NULLIF(to_jsonb(a)->>'dependency_score','')::numeric AS dependency_score,
+            NULLIF(to_jsonb(a)->>'privacy_score','')::numeric AS privacy_score,
+            NULLIF(to_jsonb(a)->>'resilience_score','')::numeric AS resilience_score,
+            NULLIF(to_jsonb(a)->>'performance_score','')::numeric AS performance_score,
+            NULLIF(to_jsonb(a)->>'assurance_score','')::numeric AS assurance_score,
+            NULLIF(to_jsonb(a)->>'continuity_score','')::numeric AS continuity_score,
+            NULLIF(to_jsonb(a)->>'incident_health_score','')::numeric AS incident_health_score,
+            NULLIF(to_jsonb(a)->>'data_trust_score','')::numeric AS data_trust_score,
+            NULLIF(to_jsonb(a)->>'score','')::numeric AS assessment_score,
+            NULLIF(to_jsonb(a)->>'inherent_risk_score','')::numeric AS inherent_risk_score,
+            NULLIF(to_jsonb(a)->>'residual_risk_score','')::numeric AS residual_risk_score,
+            ${timestamp} AS __event_time
+     FROM grc_supplier_assessments a
+     WHERE a.tenant_id=$1::uuid
+       AND lower(a.status) NOT IN ('draft','invited','in_progress','rejected','expired')
+       AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
+       AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
+    [tenantId, period.start || null, period.end || null]
+  );
+  return tagRows(result.rows, 'grc_supplier_assessments');
+}
+
 async function queryEvidenceFreshness(client, tenantId, period) {
   const candidates = [];
   if (await tableExists(client, 'evidences')) {
     const timestamp = `COALESCE(NULLIF(to_jsonb(e)->>'reviewed_at','')::timestamptz,NULLIF(to_jsonb(e)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(e)->>'created_at','')::timestamptz)`;
     candidates.push({ table: 'evidences', params: [tenantId, period.start || null, period.end || null], sql:
-      `SELECT e.id,e.tenant_id,
-              COALESCE(NULLIF(to_jsonb(e)->>'status',''),'pending') AS status,
-              NULLIF(to_jsonb(e)->>'validated','')::boolean AS validated,
-              NULLIF(to_jsonb(e)->>'created_at','')::timestamptz AS created_at,
-              NULLIF(to_jsonb(e)->>'reviewed_at','')::timestamptz AS reviewed_at,
-              NULLIF(to_jsonb(e)->>'expires_at','')::timestamptz AS expires_at,
-              ${timestamp} AS __event_time,
-              NULLIF(to_jsonb(e)->>'freshness_score','')::numeric AS freshness_score,
-              NULLIF(to_jsonb(e)->>'appears_expired','')::boolean AS appears_expired
+      `SELECT e.id,e.tenant_id,COALESCE(NULLIF(to_jsonb(e)->>'status',''),'pending') AS status,
+              NULLIF(to_jsonb(e)->>'validated','')::boolean AS validated,NULLIF(to_jsonb(e)->>'created_at','')::timestamptz AS created_at,
+              NULLIF(to_jsonb(e)->>'reviewed_at','')::timestamptz AS reviewed_at,NULLIF(to_jsonb(e)->>'expires_at','')::timestamptz AS expires_at,
+              ${timestamp} AS __event_time,NULLIF(to_jsonb(e)->>'freshness_score','')::numeric AS freshness_score,NULLIF(to_jsonb(e)->>'appears_expired','')::boolean AS appears_expired
        FROM evidences e WHERE e.tenant_id=$1::uuid
          AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
          AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
@@ -413,40 +451,22 @@ async function queryEvidenceFreshness(client, tenantId, period) {
   if (await tableExists(client, 'grc_evidence_versions')) {
     const submissionsExist = await tableExists(client, 'grc_evidence_submissions');
     const reviewsExist = await tableExists(client, 'grc_evidence_reviews');
-    const submissionJoin = submissionsExist
-      ? `LEFT JOIN grc_evidence_submissions s ON s.tenant_id=v.tenant_id AND s.id=v.submission_id`
-      : '';
-    const reviewJoin = reviewsExist
-      ? `LEFT JOIN LATERAL (
-           SELECT r.decision,r.created_at
-           FROM grc_evidence_reviews r
-           WHERE r.tenant_id=v.tenant_id AND r.submission_id=v.submission_id
-           ORDER BY r.created_at DESC NULLS LAST
-           LIMIT 1
-         ) r ON true`
-      : '';
-    const statusExpression = submissionsExist
-      ? `COALESCE(NULLIF(to_jsonb(s)->>'status',''),'submitted')`
-      : `'submitted'`;
-    const validatedExpression = reviewsExist
-      ? `CASE WHEN lower(COALESCE(NULLIF(to_jsonb(r)->>'decision',''),''))='approved' THEN true WHEN lower(COALESCE(NULLIF(to_jsonb(r)->>'decision',''),'')) IN ('rejected','reopened') THEN false ELSE NULL END`
-      : `NULL::boolean`;
-    const reviewedAtExpression = reviewsExist
-      ? `NULLIF(to_jsonb(r)->>'created_at','')::timestamptz`
-      : `NULL::timestamptz`;
+    const submissionJoin = submissionsExist ? `LEFT JOIN grc_evidence_submissions s ON s.tenant_id=v.tenant_id AND s.id=v.submission_id` : '';
+    const reviewJoin = reviewsExist ? `LEFT JOIN LATERAL (SELECT r.decision,r.created_at FROM grc_evidence_reviews r WHERE r.tenant_id=v.tenant_id AND r.submission_id=v.submission_id ORDER BY r.created_at DESC NULLS LAST LIMIT 1) r ON true` : '';
+    const statusExpression = submissionsExist ? `COALESCE(NULLIF(to_jsonb(s)->>'status',''),'submitted')` : `'submitted'`;
+    const validatedExpression = reviewsExist ? `CASE WHEN lower(COALESCE(NULLIF(to_jsonb(r)->>'decision',''),''))='approved' THEN true WHEN lower(COALESCE(NULLIF(to_jsonb(r)->>'decision',''),'')) IN ('rejected','reopened') THEN false ELSE NULL END` : `NULL::boolean`;
+    const reviewedAtExpression = reviewsExist ? `NULLIF(to_jsonb(r)->>'created_at','')::timestamptz` : `NULL::timestamptz`;
     const timestamp = `COALESCE(${reviewedAtExpression},NULLIF(to_jsonb(v)->>'created_at','')::timestamptz)`;
     candidates.push({ table: 'grc_evidence_versions', params: [tenantId, period.start || null, period.end || null], sql:
-      `SELECT v.id,v.tenant_id,${statusExpression} AS status,${validatedExpression} AS validated,v.created_at,${reviewedAtExpression} AS reviewed_at,NULL::timestamptz AS expires_at,${timestamp} AS __event_time,
-              NULL::numeric AS freshness_score,false AS appears_expired
-       FROM grc_evidence_versions v
-       ${submissionJoin}
-       ${reviewJoin}
+      `SELECT v.id,v.tenant_id,${statusExpression} AS status,${validatedExpression} AS validated,v.created_at,${reviewedAtExpression} AS reviewed_at,NULL::timestamptz AS expires_at,${timestamp} AS __event_time,NULL::numeric AS freshness_score,false AS appears_expired
+       FROM grc_evidence_versions v ${submissionJoin} ${reviewJoin}
        WHERE v.tenant_id=$1::uuid
          AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
          AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
   }
   return firstPopulated(client, candidates);
 }
+
 const ADAPTER_BY_SOURCE = Object.freeze({
   compliance_requirements_assessments: queryCompliance,
   grc_readiness_operational_snapshot: queryReadiness,
@@ -456,6 +476,9 @@ const ADAPTER_BY_SOURCE = Object.freeze({
   incident_operational_events: queryIncidents,
   evidence_freshness_records: queryEvidenceFreshness,
   loss_events_operational: queryLossEvents,
+  continuity_resilience_tests: queryContinuity,
+  assurance_test_results: queryAssurance,
+  supplier_tprm_assessments: querySupplier,
   grc_health_components: queryHealth,
   maturity_assessments: queryMaturity,
 });
@@ -475,7 +498,6 @@ function mapFormulaInput(formulaCode, rows) {
   const statuses = rows.map((row) => String(row.status || '').toLowerCase());
   const severities = rows.map((row) => String(row.severity ?? row.risk_level ?? row.level ?? row.status ?? '').toLowerCase());
   const usableScores = rows.map((row) => number(row.score)).filter((value) => value !== null);
-  const dates = rows.map((row) => row.event_date || row.measured_at || row.assessed_at || row.reviewed_at || row.updated_at || row.created_at || row.__event_time).filter(Boolean);
 
   if (formulaCode === 'F5_5_COMPLIANCE_WEIGHTED') return { assessments: rows.map((row) => ({ status: row.status, weight: number(row.weight, 1), notApplicable: ['not_applicable', 'na'].includes(String(row.status)) })) };
   if (formulaCode === 'F5_5_COVERAGE') return { evaluated: statuses.filter((status) => !['pending', 'not_evaluated', 'draft', ''].includes(status)).length, applicable: statuses.filter((status) => !['not_applicable', 'na'].includes(status)).length };
@@ -489,34 +511,22 @@ function mapFormulaInput(formulaCode, rows) {
       const impact = number(row.impact);
       return probability !== null && impact !== null ? probability * impact : null;
     }).filter((value) => value !== null);
-    const controlEffectiveness = average(rows.map((row) => row.control_effectiveness ?? row.assurance_score ?? row.control_score ?? row.effectiveness_score));
-    return {
-      inherentRisk: average(inherentScores),
-      controlEffectiveness: ratio(controlEffectiveness),
-    };
+    const controlEffectiveness = average(rows.map((row) => row.control_effectiveness ?? row.control_effectiveness_score ?? row.assurance_score ?? row.control_score ?? row.effectiveness_score));
+    return { inherentRisk: average(inherentScores), controlEffectiveness: ratio(controlEffectiveness) };
   }
   if (formulaCode === 'F5_5_FMEA_RPN') return { severity: number(first.impact), occurrence: number(first.occurrence ?? first.probability), detection: number(first.detection) };
   if (formulaCode === 'F5_5_COMBINED_EFFECTIVENESS') return { effectivenesses: usableScores.map(ratio).filter((value) => value !== null) };
   if (formulaCode === 'F5_5_CONTROL_EFFECTIVENESS') return { design: ratio(first.design_score ?? first.design_effectiveness), implementation: ratio(first.implementation_score ?? first.implementation_effectiveness), operation: ratio(first.operation_score ?? first.operation_effectiveness ?? first.operating_effectiveness), evidence: ratio(first.evidence_score ?? first.evidence_effectiveness) };
-  if (formulaCode === 'F5_5_CONTROL_COVERAGE') return { risksWithControl: rows.filter((row) => number(row.score) !== null || number(row.control_effectiveness) !== null).length, relevantRisks: rows.length };
+  if (formulaCode === 'F5_5_CONTROL_COVERAGE') return { risksWithControl: rows.filter((row) => number(row.score) !== null || number(row.control_effectiveness ?? row.control_effectiveness_score) !== null).length, relevantRisks: rows.length };
   if (formulaCode === 'F5_5_FREQUENCY_COMPLIANCE') return { onTimeExecutions: statuses.filter((status) => ['effective', 'completed', 'on_time', 'compliant'].includes(status)).length, scheduledExecutions: rows.length };
   if (formulaCode === 'F5_5_FAILURE_RATE') return { failedTests: statuses.filter((status) => ['fail', 'failed', 'non_compliant'].includes(status)).length, executedTests: rows.length };
   if (formulaCode === 'F5_5_SEVERITY_INDEX') return { low: severities.filter((severity) => severity === 'low').length, medium: severities.filter((severity) => severity === 'medium').length, high: severities.filter((severity) => severity === 'high').length, critical: severities.filter((severity) => severity === 'critical').length };
-  if (['F5_5_MTTC', 'F5_5_AGE', 'F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((row) => {
-    const progressValue = number(row.progress ?? row.progress_percent ?? row.latest_progress_percent);
-    return { openedAt: row.opened_at ?? row.created_at, closedAt: row.closed_at ?? row.completed_at, dueAt: row.due_at ?? row.due_date, createdAt: row.opened_at ?? row.created_at, progress: progressValue === null ? null : (progressValue > 1 ? progressValue / 100 : progressValue), weight: number(row.weight, 1), status: row.status ?? row.latest_status_after };
-  }).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
+  if (['F5_5_MTTC', 'F5_5_AGE', 'F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((row) => { const progressValue = number(row.progress ?? row.progress_percent ?? row.latest_progress_percent); return { openedAt: row.opened_at ?? row.created_at, closedAt: row.closed_at ?? row.completed_at, dueAt: row.due_at ?? row.due_date, createdAt: row.opened_at ?? row.created_at, progress: progressValue === null ? null : (progressValue > 1 ? progressValue / 100 : progressValue), weight: number(row.weight, 1), status: row.status ?? row.latest_status_after }; }).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
   if (formulaCode === 'F5_5_CLOSURE_RATE') return { closed: statuses.filter((status) => ['closed', 'completed', 'resolved'].includes(status)).length, openAtStart: statuses.filter((status) => !['closed', 'completed', 'resolved'].includes(status)).length, created: 0 };
   if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((row) => !['closed', 'completed', 'resolved'].includes(String(row.status ?? row.latest_status_after).toLowerCase())); return { overdueOpen: open.filter((row) => (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date()).length, openActions: open.length, items: open.map((row) => ({ overdue: (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date() ? 1 : 0, weight: number(row.weight, 1) })) }; }
   const grossLossValue = (row) => number(row.gross_loss_amount ?? row.gross_loss);
   const recoveryValue = (row) => number(row.recovery_amount ?? row.recoveries);
-  const netLossValue = (row) => {
-    const direct = number(row.net_loss_amount ?? row.net_loss);
-    if (direct !== null) return direct;
-    const gross = grossLossValue(row);
-    const recovery = recoveryValue(row);
-    return gross !== null && recovery !== null ? gross - recovery : null;
-  };
+  const netLossValue = (row) => { const direct = number(row.net_loss_amount ?? row.net_loss); if (direct !== null) return direct; const gross = grossLossValue(row); const recovery = recoveryValue(row); return gross !== null && recovery !== null ? gross - recovery : null; };
   if (formulaCode === 'F5_5_EXPECTED_LOSS') return { probability: number(first.probability), impact: number(first.impact ?? first.gross_loss_amount ?? first.gross_loss) };
   if (formulaCode === 'F5_5_NET_LOSS') return { grossLoss: sum(rows.map(grossLossValue)), recoveries: sum(rows.map(recoveryValue)) };
   if (formulaCode === 'F5_5_LOSS_SEVERITY') return { netLosses: rows.map(netLossValue).filter((value) => value !== null) };
@@ -525,13 +535,13 @@ function mapFormulaInput(formulaCode, rows) {
   if (formulaCode === 'F5_5_AVAILABILITY') return { totalTime: number(first.total_time ?? first.totalTime), downtime: number(first.downtime ?? first.downtime_hours), mtbf: number(first.mtbf), mttr: number(first.mttr) };
   if (formulaCode === 'F5_5_MTBF') return { operatingTime: number(first.operating_time ?? first.total_time), failures: number(first.failures ?? rows.filter((row) => ['failed', 'failure'].includes(String(row.status))).length) };
   if (formulaCode === 'F5_5_MTTR') return { repairTimes: rows.map((row) => number(row.repair_time ?? row.actual_recovery_hours)).filter((value) => value !== null) };
-  if (formulaCode === 'F5_5_SLA_COMPLIANCE') return { withinSla: rows.filter((row) => ['pass', 'compliant', 'within_sla', 'completed'].includes(String(row.status))).length, applicableCases: rows.length };
+  if (formulaCode === 'F5_5_SLA_COMPLIANCE') return { withinSla: rows.filter((row) => ['pass', 'passed', 'passed_with_observations', 'compliant', 'within_sla', 'completed'].includes(String(row.status).toLowerCase())).length, applicableCases: rows.length };
   if (formulaCode === 'F5_5_RTO_GAP') return { recoveryActual: number(first.actual_recovery_hours ?? first.recovery_actual), rtoObjective: number(first.rto_hours ?? first.rto_objective) };
   if (formulaCode === 'F5_5_RPO_GAP') return { dataLossActual: number(first.actual_data_loss_hours ?? first.data_loss_actual), rpoObjective: number(first.rpo_hours ?? first.rpo_objective) };
   if (formulaCode === 'F5_5_ASSET_CRITICALITY') return { confidentiality: number(first.confidentiality), integrity: number(first.integrity), availability: number(first.availability), legal: number(first.legal ?? first.legal_impact) };
-  if (formulaCode === 'F5_5_SUPPLIER_RISK') return { compliance: number(first.compliance_score ?? first.score), security: number(first.security_score), dependency: number(first.dependency_score), privacy: number(first.privacy_score), resilience: number(first.resilience_score) };
+  if (formulaCode === 'F5_5_SUPPLIER_RISK') return { compliance: number(first.compliance_score), security: number(first.security_score), dependency: number(first.dependency_score), privacy: number(first.privacy_score), resilience: number(first.resilience_score) };
   if (formulaCode === 'F5_C3_SUPPLIER_HEALTH') {
-    const riskInputs=[first.compliance_score??first.score,first.security_score,first.dependency_score,first.privacy_score,first.resilience_score].map((value)=>number(value)).filter((value)=>value!==null);
+    const riskInputs=[first.compliance_score,first.security_score,first.dependency_score,first.privacy_score,first.resilience_score].map((value)=>number(value)).filter((value)=>value!==null);
     const supplierRisk=riskInputs.length===5?average(riskInputs):null;
     return { riskHealth:supplierRisk===null?null:Math.max(0,100-(supplierRisk<=5?supplierRisk*20:supplierRisk)),performance:score(first.performance_score),assurance:score(first.assurance_score),continuity:score(first.continuity_score??first.resilience_score),incidentHealth:score(first.incident_health_score),dataTrust:score(first.data_trust_score) };
   }
@@ -580,22 +590,14 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason, contract);
   const rows = normalizeRows(queried.rows, contract);
   const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null });
-  const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK'
-    ? riskInherentPortfolio(validation.usable_rows)
-    : formulaCode === 'F5_5_SEVERITY_INDEX'
-      ? severityPortfolio(validation.usable_rows)
-      : formulaCode === 'F5_5_MATURITY'
-        ? maturityPortfolio(validation.usable_rows)
-        : null;
+  const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK' ? riskInherentPortfolio(validation.usable_rows) : formulaCode === 'F5_5_SEVERITY_INDEX' ? severityPortfolio(validation.usable_rows) : formulaCode === 'F5_5_MATURITY' ? maturityPortfolio(validation.usable_rows) : null;
   const formulaRows = formulaMapping ? formulaMapping.usableRows : validation.usable_rows;
   const formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
   const formulaExclusions = formulaMapping ? [...validation.exclusions, ...formulaMapping.exclusions] : validation.exclusions;
-  const formulaCounts = formulaMapping
-    ? { received: validation.usable_rows.length, usable: formulaMapping.usableRows.length, excluded: formulaMapping.exclusions.length }
-    : { received: rows.length, usable: validation.usable_rows.length, excluded: validation.exclusions.length };
+  const formulaCounts = { received: rows.length, usable: formulaRows.length, excluded: Math.max(0, rows.length - formulaRows.length) };
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
   const sourceWarnings = [...new Set(rows.flatMap((row) => Array.isArray(row.__source_warnings) ? row.__source_warnings : []))];
-  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, exclusions: formulaCounts.excluded, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
+  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, exclusions: formulaCounts.excluded, exclusion_issue_count: formulaExclusions.length, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
   const snapshotHash = hash(sourceSnapshot);
   return { source_code: contract.source_code, physical_sources: physicalSources, status: formulaCounts.usable ? validation.status : 'empty_dataset', rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
 }
