@@ -69,7 +69,8 @@ function riskInherentPortfolio(rows = []) {
       risks,
       aggregation_method: 'arithmetic_mean',
       sample_size: risks.length,
-      population_size: rows.length,
+      population_size: risks.length,
+      raw_population_size: rows.length,
       scores: risks.map((risk) => risk.inherent_risk_score),
     },
     usableRows,
@@ -278,7 +279,12 @@ async function queryMaturity(client, tenantId, period) {
     const timestamp = safeTimestampExpression('e');
     candidates.push({ table: 'survey_evaluations', params: [tenantId, period.start || null, period.end || null], sql:
       `SELECT e.id,(to_jsonb(e)->>'tenant_id')::uuid AS tenant_id,
-              COALESCE(NULLIF(to_jsonb(e)->>'level','')::numeric,NULLIF(to_jsonb(e)->>'maturity_level','')::numeric,NULLIF(to_jsonb(e)->>'score','')::numeric,NULLIF(to_jsonb(e)->>'total_score','')::numeric) AS level,
+              CASE
+                WHEN NULLIF(to_jsonb(e)->>'level','')::numeric BETWEEN 0 AND 5 THEN NULLIF(to_jsonb(e)->>'level','')::numeric
+                WHEN NULLIF(to_jsonb(e)->>'maturity_level','')::numeric BETWEEN 0 AND 5 THEN NULLIF(to_jsonb(e)->>'maturity_level','')::numeric
+                WHEN NULLIF(to_jsonb(e)->>'score','')::numeric BETWEEN 0 AND 100 THEN NULLIF(to_jsonb(e)->>'score','')::numeric / 20.0
+                ELSE NULL
+              END AS level,
               COALESCE(NULLIF(to_jsonb(e)->>'weight','')::numeric,1) AS weight,
               COALESCE(NULLIF(to_jsonb(e)->>'evaluation_status',''),NULLIF(to_jsonb(e)->>'status',''),'evaluated') AS status,
               ${timestamp} AS __event_time
@@ -594,14 +600,45 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null });
   const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK' ? riskInherentPortfolio(validation.usable_rows) : formulaCode === 'F5_5_SEVERITY_INDEX' ? severityPortfolio(validation.usable_rows) : formulaCode === 'F5_5_MATURITY' ? maturityPortfolio(validation.usable_rows) : null;
   const formulaRows = formulaMapping ? formulaMapping.usableRows : validation.usable_rows;
-  const formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
+  let formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
   const formulaExclusions = formulaMapping ? [...validation.exclusions, ...formulaMapping.exclusions] : validation.exclusions;
-  const formulaCounts = { received: rows.length, usable: formulaRows.length, excluded: Math.max(0, rows.length - formulaRows.length) };
+  const resolverWarnings = [];
+
+  if (formulaCode === 'F5_5_CONTROL_EFFECTIVENESS' && formulaRows.length) {
+    const mappedDimensions = [formulaInput?.design, formulaInput?.implementation, formulaInput?.operation, formulaInput?.evidence];
+    const dimensionFields = ['design_score', 'design_effectiveness', 'implementation_score', 'implementation_effectiveness', 'operation_score', 'operation_effectiveness', 'operating_effectiveness', 'evidence_score', 'evidence_effectiveness'];
+    const hasAnyDimension = formulaRows.some((row) => dimensionFields.some((field) => number(row[field]) !== null));
+    const aggregateScores = formulaRows.map((row) => ratio(row.score)).filter((value) => value !== null);
+    if (mappedDimensions.every((value) => value === null) && !hasAnyDimension && aggregateScores.length) {
+      const composite = average(aggregateScores);
+      formulaInput = { design: composite, implementation: composite, operation: composite, evidence: composite };
+      resolverWarnings.push('F5_5_CONTROL_EFFECTIVENESS usó el score oficial agregado de assurance como medida compuesta porque la fuente no publica dimensiones D/I/O/E separadas.');
+    }
+  }
+
+  let formulaCounts = { received: rows.length, usable: formulaRows.length, excluded: Math.max(0, rows.length - formulaRows.length) };
+  if (formulaCode === 'F5_5_INHERENT_RISK') {
+    const ineligible = Math.max(0, rows.length - formulaRows.length);
+    formulaCounts = {
+      received: formulaRows.length,
+      usable: formulaRows.length,
+      excluded: 0,
+      raw_received: rows.length,
+      ineligible,
+    };
+    if (formulaInput) {
+      formulaInput.population_size = formulaRows.length;
+      formulaInput.raw_population_size = rows.length;
+    }
+    if (ineligible > 0) resolverWarnings.push(`${ineligible} fila(s) físicas de riesgo quedaron fuera de la población elegible por no cumplir el contrato de ejes 1..5; las exclusiones permanecen auditables.`);
+  }
+
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
   const sourceWarnings = [...new Set(rows.flatMap((row) => Array.isArray(row.__source_warnings) ? row.__source_warnings : []))];
-  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, exclusions: formulaCounts.excluded, exclusion_issue_count: formulaExclusions.length, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
+  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, exclusions: formulaCounts.excluded, ineligible_rows: formulaCounts.ineligible || 0, exclusion_issue_count: formulaExclusions.length, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
   const snapshotHash = hash(sourceSnapshot);
-  return { source_code: contract.source_code, physical_sources: physicalSources, status: formulaCounts.usable ? validation.status : 'empty_dataset', rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
+  const resolutionStatus = formulaCounts.usable ? (resolverWarnings.length || formulaExclusions.length ? 'validated_with_warnings' : validation.status) : 'empty_dataset';
+  return { source_code: contract.source_code, physical_sources: physicalSources, status: resolutionStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings, ...resolverWarnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }
