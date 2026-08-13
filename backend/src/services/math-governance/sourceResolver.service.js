@@ -620,10 +620,10 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   if (formulaCode === 'F5_5_INHERENT_RISK') {
     const ineligible = Math.max(0, rows.length - formulaRows.length);
     formulaCounts = {
-      received: formulaRows.length,
+      received: rows.length,
       usable: formulaRows.length,
-      excluded: 0,
-      raw_received: rows.length,
+      excluded: ineligible,
+      eligible_population: formulaRows.length,
       ineligible,
     };
     if (formulaInput) {
@@ -635,7 +635,7 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
 
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
   const sourceWarnings = [...new Set(rows.flatMap((row) => Array.isArray(row.__source_warnings) ? row.__source_warnings : []))];
-  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, exclusions: formulaCounts.excluded, ineligible_rows: formulaCounts.ineligible || 0, exclusion_issue_count: formulaExclusions.length, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
+  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, eligible_population: formulaCounts.eligible_population || formulaCounts.usable, exclusions: formulaCounts.excluded, ineligible_rows: formulaCounts.ineligible || 0, exclusion_issue_count: formulaExclusions.length, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
   const snapshotHash = hash(sourceSnapshot);
   const resolutionStatus = formulaCounts.usable ? (resolverWarnings.length || formulaExclusions.length ? 'validated_with_warnings' : validation.status) : 'empty_dataset';
   return { source_code: contract.source_code, physical_sources: physicalSources, status: resolutionStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings, ...resolverWarnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
