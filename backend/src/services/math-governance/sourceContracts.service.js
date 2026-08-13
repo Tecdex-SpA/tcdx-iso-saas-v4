@@ -173,15 +173,15 @@ const SOURCE_CONTRACTS = Object.freeze([
     columns: ['tenant_id','risk_id','probability','likelihood','impact','inherent_risk_score','exposure','severity','occurrence','detection','tenant_control_id','score','status'], required_fields: ['id','tenant_id'],
     variable_map: { risks: 'rows[{source_record,probability|likelihood,impact,inherent_risk_score=probability*impact}]', aggregation_method: 'arithmetic_mean', probability: 'probability|likelihood', impact: 'impact', inherentRisk: 'mean(rows.probability*rows.impact)', controlEffectiveness: 'assurance_score/100', severity: 'severity', occurrence: 'occurrence', detection: 'detection' },
     availability: 'available', version: 3,
-    limitations: 'RISK-INHERENT calcula el promedio aritmetico del portafolio de riesgos utilizables del tenant; excluye filas sin probabilidad/likelihood o impacto validos 1..5, no usa rows[0], no deduplica por titulo y no cruza tenants.'
+    limitations: 'RISK-INHERENT calcula el promedio aritmetico del portafolio de riesgos utilizables del tenant; excluye filas sin probabilidad/likelihood o impacto numéricos, no impone una escala específica de cliente en código, no usa rows[0], no deduplica por titulo y no cruza tenants.'
   }),
   contract({
     source_code: 'control_assurance_evidence', entity: 'control',
     tables: ['grc_control_assurance', 'grc_evidence_links', 'grc_evidence_quality_scores'],
     columns: ['tenant_id','tenant_control_id','score','assurance_status','calculated_at','evidence_score'], required_fields: ['id','tenant_id','score'],
-    variable_map: { design: 'dimension.design|score/100', implementation: 'dimension.implementation|score/100', operation: 'dimension.operation|score/100', evidence: 'evidence_score|score/100', effectivenesses: 'rows.score/100' },
+    variable_map: { design: 'dimension.design', implementation: 'dimension.implementation', operation: 'dimension.operation', evidence: 'evidence_score', compositeScore: 'mean(rows.score)/100', effectivenesses: 'rows.score/100' },
     availability: 'available', version: 2,
-    limitations: 'Cuando no hay dimensiones separadas se usa el score oficial de assurance como medida compuesta declarada, conservando warning metodológico.'
+    limitations: 'Cuando no hay dimensiones separadas, CONTROL-EFFECT usa directamente el score compuesto oficial persistido; nunca replica ese valor como dimensiones D/I/O/E inexistentes.'
   }),
   contract({
     source_code: 'audit_findings_actions', entity: 'audit',
@@ -245,10 +245,10 @@ const SOURCE_CONTRACTS = Object.freeze([
   contract({
     source_code: 'maturity_assessments', entity: 'maturity',
     tables: ['survey_evaluations','metric_measurements'],
-    columns: ['tenant_id','score','numeric_value','weight','evaluated_at','measured_at','status','metadata'], required_fields: ['id','tenant_id'],
-    variable_map: { levels: 'rows[{level|score|numeric_value,weight}]' },
+    columns: ['tenant_id','level','maturity_level','score','numeric_value','weight','evaluated_at','measured_at','status','metadata'], required_fields: ['id','tenant_id'],
+    variable_map: { levels: 'rows[{level|maturity_level|numeric_value,weight}]', score_conversion: 'metadata{source_min,source_max,target_min,target_max}' },
     availability: 'available', version: 2,
-    limitations: 'Prioriza evaluaciones publicadas y usa mediciones de madurez como fallback; no infiere niveles sin datos.'
+    limitations: 'Prioriza niveles de madurez persistidos. Un score sólo se convierte cuando metadata aporta la escala origen y destino completa; sin configuración persistida queda no calculable y nunca se infiere una equivalencia.'
   }),
   contract({ source_code: 'external_fx_rates', entity: 'currency_conversion', tables: ['external_fx_rates'], columns: ['base_currency','quote_currency','rate','effective_at','source'], required_fields: ['base_currency','quote_currency','rate'], availability: 'source_unavailable', limitations: 'No official tenant-safe FX source is configured; loss calculations must not mix currencies.' }),
 ]);

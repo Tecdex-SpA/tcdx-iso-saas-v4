@@ -92,9 +92,10 @@ async function reconciliationTests() {
     throw new Error(`unexpected control query: ${sql}`);
   } };
   const controlSource = await resolveFormulaSource({ client: controlClient, tenantId: 'tenant-a', formulaCode: 'F5_5_CONTROL_EFFECTIVENESS', period: { start: '2026-08-01T00:00:00Z', end: '2026-08-13T23:59:59Z' } });
-  assert.deepStrictEqual(controlSource.formula_input, { design: 0.8, implementation: 0.8, operation: 0.8, evidence: 0.8 });
+  assert.deepStrictEqual(controlSource.formula_input, { compositeScore: 0.8 });
   assert.strictEqual(executeFormula('F5_5_CONTROL_EFFECTIVENESS', controlSource.formula_input).value, 0.8);
-  assert.ok(controlSource.warnings.some((warning) => String(warning).includes('score oficial agregado')));
+  assert.ok(controlSource.warnings.some((warning) => String(warning).includes('score compuesto oficial')));
+  assert.ok(!Object.prototype.hasOwnProperty.call(controlSource.formula_input, 'design'));
 
   const riskClient = { async query(sql, params) {
     if (sql.includes('to_regclass')) return fakeTableExists(params, ['iso_risk_matrix_items', 'iso_risk_matrix_runs']);
@@ -120,15 +121,24 @@ async function reconciliationTests() {
   const maturityClient = { async query(sql, params) {
     if (sql.includes('to_regclass')) return fakeTableExists(params, ['survey_evaluations']);
     if (sql.includes('FROM survey_evaluations e')) {
-      maturitySqlChecked = sql.includes("score','')::numeric / 20.0");
-      return { rows: [{ id: 'maturity-a', tenant_id: 'tenant-a', level: 4.2, weight: 1, status: 'confirmed', __event_time: '2026-08-10T12:00:00Z' }] };
+      maturitySqlChecked = sql.includes("metadata'->>'source_max'") && !sql.includes('/ 20.0') && !sql.includes('BETWEEN 0 AND 5');
+      return { rows: [{ id: 'maturity-a', tenant_id: 'tenant-a', level: null, source_score: 84, source_min: 0, source_max: 100, target_min: 0, target_max: 5, weight: 1, status: 'confirmed', __event_time: '2026-08-10T12:00:00Z' }] };
     }
     throw new Error(`unexpected maturity query: ${sql}`);
   } };
   const maturitySource = await resolveFormulaSource({ client: maturityClient, tenantId: 'tenant-a', formulaCode: 'F5_5_MATURITY', period: { start: '2026-08-01T00:00:00Z', end: '2026-08-13T23:59:59Z' } });
-  assert.strictEqual(maturitySqlChecked, true, 'survey evaluation percentage must be explicitly normalized to maturity 0..5');
+  assert.strictEqual(maturitySqlChecked, true, 'survey maturity conversion must use persisted scale metadata and no runtime scale constants');
   assert.deepStrictEqual(maturitySource.formula_input, { levels: [{ level: 4.2, weight: 1 }] });
   assert.strictEqual(executeFormula('F5_5_MATURITY', maturitySource.formula_input).value, 4.2);
+
+  const maturityWithoutScaleClient = { async query(sql, params) {
+    if (sql.includes('to_regclass')) return fakeTableExists(params, ['survey_evaluations']);
+    if (sql.includes('FROM survey_evaluations e')) return { rows: [{ id: 'maturity-b', tenant_id: 'tenant-b', level: null, source_score: 84, source_min: null, source_max: null, target_min: null, target_max: null, weight: 1, status: 'confirmed', __event_time: '2026-08-10T12:00:00Z' }] };
+    throw new Error(`unexpected maturity query: ${sql}`);
+  } };
+  const maturityWithoutScale = await resolveFormulaSource({ client: maturityWithoutScaleClient, tenantId: 'tenant-b', formulaCode: 'F5_5_MATURITY', period: { start: '2026-08-01T00:00:00Z', end: '2026-08-13T23:59:59Z' } });
+  assert.strictEqual(maturityWithoutScale.status, 'empty_dataset');
+  assert.ok(maturityWithoutScale.exclusions.some((item) => item.code === 'maturity_scale_configuration_missing'));
 }
 
 reconciliationTests()

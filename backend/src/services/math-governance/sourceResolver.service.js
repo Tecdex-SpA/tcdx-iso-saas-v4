@@ -24,7 +24,7 @@ function tagWarnings(rows, warnings = []) { return (rows || []).map((row) => ({ 
 
 function validRiskAxis(value) {
   const parsed = number(value);
-  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 5 ? parsed : null;
+  return parsed !== null && Number.isFinite(parsed) ? parsed : null;
 }
 
 const SEVERITY_LEVELS = Object.freeze(['low', 'medium', 'high', 'critical']);
@@ -106,14 +106,35 @@ function maturityPortfolio(rows = []) {
   const exclusions = [];
   const levels = [];
   rows.forEach((row, index) => {
-    const level = number(row.level ?? row.maturity_level ?? row.score ?? row.numeric_value ?? row.value_numeric);
     const sourceRecord = row.id || row.source_entity_id || `row-${index}`;
+    let level = number(row.level ?? row.maturity_level ?? row.numeric_value ?? row.value_numeric);
     if (level === null) {
-      exclusions.push({ code: 'maturity_level_missing_or_invalid', field: 'level|maturity_level|score|numeric_value|value_numeric', source_record: sourceRecord, physical_source: row.__physical_source || null, reason: 'F5_5_MATURITY requiere nivel numérico de madurez; filas sin nivel no se usan como proxy.' });
-      return;
+      const sourceScore = number(row.source_score);
+      const sourceMin = number(row.source_min);
+      const sourceMax = number(row.source_max);
+      const targetMin = number(row.target_min);
+      const targetMax = number(row.target_max);
+      const hasScale = [sourceScore, sourceMin, sourceMax, targetMin, targetMax].every((value) => value !== null);
+      if (!hasScale || sourceMax === sourceMin) {
+        exclusions.push({
+          code: 'maturity_scale_configuration_missing',
+          field: 'metadata.source_min|source_max|target_min|target_max',
+          source_record: sourceRecord,
+          physical_source: row.__physical_source || null,
+          reason: 'F5_5_MATURITY no convierte scores sin una escala persistida completa; no se infieren equivalencias numéricas.',
+        });
+        return;
+      }
+      level = targetMin + (((sourceScore - sourceMin) / (sourceMax - sourceMin)) * (targetMax - targetMin));
     }
-    if (level < 0 || level > 5) {
-      exclusions.push({ code: 'maturity_level_out_of_range', field: 'level', source_record: sourceRecord, physical_source: row.__physical_source || null, value: level, reason: 'F5_5_MATURITY usa escala de madurez 0..5; puntajes porcentuales u otros valores no se usan como nivel.' });
+    if (!Number.isFinite(level)) {
+      exclusions.push({
+        code: 'maturity_level_missing_or_invalid',
+        field: 'level|maturity_level|numeric_value|value_numeric',
+        source_record: sourceRecord,
+        physical_source: row.__physical_source || null,
+        reason: 'F5_5_MATURITY requiere un nivel numérico persistido o una conversión gobernada por metadata.',
+      });
       return;
     }
     levels.push({ level, weight: number(row.weight, 1) });
@@ -279,12 +300,12 @@ async function queryMaturity(client, tenantId, period) {
     const timestamp = safeTimestampExpression('e');
     candidates.push({ table: 'survey_evaluations', params: [tenantId, period.start || null, period.end || null], sql:
       `SELECT e.id,(to_jsonb(e)->>'tenant_id')::uuid AS tenant_id,
-              CASE
-                WHEN NULLIF(to_jsonb(e)->>'level','')::numeric BETWEEN 0 AND 5 THEN NULLIF(to_jsonb(e)->>'level','')::numeric
-                WHEN NULLIF(to_jsonb(e)->>'maturity_level','')::numeric BETWEEN 0 AND 5 THEN NULLIF(to_jsonb(e)->>'maturity_level','')::numeric
-                WHEN NULLIF(to_jsonb(e)->>'score','')::numeric BETWEEN 0 AND 100 THEN NULLIF(to_jsonb(e)->>'score','')::numeric / 20.0
-                ELSE NULL
-              END AS level,
+              COALESCE(NULLIF(to_jsonb(e)->>'level','')::numeric,NULLIF(to_jsonb(e)->>'maturity_level','')::numeric) AS level,
+              NULLIF(to_jsonb(e)->>'score','')::numeric AS source_score,
+              COALESCE(NULLIF(to_jsonb(e)->'metadata'->>'source_min','')::numeric,NULLIF(to_jsonb(e)->'metadata'->>'score_min','')::numeric) AS source_min,
+              COALESCE(NULLIF(to_jsonb(e)->'metadata'->>'source_max','')::numeric,NULLIF(to_jsonb(e)->'metadata'->>'score_max','')::numeric) AS source_max,
+              COALESCE(NULLIF(to_jsonb(e)->'metadata'->>'target_min','')::numeric,NULLIF(to_jsonb(e)->'metadata'->>'maturity_min','')::numeric) AS target_min,
+              COALESCE(NULLIF(to_jsonb(e)->'metadata'->>'target_max','')::numeric,NULLIF(to_jsonb(e)->'metadata'->>'maturity_max','')::numeric) AS target_max,
               COALESCE(NULLIF(to_jsonb(e)->>'weight','')::numeric,1) AS weight,
               COALESCE(NULLIF(to_jsonb(e)->>'evaluation_status',''),NULLIF(to_jsonb(e)->>'status',''),'evaluated') AS status,
               ${timestamp} AS __event_time
@@ -316,7 +337,7 @@ async function queryMaturity(client, tenantId, period) {
     const timestamp = safeTimestampExpression('gm');
     candidates.push({ table: 'grc_metric_measurements', params: [tenantId, period.start || null, period.end || null], sql:
       `SELECT gm.id,(to_jsonb(gm)->>'tenant_id')::uuid AS tenant_id,
-              COALESCE(NULLIF(to_jsonb(gm)->>'level','')::numeric,NULLIF(to_jsonb(gm)->>'score','')::numeric,NULLIF(to_jsonb(gm)->>'numeric_value','')::numeric,NULLIF(to_jsonb(gm)->>'value_numeric','')::numeric) AS level,
+              COALESCE(NULLIF(to_jsonb(gm)->>'level','')::numeric,NULLIF(to_jsonb(gm)->>'maturity_level','')::numeric,NULLIF(to_jsonb(gm)->>'numeric_value','')::numeric,NULLIF(to_jsonb(gm)->>'value_numeric','')::numeric) AS level,
               COALESCE(NULLIF(to_jsonb(gm)->>'weight','')::numeric,1) AS weight,
               COALESCE(NULLIF(to_jsonb(gm)->>'status',''),'calculated') AS status,${timestamp} AS __event_time
        FROM grc_metric_measurements gm
@@ -605,16 +626,15 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   const resolverWarnings = [];
 
   if (formulaCode === 'F5_5_CONTROL_EFFECTIVENESS' && formulaRows.length) {
-    const mappedDimensions = [formulaInput?.design, formulaInput?.implementation, formulaInput?.operation, formulaInput?.evidence];
-    const dimensionFields = ['design_score', 'design_effectiveness', 'implementation_score', 'implementation_effectiveness', 'operation_score', 'operation_effectiveness', 'operating_effectiveness', 'evidence_score', 'evidence_effectiveness'];
-    const hasAnyDimension = formulaRows.some((row) => dimensionFields.some((field) => number(row[field]) !== null));
-    const aggregateScores = formulaRows.map((row) => ratio(row.score)).filter((value) => value !== null);
-    if (mappedDimensions.every((value) => value === null) && !hasAnyDimension && aggregateScores.length) {
-      const composite = average(aggregateScores);
-      formulaInput = { design: composite, implementation: composite, operation: composite, evidence: composite };
-      resolverWarnings.push('F5_5_CONTROL_EFFECTIVENESS usó el score oficial agregado de assurance como medida compuesta porque la fuente no publica dimensiones D/I/O/E separadas.');
-    }
+  const mappedDimensions = [formulaInput?.design, formulaInput?.implementation, formulaInput?.operation, formulaInput?.evidence];
+  const dimensionFields = ['design_score', 'design_effectiveness', 'implementation_score', 'implementation_effectiveness', 'operation_score', 'operation_effectiveness', 'operating_effectiveness', 'evidence_score', 'evidence_effectiveness'];
+  const hasAnyDimension = formulaRows.some((row) => dimensionFields.some((field) => number(row[field]) !== null));
+  const aggregateScores = formulaRows.map((row) => ratio(row.score)).filter((value) => value !== null);
+  if (mappedDimensions.every((value) => value === null) && !hasAnyDimension && aggregateScores.length) {
+    formulaInput = { compositeScore: average(aggregateScores) };
+    resolverWarnings.push('F5_5_CONTROL_EFFECTIVENESS usó el score compuesto oficial de assurance sin fabricar dimensiones D/I/O/E inexistentes.');
   }
+}
 
   let formulaCounts = { received: rows.length, usable: formulaRows.length, excluded: Math.max(0, rows.length - formulaRows.length) };
   if (formulaCode === 'F5_5_INHERENT_RISK') {
@@ -630,7 +650,7 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
       formulaInput.population_size = formulaRows.length;
       formulaInput.raw_population_size = rows.length;
     }
-    if (ineligible > 0) resolverWarnings.push(`${ineligible} fila(s) físicas de riesgo quedaron fuera de la población elegible por no cumplir el contrato de ejes 1..5; las exclusiones permanecen auditables.`);
+    if (ineligible > 0) resolverWarnings.push(`${ineligible} fila(s) físicas de riesgo quedaron fuera de la población elegible por no contener ejes numéricos utilizables; las exclusiones permanecen auditables.`);
   }
 
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
