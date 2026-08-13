@@ -198,7 +198,9 @@ async function queryControls(client, tenantId, period) {
   if (await tableExists(client, 'grc_control_assurance')) {
     const timestamp = `NULLIF(to_jsonb(a)->>'calculated_at','')::timestamptz`;
     const result = await client.query(
-      `SELECT a.id,a.tenant_id,a.tenant_control_id,a.assurance_status AS status,a.score,${timestamp} AS __event_time
+      `SELECT a.*,
+              a.assurance_status AS status,
+              ${timestamp} AS __event_time
        FROM grc_control_assurance a
        WHERE a.tenant_id=$1::uuid
          AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
