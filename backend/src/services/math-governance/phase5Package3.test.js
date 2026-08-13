@@ -106,9 +106,10 @@ async function reconciliationTests() {
     throw new Error(`unexpected risk query: ${sql}`);
   } };
   const riskSource = await resolveFormulaSource({ client: riskClient, tenantId: 'tenant-a', formulaCode: 'F5_5_INHERENT_RISK', period: { start: '2026-08-01T00:00:00Z', end: '2026-08-13T23:59:59Z' } });
-  assert.strictEqual(riskSource.counts.received, 2);
+  assert.strictEqual(riskSource.counts.received, 3);
   assert.strictEqual(riskSource.counts.usable, 2);
-  assert.strictEqual(riskSource.counts.raw_received, 3);
+  assert.strictEqual(riskSource.counts.excluded, 1);
+  assert.strictEqual(riskSource.counts.eligible_population, 2);
   assert.strictEqual(riskSource.counts.ineligible, 1);
   assert.strictEqual(riskSource.formula_input.population_size, 2);
   assert.strictEqual(riskSource.formula_input.raw_population_size, 3);
