@@ -198,7 +198,12 @@ async function queryControls(client, tenantId, period) {
   if (await tableExists(client, 'grc_control_assurance')) {
     const timestamp = `NULLIF(to_jsonb(a)->>'calculated_at','')::timestamptz`;
     const result = await client.query(
-      `SELECT a.id,a.tenant_id,a.tenant_control_id,a.assurance_status AS status,a.score,${timestamp} AS __event_time
+      `SELECT a.id,a.tenant_id,a.tenant_control_id,a.assurance_status AS status,a.score,
+              NULLIF(to_jsonb(a)->>'design_score','')::numeric AS design_score,
+              NULLIF(to_jsonb(a)->>'implementation_score','')::numeric AS implementation_score,
+              NULLIF(to_jsonb(a)->>'operation_score','')::numeric AS operation_score,
+              NULLIF(to_jsonb(a)->>'evidence_score','')::numeric AS evidence_score,
+              ${timestamp} AS __event_time
        FROM grc_control_assurance a
        WHERE a.tenant_id=$1::uuid
          AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
@@ -523,7 +528,7 @@ function mapFormulaInput(formulaCode, rows) {
   if (formulaCode === 'F5_5_SEVERITY_INDEX') return { low: severities.filter((severity) => severity === 'low').length, medium: severities.filter((severity) => severity === 'medium').length, high: severities.filter((severity) => severity === 'high').length, critical: severities.filter((severity) => severity === 'critical').length };
   if (['F5_5_MTTC', 'F5_5_AGE', 'F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((row) => { const progressValue = number(row.progress ?? row.progress_percent ?? row.latest_progress_percent); return { openedAt: row.opened_at ?? row.created_at, closedAt: row.closed_at ?? row.completed_at, dueAt: row.due_at ?? row.due_date, createdAt: row.opened_at ?? row.created_at, progress: progressValue === null ? null : (progressValue > 1 ? progressValue / 100 : progressValue), weight: number(row.weight, 1), status: row.status ?? row.latest_status_after }; }).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
   if (formulaCode === 'F5_5_CLOSURE_RATE') return { closed: statuses.filter((status) => ['closed', 'completed', 'resolved'].includes(status)).length, openAtStart: statuses.filter((status) => !['closed', 'completed', 'resolved'].includes(status)).length, created: 0 };
-  if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((row) => !['closed', 'completed', 'resolved'].includes(String(row.status ?? row.latest_status_after).toLowerCase())); return { overdueOpen: open.filter((row) => (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date()).length, openActions: open.length, items: open.map((row) => ({ overdue: (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date() ? 1 : 0, weight: number(row.weight, 1) })) }; }
+  if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((row) => !['closed', 'completed', 'resolved'].includes(String(row.status ?? row.latest_status_after).toLowerCase())); return { overdueOpen: open.filter((row) => (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date() ? 1 : 0, weight: number(row.weight, 1) })).length, openActions: open.length, items: open.map((row) => ({ overdue: (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date() ? 1 : 0, weight: number(row.weight, 1) })) }; }
   const grossLossValue = (row) => number(row.gross_loss_amount ?? row.gross_loss);
   const recoveryValue = (row) => number(row.recovery_amount ?? row.recoveries);
   const netLossValue = (row) => { const direct = number(row.net_loss_amount ?? row.net_loss); if (direct !== null) return direct; const gross = grossLossValue(row); const recovery = recoveryValue(row); return gross !== null && recovery !== null ? gross - recovery : null; };
