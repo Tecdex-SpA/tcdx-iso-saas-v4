@@ -1,0 +1,72 @@
+# ARCHITECTURE_MAP — TCDX ISO SaaS V4
+
+## AS-IS de alto nivel
+
+```text
+Frontend (`frontend/src/app`, `frontend/src/components`)
+        |
+        v
+Backend Node/Express
+        |
+        +--> PostgreSQL / dominios operacionales
+        |
+        +--> math-governance
+        |      + source contracts/resolver
+        |      + dataset validation
+        |      + formula registry/execution
+        |      + official calculation
+        |      + snapshots/lineage
+        |      + decision interpretation
+        |
+        +--> GRC services/rules/workflows/approvals/observability
+        |
+        +--> Knowledge Base v2
+        |      + structured search/matching/coverage/guardrails
+        |
+        +--> Intelligence services
+               + rules/confidence/explainability/actions
+               + prompt builder/orchestrator
+               + deterministic fallback/audit traces
+                    |
+                    v
+              AI Engine Python/FastAPI
+                    + specialized routes/services
+                    + context building
+                    + trusted external lookup
+```
+
+## Ownership
+
+- CODEX A / `codex`: Data, Backend, GRC core.
+- CODEX B / `tecdex2-codex`: AI, Knowledge, RAG, Regulatory.
+- CODEX C / `tecdex3-codex`: Frontend, UX, Product E2E.
+
+## Protected extension points
+
+- `backend/src/services/math-governance/*`: extender sin crear resolver paralelo.
+- `backend/src/services/knowledge-base/*`: extender a RAG; no nueva KB.
+- `backend/src/services/intelligence/*`: extender; no segundo orchestrator.
+- `backend/src/services/grc/*`: reutilizar rules/workflows/approvals.
+- `ai-engine/app/*`: preservar flujos especializados que funcionan.
+- `frontend/src/*`: remodelación visual sin romper contratos/RBAC.
+
+## TO-BE de referencia
+
+```text
+operational data
+→ source contract/normalization
+→ eligibility/sufficiency/Data Trust
+→ official calculation
+→ measurement/snapshot/lineage
+→ Observation
+→ Gap
+→ Impact Graph
+→ Priority
+→ GRC Intelligence
+→ Human decision
+→ Action
+→ Retest/Effectiveness
+→ Operational Memory
+```
+
+Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin convertirse en sistema de registro.
