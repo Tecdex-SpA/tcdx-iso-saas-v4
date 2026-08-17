@@ -267,3 +267,36 @@ SOURCE_CONTRACTS_VERSIONED: `[]`
 FORMULAS_VERSIONED: `[]`
 
 UNNECESSARY_VERSION_BUMPS: `0`
+
+## PUI-07-HF2 Runtime Source Semantics Reconciliation
+
+Status: READY_FOR_RUNTIME_VALIDATION local on branch `fix/pui-07-hf2-runtime-source-semantics`.
+
+Canonical producer-consumer status reconciliation:
+
+| Domain | Source contract | Producer-known statuses reconciled | Canonical/eligibility decision |
+|---|---|---|---|
+| risk | `risk_register_controls` v7 | `suggested`, `accepted`, `rejected`, `needs_review`, `archived` | `accepted` remains eligible; `suggested` and `needs_review` are legitimate workflow states but not official accepted/reviewed risk population; rejected/archived remain ineligible. |
+| control | `control_assurance_evidence` v7 | `unknown`, `incomplete`, `degraded`, `effective`, `ineffective` | `degraded` maps to `partially_effective` and remains eligible with its score; `incomplete` remains visible/eligible; `unknown` is visible but ineligible. |
+| audit/action | `audit_findings_actions` v7 | `abierto`, `en progreso`, `bloqueado`, `completado`, `cancelado` plus English/underscore aliases | open/in-progress/blocked/completed rows remain eligible; `cancelado` is ineligible with `status_not_eligible`; no global status dictionary. |
+| incident | `incident_operational_events` v5 | `reported`, `triaged`, `classified`, `active`, `contained`, `recovering`, `resolved`, `post_incident_review`, `closed` | Workflow statuses are mapped in the incident domain and remain eligible for incident severity population when required fields are valid. |
+| loss | `loss_events_operational` v6 | `draft`, `under_review`, `confirmed`, `recovered_partial`, `closed`, `cancelled` | confirmed/recovered/closed rows are eligible; draft/under_review/cancelled are visible and ineligible. |
+| supplier | `supplier_tprm_assessments` v5 | `draft`, `invited`, `in_progress`, `submitted`, `under_review`, `remediation_required`, `approved`, `rejected`, `expired` | Existing approved/submitted semantics are preserved; under_review/remediation_required remain visible and ineligible. |
+| assurance | `assurance_test_results` v5 | `pass`, `pass_with_observations`, `fail`, `not_applicable`, `inconclusive` | `pass_with_observations` is eligible and distinct from `pass`; formula weighting remains unchanged. |
+| data_trust | `indicator_data_trust_assessments` v5 | `trusted`, `acceptable`, `attention`, `untrusted`, `unknown` | Operational trust assessment statuses map without `status_unmapped`; formula still requires its eight persisted dimensions. |
+
+Temporal reconciliation:
+
+| Source/Classification | Decision |
+|---|---|
+| `event_stream` | Canonical event/execution/occurrence timestamps in the future remain invalid for operational calculation (`date_in_future` / `temporal_after_as_of` as applicable). |
+| `validity_interval` | `valid_from` in the future remains invalid for current/period overlap; `valid_to` in the future is allowed because it represents lifecycle end/expiry, not a future event occurrence. |
+| `audit_findings_actions` | Actions opened before a period and not closed before `period_start` remain eligible for period overlap; actions closing after the period are still valid during the period. |
+
+Drift guard: `backend/src/services/math-governance/statusSemantics.service.js` exports `PRODUCER_STATUS_CONTRACTS`; `sourceResolver.test.js` asserts every producer-known status maps domain-wise and that unknown statuses still produce `status_unmapped`.
+
+Source contract versions changed: `risk_register_controls` v6→v7, `control_assurance_evidence` v6→v7, `audit_findings_actions` v6→v7, `incident_operational_events` v4→v5, `loss_events_operational` v5→v6, `supplier_tprm_assessments` v4→v5, `assurance_test_results` v4→v5, `indicator_data_trust_assessments` v4→v5.
+
+FORMULAS_VERSIONED: `[]`
+
+UNNECESSARY_VERSION_BUMPS: `0`

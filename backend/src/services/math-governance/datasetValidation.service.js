@@ -146,7 +146,6 @@ function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit =
         addIssue(issues, index, startValue.field, 'date_in_future', 'Fecha futura no permitida para calculo operacional.', startValue.value);
         classification = 'after_period';
       }
-      if (endValue.date && endValue.date > now) addIssue(issues, index, endValue.field, 'date_in_future', 'Fecha futura no permitida para calculo operacional.', endValue.value);
       if (endValue.date && periodStart && endValue.date <= periodStart) {
         addIssue(issues, index, endValue.field, 'date_before_period', 'Intervalo de vigencia anterior al periodo solicitado.', endValue.value);
         classification = 'before_period';

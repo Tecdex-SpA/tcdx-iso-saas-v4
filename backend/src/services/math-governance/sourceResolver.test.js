@@ -5,7 +5,7 @@ const { listFormulaSourceBindings, listSourceContracts } = require('./sourceCont
 const { validateDataset } = require('./datasetValidation.service');
 const { resolveFormulaSource, mapFormulaInput, firstPopulated, getSourceContract, PRIMARY_STATES } = require('./sourceResolver.service');
 const { sourceContractMetadata } = require('./formulaBootstrap.service');
-const { STATUS_SEMANTICS_BY_SOURCE, normalizeRowsStatus, normalizeStatus } = require('./statusSemantics.service');
+const { STATUS_SEMANTICS_BY_SOURCE, PRODUCER_STATUS_CONTRACTS, normalizeRowsStatus, normalizeStatus } = require('./statusSemantics.service');
 const { DATA_TRUST_MODEL_VERSION, DATA_TRUST_STATES } = require('./dataTrust.service');
 
 async function main() {
@@ -43,8 +43,24 @@ async function main() {
   assert.strictEqual(controlContract.scale_metadata.variables.design.canonical_scale, 'RATIO_0_1');
   assert.strictEqual(controlContract.scale_metadata.variables.effectivenesses.normalization_strategy, 'percent_to_ratio');
   const riskContract = contracts.find((contract) => contract.source_code === 'risk_register_controls');
+  assert.strictEqual(riskContract.version, 7, 'risk status semantics v2 must publish under a new source contract version');
+  assert.strictEqual(riskContract.status_semantics.mapping_version, 'risk-status-map-v2');
   assert.strictEqual(riskContract.scale_metadata.variables.probability.source_scale, 'SCORE_1_5');
   assert.strictEqual(riskContract.scale_metadata.variables.impact.allow_zero, false);
+  const changedStatusContractVersions = new Map([
+    ['control_assurance_evidence', 7],
+    ['audit_findings_actions', 7],
+    ['incident_operational_events', 5],
+    ['loss_events_operational', 6],
+    ['supplier_tprm_assessments', 5],
+    ['assurance_test_results', 5],
+    ['indicator_data_trust_assessments', 5],
+  ]);
+  for (const [sourceCode, version] of changedStatusContractVersions.entries()) {
+    const contract = contracts.find((item) => item.source_code === sourceCode);
+    assert.strictEqual(contract.version, version, `${sourceCode} status semantics changed payload must be versioned`);
+    assert.ok(contract.status_semantics.mapping_version.endsWith('-v2'), `${sourceCode} must expose status mapping v2`);
+  }
   const maturityContract = contracts.find((contract) => contract.source_code === 'maturity_assessments');
   assert.strictEqual(maturityContract.scale_metadata.variables.level.canonical_scale, 'SCORE_0_5');
   assert.strictEqual(maturityContract.scale_metadata.variables.score.normalization_strategy, 'percent_to_score_0_5');
@@ -80,6 +96,31 @@ async function main() {
   assert.strictEqual(auditClosed.canonical_status, 'closed');
   assert.strictEqual(incidentClosed.canonical_status, 'closed');
   assert.notStrictEqual(auditClosed.reason, incidentClosed.reason, 'same source status must remain domain-specific');
+  for (const [domain, statuses] of Object.entries(PRODUCER_STATUS_CONTRACTS)) {
+    for (const status of statuses) {
+      const normalized = normalizeStatus(domain, status, { required: true });
+      assert.notStrictEqual(normalized.reason, 'status_unmapped', `${domain}.${status} must not drift from producer vocabulary`);
+    }
+  }
+  assert.strictEqual(normalizeStatus('risk', 'suggested').eligible, false, 'suggested risk rows are visible but not official accepted risk population');
+  assert.strictEqual(normalizeStatus('risk', 'needs_review').eligible, false, 'needs_review risk rows require workflow review before official risk population');
+  assert.strictEqual(normalizeStatus('risk', 'accepted').eligible, true);
+  assert.deepStrictEqual(
+    {
+      canonical_status: normalizeStatus('audit', ' En Progreso ').canonical_status,
+      eligible: normalizeStatus('audit', ' En Progreso ').eligible,
+    },
+    { canonical_status: 'in_progress', eligible: true },
+    'Spanish action status aliases must normalize without whitespace/casing drift'
+  );
+  assert.strictEqual(normalizeStatus('audit', 'bloqueado').canonical_status, 'blocked');
+  assert.strictEqual(normalizeStatus('audit', 'bloqueado').eligible, true);
+  assert.strictEqual(normalizeStatus('control', 'degraded').canonical_status, 'partially_effective');
+  assert.strictEqual(normalizeStatus('control', 'degraded').eligible, true);
+  assert.strictEqual(normalizeStatus('control', 'unknown').eligible, false);
+  assert.strictEqual(normalizeStatus('assurance', 'pass with observations').canonical_status, 'pass_with_observations');
+  assert.strictEqual(normalizeStatus('assurance', 'pass with observations').eligible, true);
+  assert.strictEqual(normalizeStatus('data_trust', 'trusted').mapped, true);
   const statusRows = normalizeRowsStatus([
     { id: 'supplier-approved', tenant_id: 'tenant-a', status: 'approved' },
     { id: 'supplier-draft', tenant_id: 'tenant-a', status: 'draft' },
@@ -99,7 +140,25 @@ async function main() {
   assert.strictEqual(statusDataset.counts.ineligible, 2);
   assert.ok(statusDataset.exclusions.some((item) => item.code === 'status_not_eligible'));
   assert.ok(statusDataset.exclusions.some((item) => item.code === 'status_unmapped'));
-  assert.ok(statusDataset.status_summary.classifications.every((item) => item.mapping_version === 'supplier-status-map-v1'));
+  assert.ok(statusDataset.status_summary.classifications.every((item) => item.mapping_version === 'supplier-status-map-v2'));
+
+  const auditStatusRows = normalizeRowsStatus([
+    { id: 'action-in-progress', tenant_id: 'tenant-a', status: 'en progreso' },
+    { id: 'action-blocked', tenant_id: 'tenant-a', status: 'bloqueado' },
+    { id: 'action-cancelled', tenant_id: 'tenant-a', status: 'cancelado' },
+  ], STATUS_SEMANTICS_BY_SOURCE.audit_findings_actions);
+  const auditStatusDataset = validateDataset({
+    tenantId: 'tenant-a',
+    sourceKey: 'audit-status-unit-test',
+    requiredFields: ['id', 'tenant_id', 'status'],
+    minimumSampleSize: 1,
+    rows: auditStatusRows,
+  });
+  assert.strictEqual(auditStatusDataset.receivedCount, 3);
+  assert.strictEqual(auditStatusDataset.usableCount, 2);
+  assert.strictEqual(auditStatusDataset.excludedCount, 1);
+  assert.strictEqual(auditStatusDataset.counts.ineligible, 1);
+  assert.ok(auditStatusDataset.exclusions.some((item) => item.code === 'status_not_eligible' && item.source_record === 'action-cancelled'));
 
   const temporalDataset = validateDataset({
     tenantId: 'tenant-a',
@@ -154,11 +213,13 @@ async function main() {
     },
     rows: [
       { id: 'vigente', tenant_id: 'tenant-a', opened_at: '2025-12-15T00:00:00Z', closed_at: null },
+      { id: 'cierra-despues', tenant_id: 'tenant-a', opened_at: '2025-12-15T00:00:00Z', closed_at: '2026-12-31T00:00:00Z' },
       { id: 'cerrado-antes', tenant_id: 'tenant-a', opened_at: '2025-10-01T00:00:00Z', closed_at: '2025-12-31T00:00:00Z' },
     ],
   });
-  assert.strictEqual(intervalDataset.usableCount, 1, 'validity interval created before the period must remain eligible when still open');
+  assert.strictEqual(intervalDataset.usableCount, 2, 'validity interval created before the period must remain eligible when still open or closing later');
   assert.ok(intervalDataset.exclusions.some((item) => item.code === 'date_before_period'));
+  assert.ok(!intervalDataset.exclusions.some((item) => item.source_record === 'cierra-despues' && item.code === 'date_in_future'), 'future valid_to must not be treated as a future event');
 
   const inherentInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ id: 'risk-a', probability: 4, impact: 5 }]);
   assert.deepStrictEqual(inherentInput.risks, [{ source_record: 'risk-a', physical_source: null, probability: 4, impact: 5, inherent_risk_score: 20 }]);

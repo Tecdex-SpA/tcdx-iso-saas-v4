@@ -16,7 +16,8 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-06: DONE (fallback legacy gobernado implementado y cierre manual/deploy confirmado en `docs/codex/handoffs/PUI-06.md`).
 - PUI-07: DONE (Data Trust determinístico/versionado cerrado localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-07-HF1: DONE local (pipeline oficial consolidado sobre `officialCalculationOrchestrator -> sourceResolver -> PUI-01..PUI-07`; validación manual/CI/deploy pendiente por diseño).
-- PUI-08: BLOCKED por validación manual/productiva pendiente de PUI-07-HF1.
+- PUI-07-HF2: READY_FOR_RUNTIME_VALIDATION local (status/temporal producer-consumer reconciliation implementada para F5_5 runtime; requiere deploy, recalculo oficial y queries PostgreSQL antes de PASS).
+- PUI-08: BLOCKED por validación runtime/productiva pendiente de PUI-07-HF2.
 - PRE-UI: IN_PROGRESS.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: BLOCKED por `PRE_UI_DATA_TRUTH_GATE` donde corresponda.
@@ -58,6 +59,11 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-07-HF1 elimina Package3 como motor paralelo de verdad: `phase5Package3.service.js` queda como compatibilidad sin cálculo y `phase5.service.js` redirige recalculo/overview al `officialCalculationOrchestrator`.
 - PUI-07-HF1 persiste `not_calculable` con `calculation_run`, explanation, machine reason, Data Trust y snapshot/provenance mínimo cuando corresponde; `trust_score`/`trust_status` quedan como proyección legacy derivada de `data_trust` canónico.
 - PUI-07-HF1 elimina `America/Santiago` como timezone universal en recalculo oficial/frontend y en defaults focales tocados.
+- PUI-07-HF2 se ejecutó sobre branch `fix/pui-07-hf2-runtime-source-semantics` desde base local `606d98eebf20cb5308776740672a2d2837e5fc76`.
+- PUI-07-HF2 reconcilia vocabulario legítimo productor-consumidor para dominios F5_5: risk (`suggested`, `needs_review`), control (`unknown`, `incomplete`, `degraded`), audit/action (`abierto`, `en progreso`, `bloqueado`, `completado`, `cancelado`), incident, loss, supplier, assurance (`pass_with_observations`) y data_trust.
+- PUI-07-HF2 agrega drift guard `PRODUCER_STATUS_CONTRACTS` en `statusSemantics.service.js` y test focal para que estados legítimos productores no terminen como `status_unmapped`.
+- PUI-07-HF2 corrige semántica temporal de `validity_interval`: `valid_to` futuro no se clasifica como evento futuro inválido; `event_stream` y `valid_from` futuro siguen excluidos por `date_in_future`/`temporal_after_as_of` según contrato.
+- PUI-07-HF2 versiona sólo los source contracts cuyo `status_semantics.mapping_version` cambió a v2: `risk_register_controls` v7, `control_assurance_evidence` v7, `audit_findings_actions` v7, `incident_operational_events` v5, `loss_events_operational` v6, `supplier_tprm_assessments` v5, `assurance_test_results` v5 e `indicator_data_trust_assessments` v5. No cambió fórmulas.
 
 ## Ownership fijo
 
@@ -74,8 +80,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa PUI-07-HF1 y ejecuta push/PR/CI/full regression/deploy/manual production validation.
-2. Si PUI-07-HF1 valida en producción, actualizar continuidad y habilitar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
+1. Usuario revisa PUI-07-HF2 y ejecuta push/PR/CI/deploy/recalculo oficial/manual production validation con las queries del handoff.
+2. Si PUI-07-HF2 valida en runtime, actualizar continuidad y habilitar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
 
 ## Handoff relevante
 
@@ -89,3 +95,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-06.md`
 - `docs/codex/handoffs/PUI-07.md`
 - `docs/codex/handoffs/PUI-07-HF1.md`
+- `docs/codex/handoffs/PUI-07-HF2.md`

@@ -225,7 +225,7 @@ const SOURCE_CONTRACTS = Object.freeze([
         controlEffectiveness: { source_fields: ['assurance_score','control_effectiveness','control_effectiveness_score','control_score','effectiveness_score'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: true, allow_zero: true },
       },
     },
-    availability: 'available', version: 6,
+    availability: 'available', version: 7,
     limitations: 'RISK-INHERENT calcula el promedio aritmetico del portafolio de riesgos utilizables del tenant; excluye filas sin probabilidad/likelihood o impacto validos 1..5, no usa rows[0], no deduplica por titulo y no cruza tenants.'
   }),
   contract({
@@ -242,7 +242,7 @@ const SOURCE_CONTRACTS = Object.freeze([
         effectivenesses: { source_fields: ['score'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: false, allow_zero: true },
       },
     },
-    availability: 'available', version: 6,
+    availability: 'available', version: 7,
     limitations: 'El score agregado de assurance es una fuente valida solo para score compuesto/effectivenesses; F5_5_CONTROL_EFFECTIVENESS requiere dimensiones D/I/O/E explicitas y nunca fabrica dimensiones desde score.'
   }),
   contract({
@@ -250,7 +250,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['action_plans', 'action_plan_updates', 'grc_readiness_findings', 'grc_effectiveness_verifications'],
     columns: ['tenant_id','severity','status','created_at','opened_at','closed_at','completed_at','due_date','due_at','progress_percent','latest_progress_percent','latest_status_after','latest_update_at','approved_evidence_count','pending_evidence_count','weight'], required_fields: ['id','tenant_id','status'],
     variable_map: { low: 'count(severity=low)', medium: 'count(severity=medium)', high: 'count(severity=high)', critical: 'count(severity=critical)', items: 'rows[{createdAt,openedAt,closedAt,dueAt,progress,weight,overdue}]' },
-    availability: 'available', version: 6,
+    availability: 'available', version: 7,
     limitations: 'Acciones y remediación usan action_plans enriquecidos con el último action_plan_updates válido; progreso ausente queda unmeasured y no se convierte en cero.'
   }),
   contract({
@@ -258,7 +258,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['grc_incidents', 'grc_incident_impacts', 'grc_incident_timeline'],
     columns: ['tenant_id','incident_number','status','category','priority','calculated_severity','confirmed_severity','reported_at','contained_at','resolved_at','closed_at','financial_impact','duration_minutes','customer_impact'], required_fields: ['id','tenant_id','status'],
     variable_map: { low: 'count(calculated_severity=low)', medium: 'count(calculated_severity=medium)', high: 'count(calculated_severity=high)', critical: 'count(calculated_severity=critical)' },
-    availability: 'available', version: 4,
+    availability: 'available', version: 5,
     limitations: 'El indicador INCIDENTS usa severidad de grc_incidents. Impactos financieros, cliente y duración permanecen dimensiones separadas cuando existan; no se replican desde un único campo.'
   }),
   contract({
@@ -277,7 +277,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     variable_map: { grossLoss: 'gross_loss_amount|gross_loss', recoveries: 'recovery_amount|recoveries', netLosses: 'net_loss_amount|net_loss|gross-recoveries', eventDate: 'occurred_at|event_date only; missing/future occurrence is excluded by temporal_semantics' },
     unit: 'currency',
     availability: 'available',
-    version: 5,
+    version: 6,
     limitations: 'Normaliza columnas reales de loss_events usadas por la UI. Loss occurrence time proviene de occurred_at/event_date; fechas ausentes o futuras se excluyen con razon temporal auditable, sin fallback a created_at.'
   }),
   contract({ source_code: 'continuity_resilience_tests', entity: 'continuity', tables: ['grc_bia_assessments','grc_continuity_plans','grc_continuity_tests'], columns: ['tenant_id','rto_hours','rpo_hours','actual_recovery_hours','actual_data_loss_hours','result','tested_at','status'], required_fields: ['id','tenant_id'], unit: 'hours', availability: 'available', version: 4 }),
@@ -293,11 +293,11 @@ const SOURCE_CONTRACTS = Object.freeze([
       },
     },
     availability: 'available',
-    version: 4,
+    version: 5,
     limitations: 'Supplier risk dimensions use declared 0..5 score scale; supplier health converts 0..5 to percent through scale metadata, not by magnitude.'
   }),
   contract({ source_code: 'survey_response_scoring', entity: 'survey', tables: ['survey_definitions','survey_versions','survey_questions','assessment_campaigns','assessment_recipients','survey_responses','survey_response_items'], columns: ['tenant_id','response_id','question_id','score','max_score','weight','status','submitted_at'], required_fields: ['id','tenant_id','status'], availability: 'available', version: 4 }),
-  contract({ source_code: 'assurance_test_results', entity: 'assurance', tables: ['assurance_test_definitions','assurance_test_executions','assurance_test_samples','assurance_test_results','assurance_test_exceptions'], columns: ['tenant_id','execution_id','sample_id','result','weight','exception_count','status','executed_at'], required_fields: ['id','tenant_id','result'], availability: 'available', version: 4 }),
+  contract({ source_code: 'assurance_test_results', entity: 'assurance', tables: ['assurance_test_definitions','assurance_test_executions','assurance_test_samples','assurance_test_results','assurance_test_exceptions'], columns: ['tenant_id','execution_id','sample_id','result','weight','exception_count','status','executed_at'], required_fields: ['id','tenant_id','result'], availability: 'available', version: 5 }),
   contract({ source_code: 'data_quality_observations', entity: 'data_quality', tables: ['data_quality_rules','data_quality_assessments','metric_validations'], columns: ['tenant_id','rule_type','expected_count','valid_count','invalid_count','coverage','assessed_at'], required_fields: ['id','tenant_id'], availability: 'available', version: 4 }),
   contract({ source_code: 'data_lineage_observations', entity: 'data_lineage', tables: ['data_lineage_edges','data_sources','data_elements'], columns: ['tenant_id','source_entity_type','source_entity_id','target_entity_type','target_entity_id','relation_type','created_at'], required_fields: ['id','tenant_id','relation_type'], availability: 'available', version: 4 }),
   contract({ source_code: 'statistical_metric_measurements', entity: 'statistics', tables: ['metric_measurements','metric_definitions','metric_dimensions'], columns: ['tenant_id','metric_id','numeric_value','measured_at','unit','dimension_values','status'], required_fields: ['id','tenant_id','numeric_value'], cardinality: 'time_series', availability: 'available', version: 4 }),
@@ -306,7 +306,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['metric_trust_assessments'], columns: ['tenant_id','dimensions','trust_status','assessed_at','assessment_checksum'],
     required_fields: ['id','tenant_id','dimensions'],
     variable_map: { completeness:'dimensions.completeness.score',accuracy:'dimensions.accuracy.score',consistency:'dimensions.consistency.score',freshness:'dimensions.freshness.score',lineage:'dimensions.lineage.score',validation:'dimensions.validation.score',stability:'dimensions.stability.score',coverage:'dimensions.coverage.score' },
-    availability: 'available', version: 4,
+    availability: 'available', version: 5,
     limitations: 'Compone únicamente las ocho dimensiones persistidas; una dimensión desconocida impide calcular y nunca se renormaliza.'
   }),
   contract({

@@ -17,6 +17,7 @@ Backend Node/Express
         |      + governed legacy fallback policy and fallback provenance
         |      + deterministic/versioned data trust assessment
         |      + dataset validation and temporal/status classification
+        |      + producer-known status drift guard for F5_5 source domains
         |      + formula registry/execution
         |      + official calculation orchestrator as single source of truth
         |      + snapshots/lineage

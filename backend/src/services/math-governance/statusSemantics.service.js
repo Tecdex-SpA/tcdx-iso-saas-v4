@@ -44,17 +44,22 @@ const DOMAIN_STATUS_MAPPINGS = Object.freeze({
     draft: entry('draft', false, 'status_not_eligible'),
   }),
   risk: Object.freeze({
+    suggested: entry('suggested', false, 'status_not_eligible'),
     active: entry('active', true, 'risk_active'),
     open: entry('active', true, 'risk_active'),
     assessed: entry('assessed', true, 'risk_assessed'),
     reviewed: entry('reviewed', true, 'risk_reviewed'),
     completed: entry('completed', true, 'risk_completed'),
     accepted: entry('accepted', true, 'risk_accepted'),
+    needs_review: entry('needs_review', false, 'status_not_eligible'),
     rejected: entry('rejected', false, 'status_not_eligible'),
     archived: entry('archived', false, 'status_not_eligible'),
     retired: entry('archived', false, 'status_not_eligible'),
   }),
   control: Object.freeze({
+    unknown: entry('unknown', false, 'status_not_eligible'),
+    incomplete: entry('incomplete', true, 'control_incomplete'),
+    degraded: entry('partially_effective', true, 'control_degraded'),
     effective: entry('effective', true, 'control_effective'),
     partially_effective: entry('partially_effective', true, 'control_partially_effective'),
     ineffective: entry('ineffective', true, 'control_ineffective'),
@@ -67,24 +72,37 @@ const DOMAIN_STATUS_MAPPINGS = Object.freeze({
     retired: entry('retired', false, 'status_not_eligible'),
   }),
   audit: Object.freeze({
+    abierto: entry('open', true, 'audit_action_open'),
     open: entry('open', true, 'audit_action_open'),
     pending: entry('open', true, 'audit_action_open'),
+    en_progreso: entry('in_progress', true, 'audit_action_in_progress'),
     in_progress: entry('in_progress', true, 'audit_action_in_progress'),
     active: entry('in_progress', true, 'audit_action_in_progress'),
+    bloqueado: entry('blocked', true, 'audit_action_blocked'),
+    blocked: entry('blocked', true, 'audit_action_blocked'),
+    cerrado: entry('closed', true, 'audit_action_closed'),
     closed: entry('closed', true, 'audit_action_closed'),
+    completado: entry('completed', true, 'audit_action_completed'),
     completed: entry('completed', true, 'audit_action_completed'),
+    resuelto: entry('resolved', true, 'audit_action_resolved'),
     resolved: entry('resolved', true, 'audit_action_resolved'),
     overdue: entry('overdue', true, 'audit_action_overdue'),
+    cancelado: entry('cancelled', false, 'status_not_eligible'),
     cancelled: entry('cancelled', false, 'status_not_eligible'),
     rejected: entry('rejected', false, 'status_not_eligible'),
     archived: entry('archived', false, 'status_not_eligible'),
   }),
   incident: Object.freeze({
+    reported: entry('reported', true, 'incident_reported'),
+    triaged: entry('triaged', true, 'incident_triaged'),
+    classified: entry('classified', true, 'incident_classified'),
     open: entry('open', true, 'incident_open'),
     active: entry('open', true, 'incident_open'),
     investigating: entry('investigating', true, 'incident_investigating'),
     contained: entry('contained', true, 'incident_contained'),
+    recovering: entry('recovering', true, 'incident_recovering'),
     resolved: entry('resolved', true, 'incident_resolved'),
+    post_incident_review: entry('post_incident_review', true, 'incident_post_incident_review'),
     closed: entry('closed', true, 'incident_closed'),
     cancelled: entry('cancelled', false, 'status_not_eligible'),
     rejected: entry('rejected', false, 'status_not_eligible'),
@@ -103,9 +121,12 @@ const DOMAIN_STATUS_MAPPINGS = Object.freeze({
     expired: entry('expired', false, 'status_not_eligible'),
   }),
   loss: Object.freeze({
+    under_review: entry('under_review', false, 'status_not_eligible'),
     confirmed: entry('confirmed', true, 'loss_confirmed'),
     approved: entry('confirmed', true, 'loss_confirmed'),
     booked: entry('confirmed', true, 'loss_confirmed'),
+    recovered_partial: entry('recovered_partial', true, 'loss_recovered_partial'),
+    closed: entry('closed', true, 'loss_closed'),
     draft: entry('draft', false, 'status_not_eligible'),
     cancelled: entry('cancelled', false, 'status_not_eligible'),
     rejected: entry('rejected', false, 'status_not_eligible'),
@@ -133,6 +154,7 @@ const DOMAIN_STATUS_MAPPINGS = Object.freeze({
   supplier: Object.freeze({
     approved: entry('approved', true, 'supplier_approved'),
     submitted: entry('submitted', true, 'supplier_submitted'),
+    under_review: entry('under_review', false, 'status_not_eligible'),
     completed: entry('completed', true, 'supplier_completed'),
     active: entry('active', true, 'supplier_active'),
     current: entry('active', true, 'supplier_active'),
@@ -140,6 +162,7 @@ const DOMAIN_STATUS_MAPPINGS = Object.freeze({
     draft: entry('draft', false, 'status_not_eligible'),
     invited: entry('invited', false, 'status_not_eligible'),
     in_progress: entry('in_progress', false, 'status_not_eligible'),
+    remediation_required: entry('remediation_required', false, 'status_not_eligible'),
     rejected: entry('rejected', false, 'status_not_eligible'),
     expired: entry('expired', false, 'status_not_eligible'),
   }),
@@ -156,6 +179,8 @@ const DOMAIN_STATUS_MAPPINGS = Object.freeze({
   assurance: Object.freeze({
     pass: entry('pass', true, 'assurance_pass'),
     passed: entry('pass', true, 'assurance_pass'),
+    pass_with_observations: entry('pass_with_observations', true, 'assurance_pass_with_observations'),
+    passed_with_observations: entry('pass_with_observations', true, 'assurance_pass_with_observations'),
     fail: entry('fail', true, 'assurance_fail'),
     failed: entry('fail', true, 'assurance_fail'),
     inconclusive: entry('inconclusive', true, 'assurance_inconclusive'),
@@ -181,6 +206,11 @@ const DOMAIN_STATUS_MAPPINGS = Object.freeze({
     rejected: entry('rejected', false, 'status_not_eligible'),
   }),
   data_trust: Object.freeze({
+    trusted: entry('trusted', true, 'data_trust_trusted'),
+    acceptable: entry('acceptable', true, 'data_trust_acceptable'),
+    attention: entry('attention', true, 'data_trust_attention'),
+    untrusted: entry('untrusted', true, 'data_trust_untrusted'),
+    unknown: entry('unknown', true, 'data_trust_unknown'),
     assessed: entry('assessed', true, 'data_trust_assessed'),
     calculated: entry('calculated', true, 'data_trust_calculated'),
     approved: entry('approved', true, 'data_trust_approved'),
@@ -207,24 +237,35 @@ const DOMAIN_STATUS_MAPPINGS = Object.freeze({
   }),
 });
 
+const PRODUCER_STATUS_CONTRACTS = Object.freeze({
+  risk: Object.freeze(['suggested', 'accepted', 'rejected', 'needs_review', 'archived']),
+  control: Object.freeze(['unknown', 'incomplete', 'degraded', 'effective', 'ineffective']),
+  audit: Object.freeze(['abierto', 'en progreso', 'bloqueado', 'completado', 'cancelado']),
+  incident: Object.freeze(['reported', 'triaged', 'classified', 'active', 'contained', 'recovering', 'resolved', 'post_incident_review', 'closed']),
+  loss: Object.freeze(['draft', 'under_review', 'confirmed', 'recovered_partial', 'closed', 'cancelled']),
+  supplier: Object.freeze(['draft', 'invited', 'in_progress', 'submitted', 'under_review', 'remediation_required', 'approved', 'rejected', 'expired']),
+  assurance: Object.freeze(['pass', 'pass_with_observations', 'fail', 'not_applicable', 'inconclusive']),
+  data_trust: Object.freeze(['trusted', 'acceptable', 'attention', 'untrusted', 'unknown']),
+});
+
 const STATUS_SEMANTICS_BY_SOURCE = Object.freeze({
   compliance_requirements_assessments: statusSemantics({ domain: 'compliance', required: true }),
   grc_readiness_operational_snapshot: statusSemantics({ domain: 'readiness' }),
-  risk_register_controls: statusSemantics({ domain: 'risk' }),
-  control_assurance_evidence: statusSemantics({ domain: 'control' }),
-  audit_findings_actions: statusSemantics({ domain: 'audit', required: true }),
-  incident_operational_events: statusSemantics({ domain: 'incident', required: true }),
+  risk_register_controls: statusSemantics({ domain: 'risk', version: 2 }),
+  control_assurance_evidence: statusSemantics({ domain: 'control', version: 2 }),
+  audit_findings_actions: statusSemantics({ domain: 'audit', version: 2, required: true }),
+  incident_operational_events: statusSemantics({ domain: 'incident', version: 2, required: true }),
   evidence_freshness_records: statusSemantics({ domain: 'evidence' }),
-  loss_events_operational: statusSemantics({ domain: 'loss' }),
+  loss_events_operational: statusSemantics({ domain: 'loss', version: 2 }),
   continuity_resilience_tests: statusSemantics({ domain: 'continuity' }),
   asset_inventory_security: statusSemantics({ domain: 'asset' }),
-  supplier_tprm_assessments: statusSemantics({ domain: 'supplier', required: true }),
+  supplier_tprm_assessments: statusSemantics({ domain: 'supplier', version: 2, required: true }),
   survey_response_scoring: statusSemantics({ domain: 'survey', required: true }),
-  assurance_test_results: statusSemantics({ domain: 'assurance', sourceField: 'result', canonicalField: 'result', required: true }),
+  assurance_test_results: statusSemantics({ domain: 'assurance', version: 2, sourceField: 'result', canonicalField: 'result', required: true }),
   data_quality_observations: statusSemantics({ domain: 'data_quality' }),
   data_lineage_observations: statusSemantics({ domain: 'data_lineage' }),
   statistical_metric_measurements: statusSemantics({ domain: 'statistics' }),
-  indicator_data_trust_assessments: statusSemantics({ domain: 'data_trust', sourceField: 'trust_status', canonicalField: 'trust_status' }),
+  indicator_data_trust_assessments: statusSemantics({ domain: 'data_trust', version: 2, sourceField: 'trust_status', canonicalField: 'trust_status' }),
   grc_health_components: statusSemantics({ domain: 'health', sourceField: 'run_status', canonicalField: 'run_status' }),
   maturity_assessments: statusSemantics({ domain: 'maturity' }),
   external_fx_rates: statusSemantics({ domain: 'currency_conversion' }),
@@ -232,7 +273,13 @@ const STATUS_SEMANTICS_BY_SOURCE = Object.freeze({
 
 function normalizeSourceStatus(value) {
   if (value === null || value === undefined) return null;
-  const normalized = String(value).trim().toLowerCase();
+  const normalized = String(value)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+    .replace(/_+/g, '_');
   return normalized || null;
 }
 
@@ -293,6 +340,7 @@ function normalizeRowsStatus(rows, statusSemantics = null) {
 
 module.exports = {
   DOMAIN_STATUS_MAPPINGS,
+  PRODUCER_STATUS_CONTRACTS,
   STATUS_SEMANTICS_BY_SOURCE,
   normalizeStatus,
   normalizeRowStatus,
