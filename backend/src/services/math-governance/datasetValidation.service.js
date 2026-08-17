@@ -73,6 +73,7 @@ function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit =
   const asOf = normalizeDate(period.as_of || period.asOf);
   const temporalSemantic = normalizeTemporalSemantics(temporalSemantics);
   const temporalClassifications = [];
+  const statusClassifications = [];
   if (periodStart && periodEnd && periodEnd < periodStart) throw new MathGovernanceError('DATASET_PERIOD_INVALID', 'Periodo de dataset invalido.', { sourceKey });
   if (expectedUnit && unit && expectedUnit !== unit) warnings.push({ code: 'unit_mismatch', expected: expectedUnit, received: unit });
   if (expectedCurrency && currency && expectedCurrency !== currency) warnings.push({ code: 'currency_mismatch', expected: expectedCurrency, received: currency });
@@ -97,6 +98,25 @@ function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit =
       if (Number.isFinite(value) && rule.decimals !== undefined) { const decimals = String(row[field]).split('.')[1]?.length || 0; if (decimals > rule.decimals) addIssue(issues, index, field, 'scale_exceeded', 'Escala decimal excedida.', row[field]); }
     }
     if (allowedStates && row.status && !allowedStates.includes(row.status)) addIssue(issues, index, 'status', 'state_invalid', 'Estado no permitido por contrato.', row.status);
+    if (row.__status_normalization) {
+      const statusNormalization = row.__status_normalization;
+      statusClassifications.push({
+        row_index: index,
+        source_record: sourceRecord(row, index),
+        domain: statusNormalization.domain,
+        source_status: statusNormalization.source_status,
+        canonical_status: statusNormalization.canonical_status,
+        mapping_version: statusNormalization.mapping_version,
+        reason: statusNormalization.reason,
+        mapped: statusNormalization.mapped,
+        eligible: statusNormalization.eligible,
+      });
+      if (statusNormalization.mapped === false) {
+        addIssue(issues, index, 'status', statusNormalization.reason || 'status_unmapped', 'Estado no mapeado por diccionario de dominio.', statusNormalization.source_status);
+      } else if (statusNormalization.eligible === false) {
+        addIssue(issues, index, 'status', statusNormalization.reason || 'status_not_eligible', 'Estado no elegible por semantica de dominio.', statusNormalization.source_status);
+      }
+    }
     for (const [field, allowed] of Object.entries(referenceFields || {})) {
       if (row[field] === undefined || row[field] === null || row[field] === '') continue;
       if (Array.isArray(allowed) && allowed.length && !allowed.includes(row[field])) addIssue(issues, index, field, 'reference_invalid', 'Referencia no existe en el dataset permitido.', row[field]);
@@ -207,6 +227,9 @@ function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit =
       period_policy: temporalSemantic.period_policy,
       as_of_policy: temporalSemantic.as_of_policy,
       classifications: temporalClassifications,
+    },
+    status_summary: {
+      classifications: statusClassifications,
     },
     timezone: validatedTimezone,
     unit,

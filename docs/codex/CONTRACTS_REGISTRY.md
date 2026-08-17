@@ -5,7 +5,8 @@
 | Source contracts | PARTIAL | CODEX A | Existen; PRE-UI fortalece semántica, escala, unidad, temporalidad y elegibilidad. |
 | Metric/data semantics | PARTIAL | CODEX A | Debe quedar canónico al cerrar PRE-UI. |
 | Count semantics | CURRENT/PUI-03 | CODEX A | PUI-03 cerró received/eligible/usable/excluded/exclusionIssueCount/population_size para source resolver y dataset validation focales. |
-| Temporal semantics | CURRENT/PUI-04-REVIEW | CODEX A | `temporal_semantics` contractual agregado a los 20 source contracts; validación focal pendiente de rerun manual por límite FOCUSED_MINIMAL. |
+| Temporal semantics | CURRENT/PUI-04 | CODEX A | `temporal_semantics` contractual agregado a los 20 source contracts; validación focal/deploy confirmada externamente sobre `7a9df18`. |
+| Status semantics | CURRENT/PUI-05 | CODEX A | `status_semantics` contractual agregado a los 20 source contracts; normalización versionada por dominio y unknown visible en Math Governance. |
 | Scale/unit semantics | CURRENT/PUI-02 | CODEX A | PUI-02 cerró escala/unidad para CONTROL-EFFECT, RISK-INHERENT, MATURITY y normalización explícita auditada; otros dominios quedan para su paquete específico sólo con evidencia. |
 | Data Trust | PARTIAL | CODEX A | Foundation existente; reproducibilidad a cerrar. |
 | Measurement | CURRENT/PARTIAL | CODEX A | Official calculation existe; Data Truth aún no cerrado. |
@@ -90,7 +91,7 @@ PUI-03 decision: `source_snapshot.counts` and resolver `counts` carry the canoni
 
 ## PUI-04 Temporal Semantics
 
-Status: REVIEW under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-04-temporal-semantics`.
+Status: DONE under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-04-temporal-semantics`. Manual focal/deploy validation later confirmed externally on `main/deploy` commit `7a9df185f06be031757d0d79f25aa59b27a53bbf`.
 
 Canonical temporal terms:
 
@@ -130,3 +131,45 @@ PUI-04 source contract inventory:
 | `external_fx_rates` | v3 | latest_effective_state | `__event_time` | FX rate effective time | source unavailable | contract metadata explicit; source remains unavailable | CANONICAL |
 
 PUI-04 decision: `official_formula_source_contracts.metadata` persists `temporal_semantics` alongside `scale_metadata` and `count_semantics`. Published source contract immutability is preserved by incrementing all 20 source contract versions because their governed payload now includes temporal metadata and no longer inherits a generic `created_at` period policy. Formula payloads, weights, expressions, units and precision were not changed.
+
+## PUI-05 Status Semantics
+
+Status: DONE under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-05-status-normalization`.
+
+Canonical status terms:
+
+| Term | Canonical Semantics |
+|---|---|
+| `domain` | Explicit GRC domain used to interpret a source status; no universal status dictionary is used across domains. |
+| `source_status` | Original source status value after row normalization. It remains visible in `__status_normalization`. |
+| `canonical_status` | Domain-specific normalized status used by validation/formula inputs. Unknown values become `unknown`, not `pending`, `compliant`, `active` or `open`. |
+| `mapping_version` | Versioned dictionary identifier, e.g. `supplier-status-map-v1`, persisted in `status_semantics` and status summary. |
+| `reason` | Auditable reason for mapped, ineligible or unmapped status decisions. |
+| `unknown_policy` | `exclude_visible`: unknown/unmapped statuses are preserved, reported as `status_unmapped` and excluded by dataset validation when status semantics applies. |
+
+PUI-05 inventory:
+
+| Domain | Source contract(s) | Source statuses observed/accepted | Current mapping location before PUI-05 | Canonical target | Ambiguity | Decision |
+|---|---|---|---|---|---|---|
+| compliance | `compliance_requirements_assessments` v5 | conform/compliant/effective/implemented/approved, partial/in_progress, non_conform/non_compliant/ineffective/rejected, not_applicable/na, pending/not_evaluated/draft/deleted/retired | SQL CASE in `queryCompliance`; formulas counted raw status strings | conform, partial, non_conform, not_applicable, pending, retired, unknown | `ELSE pending` hid unmapped states | `compliance-status-map-v1`; SQL unknown stays visible; draft/deleted/retired/rejected ineligible when applicable |
+| readiness | `grc_readiness_operational_snapshot` v5 | ready/calculated/partial/draft when status exists | resolver rows had no domain status registry | ready, partial, draft, unknown | status optional but unversioned | `readiness-status-map-v1`; optional missing status is visible but not exclusionary |
+| risk | `risk_register_controls` v6 | active/open/assessed/reviewed/completed/accepted/rejected/archived/retired | `queryRisk` filtered rejected/archived rows before validation | active, assessed, reviewed, completed, accepted, rejected, archived, unknown | status ineligibility could disappear from counts | `risk-status-map-v1`; item status exclusion moves to validation; run status selection remains source query semantics |
+| control | `control_assurance_evidence` v6 | effective/partially_effective/ineffective/pass/fail/pending/draft/retired | raw assurance status and formula status sets | effective, partially_effective, ineffective, pending, draft, retired, unknown | status interpretation was not versioned | `control-status-map-v1`; optional status mapped when present |
+| audit/action | `audit_findings_actions` v6 | open/pending/in_progress/active/closed/completed/resolved/overdue/cancelled/rejected/archived | `queryAuditActions` and `mapFormulaInput`; severity fallback used `status || open` | open, in_progress, closed, completed, resolved, overdue, cancelled, rejected, archived, unknown | missing status could become open silently | `audit-status-map-v1`; missing/unknown remains visible; ineligible statuses feed exclusions/counts |
+| incident | `incident_operational_events` v4 | open/active/investigating/contained/resolved/closed/cancelled/rejected | raw incident status | open, investigating, contained, resolved, closed, cancelled, rejected, unknown | `closed` could be confused with action closure semantics | `incident-status-map-v1`; same string may map to same canonical label but carries incident-specific reason/version |
+| evidence | `evidence_freshness_records` v4 | approved/aprobada/accepted/valid/submitted/pending/pendiente/reviewed/reopened/rejected/expired | adapter defaults and freshness formula status list | approved, submitted, pending, reviewed, reopened, rejected, expired, unknown | Spanish/English approval aliases were formula-local | `evidence-status-map-v1`; approval aliases centralized |
+| loss | `loss_events_operational` v5 | confirmed/approved/booked/draft/cancelled/rejected | `queryLossEvents` filtered cancelled/rejected before validation | confirmed, draft, cancelled, rejected, unknown | ineligible loss events were not reconciled as received | `loss-status-map-v1`; status filter removed from adapter; validation records ineligible rows |
+| continuity | `continuity_resilience_tests` v4 | pass/passed/passed_with_observations/completed/successful/within_sla/failed/failure/planned/draft/scheduled/cancelled | SQL CASE and status filter | within_sla, failed, planned, draft, scheduled, cancelled, unknown | status filter hid ineligible test rows | `continuity-status-map-v1`; status filter removed while completed-time temporal rule remains PUI-04 |
+| asset | `asset_inventory_security` v4 | active/current/retired/archived when status exists | raw row status | active, retired, archived, unknown | optional status unversioned | `asset-status-map-v1` |
+| supplier | `supplier_tprm_assessments` v4 | approved/submitted/completed/active/current/qualified/draft/invited/in_progress/rejected/expired | `querySupplier` filtered ineligible statuses before validation | approved, submitted, completed, active, qualified, draft, invited, in_progress, rejected, expired, unknown | ineligible supplier assessments were not counted/explained | `supplier-status-map-v1`; filter removed and validation excludes with reason |
+| survey | `survey_response_scoring` v4 | completed/submitted/approved/not_applicable/na/in_progress/draft/rejected | formulas used local completed/not-applicable sets | completed, submitted, approved, not_applicable, in_progress, draft, rejected, unknown | status sets were formula-local | `survey-status-map-v1` |
+| assurance | `assurance_test_results` v4 | pass/passed/fail/failed/inconclusive/not_applicable/pending/draft | SQL CASE on result/status/outcome | pass, fail, inconclusive, not_applicable, pending, draft, unknown | result semantics were not persisted as status metadata | `assurance-status-map-v1`; source field `result` remains canonical field |
+| data_quality | `data_quality_observations` v4 | valid/assessed/failed when status exists | no central status mapping | valid, assessed, failed, unknown | optional status unversioned | `data_quality-status-map-v1` |
+| data_lineage | `data_lineage_observations` v4 | active/current/retired when status exists | no central status mapping | active, retired, unknown | optional status unversioned | `data_lineage-status-map-v1` |
+| statistics | `statistical_metric_measurements` v4 | calculated/published/approved/draft/rejected when status exists | metric rows carried local states | calculated, published, approved, draft, rejected, unknown | optional status unversioned | `statistics-status-map-v1` |
+| data_trust | `indicator_data_trust_assessments` v4 | assessed/calculated/approved/draft when `trust_status` exists | raw trust status | assessed, calculated, approved, draft, unknown | trust status had no mapping version | `data_trust-status-map-v1`; source field `trust_status` |
+| health | `grc_health_components` v5 | calculated/completed/failed/cancelled in `run_status` | source query filtered calculated official runs | calculated, failed, cancelled, unknown | component run status was not persisted as status metadata | `health-status-map-v1`; source field `run_status`; official run selection remains source query semantics |
+| maturity | `maturity_assessments` v6 | evaluated/calculated/published/approved/draft/rejected | adapter defaults and maturity fallback states | evaluated, calculated, published, approved, draft, rejected, unknown | maturity states were not versioned | `maturity-status-map-v1` |
+| currency_conversion | `external_fx_rates` v4 | published/active/draft when available | source unavailable | published, draft, unknown | unavailable contract still lacked governed status metadata | `currency_conversion-status-map-v1`; source remains unavailable |
+
+PUI-05 decision: `backend/src/services/math-governance/statusSemantics.service.js` owns versioned domain dictionaries. `sourceContracts.service.js` attaches `status_semantics` to every source contract, `sourceResolver.service.js` normalizes rows before dataset validation, `datasetValidation.service.js` emits `status_summary` and `status_unmapped`/`status_not_eligible` exclusions, and `formulaBootstrap.service.js` persists `status_semantics` in `official_formula_source_contracts.metadata`. Published source contract immutability is preserved by incrementing exactly one version on each contract whose governed payload now includes `status_semantics`; formula payloads, expressions, weights, units and precision were not changed.

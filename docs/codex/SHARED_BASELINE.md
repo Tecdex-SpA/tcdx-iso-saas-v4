@@ -12,6 +12,8 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - CONTROL-EFFECT: `score` agregado puede alimentar cálculos agregados/composite, pero no puede fabricarse como `design`, `implementation`, `operation` ni `evidence`.
 - PUI-02 scale/unit confirmado para CONTROL-EFFECT, RISK-INHERENT, MATURITY y normalización explícita auditada en `docs/codex/CONTRACTS_REGISTRY.md`: la normalización depende de `scale_metadata`, no de magnitud.
 - PUI-03 count semantics confirmado para Math Governance focal: `received` son filas fisicas, `eligible` es poblacion oficial elegible, `usable` son filas con inputs validos, `excluded` son filas unicas no usadas, `exclusionIssueCount` son categorias/codigos distintos y `population_size` es poblacion elegible.
+- PUI-04 temporal semantics confirmado por validación manual externa sobre `7a9df18`: temporalidad oficial depende de `temporal_semantics`, no de `created_at`/`updated_at` universales.
+- PUI-05 status semantics confirmado para Math Governance focal: `status_semantics` define dominio, mapping versionado, `unknown_policy=exclude_visible`, reason y elegibilidad; estados unknown/unmapped no se convierten silenciosamente a estados válidos.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Intelligence Engine backend existe: rules, confidence, explainability, guardrails, prompt builder, actions, orchestrator y deterministic fallback.
@@ -23,7 +25,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 ## PARTIAL
 
-- Source contracts/resolver: PUI-01, PUI-02 y PUI-03 cerraron ownership, escala/unidad y count semantics para sus variables focales; PUI-04 implementó temporal semantics en estado REVIEW por test focal no rerun; PRE-UI continúa con estado, fallback, provenance y matriz completa.
+- Source contracts/resolver: PUI-01..PUI-05 cerraron ownership, escala/unidad, count semantics, temporal semantics y status semantics para Math Governance focal; PRE-UI continúa con fallback, provenance y matriz completa.
 - Data Trust/provenance/snapshots: foundation existe; requiere cierre integral PRE-UI.
 - Decision Interpretation / Next Best Actions: foundation determinística; falta causalidad transversal completa.
 - Tenant document handling: hay capacidades especializadas, no RAG privado universal confirmado.
@@ -35,7 +37,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 - PRE-UI sigue abierto.
 - PR #91 está abierto y no debe tratarse como mergeado.
-- CONTROL-EFFECT, RISK-INHERENT y MATURITY formaban parte del bloque de reconciliación PRE-UI; PUI-01 cerró ownership de fuente y PUI-02 cerró escala/unidad localmente, con validación manual/CI pendiente.
+- CONTROL-EFFECT, RISK-INHERENT y MATURITY formaban parte del bloque de reconciliación PRE-UI; PUI-01 cerró ownership de fuente, PUI-02 cerró escala/unidad, PUI-03 cerró counts, PUI-04 cerró temporalidad y PUI-05 cerró status semantics focales.
 - No declarar Data Truth Gate mientras no se complete PUI-01..PUI-09 y validación manual correspondiente.
 
 ## NOT CONFIRMED / MISSING AS COMPLETE CAPABILITY
@@ -68,4 +70,5 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - No redescubrir en PUI-02 el ownership de fuente de CONTROL-EFFECT, RISK-INHERENT ni MATURITY cerrado por PUI-01; PUI-02 debe enfocarse en escala/unidad.
 - No redescubrir en PUI-03 la escala/unidad de CONTROL-EFFECT, RISK-INHERENT, MATURITY ni supplier risk health cerrada por PUI-02; PUI-03 debe enfocarse en counts.
 - No redescubrir en PUI-04 la semantica de conteos PUI-03; PUI-04 debe enfocarse en temporalidad.
-- PUI-05 no debe iniciar hasta cerrar la revisión de PUI-04; no reabrir PUI-01/PUI-02/PUI-03 ni version governance HF1/HF2 salvo contradicción objetiva.
+- No redescubrir en PUI-05 la temporalidad PUI-04; PUI-05 cerró status dictionaries, mapping versions y unknown policy por dominio.
+- No redescubrir en PUI-06 PUI-01 ownership, PUI-02 scale/unit, PUI-03 counts, PUI-04 temporal semantics ni PUI-05 status semantics; PUI-06 debe enfocarse en fallback legacy gobernado.

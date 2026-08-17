@@ -11,7 +11,8 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-01: DONE (source ownership cerrado localmente; validación manual/CI pendiente por diseño).
 - PUI-02: DONE (escala/unidad y normalización canónica cerradas localmente para el alcance focal; validación manual/CI pendiente por diseño).
 - PUI-03: DONE (semantica canonica de conteos y poblaciones cerrada localmente para Math Governance focal; validación manual/CI pendiente por diseño).
-- PUI-04: REVIEW (semantica temporal contractual implementada localmente; el unico test focal permitido falló antes de corregir el stub, por lo que requiere validación manual/CI antes de declarar DONE).
+- PUI-04: DONE (validación manual externa confirmada sobre `main/deploy` commit `7a9df185f06be031757d0d79f25aa59b27a53bbf`; focal test y deploy OK reportados por responsable del proyecto).
+- PUI-05: DONE (normalización canónica/versionada de estados por dominio cerrada localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PRE-UI: IN_PROGRESS.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: BLOCKED por `PRE_UI_DATA_TRUTH_GATE` donde corresponda.
@@ -37,6 +38,10 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-04 se ejecutó sobre branch `fix/pui-04-temporal-semantics` desde base local `2f6eeb488b869ee5e12e34cbbf6841a5b4f12b0d`.
 - PUI-04 agregó `temporal_semantics` gobernado a los 20 source contracts, eliminó el default contractual `created_at` como período genérico y preservó conteos PUI-03 mediante exclusiones temporales auditables.
 - PUI-04 cambió versiones de source contracts para no reutilizar payload gobernado publicado; no cambió fórmulas, pesos ni checksums históricos.
+- PUI-04 quedó validado externamente en `main/deploy` commit `7a9df185f06be031757d0d79f25aa59b27a53bbf`: `cd backend && node src/services/math-governance/sourceResolver.test.js` reportó `PHASE5_5_SOURCE_RESOLVER_TESTS_OK` y `./scripts/deploy-vms.sh` reportó `DEPLOY V4 FINALIZADO OK`.
+- PUI-05 se ejecutó sobre branch `fix/pui-05-status-normalization` desde base local `7a9df185f06be031757d0d79f25aa59b27a53bbf`.
+- PUI-05 agregó `status_semantics` gobernado a los 20 source contracts, registry versionado por dominio en Math Governance, exclusiones auditables para `status_unmapped`/`status_not_eligible` y persistencia en `official_formula_source_contracts.metadata`.
+- PUI-05 cambió versiones de source contracts para no reutilizar payload gobernado publicado; no cambió fórmulas, pesos, unidades ni precisión.
 
 ## Ownership fijo
 
@@ -53,8 +58,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa PUI-04 y ejecuta validación manual/CI, incluyendo rerun focal de `cd backend && node src/services/math-governance/sourceResolver.test.js`.
-2. Si PUI-04 queda validado, marcar PUI-04 DONE y desbloquear PUI-05; no iniciar PUI-05 desde Codex en esta sesión.
+1. Usuario revisa PUI-05 y ejecuta push/PR/CI/full regression/manual validation.
+2. Si PUI-05 queda validado, continuar con PUI-06 desde una nueva sesión/base actualizada; no iniciar PUI-06 desde Codex en esta sesión.
 
 ## Handoff relevante
 
@@ -64,3 +69,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-03.md`
 - `docs/codex/handoffs/PUI-03-HF2.md`
 - `docs/codex/handoffs/PUI-04.md`
+- `docs/codex/handoffs/PUI-05.md`

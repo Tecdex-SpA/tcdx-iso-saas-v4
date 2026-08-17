@@ -4,6 +4,7 @@ const { MathGovernanceError } = require('./statisticalEngine.service');
 const { FORMULA_MAP } = require('./formulaRegistry.service');
 const { validateDataset, COUNT_SEMANTICS, buildPopulationCounts } = require('./datasetValidation.service');
 const { getSourceCodeForFormula, getSourceContract, listSourceContracts, listFormulaSourceBindings } = require('./sourceContracts.service');
+const { normalizeRowsStatus } = require('./statusSemantics.service');
 
 const SOURCE_STATES = new Set(['ready', 'source_unavailable', 'empty_dataset', 'partially_available', 'legacy_adapter_required', 'validated_with_warnings']);
 function hash(value) { return crypto.createHash('sha256').update(JSON.stringify(value, Object.keys(value).sort())).digest('hex'); }
@@ -235,9 +236,9 @@ async function queryCompliance(client, tenantId, period) {
   const contract = getSourceContract('compliance_requirements_assessments');
   const complianceTimestamp = `COALESCE(m.updated_at,m.created_at)`;
   const candidates = [
-    { table: 'grc_requirement_control_mappings', params: [tenantId], sql: `SELECT m.id,COALESCE(m.tenant_id,r.tenant_id) AS tenant_id,m.requirement_id,m.tenant_control_id,CASE WHEN m.mapping_type='not_equivalent' THEN 'not_applicable' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level)>=80 THEN 'conform' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level)>0 THEN 'partial' WHEN m.status='rejected' THEN 'non_conform' ELSE 'pending' END AS status,(m.mapping_type<>'not_equivalent') AS applicability,1::numeric AS weight,${complianceTimestamp} AS assessed_at,${complianceTimestamp} AS __event_time,a.score AS assurance_score FROM grc_requirement_control_mappings m JOIN grc_framework_requirements r ON r.id=m.requirement_id LEFT JOIN grc_control_assurance a ON a.tenant_id=COALESCE(m.tenant_id,r.tenant_id) AND a.tenant_control_id=m.tenant_control_id WHERE COALESCE(m.tenant_id,r.tenant_id)=$1::uuid` },
-    { table: 'control_soa_assessments', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'control_id','')::uuid,NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS requirement_id,COALESCE(NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,NULLIF(to_jsonb(x)->>'control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('compliant','conform','effective','implemented','approved') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('not_applicable','na') THEN 'not_applicable' ELSE 'pending' END AS status,lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) NOT IN ('not_applicable','na') AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x', contract)} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'compliance_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM control_soa_assessments x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
-    { table: 'tenant_controls', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,(to_jsonb(x)->>'id')::uuid AS requirement_id,(to_jsonb(x)->>'id')::uuid AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('compliant','conform','effective','implemented','approved','active') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('not_applicable','na') THEN 'not_applicable' ELSE 'pending' END AS status,COALESCE(NULLIF(to_jsonb(x)->>'is_applicable','')::boolean,true) AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x', contract)} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'effectiveness_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM tenant_controls x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
+    { table: 'grc_requirement_control_mappings', params: [tenantId], sql: `SELECT m.id,COALESCE(m.tenant_id,r.tenant_id) AS tenant_id,m.requirement_id,m.tenant_control_id,CASE WHEN m.mapping_type='not_equivalent' THEN 'not_applicable' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level)>=80 THEN 'conform' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level)>0 THEN 'partial' WHEN m.status='rejected' THEN 'non_conform' ELSE lower(COALESCE(m.status,'unknown')) END AS status,(m.mapping_type<>'not_equivalent') AS applicability,1::numeric AS weight,${complianceTimestamp} AS assessed_at,${complianceTimestamp} AS __event_time,a.score AS assurance_score FROM grc_requirement_control_mappings m JOIN grc_framework_requirements r ON r.id=m.requirement_id LEFT JOIN grc_control_assurance a ON a.tenant_id=COALESCE(m.tenant_id,r.tenant_id) AND a.tenant_control_id=m.tenant_control_id WHERE COALESCE(m.tenant_id,r.tenant_id)=$1::uuid` },
+    { table: 'control_soa_assessments', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'control_id','')::uuid,NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS requirement_id,COALESCE(NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,NULLIF(to_jsonb(x)->>'control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) IN ('compliant','conform','effective','implemented','approved') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) IN ('not_applicable','na') THEN 'not_applicable' ELSE lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) END AS status,lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) NOT IN ('not_applicable','na') AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x', contract)} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'compliance_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM control_soa_assessments x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
+    { table: 'tenant_controls', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,(to_jsonb(x)->>'id')::uuid AS requirement_id,(to_jsonb(x)->>'id')::uuid AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) IN ('compliant','conform','effective','implemented','approved','active') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) IN ('not_applicable','na') THEN 'not_applicable' ELSE lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) END AS status,COALESCE(NULLIF(to_jsonb(x)->>'is_applicable','')::boolean,true) AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x', contract)} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'effectiveness_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM tenant_controls x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
   ];
   return firstPopulated(client, candidates);
 }
@@ -260,7 +261,7 @@ async function queryRisk(client, tenantId, period) {
        FROM latest_runs lr
        JOIN iso_risk_matrix_items i ON i.run_id=lr.id AND i.tenant_id=lr.tenant_id
        WHERE i.tenant_id=$1::uuid
-         AND i.status NOT IN ('rejected','archived')`,
+         `,
       [tenantId, asOf]
     );
     if (result.rows?.length) return tagRows(result.rows, 'iso_risk_matrix_items');
@@ -318,7 +319,7 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
   const tables = severityFormula ? ['grc_readiness_findings', 'findings', 'action_plans'] : ['action_plans', 'findings', 'grc_readiness_findings'];
   const rows = await firstPopulatedTables(client, tables, tenantId, period, getSourceContract('audit_findings_actions'));
   if (!rows || !severityFormula) return rows;
-  return rows.map((row) => ({ ...row, status: row.status || 'open' }));
+  return rows.map((row) => ({ ...row, status: row.status || 'unknown' }));
 }
 
 async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period, getSourceContract('grc_readiness_operational_snapshot')); }
@@ -421,15 +422,14 @@ async function queryLossEvents(client, tenantId, period) {
   if (!(await tableExists(client, 'loss_events'))) return null;
   const rawEventTime = `COALESCE(NULLIF(to_jsonb(e)->>'event_date','')::timestamptz,NULLIF(to_jsonb(e)->>'occurred_at','')::timestamptz)`;
   const result = await client.query(
-    `SELECT e.id,e.tenant_id,COALESCE(NULLIF(to_jsonb(e)->>'status',''),'draft') AS status,NULLIF(to_jsonb(e)->>'currency','') AS currency,
+	    `SELECT e.id,e.tenant_id,COALESCE(NULLIF(to_jsonb(e)->>'status',''),'unknown') AS status,NULLIF(to_jsonb(e)->>'currency','') AS currency,
             ${rawEventTime} AS raw_event_date,${rawEventTime} AS event_date,${rawEventTime} AS __event_time,
             COALESCE(NULLIF(to_jsonb(e)->>'gross_loss_amount','')::numeric,NULLIF(to_jsonb(e)->>'gross_loss','')::numeric) AS gross_loss_amount,
             COALESCE(NULLIF(to_jsonb(e)->>'recovery_amount','')::numeric,NULLIF(to_jsonb(e)->>'recoveries','')::numeric) AS recovery_amount,
             COALESCE(NULLIF(to_jsonb(e)->>'net_loss_amount','')::numeric,NULLIF(to_jsonb(e)->>'net_loss','')::numeric) AS net_loss_amount,
             CASE WHEN ${rawEventTime} IS NOT NULL AND ${rawEventTime} > now() THEN true ELSE false END AS raw_event_date_was_future
      FROM loss_events e
-     WHERE e.tenant_id=$1::uuid
-       AND COALESCE(NULLIF(to_jsonb(e)->>'status',''),'draft') NOT IN ('cancelled','rejected')`,
+	     WHERE e.tenant_id=$1::uuid`,
     [tenantId]
   );
   return tagRows(result.rows.map((row) => ({ ...row, __source_warnings: row.raw_event_date_was_future ? ['loss_events.occurred_at/event_date viene en el futuro; se excluye por temporal_semantics, sin fallback a created_at.'] : [] })), 'loss_events');
@@ -455,8 +455,7 @@ async function queryContinuity(client, tenantId, period) {
             ${timestamp} AS __event_time
      FROM grc_continuity_tests t
      WHERE t.tenant_id=$1::uuid
-       AND NULLIF(to_jsonb(t)->>'completed_at','')::timestamptz IS NOT NULL
-      AND ${status} NOT IN ('planned','draft','scheduled','cancelled')`,
+	       AND NULLIF(to_jsonb(t)->>'completed_at','')::timestamptz IS NOT NULL`,
     [tenantId]
   );
   return tagRows(result.rows, 'grc_continuity_tests');
@@ -497,8 +496,7 @@ async function querySupplier(client, tenantId, period) {
             NULLIF(to_jsonb(a)->>'residual_risk_score','')::numeric AS residual_risk_score,
             ${timestamp} AS __event_time
      FROM grc_supplier_assessments a
-     WHERE a.tenant_id=$1::uuid
-       AND lower(a.status) NOT IN ('draft','invited','in_progress','rejected','expired')`,
+	     WHERE a.tenant_id=$1::uuid`,
     [tenantId]
   );
   return tagRows(result.rows, 'grc_supplier_assessments');
@@ -655,7 +653,7 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   try { queried = await queryOperationalRows({ client, contract, tenantId, period, formulaCode }); }
   catch (error) { const wrapped = new MathGovernanceError('SOURCE_SCHEMA_INCOMPATIBLE', 'La estructura física de la fuente no coincide con el contrato analítico.', { source_code: contract.source_code, original_code: error.code || null }); wrapped.cause = error; throw wrapped; }
   if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason, contract);
-  const rows = normalizeRows(queried.rows, contract);
+  const rows = normalizeRowsStatus(normalizeRows(queried.rows, contract), contract.status_semantics);
   const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null, temporalSemantics: contract.temporal_semantics });
   const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK' ? riskInherentPortfolio(validation.usable_rows, contract) : formulaCode === 'F5_5_SEVERITY_INDEX' ? severityPortfolio(validation.usable_rows) : formulaCode === 'F5_5_MATURITY' ? maturityPortfolio(validation.usable_rows, contract) : null;
   const formulaRows = formulaMapping ? formulaMapping.usableRows : validation.usable_rows;
@@ -673,7 +671,9 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
     scale_metadata: contract.scale_metadata || {},
     count_semantics: contract.count_semantics || COUNT_SEMANTICS,
     temporal_semantics: contract.temporal_semantics || {},
+    status_semantics: contract.status_semantics || {},
     temporal_summary: validation.temporal_summary || null,
+    status_summary: validation.status_summary || null,
     counts: formulaCounts,
     row_count: formulaCounts.population_size,
     raw_row_count: formulaCounts.received,
@@ -692,7 +692,7 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
     timezone,
   };
   const snapshotHash = hash(sourceSnapshot);
-  return { source_code: contract.source_code, physical_sources: physicalSources, status: sourceStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, count_semantics: contract.count_semantics || COUNT_SEMANTICS, temporal_semantics: contract.temporal_semantics || {}, temporal_summary: validation.temporal_summary || null, population_size: formulaCounts.population_size, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
+  return { source_code: contract.source_code, physical_sources: physicalSources, status: sourceStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, count_semantics: contract.count_semantics || COUNT_SEMANTICS, temporal_semantics: contract.temporal_semantics || {}, status_semantics: contract.status_semantics || {}, temporal_summary: validation.temporal_summary || null, status_summary: validation.status_summary || null, population_size: formulaCounts.population_size, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }

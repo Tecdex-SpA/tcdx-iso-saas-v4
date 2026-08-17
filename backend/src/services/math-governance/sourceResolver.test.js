@@ -5,6 +5,7 @@ const { listFormulaSourceBindings, listSourceContracts } = require('./sourceCont
 const { validateDataset } = require('./datasetValidation.service');
 const { resolveFormulaSource, mapFormulaInput, firstPopulated } = require('./sourceResolver.service');
 const { sourceContractMetadata } = require('./formulaBootstrap.service');
+const { STATUS_SEMANTICS_BY_SOURCE, normalizeRowsStatus, normalizeStatus } = require('./statusSemantics.service');
 
 async function main() {
   const bindings = listFormulaSourceBindings();
@@ -22,6 +23,8 @@ async function main() {
     assert.strictEqual(contract.period?.mode, 'contract_temporal_semantics', `generic created_at period default must not remain for ${contract.source_code}`);
     assert.ok(contract.temporal_semantics?.canonical_time_field, `temporal semantics missing for ${contract.source_code}`);
     assert.ok(contract.temporal_semantics?.time_meaning, `time meaning missing for ${contract.source_code}`);
+    assert.ok(contract.status_semantics?.domain, `status semantics missing for ${contract.source_code}`);
+    assert.ok(contract.status_semantics?.mapping_version, `status mapping version missing for ${contract.source_code}`);
   }
   assert.deepStrictEqual(contracts.filter((contract) => contract.availability === 'source_unavailable').map((contract) => contract.source_code), ['external_fx_rates']);
   assert.strictEqual(contracts.filter((contract) => ['legacy_adapter_required','partially_available'].includes(contract.availability)).length, 0, 'internal contracts must be resolved');
@@ -31,6 +34,7 @@ async function main() {
   assert.strictEqual(controlContractMetadata.scale_metadata.variables.design.source_scale, 'PERCENT_0_100');
   assert.strictEqual(controlContractMetadata.count_semantics.received, 'physical_rows_after_tenant_source_scope');
   assert.strictEqual(controlContractMetadata.temporal_semantics.time_meaning, 'control_assurance_calculation_time');
+  assert.strictEqual(controlContractMetadata.status_semantics.domain, 'control');
   assert.ok(!String(controlContract.variable_map.design).includes('score/100'), 'aggregate assurance score must not feed design dimension');
   assert.ok(String(controlContract.variable_map.effectivenesses).includes('aggregate assurance score'), 'aggregate assurance score remains valid for composite effectivenesses');
   assert.ok(String(controlContract.limitations).includes('nunca fabrica dimensiones desde score'), 'CONTROL-EFFECT anti-fabrication contract must be explicit');
@@ -69,6 +73,32 @@ async function main() {
   assert.ok(dataset.exclusions.some((item) => item.code === 'tenant_mismatch'));
   assert.ok(dataset.exclusions.some((item) => item.code === 'duplicate_natural_key'));
   assert.ok(dataset.exclusions.every((item) => item.source_record), 'dataset exclusions must expose source record for audit');
+
+  const auditClosed = normalizeStatus('audit', 'closed');
+  const incidentClosed = normalizeStatus('incident', 'closed');
+  assert.strictEqual(auditClosed.canonical_status, 'closed');
+  assert.strictEqual(incidentClosed.canonical_status, 'closed');
+  assert.notStrictEqual(auditClosed.reason, incidentClosed.reason, 'same source status must remain domain-specific');
+  const statusRows = normalizeRowsStatus([
+    { id: 'supplier-approved', tenant_id: 'tenant-a', status: 'approved' },
+    { id: 'supplier-draft', tenant_id: 'tenant-a', status: 'draft' },
+    { id: 'supplier-mystery', tenant_id: 'tenant-a', status: 'mystery' },
+  ], STATUS_SEMANTICS_BY_SOURCE.supplier_tprm_assessments);
+  const statusDataset = validateDataset({
+    tenantId: 'tenant-a',
+    sourceKey: 'status-unit-test',
+    requiredFields: ['id', 'tenant_id', 'status'],
+    minimumSampleSize: 1,
+    rows: statusRows,
+  });
+  assert.strictEqual(statusRows[2].status, 'unknown', 'unknown status must remain visible');
+  assert.strictEqual(statusDataset.receivedCount, 3);
+  assert.strictEqual(statusDataset.usableCount, 1);
+  assert.strictEqual(statusDataset.excludedCount, 2);
+  assert.strictEqual(statusDataset.counts.ineligible, 2);
+  assert.ok(statusDataset.exclusions.some((item) => item.code === 'status_not_eligible'));
+  assert.ok(statusDataset.exclusions.some((item) => item.code === 'status_unmapped'));
+  assert.ok(statusDataset.status_summary.classifications.every((item) => item.mapping_version === 'supplier-status-map-v1'));
 
   const temporalDataset = validateDataset({
     tenantId: 'tenant-a',
