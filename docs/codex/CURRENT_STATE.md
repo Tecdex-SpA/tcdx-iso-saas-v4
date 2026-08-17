@@ -17,8 +17,9 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-07: DONE (Data Trust determinístico/versionado cerrado localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-07-HF1: DONE local (pipeline oficial consolidado sobre `officialCalculationOrchestrator -> sourceResolver -> PUI-01..PUI-07`; validación manual/CI/deploy pendiente por diseño).
 - PUI-07-HF2: READY_FOR_RUNTIME_VALIDATION local (status/temporal producer-consumer reconciliation implementada para F5_5 runtime; requiere deploy, recalculo oficial y queries PostgreSQL antes de PASS).
-- PUI-07-HF3: DONE_LOCAL (cierre contractual residual para `F5_5_SEVERITY_INDEX`, `F5_5_MATURITY` y `grc_health_components`; validación runtime/productiva pendiente por diseño).
-- PUI-08: BLOCKED por validación runtime/productiva pendiente de PUI-07-HF3.
+- PUI-07-HF3: DONE_LOCAL (cierre contractual residual para `F5_5_MATURITY` y `grc_health_components` validado en runtime externo; `F5_5_SEVERITY_INDEX` requirió HF4 por source override no canónico).
+- PUI-07-HF4: DONE_LOCAL (source ownership de `F5_5_SEVERITY_INDEX` cerrado localmente: overrides no canónicos a `incident_operational_events/grc_incidents` se ignoran con warning auditable y se resuelve `audit_findings_actions`; validación runtime/productiva pendiente por diseño).
+- PUI-08: BLOCKED por validación runtime/productiva pendiente de PUI-07-HF4.
 - PRE-UI: IN_PROGRESS.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: BLOCKED por `PRE_UI_DATA_TRUTH_GATE` donde corresponda.
@@ -68,6 +69,11 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-07-HF3 se ejecutó sobre branch `fix/pui-07-hf3-final-contract-closure` desde base local `2dc4820cd8c7967eb051e2c1b4dcbbe5f19e13b6`.
 - PUI-07-HF3 cerró drift residual focal: `audit_findings_actions` v8 usa snapshot padre de `grc_readiness_findings` para temporalidad y `status=not_applicable`; `maturity_assessments` v7 reconoce estados producer-known de `survey_evaluations`/`metric_measurements`; `grc_health_components` v6 proyecta `started_at/completed_at` porque `calculation_runs.period_start` es nullable y el contrato ya permite esos fallbacks.
 - PUI-07-HF3 no cambió fórmulas, pesos, unidades, precisión, Data Trust v1, fallback governance, snapshots ni Package3.
+- Validación runtime externa posterior a PUI-07-HF3 confirmó `F5_5_MATURITY` y `F5_5_GRC_HEALTH` sin defecto residual: no reabrir esos flujos sin evidencia nueva.
+- PUI-07-HF4 se ejecutó sobre branch `fix/pui-07-hf4-severity-index-source-closure` desde base local `0c844dddccde4a4c92a8e6bc27841d23c1405c93`.
+- PUI-07-HF4 confirmó que el ownership publicado ya era `F5_5_SEVERITY_INDEX -> audit_findings_actions`, con severidad derivada de `grc_readiness_findings`/`grc_readiness_snapshots` cuando existen.
+- PUI-07-HF4 corrigió el defecto de override: `officialCalculationOrchestrator` y `sourceResolver` ya no permiten que `source_overrides/body.source_code=incident_operational_events` desplace el contrato canónico de Severity Index; el override se conserva como `requested_source_code` y warning `source_override_ignored_non_canonical`.
+- PUI-07-HF4 no modificó source contract payload, fórmulas, pesos, unidades, precisión ni checksums históricos; `SOURCE_CONTRACTS_VERSIONED=[]`, `FORMULAS_VERSIONED=[]`.
 
 ## Ownership fijo
 
@@ -84,8 +90,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa PUI-07-HF3 y ejecuta cherry-pick/push/PR/CI/deploy/recalculo oficial/manual production validation con las queries del handoff.
-2. Si PUI-07-HF3 valida en runtime, actualizar continuidad y habilitar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
+1. Usuario revisa PUI-07-HF4 y ejecuta cherry-pick/push/PR/CI/deploy/recalculo oficial/manual production validation con las queries del handoff.
+2. Si PUI-07-HF4 valida en runtime, actualizar continuidad y habilitar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
 
 ## Handoff relevante
 
@@ -101,3 +107,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-07-HF1.md`
 - `docs/codex/handoffs/PUI-07-HF2.md`
 - `docs/codex/handoffs/PUI-07-HF3.md`
+- `docs/codex/handoffs/PUI-07-HF4.md`

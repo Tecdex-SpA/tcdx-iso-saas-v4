@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const pool = require('../../config/db');
 const { FORMULAS, OfficialFormulaRegistry } = require('./formulaRegistry.service');
 const { resolveFormulaSource } = require('./sourceResolver.service');
+const { getSourceCodeForFormula } = require('./sourceContracts.service');
 const { buildDecision, numeric } = require('./decisionInterpretation.service');
 const { assessDataTrust } = require('./dataTrust.service');
 const phase5Service = require('../phase5/phase5.service');
@@ -169,7 +170,27 @@ function hashPayload(value) {
 }
 
 function sourceCodeForFormula(formula) {
-  return formula?.source_contract?.source_code || formula?.source_code || null;
+  if (!formula) return null;
+  if (typeof formula.source_contract === 'string') return formula.source_contract;
+  return formula.source_contract?.source_code || formula.source_code || getSourceCodeForFormula(formula.formula_code) || null;
+}
+
+function sourceOverrideWarning(requestedSourceCode, canonicalSourceCode) {
+  return `source_override_ignored_non_canonical:${requestedSourceCode}->${canonicalSourceCode}`;
+}
+
+function resolveRequestedSourceCode(formula, requestedSourceCode = null) {
+  const canonicalSourceCode = sourceCodeForFormula(formula);
+  const requested = requestedSourceCode ? String(requestedSourceCode) : null;
+  const enforceCanonicalOwnership = formula?.formula_code === 'F5_5_SEVERITY_INDEX';
+  const ignored = Boolean(enforceCanonicalOwnership && requested && canonicalSourceCode && requested !== canonicalSourceCode);
+  return {
+    requestedSourceCode: requested,
+    canonicalSourceCode,
+    resolverSourceCode: ignored ? canonicalSourceCode : (requested || null),
+    sourceOverrideIgnored: ignored,
+    warnings: ignored ? [sourceOverrideWarning(requested, canonicalSourceCode)] : [],
+  };
 }
 
 function sourceForFunctionalFailure({ formula, source = null, failure, period }) {
@@ -182,10 +203,14 @@ function sourceForFunctionalFailure({ formula, source = null, failure, period })
     formula_code: formula.formula_code,
     formula_version: formula.version,
     source_code: sourceCode,
+    requested_source_code: failure.requested_source_code || source?.requested_source_code || null,
+    canonical_source_code: failure.canonical_source_code || source?.canonical_source_code || sourceCode,
+    source_override_ignored: failure.source_override_ignored || source?.source_override_ignored || false,
     source_status: failure.source_status || failure.status,
     run_status: 'not_calculable',
     machine_reason: failure.machine_reason || failure.code,
     human_explanation: failure.human_explanation || failure.message,
+    warnings: failure.warnings || [],
     period,
     counts,
     physical_sources: physicalSources,
@@ -356,36 +381,42 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
   for (const formula of formulas) {
     let sourceContext = {};
     let source = null;
+    const requestedSourceSelection = resolveRequestedSourceCode(formula, sourceOverrides[formula.formula_code] || body.source_code || null);
+    let sourceWarnings = requestedSourceSelection.warnings;
     try {
-      source = await resolver({ client, tenantId, formulaCode: formula.formula_code, sourceCode: sourceOverrides[formula.formula_code] || body.source_code || null, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
+      source = await resolver({ client, tenantId, formulaCode: formula.formula_code, sourceCode: requestedSourceSelection.resolverSourceCode, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
+      sourceWarnings = [...new Set([...requestedSourceSelection.warnings, ...(source.warnings || [])])];
       sourceContext = {
         source_contract_status: source.contract?.availability || source.status || 'unknown',
         source_resolution_status: source.physical_sources?.length ? 'resolved' : 'not_resolved',
         source_code: source.source_code,
+        requested_source_code: requestedSourceSelection.requestedSourceCode,
+        canonical_source_code: requestedSourceSelection.canonicalSourceCode,
+        source_override_ignored: requestedSourceSelection.sourceOverrideIgnored,
         physical_sources: source.physical_sources || source.source_snapshot?.physical_sources || [],
         source_counts: source.counts || null,
         data_trust: source.data_trust || source.source_snapshot?.data_trust || null,
         required_capability: source.contract?.required_capability || null,
       };
       if (source.status === 'source_unavailable') {
-        const failure = functionalFailure({ formula, sourceContext, status: 'source_unavailable', failureType: 'source_incompatible', code: 'SOURCE_UNAVAILABLE', message: source.reason || 'No existe una fuente operacional habilitada para esta fórmula.', warnings: source.warnings || [], dataRequirements: source.data_requirements || null, period });
+        const failure = functionalFailure({ formula, sourceContext, status: 'source_unavailable', failureType: 'source_incompatible', code: 'SOURCE_UNAVAILABLE', message: source.reason || 'No existe una fuente operacional habilitada para esta fórmula.', warnings: sourceWarnings, dataRequirements: source.data_requirements || null, period });
         results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
       if (!source.counts?.usable) {
-        const failure = functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'SOURCE_DATA_INSUFFICIENT', message: 'No hay datos utilizables para el período seleccionado.', warnings: source.warnings || [], missingEntities: [source.source_code || formula.category].filter(Boolean), period });
+        const failure = functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'SOURCE_DATA_INSUFFICIENT', message: 'No hay datos utilizables para el período seleccionado.', warnings: sourceWarnings, missingEntities: [source.source_code || formula.category].filter(Boolean), period });
         results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
       if (!source.formula_input) {
-        const failure = functionalFailure({ formula, sourceContext, status: 'source_incompatible', failureType: 'source_incompatible', code: 'FORMULA_SOURCE_EQUIVALENCE_MISSING', message: 'La fuente existe, pero todavía no dispone de equivalencia operacional completa para esta fórmula.', missingFields: ['formula_input_mapping'], period });
+        const failure = functionalFailure({ formula, sourceContext, status: 'source_incompatible', failureType: 'source_incompatible', code: 'FORMULA_SOURCE_EQUIVALENCE_MISSING', message: 'La fuente existe, pero todavía no dispone de equivalencia operacional completa para esta fórmula.', warnings: sourceWarnings, missingFields: ['formula_input_mapping'], period });
         results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
 
       const dependency = enrichDependencies(formula.formula_code, source.formula_input, calculatedByCode);
       if (dependency.missing.length) {
-        const failure = functionalFailure({ formula, sourceContext, status: 'dependency_pending', failureType: 'dependency_pending', code: 'FORMULA_DEPENDENCY_PENDING', message: `Faltan resultados previos requeridos: ${dependency.missing.join(', ')}.`, missingFields: dependency.missing, period });
+        const failure = functionalFailure({ formula, sourceContext, status: 'dependency_pending', failureType: 'dependency_pending', code: 'FORMULA_DEPENDENCY_PENDING', message: `Faltan resultados previos requeridos: ${dependency.missing.join(', ')}.`, warnings: sourceWarnings, missingFields: dependency.missing, period });
         results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
@@ -393,7 +424,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
       const calculated = registry.execute(formula.formula_code, dependency.input);
       const resultValue = numeric(calculated.value);
       if (calculated.status !== 'calculated' || resultValue === null) {
-        const failure = functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'FORMULA_RESULT_EMPTY', message: 'La fórmula no produjo un valor numérico verificable y no será publicada.', period });
+        const failure = functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'FORMULA_RESULT_EMPTY', message: 'La fórmula no produjo un valor numérico verificable y no será publicada.', warnings: sourceWarnings, period });
         results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
@@ -415,7 +446,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         source_snapshot: source.source_snapshot,
         source_snapshot_hash: source.source_snapshot_hash,
         lineage: source.lineage,
-        warnings: source.warnings || [],
+        warnings: sourceWarnings,
         data_trust: source.data_trust || null,
         decision,
         details: { ...(calculated.details || {}), decision, source_counts: source.counts, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [], equivalence: source.equivalence || null, data_trust: source.data_trust || null },

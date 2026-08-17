@@ -60,7 +60,7 @@ async function run() {
   assert.equal(persisted[0].details.aggregation_method, 'arithmetic_mean');
 
   const overrideCalls = [];
-  await recalculateOfficialAnalytics(
+  const overrideResult = await recalculateOfficialAnalytics(
     { tenant_id: '70000000-0000-0000-0000-000000000701', user: { id: '70000000-0000-0000-0000-000000000711' } },
     { formula_codes: ['F5_5_SEVERITY_INDEX'], source_overrides: { F5_5_SEVERITY_INDEX: 'incident_operational_events' } },
     'orchestrator-source-override-test',
@@ -88,7 +88,12 @@ async function run() {
       persistSourceSnapshot: async () => '70000000-0000-0000-0000-000000000797',
     }
   );
-  assert.equal(overrideCalls[0].sourceCode, 'incident_operational_events');
+  assert.equal(overrideCalls[0].sourceCode, 'audit_findings_actions');
+  assert.equal(overrideResult.results[0].source_code, 'audit_findings_actions');
+  assert.equal(overrideResult.results[0].requested_source_code, 'incident_operational_events');
+  assert.equal(overrideResult.results[0].canonical_source_code, 'audit_findings_actions');
+  assert.equal(overrideResult.results[0].source_override_ignored, true);
+  assert.ok(overrideResult.results[0].warnings.some((warning) => warning.includes('source_override_ignored_non_canonical')));
 
   const package3Overview = phase5Package3.buildOverviewOfficialCalculations({
     compliance: { status: 'ok', data: { score: 80 }, trust: { score: 80 }, source_count: 3, warnings: [] },

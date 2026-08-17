@@ -694,14 +694,44 @@ async function main() {
   assert.strictEqual(missingTables.data_trust.state, DATA_TRUST_STATES.UNTRUSTED);
   assert.ok(missingTables.data_trust.reasons.includes('source_unavailable'));
   assert.ok(missingTables.reason.includes('No existen tablas operacionales'));
+  const nonCanonicalSourceClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) {
+      const table = String(params[0] || '').replace(/^public\./, '');
+      return { rows: [{ exists: ['grc_readiness_findings', 'grc_readiness_snapshots', 'grc_incidents'].includes(table) }] };
+    }
+    assert.ok(!sql.includes('FROM grc_incidents'), 'non-canonical incident source must not displace Severity Index ownership');
+    if (sql.includes('JOIN grc_readiness_snapshots s')) return { rows: [
+      { id: 'canonical-finding-high', tenant_id: 'tenant-a', severity: 'high', status: 'not_applicable', source_as_of: '2026-01-31T00:00:00Z', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-01-31T00:00:00Z' },
+    ] };
+    throw new Error(`unexpected non-canonical source query: ${sql}`);
+  } };
+  const severityOverrideSource = await resolveFormulaSource({
+    client: nonCanonicalSourceClient,
+    tenantId: 'tenant-a',
+    formulaCode: 'F5_5_SEVERITY_INDEX',
+    sourceCode: 'incident_operational_events',
+    period: { start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z' },
+  });
+  assert.strictEqual(severityOverrideSource.source_code, 'audit_findings_actions');
+  assert.strictEqual(severityOverrideSource.requested_source_code, 'incident_operational_events');
+  assert.strictEqual(severityOverrideSource.canonical_source_code, 'audit_findings_actions');
+  assert.strictEqual(severityOverrideSource.source_override_ignored, true);
+  assert.deepStrictEqual(severityOverrideSource.formula_input, { low: 0, medium: 0, high: 1, critical: 0 });
+  assert.ok(severityOverrideSource.warnings.some((warning) => warning.includes('source_override_ignored_non_canonical')));
+  assert.ok(severityOverrideSource.source_snapshot.source_override_ignored, 'source snapshot must expose ignored non-canonical override');
+
   const incompatibleClient = { async query(sql, params = []) {
-    if (sql.includes('to_regclass')) return { rows: [{ exists: String(params[0] || '').includes('grc_incidents') }] };
-    throw Object.assign(new Error('schema incompatible'), { code: '42703' });
+    if (sql.includes('to_regclass')) {
+      const table = String(params[0] || '').replace(/^public\./, '');
+      return { rows: [{ exists: ['grc_readiness_findings', 'grc_readiness_snapshots'].includes(table) }] };
+    }
+    if (sql.includes('JOIN grc_readiness_snapshots s')) throw Object.assign(new Error('schema incompatible'), { code: '42703' });
+    throw new Error(`unexpected incompatible query: ${sql}`);
   } };
   await assert.rejects(
-    () => resolveFormulaSource({ client: incompatibleClient, tenantId: 'tenant-a', formulaCode: 'F5_5_SEVERITY_INDEX', sourceCode: 'incident_operational_events' }),
+    () => resolveFormulaSource({ client: incompatibleClient, tenantId: 'tenant-a', formulaCode: 'F5_5_SEVERITY_INDEX', sourceCode: 'audit_findings_actions' }),
     (error) => error?.code === 'SOURCE_SCHEMA_INCOMPATIBLE',
-    'source incompatible must remain visible and must not fallback'
+    'canonical source incompatible must remain visible and must not fallback'
   );
   process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_RESOLVER_TESTS_OK', formulas: FORMULAS.length, contracts: contracts.length, unresolved_internal: 0, fallback_assertions: 3, equivalence_assertions: 9, formula_execution_assertions: 8 }) + '\n');
 }

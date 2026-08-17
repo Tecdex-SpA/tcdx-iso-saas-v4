@@ -19,6 +19,7 @@ Backend Node/Express
         |      + dataset validation and temporal/status classification
         |      + producer-known status drift guard for F5_5 source domains
         |      + residual producer/source contract drift closure for severity, maturity and health components
+        |      + formula-to-source ownership enforcement for Severity Index source overrides
         |      + formula registry/execution
         |      + official calculation orchestrator as single source of truth
         |      + snapshots/lineage

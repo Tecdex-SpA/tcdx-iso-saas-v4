@@ -209,6 +209,29 @@ CONTRACTS_VERSIONED: `[]`
 
 UNNECESSARY_VERSION_BUMPS: `0`
 
+## PUI-07-HF4 Severity Index Source Ownership Closure
+
+Status: DONE_LOCAL on branch `fix/pui-07-hf4-severity-index-source-closure`; runtime validation pending by design.
+
+Canonical source decision:
+
+| Formula | Canonical source code | Canonical physical source | Allowed fallbacks | Legacy/non-canonical paths |
+|---|---|---|---|---|
+| `F5_5_SEVERITY_INDEX` | `audit_findings_actions` | `grc_readiness_findings` joined to parent `grc_readiness_snapshots` when present; otherwise governed audit/action physical sources under the same source contract | `NONE` for formula-to-source override; only existing `audit_findings_actions` contract fallback policy may apply for primary absent/no rows | `incident_operational_events` / `grc_incidents` are canonical for incident indicators, not for `F5_5_SEVERITY_INDEX`; request overrides to that source are ignored with warning and cannot displace the Severity Index contract |
+
+Decision:
+
+- `FORMULA_SOURCE_MAP` and formula registry already published `F5_5_SEVERITY_INDEX -> audit_findings_actions`; HF4 did not change source contract payload.
+- The runtime inconsistency came from execution-time `source_overrides` / `body.source_code` being accepted before canonical formula-to-source ownership was enforced.
+- For `F5_5_SEVERITY_INDEX`, `officialCalculationOrchestrator` and `sourceResolver` now constrain requested non-canonical source codes to the formula's canonical source code and expose `requested_source_code`, `canonical_source_code`, `source_override_ignored` and warning `source_override_ignored_non_canonical:<requested>-><canonical>` in result/snapshot provenance.
+- `SOURCE_SCHEMA_INCOMPATIBLE` remains valid for genuinely incompatible canonical physical schema, but `incident_operational_events/grc_incidents` can no longer create a false positive for `F5_5_SEVERITY_INDEX`.
+
+SOURCE_CONTRACTS_VERSIONED: `[]`
+
+FORMULAS_VERSIONED: `[]`
+
+UNNECESSARY_VERSION_BUMPS: `0`
+
 ## PUI-07 Data Trust
 
 Status: DONE under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-07-data-trust`.
