@@ -14,7 +14,7 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-04: DONE (validación manual externa confirmada sobre `main/deploy` commit `7a9df185f06be031757d0d79f25aa59b27a53bbf`; focal test y deploy OK reportados por responsable del proyecto).
 - PUI-05: DONE (normalización canónica/versionada de estados por dominio cerrada localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-06: DONE (fallback legacy gobernado implementado localmente; el único test focal permitido falló por aserción PUI-06 corregida después, rerun manual pendiente).
-- PUI_07: READY
+- PUI_07: READY.
 - PRE-UI: IN_PROGRESS.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: BLOCKED por `PRE_UI_DATA_TRUTH_GATE` donde corresponda.
