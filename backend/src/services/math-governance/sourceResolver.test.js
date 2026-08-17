@@ -3,7 +3,7 @@ const assert = require('assert');
 const { FORMULAS, FORMULA_MAP, executeFormula } = require('./formulaRegistry.service');
 const { listFormulaSourceBindings, listSourceContracts } = require('./sourceContracts.service');
 const { validateDataset } = require('./datasetValidation.service');
-const { resolveFormulaSource, mapFormulaInput, firstPopulated } = require('./sourceResolver.service');
+const { resolveFormulaSource, mapFormulaInput, firstPopulated, getSourceContract, PRIMARY_STATES } = require('./sourceResolver.service');
 const { sourceContractMetadata } = require('./formulaBootstrap.service');
 const { STATUS_SEMANTICS_BY_SOURCE, normalizeRowsStatus, normalizeStatus } = require('./statusSemantics.service');
 
@@ -273,10 +273,25 @@ async function main() {
   const fallback = await firstPopulated(fallbackClient, [
     { table: 'primary_table', sql: 'primary', params: ['tenant-a'] },
     { table: 'legacy_table', sql: 'legacy', params: ['tenant-a'] },
-  ]);
+  ], getSourceContract('risk_register_controls'));
   assert.strictEqual(calls.length, 2, 'empty primary source must continue to legacy source');
   assert.strictEqual(fallback.length, 1);
   assert.strictEqual(fallback[0].__physical_source, 'legacy_table');
+  assert.strictEqual(fallback[0].__fallback_used, true);
+  assert.strictEqual(fallback[0].__fallback_reason, 'primary_no_rows');
+  assert.strictEqual(fallback[0].__primary_state, PRIMARY_STATES.NO_ROWS);
+
+  const primaryValid = await firstPopulated(fallbackClient, [
+    { table: 'primary_table', sql: 'legacy', params: ['tenant-a'] },
+    { table: 'legacy_table', sql: 'legacy', params: ['tenant-a'] },
+  ], getSourceContract('risk_register_controls'));
+  assert.strictEqual(primaryValid[0].__fallback_used, false, 'primary rows must not use fallback');
+
+  const disallowedFallback = await firstPopulated(fallbackClient, [
+    { table: 'primary_table', sql: 'primary', params: ['tenant-a'] },
+    { table: 'legacy_table', sql: 'legacy', params: ['tenant-a'] },
+  ], getSourceContract('incident_operational_events'));
+  assert.strictEqual(disallowedFallback.length, 0, 'primary no rows must not fallback without explicit policy');
 
   const lossQueries = [];
   const lossClient = { async query(sql, params) {
@@ -307,6 +322,8 @@ async function main() {
   });
   assert.strictEqual(lossQueries.length, 1);
   assert.strictEqual(lossSource.status, 'validated_with_warnings');
+  assert.strictEqual(lossSource.fallback_used, false);
+  assert.strictEqual(lossSource.primary_state, PRIMARY_STATES.ROWS_EXCLUDED);
   assert.strictEqual(lossSource.counts.received, 1);
   assert.strictEqual(lossSource.counts.usable, 0);
   assert.ok(lossSource.exclusions.some((item) => item.code === 'date_in_future'), 'future occurrence must be excluded instead of falling back to created_at');
@@ -355,8 +372,13 @@ async function main() {
   });
   assert.strictEqual(evidenceQueries.length, 2, 'empty primary evidence table must continue to governed version evidence fallback');
   assert.strictEqual(evidenceSource.status, 'ready');
+  assert.strictEqual(evidenceSource.fallback_used, true);
+  assert.strictEqual(evidenceSource.fallback_reason, 'primary_no_rows');
+  assert.strictEqual(evidenceSource.primary_state, PRIMARY_STATES.NO_ROWS);
   assert.strictEqual(evidenceSource.rows.length, 1);
   assert.strictEqual(evidenceSource.rows[0].__physical_source, 'grc_evidence_versions');
+  assert.strictEqual(evidenceSource.source_snapshot.fallback_summary.fallback_source, 'grc_evidence_versions');
+  assert.ok(String(evidenceSource.source_snapshot.fallback_summary.warning).includes('fallback legacy'));
   assert.ok(evidenceSource.formula_input.ageHours >= 0 && evidenceSource.formula_input.ageHours < 24);
   assert.ok(executeFormula('F5_5_FRESHNESS_CONTINUOUS', evidenceSource.formula_input).value > 0);
 
@@ -427,6 +449,8 @@ async function main() {
     sourceCode: 'maturity_assessments',
   });
   assert.strictEqual(invalidMaturitySource.counts.received, 2);
+  assert.strictEqual(invalidMaturitySource.fallback_used, false);
+  assert.strictEqual(invalidMaturitySource.primary_state, PRIMARY_STATES.ROWS_EXCLUDED);
   assert.strictEqual(invalidMaturitySource.counts.eligible, 2);
   assert.strictEqual(invalidMaturitySource.counts.usable, 0);
   assert.strictEqual(invalidMaturitySource.counts.excluded, 2);
@@ -453,6 +477,9 @@ async function main() {
     formulaCode: 'F5_5_INHERENT_RISK',
   });
   assert.strictEqual(riskSource.counts.received, 4);
+  assert.strictEqual(riskSource.fallback_used, true);
+  assert.strictEqual(riskSource.fallback_reason, 'primary_source_absent');
+  assert.strictEqual(riskSource.primary_state, PRIMARY_STATES.ABSENT);
   assert.strictEqual(riskSource.counts.eligible, 4);
   assert.strictEqual(riskSource.counts.usable, 3);
   assert.strictEqual(riskSource.counts.excluded, 1);
@@ -483,6 +510,8 @@ async function main() {
     sourceCode: 'audit_findings_actions',
   });
   assert.strictEqual(findingsSource.counts.received, 1);
+  assert.strictEqual(findingsSource.fallback_used, false);
+  assert.strictEqual(findingsSource.primary_state, PRIMARY_STATES.ROWS_EXCLUDED);
   assert.strictEqual(findingsSource.counts.eligible, 1);
   assert.strictEqual(findingsSource.counts.usable, 0);
   assert.strictEqual(findingsSource.counts.excluded, 1);
@@ -495,6 +524,15 @@ async function main() {
   const missingTables = await resolveFormulaSource({ client: missingClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
   assert.strictEqual(missingTables.status, 'source_unavailable');
   assert.ok(missingTables.reason.includes('No existen tablas operacionales'));
+  const incompatibleClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) return { rows: [{ exists: String(params[0] || '').includes('grc_incidents') }] };
+    throw Object.assign(new Error('schema incompatible'), { code: '42703' });
+  } };
+  await assert.rejects(
+    () => resolveFormulaSource({ client: incompatibleClient, tenantId: 'tenant-a', formulaCode: 'F5_5_SEVERITY_INDEX', sourceCode: 'incident_operational_events' }),
+    (error) => error?.code === 'SOURCE_SCHEMA_INCOMPATIBLE',
+    'source incompatible must remain visible and must not fallback'
+  );
   process.stdout.write(JSON.stringify({ status: 'PHASE5_5_SOURCE_RESOLVER_TESTS_OK', formulas: FORMULAS.length, contracts: contracts.length, unresolved_internal: 0, fallback_assertions: 3, equivalence_assertions: 9, formula_execution_assertions: 8 }) + '\n');
 }
 main().catch((error) => { console.error(error); process.exit(1); });

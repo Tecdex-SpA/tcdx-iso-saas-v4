@@ -7,6 +7,23 @@ const { getSourceCodeForFormula, getSourceContract, listSourceContracts, listFor
 const { normalizeRowsStatus } = require('./statusSemantics.service');
 
 const SOURCE_STATES = new Set(['ready', 'source_unavailable', 'empty_dataset', 'partially_available', 'legacy_adapter_required', 'validated_with_warnings']);
+const PRIMARY_STATES = Object.freeze({
+  AVAILABLE: 'primary_available',
+  ABSENT: 'primary_absent',
+  NO_ROWS: 'primary_no_rows',
+  SOURCE_INCOMPATIBLE: 'primary_source_incompatible',
+  ROWS_EXCLUDED: 'primary_rows_excluded',
+  VALIDATION_FAILED: 'primary_validation_failed',
+  UNMEASURED: 'primary_unmeasured',
+});
+const LEGACY_FALLBACK_POLICY_BY_SOURCE = Object.freeze({
+  compliance_requirements_assessments: Object.freeze({ allowed: true, triggers: Object.freeze([PRIMARY_STATES.ABSENT, PRIMARY_STATES.NO_ROWS]) }),
+  risk_register_controls: Object.freeze({ allowed: true, triggers: Object.freeze([PRIMARY_STATES.ABSENT, PRIMARY_STATES.NO_ROWS]) }),
+  control_assurance_evidence: Object.freeze({ allowed: true, triggers: Object.freeze([PRIMARY_STATES.ABSENT, PRIMARY_STATES.NO_ROWS]) }),
+  audit_findings_actions: Object.freeze({ allowed: true, triggers: Object.freeze([PRIMARY_STATES.ABSENT, PRIMARY_STATES.NO_ROWS]) }),
+  evidence_freshness_records: Object.freeze({ allowed: true, triggers: Object.freeze([PRIMARY_STATES.ABSENT, PRIMARY_STATES.NO_ROWS]) }),
+  maturity_assessments: Object.freeze({ allowed: true, triggers: Object.freeze([PRIMARY_STATES.ABSENT, PRIMARY_STATES.NO_ROWS]) }),
+});
 function hash(value) { return crypto.createHash('sha256').update(JSON.stringify(value, Object.keys(value).sort())).digest('hex'); }
 function number(value, fallback = null) { const n = Number(value); return value === null || value === undefined || value === '' || !Number.isFinite(n) ? fallback : n; }
 const SCALE_LIMITS = Object.freeze({
@@ -78,8 +95,30 @@ function assertTenant(tenantId) { if (!tenantId) throw new MathGovernanceError('
 function assertPermission(permission) { if (permission && permission.allowed === false) throw new MathGovernanceError('SOURCE_PERMISSION_DENIED', 'Permiso insuficiente para resolver dataset matemático.', { required: permission.required }); }
 function normalizeRows(rows, contract) { return rows.map((row) => { const normalized = {}; for (const [key, value] of Object.entries(row)) normalized[key] = typeof value === 'string' ? value.trim() : value; normalized.__source_code = contract.source_code; return normalized; }); }
 function buildLineage({ rows, contract, formula, runId = null, snapshotHash = null }) { return rows.slice(0, 1000).map((row) => ({ source_record: row.id || row.source_entity_id || null, physical_source: row.__physical_source || null, source_contract: contract.source_code, dataset_snapshot: snapshotHash, formula_version: `${formula.formula_code}@${formula.version}`, calculation_run: runId })); }
-function tagRows(rows, physicalSource) { return (rows || []).map((row) => ({ ...row, __physical_source: physicalSource })); }
+function fallbackPolicy(contract = null) { return LEGACY_FALLBACK_POLICY_BY_SOURCE[contract?.source_code] || { allowed: false, triggers: [] }; }
+function canUseLegacyFallback({ contract = null, primaryState = null } = {}) {
+  const policy = fallbackPolicy(contract);
+  return Boolean(policy.allowed && policy.triggers.includes(primaryState));
+}
+function fallbackReason(primaryState) {
+  if (primaryState === PRIMARY_STATES.ABSENT) return 'primary_source_absent';
+  if (primaryState === PRIMARY_STATES.NO_ROWS) return 'primary_no_rows';
+  return 'primary_fallback_not_allowed';
+}
+function fallbackWarning({ primarySource, fallbackSource, reason }) {
+  return `Fuente primaria ${primarySource} ${reason}; se usó fallback legacy explícito ${fallbackSource}.`;
+}
+function withResolution(rows, resolution) {
+  Object.defineProperty(rows, '__source_resolution', { value: Object.freeze(resolution), enumerable: false });
+  return rows;
+}
+function tagRows(rows, physicalSource, metadata = {}) { return (rows || []).map((row) => ({ ...row, __physical_source: physicalSource, ...metadata })); }
 function tagWarnings(rows, warnings = []) { return (rows || []).map((row) => ({ ...row, __source_warnings: warnings })); }
+function primaryRows(rows, physicalSource) {
+  const primaryState = rows?.length ? PRIMARY_STATES.AVAILABLE : PRIMARY_STATES.NO_ROWS;
+  const resolution = { fallback_used: false, primary_state: primaryState, primary_source: physicalSource, physical_source: physicalSource, fallback_reason: null, fallback_source: null };
+  return withResolution(tagRows(rows, physicalSource, { __fallback_used: false, __primary_state: primaryState, __primary_source: physicalSource }), resolution);
+}
 
 function validRiskAxis(value, rule = null) {
   const parsed = number(value);
@@ -196,40 +235,50 @@ function safeTimestampExpression(alias = 'x', contractOrFields = null) {
   if (!fields.length) return 'NULL::timestamptz';
   return `COALESCE(${fields.map((field) => timestampFieldExpression(alias, field)).join(',')})`;
 }
-async function firstPopulatedTables(client, tables, tenantId, period = {}, contract = null) {
+async function firstPopulatedTables(client, tables, tenantId, period = {}, contract = null, options = {}) {
   let existing = false;
-  let primaryExisting = null;
-  for (const table of tables) {
+  const primarySource = options.primarySource || tables[0] || null;
+  let primaryState = options.primaryState || PRIMARY_STATES.ABSENT;
+  for (const [index, table] of (tables || []).entries()) {
     if (!(await tableExists(client, table))) continue;
-    if (!primaryExisting) primaryExisting = table;
     existing = true;
+    const isFallbackCandidate = options.startAsFallback || index > 0;
+    if (isFallbackCandidate && !canUseLegacyFallback({ contract, primaryState })) continue;
     const timestamp = safeTimestampExpression('x', contract);
     const result = await client.query(`SELECT x.*, ${timestamp} AS __event_time FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid`, [tenantId]);
     if (result.rows?.length) {
-      const warnings = primaryExisting && table !== primaryExisting
-        ? [`Fuente primaria ${primaryExisting} sin filas tenant-scoped; se usó fallback legacy explícito ${table}.`]
-        : [];
-      return tagWarnings(tagRows(result.rows, table), warnings);
+      if (!options.startAsFallback && index === 0) return primaryRows(result.rows, table);
+      const reason = fallbackReason(primaryState);
+      const warning = fallbackWarning({ primarySource, fallbackSource: table, reason });
+      const resolution = { fallback_used: true, primary_state: primaryState, primary_source: primarySource, physical_source: table, fallback_source: table, fallback_reason: reason };
+      return withResolution(tagWarnings(tagRows(result.rows, table, { __fallback_used: true, __fallback_reason: reason, __primary_state: primaryState, __primary_source: primarySource, __fallback_source: table }), [warning]), resolution);
     }
+    if (!options.startAsFallback && index === 0) primaryState = PRIMARY_STATES.NO_ROWS;
   }
-  return existing ? [] : null;
+  if (!existing) return null;
+  return withResolution([], { fallback_used: false, primary_state: primaryState, primary_source: primarySource, physical_source: null, fallback_source: null, fallback_reason: null });
 }
-async function firstPopulated(client, candidates) {
+async function firstPopulated(client, candidates, contract = null, options = {}) {
   let available = false;
-  let primaryExisting = null;
-  for (const candidate of candidates) {
+  const primarySource = options.primarySource || candidates[0]?.table || null;
+  let primaryState = options.primaryState || PRIMARY_STATES.ABSENT;
+  for (const [index, candidate] of (candidates || []).entries()) {
     if (!(await tableExists(client, candidate.table))) continue;
-    if (!primaryExisting) primaryExisting = candidate.table;
     available = true;
+    const isFallbackCandidate = options.startAsFallback || index > 0;
+    if (isFallbackCandidate && !canUseLegacyFallback({ contract, primaryState })) continue;
     const result = await client.query(candidate.sql, candidate.params || []);
     if (result.rows?.length) {
-      const warnings = primaryExisting && candidate.table !== primaryExisting
-        ? [`Fuente primaria ${primaryExisting} sin filas tenant-scoped; se usó fallback legacy explícito ${candidate.table}.`]
-        : [];
-      return tagWarnings(tagRows(result.rows, candidate.table), warnings);
+      if (!options.startAsFallback && index === 0) return primaryRows(result.rows, candidate.table);
+      const reason = fallbackReason(primaryState);
+      const warning = fallbackWarning({ primarySource, fallbackSource: candidate.table, reason });
+      const resolution = { fallback_used: true, primary_state: primaryState, primary_source: primarySource, physical_source: candidate.table, fallback_source: candidate.table, fallback_reason: reason };
+      return withResolution(tagWarnings(tagRows(result.rows, candidate.table, { __fallback_used: true, __fallback_reason: reason, __primary_state: primaryState, __primary_source: primarySource, __fallback_source: candidate.table }), [warning]), resolution);
     }
+    if (!options.startAsFallback && index === 0) primaryState = PRIMARY_STATES.NO_ROWS;
   }
-  return available ? [] : null;
+  if (!available) return null;
+  return withResolution([], { fallback_used: false, primary_state: primaryState, primary_source: primarySource, physical_source: null, fallback_source: null, fallback_reason: null });
 }
 
 async function queryCompliance(client, tenantId, period) {
@@ -240,7 +289,7 @@ async function queryCompliance(client, tenantId, period) {
     { table: 'control_soa_assessments', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'control_id','')::uuid,NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS requirement_id,COALESCE(NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,NULLIF(to_jsonb(x)->>'control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) IN ('compliant','conform','effective','implemented','approved') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) IN ('not_applicable','na') THEN 'not_applicable' ELSE lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) END AS status,lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','unknown')) NOT IN ('not_applicable','na') AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x', contract)} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'compliance_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM control_soa_assessments x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
     { table: 'tenant_controls', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,(to_jsonb(x)->>'id')::uuid AS requirement_id,(to_jsonb(x)->>'id')::uuid AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) IN ('compliant','conform','effective','implemented','approved','active') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) IN ('not_applicable','na') THEN 'not_applicable' ELSE lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','unknown')) END AS status,COALESCE(NULLIF(to_jsonb(x)->>'is_applicable','')::boolean,true) AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x', contract)} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'effectiveness_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM tenant_controls x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
   ];
-  return firstPopulated(client, candidates);
+  return firstPopulated(client, candidates, contract);
 }
 
 async function queryRisk(client, tenantId, period) {
@@ -264,9 +313,10 @@ async function queryRisk(client, tenantId, period) {
          `,
       [tenantId, asOf]
     );
-    if (result.rows?.length) return tagRows(result.rows, 'iso_risk_matrix_items');
+    if (result.rows?.length) return primaryRows(result.rows, 'iso_risk_matrix_items');
+    return firstPopulatedTables(client, ['grc_quantitative_risk_assessments','asset_risks','privacy_dpia_risks'], tenantId, period, getSourceContract('risk_register_controls'), { primarySource: 'iso_risk_matrix_items', primaryState: PRIMARY_STATES.NO_ROWS, startAsFallback: true });
   }
-  return firstPopulatedTables(client, ['grc_quantitative_risk_assessments','asset_risks','privacy_dpia_risks'], tenantId, period, getSourceContract('risk_register_controls'));
+  return firstPopulatedTables(client, ['grc_quantitative_risk_assessments','asset_risks','privacy_dpia_risks'], tenantId, period, getSourceContract('risk_register_controls'), { primarySource: 'iso_risk_matrix_items', primaryState: PRIMARY_STATES.ABSENT, startAsFallback: true });
 }
 
 async function queryControls(client, tenantId, period) {
@@ -281,9 +331,10 @@ async function queryControls(client, tenantId, period) {
          `,
       [tenantId]
     );
-    if (result.rows?.length) return tagRows(result.rows, 'grc_control_assurance');
+    if (result.rows?.length) return primaryRows(result.rows, 'grc_control_assurance');
+    return firstPopulatedTables(client, ['control_soa_assessments','control_health_scores','tenant_controls'], tenantId, period, getSourceContract('control_assurance_evidence'), { primarySource: 'grc_control_assurance', primaryState: PRIMARY_STATES.NO_ROWS, startAsFallback: true });
   }
-  return firstPopulatedTables(client, ['control_soa_assessments','control_health_scores','tenant_controls'], tenantId, period, getSourceContract('control_assurance_evidence'));
+  return firstPopulatedTables(client, ['control_soa_assessments','control_health_scores','tenant_controls'], tenantId, period, getSourceContract('control_assurance_evidence'), { primarySource: 'grc_control_assurance', primaryState: PRIMARY_STATES.ABSENT, startAsFallback: true });
 }
 
 async function queryAuditActions(client, tenantId, period, formulaCode) {
@@ -343,7 +394,7 @@ async function queryHealth(client, tenantId, period) {
      ORDER BY cr.formula_code, ${componentTimestamp} DESC NULLS LAST, cr.started_at DESC`,
     [tenantId, period.start || null, period.end || null, GRC_HEALTH_DEPENDENCY_FORMULAS]
   );
-  return tagRows(result.rows, 'calculation_runs/calculation_outputs');
+  return primaryRows(result.rows, 'calculation_runs/calculation_outputs');
 }
 
 async function queryMaturity(client, tenantId, period) {
@@ -398,7 +449,7 @@ async function queryMaturity(client, tenantId, period) {
        WHERE (to_jsonb(gm)->>'tenant_id')::uuid=$1::uuid
          AND lower(COALESCE(to_jsonb(gm)->>'metric_code',to_jsonb(gm)->>'functional_code',to_jsonb(gm)->>'formula_code','')) IN ('maturity','f5_5_maturity')` });
   }
-  return firstPopulated(client, candidates);
+  return firstPopulated(client, candidates, getSourceContract('maturity_assessments'));
 }
 
 async function queryIncidents(client, tenantId, period) {
@@ -415,7 +466,7 @@ async function queryIncidents(client, tenantId, period) {
      WHERE i.tenant_id=$1::uuid`,
     [tenantId]
   );
-  return tagRows(result.rows, 'grc_incidents');
+  return primaryRows(result.rows, 'grc_incidents');
 }
 
 async function queryLossEvents(client, tenantId, period) {
@@ -432,7 +483,7 @@ async function queryLossEvents(client, tenantId, period) {
 	     WHERE e.tenant_id=$1::uuid`,
     [tenantId]
   );
-  return tagRows(result.rows.map((row) => ({ ...row, __source_warnings: row.raw_event_date_was_future ? ['loss_events.occurred_at/event_date viene en el futuro; se excluye por temporal_semantics, sin fallback a created_at.'] : [] })), 'loss_events');
+  return primaryRows(result.rows.map((row) => ({ ...row, __source_warnings: row.raw_event_date_was_future ? ['loss_events.occurred_at/event_date viene en el futuro; se excluye por temporal_semantics, sin fallback a created_at.'] : [] })), 'loss_events');
 }
 
 async function queryContinuity(client, tenantId, period) {
@@ -458,7 +509,7 @@ async function queryContinuity(client, tenantId, period) {
 	       AND NULLIF(to_jsonb(t)->>'completed_at','')::timestamptz IS NOT NULL`,
     [tenantId]
   );
-  return tagRows(result.rows, 'grc_continuity_tests');
+  return primaryRows(result.rows, 'grc_continuity_tests');
 }
 
 async function queryAssurance(client, tenantId, period) {
@@ -473,7 +524,7 @@ async function queryAssurance(client, tenantId, period) {
      WHERE (to_jsonb(r)->>'tenant_id')::uuid=$1::uuid`,
     [tenantId]
   );
-  return tagRows(result.rows, 'assurance_test_results');
+  return primaryRows(result.rows, 'assurance_test_results');
 }
 
 async function querySupplier(client, tenantId, period) {
@@ -499,7 +550,7 @@ async function querySupplier(client, tenantId, period) {
 	     WHERE a.tenant_id=$1::uuid`,
     [tenantId]
   );
-  return tagRows(result.rows, 'grc_supplier_assessments');
+  return primaryRows(result.rows, 'grc_supplier_assessments');
 }
 
 async function queryEvidenceFreshness(client, tenantId, period) {
@@ -527,7 +578,7 @@ async function queryEvidenceFreshness(client, tenantId, period) {
        FROM grc_evidence_versions v ${submissionJoin} ${reviewJoin}
        WHERE v.tenant_id=$1::uuid` });
   }
-  return firstPopulated(client, candidates);
+  return firstPopulated(client, candidates, getSourceContract('evidence_freshness_records'));
 }
 
 const ADAPTER_BY_SOURCE = Object.freeze({
@@ -550,10 +601,21 @@ async function queryOperationalRows({ client, contract, tenantId, period = {}, f
   const adapter = ADAPTER_BY_SOURCE[contract.source_code];
   if (adapter) {
     const rows = await adapter(client, tenantId, period, formulaCode, contract);
-    return rows === null ? { rows: [], unavailable: true, reason: `No existen tablas operacionales para ${contract.source_code}.` } : { rows, unavailable: false, reason: null };
+    const resolution = rows?.__source_resolution || { fallback_used: false, primary_state: rows?.length ? PRIMARY_STATES.AVAILABLE : PRIMARY_STATES.NO_ROWS, primary_source: contract.tables?.[0] || contract.source_code, physical_source: rows?.[0]?.__physical_source || null, fallback_source: null, fallback_reason: null };
+    return rows === null ? { rows: [], unavailable: true, reason: `No existen tablas operacionales para ${contract.source_code}.`, primary_state: PRIMARY_STATES.ABSENT, fallback_used: false } : { rows, unavailable: false, reason: null, ...resolution };
   }
   const rows = await firstPopulatedTables(client, contract.tables || [], tenantId, period, contract);
-  return rows === null ? { rows: [], unavailable: true, reason: `No existen tablas operacionales para ${contract.source_code}.` } : { rows, unavailable: false, reason: null };
+  const resolution = rows?.__source_resolution || { fallback_used: false, primary_state: rows?.length ? PRIMARY_STATES.AVAILABLE : PRIMARY_STATES.NO_ROWS, primary_source: contract.tables?.[0] || contract.source_code, physical_source: rows?.[0]?.__physical_source || null, fallback_source: null, fallback_reason: null };
+  return rows === null ? { rows: [], unavailable: true, reason: `No existen tablas operacionales para ${contract.source_code}.`, primary_state: PRIMARY_STATES.ABSENT, fallback_used: false } : { rows, unavailable: false, reason: null, ...resolution };
+}
+
+function finalPrimaryState({ queried, counts, validation }) {
+  if (queried?.fallback_used) return queried.primary_state || PRIMARY_STATES.ABSENT;
+  if ([PRIMARY_STATES.ABSENT, PRIMARY_STATES.NO_ROWS, PRIMARY_STATES.SOURCE_INCOMPATIBLE].includes(queried?.primary_state)) return queried.primary_state;
+  if (counts.received > 0 && counts.usable === 0 && counts.excluded === counts.received) return PRIMARY_STATES.ROWS_EXCLUDED;
+  if (validation?.invalid_rows?.length) return PRIMARY_STATES.VALIDATION_FAILED;
+  if (counts.received > 0 && counts.usable === 0) return PRIMARY_STATES.UNMEASURED;
+  return queried?.primary_state || (counts.received ? PRIMARY_STATES.AVAILABLE : PRIMARY_STATES.NO_ROWS);
 }
 
 function mapFormulaInput(formulaCode, rows) {
@@ -660,9 +722,19 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   const formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
   const formulaExclusions = formulaMapping ? [...validation.exclusions, ...formulaMapping.exclusions] : validation.exclusions;
   const formulaCounts = buildPopulationCounts({ received: rows.length, eligible: validation.usable_rows.length, usable: formulaRows.length, exclusions: formulaExclusions });
+  const primaryState = finalPrimaryState({ queried, counts: formulaCounts, validation });
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
   const sourceWarnings = [...new Set(rows.flatMap((row) => Array.isArray(row.__source_warnings) ? row.__source_warnings : []))];
   const sourceStatus = formulaCounts.usable ? validation.status : (formulaCounts.received ? 'validated_with_warnings' : 'empty_dataset');
+  const fallbackSummary = {
+    fallback_used: queried.fallback_used === true,
+    fallback_reason: queried.fallback_reason || null,
+    primary_state: primaryState,
+    primary_source: queried.primary_source || null,
+    fallback_source: queried.fallback_source || null,
+    physical_source: queried.physical_source || physicalSources[0] || null,
+    warning: sourceWarnings.find((warning) => String(warning).includes('fallback legacy')) || null,
+  };
   const sourceSnapshot = {
     source_code: contract.source_code,
     physical_sources: physicalSources,
@@ -674,6 +746,10 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
     status_semantics: contract.status_semantics || {},
     temporal_summary: validation.temporal_summary || null,
     status_summary: validation.status_summary || null,
+    fallback_summary: fallbackSummary,
+    fallback_used: fallbackSummary.fallback_used,
+    fallback_reason: fallbackSummary.fallback_reason,
+    primary_state: fallbackSummary.primary_state,
     counts: formulaCounts,
     row_count: formulaCounts.population_size,
     raw_row_count: formulaCounts.received,
@@ -692,8 +768,8 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
     timezone,
   };
   const snapshotHash = hash(sourceSnapshot);
-  return { source_code: contract.source_code, physical_sources: physicalSources, status: sourceStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, count_semantics: contract.count_semantics || COUNT_SEMANTICS, temporal_semantics: contract.temporal_semantics || {}, status_semantics: contract.status_semantics || {}, temporal_summary: validation.temporal_summary || null, status_summary: validation.status_summary || null, population_size: formulaCounts.population_size, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
+  return { source_code: contract.source_code, physical_sources: physicalSources, status: sourceStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, count_semantics: contract.count_semantics || COUNT_SEMANTICS, temporal_semantics: contract.temporal_semantics || {}, status_semantics: contract.status_semantics || {}, fallback_summary: fallbackSummary, fallback_used: fallbackSummary.fallback_used, fallback_reason: fallbackSummary.fallback_reason, primary_state: fallbackSummary.primary_state, temporal_summary: validation.temporal_summary || null, status_summary: validation.status_summary || null, population_size: formulaCounts.population_size, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }
-module.exports = { SOURCE_STATES, buildSourceContract, sourceUnavailable, listSourceContracts, listFormulaSourceBindings, resolveFormulaSource, resolveFormulaSources, getSourceContract, tableExists, mapFormulaInput, queryOperationalRows, firstPopulated, firstPopulatedTables };
+module.exports = { SOURCE_STATES, PRIMARY_STATES, LEGACY_FALLBACK_POLICY_BY_SOURCE, canUseLegacyFallback, buildSourceContract, sourceUnavailable, listSourceContracts, listFormulaSourceBindings, resolveFormulaSource, resolveFormulaSources, getSourceContract, tableExists, mapFormulaInput, queryOperationalRows, firstPopulated, firstPopulatedTables };

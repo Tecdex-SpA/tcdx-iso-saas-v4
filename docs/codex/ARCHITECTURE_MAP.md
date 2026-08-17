@@ -14,6 +14,7 @@ Backend Node/Express
         |      + source contracts/resolver
         |      + scale/count/temporal/status contract metadata
         |      + domain status normalization
+        |      + governed legacy fallback policy and fallback provenance
         |      + dataset validation and temporal/status classification
         |      + formula registry/execution
         |      + official calculation

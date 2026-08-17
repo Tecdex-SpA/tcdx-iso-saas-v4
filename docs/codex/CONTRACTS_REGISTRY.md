@@ -7,6 +7,7 @@
 | Count semantics | CURRENT/PUI-03 | CODEX A | PUI-03 cerró received/eligible/usable/excluded/exclusionIssueCount/population_size para source resolver y dataset validation focales. |
 | Temporal semantics | CURRENT/PUI-04 | CODEX A | `temporal_semantics` contractual agregado a los 20 source contracts; validación focal/deploy confirmada externamente sobre `7a9df18`. |
 | Status semantics | CURRENT/PUI-05 | CODEX A | `status_semantics` contractual agregado a los 20 source contracts; normalización versionada por dominio y unknown visible en Math Governance. |
+| Legacy fallback policy | REVIEW/PUI-06 | CODEX A | Política central implementada en resolver; rerun focal manual pendiente por límite FOCUSED_MINIMAL. |
 | Scale/unit semantics | CURRENT/PUI-02 | CODEX A | PUI-02 cerró escala/unidad para CONTROL-EFFECT, RISK-INHERENT, MATURITY y normalización explícita auditada; otros dominios quedan para su paquete específico sólo con evidencia. |
 | Data Trust | PARTIAL | CODEX A | Foundation existente; reproducibilidad a cerrar. |
 | Measurement | CURRENT/PARTIAL | CODEX A | Official calculation existe; Data Truth aún no cerrado. |
@@ -173,3 +174,36 @@ PUI-05 inventory:
 | currency_conversion | `external_fx_rates` v4 | published/active/draft when available | source unavailable | published, draft, unknown | unavailable contract still lacked governed status metadata | `currency_conversion-status-map-v1`; source remains unavailable |
 
 PUI-05 decision: `backend/src/services/math-governance/statusSemantics.service.js` owns versioned domain dictionaries. `sourceContracts.service.js` attaches `status_semantics` to every source contract, `sourceResolver.service.js` normalizes rows before dataset validation, `datasetValidation.service.js` emits `status_summary` and `status_unmapped`/`status_not_eligible` exclusions, and `formulaBootstrap.service.js` persists `status_semantics` in `official_formula_source_contracts.metadata`. Published source contract immutability is preserved by incrementing exactly one version on each contract whose governed payload now includes `status_semantics`; formula payloads, expressions, weights, units and precision were not changed.
+
+## PUI-06 Governed Legacy Fallback
+
+Status: REVIEW under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-06-governed-legacy-fallback`. The single focal test was executed once and failed on a PUI-06 assertion that was corrected afterward; manual rerun is pending.
+
+Canonical fallback terms:
+
+| Term | Canonical Semantics |
+|---|---|
+| `primary_state` | Machine-readable state of the primary source path: `primary_available`, `primary_absent`, `primary_no_rows`, `primary_source_incompatible`, `primary_rows_excluded`, `primary_validation_failed`, `primary_unmeasured`. |
+| `fallback_used` | Boolean indicating that a legacy source produced the rows consumed by the resolver. |
+| `fallback_reason` | Machine-readable reason for activation; PUI-06 permits only `primary_source_absent` and `primary_no_rows`. |
+| `primary_source` | Physical source considered primary for the source contract path. |
+| `fallback_source` | Physical legacy source used when fallback is allowed and produces rows. |
+| `fallback_summary` | Snapshot/result metadata carrying fallback state, reason, primary/fallback source and warning for observability. |
+
+PUI-06 fallback inventory:
+
+| Source Contract | Primary Source | Legacy/Fallback Source | Current Trigger | Allowed? | Problem | Required Policy |
+|---|---|---|---|---|---|---|
+| `compliance_requirements_assessments` | `grc_requirement_control_mappings` | `control_soa_assessments`, `tenant_controls` | first populated candidate | YES for primary absent/no rows | previous warning lacked machine-readable state/reason | `ALLOWED_PRIMARY_ABSENT` / `ALLOWED_PRIMARY_NO_ROWS`; no fallback after validation defects |
+| `risk_register_controls` | `iso_risk_matrix_items` via latest completed/reviewed run | `grc_quantitative_risk_assessments`, `asset_risks`, `privacy_dpia_risks` | primary ISO source absent/no rows | YES for primary absent/no rows | primary ISO state was lost when entering operational legacy list | preserve `primary_source=iso_risk_matrix_items`, `primary_state`, `fallback_reason` |
+| `control_assurance_evidence` | `grc_control_assurance` | `control_soa_assessments`, `control_health_scores`, `tenant_controls` | primary absent/no rows | YES for primary absent/no rows | primary direct-source empty state was not observable | preserve `primary_state` and fallback provenance |
+| `audit_findings_actions` | formula-dependent first candidate (`action_plans` or `grc_readiness_findings`) | `findings`, alternate action/readiness tables | first populated candidate | YES for primary absent/no rows | warning-only fallback | machine-readable fallback metadata |
+| `evidence_freshness_records` | `evidences` | `grc_evidence_versions` with submission/review joins | primary absent/no rows | YES for primary absent/no rows | fallback source needed structured observability | `fallback_summary` plus existing physical source |
+| `maturity_assessments` | `survey_evaluations` | `metric_measurements`, `grc_metric_measurements` with maturity predicates | primary absent/no rows | YES for primary absent/no rows | fallback must not hide invalid maturity rows | only source absence/no rows can trigger fallback; scale invalid remains exclusion |
+| Other source contracts | first contract table or direct adapter source | none explicitly authorized | primary absent/no rows | NO | generic table lists are not treated as implicit fallback permission | `NOT_APPLICABLE`; no legacy query if policy not explicit |
+
+PUI-06 decision: fallback policy is centralized in `sourceResolver.service.js` through `LEGACY_FALLBACK_POLICY_BY_SOURCE` and `canUseLegacyFallback`. It is resolver execution policy, not source contract payload, so no source contract version bump is required. Fallback is never activated after `contract_invalid`, `source_incompatible`, `primary_rows_excluded`, `status_unmapped`, temporal exclusions, scale/unit invalidity or formula input exclusions. `source_snapshot` and resolver result expose `fallback_summary`, `fallback_used`, `fallback_reason` and `primary_state`. Formula payloads, weights, expressions, units and precision were not changed.
+
+CONTRACTS_VERSIONED: `[]`
+
+UNNECESSARY_VERSION_BUMPS: `0`

@@ -25,7 +25,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 ## PARTIAL
 
-- Source contracts/resolver: PUI-01..PUI-05 cerraron ownership, escala/unidad, count semantics, temporal semantics y status semantics para Math Governance focal; PRE-UI continúa con fallback, provenance y matriz completa.
+- Source contracts/resolver: PUI-01..PUI-05 cerraron ownership, escala/unidad, count semantics, temporal semantics y status semantics para Math Governance focal; PUI-06 implementó fallback legacy gobernado en REVIEW, con rerun focal manual pendiente antes de cerrar.
 - Data Trust/provenance/snapshots: foundation existe; requiere cierre integral PRE-UI.
 - Decision Interpretation / Next Best Actions: foundation determinística; falta causalidad transversal completa.
 - Tenant document handling: hay capacidades especializadas, no RAG privado universal confirmado.
@@ -72,3 +72,4 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - No redescubrir en PUI-04 la semantica de conteos PUI-03; PUI-04 debe enfocarse en temporalidad.
 - No redescubrir en PUI-05 la temporalidad PUI-04; PUI-05 cerró status dictionaries, mapping versions y unknown policy por dominio.
 - No redescubrir en PUI-06 PUI-01 ownership, PUI-02 scale/unit, PUI-03 counts, PUI-04 temporal semantics ni PUI-05 status semantics; PUI-06 debe enfocarse en fallback legacy gobernado.
+- PUI-06 implementó política central en `sourceResolver.service.js`: fallback legacy sólo se permite por `primary_absent` o `primary_no_rows` cuando el source code está autorizado; no marcar PUI-07 READY hasta rerun manual del test focal.
