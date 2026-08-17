@@ -8,10 +8,68 @@ const { getSourceCodeForFormula, getSourceContract, listSourceContracts, listFor
 const SOURCE_STATES = new Set(['ready', 'source_unavailable', 'empty_dataset', 'partially_available', 'legacy_adapter_required', 'validated_with_warnings']);
 function hash(value) { return crypto.createHash('sha256').update(JSON.stringify(value, Object.keys(value).sort())).digest('hex'); }
 function number(value, fallback = null) { const n = Number(value); return value === null || value === undefined || value === '' || !Number.isFinite(n) ? fallback : n; }
-function ratio(value) { const n = number(value); return n === null ? null : Math.max(0, Math.min(1, n > 1 ? n / 100 : n)); }
+const SCALE_LIMITS = Object.freeze({
+  RATIO_0_1: { min: 0, max: 1 },
+  PERCENT_0_100: { min: 0, max: 100 },
+  SCORE_0_5: { min: 0, max: 5 },
+  SCORE_1_5: { min: 1, max: 5, integer: true },
+  SCORE_0_25: { min: 0, max: 25 },
+  COUNT: { min: 0, integer: true },
+  CURRENCY: {},
+  DURATION: { min: 0 },
+  PROBABILITY: { min: 0, max: 1 },
+  RAW_NUMERIC: {},
+});
+function scaleBounds(scale) { return SCALE_LIMITS[scale] || {}; }
+function withinScale(value, rule, phase = 'source') {
+  const scale = phase === 'canonical' ? rule.canonical_scale : rule.source_scale;
+  const bounds = scaleBounds(scale);
+  const min = phase === 'canonical' ? rule.canonical_min ?? bounds.min : rule.source_min ?? bounds.min;
+  const max = phase === 'canonical' ? rule.canonical_max ?? bounds.max : rule.source_max ?? bounds.max;
+  if (min !== undefined && value < min) return false;
+  if (max !== undefined && value > max) return false;
+  if ((rule.integer || bounds.integer) && !Number.isInteger(value)) return false;
+  return true;
+}
+function convertScale(value, rule) {
+  if (!rule || !rule.source_scale || !rule.canonical_scale) return null;
+  if (!withinScale(value, rule, 'source')) return null;
+  let normalized = value;
+  if (rule.source_scale !== rule.canonical_scale) {
+    if (rule.source_scale === 'PERCENT_0_100' && rule.canonical_scale === 'RATIO_0_1') normalized = value / 100;
+    else if (rule.source_scale === 'RATIO_0_1' && rule.canonical_scale === 'PERCENT_0_100') normalized = value * 100;
+    else if (rule.source_scale === 'PERCENT_0_100' && rule.canonical_scale === 'SCORE_0_5') normalized = value / 20;
+    else if (rule.source_scale === 'SCORE_0_5' && rule.canonical_scale === 'PERCENT_0_100') normalized = value * 20;
+    else if (rule.source_scale === 'SCORE_0_5' && rule.canonical_scale === 'RATIO_0_1') normalized = value / 5;
+    else return null;
+  }
+  return withinScale(normalized, rule, 'canonical') ? normalized : null;
+}
+function findRule(contract, variable) { return contract?.scale_metadata?.variables?.[variable] || null; }
+function firstField(row, fields = []) {
+  for (const field of fields) if (row[field] !== undefined && row[field] !== null && row[field] !== '') return { field, value: row[field] };
+  return { field: null, value: null };
+}
+function normalizeContractValue(row, contract, variable, fields = null, override = {}) {
+  const baseRule = findRule(contract, variable);
+  if (!baseRule) return number(firstField(row, fields || []).value);
+  const selected = firstField(row, fields || baseRule.source_fields || []);
+  const value = number(selected.value);
+  if (value === null) return null;
+  return convertScale(value, { ...baseRule, ...override });
+}
+function ratio(value, sourceScale = 'RATIO_0_1') {
+  const n = number(value);
+  if (n === null) return null;
+  return convertScale(n, { source_scale: sourceScale, canonical_scale: 'RATIO_0_1' });
+}
 function sum(values) { const usable = values.map((value) => number(value)).filter((value) => value !== null); return usable.length ? usable.reduce((total, value) => total + value, 0) : null; }
 function average(values) { const usable = values.map((value) => number(value)).filter((value) => value !== null); return usable.length ? usable.reduce((total, value) => total + value, 0) / usable.length : null; }
-function score(value) { const normalized = ratio(value); return normalized === null ? null : normalized * 100; }
+function score(value, sourceScale = 'PERCENT_0_100') {
+  const n = number(value);
+  if (n === null) return null;
+  return convertScale(n, { source_scale: sourceScale, canonical_scale: 'PERCENT_0_100' });
+}
 function buildSourceContract({ sourceKey, entityType, requiredFields = [], tenantScoped = true, status = 'source_unavailable', unit = null } = {}) { if (!sourceKey || !entityType) throw new MathGovernanceError('SOURCE_CONTRACT_INVALID', 'sourceKey y entityType son obligatorios.'); if (!SOURCE_STATES.has(status) && status !== 'available') throw new MathGovernanceError('SOURCE_STATUS_INVALID', 'Estado de fuente inválido.'); return Object.freeze({ sourceKey, entityType, requiredFields, tenantScoped, status, unit, lineageRequired: true }); }
 function sourceUnavailable(sourceKey, reason = 'La fuente operacional no está disponible para esta fórmula.', options = {}) { return Object.freeze({ sourceKey, source_code: sourceKey, status: 'source_unavailable', rows: [], reason, warnings: [reason], inputHash: null, source_snapshot: null, lineage: [], formula_input: null, data_requirements: { status: 'source_unavailable', missing_fields: options.required_fields || [], missing_entities: options.missing_entities || [sourceKey].filter(Boolean), incomplete_records: [], required_population: options.minimum_sample_size || null, current_population: 0, coverage_gap: null, freshness_gap: null, route_to_fix: options.route_to_fix || null, required_capability: options.required_capability || null, reason } }); }
 async function tableExists(client, tableName) { if (!client || typeof client.query !== 'function') return false; const result = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [`public.${tableName}`]); return result.rows[0]?.exists === true; }
@@ -22,9 +80,11 @@ function buildLineage({ rows, contract, formula, runId = null, snapshotHash = nu
 function tagRows(rows, physicalSource) { return (rows || []).map((row) => ({ ...row, __physical_source: physicalSource })); }
 function tagWarnings(rows, warnings = []) { return (rows || []).map((row) => ({ ...row, __source_warnings: warnings })); }
 
-function validRiskAxis(value) {
+function validRiskAxis(value, rule = null) {
   const parsed = number(value);
-  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 5 ? parsed : null;
+  if (parsed === null) return null;
+  const normalized = convertScale(parsed, rule || { source_scale: 'SCORE_1_5', canonical_scale: 'SCORE_1_5' });
+  return normalized === null ? null : normalized;
 }
 
 const SEVERITY_LEVELS = Object.freeze(['low', 'medium', 'high', 'critical']);
@@ -36,13 +96,15 @@ const GRC_HEALTH_DEPENDENCY_FORMULAS = Object.freeze([
   'F5_C3_DATA_TRUST',
 ]);
 
-function riskInherentPortfolio(rows = []) {
+function riskInherentPortfolio(rows = [], contract = getSourceContract('risk_register_controls')) {
+  const probabilityRule = findRule(contract, 'probability');
+  const impactRule = findRule(contract, 'impact');
   const risks = [];
   const usableRows = [];
   const exclusions = [];
   rows.forEach((row, index) => {
-    const probability = validRiskAxis(row.probability ?? row.likelihood);
-    const impact = validRiskAxis(row.impact);
+    const probability = validRiskAxis(row.probability ?? row.likelihood, probabilityRule);
+    const impact = validRiskAxis(row.impact, impactRule);
     const sourceRecord = row.id || row.risk_id || row.source_entity_id || `row-${index}`;
     if (probability === null || impact === null) {
       exclusions.push({
@@ -100,19 +162,18 @@ function severityPortfolio(rows = []) {
   return { input: counts, usableRows, exclusions };
 }
 
-function maturityPortfolio(rows = []) {
+function maturityPortfolio(rows = [], contract = getSourceContract('maturity_assessments')) {
   const usableRows = [];
   const exclusions = [];
   const levels = [];
   rows.forEach((row, index) => {
-    const level = number(row.level ?? row.maturity_level ?? row.score ?? row.numeric_value ?? row.value_numeric);
+    const sourceScale = row.__scale_level_source || null;
+    const variable = sourceScale === 'PERCENT_0_100' ? 'score' : 'level';
+    const rule = findRule(contract, variable);
+    const level = normalizeContractValue(row, contract, variable, ['level', 'maturity_level', 'score', 'numeric_value', 'value_numeric'], sourceScale ? { source_scale: sourceScale } : {});
     const sourceRecord = row.id || row.source_entity_id || `row-${index}`;
     if (level === null) {
-      exclusions.push({ code: 'maturity_level_missing_or_invalid', field: 'level|maturity_level|score|numeric_value|value_numeric', source_record: sourceRecord, physical_source: row.__physical_source || null, reason: 'F5_5_MATURITY requiere nivel numérico de madurez; filas sin nivel no se usan como proxy.' });
-      return;
-    }
-    if (level < 0 || level > 5) {
-      exclusions.push({ code: 'maturity_level_out_of_range', field: 'level', source_record: sourceRecord, physical_source: row.__physical_source || null, value: level, reason: 'F5_5_MATURITY usa escala de madurez 0..5; puntajes porcentuales u otros valores no se usan como nivel.' });
+      exclusions.push({ code: 'maturity_level_scale_invalid', field: 'level|maturity_level|score|numeric_value|value_numeric', source_record: sourceRecord, physical_source: row.__physical_source || null, source_scale: sourceScale || rule?.source_scale || null, canonical_scale: rule?.canonical_scale || null, reason: 'F5_5_MATURITY requiere escala declarada y valor dentro de dominio; no infiere nivel por magnitud.' });
       return;
     }
     levels.push({ level, weight: number(row.weight, 1) });
@@ -279,6 +340,11 @@ async function queryMaturity(client, tenantId, period) {
     candidates.push({ table: 'survey_evaluations', params: [tenantId, period.start || null, period.end || null], sql:
       `SELECT e.id,(to_jsonb(e)->>'tenant_id')::uuid AS tenant_id,
               COALESCE(NULLIF(to_jsonb(e)->>'level','')::numeric,NULLIF(to_jsonb(e)->>'maturity_level','')::numeric,NULLIF(to_jsonb(e)->>'score','')::numeric,NULLIF(to_jsonb(e)->>'total_score','')::numeric) AS level,
+              CASE
+                WHEN NULLIF(to_jsonb(e)->>'level','') IS NOT NULL OR NULLIF(to_jsonb(e)->>'maturity_level','') IS NOT NULL THEN 'SCORE_0_5'
+                WHEN NULLIF(to_jsonb(e)->>'score','') IS NOT NULL OR NULLIF(to_jsonb(e)->>'total_score','') IS NOT NULL THEN 'PERCENT_0_100'
+                ELSE NULL
+              END AS __scale_level_source,
               COALESCE(NULLIF(to_jsonb(e)->>'weight','')::numeric,1) AS weight,
               COALESCE(NULLIF(to_jsonb(e)->>'evaluation_status',''),NULLIF(to_jsonb(e)->>'status',''),'evaluated') AS status,
               ${timestamp} AS __event_time
@@ -296,6 +362,7 @@ async function queryMaturity(client, tenantId, period) {
     const timestamp = `COALESCE(NULLIF(to_jsonb(mm)->>'calculated_at','')::timestamptz,NULLIF(to_jsonb(mm)->>'period_end','')::timestamptz,NULLIF(to_jsonb(mm)->>'created_at','')::timestamptz)`;
     candidates.push({ table: 'metric_measurements', params: [tenantId, period.start || null, period.end || null], sql:
       `SELECT mm.id,mm.tenant_id,COALESCE(mm.value_numeric,NULLIF(mm.value_text,'')::numeric) AS level,
+              COALESCE(NULLIF(to_jsonb(mm)->'metadata'->>'source_scale',''),'SCORE_0_5') AS __scale_level_source,
               COALESCE(NULLIF(to_jsonb(mm)->'metadata'->>'weight','')::numeric,1) AS weight,
               COALESCE(mm.official_state,mm.quality_status,'calculated') AS status,${timestamp} AS __event_time
        FROM metric_measurements mm
@@ -311,6 +378,11 @@ async function queryMaturity(client, tenantId, period) {
     candidates.push({ table: 'grc_metric_measurements', params: [tenantId, period.start || null, period.end || null], sql:
       `SELECT gm.id,(to_jsonb(gm)->>'tenant_id')::uuid AS tenant_id,
               COALESCE(NULLIF(to_jsonb(gm)->>'level','')::numeric,NULLIF(to_jsonb(gm)->>'score','')::numeric,NULLIF(to_jsonb(gm)->>'numeric_value','')::numeric,NULLIF(to_jsonb(gm)->>'value_numeric','')::numeric) AS level,
+              CASE
+                WHEN NULLIF(to_jsonb(gm)->>'level','') IS NOT NULL OR NULLIF(to_jsonb(gm)->>'numeric_value','') IS NOT NULL OR NULLIF(to_jsonb(gm)->>'value_numeric','') IS NOT NULL THEN 'SCORE_0_5'
+                WHEN NULLIF(to_jsonb(gm)->>'score','') IS NOT NULL THEN 'PERCENT_0_100'
+                ELSE NULL
+              END AS __scale_level_source,
               COALESCE(NULLIF(to_jsonb(gm)->>'weight','')::numeric,1) AS weight,
               COALESCE(NULLIF(to_jsonb(gm)->>'status',''),'calculated') AS status,${timestamp} AS __event_time
        FROM grc_metric_measurements gm
@@ -497,14 +569,15 @@ async function queryOperationalRows({ client, contract, tenantId, period = {}, f
 
 function mapFormulaInput(formulaCode, rows) {
   const first = rows[0] || {};
+  const contract = getSourceContract(getSourceCodeForFormula(formulaCode));
   const statuses = rows.map((row) => String(row.status || '').toLowerCase());
   const severities = rows.map((row) => String(row.severity ?? row.risk_level ?? row.level ?? row.status ?? '').toLowerCase());
   const usableScores = rows.map((row) => number(row.score)).filter((value) => value !== null);
 
   if (formulaCode === 'F5_5_COMPLIANCE_WEIGHTED') return { assessments: rows.map((row) => ({ status: row.status, weight: number(row.weight, 1), notApplicable: ['not_applicable', 'na'].includes(String(row.status)) })) };
   if (formulaCode === 'F5_5_COVERAGE') return { evaluated: statuses.filter((status) => !['pending', 'not_evaluated', 'draft', ''].includes(status)).length, applicable: statuses.filter((status) => !['not_applicable', 'na'].includes(status)).length };
-  if (formulaCode === 'F5_5_READINESS') { const by = Object.fromEntries(rows.map((row) => [String(row.dimension || '').toLowerCase(), ratio(row.score)])); return { compliance: by.compliance, evidence: by.evidence, health: by.health, actions: by.actions }; }
-  if (formulaCode === 'F5_5_INHERENT_RISK') return riskInherentPortfolio(rows).input;
+  if (formulaCode === 'F5_5_READINESS') { const by = Object.fromEntries(rows.map((row) => [String(row.dimension || '').toLowerCase(), ratio(row.score, 'PERCENT_0_100')])); return { compliance: by.compliance, evidence: by.evidence, health: by.health, actions: by.actions }; }
+  if (formulaCode === 'F5_5_INHERENT_RISK') return riskInherentPortfolio(rows, contract).input;
   if (formulaCode === 'F5_5_RESIDUAL_RISK') {
     const inherentScores = rows.map((row) => {
       const direct = number(row.exposure ?? row.inherent_risk_score);
@@ -513,17 +586,17 @@ function mapFormulaInput(formulaCode, rows) {
       const impact = number(row.impact);
       return probability !== null && impact !== null ? probability * impact : null;
     }).filter((value) => value !== null);
-    const controlEffectiveness = average(rows.map((row) => row.control_effectiveness ?? row.control_effectiveness_score ?? row.assurance_score ?? row.control_score ?? row.effectiveness_score));
-    return { inherentRisk: average(inherentScores), controlEffectiveness: ratio(controlEffectiveness) };
+    const controlEffectiveness = average(rows.map((row) => normalizeContractValue(row, contract, 'controlEffectiveness')));
+    return { inherentRisk: average(inherentScores), controlEffectiveness };
   }
   if (formulaCode === 'F5_5_FMEA_RPN') return { severity: number(first.impact), occurrence: number(first.occurrence ?? first.probability), detection: number(first.detection) };
-  if (formulaCode === 'F5_5_COMBINED_EFFECTIVENESS') return { effectivenesses: usableScores.map(ratio).filter((value) => value !== null) };
-  if (formulaCode === 'F5_5_CONTROL_EFFECTIVENESS') return { design: ratio(first.design_score ?? first.design_effectiveness), implementation: ratio(first.implementation_score ?? first.implementation_effectiveness), operation: ratio(first.operation_score ?? first.operation_effectiveness ?? first.operating_effectiveness), evidence: ratio(first.evidence_score ?? first.evidence_effectiveness) };
+  if (formulaCode === 'F5_5_COMBINED_EFFECTIVENESS') return { effectivenesses: rows.map((row) => normalizeContractValue(row, contract, 'effectivenesses')).filter((value) => value !== null) };
+  if (formulaCode === 'F5_5_CONTROL_EFFECTIVENESS') return { design: normalizeContractValue(first, contract, 'design'), implementation: normalizeContractValue(first, contract, 'implementation'), operation: normalizeContractValue(first, contract, 'operation'), evidence: normalizeContractValue(first, contract, 'evidence') };
   if (formulaCode === 'F5_5_CONTROL_COVERAGE') return { risksWithControl: rows.filter((row) => number(row.score) !== null || number(row.control_effectiveness ?? row.control_effectiveness_score) !== null).length, relevantRisks: rows.length };
   if (formulaCode === 'F5_5_FREQUENCY_COMPLIANCE') return { onTimeExecutions: statuses.filter((status) => ['effective', 'completed', 'on_time', 'compliant'].includes(status)).length, scheduledExecutions: rows.length };
   if (formulaCode === 'F5_5_FAILURE_RATE') return { failedTests: statuses.filter((status) => ['fail', 'failed', 'non_compliant'].includes(status)).length, executedTests: rows.length };
   if (formulaCode === 'F5_5_SEVERITY_INDEX') return { low: severities.filter((severity) => severity === 'low').length, medium: severities.filter((severity) => severity === 'medium').length, high: severities.filter((severity) => severity === 'high').length, critical: severities.filter((severity) => severity === 'critical').length };
-  if (['F5_5_MTTC', 'F5_5_AGE', 'F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((row) => { const progressValue = number(row.progress ?? row.progress_percent ?? row.latest_progress_percent); return { openedAt: row.opened_at ?? row.created_at, closedAt: row.closed_at ?? row.completed_at, dueAt: row.due_at ?? row.due_date, createdAt: row.opened_at ?? row.created_at, progress: progressValue === null ? null : (progressValue > 1 ? progressValue / 100 : progressValue), weight: number(row.weight, 1), status: row.status ?? row.latest_status_after }; }).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
+  if (['F5_5_MTTC', 'F5_5_AGE', 'F5_5_WEIGHTED_PROGRESS'].includes(formulaCode)) return { items: rows.map((row) => { const progressField = firstField(row, ['progress_percent', 'latest_progress_percent', 'progress']); const progressValue = progressField.field ? ratio(progressField.value, progressField.field === 'progress' ? 'RATIO_0_1' : 'PERCENT_0_100') : null; return { openedAt: row.opened_at ?? row.created_at, closedAt: row.closed_at ?? row.completed_at, dueAt: row.due_at ?? row.due_date, createdAt: row.opened_at ?? row.created_at, progress: progressValue, weight: number(row.weight, 1), status: row.status ?? row.latest_status_after }; }).filter((item) => formulaCode === 'F5_5_WEIGHTED_PROGRESS' ? item.progress !== null : item.createdAt), now: new Date().toISOString() };
   if (formulaCode === 'F5_5_CLOSURE_RATE') return { closed: statuses.filter((status) => ['closed', 'completed', 'resolved'].includes(status)).length, openAtStart: statuses.filter((status) => !['closed', 'completed', 'resolved'].includes(status)).length, created: 0 };
   if (formulaCode === 'F5_5_OVERDUE_RATE') { const open = rows.filter((row) => !['closed', 'completed', 'resolved'].includes(String(row.status ?? row.latest_status_after).toLowerCase())); return { overdueOpen: open.filter((row) => (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date()).length, openActions: open.length, items: open.map((row) => ({ overdue: (row.due_at ?? row.due_date) && new Date(row.due_at ?? row.due_date) < new Date() ? 1 : 0, weight: number(row.weight, 1) })) }; }
   const grossLossValue = (row) => number(row.gross_loss_amount ?? row.gross_loss);
@@ -545,7 +618,8 @@ function mapFormulaInput(formulaCode, rows) {
   if (formulaCode === 'F5_C3_SUPPLIER_HEALTH') {
     const riskInputs=[first.compliance_score,first.security_score,first.dependency_score,first.privacy_score,first.resilience_score].map((value)=>number(value)).filter((value)=>value!==null);
     const supplierRisk=riskInputs.length===5?average(riskInputs):null;
-    return { riskHealth:supplierRisk===null?null:Math.max(0,100-(supplierRisk<=5?supplierRisk*20:supplierRisk)),performance:score(first.performance_score),assurance:score(first.assurance_score),continuity:score(first.continuity_score??first.resilience_score),incidentHealth:score(first.incident_health_score),dataTrust:score(first.data_trust_score) };
+    const supplierRiskPercent = score(supplierRisk, 'SCORE_0_5');
+    return { riskHealth:supplierRiskPercent===null?null:Math.max(0,100-supplierRiskPercent),performance:score(first.performance_score),assurance:score(first.assurance_score),continuity:score(first.continuity_score??first.resilience_score),incidentHealth:score(first.incident_health_score),dataTrust:score(first.data_trust_score) };
   }
   if (formulaCode === 'F5_5_SURVEY_SCORE') return { items: rows.map((row) => ({ score: number(row.score), maxScore: number(row.max_score), weight: number(row.weight, 1), notApplicable: ['not_applicable', 'na'].includes(String(row.status)) })).filter((item) => item.score !== null && item.maxScore !== null) };
   if (formulaCode === 'F5_5_RESPONSE_RATE') return { completedResponses: statuses.filter((status) => ['completed', 'submitted', 'approved'].includes(status)).length, validInvitations: rows.length };
@@ -565,10 +639,10 @@ function mapFormulaInput(formulaCode, rows) {
     return { ageHours: latest === null ? null : Math.max(0, (Date.now() - latest) / 3600000), halfLifeHours: 24 * 30 };
   }
   if (formulaCode === 'F5_5_LINEAGE_SCORE') return { presentRelations: rows.length, requiredRelations: rows.length || null };
-  if (formulaCode === 'F5_5_GRC_HEALTH') { const values = {}; for (const row of rows) { const raw = row.output_value?.value ?? row.output_value; const value = ratio(raw); if (row.formula_code === 'F5_5_RESIDUAL_RISK') values.risk = value === null ? null : 1 - value; if (row.formula_code === 'F5_5_COMPLIANCE_WEIGHTED') values.compliance = value; if (row.formula_code === 'F5_5_WEIGHTED_PROGRESS') values.actions = value; if (row.formula_code === 'F5_5_FRESHNESS_CONTINUOUS') values.evidence = value; if (row.formula_code === 'F5_C3_DATA_TRUST') values.dataTrust = value; } return values; }
-  if (formulaCode === 'F5_C3_OPERATIONAL_PERFORMANCE') { const by={};for(const row of rows){const value=score(row.output_value?.value??row.output_value);if(value!==null)by[row.formula_code]=value;}const risk=by.F5_5_RESIDUAL_RISK===undefined?null:Math.max(0,100-by.F5_5_RESIDUAL_RISK);return {efficacy:by.F5_5_COMPLIANCE_WEIGHTED??null,efficiency:by.F5_5_WEIGHTED_PROGRESS??null,stability:risk,quality:by.F5_5_CONTROL_EFFECTIVENESS??null,timeliness:by.F5_5_SLA_COMPLIANCE??null,risk,compliance:by.F5_5_COMPLIANCE_WEIGHTED??null,actions:by.F5_5_WEIGHTED_PROGRESS??null,dataTrust:by.F5_C3_DATA_TRUST??null}; }
+  if (formulaCode === 'F5_5_GRC_HEALTH') { const values = {}; for (const row of rows) { const raw = row.output_value?.value ?? row.output_value; const value = ratio(raw, 'PERCENT_0_100'); if (row.formula_code === 'F5_5_RESIDUAL_RISK') values.risk = value === null ? null : 1 - value; if (row.formula_code === 'F5_5_COMPLIANCE_WEIGHTED') values.compliance = value; if (row.formula_code === 'F5_5_WEIGHTED_PROGRESS') values.actions = value; if (row.formula_code === 'F5_5_FRESHNESS_CONTINUOUS') values.evidence = value; if (row.formula_code === 'F5_C3_DATA_TRUST') values.dataTrust = value; } return values; }
+  if (formulaCode === 'F5_C3_OPERATIONAL_PERFORMANCE') { const by={};for(const row of rows){const value=score(row.output_value?.value??row.output_value, 'PERCENT_0_100');if(value!==null)by[row.formula_code]=value;}const risk=by.F5_5_RESIDUAL_RISK===undefined?null:Math.max(0,100-by.F5_5_RESIDUAL_RISK);return {efficacy:by.F5_5_COMPLIANCE_WEIGHTED??null,efficiency:by.F5_5_WEIGHTED_PROGRESS??null,stability:risk,quality:by.F5_5_CONTROL_EFFECTIVENESS??null,timeliness:by.F5_5_SLA_COMPLIANCE??null,risk,compliance:by.F5_5_COMPLIANCE_WEIGHTED??null,actions:by.F5_5_WEIGHTED_PROGRESS??null,dataTrust:by.F5_C3_DATA_TRUST??null}; }
   if (formulaCode === 'F5_C3_DATA_TRUST') { const dimensions=['completeness','accuracy','consistency','freshness','lineage','validation','stability','coverage'];return Object.fromEntries(dimensions.map((dimension)=>[dimension,average(rows.map((row)=>row.dimensions?.[dimension]?.score))])); }
-  if (formulaCode === 'F5_5_MATURITY') return maturityPortfolio(rows).input;
+  if (formulaCode === 'F5_5_MATURITY') return maturityPortfolio(rows, contract).input;
   if (['F5_5_ROBUST_Z_SCORE', 'F5_5_LINEAR_TREND', 'F5_5_PERCENT_VARIATION', 'F5_5_MOVING_AVERAGE', 'F5_5_EMA', 'F5_5_CONFIDENCE_INTERVAL'].includes(formulaCode)) {
     const values = usableScores;
     if (formulaCode === 'F5_5_ROBUST_Z_SCORE') return values.length ? { x: values[values.length - 1], values } : null;
@@ -592,14 +666,14 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason, contract);
   const rows = normalizeRows(queried.rows, contract);
   const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null });
-  const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK' ? riskInherentPortfolio(validation.usable_rows) : formulaCode === 'F5_5_SEVERITY_INDEX' ? severityPortfolio(validation.usable_rows) : formulaCode === 'F5_5_MATURITY' ? maturityPortfolio(validation.usable_rows) : null;
+  const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK' ? riskInherentPortfolio(validation.usable_rows, contract) : formulaCode === 'F5_5_SEVERITY_INDEX' ? severityPortfolio(validation.usable_rows) : formulaCode === 'F5_5_MATURITY' ? maturityPortfolio(validation.usable_rows, contract) : null;
   const formulaRows = formulaMapping ? formulaMapping.usableRows : validation.usable_rows;
   const formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
   const formulaExclusions = formulaMapping ? [...validation.exclusions, ...formulaMapping.exclusions] : validation.exclusions;
   const formulaCounts = { received: rows.length, usable: formulaRows.length, excluded: Math.max(0, rows.length - formulaRows.length) };
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
   const sourceWarnings = [...new Set(rows.flatMap((row) => Array.isArray(row.__source_warnings) ? row.__source_warnings : []))];
-  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, exclusions: formulaCounts.excluded, exclusion_issue_count: formulaExclusions.length, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
+  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, scale_metadata: contract.scale_metadata || {}, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, exclusions: formulaCounts.excluded, exclusion_issue_count: formulaExclusions.length, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
   const snapshotHash = hash(sourceSnapshot);
   return { source_code: contract.source_code, physical_sources: physicalSources, status: formulaCounts.usable ? validation.status : 'empty_dataset', rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
 }

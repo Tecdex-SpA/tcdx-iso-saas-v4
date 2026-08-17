@@ -10,6 +10,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - Math Governance existente: formula registry, source contracts/resolver, dataset validation, official calculation, snapshots/lineage y decision interpretation.
 - PUI-01 source ownership confirmado para CONTROL-EFFECT, RISK-INHERENT y MATURITY en `docs/codex/CONTRACTS_REGISTRY.md`: no reabrir sin evidencia nueva.
 - CONTROL-EFFECT: `score` agregado puede alimentar cálculos agregados/composite, pero no puede fabricarse como `design`, `implementation`, `operation` ni `evidence`.
+- PUI-02 scale/unit confirmado para CONTROL-EFFECT, RISK-INHERENT, MATURITY y normalización explícita auditada en `docs/codex/CONTRACTS_REGISTRY.md`: la normalización depende de `scale_metadata`, no de magnitud.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Intelligence Engine backend existe: rules, confidence, explainability, guardrails, prompt builder, actions, orchestrator y deterministic fallback.
@@ -21,7 +22,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 ## PARTIAL
 
-- Source contracts/resolver: PRE-UI continúa corrigiendo normalización/semántica.
+- Source contracts/resolver: PUI-01 y PUI-02 cerraron ownership y escala/unidad para sus variables focales; PRE-UI continúa con count, temporalidad, estado, fallback, provenance y matriz completa.
 - Data Trust/provenance/snapshots: foundation existe; requiere cierre integral PRE-UI.
 - Decision Interpretation / Next Best Actions: foundation determinística; falta causalidad transversal completa.
 - Tenant document handling: hay capacidades especializadas, no RAG privado universal confirmado.
@@ -33,7 +34,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 - PRE-UI sigue abierto.
 - PR #91 está abierto y no debe tratarse como mergeado.
-- CONTROL-EFFECT, RISK-INHERENT y MATURITY formaban parte del bloque de reconciliación PRE-UI; PUI-01 cerró ownership de fuente localmente, con validación manual/CI pendiente.
+- CONTROL-EFFECT, RISK-INHERENT y MATURITY formaban parte del bloque de reconciliación PRE-UI; PUI-01 cerró ownership de fuente y PUI-02 cerró escala/unidad localmente, con validación manual/CI pendiente.
 - No declarar Data Truth Gate mientras no se complete PUI-01..PUI-09 y validación manual correspondiente.
 
 ## NOT CONFIRMED / MISSING AS COMPLETE CAPABILITY
@@ -64,3 +65,4 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - Tenant learning vía memory/RAG; no fine-tuning cross-tenant automático.
 - Web general no es verdad legal autoritativa.
 - No redescubrir en PUI-02 el ownership de fuente de CONTROL-EFFECT, RISK-INHERENT ni MATURITY cerrado por PUI-01; PUI-02 debe enfocarse en escala/unidad.
+- No redescubrir en PUI-03 la escala/unidad de CONTROL-EFFECT, RISK-INHERENT, MATURITY ni supplier risk health cerrada por PUI-02; PUI-03 debe enfocarse en counts.

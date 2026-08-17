@@ -9,6 +9,7 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 
 - CONT-00: DONE (bootstrap documental materializado en `main` antes de PUI-01).
 - PUI-01: DONE (source ownership cerrado localmente; validación manual/CI pendiente por diseño).
+- PUI-02: DONE (escala/unidad y normalización canónica cerradas localmente para el alcance focal; validación manual/CI pendiente por diseño).
 - PRE-UI: IN_PROGRESS.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: BLOCKED por `PRE_UI_DATA_TRUTH_GATE` donde corresponda.
@@ -24,6 +25,9 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-01 se ejecutó sobre branch `fix/pui-01-source-contract-ownership` desde base local `033236f11a140530316c02ad81676a226efc15cb`.
 - PUI-01 confirmó que `sourceResolver.test.js` pasa localmente en el checkout actual y cerró la ambigüedad documental de CONTROL-EFFECT: el `score` agregado no se expande a dimensiones D/I/O/E.
 - PUI-01 confirmó source ownership para `control_assurance_evidence`, `risk_register_controls` y `maturity_assessments` en `docs/codex/CONTRACTS_REGISTRY.md`.
+- PUI-02 se ejecutó sobre branch `fix/pui-02-scale-unit-contract` desde base local `57e8264cfbc94a7895cf21252b85665deea731d0`.
+- PUI-02 verificó PUI-01 integrado con SHA distinto al reportado: `810b6c42e8d06572283a243da102b38adca1a5b1` no es ancestro, pero existen `control_assurance_evidence` v3, anti-fabricación D/I/O/E y `docs/codex/handoffs/PUI-01.md`.
+- PUI-02 eliminó normalización por magnitud para los paths focales y agregó `scale_metadata` gobernado a contratos/resolver/snapshot.
 
 ## Ownership fijo
 
@@ -40,10 +44,11 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario ejecuta revisión/push/PR/CI/full regression/manual validation de PUI-01.
-2. Si CI/manual validation no contradice el handoff, iniciar PUI-02 desde `docs/codex/handoffs/PUI-01.md` sin redescubrir ownership de fuente.
+1. Usuario ejecuta revisión/push/PR/CI/full regression/manual validation de PUI-02.
+2. Si CI/manual validation no contradice el handoff, iniciar PUI-03 desde `docs/codex/handoffs/PUI-02.md` sin redescubrir ownership ni escala/unidad.
 
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`
 - `docs/codex/handoffs/PUI-01.md`
+- `docs/codex/handoffs/PUI-02.md`

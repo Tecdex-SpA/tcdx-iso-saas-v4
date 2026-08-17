@@ -18,6 +18,15 @@ async function main() {
   assert.ok(!String(controlContract.variable_map.design).includes('score/100'), 'aggregate assurance score must not feed design dimension');
   assert.ok(String(controlContract.variable_map.effectivenesses).includes('aggregate assurance score'), 'aggregate assurance score remains valid for composite effectivenesses');
   assert.ok(String(controlContract.limitations).includes('nunca fabrica dimensiones desde score'), 'CONTROL-EFFECT anti-fabrication contract must be explicit');
+  assert.strictEqual(controlContract.scale_metadata.variables.design.source_scale, 'PERCENT_0_100');
+  assert.strictEqual(controlContract.scale_metadata.variables.design.canonical_scale, 'RATIO_0_1');
+  assert.strictEqual(controlContract.scale_metadata.variables.effectivenesses.normalization_strategy, 'percent_to_ratio');
+  const riskContract = contracts.find((contract) => contract.source_code === 'risk_register_controls');
+  assert.strictEqual(riskContract.scale_metadata.variables.probability.source_scale, 'SCORE_1_5');
+  assert.strictEqual(riskContract.scale_metadata.variables.impact.allow_zero, false);
+  const maturityContract = contracts.find((contract) => contract.source_code === 'maturity_assessments');
+  assert.strictEqual(maturityContract.scale_metadata.variables.level.canonical_scale, 'SCORE_0_5');
+  assert.strictEqual(maturityContract.scale_metadata.variables.score.normalization_strategy, 'percent_to_score_0_5');
   for (const contract of contracts) {
     assert.ok(contract.checksum && contract.checksum.length === 64, `contract checksum missing for ${contract.source_code}`);
     assert.ok(!/;\s*(drop|delete|update|insert|alter)\b/i.test(contract.query || ''), `contract must not contain mutable SQL: ${contract.source_code}`);
@@ -93,6 +102,9 @@ async function main() {
   const controlInput = mapFormulaInput('F5_5_CONTROL_EFFECTIVENESS', [{ design_score: 80, implementation_score: 70, operation_score: 90, evidence_score: 60 }]);
   assert.deepStrictEqual(controlInput, { design: 0.8, implementation: 0.7, operation: 0.9, evidence: 0.6 });
   assert.strictEqual(executeFormula('F5_5_CONTROL_EFFECTIVENESS', controlInput).value, 0.75);
+  const lowPercentControlInput = mapFormulaInput('F5_5_CONTROL_EFFECTIVENESS', [{ design_score: 0.8, implementation_score: 0.7, operation_score: 0.9, evidence_score: 0.6 }]);
+  assert.deepStrictEqual(lowPercentControlInput, { design: 0.008, implementation: 0.006999999999999999, operation: 0.009000000000000001, evidence: 0.006 });
+  assert.strictEqual(executeFormula('F5_5_CONTROL_EFFECTIVENESS', lowPercentControlInput).value, 0.0075, 'CONTROL-EFFECT percent source scale must not infer 0.8 as 80%');
   const globalControlScore = mapFormulaInput('F5_5_CONTROL_EFFECTIVENESS', [{ score: 85 }]);
   assert.deepStrictEqual(globalControlScore, { design: null, implementation: null, operation: null, evidence: null });
   assert.throws(() => executeFormula('F5_5_CONTROL_EFFECTIVENESS', globalControlScore), (error) => error?.code === 'FORMULA_VARIABLE_REQUIRED', 'global control score must not be copied into D/I/O/E dimensions');
@@ -126,6 +138,9 @@ async function main() {
   const maturityInput = mapFormulaInput('F5_5_MATURITY', [{ level: 2, weight: 1 }, { level: 4, weight: 3 }]);
   assert.deepStrictEqual(maturityInput, { levels: [{ level: 2, weight: 1 }, { level: 4, weight: 3 }] });
   assert.strictEqual(executeFormula('F5_5_MATURITY', maturityInput).value, 3.5);
+  const maturityPercentInput = mapFormulaInput('F5_5_MATURITY', [{ score: 80, __scale_level_source: 'PERCENT_0_100', weight: 1 }]);
+  assert.deepStrictEqual(maturityPercentInput, { levels: [{ level: 4, weight: 1 }] });
+  assert.strictEqual(executeFormula('F5_5_MATURITY', maturityPercentInput).value, 4);
   const invalidMaturityInput = mapFormulaInput('F5_5_MATURITY', [{ level: null, weight: 1 }, { level: 87, weight: 1 }]);
   assert.deepStrictEqual(invalidMaturityInput, { levels: [] });
   assert.strictEqual(executeFormula('F5_5_MATURITY', invalidMaturityInput).value, null, 'maturity rows without a 0..5 level must not become a numeric value');
@@ -302,8 +317,7 @@ async function main() {
   assert.strictEqual(invalidMaturitySource.counts.received, 2);
   assert.strictEqual(invalidMaturitySource.counts.usable, 0);
   assert.deepStrictEqual(invalidMaturitySource.formula_input, { levels: [] });
-  assert.ok(invalidMaturitySource.exclusions.some((item) => item.code === 'maturity_level_missing_or_invalid'));
-  assert.ok(invalidMaturitySource.exclusions.some((item) => item.code === 'maturity_level_out_of_range'));
+  assert.ok(invalidMaturitySource.exclusions.some((item) => item.code === 'maturity_level_scale_invalid'));
 
   const riskRows = [
     { id: 'risk-a', tenant_id: '70000000-0000-0000-0000-000000000701', likelihood: 4, impact: 5 },

@@ -126,6 +126,7 @@ function contract(definition) {
     period: Object.freeze(definition.period || { column: 'created_at', mode: 'optional_range' }),
     timezone: definition.timezone || 'tenant_timezone',
     unit: definition.unit || null,
+    scale_metadata: Object.freeze(definition.scale_metadata || {}),
     cardinality: definition.cardinality || 'one_to_many',
     required_fields: Object.freeze(definition.required_fields || ['id', 'tenant_id']),
     exclusions: Object.freeze(definition.exclusions || []),
@@ -171,7 +172,14 @@ const SOURCE_CONTRACTS = Object.freeze([
     source_code: 'risk_register_controls', entity: 'risk',
     tables: ['iso_risk_matrix_items', 'iso_risk_matrix_runs', 'grc_quantitative_risk_assessments', 'grc_control_assurance'],
     columns: ['tenant_id','risk_id','probability','likelihood','impact','inherent_risk_score','exposure','severity','occurrence','detection','tenant_control_id','score','status'], required_fields: ['id','tenant_id'],
-    variable_map: { risks: 'rows[{source_record,probability|likelihood,impact,inherent_risk_score=probability*impact}]', aggregation_method: 'arithmetic_mean', probability: 'probability|likelihood', impact: 'impact', inherentRisk: 'mean(rows.probability*rows.impact)', controlEffectiveness: 'assurance_score/100', severity: 'severity', occurrence: 'occurrence', detection: 'detection' },
+    variable_map: { risks: 'rows[{source_record,probability|likelihood,impact,inherent_risk_score=probability*impact}]', aggregation_method: 'arithmetic_mean', probability: 'probability|likelihood', impact: 'impact', inherentRisk: 'mean(rows.probability*rows.impact)', controlEffectiveness: 'assurance_score normalized by scale_metadata.controlEffectiveness', severity: 'severity', occurrence: 'occurrence', detection: 'detection' },
+    scale_metadata: {
+      variables: {
+        probability: { source_fields: ['probability','likelihood'], source_scale: 'SCORE_1_5', source_unit: 'score', source_min: 1, source_max: 5, canonical_scale: 'SCORE_1_5', canonical_unit: 'score', canonical_min: 1, canonical_max: 5, normalization_strategy: 'identity_integer', precision: 0, allow_null: false, allow_zero: false },
+        impact: { source_fields: ['impact'], source_scale: 'SCORE_1_5', source_unit: 'score', source_min: 1, source_max: 5, canonical_scale: 'SCORE_1_5', canonical_unit: 'score', canonical_min: 1, canonical_max: 5, normalization_strategy: 'identity_integer', precision: 0, allow_null: false, allow_zero: false },
+        controlEffectiveness: { source_fields: ['assurance_score','control_effectiveness','control_effectiveness_score','control_score','effectiveness_score'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: true, allow_zero: true },
+      },
+    },
     availability: 'available', version: 3,
     limitations: 'RISK-INHERENT calcula el promedio aritmetico del portafolio de riesgos utilizables del tenant; excluye filas sin probabilidad/likelihood o impacto validos 1..5, no usa rows[0], no deduplica por titulo y no cruza tenants.'
   }),
@@ -179,7 +187,16 @@ const SOURCE_CONTRACTS = Object.freeze([
     source_code: 'control_assurance_evidence', entity: 'control',
     tables: ['grc_control_assurance', 'grc_evidence_links', 'grc_evidence_quality_scores'],
     columns: ['tenant_id','tenant_control_id','score','assurance_status','calculated_at','evidence_score'], required_fields: ['id','tenant_id','score'],
-    variable_map: { design: 'design_score|design_effectiveness only', implementation: 'implementation_score|implementation_effectiveness only', operation: 'operation_score|operation_effectiveness|operating_effectiveness only', evidence: 'evidence_score|evidence_effectiveness only', effectivenesses: 'rows.score/100 as aggregate assurance score' },
+    variable_map: { design: 'design_score|design_effectiveness only; normalized by scale_metadata.design', implementation: 'implementation_score|implementation_effectiveness only; normalized by scale_metadata.implementation', operation: 'operation_score|operation_effectiveness|operating_effectiveness only; normalized by scale_metadata.operation', evidence: 'evidence_score|evidence_effectiveness only; normalized by scale_metadata.evidence', effectivenesses: 'rows.score as aggregate assurance score normalized by scale_metadata.effectivenesses' },
+    scale_metadata: {
+      variables: {
+        design: { source_fields: ['design_score','design_effectiveness'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: false, allow_zero: true },
+        implementation: { source_fields: ['implementation_score','implementation_effectiveness'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: false, allow_zero: true },
+        operation: { source_fields: ['operation_score','operation_effectiveness','operating_effectiveness'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: false, allow_zero: true },
+        evidence: { source_fields: ['evidence_score','evidence_effectiveness'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: false, allow_zero: true },
+        effectivenesses: { source_fields: ['score'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: false, allow_zero: true },
+      },
+    },
     availability: 'available', version: 3,
     limitations: 'El score agregado de assurance es una fuente valida solo para score compuesto/effectivenesses; F5_5_CONTROL_EFFECTIVENESS requiere dimensiones D/I/O/E explicitas y nunca fabrica dimensiones desde score.'
   }),
@@ -220,7 +237,19 @@ const SOURCE_CONTRACTS = Object.freeze([
   }),
   contract({ source_code: 'continuity_resilience_tests', entity: 'continuity', tables: ['grc_bia_assessments','grc_continuity_plans','grc_continuity_tests'], columns: ['tenant_id','rto_hours','rpo_hours','actual_recovery_hours','actual_data_loss_hours','result','tested_at','status'], required_fields: ['id','tenant_id'], unit: 'hours', availability: 'available' }),
   contract({ source_code: 'asset_inventory_security', entity: 'asset', tables: ['data_elements'], columns: ['tenant_id','name','classification','owner_user_id','metadata','status'], required_fields: ['id','tenant_id'], availability: 'available', limitations: 'Package 4 binds asset criticality to data_elements until a dedicated asset inventory table supersedes it.' }),
-  contract({ source_code: 'supplier_tprm_assessments', entity: 'supplier', tables: ['grc_suppliers','grc_supplier_assessments','grc_supplier_answers','grc_supplier_contracts'], columns: ['tenant_id','supplier_id','criticality','security_score','dependency_score','resilience_score','privacy_score','status'], required_fields: ['id','tenant_id','status'], availability: 'available' }),
+  contract({
+    source_code: 'supplier_tprm_assessments', entity: 'supplier',
+    tables: ['grc_suppliers','grc_supplier_assessments','grc_supplier_answers','grc_supplier_contracts'],
+    columns: ['tenant_id','supplier_id','criticality','compliance_score','security_score','dependency_score','resilience_score','privacy_score','performance_score','assurance_score','continuity_score','incident_health_score','data_trust_score','status'], required_fields: ['id','tenant_id','status'],
+    scale_metadata: {
+      variables: {
+        supplierRiskDimensions: { source_fields: ['compliance_score','security_score','dependency_score','privacy_score','resilience_score'], source_scale: 'SCORE_0_5', source_unit: 'score', source_min: 0, source_max: 5, canonical_scale: 'SCORE_0_5', canonical_unit: 'score', canonical_min: 0, canonical_max: 5, normalization_strategy: 'identity', precision: 2, allow_null: false, allow_zero: true },
+        supplierRiskHealth: { source_fields: ['compliance_score','security_score','dependency_score','privacy_score','resilience_score'], source_scale: 'SCORE_0_5', source_unit: 'score', source_min: 0, source_max: 5, canonical_scale: 'PERCENT_0_100', canonical_unit: 'percent', canonical_min: 0, canonical_max: 100, normalization_strategy: 'score_0_5_to_percent', precision: 2, allow_null: false, allow_zero: true },
+      },
+    },
+    availability: 'available',
+    limitations: 'Supplier risk dimensions use declared 0..5 score scale; supplier health converts 0..5 to percent through scale metadata, not by magnitude.'
+  }),
   contract({ source_code: 'survey_response_scoring', entity: 'survey', tables: ['survey_definitions','survey_versions','survey_questions','assessment_campaigns','assessment_recipients','survey_responses','survey_response_items'], columns: ['tenant_id','response_id','question_id','score','max_score','weight','status','submitted_at'], required_fields: ['id','tenant_id','status'], availability: 'available' }),
   contract({ source_code: 'assurance_test_results', entity: 'assurance', tables: ['assurance_test_definitions','assurance_test_executions','assurance_test_samples','assurance_test_results','assurance_test_exceptions'], columns: ['tenant_id','execution_id','sample_id','result','weight','exception_count','status','executed_at'], required_fields: ['id','tenant_id','result'], availability: 'available' }),
   contract({ source_code: 'data_quality_observations', entity: 'data_quality', tables: ['data_quality_rules','data_quality_assessments','metric_validations'], columns: ['tenant_id','rule_type','expected_count','valid_count','invalid_count','coverage','assessed_at'], required_fields: ['id','tenant_id'], availability: 'available' }),
@@ -247,8 +276,14 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['survey_evaluations','metric_measurements'],
     columns: ['tenant_id','score','numeric_value','weight','evaluated_at','measured_at','status','metadata'], required_fields: ['id','tenant_id'],
     variable_map: { levels: 'rows[{level|score|numeric_value,weight}]' },
-    availability: 'available', version: 2,
-    limitations: 'Prioriza evaluaciones publicadas y usa mediciones de madurez como fallback; no infiere niveles sin datos.'
+    scale_metadata: {
+      variables: {
+        level: { source_fields: ['level','maturity_level','numeric_value','value_numeric'], source_scale: 'SCORE_0_5', source_unit: 'level', source_min: 0, source_max: 5, canonical_scale: 'SCORE_0_5', canonical_unit: 'level', canonical_min: 0, canonical_max: 5, normalization_strategy: 'identity', precision: 2, allow_null: false, allow_zero: true },
+        score: { source_fields: ['score','total_score'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'SCORE_0_5', canonical_unit: 'level', canonical_min: 0, canonical_max: 5, normalization_strategy: 'percent_to_score_0_5', precision: 2, allow_null: false, allow_zero: true },
+      },
+    },
+    availability: 'available', version: 3,
+    limitations: 'Prioriza evaluaciones publicadas y usa mediciones de madurez como fallback; la escala de nivel se declara en el contrato y no se infiere por magnitud.'
   }),
   contract({ source_code: 'external_fx_rates', entity: 'currency_conversion', tables: ['external_fx_rates'], columns: ['base_currency','quote_currency','rate','effective_at','source'], required_fields: ['base_currency','quote_currency','rate'], availability: 'source_unavailable', limitations: 'No official tenant-safe FX source is configured; loss calculations must not mix currencies.' }),
 ]);
