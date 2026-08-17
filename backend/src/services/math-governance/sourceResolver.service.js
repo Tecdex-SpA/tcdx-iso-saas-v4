@@ -210,6 +210,7 @@ function severityPortfolio(rows = []) {
   const usableRows = [];
   const exclusions = [];
   const counts = { low: 0, medium: 0, high: 0, critical: 0 };
+  if (!rows.length) return { input: null, usableRows, exclusions };
   rows.forEach((row, index) => {
     const severity = String(row.severity ?? row.risk_level ?? row.level ?? '').trim().toLowerCase();
     const sourceRecord = row.id || row.source_entity_id || `row-${index}`;
@@ -376,17 +377,22 @@ async function queryControls(client, tenantId, period) {
 
 async function queryAuditActions(client, tenantId, period, formulaCode) {
   const severityFormula = formulaCode === 'F5_5_SEVERITY_INDEX';
-  if (severityFormula && await tableExists(client, 'grc_readiness_findings') && await tableExists(client, 'grc_readiness_snapshots')) {
+  if (severityFormula) {
+    const findingsExist = await tableExists(client, 'grc_readiness_findings');
+    const snapshotsExist = await tableExists(client, 'grc_readiness_snapshots');
+    if (!findingsExist && !snapshotsExist) return null;
+    if (!findingsExist || !snapshotsExist) {
+      throw Object.assign(new Error('canonical severity readiness tables are incomplete'), { code: 'SOURCE_SCHEMA_INCOMPATIBLE' });
+    }
     const result = await client.query(
       `SELECT f.id,
               f.tenant_id,
               f.severity,
               'not_applicable' AS status,
-              s.source_as_of,
               s.period_start,
               s.period_end,
               s.generated_at,
-              COALESCE(s.source_as_of,s.period_end,s.generated_at) AS __event_time
+              COALESCE(s.period_end::timestamptz,s.generated_at) AS __event_time
        FROM grc_readiness_findings f
        JOIN grc_readiness_snapshots s
          ON s.id=f.snapshot_id
@@ -394,7 +400,7 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
        WHERE f.tenant_id=$1::uuid`,
       [tenantId]
     );
-    if (result.rows?.length) return primaryRows(result.rows, 'grc_readiness_findings');
+    return primaryRows(result.rows || [], 'grc_readiness_findings');
   }
   if (!severityFormula && await tableExists(client, 'action_plans')) {
     const timestamp = safeTimestampExpression('a', getSourceContract('audit_findings_actions'));
@@ -424,10 +430,9 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
     );
     return tagRows(result.rows.map((row) => ({ ...row, progress: row.normalized_progress, status: row.normalized_status, opened_at: row.normalized_opened_at, closed_at: row.normalized_closed_at, due_at: row.normalized_due_at })), 'action_plans');
   }
-  const tables = severityFormula ? ['grc_readiness_findings', 'findings', 'action_plans'] : ['action_plans', 'findings', 'grc_readiness_findings'];
+  const tables = ['action_plans', 'findings', 'grc_readiness_findings'];
   const rows = await firstPopulatedTables(client, tables, tenantId, period, getSourceContract('audit_findings_actions'));
-  if (!rows || !severityFormula) return rows;
-  return rows.map((row) => row.status || row.__physical_source !== 'grc_readiness_findings' ? row : { ...row, status: 'not_applicable' });
+  return rows;
 }
 
 async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period, getSourceContract('grc_readiness_operational_snapshot')); }

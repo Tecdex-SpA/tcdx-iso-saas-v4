@@ -86,7 +86,7 @@ PUI-03 inventory:
 | Dataset validation / all source contracts | contract-specific source | `rows.length` after tenant/source scope | rows passing tenant, required field, range, scale, state, reference and current period validation | same as eligible at dataset-validation stage | unique invalid rows; `excluded = received - usable` | distinct issue codes; instances also tracked | eligible rows | CANONICAL | `datasetValidation.service.js`; `sourceResolver.test.js` |
 | RISK-INHERENT | `risk_register_controls` v3 | normalized resolver rows | `validation.usable_rows.length` | rows with valid probability/likelihood and impact under PUI-02 scale rules | received rows not in formula rows | `risk_axis_invalid` category count; instances retained | eligible rows | CANONICAL | `sourceResolver.service.js`; `sourceResolver.test.js` |
 | MATURITY | `maturity_assessments` v7 | normalized resolver rows | `validation.usable_rows.length` | rows with a declared valid maturity level/score after PUI-02 normalization and eligible maturity status | received rows not in formula rows | `status_not_eligible`, `status_unmapped`, `maturity_level_scale_invalid` category count; instances retained | eligible rows | CANONICAL | `sourceResolver.service.js`; `sourceResolver.test.js` |
-| Severity index / audit findings | `audit_findings_actions` v8 | normalized resolver rows | `validation.usable_rows.length` | rows with severity low/medium/high/critical | received rows not in formula rows; severity `info` is known but not weighted | `severity_not_eligible` / `severity_missing_or_invalid` category count; instances retained | eligible rows | CANONICAL | `sourceResolver.service.js`; `sourceResolver.test.js` |
+| Severity index / audit findings | `audit_findings_actions` v9 | normalized resolver rows | `validation.usable_rows.length` | rows with severity low/medium/high/critical | received rows not in formula rows; severity `info` is known but not weighted | `severity_not_eligible` / `severity_missing_or_invalid` category count; instances retained | eligible rows | CANONICAL | `sourceResolver.service.js`; `sourceResolver.test.js` |
 | Generic source resolver mappings | formula source contract | normalized resolver rows | `validation.usable_rows.length` | same as eligible unless a formula-specific mapper applies | received rows not used by formula | distinct issue codes; instances retained | eligible rows | CANONICAL | `sourceResolver.service.js` |
 
 PUI-03 decision: `source_snapshot.counts` and resolver `counts` carry the canonical population contract. `source_snapshot.exclusions` carries auditable issue detail; row counts live in `excluded_rows`, `ineligible_rows`, `eligible_unusable_rows` and `counts`. A source with `received > 0` and `usable = 0` is no longer represented as `empty_dataset`; it remains distinguishable as validated-with-warnings/insufficient-data for downstream state handling.
@@ -115,7 +115,7 @@ PUI-04 source contract inventory:
 | `grc_readiness_operational_snapshot` | v4 | state_snapshot | `__event_time` | readiness snapshot as-of time | tenant scope only before validation | snapshot as-of governs period classification | CANONICAL |
 | `risk_register_controls` | v5 | latest_effective_state | `__event_time` | risk assessment effective time | latest completed/reviewed run constrained by `as_of`/period end; fallback tenant scope only | latest-effective risk state is explicit | CANONICAL |
 | `control_assurance_evidence` | v5 | state_snapshot | `__event_time` | control assurance calculation time | tenant scope only before validation | calculated assurance time is canonical | CANONICAL |
-| `audit_findings_actions` | v8 | validity_interval | `__event_time`; interval `opened_at`/`created_at` or snapshot `period_start`/`source_as_of` to `closed_at`/`completed_at`/`period_end` | action lifecycle or readiness snapshot finding time | tenant scope; latest update limited by `as_of` when provided; readiness findings join snapshot parent | period eligibility uses lifecycle/snapshot overlap without synthetic timestamps | CANONICAL |
+| `audit_findings_actions` | v9 | validity_interval | `__event_time`; interval `opened_at`/`created_at` or snapshot `period_start`/`generated_at` to `closed_at`/`completed_at`/`period_end` | action lifecycle or readiness snapshot finding time | tenant scope; latest update limited by `as_of` when provided; readiness findings join snapshot parent | period eligibility uses lifecycle/snapshot overlap without synthetic timestamps; `grc_readiness_snapshots.source_as_of` is not a physical field | CANONICAL |
 | `incident_operational_events` | v3 | event_stream | `__event_time` | incident report/detection time | tenant scope only before validation | event time governs inclusion | CANONICAL |
 | `evidence_freshness_records` | v3 | validity_interval | `__event_time`; interval review/submission to `expires_at` | evidence review/submission time | tenant scope only before validation | freshness validity is explicit | CANONICAL |
 | `loss_events_operational` | v4 | event_stream | `__event_time` | loss occurrence time | tenant scope/status only before validation | `occurred_at`/`event_date` only; no fallback to `created_at` for future/missing occurrence | CANONICAL |
@@ -157,7 +157,7 @@ PUI-05 inventory:
 | readiness | `grc_readiness_operational_snapshot` v5 | ready/calculated/partial/draft when status exists | resolver rows had no domain status registry | ready, partial, draft, unknown | status optional but unversioned | `readiness-status-map-v1`; optional missing status is visible but not exclusionary |
 | risk | `risk_register_controls` v6 | active/open/assessed/reviewed/completed/accepted/rejected/archived/retired | `queryRisk` filtered rejected/archived rows before validation | active, assessed, reviewed, completed, accepted, rejected, archived, unknown | status ineligibility could disappear from counts | `risk-status-map-v1`; item status exclusion moves to validation; run status selection remains source query semantics |
 | control | `control_assurance_evidence` v6 | effective/partially_effective/ineffective/pass/fail/pending/draft/retired | raw assurance status and formula status sets | effective, partially_effective, ineffective, pending, draft, retired, unknown | status interpretation was not versioned | `control-status-map-v1`; optional status mapped when present |
-| audit/action | `audit_findings_actions` v8 | open/pending/in_progress/active/closed/completed/resolved/overdue/cancelled/rejected/archived/not_applicable | `queryAuditActions` and `mapFormulaInput`; readiness findings have no operational status | open, in_progress, closed, completed, resolved, overdue, cancelled, rejected, archived, not_applicable, unknown | missing status previously could become open/unknown silently | `audit-status-map-v3`; readiness snapshot findings use `not_applicable`; missing/unknown remains visible elsewhere |
+| audit/action | `audit_findings_actions` v9 | open/pending/in_progress/active/closed/completed/resolved/overdue/cancelled/rejected/archived/not_applicable | `queryAuditActions` and `mapFormulaInput`; readiness findings have no operational status | open, in_progress, closed, completed, resolved, overdue, cancelled, rejected, archived, not_applicable, unknown | missing status previously could become open/unknown silently | `audit-status-map-v3`; readiness snapshot findings use `not_applicable`; missing/unknown remains visible elsewhere |
 | incident | `incident_operational_events` v4 | open/active/investigating/contained/resolved/closed/cancelled/rejected | raw incident status | open, investigating, contained, resolved, closed, cancelled, rejected, unknown | `closed` could be confused with action closure semantics | `incident-status-map-v1`; same string may map to same canonical label but carries incident-specific reason/version |
 | evidence | `evidence_freshness_records` v4 | approved/aprobada/accepted/valid/submitted/pending/pendiente/reviewed/reopened/rejected/expired | adapter defaults and freshness formula status list | approved, submitted, pending, reviewed, reopened, rejected, expired, unknown | Spanish/English approval aliases were formula-local | `evidence-status-map-v1`; approval aliases centralized |
 | loss | `loss_events_operational` v5 | confirmed/approved/booked/draft/cancelled/rejected | `queryLossEvents` filtered cancelled/rejected before validation | confirmed, draft, cancelled, rejected, unknown | ineligible loss events were not reconciled as received | `loss-status-map-v1`; status filter removed from adapter; validation records ineligible rows |
@@ -227,6 +227,39 @@ Decision:
 - `SOURCE_SCHEMA_INCOMPATIBLE` remains valid for genuinely incompatible canonical physical schema, but `incident_operational_events/grc_incidents` can no longer create a false positive for `F5_5_SEVERITY_INDEX`.
 
 SOURCE_CONTRACTS_VERSIONED: `[]`
+
+FORMULAS_VERSIONED: `[]`
+
+UNNECESSARY_VERSION_BUMPS: `0`
+
+## PUI-07-HF5 Severity Index Snapshot Schema Compatibility
+
+Status: DONE_LOCAL on branch `fix/pui-07-hf5-severity-index-schema-compatibility`; runtime validation pending by design.
+
+Schema evidence:
+
+```text
+grc_readiness_snapshots:
+  generated_at: YES
+  period_start: YES
+  period_end: YES
+  source_as_of: NO
+```
+
+Canonical decision:
+
+| Formula | Source contract | Version | Canonical physical source | Temporal fields | Non-canonical path |
+|---|---|---:|---|---|---|
+| `F5_5_SEVERITY_INDEX` | `audit_findings_actions` | v9 | `grc_readiness_findings` joined to parent `grc_readiness_snapshots` | `period_start`, `period_end`, `generated_at`; no `source_as_of` dependency | `incident_operational_events` / `grc_incidents` remain non-canonical and cannot displace ownership |
+
+Notes:
+
+- The Severity adapter no longer references `s.source_as_of`; this removes the false `SOURCE_SCHEMA_INCOMPATIBLE` caused by a non-existent physical column.
+- `audit_findings_actions` v8->v9 removes `source_as_of` from governed `columns`, `temporal_semantics.source_time_fields` and `temporal_semantics.valid_from_fields`.
+- Empty canonical readiness findings return empty/not-calculable source evidence, not a fabricated zero severity portfolio.
+- Formula expression, weights, units and precision are unchanged.
+
+Source contract versions changed: `audit_findings_actions` v8->v9.
 
 FORMULAS_VERSIONED: `[]`
 
@@ -332,7 +365,7 @@ Residual contract decisions:
 
 | Source / KPI | Root cause | Canonical decision | Version |
 |---|---|---|---|
-| `audit_findings_actions` / `F5_5_SEVERITY_INDEX` | `grc_readiness_findings` has severity but no operational status or row-local timestamps; temporal context lives in `grc_readiness_snapshots`. | Resolver joins snapshot parent; readiness findings use `status=not_applicable`; temporal semantics accepts snapshot `source_as_of`/`period_start`/`period_end` without fabricated dates; severity `info` is known but not weighted. | v8 |
+| `audit_findings_actions` / `F5_5_SEVERITY_INDEX` | `grc_readiness_findings` has severity but no operational status or row-local timestamps; temporal context lives in `grc_readiness_snapshots`. | Resolver joins snapshot parent; readiness findings use `status=not_applicable`; HF5 supersedes the earlier `source_as_of` assumption because snapshots physically expose `period_start`/`period_end`/`generated_at` only; severity `info` is known but not weighted. | v9 |
 | `maturity_assessments` / `F5_5_MATURITY` | Producer vocabularies from `survey_evaluations` and `metric_measurements` exceeded `maturity-status-map-v1`; survey temporal fields are `confirmed_at`/`created_at`, not generic `evaluated_at`. | `maturity-status-map-v2` maps confirmed/applied/valid/estimated as eligible and known non-final/error states as `status_not_eligible`; survey adapter exposes producer temporal fields. | v7 |
 | `grc_health_components` / `F5_5_GRC_HEALTH` | `calculation_runs.period_start` is nullable by schema; adapter queried by `started_at`/`completed_at` but did not project those fields for validation. | Contract columns and adapter projection include `started_at`/`completed_at`; `period_start` absence does not exclude rows when official run timestamps prove the interval. | v6 |
 

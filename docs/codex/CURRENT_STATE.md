@@ -74,6 +74,9 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-07-HF4 confirmó que el ownership publicado ya era `F5_5_SEVERITY_INDEX -> audit_findings_actions`, con severidad derivada de `grc_readiness_findings`/`grc_readiness_snapshots` cuando existen.
 - PUI-07-HF4 corrigió el defecto de override: `officialCalculationOrchestrator` y `sourceResolver` ya no permiten que `source_overrides/body.source_code=incident_operational_events` desplace el contrato canónico de Severity Index; el override se conserva como `requested_source_code` y warning `source_override_ignored_non_canonical`.
 - PUI-07-HF4 no modificó source contract payload, fórmulas, pesos, unidades, precisión ni checksums históricos; `SOURCE_CONTRACTS_VERSIONED=[]`, `FORMULAS_VERSIONED=[]`.
+- PUI-07-HF5 se ejecutó sobre branch `fix/pui-07-hf5-severity-index-schema-compatibility` desde base local `44821f736f73efaf417683991faef63b7a8a43fd`.
+- PUI-07-HF5 corrigió la incompatibilidad física remanente de `F5_5_SEVERITY_INDEX`: el adapter canónico `audit_findings_actions` ya no consulta `grc_readiness_snapshots.source_as_of`, columna inexistente en el schema productor; usa sólo `period_start`, `period_end` y `generated_at`.
+- PUI-07-HF5 versionó `audit_findings_actions` v8→v9 porque el payload gobernado eliminó `source_as_of` de `columns`, `source_time_fields` y `valid_from_fields`; no modificó fórmulas, pesos, unidades, precisión, Maturity, GRC Health, Data Trust ni Package3.
 
 ## Ownership fijo
 
@@ -90,8 +93,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa PUI-07-HF4 y ejecuta cherry-pick/push/PR/CI/deploy/recalculo oficial/manual production validation con las queries del handoff.
-2. Si PUI-07-HF4 valida en runtime, actualizar continuidad y habilitar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
+1. Usuario revisa PUI-07-HF5 y ejecuta cherry-pick/push/PR/CI/deploy/recalculo oficial/manual production validation con las queries del handoff.
+2. Si PUI-07-HF5 valida en runtime, actualizar continuidad y habilitar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
 
 ## Handoff relevante
 
@@ -108,3 +111,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-07-HF2.md`
 - `docs/codex/handoffs/PUI-07-HF3.md`
 - `docs/codex/handoffs/PUI-07-HF4.md`
+- `docs/codex/handoffs/PUI-07-HF5.md`

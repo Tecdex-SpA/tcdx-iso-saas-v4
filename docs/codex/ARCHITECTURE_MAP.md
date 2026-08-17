@@ -20,6 +20,7 @@ Backend Node/Express
         |      + producer-known status drift guard for F5_5 source domains
         |      + residual producer/source contract drift closure for severity, maturity and health components
         |      + formula-to-source ownership enforcement for Severity Index source overrides
+        |      + Severity Index readiness finding adapter aligned to physical snapshot schema
         |      + formula registry/execution
         |      + official calculation orchestrator as single source of truth
         |      + snapshots/lineage

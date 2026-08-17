@@ -49,7 +49,7 @@ async function main() {
   assert.strictEqual(riskContract.scale_metadata.variables.impact.allow_zero, false);
   const changedStatusContractVersions = new Map([
     ['control_assurance_evidence', [7, 'control-status-map-v2']],
-    ['audit_findings_actions', [8, 'audit-status-map-v3']],
+    ['audit_findings_actions', [9, 'audit-status-map-v3']],
     ['incident_operational_events', [5, 'incident-status-map-v2']],
     ['loss_events_operational', [6, 'loss-status-map-v2']],
     ['supplier_tprm_assessments', [5, 'supplier-status-map-v2']],
@@ -61,6 +61,11 @@ async function main() {
     assert.strictEqual(contract.version, version, `${sourceCode} status semantics changed payload must be versioned`);
     assert.strictEqual(contract.status_semantics.mapping_version, mappingVersion, `${sourceCode} must expose expected status mapping version`);
   }
+  const auditContract = contracts.find((contract) => contract.source_code === 'audit_findings_actions');
+  assert.strictEqual(auditContract.version, 9, 'Severity schema compatibility change must publish audit_findings_actions as a new source contract version');
+  assert.ok(!auditContract.columns.includes('source_as_of'), 'audit_findings_actions must not require non-existent grc_readiness_snapshots.source_as_of');
+  assert.ok(!auditContract.temporal_semantics.source_time_fields.includes('source_as_of'), 'Severity temporal fields must use produced snapshot fields only');
+  assert.ok(!auditContract.temporal_semantics.valid_from_fields.includes('source_as_of'), 'Severity valid-from fields must not include non-existent source_as_of');
   const maturityContract = contracts.find((contract) => contract.source_code === 'maturity_assessments');
   assert.strictEqual(maturityContract.version, 7, 'maturity producer status/temporal drift closure must publish under a new source contract version');
   assert.strictEqual(maturityContract.status_semantics.mapping_version, 'maturity-status-map-v2');
@@ -311,9 +316,15 @@ async function main() {
 	      return { rows: [{ exists: ['grc_readiness_findings', 'grc_readiness_snapshots'].includes(table) }] };
 	    }
 	    assert.ok(sql.includes('JOIN grc_readiness_snapshots s'), 'readiness findings severity must derive temporal context from the parent snapshot');
+	    assert.ok(!sql.includes('s.source_as_of'), 'readiness snapshot adapter must not reference non-existent source_as_of');
 	    return { rows: [
-	      { id: 'finding-low', tenant_id: 'tenant-a', severity: 'low', status: 'not_applicable', source_as_of: '2026-01-31T00:00:00Z', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-01-31T00:00:00Z' },
-	      { id: 'finding-info', tenant_id: 'tenant-a', severity: 'info', status: 'not_applicable', source_as_of: '2026-01-31T00:00:00Z', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-01-31T00:00:00Z' },
+	      { id: 'finding-low', tenant_id: 'tenant-a', severity: 'low', status: 'not_applicable', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-02-01T00:00:00Z' },
+	      { id: 'finding-medium', tenant_id: 'tenant-a', severity: 'medium', status: 'not_applicable', period_start: null, period_end: null, generated_at: '2026-01-20T00:00:00Z', __event_time: '2026-01-20T00:00:00Z' },
+	      { id: 'finding-high', tenant_id: 'tenant-a', severity: 'high', status: 'not_applicable', period_start: '2026-01-05T00:00:00Z', period_end: '2026-01-25T00:00:00Z', generated_at: '2026-01-25T00:00:00Z', __event_time: '2026-01-25T00:00:00Z' },
+	      { id: 'finding-critical', tenant_id: 'tenant-a', severity: 'critical', status: 'not_applicable', period_start: '2026-01-10T00:00:00Z', period_end: '2026-01-30T00:00:00Z', generated_at: '2026-01-30T00:00:00Z', __event_time: '2026-01-30T00:00:00Z' },
+	      { id: 'finding-info', tenant_id: 'tenant-a', severity: 'info', status: 'not_applicable', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-02-01T00:00:00Z' },
+	      { id: 'finding-unknown', tenant_id: 'tenant-a', severity: 'unknown', status: 'not_applicable', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-02-01T00:00:00Z' },
+	      { id: 'finding-before-period', tenant_id: 'tenant-a', severity: 'low', status: 'not_applicable', period_start: '2025-12-01T00:00:00Z', period_end: '2025-12-31T00:00:00Z', generated_at: '2025-12-31T00:00:00Z', __event_time: '2025-12-31T00:00:00Z' },
 	    ] };
 	  } };
 	  const readinessFindingsSource = await resolveFormulaSource({
@@ -323,11 +334,13 @@ async function main() {
 	    sourceCode: 'audit_findings_actions',
 	    period: { start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z' },
 	  });
-	  assert.strictEqual(readinessFindingsSource.counts.received, 2);
-	  assert.strictEqual(readinessFindingsSource.counts.usable, 1);
-	  assert.strictEqual(readinessFindingsSource.counts.excluded, 1);
-	  assert.deepStrictEqual(readinessFindingsSource.formula_input, { low: 1, medium: 0, high: 0, critical: 0 });
+	  assert.strictEqual(readinessFindingsSource.counts.received, 7);
+	  assert.strictEqual(readinessFindingsSource.counts.usable, 4);
+	  assert.strictEqual(readinessFindingsSource.counts.excluded, 3);
+	  assert.deepStrictEqual(readinessFindingsSource.formula_input, { low: 1, medium: 1, high: 1, critical: 1 });
 	  assert.ok(readinessFindingsSource.exclusions.some((item) => item.code === 'severity_not_eligible' && item.source_record === 'finding-info'));
+	  assert.ok(readinessFindingsSource.exclusions.some((item) => item.code === 'severity_missing_or_invalid' && item.source_record === 'finding-unknown'));
+	  assert.ok(readinessFindingsSource.exclusions.some((item) => item.code === 'date_before_period' && item.source_record === 'finding-before-period'));
 	  assert.ok(!readinessFindingsSource.exclusions.some((item) => item.code === 'status_unmapped' || item.code === 'temporal_missing_required_time'), 'readiness finding status/temporal contract must not drift');
 
 	  const actionInput = mapFormulaInput('F5_5_WEIGHTED_PROGRESS', [
@@ -664,10 +677,10 @@ async function main() {
   const findingsClient = { async query(sql, params = []) {
     if (sql.includes('to_regclass')) {
       const table = String(params[0] || '').replace(/^public\./, '');
-      return { rows: [{ exists: table === 'grc_readiness_findings' }] };
+      return { rows: [{ exists: ['grc_readiness_findings', 'grc_readiness_snapshots'].includes(table) }] };
     }
-    if (sql.includes('FROM grc_readiness_findings x')) return { rows: [
-      { id: 'finding-without-severity', tenant_id: 'tenant-a', status: 'open', __event_time: new Date().toISOString() },
+    if (sql.includes('JOIN grc_readiness_snapshots s')) return { rows: [
+      { id: 'finding-without-severity', tenant_id: 'tenant-a', status: 'not_applicable', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-02-01T00:00:00Z' },
     ] };
     throw new Error(`unexpected findings query: ${sql}`);
   } };
@@ -688,6 +701,25 @@ async function main() {
   assert.strictEqual(findingsSource.status, 'validated_with_warnings');
   assert.strictEqual(findingsSource.exclusions[0].code, 'severity_missing_or_invalid');
 
+  const emptySeverityClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) {
+      const table = String(params[0] || '').replace(/^public\./, '');
+      return { rows: [{ exists: ['grc_readiness_findings', 'grc_readiness_snapshots'].includes(table) }] };
+    }
+    if (sql.includes('JOIN grc_readiness_snapshots s')) return { rows: [] };
+    throw new Error(`unexpected empty severity query: ${sql}`);
+  } };
+  const emptySeveritySource = await resolveFormulaSource({
+    client: emptySeverityClient,
+    tenantId: 'tenant-a',
+    formulaCode: 'F5_5_SEVERITY_INDEX',
+    sourceCode: 'audit_findings_actions',
+    period: { start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z' },
+  });
+  assert.strictEqual(emptySeveritySource.status, 'empty_dataset');
+  assert.strictEqual(emptySeveritySource.counts.received, 0);
+  assert.strictEqual(emptySeveritySource.formula_input, null);
+
   const missingClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
   const missingTables = await resolveFormulaSource({ client: missingClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
   assert.strictEqual(missingTables.status, 'source_unavailable');
@@ -700,8 +732,9 @@ async function main() {
       return { rows: [{ exists: ['grc_readiness_findings', 'grc_readiness_snapshots', 'grc_incidents'].includes(table) }] };
     }
     assert.ok(!sql.includes('FROM grc_incidents'), 'non-canonical incident source must not displace Severity Index ownership');
+    assert.ok(!sql.includes('s.source_as_of'), 'non-canonical override path must still use schema-compatible canonical query');
     if (sql.includes('JOIN grc_readiness_snapshots s')) return { rows: [
-      { id: 'canonical-finding-high', tenant_id: 'tenant-a', severity: 'high', status: 'not_applicable', source_as_of: '2026-01-31T00:00:00Z', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-01-31T00:00:00Z' },
+      { id: 'canonical-finding-high', tenant_id: 'tenant-a', severity: 'high', status: 'not_applicable', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-02-01T00:00:00Z' },
     ] };
     throw new Error(`unexpected non-canonical source query: ${sql}`);
   } };
