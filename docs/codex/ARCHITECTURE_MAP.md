@@ -18,9 +18,10 @@ Backend Node/Express
         |      + deterministic/versioned data trust assessment
         |      + dataset validation and temporal/status classification
         |      + formula registry/execution
-        |      + official calculation
+        |      + official calculation orchestrator as single source of truth
         |      + snapshots/lineage
         |      + decision interpretation
+        |      + Package3 compatibility projection only; no parallel official truth
         |
         +--> GRC services/rules/workflows/approvals/observability
         |

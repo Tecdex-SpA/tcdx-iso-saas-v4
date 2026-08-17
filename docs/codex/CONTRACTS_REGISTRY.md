@@ -10,6 +10,7 @@
 | Legacy fallback policy | CURRENT/PUI-06 | CODEX A | Política central implementada en resolver; cierre focal/manual/deploy confirmado en handoff PUI-06. |
 | Scale/unit semantics | CURRENT/PUI-02 | CODEX A | PUI-02 cerró escala/unidad para CONTROL-EFFECT, RISK-INHERENT, MATURITY y normalización explícita auditada; otros dominios quedan para su paquete específico sólo con evidencia. |
 | Data Trust | CURRENT/PUI-07 | CODEX A | Modelo determinístico `data-trust-model-v1` expuesto por resolver, snapshots y cálculo oficial; PUI-08 cierra reproducibilidad integral. |
+| Official calculation pipeline | CURRENT/PUI-07-HF1 | CODEX A | `officialCalculationOrchestrator` es la única fuente de verdad para fórmulas oficiales; Package3 queda como compatibilidad sin cálculo/persistencia paralela. |
 | Measurement | CURRENT/PARTIAL | CODEX A | Official calculation existe; Data Truth aún no cerrado. |
 | Snapshot | CURRENT/PARTIAL | CODEX A | Foundation existente. |
 | Lineage | CURRENT/PARTIAL | CODEX A | Foundation existente. |
@@ -231,6 +232,35 @@ Canonical Data Trust model:
 PUI-07 decision: Data Trust is deterministic, versioned and attached to `source_snapshot.data_trust`, resolver `data_trust`, official calculation result context and persisted snapshot metadata. It distinguishes insufficient population from low confidence: insufficient usable population yields `INSUFFICIENT_DATA`; sufficient population with high exclusion ratio yields `LOW_CONFIDENCE`. Fallback legacy yields an explicit warning/reason and can produce `TRUSTED_WITH_WARNINGS`, not automatic `UNTRUSTED`.
 
 Source contracts changed: `NONE`
+
+SOURCE_CONTRACTS_VERSIONED: `[]`
+
+FORMULAS_VERSIONED: `[]`
+
+UNNECESSARY_VERSION_BUMPS: `0`
+
+## PUI-07-HF1 Official Calculation Pipeline Consolidation
+
+Status: DONE_LOCAL under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `hotfix/pui-07-hf1-official-pipeline-consolidation`.
+
+Canonical pipeline:
+
+```text
+consumer
+-> officialCalculationOrchestrator
+-> sourceResolver
+-> source contracts / validation / Data Trust
+-> official result
+-> calculation_run + output + explanation + source snapshot
+```
+
+Decisions:
+
+- `phase5Package3.service.js` no longer calculates from overview blocks and throws `PACKAGE3_CANONICAL_ORCHESTRATOR_REQUIRED` for direct calculation attempts.
+- `phase5.service.js` redirects Package3-compatible overview and single-metric recalculation consumers to `officialCalculationOrchestrator.recalculateOfficialAnalytics`.
+- `not_calculable` results are persisted with machine-readable reason, `data_trust`, source context and source snapshot/provenance when the persistence layer is available.
+- Legacy `trust_score` and `trust_status` remain only as compatibility projections derived from canonical `data_trust` when present.
+- Formula expressions, weights, units, precision, source contract payloads and formula payloads were not changed.
 
 SOURCE_CONTRACTS_VERSIONED: `[]`
 

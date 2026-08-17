@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const pool = require('../../config/db');
 const { FORMULAS, OfficialFormulaRegistry } = require('./formulaRegistry.service');
 const { resolveFormulaSource } = require('./sourceResolver.service');
@@ -38,10 +39,12 @@ function actorIdFrom(scope) {
 function normalizePeriod(period = {}) {
   const start = period.start || period.period_start || null;
   const end = period.end || period.period_end || null;
+  const asOf = period.as_of || period.source_as_of || null;
   if (start && Number.isNaN(new Date(start).getTime())) throw new OfficialCalculationOrchestratorError('OFFICIAL_RECALC_PERIOD_INVALID', 'Fecha inicial inválida.', 422);
   if (end && Number.isNaN(new Date(end).getTime())) throw new OfficialCalculationOrchestratorError('OFFICIAL_RECALC_PERIOD_INVALID', 'Fecha final inválida.', 422);
+  if (asOf && Number.isNaN(new Date(asOf).getTime())) throw new OfficialCalculationOrchestratorError('OFFICIAL_RECALC_PERIOD_INVALID', 'Fecha as_of inválida.', 422);
   if (start && end && new Date(start) > new Date(end)) throw new OfficialCalculationOrchestratorError('OFFICIAL_RECALC_PERIOD_INVALID', 'La fecha inicial no puede ser posterior a la fecha final.', 422);
-  return { start, end, timezone: period.timezone || 'America/Santiago' };
+  return { start, end, as_of: asOf, timezone: period.timezone || null };
 }
 
 const FORMULA_PRIORITY = Object.freeze({
@@ -89,8 +92,8 @@ function summarize(results) {
 
 function buildDataRequirements({ formula, sourceContext = {}, status, code, message, missingFields = [], missingEntities = [] }) {
   const counts = sourceContext.source_counts || {};
-  const received = Number(counts.received || 0);
-  const usable = Number(counts.usable || 0);
+  const received = Number.isFinite(Number(counts.received)) ? Number(counts.received) : null;
+  const usable = Number.isFinite(Number(counts.usable)) ? Number(counts.usable) : null;
   const requiredPopulation = Number(formula.minimum_sample_size || 1);
   const routeByDomain = {
     compliance: '/cumplimiento',
@@ -118,7 +121,7 @@ function buildDataRequirements({ formula, sourceContext = {}, status, code, mess
     incomplete_records: [],
     required_population: requiredPopulation,
     current_population: usable,
-    coverage_gap: received > 0 ? Math.max(0, requiredPopulation - usable) : null,
+    coverage_gap: received !== null && received > 0 && usable !== null ? Math.max(0, requiredPopulation - usable) : null,
     freshness_gap: null,
     route_to_fix: routeByDomain[formula.category] || '/metricas',
     required_capability: sourceContext.required_capability || 'metrics.engine',
@@ -126,7 +129,7 @@ function buildDataRequirements({ formula, sourceContext = {}, status, code, mess
   };
 }
 
-function functionalFailure({ formula, sourceContext = {}, status, failureType, code, message, warnings = [], missingFields = [], missingEntities = [], dataRequirements = null, dataTrust = null }) {
+function functionalFailure({ formula, sourceContext = {}, status, failureType, code, message, warnings = [], missingFields = [], missingEntities = [], dataRequirements = null, dataTrust = null, period = {} }) {
   const requirements = dataRequirements || buildDataRequirements({ formula, sourceContext, status, code, message, missingFields, missingEntities });
   return {
     formula_code: formula.formula_code,
@@ -136,12 +139,99 @@ function functionalFailure({ formula, sourceContext = {}, status, failureType, c
     failure_type: failureType,
     failure_label: FUNCTIONAL_FAILURE_CODES[failureType] || FUNCTIONAL_FAILURE_CODES.technical_error,
     code,
+    machine_reason: code,
+    human_explanation: message,
     message,
     error: message,
     warnings,
     data_trust: dataTrust || sourceContext.data_trust || null,
     data_requirements: requirements,
+    value: null,
+    unit: formula.units?.output || null,
+    period,
     ...sourceContext,
+  };
+}
+
+function stable(value) {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((acc, key) => {
+      acc[key] = stable(value[key]);
+      return acc;
+    }, {});
+  }
+  return value;
+}
+
+function hashPayload(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
+}
+
+function sourceCodeForFormula(formula) {
+  return formula?.source_contract?.source_code || formula?.source_code || null;
+}
+
+function sourceForFunctionalFailure({ formula, source = null, failure, period }) {
+  const dataTrust = failure.data_trust || source?.data_trust || source?.source_snapshot?.data_trust || null;
+  const sourceCode = source?.source_code || failure.source_code || sourceCodeForFormula(formula);
+  const physicalSources = source?.physical_sources || failure.physical_sources || [];
+  const counts = source?.counts || failure.source_counts || null;
+  const exclusions = source?.exclusions || [];
+  const snapshot = source?.source_snapshot || {
+    formula_code: formula.formula_code,
+    formula_version: formula.version,
+    source_code: sourceCode,
+    source_status: failure.source_status || failure.status,
+    run_status: 'not_calculable',
+    machine_reason: failure.machine_reason || failure.code,
+    human_explanation: failure.human_explanation || failure.message,
+    period,
+    counts,
+    physical_sources: physicalSources,
+    exclusions,
+    fallback_summary: source?.fallback_summary || null,
+    temporal_summary: source?.temporal_summary || null,
+    status_summary: source?.status_summary || null,
+    data_trust: dataTrust,
+  };
+  const sourceSnapshotHash = source?.source_snapshot_hash || hashPayload(snapshot);
+  return {
+    source_code: sourceCode,
+    physical_sources: physicalSources,
+    counts,
+    exclusions,
+    data_trust: dataTrust,
+    source_snapshot: snapshot,
+    source_snapshot_hash: sourceSnapshotHash,
+  };
+}
+
+async function persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }) {
+  const snapshotSource = sourceForFunctionalFailure({ formula, source, failure, period });
+  const persisted = await persist(scope, {
+    ...failure,
+    status: failure.status === 'failed' ? 'failed' : 'unmeasured',
+    source_status: failure.source_status || failure.status,
+    source_code: snapshotSource.source_code,
+    physical_sources: snapshotSource.physical_sources,
+    source_counts: snapshotSource.counts,
+    source_snapshot: snapshotSource.source_snapshot,
+    source_snapshot_hash: snapshotSource.source_snapshot_hash,
+    data_trust: snapshotSource.data_trust || failure.data_trust || null,
+    lineage: source?.lineage || [
+      { step: 'source_resolution', status: failure.status, source_contract: snapshotSource.source_code },
+      { step: 'not_calculable', status: failure.machine_reason || failure.code },
+    ],
+    metadata: { package: 'official_calculation_orchestrator', machine_reason: failure.machine_reason || failure.code, failure_type: failure.failure_type || null },
+  }, requestId);
+  const snapshotId = await persistSnapshot(client, tenantId, snapshotSource, persisted);
+  return {
+    ...failure,
+    calculation_run_id: persisted?.calculation_run_id || null,
+    snapshot_id: snapshotId,
+    explanation_url: persisted?.explanation_url || null,
+    lineage_url: persisted?.lineage_url || null,
   };
 }
 
@@ -265,40 +355,46 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
 
   for (const formula of formulas) {
     let sourceContext = {};
+    let source = null;
     try {
-      const source = await resolver({ client, tenantId, formulaCode: formula.formula_code, sourceCode: sourceOverrides[formula.formula_code] || body.source_code || null, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
+      source = await resolver({ client, tenantId, formulaCode: formula.formula_code, sourceCode: sourceOverrides[formula.formula_code] || body.source_code || null, period, timezone: period.timezone, permission: { allowed: true, required: 'metrics.engine' } });
       sourceContext = {
         source_contract_status: source.contract?.availability || source.status || 'unknown',
         source_resolution_status: source.physical_sources?.length ? 'resolved' : 'not_resolved',
         source_code: source.source_code,
         physical_sources: source.physical_sources || source.source_snapshot?.physical_sources || [],
-        source_counts: source.counts || { received: 0, usable: 0, excluded: 0 },
+        source_counts: source.counts || null,
         data_trust: source.data_trust || source.source_snapshot?.data_trust || null,
         required_capability: source.contract?.required_capability || null,
       };
       if (source.status === 'source_unavailable') {
-        results.push(functionalFailure({ formula, sourceContext, status: 'source_unavailable', failureType: 'source_incompatible', code: 'SOURCE_UNAVAILABLE', message: source.reason || 'No existe una fuente operacional habilitada para esta fórmula.', warnings: source.warnings || [], dataRequirements: source.data_requirements || null }));
+        const failure = functionalFailure({ formula, sourceContext, status: 'source_unavailable', failureType: 'source_incompatible', code: 'SOURCE_UNAVAILABLE', message: source.reason || 'No existe una fuente operacional habilitada para esta fórmula.', warnings: source.warnings || [], dataRequirements: source.data_requirements || null, period });
+        results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
       if (!source.counts?.usable) {
-        results.push(functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'SOURCE_DATA_INSUFFICIENT', message: 'No hay datos utilizables para el período seleccionado.', warnings: source.warnings || [], missingEntities: [source.source_code || formula.category].filter(Boolean) }));
+        const failure = functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'SOURCE_DATA_INSUFFICIENT', message: 'No hay datos utilizables para el período seleccionado.', warnings: source.warnings || [], missingEntities: [source.source_code || formula.category].filter(Boolean), period });
+        results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
       if (!source.formula_input) {
-        results.push(functionalFailure({ formula, sourceContext, status: 'source_incompatible', failureType: 'source_incompatible', code: 'FORMULA_SOURCE_EQUIVALENCE_MISSING', message: 'La fuente existe, pero todavía no dispone de equivalencia operacional completa para esta fórmula.', missingFields: ['formula_input_mapping'] }));
+        const failure = functionalFailure({ formula, sourceContext, status: 'source_incompatible', failureType: 'source_incompatible', code: 'FORMULA_SOURCE_EQUIVALENCE_MISSING', message: 'La fuente existe, pero todavía no dispone de equivalencia operacional completa para esta fórmula.', missingFields: ['formula_input_mapping'], period });
+        results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
 
       const dependency = enrichDependencies(formula.formula_code, source.formula_input, calculatedByCode);
       if (dependency.missing.length) {
-        results.push(functionalFailure({ formula, sourceContext, status: 'dependency_pending', failureType: 'dependency_pending', code: 'FORMULA_DEPENDENCY_PENDING', message: `Faltan resultados previos requeridos: ${dependency.missing.join(', ')}.`, missingFields: dependency.missing }));
+        const failure = functionalFailure({ formula, sourceContext, status: 'dependency_pending', failureType: 'dependency_pending', code: 'FORMULA_DEPENDENCY_PENDING', message: `Faltan resultados previos requeridos: ${dependency.missing.join(', ')}.`, missingFields: dependency.missing, period });
+        results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
 
       const calculated = registry.execute(formula.formula_code, dependency.input);
       const resultValue = numeric(calculated.value);
       if (calculated.status !== 'calculated' || resultValue === null) {
-        results.push(functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'FORMULA_RESULT_EMPTY', message: 'La fórmula no produjo un valor numérico verificable y no será publicada.' }));
+        const failure = functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'FORMULA_RESULT_EMPTY', message: 'La fórmula no produjo un valor numérico verificable y no será publicada.', period });
+        results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }
 
@@ -334,7 +430,8 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
     } catch (error) {
       const classified = classifyError(error);
       const dataTrust = sourceContext.data_trust || assessDataTrust({ sourceStatus: classified.status, formula, counts: sourceContext.source_counts || {}, exclusions: [{ code: classified.code }], provenance: { formula_code: formula.formula_code, source_code: sourceContext.source_code || null, contract_resolved: false } });
-      results.push(functionalFailure({ formula, sourceContext, status: classified.status, failureType: classified.failureType, code: classified.code, message: classified.message, missingFields: classified.missingFields || [], dataTrust }));
+      const failure = functionalFailure({ formula, sourceContext, status: classified.status, failureType: classified.failureType, code: classified.code, message: classified.message, missingFields: classified.missingFields || [], dataTrust, period });
+      results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
     }
   }
 

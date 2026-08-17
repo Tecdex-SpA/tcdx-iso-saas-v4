@@ -1596,7 +1596,7 @@ async function createReportSchedule(scope, body = {}, requestId = null) {
      SET frequency=EXCLUDED.frequency, restricted_cron=EXCLUDED.restricted_cron, timezone=EXCLUDED.timezone,
          next_run_at=EXCLUDED.next_run_at, status=EXCLUDED.status, updated_at=now(), metadata=report_schedules.metadata || EXCLUDED.metadata
      RETURNING *`,
-    [tenantId, body.report_definition_id, text(body.schedule_key || body.key), text(body.frequency, 'monthly'), text(body.restricted_cron), text(body.timezone, 'America/Santiago'), body.next_run_at || null, text(body.status, 'active'), userId(scope.user), json(body.metadata)]
+    [tenantId, body.report_definition_id, text(body.schedule_key || body.key), text(body.frequency, 'monthly'), text(body.restricted_cron), text(body.timezone), body.next_run_at || null, text(body.status, 'active'), userId(scope.user), json(body.metadata)]
   );
   await auditEvent(pool, { tenantId, userId: userId(scope.user), action: 'report.schedule.upserted', entityType: 'report_schedule', entityId: result.rows[0].id, requestId });
   return result.rows[0];
@@ -1726,8 +1726,47 @@ async function listOfficialPackage4Jobs(scope) {
 
 async function calculateOfficialGrcMetric(scope, metricKey, body = {}, requestId = null) {
   tenantIdFrom(scope);
-  const result = phase5Package3.calculateOfficialByKey(metricKey, body);
-  return persistOfficialCalculation(scope, result, requestId);
+  const formulaCode = phase5Package3.formulaCodeForKey(metricKey);
+  if (!formulaCode) throw new Phase5Error('OFFICIAL_CALCULATION_NOT_FOUND', 'Calculo oficial no soportado.', 404, { key: metricKey });
+  const orchestrator = require('../math-governance/officialCalculationOrchestrator.service');
+  const recalculation = await orchestrator.recalculateOfficialAnalytics(scope, { ...body, formula_codes: [formulaCode], period: body.period || {} }, requestId);
+  const result = recalculation.results.find((item) => item.formula_code === formulaCode) || null;
+  if (!result) throw new Phase5Error('OFFICIAL_CALCULATION_RESULT_MISSING', 'El pipeline oficial no devolvió resultado para la fórmula solicitada.', 500, { formula_code: formulaCode });
+  return { ...result, canonical_pipeline: 'officialCalculationOrchestrator' };
+}
+
+function runStatusForOfficialResult(result) {
+  const status = String(result?.status || '').toLowerCase();
+  if (status === 'failed') return 'failed';
+  if ((status === 'completed' || status === 'calculated') && result?.value !== null && result?.value !== undefined) return 'calculated';
+  if (['unmeasured', 'source_unavailable', 'source_incompatible', 'dependency_pending', 'not_applicable'].includes(status)) return 'not_calculable';
+  return result?.value === null || result?.value === undefined ? 'not_calculable' : 'calculated';
+}
+
+function legacyTrustProjection(result = {}) {
+  const trust = result.data_trust || result.details?.data_trust || null;
+  if (!trust?.state) return { score: result.trust_score ?? null, status: result.trust_status || 'unknown', source: result.trust_score === undefined && !result.trust_status ? 'legacy_unavailable' : 'legacy_payload' };
+  const projection = {
+    TRUSTED: { score: 100, status: 'trusted' },
+    TRUSTED_WITH_WARNINGS: { score: 75, status: 'attention' },
+    LOW_CONFIDENCE: { score: 45, status: 'attention' },
+    INSUFFICIENT_DATA: { score: null, status: 'insufficient_data' },
+    UNTRUSTED: { score: 0, status: 'untrusted' },
+    UNMEASURED: { score: null, status: 'unknown' },
+  }[trust.state] || { score: null, status: 'unknown' };
+  return { ...projection, source: 'derived_from_data_trust' };
+}
+
+function canonicalPackageForResult(result = {}) {
+  return result.metadata?.package || result.package || (result.data_trust || result.details?.data_trust ? 'official_calculation_orchestrator' : 'legacy_official_calculation');
+}
+
+function package3OverviewFromCanonicalResults(results = []) {
+  return results.reduce((acc, result) => {
+    const key = phase5Package3.overviewKeyForFormula(result.formula_code);
+    if (key) acc[key] = { ...result, canonical_pipeline: 'officialCalculationOrchestrator' };
+    return acc;
+  }, {});
 }
 
 
@@ -1752,31 +1791,49 @@ async function persistOfficialCalculation(scope, result, requestId = null) {
      LIMIT 1`,
     [result.formula_code, result.formula_version || 1]
   )).rows[0] || null;
-  const runStatus = result.status === 'completed' ? 'calculated' : result.status === 'unmeasured' ? 'not_calculable' : 'calculated';
+  const runStatus = runStatusForOfficialResult(result);
   const period = result.period || {};
+  const trustProjection = legacyTrustProjection(result);
+  const sourceStatus = result.source_status || result.source_contract_status || (runStatus === 'calculated' ? 'ready' : result.status || 'unknown');
+  const packageName = canonicalPackageForResult(result);
+  const machineReason = result.machine_reason || result.code || result.failure_type || null;
+  const dataTrust = result.data_trust || result.details?.data_trust || null;
+  const runMetadata = {
+    source_status: sourceStatus,
+    trust_score: trustProjection.score,
+    trust_status: trustProjection.status,
+    legacy_trust_projection: trustProjection.source,
+    data_trust: dataTrust,
+    machine_reason: machineReason,
+    failure_type: result.failure_type || null,
+    package: packageName,
+    canonical_pipeline: packageName === 'official_calculation_orchestrator',
+    warnings: result.warnings || [],
+  };
   const run = (await pool.query(
     `INSERT INTO calculation_runs (tenant_id, formula_version_id, formula_code, run_status, period_start, period_end, timezone, input_hash, output_hash, correlation_id, requested_by, completed_at, metadata)
      VALUES ($1::uuid,$2::uuid,$3,$4,$5::timestamptz,$6::timestamptz,$7,$8,$9,$10,$11::uuid,now(),$12::jsonb)
      RETURNING id`,
-    [tenantId, formulaVersion?.id || null, result.formula_code, runStatus, period.start || period.period_start || null, period.end || period.period_end || null, period.timezone || 'UTC', inputHash, outputHash, requestId || null, userId(scope.user), json({ source_status: result.source_status, trust_score: result.trust_score, trust_status: result.trust_status, package: 'phase5_5_package3' })]
+    [tenantId, formulaVersion?.id || null, result.formula_code, runStatus, period.start || period.period_start || null, period.end || period.period_end || null, period.timezone || null, inputHash, outputHash, requestId || null, userId(scope.user), json(runMetadata)]
   )).rows[0];
   await pool.query(
     `INSERT INTO calculation_inputs (run_id, tenant_id, variable_name, input_value, unit, input_hash, metadata)
      VALUES ($1::uuid,$2::uuid,'official_payload',$3::jsonb,$4,$5,$6::jsonb)
      ON CONFLICT (run_id, variable_name) DO NOTHING`,
-    [run.id, tenantId, json({ components: result.components || {}, details: result.details || {}, period }), result.unit || null, inputHash, json({ source_status: result.source_status })]
+    [run.id, tenantId, json({ components: result.components || {}, details: result.details || {}, period, data_requirements: result.data_requirements || null }), result.unit || null, inputHash, json({ source_status: sourceStatus, data_trust: dataTrust, machine_reason: machineReason })]
   );
+  const outputStatus = runStatus === 'not_calculable' ? 'unmeasured' : result.status;
   await pool.query(
     `INSERT INTO calculation_outputs (run_id, tenant_id, output_name, output_value, unit, precision, rounding_policy, output_hash, metadata)
      VALUES ($1::uuid,$2::uuid,'value',$3::jsonb,$4,$5,$6,$7,$8::jsonb)
      ON CONFLICT (run_id, output_name) DO NOTHING`,
-    [run.id, tenantId, json({ value: result.value, status: result.status }), result.unit || null, 4, 'formula_default', outputHash, json({ formula_code: result.formula_code, formula_version: result.formula_version })]
+    [run.id, tenantId, json({ value: result.value, status: outputStatus }), result.unit || null, 4, 'formula_default', outputHash, json({ formula_code: result.formula_code, formula_version: result.formula_version, source_status: sourceStatus, data_trust: dataTrust, machine_reason: machineReason })]
   );
   if (await tableExists(pool, 'calculation_explanations')) {
     await pool.query(
       `INSERT INTO calculation_explanations (run_id, tenant_id, explanation_type, explanation, variables, lineage, metadata)
        VALUES ($1::uuid,$2::uuid,'formula',$3,$4::jsonb,$5::jsonb,$6::jsonb)`,
-      [run.id, tenantId, result.explanation || 'Calculo oficial ejecutado.', json(result.components || {}), json(result.lineage || []), json({ package: 'phase5_5_package3' })]
+      [run.id, tenantId, result.explanation || result.message || 'Calculo oficial ejecutado.', json({ components: result.components || {}, details: result.details || {}, data_requirements: result.data_requirements || null, source_counts: result.source_counts || result.details?.source_counts || null, data_trust: dataTrust }), json(result.lineage || []), json({ package: packageName, canonical_pipeline: packageName === 'official_calculation_orchestrator', source_status: sourceStatus, machine_reason: machineReason, failure_type: result.failure_type || null, data_trust: dataTrust })]
     );
   }
   return {
@@ -1826,7 +1883,7 @@ async function getOfficialCalculationExplanation(scope, runId) {
     run_status: run.run_status,
     started_at: run.started_at,
     completed_at: run.completed_at,
-    metadata: { package: 'phase5_5_package3', persisted_history: false },
+    metadata: { package: 'official_calculation_orchestrator', persisted_history: false, canonical_pipeline: true },
   };
 }
 
@@ -1859,7 +1916,7 @@ async function getOfficialCalculationLineage(scope, runId) {
     source_snapshot_hash: run.source_snapshot_hash,
     started_at: run.started_at,
     completed_at: run.completed_at,
-    metadata: { package: 'phase5_5_package3', persisted_history: false },
+    metadata: { package: 'official_calculation_orchestrator', persisted_history: false, canonical_pipeline: true },
   };
 }
 
@@ -2032,10 +2089,9 @@ async function getGrcOverview(scope, requestId = null) {
   const alerts = Object.entries(overview)
     .flatMap(([block, value]) => (value.warnings || []).map((message) => ({ block, severity: value.status === 'error' ? 'high' : 'medium', message })))
     .slice(0, 50);
-  const officialCalculations = phase5Package3.buildOverviewOfficialCalculations(overview, { period: { generated_at: now }, requestId });
-  for (const [key, result] of Object.entries(officialCalculations)) {
-    officialCalculations[key] = await persistOfficialCalculation(scope, result, requestId);
-  }
+  const orchestrator = require('../math-governance/officialCalculationOrchestrator.service');
+  const canonical = await orchestrator.recalculateOfficialAnalytics(scope, { formula_codes: phase5Package3.PACKAGE3_FORMULA_CODES, period: { as_of: now } }, requestId);
+  const officialCalculations = package3OverviewFromCanonicalResults(canonical.results);
   return {
     ...overview,
     official_calculations: officialCalculations,

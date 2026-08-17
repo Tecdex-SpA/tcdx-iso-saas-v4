@@ -15,6 +15,8 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-05: DONE (normalización canónica/versionada de estados por dominio cerrada localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-06: DONE (fallback legacy gobernado implementado y cierre manual/deploy confirmado en `docs/codex/handoffs/PUI-06.md`).
 - PUI-07: DONE (Data Trust determinístico/versionado cerrado localmente para Math Governance focal; validación manual/CI pendiente por diseño).
+- PUI-07-HF1: DONE local (pipeline oficial consolidado sobre `officialCalculationOrchestrator -> sourceResolver -> PUI-01..PUI-07`; validación manual/CI/deploy pendiente por diseño).
+- PUI-08: BLOCKED por validación manual/productiva pendiente de PUI-07-HF1.
 - PRE-UI: IN_PROGRESS.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: BLOCKED por `PRE_UI_DATA_TRUTH_GATE` donde corresponda.
@@ -52,6 +54,10 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-07 se ejecutó sobre branch `fix/pui-07-data-trust` desde base local `955a5877bd1f199def844a94d3c173be6b94dc04`.
 - PUI-07 agregó `dataTrust.service.js` con `data-trust-model-v1`, estados discretos, dimensiones y reasons machine-readable; consume señales PUI-01..PUI-06 sin recalcularlas.
 - PUI-07 expone `data_trust` en resolver, `source_snapshot`, metadata de snapshot persistido, result oficial y detalles; no cambió source contracts ni fórmulas.
+- PUI-07-HF1 se ejecutó sobre branch `hotfix/pui-07-hf1-official-pipeline-consolidation` desde base local/desplegada `17975ded33956a103e31c26b036b2b4ccae876ea`.
+- PUI-07-HF1 elimina Package3 como motor paralelo de verdad: `phase5Package3.service.js` queda como compatibilidad sin cálculo y `phase5.service.js` redirige recalculo/overview al `officialCalculationOrchestrator`.
+- PUI-07-HF1 persiste `not_calculable` con `calculation_run`, explanation, machine reason, Data Trust y snapshot/provenance mínimo cuando corresponde; `trust_score`/`trust_status` quedan como proyección legacy derivada de `data_trust` canónico.
+- PUI-07-HF1 elimina `America/Santiago` como timezone universal en recalculo oficial/frontend y en defaults focales tocados.
 
 ## Ownership fijo
 
@@ -68,8 +74,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa PUI-07 y ejecuta push/PR/CI/full regression/manual validation.
-2. Si no aparece contradicción, iniciar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
+1. Usuario revisa PUI-07-HF1 y ejecuta push/PR/CI/full regression/deploy/manual production validation.
+2. Si PUI-07-HF1 valida en producción, actualizar continuidad y habilitar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
 
 ## Handoff relevante
 
@@ -82,3 +88,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-05.md`
 - `docs/codex/handoffs/PUI-06.md`
 - `docs/codex/handoffs/PUI-07.md`
+- `docs/codex/handoffs/PUI-07-HF1.md`

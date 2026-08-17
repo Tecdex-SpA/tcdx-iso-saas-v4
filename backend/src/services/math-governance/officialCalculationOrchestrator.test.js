@@ -3,12 +3,13 @@
 const assert = require('assert');
 const { OfficialFormulaRegistry } = require('./formulaRegistry.service');
 const { recalculateOfficialAnalytics } = require('./officialCalculationOrchestrator.service');
+const phase5Package3 = require('./phase5Package3.service');
 
 async function run() {
   const persisted = [];
   const calculated = await recalculateOfficialAnalytics(
     { tenant_id: '70000000-0000-0000-0000-000000000701', user: { id: '70000000-0000-0000-0000-000000000711' } },
-    { formula_codes: ['F5_5_INHERENT_RISK'], period: { start: '2026-01-01', end: '2026-12-31', timezone: 'America/Santiago' } },
+    { formula_codes: ['F5_5_INHERENT_RISK'], period: { start: '2026-01-01', end: '2026-12-31', timezone: 'tenant-configured' } },
     'orchestrator-test',
     {
       client: {},
@@ -89,37 +90,80 @@ async function run() {
   );
   assert.equal(overrideCalls[0].sourceCode, 'incident_operational_events');
 
+  const package3Overview = phase5Package3.buildOverviewOfficialCalculations({
+    compliance: { status: 'ok', data: { score: 80 }, trust: { score: 80 }, source_count: 3, warnings: [] },
+    actions: { status: 'ok', trust: { score: 70 }, source_count: 2, warnings: [] },
+  }, { period: { as_of: '2026-12-31T00:00:00.000Z' } });
+  assert.equal(package3Overview.compliance.status, 'unmeasured');
+  assert.ok(package3Overview.compliance.warnings.includes('canonical_orchestrator_required'));
+  assert.throws(() => phase5Package3.calculateOfficialByKey('actions-progress', {}), /officialCalculationOrchestrator/);
+
+  const unavailablePersisted = [];
+  const unavailableSnapshots = [];
   const unavailable = await recalculateOfficialAnalytics(
     { tenant_id: '70000000-0000-0000-0000-000000000701', user: { id: '70000000-0000-0000-0000-000000000711' } },
-    { formula_codes: ['F5_5_INHERENT_RISK'] },
+    { formula_codes: ['F5_5_WEIGHTED_PROGRESS'] },
     null,
     {
       client: {},
-      resolveFormulaSource: async () => ({ status: 'source_unavailable', source_code: 'risk_register_controls', warnings: ['tabla ausente'] }),
-      persistOfficialCalculation: async () => { throw new Error('no debe persistir'); },
-      persistSourceSnapshot: async () => { throw new Error('no debe persistir snapshot'); },
+      resolveFormulaSource: async () => ({ status: 'source_unavailable', source_code: 'audit_findings_actions', warnings: ['tabla ausente'], data_trust: { model_version: 'data-trust-model-v1', state: 'UNTRUSTED', reasons: ['source_unavailable'] } }),
+      persistOfficialCalculation: async (_scope, result) => {
+        unavailablePersisted.push(result);
+        return { ...result, calculation_run_id: '70000000-0000-0000-0000-000000000796' };
+      },
+      persistSourceSnapshot: async (_client, _tenantId, source) => {
+        unavailableSnapshots.push(source);
+        return '70000000-0000-0000-0000-000000000795';
+      },
     }
   );
   assert.equal(unavailable.summary.source_unavailable, 1);
   assert.equal(unavailable.results[0].data_requirements.status, 'source_unavailable');
   assert.ok(unavailable.results[0].data_requirements.route_to_fix);
+  assert.equal(unavailable.results[0].calculation_run_id, '70000000-0000-0000-0000-000000000796');
+  assert.equal(unavailable.results[0].snapshot_id, '70000000-0000-0000-0000-000000000795');
+  assert.equal(unavailablePersisted[0].status, 'unmeasured');
+  assert.equal(unavailablePersisted[0].source_status, 'source_unavailable');
+  assert.equal(unavailablePersisted[0].data_trust.state, 'UNTRUSTED');
+  assert.equal(unavailableSnapshots[0].source_snapshot.machine_reason, 'SOURCE_UNAVAILABLE');
+  assert.equal(unavailableSnapshots[0].source_snapshot.run_status, 'not_calculable');
 
+  const unmeasuredPersisted = [];
+  const unmeasuredSnapshots = [];
   const unmeasured = await recalculateOfficialAnalytics(
     { tenant_id: '70000000-0000-0000-0000-000000000701', user: { id: '70000000-0000-0000-0000-000000000711' } },
     { formula_codes: ['F5_5_INHERENT_RISK'] },
     null,
     {
       client: {},
-      resolveFormulaSource: async () => ({ status: 'empty_dataset', source_code: 'risk_register_controls', counts: { usable: 0 }, formula_input: { probability: null, impact: null }, warnings: ['sin datos'] }),
-      persistOfficialCalculation: async () => { throw new Error('no debe persistir'); },
-      persistSourceSnapshot: async () => { throw new Error('no debe persistir snapshot'); },
+      resolveFormulaSource: async () => ({
+        status: 'empty_dataset',
+        source_code: 'risk_register_controls',
+        counts: { received: 4, eligible: 4, usable: 0, excluded: 4 },
+        formula_input: { probability: null, impact: null },
+        warnings: ['sin datos'],
+        source_snapshot: { counts: { received: 4, eligible: 4, usable: 0, excluded: 4 }, exclusions: [{ code: 'risk_axis_invalid' }] },
+        source_snapshot_hash: 'e'.repeat(64),
+        data_trust: { model_version: 'data-trust-model-v1', state: 'INSUFFICIENT_DATA', reasons: ['insufficient_population'] },
+      }),
+      persistOfficialCalculation: async (_scope, result) => {
+        unmeasuredPersisted.push(result);
+        return { ...result, calculation_run_id: '70000000-0000-0000-0000-000000000794' };
+      },
+      persistSourceSnapshot: async (_client, _tenantId, source) => {
+        unmeasuredSnapshots.push(source);
+        return '70000000-0000-0000-0000-000000000793';
+      },
     }
   );
   assert.equal(unmeasured.summary.unmeasured, 1);
   assert.equal(unmeasured.results[0].data_requirements.status, 'insufficient');
   assert.equal(unmeasured.results[0].data_requirements.current_population, 0);
+  assert.equal(unmeasured.results[0].snapshot_id, '70000000-0000-0000-0000-000000000793');
+  assert.equal(unmeasuredPersisted[0].data_trust.state, 'INSUFFICIENT_DATA');
+  assert.deepEqual(unmeasuredSnapshots[0].counts, { received: 4, eligible: 4, usable: 0, excluded: 4 });
 
-  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 16 }));
+  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 32 }));
 }
 
 run().catch((error) => {

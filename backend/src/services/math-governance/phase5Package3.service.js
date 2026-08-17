@@ -1,89 +1,140 @@
- 'use strict';
-const compliance = require('./complianceCalculation.service');
-const controls = require('./controlCalculation.service');
-const risk = require('./riskCalculation.service');
-const actions = require('./actionCalculation.service');
-const readiness = require('./readinessCalculation.service');
-const health = require('./grcHealthCalculation.service');
-const { operationalExcellence } = require('./operationalExcellence.service');
-const survey = require('./surveyCalculation.service');
-const assurance = require('./assuranceCalculation.service');
-const loss = require('./lossCalculation.service');
-const continuity = require('./continuityCalculation.service');
-const asset = require('./assetCalculation.service');
-const supplier = require('./supplierCalculation.service');
-const { officialResult, unmeasured, clamp } = require('./officialCalculation.service');
+'use strict';
 
-function ratio(value) { if (value === null || value === undefined) return null; const n = Number(value); return Number.isFinite(n) ? clamp(n / 100, 0, 1) : null; }
-function pctValue(block, keys = []) { for (const key of keys) { const value = block?.data?.[key] ?? block?.[key]; if (value !== null && value !== undefined) return Number(value); } return block?.trust?.score ?? null; }
-function sourceFromBlock(sourceCode, block) { return { status: block?.status === 'ok' || block?.status === 'attention' ? 'ready' : 'source_unavailable', warnings: block?.warnings || [], counts: { received: block?.source_count || 0, usable: block?.source_count || 0, excluded: 0 }, input_hash: block?.input_hash || null, lineage: block?.source_count ? [{ source_record: null, source_contract: sourceCode, dataset_snapshot: null, formula_version: null, calculation_run: null }] : [] }; }
-function buildOverviewOfficialCalculations(overview = {}, { period = {}, requestId = null } = {}) {
-  const complianceScore = pctValue(overview.compliance, ['score', 'records']);
-  const complianceRatio = ratio(complianceScore ?? overview.metrics?.trust?.score ?? null);
-  const evidenceRatio = ratio(overview.evidence?.trust?.score ?? overview.data_trust?.trust?.score ?? null);
-  const actionRatio = ratio(overview.actions?.trust?.score ?? overview.metrics?.trust?.score ?? null);
-  const dataTrustRatio = ratio(overview.data_trust?.trust?.score ?? overview.metrics?.trust?.score ?? null);
-  const riskRatio = overview.risks?.status === 'attention' ? 0.5 : overview.risks?.status === 'ok' ? 0.8 : null;
-  const controlRatio = ratio(overview.controls?.trust?.score ?? null);
-  const official = {};
-  official.compliance = complianceScore === null || complianceScore === undefined
-    ? unmeasured('F5_5_COMPLIANCE_WEIGHTED', 'Overview sin dataset de cumplimiento evaluado.', { unit: '%', period, source: sourceFromBlock('compliance_requirements_assessments', overview.compliance) })
-    : officialResult('F5_5_COMPLIANCE_WEIGHTED', { assessments: [{ status: 'conform', weight: complianceScore }, { status: 'non_conform', weight: Math.max(0, 100 - complianceScore) }] }, { period, source: sourceFromBlock('compliance_requirements_assessments', overview.compliance), coverage: overview.compliance?.source_count ? 100 : null, runId: requestId ? `overview-${requestId}-compliance` : null });
-  official.control_effectiveness = controlRatio === null
-    ? unmeasured('F5_5_CONTROL_EFFECTIVENESS', 'Overview sin dimensiones oficiales de controles.', { unit: 'ratio', period, source: sourceFromBlock('control_assurance_evidence', overview.controls) })
-    : controls.officialControlEffectiveness({ design: controlRatio, implementation: controlRatio, operation: controlRatio, evidence: evidenceRatio ?? controlRatio, period, source: sourceFromBlock('control_assurance_evidence', overview.controls) });
-  official.actions = actionRatio === null
-    ? unmeasured('F5_5_WEIGHTED_PROGRESS', 'Overview sin progreso de acciones medido.', { unit: '%', period, source: sourceFromBlock('audit_findings_actions', overview.actions) })
-    : actions.officialWeightedProgress({ items: [{ progress: actionRatio, weight: 1 }], period, source: sourceFromBlock('audit_findings_actions', overview.actions) });
-  official.readiness = [complianceRatio, evidenceRatio, controlRatio, actionRatio].some((value) => value === null)
-    ? unmeasured('F5_5_READINESS', 'Readiness incompleto en overview oficial.', { unit: 'score', period, source: sourceFromBlock('grc_readiness_operational_snapshot', overview.metrics) })
-    : readiness.officialReadiness({ compliance: complianceRatio, evidence: evidenceRatio, health: controlRatio, actions: actionRatio, coverage: overview.metrics?.source_count ? 100 : 0, period, source: sourceFromBlock('grc_readiness_operational_snapshot', overview.metrics) });
-  official.risk = riskRatio === null
-    ? unmeasured('F5_5_RESIDUAL_RISK', 'Overview sin riesgo residual oficial medido.', { unit: 'score', period, source: sourceFromBlock('risk_register_controls', overview.risks) })
-    : risk.officialResidualRisk({ inherentRisk: 25, controlEffectiveness: riskRatio, period, source: sourceFromBlock('risk_register_controls', overview.risks), method: 'overview_adapter' });
-  official.health = [riskRatio, complianceRatio, actionRatio, evidenceRatio, dataTrustRatio].some((value) => value === null)
-    ? unmeasured('F5_5_GRC_HEALTH', 'GRC Health incompleto por componentes unmeasured.', { unit: 'score', period, source: sourceFromBlock('grc_health_components', overview.metrics) })
-    : health.officialGrcHealth({ risk: riskRatio, compliance: complianceRatio, actions: actionRatio, evidence: evidenceRatio, dataTrust: dataTrustRatio, period, source: sourceFromBlock('grc_health_components', overview.metrics) });
-  official.operational_excellence = operationalExcellence({ compliance: official.compliance.value, actions: official.actions.value, risk: official.health.value, quality: evidenceRatio === null ? null : evidenceRatio * 100, dataTrust: dataTrustRatio === null ? null : dataTrustRatio * 100, period, source: sourceFromBlock('grc_health_components', overview.metrics) });
-  return official;
+const { unmeasured } = require('./officialCalculation.service');
+
+const PACKAGE3_FORMULA_CODES = Object.freeze([
+  'F5_5_COMPLIANCE_WEIGHTED',
+  'F5_5_CONTROL_EFFECTIVENESS',
+  'F5_5_WEIGHTED_PROGRESS',
+  'F5_5_READINESS',
+  'F5_5_RESIDUAL_RISK',
+  'F5_5_GRC_HEALTH',
+]);
+
+const OVERVIEW_KEY_BY_FORMULA_CODE = Object.freeze({
+  F5_5_COMPLIANCE_WEIGHTED: 'compliance',
+  F5_5_CONTROL_EFFECTIVENESS: 'control_effectiveness',
+  F5_5_WEIGHTED_PROGRESS: 'actions',
+  F5_5_READINESS: 'readiness',
+  F5_5_RESIDUAL_RISK: 'risk',
+  F5_5_GRC_HEALTH: 'health',
+});
+
+const SOURCE_CODE_BY_FORMULA_CODE = Object.freeze({
+  F5_5_COMPLIANCE_WEIGHTED: 'compliance_requirements_assessments',
+  F5_5_CONTROL_EFFECTIVENESS: 'control_assurance_evidence',
+  F5_5_WEIGHTED_PROGRESS: 'audit_findings_actions',
+  F5_5_READINESS: 'grc_readiness_operational_snapshot',
+  F5_5_RESIDUAL_RISK: 'risk_register_controls',
+  F5_5_GRC_HEALTH: 'grc_health_components',
+});
+
+const FORMULA_CODE_BY_METRIC_KEY = Object.freeze({
+  compliance: 'F5_5_COMPLIANCE_WEIGHTED',
+  'compliance.weighted': 'F5_5_COMPLIANCE_WEIGHTED',
+  readiness: 'F5_5_READINESS',
+  'readiness.iso': 'F5_5_READINESS',
+  'risk-residual': 'F5_5_RESIDUAL_RISK',
+  'risk.residual': 'F5_5_RESIDUAL_RISK',
+  'control-effectiveness': 'F5_5_CONTROL_EFFECTIVENESS',
+  'control.effectiveness': 'F5_5_CONTROL_EFFECTIVENESS',
+  'actions-progress': 'F5_5_WEIGHTED_PROGRESS',
+  'actions.progress': 'F5_5_WEIGHTED_PROGRESS',
+  'health-grc': 'F5_5_GRC_HEALTH',
+  'health.grc': 'F5_5_GRC_HEALTH',
+  'health.iso': 'F5_5_GRC_HEALTH',
+  'operational_excellence.health': 'F5_5_GRC_HEALTH',
+  'survey-score': 'F5_5_SURVEY_SCORE',
+  'survey.response_rate': 'F5_5_RESPONSE_RATE',
+  'survey-response-rate': 'F5_5_RESPONSE_RATE',
+  'survey.dropout_rate': 'F5_5_DROPOUT_RATE',
+  'survey-dropout-rate': 'F5_5_DROPOUT_RATE',
+  'survey.cronbach': 'F5_5_CRONBACH_ALPHA',
+  'survey-cronbach': 'F5_5_CRONBACH_ALPHA',
+  'assurance-score': 'F5_5_ASSURANCE_SCORE',
+  'assurance.score': 'F5_5_ASSURANCE_SCORE',
+  'assurance-sample-size': 'F5_5_SAMPLE_SIZE',
+  'assurance.sample_size': 'F5_5_SAMPLE_SIZE',
+  'loss-net': 'F5_5_NET_LOSS',
+  'loss.net': 'F5_5_NET_LOSS',
+  'loss-expected': 'F5_5_EXPECTED_LOSS',
+  'loss.expected': 'F5_5_EXPECTED_LOSS',
+  'loss-severity': 'F5_5_LOSS_SEVERITY',
+  'loss.severity': 'F5_5_LOSS_SEVERITY',
+  'loss-var': 'F5_5_PARAMETRIC_VAR',
+  'loss.var': 'F5_5_PARAMETRIC_VAR',
+  'loss-monte-carlo': 'F5_5_MONTE_CARLO',
+  'loss.monte_carlo': 'F5_5_MONTE_CARLO',
+  'continuity-availability': 'F5_5_AVAILABILITY',
+  'continuity.availability': 'F5_5_AVAILABILITY',
+  'continuity-mtbf': 'F5_5_MTBF',
+  'continuity.mtbf': 'F5_5_MTBF',
+  'continuity-mttr': 'F5_5_MTTR',
+  'continuity.mttr': 'F5_5_MTTR',
+  'continuity-sla': 'F5_5_SLA_COMPLIANCE',
+  'continuity.sla': 'F5_5_SLA_COMPLIANCE',
+  'continuity-rto-gap': 'F5_5_RTO_GAP',
+  'continuity.rto_gap': 'F5_5_RTO_GAP',
+  'continuity-rpo-gap': 'F5_5_RPO_GAP',
+  'continuity.rpo_gap': 'F5_5_RPO_GAP',
+  'asset-criticality': 'F5_5_ASSET_CRITICALITY',
+  'asset.criticality': 'F5_5_ASSET_CRITICALITY',
+  'supplier-risk': 'F5_5_SUPPLIER_RISK',
+  'supplier.risk': 'F5_5_SUPPLIER_RISK',
+});
+
+function sourceFromCompatibility(sourceCode, period) {
+  return {
+    status: 'source_unavailable',
+    warnings: ['package3_parallel_truth_disabled'],
+    counts: null,
+    input_hash: null,
+    lineage: [
+      { step: 'compatibility_layer', status: 'requires_official_calculation_orchestrator', source_contract: sourceCode || null, period },
+    ],
+  };
 }
-function calculateOfficialByKey(key, input = {}) {
-  switch (key) {
-    case 'compliance': return compliance.officialCompliance(input);
-    case 'coverage': return compliance.officialCoverage(input);
-    case 'readiness': return readiness.officialReadiness(input);
-    case 'risk-inherent': return risk.officialInherentRisk(input);
-    case 'risk-residual': return risk.officialResidualRisk(input);
-    case 'risk-expected-loss': return risk.officialExpectedLoss(input);
-    case 'control-effectiveness': return controls.officialControlEffectiveness(input);
-    case 'control-combined': return controls.officialCombinedEffectiveness(input);
-    case 'findings-severity': return actions.officialSeverity(input);
-    case 'actions-closure': return actions.officialClosureRate(input);
-    case 'actions-progress': return actions.officialWeightedProgress(input);
-    case 'actions-overdue': return actions.officialOverdueRate(input);
-    case 'health-grc': return health.officialGrcHealth(input);
-    case 'health-iso': return health.officialIsoHealth(input);
-    case 'operational-excellence': return operationalExcellence(input);
-    case 'survey-score': return survey.officialSurveyScore(input);
-    case 'survey-response-rate': return survey.officialResponseRate(input);
-    case 'survey-dropout-rate': return survey.officialDropoutRate(input);
-    case 'survey-cronbach': return survey.officialCronbach(input);
-    case 'assurance-score': return assurance.officialAssuranceScore(input);
-    case 'assurance-sample-size': return assurance.officialSampleSize(input);
-    case 'loss-net': return loss.officialNetLoss(input);
-    case 'loss-expected': return loss.officialExpectedLoss(input);
-    case 'loss-severity': return loss.officialSeverity(input);
-    case 'loss-var': return loss.officialVaR(input);
-    case 'loss-monte-carlo': return loss.officialMonteCarlo(input);
-    case 'continuity-availability': return continuity.officialAvailability(input);
-    case 'continuity-mtbf': return continuity.officialMtbf(input);
-    case 'continuity-mttr': return continuity.officialMttr(input);
-    case 'continuity-sla': return continuity.officialSla(input);
-    case 'continuity-rto-gap': return continuity.officialRtoGap(input);
-    case 'continuity-rpo-gap': return continuity.officialRpoGap(input);
-    case 'asset-criticality': return asset.officialAssetCriticality(input);
-    case 'supplier-risk': return supplier.officialSupplierRisk(input);
-    default: throw Object.assign(new Error('Calculo oficial no soportado.'), { code: 'OFFICIAL_CALCULATION_NOT_FOUND', status: 404, details: { key } });
-  }
+
+function formulaCodeForKey(key) {
+  const normalized = String(key || '').trim();
+  if (!normalized) return null;
+  if (normalized.startsWith('F5_')) return normalized;
+  return FORMULA_CODE_BY_METRIC_KEY[normalized] || FORMULA_CODE_BY_METRIC_KEY[normalized.replace(/_/g, '-')] || null;
 }
-module.exports = { buildOverviewOfficialCalculations, calculateOfficialByKey };
+
+function overviewKeyForFormula(formulaCode) {
+  return OVERVIEW_KEY_BY_FORMULA_CODE[formulaCode] || null;
+}
+
+function buildOverviewOfficialCalculations(_overview = {}, { period = {} } = {}) {
+  return Object.fromEntries(PACKAGE3_FORMULA_CODES.map((formulaCode) => {
+    const key = overviewKeyForFormula(formulaCode);
+    const result = unmeasured(formulaCode, 'Package3 es una capa de compatibilidad; el cálculo oficial debe provenir de officialCalculationOrchestrator.', {
+      period,
+      source: sourceFromCompatibility(SOURCE_CODE_BY_FORMULA_CODE[formulaCode], period),
+      warnings: ['canonical_orchestrator_required'],
+    });
+    result.metadata = { package: 'phase5_5_package3_compatibility', canonical_pipeline_required: true };
+    return [key, result];
+  }));
+}
+
+function calculateOfficialByKey(key) {
+  const formulaCode = formulaCodeForKey(key);
+  const error = new Error('Package3 no calcula fórmulas oficiales; use officialCalculationOrchestrator.');
+  error.code = 'PACKAGE3_CANONICAL_ORCHESTRATOR_REQUIRED';
+  error.status = 409;
+  error.details = { key, formula_code: formulaCode };
+  throw error;
+}
+
+module.exports = {
+  PACKAGE3_FORMULA_CODES,
+  OVERVIEW_KEY_BY_FORMULA_CODE,
+  FORMULA_CODE_BY_METRIC_KEY,
+  SOURCE_CODE_BY_FORMULA_CODE,
+  buildOverviewOfficialCalculations,
+  calculateOfficialByKey,
+  formulaCodeForKey,
+  overviewKeyForFormula,
+};
