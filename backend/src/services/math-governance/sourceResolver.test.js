@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { FORMULAS, executeFormula } = require('./formulaRegistry.service');
+const { FORMULAS, FORMULA_MAP, executeFormula } = require('./formulaRegistry.service');
 const { listFormulaSourceBindings, listSourceContracts } = require('./sourceContracts.service');
 const { validateDataset } = require('./datasetValidation.service');
 const { resolveFormulaSource, mapFormulaInput, firstPopulated } = require('./sourceResolver.service');
@@ -10,6 +10,8 @@ async function main() {
   const bindings = listFormulaSourceBindings();
   assert.strictEqual(bindings.length, 53, 'every official formula must have a source binding');
   assert.strictEqual(FORMULAS.filter((formula) => formula.source_contract === 'pending_package_2').length, 0, 'package 2 must replace pending source markers');
+  assert.strictEqual(FORMULA_MAP.get('F5_5_CONTROL_EFFECTIVENESS').version, 2, 'changed CONTROL-EFFECT governed payload must publish as a new formula version');
+  assert.strictEqual(FORMULA_MAP.get('F5_5_INHERENT_RISK').version, 2, 'already-versioned inherent risk formula must not be bumped again');
   const contracts = listSourceContracts();
   assert.ok(contracts.some((contract) => contract.availability === 'available'), 'available operational adapters expected');
   assert.strictEqual(contracts.length, 20, 'all source contracts must be version-governed');
