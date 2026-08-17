@@ -17,7 +17,8 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-07: DONE (Data Trust determinístico/versionado cerrado localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-07-HF1: DONE local (pipeline oficial consolidado sobre `officialCalculationOrchestrator -> sourceResolver -> PUI-01..PUI-07`; validación manual/CI/deploy pendiente por diseño).
 - PUI-07-HF2: READY_FOR_RUNTIME_VALIDATION local (status/temporal producer-consumer reconciliation implementada para F5_5 runtime; requiere deploy, recalculo oficial y queries PostgreSQL antes de PASS).
-- PUI-08: BLOCKED por validación runtime/productiva pendiente de PUI-07-HF2.
+- PUI-07-HF3: DONE_LOCAL (cierre contractual residual para `F5_5_SEVERITY_INDEX`, `F5_5_MATURITY` y `grc_health_components`; validación runtime/productiva pendiente por diseño).
+- PUI-08: BLOCKED por validación runtime/productiva pendiente de PUI-07-HF3.
 - PRE-UI: IN_PROGRESS.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: BLOCKED por `PRE_UI_DATA_TRUTH_GATE` donde corresponda.
@@ -64,6 +65,9 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-07-HF2 agrega drift guard `PRODUCER_STATUS_CONTRACTS` en `statusSemantics.service.js` y test focal para que estados legítimos productores no terminen como `status_unmapped`.
 - PUI-07-HF2 corrige semántica temporal de `validity_interval`: `valid_to` futuro no se clasifica como evento futuro inválido; `event_stream` y `valid_from` futuro siguen excluidos por `date_in_future`/`temporal_after_as_of` según contrato.
 - PUI-07-HF2 versiona sólo los source contracts cuyo `status_semantics.mapping_version` cambió a v2: `risk_register_controls` v7, `control_assurance_evidence` v7, `audit_findings_actions` v7, `incident_operational_events` v5, `loss_events_operational` v6, `supplier_tprm_assessments` v5, `assurance_test_results` v5 e `indicator_data_trust_assessments` v5. No cambió fórmulas.
+- PUI-07-HF3 se ejecutó sobre branch `fix/pui-07-hf3-final-contract-closure` desde base local `2dc4820cd8c7967eb051e2c1b4dcbbe5f19e13b6`.
+- PUI-07-HF3 cerró drift residual focal: `audit_findings_actions` v8 usa snapshot padre de `grc_readiness_findings` para temporalidad y `status=not_applicable`; `maturity_assessments` v7 reconoce estados producer-known de `survey_evaluations`/`metric_measurements`; `grc_health_components` v6 proyecta `started_at/completed_at` porque `calculation_runs.period_start` es nullable y el contrato ya permite esos fallbacks.
+- PUI-07-HF3 no cambió fórmulas, pesos, unidades, precisión, Data Trust v1, fallback governance, snapshots ni Package3.
 
 ## Ownership fijo
 
@@ -80,8 +84,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa PUI-07-HF2 y ejecuta push/PR/CI/deploy/recalculo oficial/manual production validation con las queries del handoff.
-2. Si PUI-07-HF2 valida en runtime, actualizar continuidad y habilitar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
+1. Usuario revisa PUI-07-HF3 y ejecuta cherry-pick/push/PR/CI/deploy/recalculo oficial/manual production validation con las queries del handoff.
+2. Si PUI-07-HF3 valida en runtime, actualizar continuidad y habilitar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
 
 ## Handoff relevante
 
@@ -96,3 +100,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-07.md`
 - `docs/codex/handoffs/PUI-07-HF1.md`
 - `docs/codex/handoffs/PUI-07-HF2.md`
+- `docs/codex/handoffs/PUI-07-HF3.md`

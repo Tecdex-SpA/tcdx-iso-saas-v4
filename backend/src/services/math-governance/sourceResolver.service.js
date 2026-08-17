@@ -187,6 +187,16 @@ function severityPortfolio(rows = []) {
   rows.forEach((row, index) => {
     const severity = String(row.severity ?? row.risk_level ?? row.level ?? '').trim().toLowerCase();
     const sourceRecord = row.id || row.source_entity_id || `row-${index}`;
+    if (severity === 'info') {
+      exclusions.push({
+        code: 'severity_not_eligible',
+        field: 'severity',
+        source_record: sourceRecord,
+        physical_source: row.__physical_source || null,
+        reason: 'F5_5_SEVERITY_INDEX conoce severidad info como hallazgo informativo no ponderado por la fórmula low/medium/high/critical.',
+      });
+      return;
+    }
     if (!SEVERITY_LEVELS.includes(severity)) {
       exclusions.push({
         code: 'severity_missing_or_invalid',
@@ -340,6 +350,26 @@ async function queryControls(client, tenantId, period) {
 
 async function queryAuditActions(client, tenantId, period, formulaCode) {
   const severityFormula = formulaCode === 'F5_5_SEVERITY_INDEX';
+  if (severityFormula && await tableExists(client, 'grc_readiness_findings') && await tableExists(client, 'grc_readiness_snapshots')) {
+    const result = await client.query(
+      `SELECT f.id,
+              f.tenant_id,
+              f.severity,
+              'not_applicable' AS status,
+              s.source_as_of,
+              s.period_start,
+              s.period_end,
+              s.generated_at,
+              COALESCE(s.source_as_of,s.period_end,s.generated_at) AS __event_time
+       FROM grc_readiness_findings f
+       JOIN grc_readiness_snapshots s
+         ON s.id=f.snapshot_id
+        AND s.tenant_id=f.tenant_id
+       WHERE f.tenant_id=$1::uuid`,
+      [tenantId]
+    );
+    if (result.rows?.length) return primaryRows(result.rows, 'grc_readiness_findings');
+  }
   if (!severityFormula && await tableExists(client, 'action_plans')) {
     const timestamp = safeTimestampExpression('a', getSourceContract('audit_findings_actions'));
     const asOf = period.as_of || period.asOf || period.end || null;
@@ -371,7 +401,7 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
   const tables = severityFormula ? ['grc_readiness_findings', 'findings', 'action_plans'] : ['action_plans', 'findings', 'grc_readiness_findings'];
   const rows = await firstPopulatedTables(client, tables, tenantId, period, getSourceContract('audit_findings_actions'));
   if (!rows || !severityFormula) return rows;
-  return rows.map((row) => ({ ...row, status: row.status || 'unknown' }));
+  return rows.map((row) => row.status || row.__physical_source !== 'grc_readiness_findings' ? row : { ...row, status: 'not_applicable' });
 }
 
 async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period, getSourceContract('grc_readiness_operational_snapshot')); }
@@ -383,7 +413,7 @@ async function queryHealth(client, tenantId, period) {
   const componentTimestamp = `COALESCE(cr.completed_at,cr.period_end,cr.started_at)`;
   const result = await client.query(
     `SELECT DISTINCT ON (cr.formula_code)
-            co.id,cr.tenant_id,cr.formula_code,co.output_value,co.unit,cr.period_start,cr.period_end,cr.run_status,
+            co.id,cr.tenant_id,cr.formula_code,co.output_value,co.unit,cr.period_start,cr.period_end,cr.started_at,cr.completed_at,cr.run_status,
             ${componentTimestamp} AS __event_time
      FROM calculation_runs cr
      JOIN calculation_outputs co ON co.run_id=cr.id AND co.tenant_id=cr.tenant_id AND co.output_name='value'
@@ -401,7 +431,7 @@ async function queryHealth(client, tenantId, period) {
 async function queryMaturity(client, tenantId, period) {
   const candidates = [];
   if (await tableExists(client, 'survey_evaluations')) {
-    const timestamp = safeTimestampExpression('e', getSourceContract('maturity_assessments'));
+    const timestamp = `COALESCE(NULLIF(to_jsonb(e)->>'confirmed_at','')::timestamptz,NULLIF(to_jsonb(e)->>'created_at','')::timestamptz)`;
     candidates.push({ table: 'survey_evaluations', params: [tenantId], sql:
       `SELECT e.id,(to_jsonb(e)->>'tenant_id')::uuid AS tenant_id,
               COALESCE(NULLIF(to_jsonb(e)->>'level','')::numeric,NULLIF(to_jsonb(e)->>'maturity_level','')::numeric,NULLIF(to_jsonb(e)->>'score','')::numeric,NULLIF(to_jsonb(e)->>'total_score','')::numeric) AS level,
@@ -412,6 +442,9 @@ async function queryMaturity(client, tenantId, period) {
               END AS __scale_level_source,
               COALESCE(NULLIF(to_jsonb(e)->>'weight','')::numeric,1) AS weight,
               COALESCE(NULLIF(to_jsonb(e)->>'evaluation_status',''),NULLIF(to_jsonb(e)->>'status',''),'evaluated') AS status,
+              ${timestamp} AS evaluated_at,
+              NULLIF(to_jsonb(e)->>'confirmed_at','')::timestamptz AS confirmed_at,
+              NULLIF(to_jsonb(e)->>'created_at','')::timestamptz AS created_at,
               ${timestamp} AS __event_time
        FROM survey_evaluations e
        WHERE (to_jsonb(e)->>'tenant_id')::uuid=$1::uuid` });

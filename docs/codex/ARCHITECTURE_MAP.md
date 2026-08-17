@@ -18,6 +18,7 @@ Backend Node/Express
         |      + deterministic/versioned data trust assessment
         |      + dataset validation and temporal/status classification
         |      + producer-known status drift guard for F5_5 source domains
+        |      + residual producer/source contract drift closure for severity, maturity and health components
         |      + formula registry/execution
         |      + official calculation orchestrator as single source of truth
         |      + snapshots/lineage

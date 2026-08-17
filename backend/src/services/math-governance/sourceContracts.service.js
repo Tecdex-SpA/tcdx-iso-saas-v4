@@ -71,7 +71,7 @@ const TEMPORAL_SEMANTICS_BY_SOURCE = Object.freeze({
   grc_readiness_operational_snapshot: temporal({ classification: 'state_snapshot', source_time_fields: ['source_as_of', 'period_end', 'updated_at', 'created_at'], time_meaning: 'readiness_snapshot_as_of_time', validity_policy: 'snapshot_effective_at_period_or_as_of' }),
   risk_register_controls: temporal({ classification: 'latest_effective_state', source_time_fields: ['effective_at', 'completed_at', 'assessed_at', 'measured_at', 'updated_at', 'created_at'], time_meaning: 'risk_assessment_effective_time', validity_policy: 'latest_completed_or_reviewed_state_at_as_of' }),
   control_assurance_evidence: temporal({ classification: 'state_snapshot', source_time_fields: ['calculated_at', 'assessed_at', 'measured_at', 'updated_at', 'created_at'], time_meaning: 'control_assurance_calculation_time', validity_policy: 'assurance_state_effective_at_period_or_as_of' }),
-  audit_findings_actions: temporal({ classification: 'validity_interval', source_time_fields: ['latest_update_at', 'opened_at', 'created_at', 'closed_at', 'completed_at'], valid_from_fields: ['opened_at', 'created_at'], valid_to_fields: ['closed_at', 'completed_at'], time_meaning: 'action_lifecycle_state_time', validity_policy: 'action_state_in_requested_period' }),
+  audit_findings_actions: temporal({ classification: 'validity_interval', source_time_fields: ['latest_update_at', 'opened_at', 'created_at', 'source_as_of', 'period_start', 'generated_at', 'closed_at', 'completed_at', 'period_end'], valid_from_fields: ['opened_at', 'created_at', 'period_start', 'source_as_of', 'generated_at'], valid_to_fields: ['closed_at', 'completed_at', 'period_end'], time_meaning: 'action_lifecycle_or_snapshot_finding_time', validity_policy: 'action_or_finding_state_in_requested_period' }),
   incident_operational_events: temporal({ classification: 'event_stream', source_time_fields: ['reported_at', 'detected_at', 'created_at'], time_meaning: 'incident_report_or_detection_time', validity_policy: 'event_time_in_requested_period' }),
   evidence_freshness_records: temporal({ classification: 'validity_interval', source_time_fields: ['reviewed_at', 'submitted_at', 'decided_at', 'created_at', 'expires_at'], valid_from_fields: ['reviewed_at', 'submitted_at', 'decided_at', 'created_at'], valid_to_fields: ['expires_at'], time_meaning: 'evidence_review_or_submission_time', validity_policy: 'evidence_state_and_expiration_at_as_of' }),
   loss_events_operational: temporal({ classification: 'event_stream', source_time_fields: ['event_date', 'occurred_at'], time_meaning: 'loss_occurrence_time', validity_policy: 'loss_occurrence_in_requested_period', missing_time_policy: 'exclude_with_reason' }),
@@ -85,7 +85,7 @@ const TEMPORAL_SEMANTICS_BY_SOURCE = Object.freeze({
   statistical_metric_measurements: temporal({ classification: 'event_stream', source_time_fields: ['measured_at', 'calculated_at', 'period_end'], time_meaning: 'metric_measurement_time', validity_policy: 'measurement_time_in_requested_period' }),
   indicator_data_trust_assessments: temporal({ classification: 'event_stream', source_time_fields: ['assessed_at'], time_meaning: 'data_trust_assessment_time', validity_policy: 'assessment_time_in_requested_period' }),
   grc_health_components: temporal({ classification: 'validity_interval', source_time_fields: ['period_end', 'completed_at', 'started_at'], valid_from_fields: ['period_start', 'started_at'], valid_to_fields: ['period_end', 'completed_at'], time_meaning: 'official_calculation_period_end_or_completion_time', validity_policy: 'calculation_period_overlaps_requested_period' }),
-  maturity_assessments: temporal({ classification: 'event_stream', source_time_fields: ['evaluated_at', 'measured_at', 'calculated_at', 'period_end'], time_meaning: 'maturity_evaluation_or_measurement_time', validity_policy: 'maturity_observation_in_requested_period' }),
+  maturity_assessments: temporal({ classification: 'event_stream', source_time_fields: ['evaluated_at', 'confirmed_at', 'measured_at', 'source_timestamp', 'calculated_at', 'period_end', 'created_at'], time_meaning: 'maturity_evaluation_or_measurement_time', validity_policy: 'maturity_observation_in_requested_period' }),
   external_fx_rates: temporal({ classification: 'latest_effective_state', source_time_fields: ['effective_at'], time_meaning: 'fx_rate_effective_time', validity_policy: 'rate_effective_at_period_or_as_of' }),
 });
 
@@ -248,10 +248,10 @@ const SOURCE_CONTRACTS = Object.freeze([
   contract({
     source_code: 'audit_findings_actions', entity: 'audit',
     tables: ['action_plans', 'action_plan_updates', 'grc_readiness_findings', 'grc_effectiveness_verifications'],
-    columns: ['tenant_id','severity','status','created_at','opened_at','closed_at','completed_at','due_date','due_at','progress_percent','latest_progress_percent','latest_status_after','latest_update_at','approved_evidence_count','pending_evidence_count','weight'], required_fields: ['id','tenant_id','status'],
+    columns: ['tenant_id','severity','status','created_at','opened_at','closed_at','completed_at','due_date','due_at','progress_percent','latest_progress_percent','latest_status_after','latest_update_at','source_as_of','period_start','period_end','generated_at','approved_evidence_count','pending_evidence_count','weight'], required_fields: ['id','tenant_id','status'],
     variable_map: { low: 'count(severity=low)', medium: 'count(severity=medium)', high: 'count(severity=high)', critical: 'count(severity=critical)', items: 'rows[{createdAt,openedAt,closedAt,dueAt,progress,weight,overdue}]' },
-    availability: 'available', version: 7,
-    limitations: 'Acciones y remediación usan action_plans enriquecidos con el último action_plan_updates válido; progreso ausente queda unmeasured y no se convierte en cero.'
+    availability: 'available', version: 8,
+    limitations: 'Acciones y remediación usan action_plans enriquecidos con el último action_plan_updates válido; hallazgos snapshot de readiness no tienen status operacional y se marcan not_applicable; progreso ausente queda unmeasured y no se convierte en cero.'
   }),
   contract({
     source_code: 'incident_operational_events', entity: 'incident',
@@ -312,15 +312,15 @@ const SOURCE_CONTRACTS = Object.freeze([
   contract({
     source_code: 'grc_health_components', entity: 'health',
     tables: ['calculation_runs','calculation_outputs','data_trust_scores'],
-    columns: ['tenant_id','formula_code','output_value','trust_score','period_start','period_end','run_status'], required_fields: ['id','tenant_id','formula_code'],
+    columns: ['tenant_id','formula_code','output_value','trust_score','period_start','period_end','started_at','completed_at','run_status'], required_fields: ['id','tenant_id','formula_code'],
     variable_map: { risk: 'latest risk output', compliance: 'latest compliance output', actions: 'latest actions output', evidence: 'latest evidence/trust output', dataTrust: 'latest trust score' },
-    availability: 'available', version: 5,
+    availability: 'available', version: 6,
     limitations: 'Solo consume outputs oficiales calculados y aprobados; componentes ausentes dejan Health como unmeasured.'
   }),
   contract({
     source_code: 'maturity_assessments', entity: 'maturity',
     tables: ['survey_evaluations','metric_measurements'],
-    columns: ['tenant_id','score','numeric_value','weight','evaluated_at','measured_at','status','metadata'], required_fields: ['id','tenant_id'],
+    columns: ['tenant_id','score','numeric_value','weight','evaluated_at','confirmed_at','measured_at','source_timestamp','calculated_at','period_start','period_end','created_at','status','metadata'], required_fields: ['id','tenant_id'],
     variable_map: { levels: 'rows[{level|score|numeric_value,weight}]' },
     scale_metadata: {
       variables: {
@@ -328,8 +328,8 @@ const SOURCE_CONTRACTS = Object.freeze([
         score: { source_fields: ['score','total_score'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'SCORE_0_5', canonical_unit: 'level', canonical_min: 0, canonical_max: 5, normalization_strategy: 'percent_to_score_0_5', precision: 2, allow_null: false, allow_zero: true },
       },
     },
-    availability: 'available', version: 6,
-    limitations: 'Prioriza evaluaciones publicadas y usa mediciones de madurez como fallback; la escala de nivel se declara en el contrato y no se infiere por magnitud.'
+    availability: 'available', version: 7,
+    limitations: 'Prioriza evaluaciones confirmadas/aplicadas y usa mediciones de madurez como fallback; estados preview/draft son conocidos pero no elegibles. La escala de nivel se declara en el contrato y no se infiere por magnitud.'
   }),
   contract({ source_code: 'external_fx_rates', entity: 'currency_conversion', tables: ['external_fx_rates'], columns: ['base_currency','quote_currency','rate','effective_at','source'], required_fields: ['base_currency','quote_currency','rate'], availability: 'source_unavailable', version: 4, limitations: 'No official tenant-safe FX source is configured; loss calculations must not mix currencies.' }),
 ]);

@@ -48,22 +48,27 @@ async function main() {
   assert.strictEqual(riskContract.scale_metadata.variables.probability.source_scale, 'SCORE_1_5');
   assert.strictEqual(riskContract.scale_metadata.variables.impact.allow_zero, false);
   const changedStatusContractVersions = new Map([
-    ['control_assurance_evidence', 7],
-    ['audit_findings_actions', 7],
-    ['incident_operational_events', 5],
-    ['loss_events_operational', 6],
-    ['supplier_tprm_assessments', 5],
-    ['assurance_test_results', 5],
-    ['indicator_data_trust_assessments', 5],
+    ['control_assurance_evidence', [7, 'control-status-map-v2']],
+    ['audit_findings_actions', [8, 'audit-status-map-v3']],
+    ['incident_operational_events', [5, 'incident-status-map-v2']],
+    ['loss_events_operational', [6, 'loss-status-map-v2']],
+    ['supplier_tprm_assessments', [5, 'supplier-status-map-v2']],
+    ['assurance_test_results', [5, 'assurance-status-map-v2']],
+    ['indicator_data_trust_assessments', [5, 'data_trust-status-map-v2']],
   ]);
-  for (const [sourceCode, version] of changedStatusContractVersions.entries()) {
+  for (const [sourceCode, [version, mappingVersion]] of changedStatusContractVersions.entries()) {
     const contract = contracts.find((item) => item.source_code === sourceCode);
     assert.strictEqual(contract.version, version, `${sourceCode} status semantics changed payload must be versioned`);
-    assert.ok(contract.status_semantics.mapping_version.endsWith('-v2'), `${sourceCode} must expose status mapping v2`);
+    assert.strictEqual(contract.status_semantics.mapping_version, mappingVersion, `${sourceCode} must expose expected status mapping version`);
   }
   const maturityContract = contracts.find((contract) => contract.source_code === 'maturity_assessments');
+  assert.strictEqual(maturityContract.version, 7, 'maturity producer status/temporal drift closure must publish under a new source contract version');
+  assert.strictEqual(maturityContract.status_semantics.mapping_version, 'maturity-status-map-v2');
   assert.strictEqual(maturityContract.scale_metadata.variables.level.canonical_scale, 'SCORE_0_5');
   assert.strictEqual(maturityContract.scale_metadata.variables.score.normalization_strategy, 'percent_to_score_0_5');
+  const healthContract = contracts.find((contract) => contract.source_code === 'grc_health_components');
+  assert.strictEqual(healthContract.version, 6, 'health component adapter projection change must be source-contract versioned');
+  assert.ok(healthContract.columns.includes('started_at') && healthContract.columns.includes('completed_at'), 'health contract must expose temporal fallback fields used by validation');
   for (const contract of contracts) {
     assert.ok(contract.checksum && contract.checksum.length === 64, `contract checksum missing for ${contract.source_code}`);
     assert.ok(!/;\s*(drop|delete|update|insert|alter)\b/i.test(contract.query || ''), `contract must not contain mutable SQL: ${contract.source_code}`);
@@ -120,6 +125,12 @@ async function main() {
   assert.strictEqual(normalizeStatus('control', 'unknown').eligible, false);
   assert.strictEqual(normalizeStatus('assurance', 'pass with observations').canonical_status, 'pass_with_observations');
   assert.strictEqual(normalizeStatus('assurance', 'pass with observations').eligible, true);
+  assert.strictEqual(normalizeStatus('audit', 'not applicable').canonical_status, 'not_applicable');
+  assert.strictEqual(normalizeStatus('audit', 'mystery').reason, 'status_unmapped');
+  assert.strictEqual(normalizeStatus('maturity', 'confirmed').eligible, true);
+  assert.strictEqual(normalizeStatus('maturity', 'previewed').reason, 'status_not_eligible');
+  assert.strictEqual(normalizeStatus('maturity', 'valid').canonical_status, 'calculated');
+  assert.strictEqual(normalizeStatus('maturity', 'mystery').reason, 'status_unmapped');
   assert.strictEqual(normalizeStatus('data_trust', 'trusted').mapped, true);
   const statusRows = normalizeRowsStatus([
     { id: 'supplier-approved', tenant_id: 'tenant-a', status: 'approved' },
@@ -290,11 +301,36 @@ async function main() {
   assert.strictEqual(updatedLikelihoodInput.risks[0].probability, 3);
   assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', updatedLikelihoodInput).value, 15);
 
-  const severityInput = mapFormulaInput('F5_5_SEVERITY_INDEX', [{ severity: 'low' }, { severity: 'critical' }, { severity: 'high' }]);
-  assert.deepStrictEqual(severityInput, { low: 1, medium: 0, high: 1, critical: 1 });
-  assert.ok(executeFormula('F5_5_SEVERITY_INDEX', severityInput).value > 0);
+	  const severityInput = mapFormulaInput('F5_5_SEVERITY_INDEX', [{ severity: 'low' }, { severity: 'critical' }, { severity: 'high' }]);
+	  assert.deepStrictEqual(severityInput, { low: 1, medium: 0, high: 1, critical: 1 });
+	  assert.ok(executeFormula('F5_5_SEVERITY_INDEX', severityInput).value > 0);
 
-  const actionInput = mapFormulaInput('F5_5_WEIGHTED_PROGRESS', [
+	  const readinessFindingsClient = { async query(sql, params = []) {
+	    if (sql.includes('to_regclass')) {
+	      const table = String(params[0] || '').replace(/^public\./, '');
+	      return { rows: [{ exists: ['grc_readiness_findings', 'grc_readiness_snapshots'].includes(table) }] };
+	    }
+	    assert.ok(sql.includes('JOIN grc_readiness_snapshots s'), 'readiness findings severity must derive temporal context from the parent snapshot');
+	    return { rows: [
+	      { id: 'finding-low', tenant_id: 'tenant-a', severity: 'low', status: 'not_applicable', source_as_of: '2026-01-31T00:00:00Z', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-01-31T00:00:00Z' },
+	      { id: 'finding-info', tenant_id: 'tenant-a', severity: 'info', status: 'not_applicable', source_as_of: '2026-01-31T00:00:00Z', period_start: '2026-01-01T00:00:00Z', period_end: '2026-02-01T00:00:00Z', generated_at: '2026-01-31T00:00:00Z', __event_time: '2026-01-31T00:00:00Z' },
+	    ] };
+	  } };
+	  const readinessFindingsSource = await resolveFormulaSource({
+	    client: readinessFindingsClient,
+	    tenantId: 'tenant-a',
+	    formulaCode: 'F5_5_SEVERITY_INDEX',
+	    sourceCode: 'audit_findings_actions',
+	    period: { start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z' },
+	  });
+	  assert.strictEqual(readinessFindingsSource.counts.received, 2);
+	  assert.strictEqual(readinessFindingsSource.counts.usable, 1);
+	  assert.strictEqual(readinessFindingsSource.counts.excluded, 1);
+	  assert.deepStrictEqual(readinessFindingsSource.formula_input, { low: 1, medium: 0, high: 0, critical: 0 });
+	  assert.ok(readinessFindingsSource.exclusions.some((item) => item.code === 'severity_not_eligible' && item.source_record === 'finding-info'));
+	  assert.ok(!readinessFindingsSource.exclusions.some((item) => item.code === 'status_unmapped' || item.code === 'temporal_missing_required_time'), 'readiness finding status/temporal contract must not drift');
+
+	  const actionInput = mapFormulaInput('F5_5_WEIGHTED_PROGRESS', [
     { opened_at: '2026-01-01T00:00:00Z', progress_percent: 25, weight: 1 },
     { opened_at: '2026-01-01T00:00:00Z', latest_progress_percent: 50, weight: 1 },
     { opened_at: '2026-01-01T00:00:00Z', progress: 1, weight: 2 },
@@ -450,34 +486,39 @@ async function main() {
   assert.ok(evidenceSource.formula_input.ageHours >= 0 && evidenceSource.formula_input.ageHours < 24);
   assert.ok(executeFormula('F5_5_FRESHNESS_CONTINUOUS', evidenceSource.formula_input).value > 0);
 
-  const healthClient = { async query(sql, params = []) {
-    if (sql.includes('to_regclass')) {
-      const table = String(params[0] || '').replace(/^public\./, '');
-      return { rows: [{ exists: ['calculation_runs', 'calculation_outputs'].includes(table) }] };
-    }
-    assert.ok(sql.includes('FROM calculation_runs cr'), 'GRC-HEALTH source must include formula_code from calculation_runs');
-    assert.ok(sql.includes('JOIN calculation_outputs co'), 'GRC-HEALTH source must consume official calculation outputs');
-    assert.ok(Array.isArray(params[3]) && params[3].includes('F5_5_FRESHNESS_CONTINUOUS') && params[3].includes('F5_C3_DATA_TRUST'));
-    return { rows: [
-      { id: 'out-risk', tenant_id: 'tenant-a', formula_code: 'F5_5_RESIDUAL_RISK', output_value: { value: 7 }, __event_time: new Date().toISOString() },
-      { id: 'out-compliance', tenant_id: 'tenant-a', formula_code: 'F5_5_COMPLIANCE_WEIGHTED', output_value: { value: 83.33 }, __event_time: new Date().toISOString() },
-      { id: 'out-actions', tenant_id: 'tenant-a', formula_code: 'F5_5_WEIGHTED_PROGRESS', output_value: { value: 62.5 }, __event_time: new Date().toISOString() },
-      { id: 'out-evidence', tenant_id: 'tenant-a', formula_code: 'F5_5_FRESHNESS_CONTINUOUS', output_value: { value: 99 }, __event_time: new Date().toISOString() },
-      { id: 'out-trust', tenant_id: 'tenant-a', formula_code: 'F5_C3_DATA_TRUST', output_value: { value: 85 }, __event_time: new Date().toISOString() },
-    ] };
-  } };
-  const healthSource = await resolveFormulaSource({
-    client: healthClient,
-    tenantId: 'tenant-a',
-    formulaCode: 'F5_5_GRC_HEALTH',
-    sourceCode: 'grc_health_components',
-  });
+	  const healthClient = { async query(sql, params = []) {
+	    if (sql.includes('to_regclass')) {
+	      const table = String(params[0] || '').replace(/^public\./, '');
+	      return { rows: [{ exists: ['calculation_runs', 'calculation_outputs'].includes(table) }] };
+	    }
+	    assert.ok(sql.includes('FROM calculation_runs cr'), 'GRC-HEALTH source must include formula_code from calculation_runs');
+	    assert.ok(sql.includes('JOIN calculation_outputs co'), 'GRC-HEALTH source must consume official calculation outputs');
+	    assert.ok(sql.includes('cr.started_at') && sql.includes('cr.completed_at'), 'GRC-HEALTH adapter must project temporal fallback fields declared by the contract');
+	    assert.ok(Array.isArray(params[3]) && params[3].includes('F5_5_FRESHNESS_CONTINUOUS') && params[3].includes('F5_C3_DATA_TRUST'));
+	    const startedAt = '2026-01-10T00:00:00Z';
+	    const completedAt = '2026-01-15T00:00:00Z';
+	    return { rows: [
+	      { id: 'out-risk', tenant_id: 'tenant-a', formula_code: 'F5_5_RESIDUAL_RISK', output_value: { value: 7 }, period_start: null, period_end: null, started_at: startedAt, completed_at: completedAt, __event_time: completedAt },
+	      { id: 'out-compliance', tenant_id: 'tenant-a', formula_code: 'F5_5_COMPLIANCE_WEIGHTED', output_value: { value: 83.33 }, period_start: null, period_end: null, started_at: startedAt, completed_at: completedAt, __event_time: completedAt },
+	      { id: 'out-actions', tenant_id: 'tenant-a', formula_code: 'F5_5_WEIGHTED_PROGRESS', output_value: { value: 62.5 }, period_start: null, period_end: null, started_at: startedAt, completed_at: completedAt, __event_time: completedAt },
+	      { id: 'out-evidence', tenant_id: 'tenant-a', formula_code: 'F5_5_FRESHNESS_CONTINUOUS', output_value: { value: 99 }, period_start: null, period_end: null, started_at: startedAt, completed_at: completedAt, __event_time: completedAt },
+	      { id: 'out-trust', tenant_id: 'tenant-a', formula_code: 'F5_C3_DATA_TRUST', output_value: { value: 85 }, period_start: null, period_end: null, started_at: startedAt, completed_at: completedAt, __event_time: completedAt },
+	    ] };
+	  } };
+	  const healthSource = await resolveFormulaSource({
+	    client: healthClient,
+	    tenantId: 'tenant-a',
+	    formulaCode: 'F5_5_GRC_HEALTH',
+	    sourceCode: 'grc_health_components',
+	    period: { start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z' },
+	  });
   assert.strictEqual(healthSource.status, 'ready');
   assert.strictEqual(healthSource.data_trust.state, DATA_TRUST_STATES.TRUSTED);
   assert.strictEqual(healthSource.data_trust.dimensions.population_sufficiency.status, 'pass');
-  assert.strictEqual(healthSource.formula_input.evidence, 0.99);
-  assert.strictEqual(healthSource.formula_input.dataTrust, 0.85);
-  assert.ok(executeFormula('F5_5_GRC_HEALTH', healthSource.formula_input).value > 0);
+	  assert.strictEqual(healthSource.formula_input.evidence, 0.99);
+	  assert.strictEqual(healthSource.formula_input.dataTrust, 0.85);
+	  assert.ok(!healthSource.exclusions.some((item) => item.code === 'temporal_missing_required_time'), 'missing period_start must not exclude health rows when started_at/completed_at prove the calculation interval');
+	  assert.ok(executeFormula('F5_5_GRC_HEALTH', healthSource.formula_input).value > 0);
 
   const maturityClient = { async query(sql, params = []) {
     if (sql.includes('to_regclass')) {
@@ -497,11 +538,41 @@ async function main() {
     formulaCode: 'F5_5_MATURITY',
     sourceCode: 'maturity_assessments',
   });
-  assert.strictEqual(maturitySource.counts.received, 1);
-  assert.deepStrictEqual(maturitySource.formula_input, { levels: [{ level: 3, weight: 2 }] });
-  assert.strictEqual(executeFormula('F5_5_MATURITY', maturitySource.formula_input).value, 3);
+	  assert.strictEqual(maturitySource.counts.received, 1);
+	  assert.deepStrictEqual(maturitySource.formula_input, { levels: [{ level: 3, weight: 2 }] });
+	  assert.strictEqual(executeFormula('F5_5_MATURITY', maturitySource.formula_input).value, 3);
 
-  const invalidMaturityClient = { async query(sql, params = []) {
+	  const maturityStatusClient = { async query(sql, params = []) {
+	    if (sql.includes('to_regclass')) {
+	      const table = String(params[0] || '').replace(/^public\./, '');
+	      return { rows: [{ exists: table === 'survey_evaluations' }] };
+	    }
+	    if (sql.includes('FROM survey_evaluations e')) {
+	      assert.ok(sql.includes('confirmed_at') && sql.includes('created_at'), 'survey maturity adapter must use producer temporal fields without synthetic timestamps');
+	      return { rows: [
+	        { id: 'maturity-confirmed', tenant_id: 'tenant-a', level: 80, __scale_level_source: 'PERCENT_0_100', weight: 1, status: 'confirmed', evaluated_at: '2026-01-15T00:00:00Z', confirmed_at: '2026-01-15T00:00:00Z', created_at: '2026-01-10T00:00:00Z', __event_time: '2026-01-15T00:00:00Z' },
+	        { id: 'maturity-previewed', tenant_id: 'tenant-a', level: 60, __scale_level_source: 'PERCENT_0_100', weight: 1, status: 'previewed', evaluated_at: '2026-01-10T00:00:00Z', confirmed_at: null, created_at: '2026-01-10T00:00:00Z', __event_time: '2026-01-10T00:00:00Z' },
+	        { id: 'maturity-unknown-status', tenant_id: 'tenant-a', level: 70, __scale_level_source: 'PERCENT_0_100', weight: 1, status: 'mystery', evaluated_at: '2026-01-12T00:00:00Z', confirmed_at: null, created_at: '2026-01-12T00:00:00Z', __event_time: '2026-01-12T00:00:00Z' },
+	      ] };
+	    }
+	    throw new Error(`unexpected maturity status query: ${sql}`);
+	  } };
+	  const maturityStatusSource = await resolveFormulaSource({
+	    client: maturityStatusClient,
+	    tenantId: 'tenant-a',
+	    formulaCode: 'F5_5_MATURITY',
+	    sourceCode: 'maturity_assessments',
+	    period: { start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z' },
+	  });
+	  assert.strictEqual(maturityStatusSource.counts.received, 3);
+	  assert.strictEqual(maturityStatusSource.counts.usable, 1);
+	  assert.strictEqual(maturityStatusSource.counts.excluded, 2);
+	  assert.deepStrictEqual(maturityStatusSource.formula_input, { levels: [{ level: 4, weight: 1 }] });
+	  assert.ok(maturityStatusSource.exclusions.some((item) => item.code === 'status_not_eligible' && item.source_record === 'maturity-previewed'));
+	  assert.ok(maturityStatusSource.exclusions.some((item) => item.code === 'status_unmapped' && item.source_record === 'maturity-unknown-status'));
+	  assert.ok(!maturityStatusSource.exclusions.some((item) => item.code === 'temporal_missing_required_time'), 'producer-confirmed maturity timestamps must satisfy temporal contract');
+
+	  const invalidMaturityClient = { async query(sql, params = []) {
     if (sql.includes('to_regclass')) {
       const table = String(params[0] || '').replace(/^public\./, '');
       return { rows: [{ exists: ['survey_evaluations'].includes(table) }] };
