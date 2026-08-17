@@ -3,9 +3,16 @@ const crypto = require('crypto');
 const { MathGovernanceError } = require('./statisticalEngine.service');
 const { COUNT_SEMANTICS, buildPopulationCounts } = require('./countSemantics.service');
 
-const LEGACY_TIMESTAMP_FIELDS = Object.freeze([
-  'created_at', 'updated_at', 'measured_at', 'assessed_at', 'event_date', 'submitted_at', 'executed_at', 'tested_at',
-]);
+const DEFAULT_TEMPORAL_SEMANTICS = Object.freeze({
+  canonical_time_field: '__event_time',
+  fallback_time_fields: Object.freeze([]),
+  time_meaning: 'contract_canonical_time',
+  timezone_policy: 'tenant_timezone',
+  period_policy: 'start_inclusive_end_exclusive',
+  validity_policy: 'canonical_time_in_requested_period',
+  missing_time_policy: 'exclude_when_period_requested',
+  as_of_policy: 'exclude_future_canonical_time',
+});
 
 function canonical(value) { return JSON.stringify(value, Object.keys(value).sort()); }
 function hashDataset(rows) { return crypto.createHash('sha256').update(canonical(rows || [])).digest('hex'); }
@@ -29,16 +36,43 @@ function validateTimezone(timezone) {
   try { new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date()); return timezone; }
   catch (error) { throw new MathGovernanceError('DATASET_TIMEZONE_INVALID', 'Timezone invalido para dataset operacional.', { timezone }); }
 }
-function timestampFieldsForRow(row) {
-  if (row && row.__event_time !== undefined && row.__event_time !== null && row.__event_time !== '') return ['__event_time'];
-  return LEGACY_TIMESTAMP_FIELDS.filter((field) => row?.[field] !== undefined && row?.[field] !== null && row?.[field] !== '');
+function normalizeTemporalSemantics(temporalSemantics = null) {
+  return {
+    ...DEFAULT_TEMPORAL_SEMANTICS,
+    ...(temporalSemantics || {}),
+    fallback_time_fields: Object.freeze(Array.isArray(temporalSemantics?.fallback_time_fields) ? temporalSemantics.fallback_time_fields : []),
+    valid_from_fields: Object.freeze(Array.isArray(temporalSemantics?.valid_from_fields) ? temporalSemantics.valid_from_fields : []),
+    valid_to_fields: Object.freeze(Array.isArray(temporalSemantics?.valid_to_fields) ? temporalSemantics.valid_to_fields : []),
+  };
 }
-function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit = null, expectedUnit = null, requiredFields = [], minimumSampleSize = 1, sourceKey = 'dataset', naturalKey = null, rangeRules = {}, scaleRules = {}, allowedStates = null, referenceFields = {}, currency = null, expectedCurrency = null, now = new Date() } = {}) {
+function fieldHasValue(row, field) {
+  return field && row?.[field] !== undefined && row?.[field] !== null && row?.[field] !== '';
+}
+function resolveTemporalValue(row, temporalSemantics) {
+  const semantic = normalizeTemporalSemantics(temporalSemantics);
+  const fields = [semantic.canonical_time_field, ...semantic.fallback_time_fields].filter(Boolean);
+  for (const field of fields) if (fieldHasValue(row, field)) return { field, value: row[field], semantic };
+  return { field: semantic.canonical_time_field, value: null, semantic };
+}
+function resolveFirstTemporalField(row, fields = []) {
+  for (const field of fields || []) if (fieldHasValue(row, field)) return { field, value: row[field], date: normalizeDate(row[field]) };
+  return { field: fields?.[0] || null, value: null, date: null };
+}
+function shouldRequireTemporalValue({ periodStart, periodEnd, asOf, temporalSemantics }) {
+  const policy = normalizeTemporalSemantics(temporalSemantics).missing_time_policy;
+  if (policy === 'allow_missing') return false;
+  if (policy === 'exclude_with_reason') return true;
+  return Boolean(periodStart || periodEnd || asOf);
+}
+function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit = null, expectedUnit = null, requiredFields = [], minimumSampleSize = 1, sourceKey = 'dataset', naturalKey = null, rangeRules = {}, scaleRules = {}, allowedStates = null, referenceFields = {}, currency = null, expectedCurrency = null, temporalSemantics = null, now = new Date() } = {}) {
   if (!Array.isArray(rows)) throw new MathGovernanceError('DATASET_ROWS_REQUIRED', 'Dataset debe ser arreglo.', { sourceKey });
   if (!tenantId) throw new MathGovernanceError('DATASET_TENANT_REQUIRED', 'Dataset requiere tenant efectivo.', { sourceKey });
   const validatedTimezone = validateTimezone(timezone);
   const warnings = []; const exclusions = []; const invalidRows = []; const seen = new Set();
   const periodStart = normalizeDate(period.start); const periodEnd = normalizeDate(period.end);
+  const asOf = normalizeDate(period.as_of || period.asOf);
+  const temporalSemantic = normalizeTemporalSemantics(temporalSemantics);
+  const temporalClassifications = [];
   if (periodStart && periodEnd && periodEnd < periodStart) throw new MathGovernanceError('DATASET_PERIOD_INVALID', 'Periodo de dataset invalido.', { sourceKey });
   if (expectedUnit && unit && expectedUnit !== unit) warnings.push({ code: 'unit_mismatch', expected: expectedUnit, received: unit });
   if (expectedCurrency && currency && expectedCurrency !== currency) warnings.push({ code: 'currency_mismatch', expected: expectedCurrency, received: currency });
@@ -67,12 +101,72 @@ function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit =
       if (row[field] === undefined || row[field] === null || row[field] === '') continue;
       if (Array.isArray(allowed) && allowed.length && !allowed.includes(row[field])) addIssue(issues, index, field, 'reference_invalid', 'Referencia no existe en el dataset permitido.', row[field]);
     }
-    for (const field of timestampFieldsForRow(row)) {
-      const date = normalizeDate(row[field]);
-      if (!date) addIssue(issues, index, field, 'date_invalid', 'Fecha invalida.', row[field]);
-      if (date && date > now) addIssue(issues, index, field, 'date_in_future', 'Fecha futura no permitida para calculo operacional.', row[field]);
-      if (date && periodStart && date < periodStart) addIssue(issues, index, field, 'date_before_period', 'Fecha fuera del periodo solicitado.', row[field]);
-      if (date && periodEnd && date > periodEnd) addIssue(issues, index, field, 'date_after_period', 'Fecha fuera del periodo solicitado.', row[field]);
+    const intervalMode = temporalSemantic.classification === 'validity_interval' && Boolean(periodStart || periodEnd || asOf);
+    if (intervalMode) {
+      const startValue = resolveFirstTemporalField(row, temporalSemantic.valid_from_fields);
+      const endValue = resolveFirstTemporalField(row, temporalSemantic.valid_to_fields);
+      let classification = 'in_period';
+      if (!startValue.value && shouldRequireTemporalValue({ periodStart, periodEnd, asOf, temporalSemantics: temporalSemantic })) {
+        addIssue(issues, index, startValue.field || temporalSemantic.canonical_time_field, 'temporal_missing_required_time', 'Fecha inicial de vigencia ausente para el periodo solicitado.', startValue.value);
+        classification = 'missing_required_time';
+      }
+      if (startValue.value && !startValue.date) {
+        addIssue(issues, index, startValue.field, 'date_invalid', 'Fecha invalida.', startValue.value);
+        classification = 'missing_required_time';
+      }
+      if (endValue.value && !endValue.date) {
+        addIssue(issues, index, endValue.field, 'date_invalid', 'Fecha invalida.', endValue.value);
+        classification = 'missing_required_time';
+      }
+      if (startValue.date && asOf && startValue.date > asOf) {
+        addIssue(issues, index, startValue.field, 'temporal_after_as_of', 'Fecha temporal posterior al as_of solicitado.', startValue.value);
+        classification = 'after_period';
+      }
+      if (startValue.date && startValue.date > now) {
+        addIssue(issues, index, startValue.field, 'date_in_future', 'Fecha futura no permitida para calculo operacional.', startValue.value);
+        classification = 'after_period';
+      }
+      if (endValue.date && endValue.date > now) addIssue(issues, index, endValue.field, 'date_in_future', 'Fecha futura no permitida para calculo operacional.', endValue.value);
+      if (endValue.date && periodStart && endValue.date <= periodStart) {
+        addIssue(issues, index, endValue.field, 'date_before_period', 'Intervalo de vigencia anterior al periodo solicitado.', endValue.value);
+        classification = 'before_period';
+      }
+      if (startValue.date && periodEnd && startValue.date >= periodEnd) {
+        addIssue(issues, index, startValue.field, 'date_after_period', 'Intervalo de vigencia posterior al periodo solicitado.', startValue.value);
+        classification = 'after_period';
+      }
+      temporalClassifications.push({ row_index: index, source_record: sourceRecord(row, index), field: startValue.field || temporalSemantic.canonical_time_field, value: startValue.value, valid_to_field: endValue.field, valid_to_value: endValue.value, classification, rule: temporalSemantic.validity_policy });
+    }
+    const temporalValue = intervalMode ? { value: null, field: null } : resolveTemporalValue(row, temporalSemantic);
+    const requireTemporalValue = shouldRequireTemporalValue({ periodStart, periodEnd, asOf, temporalSemantics: temporalSemantic });
+    if (!intervalMode && !temporalValue.value && requireTemporalValue) {
+      addIssue(issues, index, temporalValue.field, 'temporal_missing_required_time', 'Fecha temporal canonica ausente para el periodo solicitado.', temporalValue.value);
+      temporalClassifications.push({ row_index: index, source_record: sourceRecord(row, index), field: temporalValue.field, classification: 'missing_required_time', rule: temporalSemantic.validity_policy });
+    }
+    if (!intervalMode && temporalValue.value) {
+      const date = normalizeDate(temporalValue.value);
+      let classification = 'in_period';
+      if (!date) {
+        addIssue(issues, index, temporalValue.field, 'date_invalid', 'Fecha invalida.', temporalValue.value);
+        classification = 'missing_required_time';
+      }
+      if (date && asOf && date > asOf) {
+        addIssue(issues, index, temporalValue.field, 'temporal_after_as_of', 'Fecha temporal posterior al as_of solicitado.', temporalValue.value);
+        classification = 'after_period';
+      }
+      if (date && date > now) {
+        addIssue(issues, index, temporalValue.field, 'date_in_future', 'Fecha futura no permitida para calculo operacional.', temporalValue.value);
+        classification = 'after_period';
+      }
+      if (date && periodStart && date < periodStart) {
+        addIssue(issues, index, temporalValue.field, 'date_before_period', 'Fecha fuera del periodo solicitado.', temporalValue.value);
+        classification = 'before_period';
+      }
+      if (date && periodEnd && date >= periodEnd) {
+        addIssue(issues, index, temporalValue.field, 'date_after_period', 'Fecha fuera del periodo solicitado.', temporalValue.value);
+        classification = 'after_period';
+      }
+      temporalClassifications.push({ row_index: index, source_record: sourceRecord(row, index), field: temporalValue.field, value: temporalValue.value, classification, rule: temporalSemantic.validity_policy });
     }
     if (issues.length) {
       const enrichedIssues = enrichIssues(issues, row, index);
@@ -108,10 +202,16 @@ function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit =
     population_size: counts.population_size,
     counts,
     count_semantics: COUNT_SEMANTICS,
+    temporal_semantics: temporalSemantic,
+    temporal_summary: {
+      period_policy: temporalSemantic.period_policy,
+      as_of_policy: temporalSemantic.as_of_policy,
+      classifications: temporalClassifications,
+    },
     timezone: validatedTimezone,
     unit,
     tenantId,
     status: rows.length === 0 ? 'empty_dataset' : (valid ? 'ready' : 'validated_with_warnings'),
   };
 }
-module.exports = { validateDataset, hashDataset, COUNT_SEMANTICS, buildPopulationCounts };
+module.exports = { validateDataset, hashDataset, COUNT_SEMANTICS, buildPopulationCounts, normalizeTemporalSemantics };

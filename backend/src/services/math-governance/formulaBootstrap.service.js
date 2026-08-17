@@ -14,6 +14,7 @@ function sourceContractMetadata(contract) {
     limitations: contract.limitations,
     scale_metadata: contract.scale_metadata || {},
     count_semantics: contract.count_semantics || {},
+    temporal_semantics: contract.temporal_semantics || {},
   };
 }
 

@@ -19,6 +19,9 @@ async function main() {
     assert.ok(contract.version >= 2, `PUI-03 count_semantics governance version bump missing for ${contract.source_code}`);
     assert.strictEqual(contract.count_semantics?.received, 'physical_rows_after_tenant_source_scope', `count semantics missing for ${contract.source_code}`);
     assert.ok(contract.count_semantics?.population_size, `population_size semantics missing for ${contract.source_code}`);
+    assert.strictEqual(contract.period?.mode, 'contract_temporal_semantics', `generic created_at period default must not remain for ${contract.source_code}`);
+    assert.ok(contract.temporal_semantics?.canonical_time_field, `temporal semantics missing for ${contract.source_code}`);
+    assert.ok(contract.temporal_semantics?.time_meaning, `time meaning missing for ${contract.source_code}`);
   }
   assert.deepStrictEqual(contracts.filter((contract) => contract.availability === 'source_unavailable').map((contract) => contract.source_code), ['external_fx_rates']);
   assert.strictEqual(contracts.filter((contract) => ['legacy_adapter_required','partially_available'].includes(contract.availability)).length, 0, 'internal contracts must be resolved');
@@ -27,6 +30,7 @@ async function main() {
   const controlContractMetadata = sourceContractMetadata(controlContract);
   assert.strictEqual(controlContractMetadata.scale_metadata.variables.design.source_scale, 'PERCENT_0_100');
   assert.strictEqual(controlContractMetadata.count_semantics.received, 'physical_rows_after_tenant_source_scope');
+  assert.strictEqual(controlContractMetadata.temporal_semantics.time_meaning, 'control_assurance_calculation_time');
   assert.ok(!String(controlContract.variable_map.design).includes('score/100'), 'aggregate assurance score must not feed design dimension');
   assert.ok(String(controlContract.variable_map.effectivenesses).includes('aggregate assurance score'), 'aggregate assurance score remains valid for composite effectivenesses');
   assert.ok(String(controlContract.limitations).includes('nunca fabrica dimensiones desde score'), 'CONTROL-EFFECT anti-fabrication contract must be explicit');
@@ -65,6 +69,65 @@ async function main() {
   assert.ok(dataset.exclusions.some((item) => item.code === 'tenant_mismatch'));
   assert.ok(dataset.exclusions.some((item) => item.code === 'duplicate_natural_key'));
   assert.ok(dataset.exclusions.every((item) => item.source_record), 'dataset exclusions must expose source record for audit');
+
+  const temporalDataset = validateDataset({
+    tenantId: 'tenant-a',
+    sourceKey: 'temporal-unit-test',
+    requiredFields: ['id', 'tenant_id'],
+    minimumSampleSize: 1,
+    period: { start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z', as_of: '2026-01-20T00:00:00Z' },
+    now: new Date('2026-02-15T00:00:00Z'),
+    temporalSemantics: {
+      canonical_time_field: '__event_time',
+      time_meaning: 'unit_test_measurement_time',
+      period_policy: 'start_inclusive_end_exclusive',
+      validity_policy: 'measurement_time_in_requested_period',
+      missing_time_policy: 'exclude_with_reason',
+      as_of_policy: 'exclude_future_canonical_time',
+    },
+    rows: [
+      { id: 'in', tenant_id: 'tenant-a', __event_time: '2026-01-10T00:00:00Z' },
+      { id: 'before', tenant_id: 'tenant-a', __event_time: '2025-12-31T23:59:59Z' },
+      { id: 'after', tenant_id: 'tenant-a', __event_time: '2026-02-01T00:00:00Z' },
+      { id: 'missing', tenant_id: 'tenant-a' },
+      { id: 'future-asof', tenant_id: 'tenant-a', __event_time: '2026-01-25T00:00:00Z' },
+      { id: 'other-tenant', tenant_id: 'tenant-b', __event_time: '2026-01-10T00:00:00Z' },
+    ],
+  });
+  assert.strictEqual(temporalDataset.receivedCount, 6);
+  assert.strictEqual(temporalDataset.usableCount, 1);
+  assert.strictEqual(temporalDataset.excludedCount, 5);
+  assert.strictEqual(temporalDataset.counts.population_size, 1);
+  assert.ok(temporalDataset.exclusions.some((item) => item.code === 'date_before_period'));
+  assert.ok(temporalDataset.exclusions.some((item) => item.code === 'date_after_period'));
+  assert.ok(temporalDataset.exclusions.some((item) => item.code === 'temporal_missing_required_time'));
+  assert.ok(temporalDataset.exclusions.some((item) => item.code === 'temporal_after_as_of'));
+  assert.ok(temporalDataset.exclusions.some((item) => item.code === 'tenant_mismatch'));
+  assert.ok(temporalDataset.temporal_summary.classifications.some((item) => item.classification === 'missing_required_time'));
+
+  const intervalDataset = validateDataset({
+    tenantId: 'tenant-a',
+    sourceKey: 'temporal-interval-test',
+    requiredFields: ['id', 'tenant_id'],
+    minimumSampleSize: 1,
+    period: { start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z' },
+    now: new Date('2026-02-15T00:00:00Z'),
+    temporalSemantics: {
+      classification: 'validity_interval',
+      canonical_time_field: '__event_time',
+      valid_from_fields: ['opened_at'],
+      valid_to_fields: ['closed_at'],
+      time_meaning: 'action_lifecycle_state_time',
+      validity_policy: 'action_state_in_requested_period',
+      missing_time_policy: 'exclude_with_reason',
+    },
+    rows: [
+      { id: 'vigente', tenant_id: 'tenant-a', opened_at: '2025-12-15T00:00:00Z', closed_at: null },
+      { id: 'cerrado-antes', tenant_id: 'tenant-a', opened_at: '2025-10-01T00:00:00Z', closed_at: '2025-12-31T00:00:00Z' },
+    ],
+  });
+  assert.strictEqual(intervalDataset.usableCount, 1, 'validity interval created before the period must remain eligible when still open');
+  assert.ok(intervalDataset.exclusions.some((item) => item.code === 'date_before_period'));
 
   const inherentInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ id: 'risk-a', probability: 4, impact: 5 }]);
   assert.deepStrictEqual(inherentInput.risks, [{ source_record: 'risk-a', physical_source: null, probability: 4, impact: 5, inherent_risk_score: 20 }]);
@@ -196,8 +259,8 @@ async function main() {
         status: 'confirmed',
         currency: 'CLP',
         raw_event_date: '2999-08-31T23:59:59.999Z',
-        event_date: '2026-08-10T12:00:00.000Z',
-        __event_time: '2026-08-10T12:00:00.000Z',
+        event_date: '2999-08-31T23:59:59.999Z',
+        __event_time: '2999-08-31T23:59:59.999Z',
         gross_loss_amount: '100000.00',
         recovery_amount: '25000.00',
         net_loss_amount: '75000.00',
@@ -213,11 +276,11 @@ async function main() {
     sourceCode: 'loss_events_operational',
   });
   assert.strictEqual(lossQueries.length, 1);
-  assert.strictEqual(lossSource.status, 'ready');
-  assert.strictEqual(lossSource.rows.length, 1);
-  assert.deepStrictEqual(lossSource.formula_input, { grossLoss: 100000, recoveries: 25000 });
-  assert.strictEqual(executeFormula('F5_5_NET_LOSS', lossSource.formula_input).value, 75000);
-  assert.ok(lossSource.warnings.some((warning) => String(warning).includes('occurred_at viene en el futuro')), 'future occurrence warning expected');
+  assert.strictEqual(lossSource.status, 'validated_with_warnings');
+  assert.strictEqual(lossSource.counts.received, 1);
+  assert.strictEqual(lossSource.counts.usable, 0);
+  assert.ok(lossSource.exclusions.some((item) => item.code === 'date_in_future'), 'future occurrence must be excluded instead of falling back to created_at');
+  assert.ok(lossSource.warnings.some((warning) => String(warning).includes('sin fallback a created_at')), 'future occurrence warning expected');
 
   const evidenceFreshnessInput = mapFormulaInput('F5_5_FRESHNESS_CONTINUOUS', [
     { id: 'evidence-a', tenant_id: 'tenant-a', status: 'aprobada', reviewed_at: new Date(Date.now() - 6 * 3600000).toISOString() },

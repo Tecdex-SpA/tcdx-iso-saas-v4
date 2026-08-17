@@ -23,7 +23,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 ## PARTIAL
 
-- Source contracts/resolver: PUI-01, PUI-02 y PUI-03 cerraron ownership, escala/unidad y count semantics para sus variables focales; PRE-UI continúa con temporalidad, estado, fallback, provenance y matriz completa.
+- Source contracts/resolver: PUI-01, PUI-02 y PUI-03 cerraron ownership, escala/unidad y count semantics para sus variables focales; PUI-04 implementó temporal semantics en estado REVIEW por test focal no rerun; PRE-UI continúa con estado, fallback, provenance y matriz completa.
 - Data Trust/provenance/snapshots: foundation existe; requiere cierre integral PRE-UI.
 - Decision Interpretation / Next Best Actions: foundation determinística; falta causalidad transversal completa.
 - Tenant document handling: hay capacidades especializadas, no RAG privado universal confirmado.
@@ -68,3 +68,4 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - No redescubrir en PUI-02 el ownership de fuente de CONTROL-EFFECT, RISK-INHERENT ni MATURITY cerrado por PUI-01; PUI-02 debe enfocarse en escala/unidad.
 - No redescubrir en PUI-03 la escala/unidad de CONTROL-EFFECT, RISK-INHERENT, MATURITY ni supplier risk health cerrada por PUI-02; PUI-03 debe enfocarse en counts.
 - No redescubrir en PUI-04 la semantica de conteos PUI-03; PUI-04 debe enfocarse en temporalidad.
+- PUI-05 no debe iniciar hasta cerrar la revisión de PUI-04; no reabrir PUI-01/PUI-02/PUI-03 ni version governance HF1/HF2 salvo contradicción objetiva.

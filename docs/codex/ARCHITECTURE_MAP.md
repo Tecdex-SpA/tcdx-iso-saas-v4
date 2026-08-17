@@ -12,7 +12,8 @@ Backend Node/Express
         |
         +--> math-governance
         |      + source contracts/resolver
-        |      + dataset validation
+        |      + scale/count/temporal contract metadata
+        |      + dataset validation and temporal classification
         |      + formula registry/execution
         |      + official calculation
         |      + snapshots/lineage

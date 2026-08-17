@@ -182,21 +182,31 @@ function maturityPortfolio(rows = [], contract = getSourceContract('maturity_ass
   return { input: { levels }, usableRows, exclusions };
 }
 
-function safeTimestampExpression(alias = 'x') {
-  return `COALESCE(NULLIF(to_jsonb(${alias})->>'event_date','')::timestamptz,NULLIF(to_jsonb(${alias})->>'occurred_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'measured_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'assessed_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'updated_at','')::timestamptz,NULLIF(to_jsonb(${alias})->>'created_at','')::timestamptz)`;
+function temporalFields(contractOrFields = null) {
+  if (Array.isArray(contractOrFields)) return contractOrFields;
+  return contractOrFields?.temporal_semantics?.source_time_fields || ['__event_time'];
 }
-async function firstPopulatedTables(client, tables, tenantId, period = {}) {
+function timestampFieldExpression(alias, field) {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(String(field || ''))) throw new MathGovernanceError('SOURCE_TEMPORAL_FIELD_INVALID', 'Campo temporal invalido en contrato de fuente.', { field });
+  return `NULLIF(to_jsonb(${alias})->>'${field}','')::timestamptz`;
+}
+function safeTimestampExpression(alias = 'x', contractOrFields = null) {
+  const fields = temporalFields(contractOrFields).filter(Boolean);
+  if (!fields.length) return 'NULL::timestamptz';
+  return `COALESCE(${fields.map((field) => timestampFieldExpression(alias, field)).join(',')})`;
+}
+async function firstPopulatedTables(client, tables, tenantId, period = {}, contract = null) {
   let existing = false;
   let primaryExisting = null;
   for (const table of tables) {
     if (!(await tableExists(client, table))) continue;
     if (!primaryExisting) primaryExisting = table;
     existing = true;
-    const timestamp = safeTimestampExpression('x');
-    const result = await client.query(`SELECT x.*, ${timestamp} AS __event_time FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid AND ($2::timestamptz IS NULL OR ${timestamp}>=$2) AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`, [tenantId, period.start || null, period.end || null]);
+    const timestamp = safeTimestampExpression('x', contract);
+    const result = await client.query(`SELECT x.*, ${timestamp} AS __event_time FROM ${table} x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid`, [tenantId]);
     if (result.rows?.length) {
       const warnings = primaryExisting && table !== primaryExisting
-        ? [`Fuente primaria ${primaryExisting} sin filas en el período solicitado; se usó fallback legacy explícito ${table}.`]
+        ? [`Fuente primaria ${primaryExisting} sin filas tenant-scoped; se usó fallback legacy explícito ${table}.`]
         : [];
       return tagWarnings(tagRows(result.rows, table), warnings);
     }
@@ -213,7 +223,7 @@ async function firstPopulated(client, candidates) {
     const result = await client.query(candidate.sql, candidate.params || []);
     if (result.rows?.length) {
       const warnings = primaryExisting && candidate.table !== primaryExisting
-        ? [`Fuente primaria ${primaryExisting} sin filas en el período solicitado; se usó fallback legacy explícito ${candidate.table}.`]
+        ? [`Fuente primaria ${primaryExisting} sin filas tenant-scoped; se usó fallback legacy explícito ${candidate.table}.`]
         : [];
       return tagWarnings(tagRows(result.rows, candidate.table), warnings);
     }
@@ -222,10 +232,12 @@ async function firstPopulated(client, candidates) {
 }
 
 async function queryCompliance(client, tenantId, period) {
+  const contract = getSourceContract('compliance_requirements_assessments');
+  const complianceTimestamp = `COALESCE(m.updated_at,m.created_at)`;
   const candidates = [
-    { table: 'grc_requirement_control_mappings', params: [tenantId, period.start || null, period.end || null], sql: `SELECT m.id,COALESCE(m.tenant_id,r.tenant_id) AS tenant_id,m.requirement_id,m.tenant_control_id,CASE WHEN m.mapping_type='not_equivalent' THEN 'not_applicable' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level)>=80 THEN 'conform' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level)>0 THEN 'partial' WHEN m.status='rejected' THEN 'non_conform' ELSE 'pending' END AS status,(m.mapping_type<>'not_equivalent') AS applicability,1::numeric AS weight,COALESCE(m.updated_at,m.created_at) AS assessed_at,a.score AS assurance_score FROM grc_requirement_control_mappings m JOIN grc_framework_requirements r ON r.id=m.requirement_id LEFT JOIN grc_control_assurance a ON a.tenant_id=COALESCE(m.tenant_id,r.tenant_id) AND a.tenant_control_id=m.tenant_control_id WHERE COALESCE(m.tenant_id,r.tenant_id)=$1::uuid AND ($2::timestamptz IS NULL OR COALESCE(m.updated_at,m.created_at)>=$2) AND ($3::timestamptz IS NULL OR COALESCE(m.updated_at,m.created_at)<=$3)` },
-    { table: 'control_soa_assessments', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'control_id','')::uuid,NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS requirement_id,COALESCE(NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,NULLIF(to_jsonb(x)->>'control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('compliant','conform','effective','implemented','approved') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('not_applicable','na') THEN 'not_applicable' ELSE 'pending' END AS status,lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) NOT IN ('not_applicable','na') AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x')} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'compliance_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM control_soa_assessments x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
-    { table: 'tenant_controls', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,(to_jsonb(x)->>'id')::uuid AS requirement_id,(to_jsonb(x)->>'id')::uuid AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('compliant','conform','effective','implemented','approved','active') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('not_applicable','na') THEN 'not_applicable' ELSE 'pending' END AS status,COALESCE(NULLIF(to_jsonb(x)->>'is_applicable','')::boolean,true) AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x')} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'effectiveness_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM tenant_controls x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
+    { table: 'grc_requirement_control_mappings', params: [tenantId], sql: `SELECT m.id,COALESCE(m.tenant_id,r.tenant_id) AS tenant_id,m.requirement_id,m.tenant_control_id,CASE WHEN m.mapping_type='not_equivalent' THEN 'not_applicable' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level)>=80 THEN 'conform' WHEN m.status IN ('published','reviewed') AND COALESCE(a.score,m.coverage_level)>0 THEN 'partial' WHEN m.status='rejected' THEN 'non_conform' ELSE 'pending' END AS status,(m.mapping_type<>'not_equivalent') AS applicability,1::numeric AS weight,${complianceTimestamp} AS assessed_at,${complianceTimestamp} AS __event_time,a.score AS assurance_score FROM grc_requirement_control_mappings m JOIN grc_framework_requirements r ON r.id=m.requirement_id LEFT JOIN grc_control_assurance a ON a.tenant_id=COALESCE(m.tenant_id,r.tenant_id) AND a.tenant_control_id=m.tenant_control_id WHERE COALESCE(m.tenant_id,r.tenant_id)=$1::uuid` },
+    { table: 'control_soa_assessments', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,COALESCE(NULLIF(to_jsonb(x)->>'control_id','')::uuid,NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS requirement_id,COALESCE(NULLIF(to_jsonb(x)->>'tenant_control_id','')::uuid,NULLIF(to_jsonb(x)->>'control_id','')::uuid,(to_jsonb(x)->>'id')::uuid) AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('compliant','conform','effective','implemented','approved') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) IN ('not_applicable','na') THEN 'not_applicable' ELSE 'pending' END AS status,lower(COALESCE(to_jsonb(x)->>'status',to_jsonb(x)->>'assessment_status','pending')) NOT IN ('not_applicable','na') AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x', contract)} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'compliance_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM control_soa_assessments x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
+    { table: 'tenant_controls', params: [tenantId], sql: `SELECT (to_jsonb(x)->>'id')::uuid AS id,(to_jsonb(x)->>'tenant_id')::uuid AS tenant_id,(to_jsonb(x)->>'id')::uuid AS requirement_id,(to_jsonb(x)->>'id')::uuid AS tenant_control_id,CASE WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('compliant','conform','effective','implemented','approved','active') THEN 'conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('partial','partially_compliant','in_progress') THEN 'partial' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('non_compliant','non_conform','ineffective','rejected') THEN 'non_conform' WHEN lower(COALESCE(to_jsonb(x)->>'compliance_status',to_jsonb(x)->>'status','pending')) IN ('not_applicable','na') THEN 'not_applicable' ELSE 'pending' END AS status,COALESCE(NULLIF(to_jsonb(x)->>'is_applicable','')::boolean,true) AS applicability,COALESCE(NULLIF(to_jsonb(x)->>'weight','')::numeric,1) AS weight,${safeTimestampExpression('x', contract)} AS assessed_at,COALESCE(NULLIF(to_jsonb(x)->>'score','')::numeric,NULLIF(to_jsonb(x)->>'effectiveness_score','')::numeric,NULLIF(to_jsonb(x)->>'assurance_score','')::numeric) AS assurance_score FROM tenant_controls x WHERE (to_jsonb(x)->>'tenant_id')::uuid=$1::uuid` },
   ];
   return firstPopulated(client, candidates);
 }
@@ -233,6 +245,7 @@ async function queryCompliance(client, tenantId, period) {
 async function queryRisk(client, tenantId, period) {
   if (await tableExists(client, 'iso_risk_matrix_items') && await tableExists(client, 'iso_risk_matrix_runs')) {
     const runTimestamp = `COALESCE(r.completed_at,r.updated_at,r.created_at)`;
+    const asOf = period.as_of || period.asOf || period.end || null;
     const result = await client.query(
       `WITH latest_runs AS (
          SELECT DISTINCT ON (r.tenant_id,r.standard_code,r.version_code)
@@ -248,11 +261,11 @@ async function queryRisk(client, tenantId, period) {
        JOIN iso_risk_matrix_items i ON i.run_id=lr.id AND i.tenant_id=lr.tenant_id
        WHERE i.tenant_id=$1::uuid
          AND i.status NOT IN ('rejected','archived')`,
-      [tenantId, period.end || null]
+      [tenantId, asOf]
     );
     if (result.rows?.length) return tagRows(result.rows, 'iso_risk_matrix_items');
   }
-  return firstPopulatedTables(client, ['grc_quantitative_risk_assessments','asset_risks','privacy_dpia_risks'], tenantId, period);
+  return firstPopulatedTables(client, ['grc_quantitative_risk_assessments','asset_risks','privacy_dpia_risks'], tenantId, period, getSourceContract('risk_register_controls'));
 }
 
 async function queryControls(client, tenantId, period) {
@@ -264,24 +277,25 @@ async function queryControls(client, tenantId, period) {
               ${timestamp} AS __event_time
        FROM grc_control_assurance a
        WHERE a.tenant_id=$1::uuid
-         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
-      [tenantId, period.start || null, period.end || null]
+         `,
+      [tenantId]
     );
     if (result.rows?.length) return tagRows(result.rows, 'grc_control_assurance');
   }
-  return firstPopulatedTables(client, ['control_soa_assessments','control_health_scores','tenant_controls'], tenantId, period);
+  return firstPopulatedTables(client, ['control_soa_assessments','control_health_scores','tenant_controls'], tenantId, period, getSourceContract('control_assurance_evidence'));
 }
 
 async function queryAuditActions(client, tenantId, period, formulaCode) {
   const severityFormula = formulaCode === 'F5_5_SEVERITY_INDEX';
   if (!severityFormula && await tableExists(client, 'action_plans')) {
-    const timestamp = safeTimestampExpression('a');
+    const timestamp = safeTimestampExpression('a', getSourceContract('audit_findings_actions'));
+    const asOf = period.as_of || period.asOf || period.end || null;
     const updatesExist = await tableExists(client, 'action_plan_updates');
     const updateJoin = updatesExist ? `LEFT JOIN LATERAL (
          SELECT au.* FROM action_plan_updates au
          WHERE (to_jsonb(au)->>'tenant_id')::uuid=$1::uuid
            AND COALESCE(NULLIF(to_jsonb(au)->>'action_plan_id','')::uuid,NULLIF(to_jsonb(au)->>'plan_id','')::uuid)=a.id
+           AND ($2::timestamptz IS NULL OR COALESCE(NULLIF(to_jsonb(au)->>'created_at','')::timestamptz,NULLIF(to_jsonb(au)->>'updated_at','')::timestamptz)<=$2)
          ORDER BY COALESCE(NULLIF(to_jsonb(au)->>'created_at','')::timestamptz,NULLIF(to_jsonb(au)->>'updated_at','')::timestamptz) DESC NULLS LAST
          LIMIT 1
        ) u ON true` : 'LEFT JOIN LATERAL (SELECT NULL::jsonb AS row_json) u ON false';
@@ -296,20 +310,18 @@ async function queryAuditActions(client, tenantId, period, formulaCode) {
               COALESCE(NULLIF(${updateJson}->>'created_at','')::timestamptz,NULLIF(to_jsonb(a)->>'latest_update_at','')::timestamptz,${timestamp}) AS __event_time
        FROM action_plans a
        ${updateJoin}
-       WHERE (to_jsonb(a)->>'tenant_id')::uuid=$1::uuid
-         AND ($2::timestamptz IS NULL OR COALESCE(NULLIF(${updateJson}->>'created_at','')::timestamptz,NULLIF(to_jsonb(a)->>'latest_update_at','')::timestamptz,${timestamp})>=$2)
-         AND ($3::timestamptz IS NULL OR COALESCE(NULLIF(${updateJson}->>'created_at','')::timestamptz,NULLIF(to_jsonb(a)->>'latest_update_at','')::timestamptz,${timestamp})<=$3)`,
-      [tenantId, period.start || null, period.end || null]
+       WHERE (to_jsonb(a)->>'tenant_id')::uuid=$1::uuid`,
+      [tenantId, asOf]
     );
     return tagRows(result.rows.map((row) => ({ ...row, progress: row.normalized_progress, status: row.normalized_status, opened_at: row.normalized_opened_at, closed_at: row.normalized_closed_at, due_at: row.normalized_due_at })), 'action_plans');
   }
   const tables = severityFormula ? ['grc_readiness_findings', 'findings', 'action_plans'] : ['action_plans', 'findings', 'grc_readiness_findings'];
-  const rows = await firstPopulatedTables(client, tables, tenantId, period);
+  const rows = await firstPopulatedTables(client, tables, tenantId, period, getSourceContract('audit_findings_actions'));
   if (!rows || !severityFormula) return rows;
   return rows.map((row) => ({ ...row, status: row.status || 'open' }));
 }
 
-async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period); }
+async function queryReadiness(client, tenantId, period) { return firstPopulatedTables(client, ['grc_readiness_results'], tenantId, period, getSourceContract('grc_readiness_operational_snapshot')); }
 
 async function queryHealth(client, tenantId, period) {
   const hasRuns = await tableExists(client, 'calculation_runs');
@@ -326,7 +338,7 @@ async function queryHealth(client, tenantId, period) {
        AND cr.run_status='calculated'
        AND cr.formula_code = ANY($4::text[])
        AND ($2::timestamptz IS NULL OR COALESCE(cr.period_end,cr.completed_at,cr.started_at)>=$2)
-       AND ($3::timestamptz IS NULL OR COALESCE(cr.period_start,cr.started_at,cr.completed_at)<=$3)
+       AND ($3::timestamptz IS NULL OR COALESCE(cr.period_start,cr.started_at,cr.completed_at)<$3)
      ORDER BY cr.formula_code, ${componentTimestamp} DESC NULLS LAST, cr.started_at DESC`,
     [tenantId, period.start || null, period.end || null, GRC_HEALTH_DEPENDENCY_FORMULAS]
   );
@@ -336,8 +348,8 @@ async function queryHealth(client, tenantId, period) {
 async function queryMaturity(client, tenantId, period) {
   const candidates = [];
   if (await tableExists(client, 'survey_evaluations')) {
-    const timestamp = safeTimestampExpression('e');
-    candidates.push({ table: 'survey_evaluations', params: [tenantId, period.start || null, period.end || null], sql:
+    const timestamp = safeTimestampExpression('e', getSourceContract('maturity_assessments'));
+    candidates.push({ table: 'survey_evaluations', params: [tenantId], sql:
       `SELECT e.id,(to_jsonb(e)->>'tenant_id')::uuid AS tenant_id,
               COALESCE(NULLIF(to_jsonb(e)->>'level','')::numeric,NULLIF(to_jsonb(e)->>'maturity_level','')::numeric,NULLIF(to_jsonb(e)->>'score','')::numeric,NULLIF(to_jsonb(e)->>'total_score','')::numeric) AS level,
               CASE
@@ -349,9 +361,7 @@ async function queryMaturity(client, tenantId, period) {
               COALESCE(NULLIF(to_jsonb(e)->>'evaluation_status',''),NULLIF(to_jsonb(e)->>'status',''),'evaluated') AS status,
               ${timestamp} AS __event_time
        FROM survey_evaluations e
-       WHERE (to_jsonb(e)->>'tenant_id')::uuid=$1::uuid
-         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+       WHERE (to_jsonb(e)->>'tenant_id')::uuid=$1::uuid` });
   }
   if (await tableExists(client, 'metric_measurements') && await tableExists(client, 'metric_definitions')) {
     const hasVersions = await tableExists(client, 'metric_definition_versions');
@@ -360,7 +370,7 @@ async function queryMaturity(client, tenantId, period) {
     const bindingJoin = hasBindings ? `LEFT JOIN LATERAL (SELECT msb.formula_code FROM metric_source_bindings msb WHERE msb.metric_definition_id=md.id AND msb.binding_status='published' ORDER BY msb.tenant_id DESC NULLS LAST,msb.version_number DESC LIMIT 1) msb ON true` : '';
     const maturityPredicate = [`md.metric_code='MATURITY'`, hasVersions ? `mdv.functional_code='MATURITY'` : null, hasBindings ? `msb.formula_code='F5_5_MATURITY'` : null].filter(Boolean).join(' OR ');
     const timestamp = `COALESCE(NULLIF(to_jsonb(mm)->>'calculated_at','')::timestamptz,NULLIF(to_jsonb(mm)->>'period_end','')::timestamptz,NULLIF(to_jsonb(mm)->>'created_at','')::timestamptz)`;
-    candidates.push({ table: 'metric_measurements', params: [tenantId, period.start || null, period.end || null], sql:
+    candidates.push({ table: 'metric_measurements', params: [tenantId], sql:
       `SELECT mm.id,mm.tenant_id,COALESCE(mm.value_numeric,NULLIF(mm.value_text,'')::numeric) AS level,
               COALESCE(NULLIF(to_jsonb(mm)->'metadata'->>'source_scale',''),'SCORE_0_5') AS __scale_level_source,
               COALESCE(NULLIF(to_jsonb(mm)->'metadata'->>'weight','')::numeric,1) AS weight,
@@ -369,13 +379,11 @@ async function queryMaturity(client, tenantId, period) {
        JOIN metric_definitions md ON md.id=mm.metric_definition_id
        ${versionJoin}
        ${bindingJoin}
-       WHERE mm.tenant_id=$1::uuid AND (${maturityPredicate})
-         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+       WHERE mm.tenant_id=$1::uuid AND (${maturityPredicate})` });
   }
   if (await tableExists(client, 'grc_metric_measurements')) {
-    const timestamp = safeTimestampExpression('gm');
-    candidates.push({ table: 'grc_metric_measurements', params: [tenantId, period.start || null, period.end || null], sql:
+    const timestamp = safeTimestampExpression('gm', getSourceContract('maturity_assessments'));
+    candidates.push({ table: 'grc_metric_measurements', params: [tenantId], sql:
       `SELECT gm.id,(to_jsonb(gm)->>'tenant_id')::uuid AS tenant_id,
               COALESCE(NULLIF(to_jsonb(gm)->>'level','')::numeric,NULLIF(to_jsonb(gm)->>'score','')::numeric,NULLIF(to_jsonb(gm)->>'numeric_value','')::numeric,NULLIF(to_jsonb(gm)->>'value_numeric','')::numeric) AS level,
               CASE
@@ -387,16 +395,14 @@ async function queryMaturity(client, tenantId, period) {
               COALESCE(NULLIF(to_jsonb(gm)->>'status',''),'calculated') AS status,${timestamp} AS __event_time
        FROM grc_metric_measurements gm
        WHERE (to_jsonb(gm)->>'tenant_id')::uuid=$1::uuid
-         AND lower(COALESCE(to_jsonb(gm)->>'metric_code',to_jsonb(gm)->>'functional_code',to_jsonb(gm)->>'formula_code','')) IN ('maturity','f5_5_maturity')
-         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+         AND lower(COALESCE(to_jsonb(gm)->>'metric_code',to_jsonb(gm)->>'functional_code',to_jsonb(gm)->>'formula_code','')) IN ('maturity','f5_5_maturity')` });
   }
   return firstPopulated(client, candidates);
 }
 
 async function queryIncidents(client, tenantId, period) {
   if (!(await tableExists(client, 'grc_incidents'))) return null;
-  const timestamp = `COALESCE(NULLIF(to_jsonb(i)->>'reported_at','')::timestamptz,NULLIF(to_jsonb(i)->>'detected_at','')::timestamptz,NULLIF(to_jsonb(i)->>'created_at','')::timestamptz)`;
+  const timestamp = safeTimestampExpression('i', getSourceContract('incident_operational_events'));
   const result = await client.query(
     `SELECT i.id,i.tenant_id,i.status,i.category,i.priority,
             COALESCE(NULLIF(to_jsonb(i)->>'confirmed_severity',''),NULLIF(to_jsonb(i)->>'calculated_severity',''),NULLIF(to_jsonb(i)->>'priority','')) AS severity,
@@ -405,10 +411,8 @@ async function queryIncidents(client, tenantId, period) {
             NULLIF(to_jsonb(i)->>'duration_minutes','')::numeric AS duration_minutes,
             NULLIF(to_jsonb(i)->>'customer_impact','') AS customer_impact
      FROM grc_incidents i
-     WHERE i.tenant_id=$1::uuid
-       AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-       AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
-    [tenantId, period.start || null, period.end || null]
+     WHERE i.tenant_id=$1::uuid`,
+    [tenantId]
   );
   return tagRows(result.rows, 'grc_incidents');
 }
@@ -416,27 +420,24 @@ async function queryIncidents(client, tenantId, period) {
 async function queryLossEvents(client, tenantId, period) {
   if (!(await tableExists(client, 'loss_events'))) return null;
   const rawEventTime = `COALESCE(NULLIF(to_jsonb(e)->>'event_date','')::timestamptz,NULLIF(to_jsonb(e)->>'occurred_at','')::timestamptz)`;
-  const effectiveEventTime = `COALESCE(CASE WHEN ${rawEventTime} IS NOT NULL AND ${rawEventTime} <= now() THEN ${rawEventTime} END,NULLIF(to_jsonb(e)->>'created_at','')::timestamptz,NULLIF(to_jsonb(e)->>'updated_at','')::timestamptz,${rawEventTime})`;
   const result = await client.query(
     `SELECT e.id,e.tenant_id,COALESCE(NULLIF(to_jsonb(e)->>'status',''),'draft') AS status,NULLIF(to_jsonb(e)->>'currency','') AS currency,
-            ${rawEventTime} AS raw_event_date,${effectiveEventTime} AS event_date,${effectiveEventTime} AS __event_time,
+            ${rawEventTime} AS raw_event_date,${rawEventTime} AS event_date,${rawEventTime} AS __event_time,
             COALESCE(NULLIF(to_jsonb(e)->>'gross_loss_amount','')::numeric,NULLIF(to_jsonb(e)->>'gross_loss','')::numeric) AS gross_loss_amount,
             COALESCE(NULLIF(to_jsonb(e)->>'recovery_amount','')::numeric,NULLIF(to_jsonb(e)->>'recoveries','')::numeric) AS recovery_amount,
             COALESCE(NULLIF(to_jsonb(e)->>'net_loss_amount','')::numeric,NULLIF(to_jsonb(e)->>'net_loss','')::numeric) AS net_loss_amount,
             CASE WHEN ${rawEventTime} IS NOT NULL AND ${rawEventTime} > now() THEN true ELSE false END AS raw_event_date_was_future
      FROM loss_events e
      WHERE e.tenant_id=$1::uuid
-       AND COALESCE(NULLIF(to_jsonb(e)->>'status',''),'draft') NOT IN ('cancelled','rejected')
-       AND ($2::timestamptz IS NULL OR ${effectiveEventTime}>=$2)
-       AND ($3::timestamptz IS NULL OR ${effectiveEventTime}<=$3)`,
-    [tenantId, period.start || null, period.end || null]
+       AND COALESCE(NULLIF(to_jsonb(e)->>'status',''),'draft') NOT IN ('cancelled','rejected')`,
+    [tenantId]
   );
-  return tagRows(result.rows.map((row) => ({ ...row, __source_warnings: row.raw_event_date_was_future ? ['loss_events.occurred_at viene en el futuro; se usó created_at como fecha efectiva para el cálculo oficial.'] : [] })), 'loss_events');
+  return tagRows(result.rows.map((row) => ({ ...row, __source_warnings: row.raw_event_date_was_future ? ['loss_events.occurred_at/event_date viene en el futuro; se excluye por temporal_semantics, sin fallback a created_at.'] : [] })), 'loss_events');
 }
 
 async function queryContinuity(client, tenantId, period) {
   if (!(await tableExists(client, 'grc_continuity_tests'))) return null;
-  const timestamp = `COALESCE(NULLIF(to_jsonb(t)->>'completed_at','')::timestamptz,NULLIF(to_jsonb(t)->>'scheduled_at','')::timestamptz,NULLIF(to_jsonb(t)->>'created_at','')::timestamptz)`;
+  const timestamp = safeTimestampExpression('t', getSourceContract('continuity_resilience_tests'));
   const status = `lower(COALESCE(NULLIF(to_jsonb(t)->>'status',''),'planned'))`;
   const result = await client.query(
     `SELECT t.id,t.tenant_id,
@@ -455,34 +456,30 @@ async function queryContinuity(client, tenantId, period) {
      FROM grc_continuity_tests t
      WHERE t.tenant_id=$1::uuid
        AND NULLIF(to_jsonb(t)->>'completed_at','')::timestamptz IS NOT NULL
-       AND ${status} NOT IN ('planned','draft','scheduled','cancelled')
-       AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-       AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
-    [tenantId, period.start || null, period.end || null]
+      AND ${status} NOT IN ('planned','draft','scheduled','cancelled')`,
+    [tenantId]
   );
   return tagRows(result.rows, 'grc_continuity_tests');
 }
 
 async function queryAssurance(client, tenantId, period) {
   if (!(await tableExists(client, 'assurance_test_results'))) return null;
-  const timestamp = safeTimestampExpression('r');
+  const timestamp = safeTimestampExpression('r', getSourceContract('assurance_test_results'));
   const rawResult = `lower(COALESCE(NULLIF(to_jsonb(r)->>'result',''),NULLIF(to_jsonb(r)->>'status',''),NULLIF(to_jsonb(r)->>'outcome',''),'inconclusive'))`;
   const result = await client.query(
     `SELECT (to_jsonb(r)->>'id')::uuid AS id,(to_jsonb(r)->>'tenant_id')::uuid AS tenant_id,
             CASE WHEN ${rawResult}='passed' THEN 'pass' WHEN ${rawResult}='failed' THEN 'fail' ELSE ${rawResult} END AS result,
             COALESCE(NULLIF(to_jsonb(r)->>'weight','')::numeric,1) AS weight,${timestamp} AS __event_time
      FROM assurance_test_results r
-     WHERE (to_jsonb(r)->>'tenant_id')::uuid=$1::uuid
-       AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-       AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
-    [tenantId, period.start || null, period.end || null]
+     WHERE (to_jsonb(r)->>'tenant_id')::uuid=$1::uuid`,
+    [tenantId]
   );
   return tagRows(result.rows, 'assurance_test_results');
 }
 
 async function querySupplier(client, tenantId, period) {
   if (!(await tableExists(client, 'grc_supplier_assessments'))) return null;
-  const timestamp = `COALESCE(NULLIF(to_jsonb(a)->>'approved_at','')::timestamptz,NULLIF(to_jsonb(a)->>'submitted_at','')::timestamptz,NULLIF(to_jsonb(a)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(a)->>'created_at','')::timestamptz)`;
+  const timestamp = safeTimestampExpression('a', getSourceContract('supplier_tprm_assessments'));
   const result = await client.query(
     `SELECT a.id,a.tenant_id,a.supplier_id,a.status,
             NULLIF(to_jsonb(a)->>'compliance_score','')::numeric AS compliance_score,
@@ -501,10 +498,8 @@ async function querySupplier(client, tenantId, period) {
             ${timestamp} AS __event_time
      FROM grc_supplier_assessments a
      WHERE a.tenant_id=$1::uuid
-       AND lower(a.status) NOT IN ('draft','invited','in_progress','rejected','expired')
-       AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-       AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)`,
-    [tenantId, period.start || null, period.end || null]
+       AND lower(a.status) NOT IN ('draft','invited','in_progress','rejected','expired')`,
+    [tenantId]
   );
   return tagRows(result.rows, 'grc_supplier_assessments');
 }
@@ -512,15 +507,13 @@ async function querySupplier(client, tenantId, period) {
 async function queryEvidenceFreshness(client, tenantId, period) {
   const candidates = [];
   if (await tableExists(client, 'evidences')) {
-    const timestamp = `COALESCE(NULLIF(to_jsonb(e)->>'reviewed_at','')::timestamptz,NULLIF(to_jsonb(e)->>'updated_at','')::timestamptz,NULLIF(to_jsonb(e)->>'created_at','')::timestamptz)`;
-    candidates.push({ table: 'evidences', params: [tenantId, period.start || null, period.end || null], sql:
+    const timestamp = safeTimestampExpression('e', getSourceContract('evidence_freshness_records'));
+    candidates.push({ table: 'evidences', params: [tenantId], sql:
       `SELECT e.id,e.tenant_id,COALESCE(NULLIF(to_jsonb(e)->>'status',''),'pending') AS status,
               NULLIF(to_jsonb(e)->>'validated','')::boolean AS validated,NULLIF(to_jsonb(e)->>'created_at','')::timestamptz AS created_at,
               NULLIF(to_jsonb(e)->>'reviewed_at','')::timestamptz AS reviewed_at,NULLIF(to_jsonb(e)->>'expires_at','')::timestamptz AS expires_at,
               ${timestamp} AS __event_time,NULLIF(to_jsonb(e)->>'freshness_score','')::numeric AS freshness_score,NULLIF(to_jsonb(e)->>'appears_expired','')::boolean AS appears_expired
-       FROM evidences e WHERE e.tenant_id=$1::uuid
-         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+       FROM evidences e WHERE e.tenant_id=$1::uuid` });
   }
   if (await tableExists(client, 'grc_evidence_versions')) {
     const submissionsExist = await tableExists(client, 'grc_evidence_submissions');
@@ -531,12 +524,10 @@ async function queryEvidenceFreshness(client, tenantId, period) {
     const validatedExpression = reviewsExist ? `CASE WHEN lower(COALESCE(NULLIF(to_jsonb(r)->>'decision',''),''))='approved' THEN true WHEN lower(COALESCE(NULLIF(to_jsonb(r)->>'decision',''),'')) IN ('rejected','reopened') THEN false ELSE NULL END` : `NULL::boolean`;
     const reviewedAtExpression = reviewsExist ? `NULLIF(to_jsonb(r)->>'created_at','')::timestamptz` : `NULL::timestamptz`;
     const timestamp = `COALESCE(${reviewedAtExpression},NULLIF(to_jsonb(v)->>'created_at','')::timestamptz)`;
-    candidates.push({ table: 'grc_evidence_versions', params: [tenantId, period.start || null, period.end || null], sql:
+    candidates.push({ table: 'grc_evidence_versions', params: [tenantId], sql:
       `SELECT v.id,v.tenant_id,${statusExpression} AS status,${validatedExpression} AS validated,v.created_at,${reviewedAtExpression} AS reviewed_at,NULL::timestamptz AS expires_at,${timestamp} AS __event_time,NULL::numeric AS freshness_score,false AS appears_expired
        FROM grc_evidence_versions v ${submissionJoin} ${reviewJoin}
-       WHERE v.tenant_id=$1::uuid
-         AND ($2::timestamptz IS NULL OR ${timestamp}>=$2)
-         AND ($3::timestamptz IS NULL OR ${timestamp}<=$3)` });
+       WHERE v.tenant_id=$1::uuid` });
   }
   return firstPopulated(client, candidates);
 }
@@ -560,10 +551,10 @@ const ADAPTER_BY_SOURCE = Object.freeze({
 async function queryOperationalRows({ client, contract, tenantId, period = {}, formulaCode = null }) {
   const adapter = ADAPTER_BY_SOURCE[contract.source_code];
   if (adapter) {
-    const rows = await adapter(client, tenantId, period, formulaCode);
+    const rows = await adapter(client, tenantId, period, formulaCode, contract);
     return rows === null ? { rows: [], unavailable: true, reason: `No existen tablas operacionales para ${contract.source_code}.` } : { rows, unavailable: false, reason: null };
   }
-  const rows = await firstPopulatedTables(client, contract.tables || [], tenantId, period);
+  const rows = await firstPopulatedTables(client, contract.tables || [], tenantId, period, contract);
   return rows === null ? { rows: [], unavailable: true, reason: `No existen tablas operacionales para ${contract.source_code}.` } : { rows, unavailable: false, reason: null };
 }
 
@@ -665,7 +656,7 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   catch (error) { const wrapped = new MathGovernanceError('SOURCE_SCHEMA_INCOMPATIBLE', 'La estructura física de la fuente no coincide con el contrato analítico.', { source_code: contract.source_code, original_code: error.code || null }); wrapped.cause = error; throw wrapped; }
   if (queried.unavailable) return sourceUnavailable(contract.source_code, queried.reason, contract);
   const rows = normalizeRows(queried.rows, contract);
-  const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null });
+  const validation = validateDataset({ rows, tenantId, period, timezone, unit: contract.unit, requiredFields: contract.required_fields, minimumSampleSize: formula.minimum_sample_size || 1, sourceKey: contract.source_code, allowedStates: contract.status_filter?.allowed || null, temporalSemantics: contract.temporal_semantics });
   const formulaMapping = formulaCode === 'F5_5_INHERENT_RISK' ? riskInherentPortfolio(validation.usable_rows, contract) : formulaCode === 'F5_5_SEVERITY_INDEX' ? severityPortfolio(validation.usable_rows) : formulaCode === 'F5_5_MATURITY' ? maturityPortfolio(validation.usable_rows, contract) : null;
   const formulaRows = formulaMapping ? formulaMapping.usableRows : validation.usable_rows;
   const formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
@@ -681,6 +672,8 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
     contract_checksum: contract.checksum,
     scale_metadata: contract.scale_metadata || {},
     count_semantics: contract.count_semantics || COUNT_SEMANTICS,
+    temporal_semantics: contract.temporal_semantics || {},
+    temporal_summary: validation.temporal_summary || null,
     counts: formulaCounts,
     row_count: formulaCounts.population_size,
     raw_row_count: formulaCounts.received,
@@ -699,7 +692,7 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
     timezone,
   };
   const snapshotHash = hash(sourceSnapshot);
-  return { source_code: contract.source_code, physical_sources: physicalSources, status: sourceStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, count_semantics: contract.count_semantics || COUNT_SEMANTICS, population_size: formulaCounts.population_size, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
+  return { source_code: contract.source_code, physical_sources: physicalSources, status: sourceStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, count_semantics: contract.count_semantics || COUNT_SEMANTICS, temporal_semantics: contract.temporal_semantics || {}, temporal_summary: validation.temporal_summary || null, population_size: formulaCounts.population_size, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }

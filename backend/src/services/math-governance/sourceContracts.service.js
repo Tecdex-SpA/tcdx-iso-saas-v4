@@ -48,6 +48,46 @@ const CAPABILITY_BY_ENTITY = Object.freeze({
   currency_conversion: null,
 });
 
+function temporal(definition) {
+  return Object.freeze({
+    classification: definition.classification,
+    canonical_time_field: definition.canonical_time_field || '__event_time',
+    source_time_fields: Object.freeze(definition.source_time_fields || ['__event_time']),
+    fallback_time_fields: Object.freeze(definition.fallback_time_fields || []),
+    valid_from_fields: Object.freeze(definition.valid_from_fields || []),
+    valid_to_fields: Object.freeze(definition.valid_to_fields || []),
+    time_meaning: definition.time_meaning,
+    timezone_policy: definition.timezone_policy || 'tenant_timezone',
+    period_policy: definition.period_policy || 'start_inclusive_end_exclusive',
+    validity_policy: definition.validity_policy || 'canonical_time_in_requested_period',
+    missing_time_policy: definition.missing_time_policy || 'exclude_when_period_requested',
+    as_of_policy: definition.as_of_policy || 'exclude_future_canonical_time',
+  });
+}
+
+const TEMPORAL_SEMANTICS_BY_SOURCE = Object.freeze({
+  compliance_requirements_assessments: temporal({ classification: 'latest_effective_state', source_time_fields: ['assessed_at', 'updated_at', 'created_at'], fallback_time_fields: ['assessed_at'], time_meaning: 'compliance_mapping_assessment_state_time', validity_policy: 'state_effective_at_period_or_as_of' }),
+  grc_readiness_operational_snapshot: temporal({ classification: 'state_snapshot', source_time_fields: ['source_as_of', 'period_end', 'updated_at', 'created_at'], time_meaning: 'readiness_snapshot_as_of_time', validity_policy: 'snapshot_effective_at_period_or_as_of' }),
+  risk_register_controls: temporal({ classification: 'latest_effective_state', source_time_fields: ['effective_at', 'completed_at', 'assessed_at', 'measured_at', 'updated_at', 'created_at'], time_meaning: 'risk_assessment_effective_time', validity_policy: 'latest_completed_or_reviewed_state_at_as_of' }),
+  control_assurance_evidence: temporal({ classification: 'state_snapshot', source_time_fields: ['calculated_at', 'assessed_at', 'measured_at', 'updated_at', 'created_at'], time_meaning: 'control_assurance_calculation_time', validity_policy: 'assurance_state_effective_at_period_or_as_of' }),
+  audit_findings_actions: temporal({ classification: 'validity_interval', source_time_fields: ['latest_update_at', 'opened_at', 'created_at', 'closed_at', 'completed_at'], valid_from_fields: ['opened_at', 'created_at'], valid_to_fields: ['closed_at', 'completed_at'], time_meaning: 'action_lifecycle_state_time', validity_policy: 'action_state_in_requested_period' }),
+  incident_operational_events: temporal({ classification: 'event_stream', source_time_fields: ['reported_at', 'detected_at', 'created_at'], time_meaning: 'incident_report_or_detection_time', validity_policy: 'event_time_in_requested_period' }),
+  evidence_freshness_records: temporal({ classification: 'validity_interval', source_time_fields: ['reviewed_at', 'submitted_at', 'decided_at', 'created_at', 'expires_at'], valid_from_fields: ['reviewed_at', 'submitted_at', 'decided_at', 'created_at'], valid_to_fields: ['expires_at'], time_meaning: 'evidence_review_or_submission_time', validity_policy: 'evidence_state_and_expiration_at_as_of' }),
+  loss_events_operational: temporal({ classification: 'event_stream', source_time_fields: ['event_date', 'occurred_at'], time_meaning: 'loss_occurrence_time', validity_policy: 'loss_occurrence_in_requested_period', missing_time_policy: 'exclude_with_reason' }),
+  continuity_resilience_tests: temporal({ classification: 'event_stream', source_time_fields: ['completed_at', 'tested_at', 'scheduled_at'], time_meaning: 'resilience_test_completion_time', validity_policy: 'completed_test_in_requested_period' }),
+  asset_inventory_security: temporal({ classification: 'latest_effective_state', source_time_fields: ['updated_at', 'created_at'], time_meaning: 'asset_inventory_state_time', validity_policy: 'asset_state_effective_at_period_or_as_of' }),
+  supplier_tprm_assessments: temporal({ classification: 'state_snapshot', source_time_fields: ['approved_at', 'submitted_at', 'updated_at', 'created_at'], time_meaning: 'supplier_assessment_decision_time', validity_policy: 'published_supplier_assessment_at_period_or_as_of' }),
+  survey_response_scoring: temporal({ classification: 'event_stream', source_time_fields: ['submitted_at'], time_meaning: 'survey_response_submission_time', validity_policy: 'submitted_response_in_requested_period' }),
+  assurance_test_results: temporal({ classification: 'event_stream', source_time_fields: ['executed_at', 'tested_at', 'created_at'], time_meaning: 'assurance_test_execution_time', validity_policy: 'test_execution_in_requested_period' }),
+  data_quality_observations: temporal({ classification: 'event_stream', source_time_fields: ['assessed_at'], time_meaning: 'data_quality_assessment_time', validity_policy: 'assessment_time_in_requested_period' }),
+  data_lineage_observations: temporal({ classification: 'event_stream', source_time_fields: ['created_at'], time_meaning: 'lineage_relation_observation_time', validity_policy: 'lineage_observation_in_requested_period' }),
+  statistical_metric_measurements: temporal({ classification: 'event_stream', source_time_fields: ['measured_at', 'calculated_at', 'period_end'], time_meaning: 'metric_measurement_time', validity_policy: 'measurement_time_in_requested_period' }),
+  indicator_data_trust_assessments: temporal({ classification: 'event_stream', source_time_fields: ['assessed_at'], time_meaning: 'data_trust_assessment_time', validity_policy: 'assessment_time_in_requested_period' }),
+  grc_health_components: temporal({ classification: 'validity_interval', source_time_fields: ['period_end', 'completed_at', 'started_at'], valid_from_fields: ['period_start', 'started_at'], valid_to_fields: ['period_end', 'completed_at'], time_meaning: 'official_calculation_period_end_or_completion_time', validity_policy: 'calculation_period_overlaps_requested_period' }),
+  maturity_assessments: temporal({ classification: 'event_stream', source_time_fields: ['evaluated_at', 'measured_at', 'calculated_at', 'period_end'], time_meaning: 'maturity_evaluation_or_measurement_time', validity_policy: 'maturity_observation_in_requested_period' }),
+  external_fx_rates: temporal({ classification: 'latest_effective_state', source_time_fields: ['effective_at'], time_meaning: 'fx_rate_effective_time', validity_policy: 'rate_effective_at_period_or_as_of' }),
+});
+
 const FORMULA_SOURCE_MAP = Object.freeze({
   F5_5_COMPLIANCE_WEIGHTED: 'compliance_requirements_assessments',
   F5_5_COVERAGE: 'compliance_requirements_assessments',
@@ -124,11 +164,12 @@ function contract(definition) {
     joins: Object.freeze(definition.joins || []),
     tenant_filter: Object.freeze(definition.tenant_filter || { column: 'tenant_id', required: true }),
     status_filter: Object.freeze(definition.status_filter || {}),
-    period: Object.freeze(definition.period || { column: 'created_at', mode: 'optional_range' }),
+    period: Object.freeze(definition.period || { column: null, mode: 'contract_temporal_semantics' }),
     timezone: definition.timezone || 'tenant_timezone',
     unit: definition.unit || null,
     scale_metadata: Object.freeze(definition.scale_metadata || {}),
     count_semantics: Object.freeze(definition.count_semantics || COUNT_SEMANTICS),
+    temporal_semantics: Object.freeze(definition.temporal_semantics || TEMPORAL_SEMANTICS_BY_SOURCE[definition.source_code] || {}),
     cardinality: definition.cardinality || 'one_to_many',
     required_fields: Object.freeze(definition.required_fields || ['id', 'tenant_id']),
     exclusions: Object.freeze(definition.exclusions || []),
@@ -159,7 +200,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     joins: ['grc_requirement_control_mappings.requirement_id -> grc_framework_requirements.id', 'grc_control_assurance.tenant_control_id -> grc_requirement_control_mappings.tenant_control_id'],
     required_fields: ['id', 'tenant_id', 'status'], status_filter: { excluded: ['deleted', 'retired', 'rejected'] },
     variable_map: { assessments: 'rows[{status,weight,applicability}]', evaluated: 'count(status not pending)', applicable: 'count(applicability=true)' },
-    availability: 'available', version: 3,
+    availability: 'available', version: 4,
     limitations: 'El adaptador normaliza mappings publicados/revisados y assurance de control; requisitos sin mapping permanecen pendientes y no se convierten en cero.'
   }),
   contract({
@@ -167,7 +208,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['grc_readiness_snapshots', 'grc_readiness_results', 'grc_readiness_findings'],
     columns: ['tenant_id','snapshot_id','dimension','score','weight','source_as_of','severity'], required_fields: ['id','tenant_id','score'],
     variable_map: { compliance: 'dimension=compliance', evidence: 'dimension=evidence', health: 'dimension=health', actions: 'dimension=actions' },
-    availability: 'available', version: 3,
+    availability: 'available', version: 4,
     limitations: 'Usa el snapshot más reciente del período; dimensiones ausentes producen unmeasured en vez de imputación.'
   }),
   contract({
@@ -182,7 +223,7 @@ const SOURCE_CONTRACTS = Object.freeze([
         controlEffectiveness: { source_fields: ['assurance_score','control_effectiveness','control_effectiveness_score','control_score','effectiveness_score'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: true, allow_zero: true },
       },
     },
-    availability: 'available', version: 4,
+    availability: 'available', version: 5,
     limitations: 'RISK-INHERENT calcula el promedio aritmetico del portafolio de riesgos utilizables del tenant; excluye filas sin probabilidad/likelihood o impacto validos 1..5, no usa rows[0], no deduplica por titulo y no cruza tenants.'
   }),
   contract({
@@ -199,7 +240,7 @@ const SOURCE_CONTRACTS = Object.freeze([
         effectivenesses: { source_fields: ['score'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'RATIO_0_1', canonical_unit: 'ratio', canonical_min: 0, canonical_max: 1, normalization_strategy: 'percent_to_ratio', precision: 4, allow_null: false, allow_zero: true },
       },
     },
-    availability: 'available', version: 4,
+    availability: 'available', version: 5,
     limitations: 'El score agregado de assurance es una fuente valida solo para score compuesto/effectivenesses; F5_5_CONTROL_EFFECTIVENESS requiere dimensiones D/I/O/E explicitas y nunca fabrica dimensiones desde score.'
   }),
   contract({
@@ -207,7 +248,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['action_plans', 'action_plan_updates', 'grc_readiness_findings', 'grc_effectiveness_verifications'],
     columns: ['tenant_id','severity','status','created_at','opened_at','closed_at','completed_at','due_date','due_at','progress_percent','latest_progress_percent','latest_status_after','latest_update_at','approved_evidence_count','pending_evidence_count','weight'], required_fields: ['id','tenant_id','status'],
     variable_map: { low: 'count(severity=low)', medium: 'count(severity=medium)', high: 'count(severity=high)', critical: 'count(severity=critical)', items: 'rows[{createdAt,openedAt,closedAt,dueAt,progress,weight,overdue}]' },
-    availability: 'available', version: 4,
+    availability: 'available', version: 5,
     limitations: 'Acciones y remediación usan action_plans enriquecidos con el último action_plan_updates válido; progreso ausente queda unmeasured y no se convierte en cero.'
   }),
   contract({
@@ -215,7 +256,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['grc_incidents', 'grc_incident_impacts', 'grc_incident_timeline'],
     columns: ['tenant_id','incident_number','status','category','priority','calculated_severity','confirmed_severity','reported_at','contained_at','resolved_at','closed_at','financial_impact','duration_minutes','customer_impact'], required_fields: ['id','tenant_id','status'],
     variable_map: { low: 'count(calculated_severity=low)', medium: 'count(calculated_severity=medium)', high: 'count(calculated_severity=high)', critical: 'count(calculated_severity=critical)' },
-    availability: 'available', version: 2,
+    availability: 'available', version: 3,
     limitations: 'El indicador INCIDENTS usa severidad de grc_incidents. Impactos financieros, cliente y duración permanecen dimensiones separadas cuando existan; no se replican desde un único campo.'
   }),
   contract({
@@ -223,7 +264,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['evidences', 'grc_evidence_submissions', 'grc_evidence_versions', 'grc_evidence_reviews'],
     columns: ['tenant_id','status','validated','created_at','reviewed_at','expires_at','version','submitted_at','decided_at','freshness_score','appears_expired'], required_fields: ['id','tenant_id'],
     variable_map: { ageHours: 'now - effective evidence date', halfLifeHours: '30 days default', status: 'approval/freshness eligibility' },
-    availability: 'available', version: 2,
+    availability: 'available', version: 3,
     limitations: 'Freshness de evidencia usa evidencia real, revisión y expiración; data quality freshness conserva su contrato separado.'
   }),
   contract({
@@ -231,14 +272,14 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['loss_events','loss_recoveries'],
     columns: ['tenant_id','occurred_at','event_date','gross_loss','gross_loss_amount','recoveries','recovery_amount','net_loss','net_loss_amount','currency','status','created_at','updated_at'],
     required_fields: ['id','tenant_id','event_date'],
-    variable_map: { grossLoss: 'gross_loss_amount|gross_loss', recoveries: 'recovery_amount|recoveries', netLosses: 'net_loss_amount|net_loss|gross-recoveries', eventDate: 'occurred_at|event_date|created_at' },
+    variable_map: { grossLoss: 'gross_loss_amount|gross_loss', recoveries: 'recovery_amount|recoveries', netLosses: 'net_loss_amount|net_loss|gross-recoveries', eventDate: 'occurred_at|event_date only; missing/future occurrence is excluded by temporal_semantics' },
     unit: 'currency',
     availability: 'available',
-    version: 3,
-    limitations: 'Normaliza columnas reales de loss_events usadas por la UI. Si occurred_at queda en el futuro por el período visual, el adaptador conserva raw_event_date y usa created_at como fecha efectiva para no descartar el input confirmado.'
+    version: 4,
+    limitations: 'Normaliza columnas reales de loss_events usadas por la UI. Loss occurrence time proviene de occurred_at/event_date; fechas ausentes o futuras se excluyen con razon temporal auditable, sin fallback a created_at.'
   }),
-  contract({ source_code: 'continuity_resilience_tests', entity: 'continuity', tables: ['grc_bia_assessments','grc_continuity_plans','grc_continuity_tests'], columns: ['tenant_id','rto_hours','rpo_hours','actual_recovery_hours','actual_data_loss_hours','result','tested_at','status'], required_fields: ['id','tenant_id'], unit: 'hours', availability: 'available', version: 2 }),
-  contract({ source_code: 'asset_inventory_security', entity: 'asset', tables: ['data_elements'], columns: ['tenant_id','name','classification','owner_user_id','metadata','status'], required_fields: ['id','tenant_id'], availability: 'available', version: 2, limitations: 'Package 4 binds asset criticality to data_elements until a dedicated asset inventory table supersedes it.' }),
+  contract({ source_code: 'continuity_resilience_tests', entity: 'continuity', tables: ['grc_bia_assessments','grc_continuity_plans','grc_continuity_tests'], columns: ['tenant_id','rto_hours','rpo_hours','actual_recovery_hours','actual_data_loss_hours','result','tested_at','status'], required_fields: ['id','tenant_id'], unit: 'hours', availability: 'available', version: 3 }),
+  contract({ source_code: 'asset_inventory_security', entity: 'asset', tables: ['data_elements'], columns: ['tenant_id','name','classification','owner_user_id','metadata','status'], required_fields: ['id','tenant_id'], availability: 'available', version: 3, limitations: 'Package 4 binds asset criticality to data_elements until a dedicated asset inventory table supersedes it.' }),
   contract({
     source_code: 'supplier_tprm_assessments', entity: 'supplier',
     tables: ['grc_suppliers','grc_supplier_assessments','grc_supplier_answers','grc_supplier_contracts'],
@@ -250,20 +291,20 @@ const SOURCE_CONTRACTS = Object.freeze([
       },
     },
     availability: 'available',
-    version: 2,
+    version: 3,
     limitations: 'Supplier risk dimensions use declared 0..5 score scale; supplier health converts 0..5 to percent through scale metadata, not by magnitude.'
   }),
-  contract({ source_code: 'survey_response_scoring', entity: 'survey', tables: ['survey_definitions','survey_versions','survey_questions','assessment_campaigns','assessment_recipients','survey_responses','survey_response_items'], columns: ['tenant_id','response_id','question_id','score','max_score','weight','status','submitted_at'], required_fields: ['id','tenant_id','status'], availability: 'available', version: 2 }),
-  contract({ source_code: 'assurance_test_results', entity: 'assurance', tables: ['assurance_test_definitions','assurance_test_executions','assurance_test_samples','assurance_test_results','assurance_test_exceptions'], columns: ['tenant_id','execution_id','sample_id','result','weight','exception_count','status','executed_at'], required_fields: ['id','tenant_id','result'], availability: 'available', version: 2 }),
-  contract({ source_code: 'data_quality_observations', entity: 'data_quality', tables: ['data_quality_rules','data_quality_assessments','metric_validations'], columns: ['tenant_id','rule_type','expected_count','valid_count','invalid_count','coverage','assessed_at'], required_fields: ['id','tenant_id'], availability: 'available', version: 2 }),
-  contract({ source_code: 'data_lineage_observations', entity: 'data_lineage', tables: ['data_lineage_edges','data_sources','data_elements'], columns: ['tenant_id','source_entity_type','source_entity_id','target_entity_type','target_entity_id','relation_type','created_at'], required_fields: ['id','tenant_id','relation_type'], availability: 'available', version: 2 }),
-  contract({ source_code: 'statistical_metric_measurements', entity: 'statistics', tables: ['metric_measurements','metric_definitions','metric_dimensions'], columns: ['tenant_id','metric_id','numeric_value','measured_at','unit','dimension_values','status'], required_fields: ['id','tenant_id','numeric_value'], cardinality: 'time_series', availability: 'available', version: 2 }),
+  contract({ source_code: 'survey_response_scoring', entity: 'survey', tables: ['survey_definitions','survey_versions','survey_questions','assessment_campaigns','assessment_recipients','survey_responses','survey_response_items'], columns: ['tenant_id','response_id','question_id','score','max_score','weight','status','submitted_at'], required_fields: ['id','tenant_id','status'], availability: 'available', version: 3 }),
+  contract({ source_code: 'assurance_test_results', entity: 'assurance', tables: ['assurance_test_definitions','assurance_test_executions','assurance_test_samples','assurance_test_results','assurance_test_exceptions'], columns: ['tenant_id','execution_id','sample_id','result','weight','exception_count','status','executed_at'], required_fields: ['id','tenant_id','result'], availability: 'available', version: 3 }),
+  contract({ source_code: 'data_quality_observations', entity: 'data_quality', tables: ['data_quality_rules','data_quality_assessments','metric_validations'], columns: ['tenant_id','rule_type','expected_count','valid_count','invalid_count','coverage','assessed_at'], required_fields: ['id','tenant_id'], availability: 'available', version: 3 }),
+  contract({ source_code: 'data_lineage_observations', entity: 'data_lineage', tables: ['data_lineage_edges','data_sources','data_elements'], columns: ['tenant_id','source_entity_type','source_entity_id','target_entity_type','target_entity_id','relation_type','created_at'], required_fields: ['id','tenant_id','relation_type'], availability: 'available', version: 3 }),
+  contract({ source_code: 'statistical_metric_measurements', entity: 'statistics', tables: ['metric_measurements','metric_definitions','metric_dimensions'], columns: ['tenant_id','metric_id','numeric_value','measured_at','unit','dimension_values','status'], required_fields: ['id','tenant_id','numeric_value'], cardinality: 'time_series', availability: 'available', version: 3 }),
   contract({
     source_code: 'indicator_data_trust_assessments', entity: 'data_trust',
     tables: ['metric_trust_assessments'], columns: ['tenant_id','dimensions','trust_status','assessed_at','assessment_checksum'],
     required_fields: ['id','tenant_id','dimensions'],
     variable_map: { completeness:'dimensions.completeness.score',accuracy:'dimensions.accuracy.score',consistency:'dimensions.consistency.score',freshness:'dimensions.freshness.score',lineage:'dimensions.lineage.score',validation:'dimensions.validation.score',stability:'dimensions.stability.score',coverage:'dimensions.coverage.score' },
-    availability: 'available', version: 2,
+    availability: 'available', version: 3,
     limitations: 'Compone únicamente las ocho dimensiones persistidas; una dimensión desconocida impide calcular y nunca se renormaliza.'
   }),
   contract({
@@ -271,7 +312,7 @@ const SOURCE_CONTRACTS = Object.freeze([
     tables: ['calculation_runs','calculation_outputs','data_trust_scores'],
     columns: ['tenant_id','formula_code','output_value','trust_score','period_start','period_end','run_status'], required_fields: ['id','tenant_id','formula_code'],
     variable_map: { risk: 'latest risk output', compliance: 'latest compliance output', actions: 'latest actions output', evidence: 'latest evidence/trust output', dataTrust: 'latest trust score' },
-    availability: 'available', version: 3,
+    availability: 'available', version: 4,
     limitations: 'Solo consume outputs oficiales calculados y aprobados; componentes ausentes dejan Health como unmeasured.'
   }),
   contract({
@@ -285,10 +326,10 @@ const SOURCE_CONTRACTS = Object.freeze([
         score: { source_fields: ['score','total_score'], source_scale: 'PERCENT_0_100', source_unit: 'percent', source_min: 0, source_max: 100, canonical_scale: 'SCORE_0_5', canonical_unit: 'level', canonical_min: 0, canonical_max: 5, normalization_strategy: 'percent_to_score_0_5', precision: 2, allow_null: false, allow_zero: true },
       },
     },
-    availability: 'available', version: 4,
+    availability: 'available', version: 5,
     limitations: 'Prioriza evaluaciones publicadas y usa mediciones de madurez como fallback; la escala de nivel se declara en el contrato y no se infiere por magnitud.'
   }),
-  contract({ source_code: 'external_fx_rates', entity: 'currency_conversion', tables: ['external_fx_rates'], columns: ['base_currency','quote_currency','rate','effective_at','source'], required_fields: ['base_currency','quote_currency','rate'], availability: 'source_unavailable', version: 2, limitations: 'No official tenant-safe FX source is configured; loss calculations must not mix currencies.' }),
+  contract({ source_code: 'external_fx_rates', entity: 'currency_conversion', tables: ['external_fx_rates'], columns: ['base_currency','quote_currency','rate','effective_at','source'], required_fields: ['base_currency','quote_currency','rate'], availability: 'source_unavailable', version: 3, limitations: 'No official tenant-safe FX source is configured; loss calculations must not mix currencies.' }),
 ]);
 
 const SOURCE_CONTRACT_MAP = new Map(SOURCE_CONTRACTS.map((item) => [item.source_code, item]));
@@ -299,4 +340,4 @@ function listSourceContracts() { return SOURCE_CONTRACTS.map((item) => ({ ...ite
 function getSourceContract(sourceCode) { const value = SOURCE_CONTRACT_MAP.get(sourceCode); return value ? { ...value } : null; }
 function listFormulaSourceBindings() { return Object.entries(FORMULA_SOURCE_MAP).map(([formula_code, source_code]) => ({ formula_code, source_code, contract: getSourceContract(source_code) })); }
 
-module.exports = { AVAILABILITY, FORMULA_SOURCE_MAP, SOURCE_CONTRACTS, getSourceCodeForFormula, getSourceCodeForIndicator, getSourceContract, listSourceContracts, listFormulaSourceBindings };
+module.exports = { AVAILABILITY, FORMULA_SOURCE_MAP, SOURCE_CONTRACTS, TEMPORAL_SEMANTICS_BY_SOURCE, getSourceCodeForFormula, getSourceCodeForIndicator, getSourceContract, listSourceContracts, listFormulaSourceBindings };
