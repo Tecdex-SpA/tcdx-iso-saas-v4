@@ -13,8 +13,8 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-03: DONE (semantica canonica de conteos y poblaciones cerrada localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-04: DONE (validación manual externa confirmada sobre `main/deploy` commit `7a9df185f06be031757d0d79f25aa59b27a53bbf`; focal test y deploy OK reportados por responsable del proyecto).
 - PUI-05: DONE (normalización canónica/versionada de estados por dominio cerrada localmente para Math Governance focal; validación manual/CI pendiente por diseño).
-- PUI-06: DONE (fallback legacy gobernado implementado localmente; el único test focal permitido falló por aserción PUI-06 corregida después, rerun manual pendiente).
-- PUI_07: READY.
+- PUI-06: DONE (fallback legacy gobernado implementado y cierre manual/deploy confirmado en `docs/codex/handoffs/PUI-06.md`).
+- PUI-07: DONE (Data Trust determinístico/versionado cerrado localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PRE-UI: IN_PROGRESS.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: BLOCKED por `PRE_UI_DATA_TRUTH_GATE` donde corresponda.
@@ -48,6 +48,10 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-06 formalizó una política central en `sourceResolver.service.js`: fallback legacy sólo se permite para `primary_absent` o `primary_no_rows` cuando el source code está explícitamente autorizado en `LEGACY_FALLBACK_POLICY_BY_SOURCE`.
 - PUI-06 agrega provenance/observabilidad en filas, resultado y snapshot: `fallback_used`, `fallback_reason`, `primary_state`, `primary_source`, `fallback_source`, `fallback_summary` y warning estructurado.
 - PUI-06 no modificó source contract payload, fórmulas, pesos, unidades, precisión ni checksums históricos; `CONTRACTS_VERSIONED=[]`.
+- PUI-06 cierre manual confirmado: `sourceResolver.test.js` PASS, `./scripts/deploy-vms.sh` PASS y post-deploy backend/AI/frontend PASS según handoff.
+- PUI-07 se ejecutó sobre branch `fix/pui-07-data-trust` desde base local `955a5877bd1f199def844a94d3c173be6b94dc04`.
+- PUI-07 agregó `dataTrust.service.js` con `data-trust-model-v1`, estados discretos, dimensiones y reasons machine-readable; consume señales PUI-01..PUI-06 sin recalcularlas.
+- PUI-07 expone `data_trust` en resolver, `source_snapshot`, metadata de snapshot persistido, result oficial y detalles; no cambió source contracts ni fórmulas.
 
 ## Ownership fijo
 
@@ -64,8 +68,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa PUI-06 y rerun manualmente `cd backend && node src/services/math-governance/sourceResolver.test.js`.
-2. Si el rerun focal/manual pasa, promover PUI-06 a DONE y habilitar PUI-07 desde una nueva sesión/base actualizada; no iniciar PUI-07 desde Codex en esta sesión.
+1. Usuario revisa PUI-07 y ejecuta push/PR/CI/full regression/manual validation.
+2. Si no aparece contradicción, iniciar PUI-08 desde una nueva sesión/base actualizada; no iniciar PUI-08 desde Codex en esta sesión.
 
 ## Handoff relevante
 
@@ -77,3 +81,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-04.md`
 - `docs/codex/handoffs/PUI-05.md`
 - `docs/codex/handoffs/PUI-06.md`
+- `docs/codex/handoffs/PUI-07.md`

@@ -7,9 +7,9 @@
 | Count semantics | CURRENT/PUI-03 | CODEX A | PUI-03 cerró received/eligible/usable/excluded/exclusionIssueCount/population_size para source resolver y dataset validation focales. |
 | Temporal semantics | CURRENT/PUI-04 | CODEX A | `temporal_semantics` contractual agregado a los 20 source contracts; validación focal/deploy confirmada externamente sobre `7a9df18`. |
 | Status semantics | CURRENT/PUI-05 | CODEX A | `status_semantics` contractual agregado a los 20 source contracts; normalización versionada por dominio y unknown visible en Math Governance. |
-| Legacy fallback policy | REVIEW/PUI-06 | CODEX A | Política central implementada en resolver; rerun focal manual pendiente por límite FOCUSED_MINIMAL. |
+| Legacy fallback policy | CURRENT/PUI-06 | CODEX A | Política central implementada en resolver; cierre focal/manual/deploy confirmado en handoff PUI-06. |
 | Scale/unit semantics | CURRENT/PUI-02 | CODEX A | PUI-02 cerró escala/unidad para CONTROL-EFFECT, RISK-INHERENT, MATURITY y normalización explícita auditada; otros dominios quedan para su paquete específico sólo con evidencia. |
-| Data Trust | PARTIAL | CODEX A | Foundation existente; reproducibilidad a cerrar. |
+| Data Trust | CURRENT/PUI-07 | CODEX A | Modelo determinístico `data-trust-model-v1` expuesto por resolver, snapshots y cálculo oficial; PUI-08 cierra reproducibilidad integral. |
 | Measurement | CURRENT/PARTIAL | CODEX A | Official calculation existe; Data Truth aún no cerrado. |
 | Snapshot | CURRENT/PARTIAL | CODEX A | Foundation existente. |
 | Lineage | CURRENT/PARTIAL | CODEX A | Foundation existente. |
@@ -177,7 +177,7 @@ PUI-05 decision: `backend/src/services/math-governance/statusSemantics.service.j
 
 ## PUI-06 Governed Legacy Fallback
 
-Status: REVIEW under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-06-governed-legacy-fallback`. The single focal test was executed once and failed on a PUI-06 assertion that was corrected afterward; manual rerun is pending.
+Status: DONE under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-06-governed-legacy-fallback`. Manual closure recorded in handoff PUI-06: focal rerun PASS and deploy/post-deploy PASS.
 
 Canonical fallback terms:
 
@@ -205,5 +205,35 @@ PUI-06 fallback inventory:
 PUI-06 decision: fallback policy is centralized in `sourceResolver.service.js` through `LEGACY_FALLBACK_POLICY_BY_SOURCE` and `canUseLegacyFallback`. It is resolver execution policy, not source contract payload, so no source contract version bump is required. Fallback is never activated after `contract_invalid`, `source_incompatible`, `primary_rows_excluded`, `status_unmapped`, temporal exclusions, scale/unit invalidity or formula input exclusions. `source_snapshot` and resolver result expose `fallback_summary`, `fallback_used`, `fallback_reason` and `primary_state`. Formula payloads, weights, expressions, units and precision were not changed.
 
 CONTRACTS_VERSIONED: `[]`
+
+UNNECESSARY_VERSION_BUMPS: `0`
+
+## PUI-07 Data Trust
+
+Status: DONE under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-07-data-trust`.
+
+Existing foundation distinguished:
+
+- `indicator_data_trust_assessments` and `F5_C3_DATA_TRUST` remain an operational dataset/formula for persisted trust assessments.
+- PUI-07 adds deterministic trust assessment for each Math Governance source resolution; it does not replace or recursively consume the operational `indicator_data_trust_assessments` source contract.
+
+Canonical Data Trust model:
+
+| Contract Element | Decision |
+|---|---|
+| model version | `data-trust-model-v1` |
+| owner | `backend/src/services/math-governance/dataTrust.service.js` |
+| states | `TRUSTED`, `TRUSTED_WITH_WARNINGS`, `LOW_CONFIDENCE`, `INSUFFICIENT_DATA`, `UNTRUSTED`, `UNMEASURED` |
+| dimensions | `source_validity`, `completeness`, `population_sufficiency`, `field_validity`, `temporal_validity`, `status_validity`, `scale_unit_validity`, `consistency`, `fallback_dependency`, `provenance_completeness` |
+| reasons | `source_unavailable`, `source_incompatible`, `source_contract_invalid`, `no_received_rows`, `insufficient_population`, `high_exclusion_ratio`, `validation_warnings`, `fallback_used`, `status_unmapped`, `status_not_eligible`, `temporal_invalid`, `scale_unit_invalid`, `missing_required_fields`, `provenance_incomplete`, `consistency_issues` |
+| source of truth | Existing resolver/validation signals from PUI-01..PUI-06; no metric-value based trust and no AI scoring. |
+
+PUI-07 decision: Data Trust is deterministic, versioned and attached to `source_snapshot.data_trust`, resolver `data_trust`, official calculation result context and persisted snapshot metadata. It distinguishes insufficient population from low confidence: insufficient usable population yields `INSUFFICIENT_DATA`; sufficient population with high exclusion ratio yields `LOW_CONFIDENCE`. Fallback legacy yields an explicit warning/reason and can produce `TRUSTED_WITH_WARNINGS`, not automatic `UNTRUSTED`.
+
+Source contracts changed: `NONE`
+
+SOURCE_CONTRACTS_VERSIONED: `[]`
+
+FORMULAS_VERSIONED: `[]`
 
 UNNECESSARY_VERSION_BUMPS: `0`

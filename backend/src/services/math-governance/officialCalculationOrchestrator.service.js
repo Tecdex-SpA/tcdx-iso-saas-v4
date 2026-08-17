@@ -4,6 +4,7 @@ const pool = require('../../config/db');
 const { FORMULAS, OfficialFormulaRegistry } = require('./formulaRegistry.service');
 const { resolveFormulaSource } = require('./sourceResolver.service');
 const { buildDecision, numeric } = require('./decisionInterpretation.service');
+const { assessDataTrust } = require('./dataTrust.service');
 const phase5Service = require('../phase5/phase5.service');
 
 const SOURCE_DATASET_SNAPSHOT_TYPE = 'source_dataset';
@@ -125,7 +126,7 @@ function buildDataRequirements({ formula, sourceContext = {}, status, code, mess
   };
 }
 
-function functionalFailure({ formula, sourceContext = {}, status, failureType, code, message, warnings = [], missingFields = [], missingEntities = [], dataRequirements = null }) {
+function functionalFailure({ formula, sourceContext = {}, status, failureType, code, message, warnings = [], missingFields = [], missingEntities = [], dataRequirements = null, dataTrust = null }) {
   const requirements = dataRequirements || buildDataRequirements({ formula, sourceContext, status, code, message, missingFields, missingEntities });
   return {
     formula_code: formula.formula_code,
@@ -138,6 +139,7 @@ function functionalFailure({ formula, sourceContext = {}, status, failureType, c
     message,
     error: message,
     warnings,
+    data_trust: dataTrust || sourceContext.data_trust || null,
     data_requirements: requirements,
     ...sourceContext,
   };
@@ -216,11 +218,12 @@ async function persistSourceSnapshot(client, tenantId, source, persisted) {
     const contract = await client.query(`SELECT id FROM official_formula_source_contracts WHERE tenant_id IS NULL AND source_code=$1 AND status='published' ORDER BY version_number DESC LIMIT 1`, [source.source_code]);
     sourceContractId = contract.rows[0]?.id || null;
   }
+  const snapshotRowCount = Number.isInteger(Number(source.counts?.usable)) ? Number(source.counts.usable) : 0;
   const snapshot = await client.query(
     `INSERT INTO calculation_snapshots (tenant_id, run_id, source_contract_id, snapshot_type, snapshot_hash, row_count, payload, metadata)
      VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7::jsonb,$8::jsonb)
      RETURNING id`,
-    [tenantId, persisted.calculation_run_id, sourceContractId, SOURCE_DATASET_SNAPSHOT_TYPE, source.source_snapshot_hash, Number(source.counts?.usable || 0), JSON.stringify(source.source_snapshot || {}), JSON.stringify({ source_code: source.source_code, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [] })]
+    [tenantId, persisted.calculation_run_id, sourceContractId, SOURCE_DATASET_SNAPSHOT_TYPE, source.source_snapshot_hash, snapshotRowCount, JSON.stringify(source.source_snapshot || {}), JSON.stringify({ source_code: source.source_code, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [], data_trust: source.data_trust || source.source_snapshot?.data_trust || null })]
   );
   await client.query(`UPDATE calculation_runs SET source_contract_id=COALESCE($3::uuid,source_contract_id), source_snapshot_hash=$4 WHERE tenant_id=$1::uuid AND id=$2::uuid`, [tenantId, persisted.calculation_run_id, sourceContractId, source.source_snapshot_hash]);
   return snapshot.rows[0]?.id || null;
@@ -270,6 +273,7 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         source_code: source.source_code,
         physical_sources: source.physical_sources || source.source_snapshot?.physical_sources || [],
         source_counts: source.counts || { received: 0, usable: 0, excluded: 0 },
+        data_trust: source.data_trust || source.source_snapshot?.data_trust || null,
         required_capability: source.contract?.required_capability || null,
       };
       if (source.status === 'source_unavailable') {
@@ -316,8 +320,9 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
         source_snapshot_hash: source.source_snapshot_hash,
         lineage: source.lineage,
         warnings: source.warnings || [],
+        data_trust: source.data_trust || null,
         decision,
-        details: { ...(calculated.details || {}), decision, source_counts: source.counts, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [], equivalence: source.equivalence || null },
+        details: { ...(calculated.details || {}), decision, source_counts: source.counts, physical_sources: source.physical_sources || [], exclusions: source.exclusions || [], equivalence: source.equivalence || null, data_trust: source.data_trust || null },
       };
       const persisted = await persist(scope, officialResult, requestId);
       const persistedValue = numeric(persisted.value);
@@ -325,10 +330,11 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
       const snapshotId = await persistSnapshot(client, tenantId, source, persisted);
       if (!snapshotId) throw new OfficialCalculationOrchestratorError('SOURCE_SNAPSHOT_NOT_PERSISTED', 'El cálculo no puede publicarse sin snapshot de fuente.', 500);
       calculatedByCode.set(formula.formula_code, persistedValue);
-      results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'calculated', ...sourceContext, value: persistedValue, unit: persisted.unit, calculation_run_id: persisted.calculation_run_id || null, snapshot_id: snapshotId, warnings: persisted.warnings || [], decision });
+      results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'calculated', ...sourceContext, value: persistedValue, unit: persisted.unit, calculation_run_id: persisted.calculation_run_id || null, snapshot_id: snapshotId, warnings: persisted.warnings || [], data_trust: source.data_trust || null, decision });
     } catch (error) {
       const classified = classifyError(error);
-      results.push(functionalFailure({ formula, sourceContext, status: classified.status, failureType: classified.failureType, code: classified.code, message: classified.message, missingFields: classified.missingFields || [] }));
+      const dataTrust = sourceContext.data_trust || assessDataTrust({ sourceStatus: classified.status, formula, counts: sourceContext.source_counts || {}, exclusions: [{ code: classified.code }], provenance: { formula_code: formula.formula_code, source_code: sourceContext.source_code || null, contract_resolved: false } });
+      results.push(functionalFailure({ formula, sourceContext, status: classified.status, failureType: classified.failureType, code: classified.code, message: classified.message, missingFields: classified.missingFields || [], dataTrust }));
     }
   }
 

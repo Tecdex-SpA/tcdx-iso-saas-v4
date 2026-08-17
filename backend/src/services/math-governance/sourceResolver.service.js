@@ -5,6 +5,7 @@ const { FORMULA_MAP } = require('./formulaRegistry.service');
 const { validateDataset, COUNT_SEMANTICS, buildPopulationCounts } = require('./datasetValidation.service');
 const { getSourceCodeForFormula, getSourceContract, listSourceContracts, listFormulaSourceBindings } = require('./sourceContracts.service');
 const { normalizeRowsStatus } = require('./statusSemantics.service');
+const { assessDataTrust } = require('./dataTrust.service');
 
 const SOURCE_STATES = new Set(['ready', 'source_unavailable', 'empty_dataset', 'partially_available', 'legacy_adapter_required', 'validated_with_warnings']);
 const PRIMARY_STATES = Object.freeze({
@@ -89,7 +90,7 @@ function score(value, sourceScale = 'PERCENT_0_100') {
   return convertScale(n, { source_scale: sourceScale, canonical_scale: 'PERCENT_0_100' });
 }
 function buildSourceContract({ sourceKey, entityType, requiredFields = [], tenantScoped = true, status = 'source_unavailable', unit = null } = {}) { if (!sourceKey || !entityType) throw new MathGovernanceError('SOURCE_CONTRACT_INVALID', 'sourceKey y entityType son obligatorios.'); if (!SOURCE_STATES.has(status) && status !== 'available') throw new MathGovernanceError('SOURCE_STATUS_INVALID', 'Estado de fuente inválido.'); return Object.freeze({ sourceKey, entityType, requiredFields, tenantScoped, status, unit, lineageRequired: true }); }
-function sourceUnavailable(sourceKey, reason = 'La fuente operacional no está disponible para esta fórmula.', options = {}) { return Object.freeze({ sourceKey, source_code: sourceKey, status: 'source_unavailable', rows: [], reason, warnings: [reason], inputHash: null, source_snapshot: null, lineage: [], formula_input: null, data_requirements: { status: 'source_unavailable', missing_fields: options.required_fields || [], missing_entities: options.missing_entities || [sourceKey].filter(Boolean), incomplete_records: [], required_population: options.minimum_sample_size || null, current_population: 0, coverage_gap: null, freshness_gap: null, route_to_fix: options.route_to_fix || null, required_capability: options.required_capability || null, reason } }); }
+function sourceUnavailable(sourceKey, reason = 'La fuente operacional no está disponible para esta fórmula.', options = {}) { const dataTrust = assessDataTrust({ sourceStatus: 'source_unavailable', contract: options.source_code ? options : null, counts: {}, warnings: [{ code: 'source_unavailable', reason }], provenance: { source_code: sourceKey, contract_resolved: options.source_code ? true : false } }); return Object.freeze({ sourceKey, source_code: sourceKey, status: 'source_unavailable', rows: [], reason, warnings: [reason], inputHash: null, source_snapshot: null, lineage: [], formula_input: null, data_trust: dataTrust, data_requirements: { status: 'source_unavailable', missing_fields: options.required_fields || [], missing_entities: options.missing_entities || [sourceKey].filter(Boolean), incomplete_records: [], required_population: options.minimum_sample_size || null, current_population: 0, coverage_gap: null, freshness_gap: null, route_to_fix: options.route_to_fix || null, required_capability: options.required_capability || null, reason } }); }
 async function tableExists(client, tableName) { if (!client || typeof client.query !== 'function') return false; const result = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [`public.${tableName}`]); return result.rows[0]?.exists === true; }
 function assertTenant(tenantId) { if (!tenantId) throw new MathGovernanceError('SOURCE_TENANT_REQUIRED', 'Resolver de fuentes requiere tenant efectivo.'); }
 function assertPermission(permission) { if (permission && permission.allowed === false) throw new MathGovernanceError('SOURCE_PERMISSION_DENIED', 'Permiso insuficiente para resolver dataset matemático.', { required: permission.required }); }
@@ -767,8 +768,27 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
     period,
     timezone,
   };
+  const dataTrust = assessDataTrust({
+    sourceStatus,
+    contract,
+    formula,
+    counts: formulaCounts,
+    warnings: [...sourceWarnings, ...validation.warnings],
+    exclusions: formulaExclusions,
+    validation,
+    fallbackSummary,
+    physicalSources,
+    sourceSnapshot,
+    provenance: {
+      source_code: contract.source_code,
+      formula_code: formula.formula_code,
+      contract_checksum: contract.checksum,
+      contract_resolved: true,
+    },
+  });
+  sourceSnapshot.data_trust = dataTrust;
   const snapshotHash = hash(sourceSnapshot);
-  return { source_code: contract.source_code, physical_sources: physicalSources, status: sourceStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, count_semantics: contract.count_semantics || COUNT_SEMANTICS, temporal_semantics: contract.temporal_semantics || {}, status_semantics: contract.status_semantics || {}, fallback_summary: fallbackSummary, fallback_used: fallbackSummary.fallback_used, fallback_reason: fallbackSummary.fallback_reason, primary_state: fallbackSummary.primary_state, temporal_summary: validation.temporal_summary || null, status_summary: validation.status_summary || null, population_size: formulaCounts.population_size, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
+  return { source_code: contract.source_code, physical_sources: physicalSources, status: sourceStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, count_semantics: contract.count_semantics || COUNT_SEMANTICS, temporal_semantics: contract.temporal_semantics || {}, status_semantics: contract.status_semantics || {}, fallback_summary: fallbackSummary, fallback_used: fallbackSummary.fallback_used, fallback_reason: fallbackSummary.fallback_reason, primary_state: fallbackSummary.primary_state, data_trust: dataTrust, temporal_summary: validation.temporal_summary || null, status_summary: validation.status_summary || null, population_size: formulaCounts.population_size, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }

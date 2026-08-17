@@ -15,6 +15,7 @@ Backend Node/Express
         |      + scale/count/temporal/status contract metadata
         |      + domain status normalization
         |      + governed legacy fallback policy and fallback provenance
+        |      + deterministic/versioned data trust assessment
         |      + dataset validation and temporal/status classification
         |      + formula registry/execution
         |      + official calculation

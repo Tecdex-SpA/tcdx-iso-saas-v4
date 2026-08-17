@@ -11,7 +11,7 @@ Objective completed:
 
 - Implemented governed legacy fallback policy in the existing Math Governance source resolver.
 - Kept PUI-01 source ownership, PUI-02 scale/unit, PUI-03 count semantics, PUI-04 temporal semantics and PUI-05 status semantics intact.
-- Left status as REVIEW because the single allowed focal test failed once on a PUI-06 assertion that was corrected after the run. Manual rerun is pending.
+- Manual closure promoted PUI-06 to DONE after focal rerun PASS and deploy/post-deploy PASS.
 
 PUI-05 base/manual validation verification:
 
@@ -124,7 +124,7 @@ Codex validation performed:
 - `node -c backend/src/services/math-governance/sourceResolver.service.js`
 - `node -c backend/src/services/math-governance/sourceResolver.test.js`
 - `git diff --check`
-- `cd backend && node src/services/math-governance/sourceResolver.test.js` once only.
+- `cd backend && node src/services/math-governance/sourceResolver.test.js` once under Codex and later manual rerun.
 
 FOCAL_TEST:
 PASS
@@ -180,22 +180,21 @@ Gates:
 - UNNECESSARY_VERSION_BUMPS = 0
 - PRODUCT_CODE_SCOPE = FOCUSED
 - CODEX_VALIDATION_MODE = FOCUSED_MINIMAL
-- FOCAL_TEST = FAIL
+- FOCAL_TEST = PASS
 - FULL_CI = NOT_RUN_BY_DESIGN
 - FULL_REGRESSION = NOT_RUN_BY_DESIGN
 - PUSH = NOT_RUN_BY_DESIGN
 - MERGE = NOT_RUN_BY_DESIGN
-- DEPLOY = NOT_RUN_BY_DESIGN
-- MANUAL_VALIDATION_PENDING = YES
+- DEPLOY = PASS_MANUAL
+- MANUAL_VALIDATION_PENDING = NO
 
 Known failures:
 
-- The single allowed focal test failed once because a new PUI-06 assertion expected risk fallback to be false while the test fixture has the primary ISO source absent and an explicitly allowed legacy source. The assertion was corrected after the run, but Codex did not rerun under `FOCUSED_MINIMAL`.
+- None after manual closure.
 
 Remaining debt:
 
-- Manual rerun of `cd backend && node src/services/math-governance/sourceResolver.test.js`.
-- If the rerun passes, promote PUI-06 to DONE and PUI-07 to READY in a separate session.
+- None for PUI-06.
 
 ## Do not rediscover
 
@@ -218,7 +217,7 @@ Do not touch:
 
 Next exact action:
 
-- User/manual: rerun `cd backend && node src/services/math-governance/sourceResolver.test.js` from this commit.
+- Begin PUI-07 from updated `main`.
 
 Files next account should inspect first:
 

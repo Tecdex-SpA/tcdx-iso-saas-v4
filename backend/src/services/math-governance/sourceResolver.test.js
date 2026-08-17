@@ -6,6 +6,7 @@ const { validateDataset } = require('./datasetValidation.service');
 const { resolveFormulaSource, mapFormulaInput, firstPopulated, getSourceContract, PRIMARY_STATES } = require('./sourceResolver.service');
 const { sourceContractMetadata } = require('./formulaBootstrap.service');
 const { STATUS_SEMANTICS_BY_SOURCE, normalizeRowsStatus, normalizeStatus } = require('./statusSemantics.service');
+const { DATA_TRUST_MODEL_VERSION, DATA_TRUST_STATES } = require('./dataTrust.service');
 
 async function main() {
   const bindings = listFormulaSourceBindings();
@@ -324,6 +325,9 @@ async function main() {
   assert.strictEqual(lossSource.status, 'validated_with_warnings');
   assert.strictEqual(lossSource.fallback_used, false);
   assert.strictEqual(lossSource.primary_state, PRIMARY_STATES.ROWS_EXCLUDED);
+  assert.strictEqual(lossSource.data_trust.model_version, DATA_TRUST_MODEL_VERSION);
+  assert.strictEqual(lossSource.data_trust.state, DATA_TRUST_STATES.INSUFFICIENT_DATA);
+  assert.ok(lossSource.data_trust.reasons.includes('temporal_invalid'));
   assert.strictEqual(lossSource.counts.received, 1);
   assert.strictEqual(lossSource.counts.usable, 0);
   assert.ok(lossSource.exclusions.some((item) => item.code === 'date_in_future'), 'future occurrence must be excluded instead of falling back to created_at');
@@ -375,6 +379,9 @@ async function main() {
   assert.strictEqual(evidenceSource.fallback_used, true);
   assert.strictEqual(evidenceSource.fallback_reason, 'primary_no_rows');
   assert.strictEqual(evidenceSource.primary_state, PRIMARY_STATES.NO_ROWS);
+  assert.strictEqual(evidenceSource.data_trust.state, DATA_TRUST_STATES.TRUSTED_WITH_WARNINGS);
+  assert.ok(evidenceSource.data_trust.reasons.includes('fallback_used'));
+  assert.strictEqual(evidenceSource.source_snapshot.data_trust.model_version, DATA_TRUST_MODEL_VERSION);
   assert.strictEqual(evidenceSource.rows.length, 1);
   assert.strictEqual(evidenceSource.rows[0].__physical_source, 'grc_evidence_versions');
   assert.strictEqual(evidenceSource.source_snapshot.fallback_summary.fallback_source, 'grc_evidence_versions');
@@ -405,6 +412,8 @@ async function main() {
     sourceCode: 'grc_health_components',
   });
   assert.strictEqual(healthSource.status, 'ready');
+  assert.strictEqual(healthSource.data_trust.state, DATA_TRUST_STATES.TRUSTED);
+  assert.strictEqual(healthSource.data_trust.dimensions.population_sufficiency.status, 'pass');
   assert.strictEqual(healthSource.formula_input.evidence, 0.99);
   assert.strictEqual(healthSource.formula_input.dataTrust, 0.85);
   assert.ok(executeFormula('F5_5_GRC_HEALTH', healthSource.formula_input).value > 0);
@@ -451,6 +460,9 @@ async function main() {
   assert.strictEqual(invalidMaturitySource.counts.received, 2);
   assert.strictEqual(invalidMaturitySource.fallback_used, false);
   assert.strictEqual(invalidMaturitySource.primary_state, PRIMARY_STATES.ROWS_EXCLUDED);
+  assert.strictEqual(invalidMaturitySource.data_trust.state, DATA_TRUST_STATES.INSUFFICIENT_DATA);
+  assert.ok(invalidMaturitySource.data_trust.reasons.includes('insufficient_population'));
+  assert.ok(invalidMaturitySource.data_trust.reasons.includes('scale_unit_invalid'));
   assert.strictEqual(invalidMaturitySource.counts.eligible, 2);
   assert.strictEqual(invalidMaturitySource.counts.usable, 0);
   assert.strictEqual(invalidMaturitySource.counts.excluded, 2);
@@ -480,6 +492,8 @@ async function main() {
   assert.strictEqual(riskSource.fallback_used, true);
   assert.strictEqual(riskSource.fallback_reason, 'primary_source_absent');
   assert.strictEqual(riskSource.primary_state, PRIMARY_STATES.ABSENT);
+  assert.strictEqual(riskSource.data_trust.state, DATA_TRUST_STATES.TRUSTED_WITH_WARNINGS);
+  assert.ok(riskSource.data_trust.reasons.includes('fallback_used'));
   assert.strictEqual(riskSource.counts.eligible, 4);
   assert.strictEqual(riskSource.counts.usable, 3);
   assert.strictEqual(riskSource.counts.excluded, 1);
@@ -492,6 +506,28 @@ async function main() {
   assert.strictEqual(riskSource.lineage.length, 3);
   assert.deepStrictEqual(riskSource.formula_input.scores, [20, 10, 15]);
   assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', riskSource.formula_input).value, 15);
+
+  const lowTrustRiskRows = [
+    { id: 'risk-ok-a', tenant_id: 'tenant-b', likelihood: 4, impact: 5 },
+    { id: 'risk-ok-b', tenant_id: 'tenant-b', likelihood: 2, impact: 5 },
+    { id: 'risk-invalid-a', tenant_id: 'tenant-b', likelihood: null, impact: 5 },
+    { id: 'risk-invalid-b', tenant_id: 'tenant-b', likelihood: 2, impact: null },
+  ];
+  const lowTrustRiskClient = { async query(sql, params = []) {
+    if (sql.includes('to_regclass')) return { rows: [{ exists: String(params[0] || '').includes('grc_quantitative_risk_assessments') }] };
+    if (sql.includes('FROM grc_quantitative_risk_assessments x')) return { rows: lowTrustRiskRows.filter((row) => row.tenant_id === params[0]) };
+    throw new Error(`unexpected low trust risk query: ${sql}`);
+  } };
+  const lowTrustRiskSource = await resolveFormulaSource({
+    client: lowTrustRiskClient,
+    tenantId: 'tenant-b',
+    formulaCode: 'F5_5_INHERENT_RISK',
+  });
+  assert.strictEqual(lowTrustRiskSource.counts.received, 4);
+  assert.strictEqual(lowTrustRiskSource.counts.usable, 2);
+  assert.strictEqual(lowTrustRiskSource.data_trust.state, DATA_TRUST_STATES.LOW_CONFIDENCE);
+  assert.ok(lowTrustRiskSource.data_trust.reasons.includes('high_exclusion_ratio'));
+  assert.notStrictEqual(lowTrustRiskSource.data_trust.state, riskSource.data_trust.state, 'tenant-scoped datasets must produce independent trust states');
 
   const findingsClient = { async query(sql, params = []) {
     if (sql.includes('to_regclass')) {
@@ -523,6 +559,8 @@ async function main() {
   const missingClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };
   const missingTables = await resolveFormulaSource({ client: missingClient, tenantId: 'tenant-a', formulaCode: 'F5_5_ASSET_CRITICALITY' });
   assert.strictEqual(missingTables.status, 'source_unavailable');
+  assert.strictEqual(missingTables.data_trust.state, DATA_TRUST_STATES.UNTRUSTED);
+  assert.ok(missingTables.data_trust.reasons.includes('source_unavailable'));
   assert.ok(missingTables.reason.includes('No existen tablas operacionales'));
   const incompatibleClient = { async query(sql, params = []) {
     if (sql.includes('to_regclass')) return { rows: [{ exists: String(params[0] || '').includes('grc_incidents') }] };

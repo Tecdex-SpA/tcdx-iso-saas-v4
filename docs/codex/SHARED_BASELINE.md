@@ -14,6 +14,8 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - PUI-03 count semantics confirmado para Math Governance focal: `received` son filas fisicas, `eligible` es poblacion oficial elegible, `usable` son filas con inputs validos, `excluded` son filas unicas no usadas, `exclusionIssueCount` son categorias/codigos distintos y `population_size` es poblacion elegible.
 - PUI-04 temporal semantics confirmado por validación manual externa sobre `7a9df18`: temporalidad oficial depende de `temporal_semantics`, no de `created_at`/`updated_at` universales.
 - PUI-05 status semantics confirmado para Math Governance focal: `status_semantics` define dominio, mapping versionado, `unknown_policy=exclude_visible`, reason y elegibilidad; estados unknown/unmapped no se convierten silenciosamente a estados válidos.
+- PUI-06 fallback governance confirmado para Math Governance focal: fallback legacy sólo se permite por `primary_absent` o `primary_no_rows` explícitamente autorizados; cierre manual/deploy confirmado en handoff PUI-06.
+- PUI-07 Data Trust confirmado para Math Governance focal: `data-trust-model-v1` es determinístico, versionado, no usa IA ni valor de métrica y consume señales PUI-01..PUI-06.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Intelligence Engine backend existe: rules, confidence, explainability, guardrails, prompt builder, actions, orchestrator y deterministic fallback.
@@ -25,8 +27,8 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 ## PARTIAL
 
-- Source contracts/resolver: PUI-01..PUI-05 cerraron ownership, escala/unidad, count semantics, temporal semantics y status semantics para Math Governance focal; PUI-06 implementó fallback legacy gobernado en REVIEW, con rerun focal manual pendiente antes de cerrar.
-- Data Trust/provenance/snapshots: foundation existe; requiere cierre integral PRE-UI.
+- Source contracts/resolver: PUI-01..PUI-07 cerraron ownership, escala/unidad, count semantics, temporal semantics, status semantics, fallback governance y Data Trust para Math Governance focal.
+- Data Trust/provenance/snapshots: Data Trust focal existe; PUI-08 debe cerrar reproducibilidad/snapshots/lineage integral sin redescubrir PUI-07.
 - Decision Interpretation / Next Best Actions: foundation determinística; falta causalidad transversal completa.
 - Tenant document handling: hay capacidades especializadas, no RAG privado universal confirmado.
 - External lookup: foundation web/trusted sources; falta registry regulatorio autoritativo, versionado y semantic diff.
@@ -72,4 +74,5 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - No redescubrir en PUI-04 la semantica de conteos PUI-03; PUI-04 debe enfocarse en temporalidad.
 - No redescubrir en PUI-05 la temporalidad PUI-04; PUI-05 cerró status dictionaries, mapping versions y unknown policy por dominio.
 - No redescubrir en PUI-06 PUI-01 ownership, PUI-02 scale/unit, PUI-03 counts, PUI-04 temporal semantics ni PUI-05 status semantics; PUI-06 debe enfocarse en fallback legacy gobernado.
-- PUI-06 implementó política central en `sourceResolver.service.js`: fallback legacy sólo se permite por `primary_absent` o `primary_no_rows` cuando el source code está autorizado; no marcar PUI-07 READY hasta rerun manual del test focal.
+- PUI-06 implementó política central en `sourceResolver.service.js`: fallback legacy sólo se permite por `primary_absent` o `primary_no_rows` cuando el source code está autorizado.
+- No redescubrir en PUI-08 el modelo Data Trust PUI-07: `dataTrust.service.js`, `data-trust-model-v1`, estados/reasons/dimensiones y exposición en resolver/snapshot/orchestrator están cerrados; PUI-08 debe enfocarse en reproducibilidad integral de snapshots/lineage.
