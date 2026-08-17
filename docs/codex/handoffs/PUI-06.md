@@ -2,7 +2,7 @@
 
 Owner: CODEX A
 Account: codex
-Status: REVIEW
+Status: DONE
 Branch: fix/pui-06-governed-legacy-fallback
 Base SHA: 90d75b60603fccfc3b4ab0b7f75a9a3e3ef4c1cc
 Head/Commit SHA: FINAL_COMMIT_REPORTED_IN_CODEX_RESPONSE
@@ -127,7 +127,7 @@ Codex validation performed:
 - `cd backend && node src/services/math-governance/sourceResolver.test.js` once only.
 
 FOCAL_TEST:
-FAIL
+PASS
 
 FULL_CI:
 NOT_RUN_BY_DESIGN
@@ -142,10 +142,10 @@ MERGE:
 NOT_RUN_BY_DESIGN
 
 DEPLOY:
-NOT_RUN_BY_DESIGN
+PASS_MANUAL
 
 MANUAL_VALIDATION_PENDING:
-YES
+NO
 
 Gates:
 
@@ -233,3 +233,15 @@ Files next account should NOT inspect unless evidence/test requires it:
 - `backend/src/services/knowledge-base/`
 - `backend/src/services/intelligence/`
 - Regulatory services
+
+Manual validation closure:
+
+- sourceResolver.test.js rerun manually after Codex correction: PASS
+- deployment executed manually with ./scripts/deploy-vms.sh: PASS
+- backend post-deploy: PASS
+- AI Engine post-deploy: PASS
+- frontend post-deploy: PASS
+- no source contract checksum mismatch
+- no formula checksum mismatch
+
+PUI-06 promoted from REVIEW to DONE.
