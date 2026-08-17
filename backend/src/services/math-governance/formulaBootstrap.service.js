@@ -6,6 +6,16 @@ function publicFormula(definition) {
   const { execute, tests, ...serializable } = definition;
   return serializable;
 }
+function sourceContractMetadata(contract) {
+  return {
+    package: 'phase5_5',
+    adapter: contract.adapter,
+    variable_map: contract.variable_map,
+    limitations: contract.limitations,
+    scale_metadata: contract.scale_metadata || {},
+    count_semantics: contract.count_semantics || {},
+  };
+}
 
 async function syncOfficialFormulaRegistry(client, { actorId = null, status = 'published' } = {}) {
   if (!client || typeof client.query !== 'function') throw new Error('syncOfficialFormulaRegistry requires a PostgreSQL client');
@@ -81,7 +91,7 @@ async function syncOfficialSourceContracts(client, { actorId = null } = {}) {
         [contract.source_code, contract.entity, contract.version, JSON.stringify(contract.tables), JSON.stringify(contract.columns), JSON.stringify(contract.joins),
           JSON.stringify(contract.tenant_filter), JSON.stringify(contract.status_filter), JSON.stringify(contract.period), contract.timezone, contract.unit,
           contract.cardinality, JSON.stringify(contract.required_fields), JSON.stringify(contract.exclusions), contract.null_policy, contract.availability,
-          contract.checksum, contract.status, actorId, JSON.stringify({ package: 'phase5_5', adapter: contract.adapter, variable_map: contract.variable_map, limitations: contract.limitations })]
+          contract.checksum, contract.status, actorId, JSON.stringify(sourceContractMetadata(contract))]
       );
       results.push({ source_code: contract.source_code, action: 'created', checksum: contract.checksum });
     } else {
@@ -97,4 +107,4 @@ async function syncMathGovernanceCatalog(client, options = {}) {
   return { status: 'OFFICIAL_MATH_GOVERNANCE_SYNCED', sourceContracts, formulas };
 }
 
-module.exports = { syncOfficialFormulaRegistry, syncOfficialSourceContracts, syncMathGovernanceCatalog, publicFormula };
+module.exports = { syncOfficialFormulaRegistry, syncOfficialSourceContracts, syncMathGovernanceCatalog, publicFormula, sourceContractMetadata };

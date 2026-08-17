@@ -4,6 +4,7 @@ const { FORMULAS, executeFormula } = require('./formulaRegistry.service');
 const { listFormulaSourceBindings, listSourceContracts } = require('./sourceContracts.service');
 const { validateDataset } = require('./datasetValidation.service');
 const { resolveFormulaSource, mapFormulaInput, firstPopulated } = require('./sourceResolver.service');
+const { sourceContractMetadata } = require('./formulaBootstrap.service');
 
 async function main() {
   const bindings = listFormulaSourceBindings();
@@ -11,10 +12,19 @@ async function main() {
   assert.strictEqual(FORMULAS.filter((formula) => formula.source_contract === 'pending_package_2').length, 0, 'package 2 must replace pending source markers');
   const contracts = listSourceContracts();
   assert.ok(contracts.some((contract) => contract.availability === 'available'), 'available operational adapters expected');
+  assert.strictEqual(contracts.length, 20, 'all source contracts must be version-governed');
+  for (const contract of contracts) {
+    assert.ok(contract.version >= 2, `PUI-03 count_semantics governance version bump missing for ${contract.source_code}`);
+    assert.strictEqual(contract.count_semantics?.received, 'physical_rows_after_tenant_source_scope', `count semantics missing for ${contract.source_code}`);
+    assert.ok(contract.count_semantics?.population_size, `population_size semantics missing for ${contract.source_code}`);
+  }
   assert.deepStrictEqual(contracts.filter((contract) => contract.availability === 'source_unavailable').map((contract) => contract.source_code), ['external_fx_rates']);
   assert.strictEqual(contracts.filter((contract) => ['legacy_adapter_required','partially_available'].includes(contract.availability)).length, 0, 'internal contracts must be resolved');
   const controlContract = contracts.find((contract) => contract.source_code === 'control_assurance_evidence');
   assert.ok(controlContract, 'CONTROL-EFFECT source contract expected');
+  const controlContractMetadata = sourceContractMetadata(controlContract);
+  assert.strictEqual(controlContractMetadata.scale_metadata.variables.design.source_scale, 'PERCENT_0_100');
+  assert.strictEqual(controlContractMetadata.count_semantics.received, 'physical_rows_after_tenant_source_scope');
   assert.ok(!String(controlContract.variable_map.design).includes('score/100'), 'aggregate assurance score must not feed design dimension');
   assert.ok(String(controlContract.variable_map.effectivenesses).includes('aggregate assurance score'), 'aggregate assurance score remains valid for composite effectivenesses');
   assert.ok(String(controlContract.limitations).includes('nunca fabrica dimensiones desde score'), 'CONTROL-EFFECT anti-fabrication contract must be explicit');
