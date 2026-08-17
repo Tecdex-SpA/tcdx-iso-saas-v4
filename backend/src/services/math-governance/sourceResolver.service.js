@@ -2,7 +2,7 @@
 const crypto = require('crypto');
 const { MathGovernanceError } = require('./statisticalEngine.service');
 const { FORMULA_MAP } = require('./formulaRegistry.service');
-const { validateDataset } = require('./datasetValidation.service');
+const { validateDataset, COUNT_SEMANTICS, buildPopulationCounts } = require('./datasetValidation.service');
 const { getSourceCodeForFormula, getSourceContract, listSourceContracts, listFormulaSourceBindings } = require('./sourceContracts.service');
 
 const SOURCE_STATES = new Set(['ready', 'source_unavailable', 'empty_dataset', 'partially_available', 'legacy_adapter_required', 'validated_with_warnings']);
@@ -670,12 +670,36 @@ async function resolveFormulaSource({ client, tenantId, formulaCode, sourceCode 
   const formulaRows = formulaMapping ? formulaMapping.usableRows : validation.usable_rows;
   const formulaInput = formulaMapping ? formulaMapping.input : mapFormulaInput(formulaCode, validation.usable_rows);
   const formulaExclusions = formulaMapping ? [...validation.exclusions, ...formulaMapping.exclusions] : validation.exclusions;
-  const formulaCounts = { received: rows.length, usable: formulaRows.length, excluded: Math.max(0, rows.length - formulaRows.length) };
+  const formulaCounts = buildPopulationCounts({ received: rows.length, eligible: validation.usable_rows.length, usable: formulaRows.length, exclusions: formulaExclusions });
   const physicalSources = [...new Set(rows.map((row) => row.__physical_source).filter(Boolean))];
   const sourceWarnings = [...new Set(rows.flatMap((row) => Array.isArray(row.__source_warnings) ? row.__source_warnings : []))];
-  const sourceSnapshot = { source_code: contract.source_code, physical_sources: physicalSources, formula_code: formula.formula_code, contract_checksum: contract.checksum, scale_metadata: contract.scale_metadata || {}, row_count: formulaCounts.received, raw_row_count: rows.length, usable_rows: formulaCounts.usable, exclusions: formulaCounts.excluded, exclusion_issue_count: formulaExclusions.length, aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined, period, timezone };
+  const sourceStatus = formulaCounts.usable ? validation.status : (formulaCounts.received ? 'validated_with_warnings' : 'empty_dataset');
+  const sourceSnapshot = {
+    source_code: contract.source_code,
+    physical_sources: physicalSources,
+    formula_code: formula.formula_code,
+    contract_checksum: contract.checksum,
+    scale_metadata: contract.scale_metadata || {},
+    count_semantics: contract.count_semantics || COUNT_SEMANTICS,
+    counts: formulaCounts,
+    row_count: formulaCounts.population_size,
+    raw_row_count: formulaCounts.received,
+    received_rows: formulaCounts.received,
+    eligible_rows: formulaCounts.eligible,
+    usable_rows: formulaCounts.usable,
+    excluded_rows: formulaCounts.excluded,
+    ineligible_rows: formulaCounts.ineligible,
+    eligible_unusable_rows: formulaCounts.eligible_unusable,
+    exclusion_issue_count: formulaCounts.exclusionIssueCount,
+    exclusion_issue_instance_count: formulaCounts.exclusionIssueInstanceCount,
+    population_size: formulaCounts.population_size,
+    exclusions: formulaExclusions,
+    aggregation_method: formulaCode === 'F5_5_INHERENT_RISK' ? 'arithmetic_mean' : undefined,
+    period,
+    timezone,
+  };
   const snapshotHash = hash(sourceSnapshot);
-  return { source_code: contract.source_code, physical_sources: physicalSources, status: formulaCounts.usable ? validation.status : 'empty_dataset', rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
+  return { source_code: contract.source_code, physical_sources: physicalSources, status: sourceStatus, rows: formulaRows, warnings: [...sourceWarnings, ...validation.warnings], exclusions: formulaExclusions, invalid_rows: validation.invalid_rows, counts: formulaCounts, count_semantics: contract.count_semantics || COUNT_SEMANTICS, population_size: formulaCounts.population_size, inputHash: validation.hash, input_hash: validation.hash, source_snapshot: sourceSnapshot, source_snapshot_hash: snapshotHash, lineage: buildLineage({ rows: formulaRows, contract, formula, runId, snapshotHash }), formula_input: formulaInput, equivalence: contract.variable_map, contract };
 }
 
 async function resolveFormulaSources(args) { return resolveFormulaSource(args); }

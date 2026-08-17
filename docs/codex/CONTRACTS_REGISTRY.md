@@ -4,7 +4,7 @@
 |---|---|---|---|
 | Source contracts | PARTIAL | CODEX A | Existen; PRE-UI fortalece semántica, escala, unidad, temporalidad y elegibilidad. |
 | Metric/data semantics | PARTIAL | CODEX A | Debe quedar canónico al cerrar PRE-UI. |
-| Count semantics | PARTIAL | CODEX A | received/eligible/usable/excluded/exclusionIssueCount a reconciliar transversalmente. |
+| Count semantics | CURRENT/PUI-03 | CODEX A | PUI-03 cerró received/eligible/usable/excluded/exclusionIssueCount/population_size para source resolver y dataset validation focales. |
 | Temporal semantics | PARTIAL | CODEX A | event/state/validity/latest-effective-state. |
 | Scale/unit semantics | CURRENT/PUI-02 | CODEX A | PUI-02 cerró escala/unidad para CONTROL-EFFECT, RISK-INHERENT, MATURITY y normalización explícita auditada; otros dominios quedan para su paquete específico sólo con evidencia. |
 | Data Trust | PARTIAL | CODEX A | Foundation existente; reproducibilidad a cerrar. |
@@ -57,3 +57,33 @@ Status: DONE under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-
 | Supplier risk health support | `supplier_tprm_assessments` | supplier risk dimension scores | `SCORE_0_5` | `score` | `PERCENT_0_100` | `percent` | `score_0_5_to_percent`; removed `<=5 ? *20 : value` inference | CANONICAL | same files |
 
 PUI-02 decision: numeric normalization is driven by `scale_metadata` in the source contract. `source_scale`, `source_unit`, source range, canonical range, canonical unit and `normalization_strategy` are explicit for the PUI-02 variables above. Out-of-range values return invalid/excluded/null according to the existing resolver path; they are not clamped and are not converted to zero.
+
+## PUI-03 Count And Population Semantics
+
+Status: DONE under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-03-count-population-semantics`.
+
+Canonical count terms:
+
+| Term | Canonical Semantics |
+|---|---|
+| `received` | Physical rows after tenant/source scoping and row normalization, before contract/dataset eligibility. |
+| `eligible` | Rows that pass contract/dataset eligibility validation and belong to the official population before formula-specific input validation. |
+| `usable` | Eligible rows with sufficient valid formula inputs. |
+| `excluded` | Unique physical rows received but not used by the formula. It is a row count, not an issue count. |
+| `ineligible` | Received rows excluded by contract/dataset validation. |
+| `eligible_unusable` | Eligible rows excluded by formula-specific input validation. |
+| `exclusionIssueCount` | Distinct exclusion issue categories/codes. |
+| `exclusionIssueInstanceCount` | Total exclusion issue instances, preserving multiple issues per row for audit. |
+| `population_size` | Official eligible population size: the population the formula operates over before formula-specific usability exclusions. |
+
+PUI-03 inventory:
+
+| Metric/Family | Contract | Physical Received | Eligibility Rule | Usable Rule | Excluded Semantics | Issue Count | population_size | Status | Evidence |
+|---|---:|---|---|---|---|---|---|---|---|
+| Dataset validation / all source contracts | contract-specific source | `rows.length` after tenant/source scope | rows passing tenant, required field, range, scale, state, reference and current period validation | same as eligible at dataset-validation stage | unique invalid rows; `excluded = received - usable` | distinct issue codes; instances also tracked | eligible rows | CANONICAL | `datasetValidation.service.js`; `sourceResolver.test.js` |
+| RISK-INHERENT | `risk_register_controls` v3 | normalized resolver rows | `validation.usable_rows.length` | rows with valid probability/likelihood and impact under PUI-02 scale rules | received rows not in formula rows | `risk_axis_invalid` category count; instances retained | eligible rows | CANONICAL | `sourceResolver.service.js`; `sourceResolver.test.js` |
+| MATURITY | `maturity_assessments` v3 | normalized resolver rows | `validation.usable_rows.length` | rows with a declared valid maturity level/score after PUI-02 normalization | received rows not in formula rows | `maturity_level_scale_invalid` category count; instances retained | eligible rows | CANONICAL | `sourceResolver.service.js`; `sourceResolver.test.js` |
+| Severity index / audit findings | `audit_findings_actions` | normalized resolver rows | `validation.usable_rows.length` | rows with severity low/medium/high/critical | received rows not in formula rows | `severity_missing_or_invalid` category count; instances retained | eligible rows | CANONICAL | `sourceResolver.service.js`; `sourceResolver.test.js` |
+| Generic source resolver mappings | formula source contract | normalized resolver rows | `validation.usable_rows.length` | same as eligible unless a formula-specific mapper applies | received rows not used by formula | distinct issue codes; instances retained | eligible rows | CANONICAL | `sourceResolver.service.js` |
+
+PUI-03 decision: `source_snapshot.counts` and resolver `counts` carry the canonical population contract. `source_snapshot.exclusions` carries auditable issue detail; row counts live in `excluded_rows`, `ineligible_rows`, `eligible_unusable_rows` and `counts`. A source with `received > 0` and `usable = 0` is no longer represented as `empty_dataset`; it remains distinguishable as validated-with-warnings/insufficient-data for downstream state handling.

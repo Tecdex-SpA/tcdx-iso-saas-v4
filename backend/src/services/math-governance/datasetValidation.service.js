@@ -1,6 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const { MathGovernanceError } = require('./statisticalEngine.service');
+const { COUNT_SEMANTICS, buildPopulationCounts } = require('./countSemantics.service');
 
 const LEGACY_TIMESTAMP_FIELDS = Object.freeze([
   'created_at', 'updated_at', 'measured_at', 'assessed_at', 'event_date', 'submitted_at', 'executed_at', 'tested_at',
@@ -14,6 +15,15 @@ function normalizeDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 function addIssue(collection, rowIndex, field, code, message, value = null) { collection.push({ row_index: rowIndex, field, code, message, value }); }
+function sourceRecord(row, index) { return row?.id || row?.source_record || row?.source_entity_id || `row-${index}`; }
+function enrichIssues(issues, row, index) {
+  return issues.map((issue) => ({
+    ...issue,
+    reason: issue.reason || issue.message,
+    source_record: sourceRecord(row, index),
+    physical_source: row?.__physical_source || null,
+  }));
+}
 function validateTimezone(timezone) {
   if (!timezone) return 'UTC';
   try { new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date()); return timezone; }
@@ -64,7 +74,11 @@ function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit =
       if (date && periodStart && date < periodStart) addIssue(issues, index, field, 'date_before_period', 'Fecha fuera del periodo solicitado.', row[field]);
       if (date && periodEnd && date > periodEnd) addIssue(issues, index, field, 'date_after_period', 'Fecha fuera del periodo solicitado.', row[field]);
     }
-    if (issues.length) { invalidRows.push({ row_index: index, issues }); exclusions.push(...issues); }
+    if (issues.length) {
+      const enrichedIssues = enrichIssues(issues, row, index);
+      invalidRows.push({ row_index: index, source_record: sourceRecord(row, index), physical_source: row?.__physical_source || null, issues: enrichedIssues });
+      exclusions.push(...enrichedIssues);
+    }
   });
   const invalid = new Set(invalidRows.map((item) => item.row_index));
   const usableRows = rows.filter((_, index) => !invalid.has(index));
@@ -72,6 +86,32 @@ function validateDataset({ rows, tenantId, period = {}, timezone = 'UTC', unit =
   const sampleSize = usableRows.length;
   const valid = sampleSize >= minimumSampleSize && invalidRows.length === 0;
   if (sampleSize < minimumSampleSize) warnings.push({ code: 'minimum_sample_size_not_met', minimumSampleSize, sampleSize });
-  return { sourceKey, valid, warnings, exclusions, invalid_rows: invalidRows, usable_rows: usableRows, sample_size: sampleSize, coverage, hash: hashDataset(usableRows), inputHash: hashDataset(usableRows), rowCount: sampleSize, excludedCount: invalidRows.length, exclusionIssueCount: exclusions.length, timezone: validatedTimezone, unit, tenantId, status: sampleSize === 0 ? 'empty_dataset' : (valid ? 'ready' : 'validated_with_warnings') };
+  const counts = buildPopulationCounts({ received: rows.length, eligible: usableRows.length, usable: usableRows.length, exclusions });
+  return {
+    sourceKey,
+    valid,
+    warnings,
+    exclusions,
+    invalid_rows: invalidRows,
+    usable_rows: usableRows,
+    sample_size: sampleSize,
+    coverage,
+    hash: hashDataset(usableRows),
+    inputHash: hashDataset(usableRows),
+    rowCount: counts.usable,
+    receivedCount: counts.received,
+    eligibleCount: counts.eligible,
+    usableCount: counts.usable,
+    excludedCount: counts.excluded,
+    exclusionIssueCount: counts.exclusionIssueCount,
+    exclusionIssueInstanceCount: counts.exclusionIssueInstanceCount,
+    population_size: counts.population_size,
+    counts,
+    count_semantics: COUNT_SEMANTICS,
+    timezone: validatedTimezone,
+    unit,
+    tenantId,
+    status: rows.length === 0 ? 'empty_dataset' : (valid ? 'ready' : 'validated_with_warnings'),
+  };
 }
-module.exports = { validateDataset, hashDataset };
+module.exports = { validateDataset, hashDataset, COUNT_SEMANTICS, buildPopulationCounts };

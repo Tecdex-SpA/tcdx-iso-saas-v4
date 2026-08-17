@@ -42,10 +42,17 @@ async function main() {
     ],
   });
   assert.strictEqual(dataset.valid, false);
+  assert.strictEqual(dataset.receivedCount, 3);
+  assert.strictEqual(dataset.eligibleCount, 1);
   assert.strictEqual(dataset.usable_rows.length, 1);
+  assert.strictEqual(dataset.excludedCount, 2);
+  assert.strictEqual(dataset.exclusionIssueCount, 3);
+  assert.strictEqual(dataset.exclusionIssueInstanceCount, 3);
+  assert.strictEqual(dataset.population_size, 1);
   assert.ok(dataset.hash.length === 64);
   assert.ok(dataset.exclusions.some((item) => item.code === 'tenant_mismatch'));
   assert.ok(dataset.exclusions.some((item) => item.code === 'duplicate_natural_key'));
+  assert.ok(dataset.exclusions.every((item) => item.source_record), 'dataset exclusions must expose source record for audit');
 
   const inherentInput = mapFormulaInput('F5_5_INHERENT_RISK', [{ id: 'risk-a', probability: 4, impact: 5 }]);
   assert.deepStrictEqual(inherentInput.risks, [{ source_record: 'risk-a', physical_source: null, probability: 4, impact: 5, inherent_risk_score: 20 }]);
@@ -315,7 +322,12 @@ async function main() {
     sourceCode: 'maturity_assessments',
   });
   assert.strictEqual(invalidMaturitySource.counts.received, 2);
+  assert.strictEqual(invalidMaturitySource.counts.eligible, 2);
   assert.strictEqual(invalidMaturitySource.counts.usable, 0);
+  assert.strictEqual(invalidMaturitySource.counts.excluded, 2);
+  assert.strictEqual(invalidMaturitySource.counts.exclusionIssueCount, 1);
+  assert.strictEqual(invalidMaturitySource.counts.population_size, 2);
+  assert.strictEqual(invalidMaturitySource.status, 'validated_with_warnings');
   assert.deepStrictEqual(invalidMaturitySource.formula_input, { levels: [] });
   assert.ok(invalidMaturitySource.exclusions.some((item) => item.code === 'maturity_level_scale_invalid'));
 
@@ -336,8 +348,15 @@ async function main() {
     formulaCode: 'F5_5_INHERENT_RISK',
   });
   assert.strictEqual(riskSource.counts.received, 4);
+  assert.strictEqual(riskSource.counts.eligible, 4);
   assert.strictEqual(riskSource.counts.usable, 3);
   assert.strictEqual(riskSource.counts.excluded, 1);
+  assert.strictEqual(riskSource.counts.exclusionIssueCount, 1);
+  assert.strictEqual(riskSource.counts.population_size, 4);
+  assert.strictEqual(riskSource.source_snapshot.row_count, 4);
+  assert.strictEqual(riskSource.source_snapshot.excluded_rows, 1);
+  assert.strictEqual(riskSource.source_snapshot.exclusion_issue_count, 1);
+  assert.ok(Array.isArray(riskSource.source_snapshot.exclusions), 'snapshot exclusions must carry auditable issue details');
   assert.strictEqual(riskSource.lineage.length, 3);
   assert.deepStrictEqual(riskSource.formula_input.scores, [20, 10, 15]);
   assert.strictEqual(executeFormula('F5_5_INHERENT_RISK', riskSource.formula_input).value, 15);
@@ -359,7 +378,12 @@ async function main() {
     sourceCode: 'audit_findings_actions',
   });
   assert.strictEqual(findingsSource.counts.received, 1);
+  assert.strictEqual(findingsSource.counts.eligible, 1);
   assert.strictEqual(findingsSource.counts.usable, 0);
+  assert.strictEqual(findingsSource.counts.excluded, 1);
+  assert.strictEqual(findingsSource.counts.exclusionIssueCount, 1);
+  assert.strictEqual(findingsSource.counts.population_size, 1);
+  assert.strictEqual(findingsSource.status, 'validated_with_warnings');
   assert.strictEqual(findingsSource.exclusions[0].code, 'severity_missing_or_invalid');
 
   const missingClient = { async query(sql) { if (sql.includes('to_regclass')) return { rows: [{ exists: false }] }; throw new Error('unexpected query'); } };

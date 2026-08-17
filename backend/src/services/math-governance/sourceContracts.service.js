@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { COUNT_SEMANTICS } = require('./countSemantics.service');
 
 const AVAILABILITY = new Set(['available', 'partially_available', 'source_unavailable', 'legacy_adapter_required']);
 const SOURCE_STATUSES = new Set(['draft', 'reviewed', 'approved', 'published', 'retired']);
@@ -127,6 +128,7 @@ function contract(definition) {
     timezone: definition.timezone || 'tenant_timezone',
     unit: definition.unit || null,
     scale_metadata: Object.freeze(definition.scale_metadata || {}),
+    count_semantics: Object.freeze(definition.count_semantics || COUNT_SEMANTICS),
     cardinality: definition.cardinality || 'one_to_many',
     required_fields: Object.freeze(definition.required_fields || ['id', 'tenant_id']),
     exclusions: Object.freeze(definition.exclusions || []),
