@@ -8,6 +8,8 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - Auth/RBAC existente: proteger; no reabrir sin evidencia.
 - Multi-tenant scoping ya validado en fases previas: proteger y volver a probar sólo cuando el work package toque datos tenant-scoped.
 - Math Governance existente: formula registry, source contracts/resolver, dataset validation, official calculation, snapshots/lineage y decision interpretation.
+- PUI-01 source ownership confirmado para CONTROL-EFFECT, RISK-INHERENT y MATURITY en `docs/codex/CONTRACTS_REGISTRY.md`: no reabrir sin evidencia nueva.
+- CONTROL-EFFECT: `score` agregado puede alimentar cálculos agregados/composite, pero no puede fabricarse como `design`, `implementation`, `operation` ni `evidence`.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Intelligence Engine backend existe: rules, confidence, explainability, guardrails, prompt builder, actions, orchestrator y deterministic fallback.
@@ -31,7 +33,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 - PRE-UI sigue abierto.
 - PR #91 está abierto y no debe tratarse como mergeado.
-- CONTROL-EFFECT, RISK-INHERENT y MATURITY forman parte del bloque de reconciliación PRE-UI.
+- CONTROL-EFFECT, RISK-INHERENT y MATURITY formaban parte del bloque de reconciliación PRE-UI; PUI-01 cerró ownership de fuente localmente, con validación manual/CI pendiente.
 - No declarar Data Truth Gate mientras no se complete PUI-01..PUI-09 y validación manual correspondiente.
 
 ## NOT CONFIRMED / MISSING AS COMPLETE CAPABILITY
@@ -61,3 +63,4 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - Deterministic truth, AI explanation.
 - Tenant learning vía memory/RAG; no fine-tuning cross-tenant automático.
 - Web general no es verdad legal autoritativa.
+- No redescubrir en PUI-02 el ownership de fuente de CONTROL-EFFECT, RISK-INHERENT ni MATURITY cerrado por PUI-01; PUI-02 debe enfocarse en escala/unidad.

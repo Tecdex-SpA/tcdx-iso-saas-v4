@@ -179,9 +179,9 @@ const SOURCE_CONTRACTS = Object.freeze([
     source_code: 'control_assurance_evidence', entity: 'control',
     tables: ['grc_control_assurance', 'grc_evidence_links', 'grc_evidence_quality_scores'],
     columns: ['tenant_id','tenant_control_id','score','assurance_status','calculated_at','evidence_score'], required_fields: ['id','tenant_id','score'],
-    variable_map: { design: 'dimension.design|score/100', implementation: 'dimension.implementation|score/100', operation: 'dimension.operation|score/100', evidence: 'evidence_score|score/100', effectivenesses: 'rows.score/100' },
-    availability: 'available', version: 2,
-    limitations: 'Cuando no hay dimensiones separadas se usa el score oficial de assurance como medida compuesta declarada, conservando warning metodológico.'
+    variable_map: { design: 'design_score|design_effectiveness only', implementation: 'implementation_score|implementation_effectiveness only', operation: 'operation_score|operation_effectiveness|operating_effectiveness only', evidence: 'evidence_score|evidence_effectiveness only', effectivenesses: 'rows.score/100 as aggregate assurance score' },
+    availability: 'available', version: 3,
+    limitations: 'El score agregado de assurance es una fuente valida solo para score compuesto/effectivenesses; F5_5_CONTROL_EFFECTIVENESS requiere dimensiones D/I/O/E explicitas y nunca fabrica dimensiones desde score.'
   }),
   contract({
     source_code: 'audit_findings_actions', entity: 'audit',

@@ -5,8 +5,8 @@ Fuente: Plan Maestro canónico. No tomar un work package `IN_PROGRESS` por otra 
 | ID | Owner | Account | Status | Depends on | Branch | Base SHA | Head/Commit | Handoff | Exit Gate | Next exact action |
 |---|---|---|---|---|---|---|---|---|---|---|
 | CONT-00 | CODEX A | codex | DONE | - | manual-local | main@3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | THIS_BOOTSTRAP | docs/codex/handoffs/CONT-00.md | CODEX_CONTINUITY_BOOTSTRAP=PASS | Materializar y commit manual |
-| PUI-01 | CODEX A | codex | READY | CONT-00 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/PUI-01.md | See Plan Maestro | Reconciliar PR #91 y recuperar CI completo |
-| PUI-02 | CODEX A | codex | BLOCKED | PUI-01 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/PUI-02.md | See Plan Maestro | Contrato canonico de escala y unidades |
+| PUI-01 | CODEX A | codex | DONE | CONT-00 | fix/pui-01-source-contract-ownership | 033236f11a140530316c02ad81676a226efc15cb | FINAL_COMMIT_REPORTED_IN_CODEX_RESPONSE | docs/codex/handoffs/PUI-01.md | PUI_01_SOURCE_OWNERSHIP=PASS; manual validation pending | Usuario ejecuta push/PR/CI/full regression/manual validation |
+| PUI-02 | CODEX A | codex | READY | PUI-01 | - | FINAL_PUI01_COMMIT_REPORTED_IN_CODEX_RESPONSE | - | docs/codex/handoffs/PUI-02.md | See Plan Maestro | Contrato canonico de escala y unidades; no redescubrir ownership cerrado por PUI-01 |
 | PUI-03 | CODEX A | codex | BLOCKED | PUI-02 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/PUI-03.md | See Plan Maestro | Poblacion fisica, elegible y utilizable |
 | PUI-04 | CODEX A | codex | BLOCKED | PUI-03 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/PUI-04.md | See Plan Maestro | Semantica temporal por dominio |
 | PUI-05 | CODEX A | codex | BLOCKED | PUI-04 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/PUI-05.md | See Plan Maestro | Normalizacion de estados por dominio |
