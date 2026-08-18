@@ -37,6 +37,7 @@ Backend Node/Express
         |      + Outbox -> Semantic Layer timestamp boundary normalized to ISO-8601 UTC
         |      + Canonical deterministic Gap model (`grc_gaps`, `grc_gap_rules`, `grc_gap_status_history`, `grc_gap_hypotheses`)
         |      + GRC relationship inventory foundation for Impact Graph (`docs/architecture/grc_relationship_inventory.md`)
+        |      + Impact Graph 2.0 projection/adapters (`impactGraph.service.js`) over existing relation truth
         |      + tenant-scoped source validation, RBAC and audit log integration
         |
         +--> Semantic Layer
@@ -108,4 +109,5 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - 6.8-02-HF1: CLOSED / PASS_RUNTIME; timestamp serialization hotfix validated after user deploy/retry.
 - 6.8-03: CLOSED / PASS_RUNTIME; canonical deterministic Gap model validated after user deploy with Observation -> Gap relation in `grc_observation_relations`.
 - 6.9-01: DONE_LOCAL; relationship inventory created at `docs/architecture/grc_relationship_inventory.md`, no graph storage/traversal implemented, duplicate relation model remains 0.
-- Next work package candidate: 6.9-02 Impact Graph 2.0 using adapters/projection over the 6.9-01 inventory.
+- 6.9-02: DONE_LOCAL; Impact Graph 2.0 foundation implemented as tenant-scoped projection/adapters over 6.9-01 inventory, with no graph storage/migration and runtime validation pending user acceptance.
+- Next work package candidate after merge/acceptance: 6.9-03 Priority Engine 2.0.

@@ -28,6 +28,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - 6.8-02-HF1 corrigió y cerró en runtime el defecto de serialización temporal del emitter: filas `timestamptz` del outbox vuelven desde PostgreSQL como `Date` y deben normalizarse a ISO-8601 UTC antes de cruzar a `semanticLayer.createManualObservation`. No se fabrican fechas, no hay migración, no cambian fórmulas ni source contracts; `F6_8_02_RUNTIME=PASS`.
 - 6.8-03 está cerrado en runtime por `docs/codex/handoffs/6.8-03-RUNTIME-CLOSURE.md`: `grc_gaps` es la brecha determinística tenant-scoped derivada de Observations canónicas; `grc_gap_rules` versiona reglas publicadas inmutables; `grc_gap_status_history` conserva lifecycle; `grc_gap_hypotheses` separa señales AI/no determinísticas; la relación Observation -> Gap usa `grc_observation_relations`; no hay modelo paralelo de Observation ni findings convertidos silenciosamente en Gap. `F6_8_03_RUNTIME=PASS`.
 - 6.9-01 cierra localmente el inventario de relaciones GRC en `docs/architecture/grc_relationship_inventory.md`: 38 familias de relación inventariadas, 32 persistidas, 6 derivadas, 8 canónicas, 25 domain-specific, 0 duplicate candidates. La foundation para 6.9-02 es proyección/adapters sobre truth existente, no una tabla nueva de graph en 6.9-01.
+- 6.9-02 cierra localmente la foundation de Impact Graph 2.0 como contrato `impact-graph-2-foundation-v1` en `backend/src/services/grc/impactGraph.service.js`: adapters sobre `grc_requirement_control_mappings`, `grc_evidence_links`, `grc_phase2_relations`, `grc_operational_dependencies`, `tenant_process_entity_links`, `grc_observation_relations` y provenance derivada de `grc_gaps`; sin migración, graph storage ni segundo source of truth.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Intelligence Engine backend existe: rules, confidence, explainability, guardrails, prompt builder, actions, orchestrator y deterministic fallback.
@@ -57,7 +58,8 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 ## NOT CONFIRMED / MISSING AS COMPLETE CAPABILITY
 
 - Hybrid RAG con pgvector/embeddings/reranking/citations.
-- Impact Graph canónico transversal.
+- Impact Graph advanced analytics/centrality/consumer rollout beyond 6.9-02 foundation.
+- Priority Engine 2.0 sobre Impact Graph.
 - Regulatory Intelligence genérica con RegulationVersion/LegalObligation/Applicability.
 - Regulatory Packs completos Ley 21.719 / Ley 21.663.
 - Operational Memory transversal.
@@ -97,3 +99,4 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - No redescubrir en 6.8-03 el mecanismo inicial de emisión Observation: el outbox F6.8 usa PostgreSQL, no Kafka; la emisión automática no escribe directo a `grc_observations`; los eventos no elegibles quedan `ignored` y no producen observaciones negativas desde no-data/insufficient/source-incompatible/dependency-pending.
 - No redescubrir después de 6.8-03 el ownership Gap: findings/readiness/nonconformities/action plans permanecen modelos de dominio o tratamiento; Gap determinístico se deriva de `grc_observations` por `grc_gap_rules`; AI sólo puede registrar hipótesis separadas, no verdad Gap determinística.
 - No redescubrir en 6.9-02 el inventario de relaciones GRC cerrado por 6.9-01: usar `docs/architecture/grc_relationship_inventory.md` como input principal; proyectar/adaptar tablas propietarias existentes y no duplicar `grc_observation_relations`, `grc_gaps`, relaciones de evidencia/auditoría/proceso/proveedor/métrica ni modelos de dominio.
+- No redescubrir después de 6.9-02 el contrato foundation de Impact Graph: `impactGraph.service.js` provee node/edge/projection/provenance determinístico con adapters y límites de traversal; no crear `grc_graph_edges`, graph DB, `grc_observation_links` ni storage paralelo salvo decisión futura explícita y justificada.

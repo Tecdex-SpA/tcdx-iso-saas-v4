@@ -7,6 +7,7 @@ const { observe, snapshot: observabilitySnapshot } = require('./grcObservability
 const { createGrcBootstrapService } = require('./grcBootstrap.service');
 const { createGrcObservationService } = require('./grcObservation.service');
 const { createGrcGapService } = require('./grcGap.service');
+const { createImpactGraphService } = require('./impactGraph.service');
 
 const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 
@@ -39,6 +40,7 @@ function createGrcService(pool, asyncJobs) {
   const bootstrapService = createGrcBootstrapService(pool, { GrcError, observe });
   let observationService = null;
   let gapService = null;
+  let impactGraphService = null;
 
   async function withTransaction(work) {
     const client = await pool.connect();
@@ -1845,6 +1847,16 @@ function createGrcService(pool, asyncJobs) {
     return gapService;
   }
 
+  function impactGraph() {
+    if (!impactGraphService) {
+      impactGraphService = createImpactGraphService(pool, {
+        GrcError,
+        assertUuid,
+      });
+    }
+    return impactGraphService;
+  }
+
   async function listObservations({ tenantId, filters }) {
     return observations().listObservations({ tenantId, filters });
   }
@@ -1892,6 +1904,27 @@ function createGrcService(pool, asyncJobs) {
     return gaps().transitionGap({ tenantId, userId, gapId, body, correlationId });
   }
 
+  async function getImpactGraphRelationships({ tenantId, entityType, entityId, filters }) {
+    return impactGraph().getNodeRelationships({
+      tenantId,
+      entityType,
+      entityId,
+      direction: filters?.direction || 'both',
+      limit: filters?.limit,
+    });
+  }
+
+  async function getImpactGraphNeighborhood({ tenantId, entityType, entityId, filters }) {
+    return impactGraph().getNeighborhood({
+      tenantId,
+      entityType,
+      entityId,
+      depth: filters?.depth,
+      maxNodes: filters?.max_nodes,
+      maxEdges: filters?.max_edges,
+    });
+  }
+
   return {
     GrcError,
     assertModuleEnabled,
@@ -1928,6 +1961,8 @@ function createGrcService(pool, asyncJobs) {
     getExport,
     getEvidenceRequest,
     getGap,
+    getImpactGraphNeighborhood,
+    getImpactGraphRelationships,
     getMeta,
     getObservation,
     getReadiness,
