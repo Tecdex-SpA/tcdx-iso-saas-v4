@@ -232,6 +232,39 @@ FORMULAS_VERSIONED: `[]`
 
 UNNECESSARY_VERSION_BUMPS: `0`
 
+## PUI-08 Official Indicator Matrix
+
+Status: DONE_LOCAL under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `fix/pui-08-official-indicator-matrix-closure`.
+
+Machine-readable artifact:
+
+- `backend/src/services/math-governance/officialIndicatorMatrix.service.js`
+- Validation: `backend/src/services/math-governance/officialIndicatorMatrix.test.js`
+- Matrix version: `pui-08-official-indicator-matrix-v1`
+
+Canonical decision:
+
+| Area | Contract |
+|---|---|
+| Formula coverage | `OFFICIAL_FORMULA_COUNT=53`; every row derives from `FORMULAS` and retains formula version/unit. |
+| Source ownership | Every formula row uses `FORMULA_SOURCE_MAP` and a published source contract with version/checksum. |
+| Physical source coverage | Every row exposes physical sources from the source contract; `F5_5_SEVERITY_INDEX` is explicitly `grc_readiness_findings + grc_readiness_snapshots`. |
+| Temporal/status/count semantics | Every row carries the source contract `temporal_semantics`, `status_semantics` and `count_semantics`; no PUI-01..PUI-07 contract is reopened. |
+| Empty behavior | Empty/no applicable source remains `not_calculable` with `value=null`; no null/no-data/insufficient-data is converted to zero. |
+| Partial behavior | Exclusions and count reconciliation are required; silent fallback is forbidden. |
+| Sufficient behavior | Formula output must be deterministic, calculated through formula registry/orchestrator, with snapshot, lineage and Data Trust. |
+| Tenant behavior | Two-tenant scenario requires isolated datasets and forbids cross-tenant lineage leaks. |
+| Consumers | Consumers are official projections only: orchestrator/source resolver/persistence, analytics catalog, functional indicator catalog, Formula Catalog, dashboard official metrics and reports/exports via persisted official calculations. |
+| Dependency graph | Dependencies are explicit for readiness, residual risk and GRC health; cycles are forbidden. |
+
+PUI-08 does not change source contract payload, formula payload, formula expression, weights, units or precision.
+
+SOURCE_CONTRACTS_VERSIONED: `[]`
+
+FORMULAS_VERSIONED: `[]`
+
+UNNECESSARY_VERSION_BUMPS: `0`
+
 ## PUI-07-HF5 Severity Index Snapshot Schema Compatibility
 
 Status: DONE_LOCAL on branch `fix/pui-07-hf5-severity-index-schema-compatibility`; runtime validation pending by design.

@@ -20,6 +20,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - PUI-07-HF3 cierra localmente drift residual focal: `grc_readiness_findings` usa el snapshot padre para temporalidad y `status=not_applicable`; `maturity_assessments` reconoce vocabulario productor de `survey_evaluations`/`metric_measurements`; `grc_health_components` usa `started_at/completed_at` cuando `period_start` es nulo.
 - PUI-07-HF4 cierra localmente source ownership de `F5_5_SEVERITY_INDEX`: el source canónico sigue siendo `audit_findings_actions`; overrides no canónicos a `incident_operational_events`/`grc_incidents` no pueden desplazarlo y quedan visibles como warning/provenance.
 - PUI-07-HF5 cierra localmente compatibilidad física de `F5_5_SEVERITY_INDEX`: `grc_readiness_snapshots` produce `generated_at`, `period_start` y `period_end`, no `source_as_of`; `audit_findings_actions` v9 y el adapter de Severity no requieren ni fabrican `source_as_of`.
+- PUI-08 cierra localmente la matriz integral oficial: 53 fórmulas oficiales gobernadas se derivan de `FORMULAS`, `FORMULA_SOURCE_MAP`, source contracts, consumers, dependencias, snapshots/lineage y escenarios empty/partial/sufficient/two-tenant mediante `officialIndicatorMatrix.service.js`.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Intelligence Engine backend existe: rules, confidence, explainability, guardrails, prompt builder, actions, orchestrator y deterministic fallback.
@@ -32,7 +33,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 ## PARTIAL
 
 - Source contracts/resolver: PUI-01..PUI-07-HF5 cerraron ownership, escala/unidad, count semantics, temporal semantics, status semantics, fallback governance, Data Trust, pipeline oficial único, drift residual/source override focal y compatibilidad física de Severity snapshot para Math Governance.
-- Data Trust/provenance/snapshots: Data Trust focal existe; PUI-08 debe cerrar reproducibilidad/snapshots/lineage integral sin redescubrir PUI-07.
+- Data Trust/provenance/snapshots: PUI-08 deja matriz local completa y validable para reproducibilidad/snapshots/lineage; PUI-09 debe ejecutar el runtime post-deploy integral.
 - Decision Interpretation / Next Best Actions: foundation determinística; falta causalidad transversal completa.
 - Tenant document handling: hay capacidades especializadas, no RAG privado universal confirmado.
 - External lookup: foundation web/trusted sources; falta registry regulatorio autoritativo, versionado y semantic diff.
@@ -82,3 +83,4 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - No redescubrir en PUI-08 el modelo Data Trust PUI-07 ni la consolidación PUI-07-HF1: `dataTrust.service.js`, `data-trust-model-v1`, `officialCalculationOrchestrator` como pipeline canónico y Package3 como compatibilidad están cerrados; PUI-08 debe enfocarse en reproducibilidad integral de snapshots/lineage.
 - No redescubrir en PUI-08 los cierres HF3: `status_unmapped` no equivale a `status_not_eligible`; no inventar timestamps; `audit_findings_actions` v8, `maturity_assessments` v7 y `grc_health_components` v6 son los contratos focales actualizados por drift residual.
 - No redescubrir en PUI-08 el cierre HF4/HF5: `F5_5_SEVERITY_INDEX` no usa `incident_operational_events`/`grc_incidents` como fuente canónica; source overrides no canónicos se ignoran con warning; el adapter canónico usa `grc_readiness_findings` + `grc_readiness_snapshots` y no debe consultar `grc_readiness_snapshots.source_as_of`.
+- No redescubrir en PUI-09 el inventario PUI-08: `OFFICIAL_FORMULA_COUNT=53`, la matriz machine-readable vive en `backend/src/services/math-governance/officialIndicatorMatrix.service.js`, y consumers no pueden crear verdad paralela.

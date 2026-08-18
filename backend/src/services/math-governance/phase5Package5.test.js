@@ -44,7 +44,7 @@ function main() {
     unit: '%',
     period_start: '2026-01-01T00:00:00.000Z',
     period_end: '2026-01-31T23:59:59.000Z',
-    timezone: 'America/Santiago',
+    timezone: 'tenant-configured',
     run_metadata: { trust_score: 91, trust_status: 'trusted', source_status: 'available', coverage: 98 },
     output_metadata: {},
     snapshot_id: '70000000-0000-0000-0000-000000000778',
@@ -57,9 +57,11 @@ function main() {
   assert(latestPayload.lineage_url.includes(latestPayload.calculation_run_id)); assertions += 1;
 
   for (const key of ['compliance', 'risk-residual', 'survey-score', 'assurance-score', 'loss-expected', 'continuity-availability', 'asset-criticality', 'supplier-risk']) {
-    const result = phase5Package3.calculateOfficialByKey(key, sampleInputFor(key));
-    assert(result.formula_code.startsWith('F5_5_')); assertions += 1;
-    assert(result.status === 'completed' || result.status === 'unmeasured'); assertions += 1;
+    assert.throws(
+      () => phase5Package3.calculateOfficialByKey(key, sampleInputFor(key)),
+      (error) => error?.code === 'PACKAGE3_CANONICAL_ORCHESTRATOR_REQUIRED'
+    );
+    assertions += 1;
   }
 
   const health = catalog.buildHealthCatalog();
