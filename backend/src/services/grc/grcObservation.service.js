@@ -1,8 +1,9 @@
 'use strict';
 
 const crypto = require('crypto');
+const semanticLayer = require('../semantic/semanticLayer.service');
 
-const OBSERVATION_MODEL_VERSION = 'grc-observation-model-v1';
+const OBSERVATION_MODEL_VERSION = 'grc-canonical-observation-facade-v1';
 
 const OBSERVATION_TYPES = new Set([
   'observation',
@@ -69,7 +70,7 @@ const SOURCE_TYPES = new Set([
   'assessment',
 ]);
 
-const RELATION_TYPES = new Set([
+const API_RELATION_TYPES = new Set([
   'relates_to',
   'evidence_for',
   'impacts',
@@ -80,7 +81,17 @@ const RELATION_TYPES = new Set([
   'blocks',
 ]);
 
-const LINK_SOURCES = new Set(['manual', 'system', 'import', 'ai_suggested']);
+const RELATION_TO_CANONICAL = Object.freeze({
+  relates_to: 'related_to',
+  evidence_for: 'evidences',
+  impacts: 'affects',
+  caused_by: 'derived_from',
+  mitigated_by: 'related_to',
+  duplicates: 'related_to',
+  remediated_by: 'related_to',
+  blocks: 'related_to',
+});
+
 const UUID_RE = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
 const STATUS_TRANSITIONS = Object.freeze({
@@ -94,162 +105,61 @@ const STATUS_TRANSITIONS = Object.freeze({
 });
 
 const SOURCE_ADAPTERS = Object.freeze({
-  finding: [
-    {
-      table: 'findings',
-      query: `
-        SELECT id, tenant_id, COALESCE(title, finding_type, 'Finding') AS label
-        FROM findings
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  action: [
-    {
-      table: 'action_plans',
-      query: `
-        SELECT id, tenant_id, COALESCE(title, description, 'Action plan') AS label
-        FROM action_plans
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  audit: [
-    {
-      table: 'audits',
-      query: `
-        SELECT id, tenant_id, COALESCE(iso, status, 'Audit') AS label
-        FROM audits
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  control: [
-    {
-      table: 'tenant_controls',
-      query: `
-        SELECT tc.id, tc.tenant_id, COALESCE(cc.description, 'Control') AS label
-        FROM tenant_controls tc
-        LEFT JOIN controls_catalog cc ON cc.id = tc.control_id
-        WHERE tc.tenant_id = $1::uuid AND tc.id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  risk: [
-    {
-      table: 'iso_risk_matrix_items',
-      query: `
-        SELECT id, tenant_id, COALESCE(risk_title, risk_code, risk_description, 'Risk') AS label
-        FROM iso_risk_matrix_items
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-    {
-      table: 'asset_risks',
-      query: `
-        SELECT ar.id, a.tenant_id, COALESCE(ar.risk::text, ar.impact::text, ar.level::text, 'Asset risk') AS label
-        FROM asset_risks ar
-        JOIN assets a ON a.id = ar.asset_id
-        WHERE a.tenant_id = $1::uuid AND ar.id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  evidence: [
-    {
-      table: 'evidences',
-      query: `
-        SELECT id, tenant_id, COALESCE(file_name, description, evidence_type, 'Evidence') AS label
-        FROM evidences
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  document: [
-    {
-      table: 'document_index',
-      query: `
-        SELECT id, tenant_id, COALESCE(file_name, relative_path, provider_file_id, 'Document') AS label
-        FROM document_index
-        WHERE tenant_id = $1::uuid
-          AND id = $2::uuid
-          AND COALESCE(status, 'indexed') NOT IN ('deleted', 'error', 'ignored', 'missing')
-        LIMIT 1
-      `,
-    },
-  ],
-  incident: [
-    {
-      table: 'grc_incidents',
-      query: `
-        SELECT id, tenant_id, COALESCE(title, incident_number, 'Incident') AS label
-        FROM grc_incidents
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  readiness_snapshot: [
-    {
-      table: 'grc_readiness_snapshots',
-      query: `
-        SELECT id, tenant_id, COALESCE(formula_version, input_hash, 'Readiness snapshot') AS label
-        FROM grc_readiness_snapshots
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  readiness_finding: [
-    {
-      table: 'grc_readiness_findings',
-      query: `
-        SELECT id, tenant_id, COALESCE(finding_code, severity, 'Readiness finding') AS label
-        FROM grc_readiness_findings
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  nonconformity: [
-    {
-      table: 'tenant_nonconformities',
-      query: `
-        SELECT id, tenant_id, COALESCE(control_description, status, 'Nonconformity') AS label
-        FROM tenant_nonconformities
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  metric_measurement: [
-    {
-      table: 'metric_measurements',
-      query: `
-        SELECT id, tenant_id, COALESCE(period_key, unit, 'Metric measurement') AS label
-        FROM metric_measurements
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
-  assessment: [
-    {
-      table: 'survey_evaluations',
-      query: `
-        SELECT id, tenant_id, COALESCE(evaluation_status, 'Assessment') AS label
-        FROM survey_evaluations
-        WHERE tenant_id = $1::uuid AND id = $2::uuid
-        LIMIT 1
-      `,
-    },
-  ],
+  finding: [{
+    table: 'findings',
+    query: `SELECT id, tenant_id, COALESCE(title, finding_type, 'Finding') AS label FROM findings WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
+  action: [{
+    table: 'action_plans',
+    query: `SELECT id, tenant_id, COALESCE(title, description, 'Action plan') AS label FROM action_plans WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
+  audit: [{
+    table: 'audits',
+    query: `SELECT id, tenant_id, COALESCE(iso, status, 'Audit') AS label FROM audits WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
+  control: [{
+    table: 'tenant_controls',
+    query: `SELECT tc.id, tc.tenant_id, COALESCE(cc.description, 'Control') AS label FROM tenant_controls tc LEFT JOIN controls_catalog cc ON cc.id = tc.control_id WHERE tc.tenant_id = $1::uuid AND tc.id = $2::uuid LIMIT 1`,
+  }],
+  risk: [{
+    table: 'iso_risk_matrix_items',
+    query: `SELECT id, tenant_id, COALESCE(risk_title, risk_code, risk_description, 'Risk') AS label FROM iso_risk_matrix_items WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }, {
+    table: 'asset_risks',
+    query: `SELECT ar.id, a.tenant_id, COALESCE(ar.risk::text, ar.impact::text, ar.level::text, 'Asset risk') AS label FROM asset_risks ar JOIN assets a ON a.id = ar.asset_id WHERE a.tenant_id = $1::uuid AND ar.id = $2::uuid LIMIT 1`,
+  }],
+  evidence: [{
+    table: 'evidences',
+    query: `SELECT id, tenant_id, COALESCE(file_name, description, evidence_type, 'Evidence') AS label FROM evidences WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
+  document: [{
+    table: 'document_index',
+    query: `SELECT id, tenant_id, COALESCE(file_name, relative_path, provider_file_id, 'Document') AS label FROM document_index WHERE tenant_id = $1::uuid AND id = $2::uuid AND COALESCE(status, 'indexed') NOT IN ('deleted', 'error', 'ignored', 'missing') LIMIT 1`,
+  }],
+  incident: [{
+    table: 'grc_incidents',
+    query: `SELECT id, tenant_id, COALESCE(title, incident_number, 'Incident') AS label FROM grc_incidents WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
+  readiness_snapshot: [{
+    table: 'grc_readiness_snapshots',
+    query: `SELECT id, tenant_id, COALESCE(formula_version, input_hash, 'Readiness snapshot') AS label FROM grc_readiness_snapshots WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
+  readiness_finding: [{
+    table: 'grc_readiness_findings',
+    query: `SELECT id, tenant_id, COALESCE(finding_code, severity, 'Readiness finding') AS label FROM grc_readiness_findings WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
+  nonconformity: [{
+    table: 'tenant_nonconformities',
+    query: `SELECT id, tenant_id, COALESCE(control_description, status, 'Nonconformity') AS label FROM tenant_nonconformities WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
+  metric_measurement: [{
+    table: 'metric_measurements',
+    query: `SELECT id, tenant_id, COALESCE(period_key, unit, 'Metric measurement') AS label FROM metric_measurements WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
+  assessment: [{
+    table: 'survey_evaluations',
+    query: `SELECT id, tenant_id, COALESCE(evaluation_status, 'Assessment') AS label FROM survey_evaluations WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+  }],
 });
 
 function publicError(GrcError, status, code, message, details = null) {
@@ -271,9 +181,7 @@ function parseTimestamp(value, field, GrcError) {
   const text = asText(value, 80);
   if (!text) throw publicError(GrcError, 400, 'OBSERVATION_TIME_REQUIRED', `${field} es obligatorio.`);
   const date = new Date(text);
-  if (!Number.isFinite(date.getTime())) {
-    throw publicError(GrcError, 400, 'OBSERVATION_TIME_INVALID', `${field} inválido.`);
-  }
+  if (!Number.isFinite(date.getTime())) throw publicError(GrcError, 400, 'OBSERVATION_TIME_INVALID', `${field} inválido.`);
   return date.toISOString();
 }
 
@@ -285,137 +193,96 @@ function parseOptionalTimestamp(value, field, GrcError) {
 function optionalUuid(value, field, GrcError) {
   const text = asText(value, 80);
   if (!text) return null;
-  if (!UUID_RE.test(text)) {
-    throw publicError(GrcError, 400, 'OBSERVATION_UUID_INVALID', `${field} inválido.`);
-  }
+  if (!UUID_RE.test(text)) throw publicError(GrcError, 400, 'OBSERVATION_UUID_INVALID', `${field} inválido.`);
   return text;
 }
 
-function stableJson(value) {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
+function sha256(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function sha256(value) {
-  return crypto.createHash('sha256').update(String(value)).digest('hex');
+function semanticScope(tenantId, userId) {
+  return { tenant_id: tenantId, user: { id: userId, tenant_id: tenantId } };
 }
 
 function normalizePayload(payload = {}, tenantId, userId, GrcError) {
   const observationType = asText(payload.observation_type, 80) || 'observation';
   const domain = asText(payload.domain, 80) || 'general';
-  const status = asText(payload.status, 80) || 'open';
-  const severity = asText(payload.severity, 80);
+  const status = asText(payload.status_value ?? payload.status, 80) || 'open';
+  const severity = asText(payload.severity_value ?? payload.severity, 80);
   const sourceType = asText(payload.source_type, 80) || 'manual';
-  const title = asText(payload.title, 300);
+  const title = asText(payload.title ?? payload.text_value, 300);
   const description = asText(payload.description, 4000);
   const metadata = asObject(payload.metadata, {});
 
-  if (!OBSERVATION_TYPES.has(observationType)) {
-    throw publicError(GrcError, 400, 'OBSERVATION_TYPE_INVALID', 'observation_type inválido.');
-  }
-  if (observationType === 'custom' && !asText(metadata.custom_type, 120)) {
-    throw publicError(GrcError, 400, 'OBSERVATION_CUSTOM_TYPE_REQUIRED', 'metadata.custom_type es obligatorio para observation_type=custom.');
-  }
-  if (!OBSERVATION_DOMAINS.has(domain)) {
-    throw publicError(GrcError, 400, 'OBSERVATION_DOMAIN_INVALID', 'domain inválido.');
-  }
-  if (!OBSERVATION_STATUSES.has(status)) {
-    throw publicError(GrcError, 400, 'OBSERVATION_STATUS_INVALID', 'status inválido.');
-  }
-  if (!severity || !OBSERVATION_SEVERITIES.has(severity)) {
-    throw publicError(GrcError, 400, 'OBSERVATION_SEVERITY_INVALID', 'severity inválida.');
-  }
-  if (!SOURCE_TYPES.has(sourceType)) {
-    throw publicError(GrcError, 400, 'OBSERVATION_SOURCE_TYPE_INVALID', 'source_type inválido.');
-  }
+  if (!OBSERVATION_TYPES.has(observationType)) throw publicError(GrcError, 400, 'OBSERVATION_TYPE_INVALID', 'observation_type inválido.');
+  if (observationType === 'custom' && !asText(metadata.custom_type, 120)) throw publicError(GrcError, 400, 'OBSERVATION_CUSTOM_TYPE_REQUIRED', 'metadata.custom_type es obligatorio para observation_type=custom.');
+  if (!OBSERVATION_DOMAINS.has(domain)) throw publicError(GrcError, 400, 'OBSERVATION_DOMAIN_INVALID', 'domain inválido.');
+  if (!OBSERVATION_STATUSES.has(status)) throw publicError(GrcError, 400, 'OBSERVATION_STATUS_INVALID', 'status inválido.');
+  if (!severity || !OBSERVATION_SEVERITIES.has(severity)) throw publicError(GrcError, 400, 'OBSERVATION_SEVERITY_INVALID', 'severity inválida.');
+  if (!SOURCE_TYPES.has(sourceType)) throw publicError(GrcError, 400, 'OBSERVATION_SOURCE_TYPE_INVALID', 'source_type inválido.');
   if (!title) throw publicError(GrcError, 400, 'OBSERVATION_TITLE_REQUIRED', 'title es obligatorio.');
 
   const sourceId = asText(payload.source_id, 80);
-  if (sourceType === 'manual' && sourceId) {
-    throw publicError(GrcError, 400, 'OBSERVATION_MANUAL_SOURCE_ID_FORBIDDEN', 'manual no acepta source_id.');
-  }
-  if (sourceType !== 'manual' && !sourceId) {
-    throw publicError(GrcError, 400, 'OBSERVATION_SOURCE_ID_REQUIRED', 'source_id es obligatorio para fuentes no manuales.');
-  }
+  if (sourceType === 'manual' && sourceId) throw publicError(GrcError, 400, 'OBSERVATION_MANUAL_SOURCE_ID_FORBIDDEN', 'manual no acepta source_id.');
+  if (sourceType !== 'manual' && !sourceId) throw publicError(GrcError, 400, 'OBSERVATION_SOURCE_ID_REQUIRED', 'source_id es obligatorio para fuentes no manuales.');
 
   const observedAt = parseTimestamp(payload.observed_at, 'observed_at', GrcError);
-  const effectiveFrom = parseOptionalTimestamp(payload.effective_from, 'effective_from', GrcError);
-  const effectiveTo = parseOptionalTimestamp(payload.effective_to, 'effective_to', GrcError);
-  if (effectiveFrom && effectiveTo && new Date(effectiveFrom).getTime() > new Date(effectiveTo).getTime()) {
-    throw publicError(GrcError, 400, 'OBSERVATION_EFFECTIVE_INTERVAL_INVALID', 'effective_from debe ser menor o igual a effective_to.');
+  const periodStart = parseOptionalTimestamp(payload.period_start ?? payload.effective_from, 'period_start', GrcError);
+  const periodEnd = parseOptionalTimestamp(payload.period_end ?? payload.effective_to, 'period_end', GrcError);
+  if (periodStart && periodEnd && new Date(periodStart).getTime() > new Date(periodEnd).getTime()) {
+    throw publicError(GrcError, 400, 'OBSERVATION_EFFECTIVE_INTERVAL_INVALID', 'period_start debe ser menor o igual a period_end.');
   }
-
-  const sourceReference = asObject(payload.source_reference, {});
-  const baseForKey = {
-    source_type: sourceType,
-    source_id: sourceId || null,
-    observation_type: observationType,
-    domain,
-    title,
-    observed_at: observedAt,
-  };
-  const explicitKey = asText(payload.observation_key, 300);
-  const observationKey = explicitKey || `${sourceType}:${sha256(stableJson(baseForKey)).slice(0, 48)}`;
-  const hashPayload = {
-    tenant_id: tenantId,
-    observation_key: observationKey,
-    observation_type: observationType,
-    domain,
-    title,
-    description: description || null,
-    severity,
-    source_type: sourceType,
-    source_id: sourceId || null,
-    observed_at: observedAt,
-    effective_from: effectiveFrom,
-    effective_to: effectiveTo,
-    source_reference: sourceReference,
-    model_version: OBSERVATION_MODEL_VERSION,
-  };
 
   return {
     tenant_id: tenantId,
-    observation_key: observationKey,
-    observation_hash: sha256(stableJson(hashPayload)),
     observation_type: observationType,
     domain,
+    entity_type: asText(payload.entity_type, 120) || domain,
+    entity_id: optionalUuid(payload.entity_id, 'entity_id', GrcError),
     title,
     description,
     status,
     severity,
     source_type: sourceType,
     source_id: sourceId || null,
-    source_reference: sourceReference,
+    source_reference: asObject(payload.source_reference, {}),
     observed_at: observedAt,
-    effective_from: effectiveFrom,
-    effective_to: effectiveTo,
+    period_start: periodStart,
+    period_end: periodEnd,
     owner_user_id: optionalUuid(payload.owner_user_id, 'owner_user_id', GrcError),
-    responsible_user_id: optionalUuid(payload.responsible_user_id, 'responsible_user_id', GrcError),
     created_by: userId || null,
-    metadata: {
-      ...metadata,
-      model_version: OBSERVATION_MODEL_VERSION,
-    },
+    metadata,
     correlation_id: asText(payload.correlation_id, 160),
+    idempotency_id: asText(payload.idempotency_id || payload.idempotency_key, 240),
   };
 }
 
-function createGrcObservationService(pool, { GrcError, assertUuid, observe, withTransaction, audit, json }) {
+function projectObservation(row = {}) {
+  const grc = row.metadata?.grc_facade || {};
+  return {
+    ...row,
+    status: row.status_value || grc.status || null,
+    severity: row.severity_value || grc.severity || null,
+    domain: grc.domain || row.entity_type || 'general',
+    title: grc.title || row.text_value || null,
+    description: grc.description || null,
+    source_type: grc.source_type || null,
+    source_id: grc.source_id || null,
+    source_reference: grc.source_reference || {},
+    effective_from: row.period_start || null,
+    effective_to: row.period_end || null,
+    model_version: OBSERVATION_MODEL_VERSION,
+  };
+}
+
+function createGrcObservationService(pool, { GrcError, assertUuid, observe, audit, json, semantic = semanticLayer }) {
   const tableCache = new Map();
 
   async function tableExists(tableName) {
     if (tableCache.has(tableName)) return tableCache.get(tableName);
     const result = await pool.query(
-      `
-      SELECT 1
-      FROM information_schema.tables
-      WHERE table_schema = 'public'
-        AND table_name = $1
-      LIMIT 1
-      `,
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1 LIMIT 1`,
       [tableName]
     );
     const exists = result.rowCount > 0;
@@ -425,14 +292,8 @@ function createGrcObservationService(pool, { GrcError, assertUuid, observe, with
 
   async function validateSource(tenantId, sourceType, sourceId) {
     if (sourceType === 'manual') {
-      return {
-        source_type: 'manual',
-        source_id: null,
-        source_table: null,
-        source_label: 'Manual observation',
-      };
+      return { source_type: 'manual', source_id: null, source_table: 'data_snapshots', source_label: 'Manual observation' };
     }
-
     assertUuid(sourceId, 'OBSERVATION_SOURCE_ID_INVALID');
     const adapters = SOURCE_ADAPTERS[sourceType] || [];
     let available = false;
@@ -441,297 +302,184 @@ function createGrcObservationService(pool, { GrcError, assertUuid, observe, with
       available = true;
       const result = await pool.query(adapter.query, [tenantId, sourceId]);
       if (result.rowCount > 0) {
-        return {
-          source_type: sourceType,
-          source_id: sourceId,
-          source_table: adapter.table,
-          source_label: result.rows[0].label || null,
-        };
+        return { source_type: sourceType, source_id: sourceId, source_table: adapter.table, source_label: result.rows[0].label || null };
       }
     }
-
-    if (!available) {
-      throw publicError(GrcError, 400, 'OBSERVATION_SOURCE_UNAVAILABLE', 'La fuente indicada no está disponible en el schema actual.');
-    }
+    if (!available) throw publicError(GrcError, 400, 'OBSERVATION_SOURCE_UNAVAILABLE', 'La fuente indicada no está disponible en el schema actual.');
     throw publicError(GrcError, 404, 'OBSERVATION_SOURCE_NOT_FOUND', 'Fuente no encontrada para el tenant autenticado.');
   }
 
   async function listObservations({ tenantId, filters = {} }) {
-    const params = [tenantId];
-    const where = ['tenant_id = $1::uuid'];
-    const limit = Math.max(1, Math.min(Number(filters.limit) || 100, 200));
-
-    for (const [field, allowed] of [
-      ['status', OBSERVATION_STATUSES],
-      ['domain', OBSERVATION_DOMAINS],
-      ['observation_type', OBSERVATION_TYPES],
-      ['source_type', SOURCE_TYPES],
-    ]) {
-      if (!filters[field]) continue;
-      const value = asText(filters[field], 80);
-      if (!allowed.has(value)) {
-        throw publicError(GrcError, 400, `OBSERVATION_${field.toUpperCase()}_INVALID`, `${field} inválido.`);
-      }
-      params.push(value);
-      where.push(`${field} = $${params.length}`);
-    }
-
-    params.push(limit);
-    const result = await pool.query(
-      `
-      SELECT *
-      FROM grc_observations
-      WHERE ${where.join(' AND ')}
-      ORDER BY observed_at DESC, created_at DESC
-      LIMIT $${params.length}
-      `,
-      params
-    );
-    return { data: result.rows, model_version: OBSERVATION_MODEL_VERSION };
+    const rows = await semantic.listObservations(semanticScope(tenantId), {
+      observation_type: filters.observation_type,
+      current: filters.current,
+      limit: filters.limit,
+    });
+    const data = rows.map(projectObservation).filter((row) => {
+      if (filters.status && row.status !== asText(filters.status, 80)) return false;
+      if (filters.domain && row.domain !== asText(filters.domain, 80)) return false;
+      if (filters.source_type && row.source_type !== asText(filters.source_type, 80)) return false;
+      return true;
+    });
+    return { data, model_version: OBSERVATION_MODEL_VERSION };
   }
 
   async function getObservation(tenantId, observationId) {
-    const result = await pool.query(
-      `
-      SELECT *
-      FROM grc_observations
-      WHERE tenant_id = $1::uuid
-        AND id = $2::uuid
-      LIMIT 1
-      `,
-      [tenantId, assertUuid(observationId, 'OBSERVATION_ID_INVALID')]
-    );
-    if (result.rowCount === 0) {
-      throw publicError(GrcError, 404, 'OBSERVATION_NOT_FOUND', 'Observation no encontrada para el tenant autenticado.');
+    try {
+      return projectObservation(await semantic.getObservation(semanticScope(tenantId), observationId));
+    } catch (error) {
+      if (error?.code === 'SEMANTIC_OBSERVATION_NOT_FOUND') {
+        throw publicError(GrcError, 404, 'OBSERVATION_NOT_FOUND', 'Observation no encontrada para el tenant autenticado.');
+      }
+      throw error;
     }
-    return result.rows[0];
   }
 
   async function createObservation({ tenantId, userId, body, correlationId }) {
     const normalized = normalizePayload({ ...body, correlation_id: body?.correlation_id || correlationId }, tenantId, userId, GrcError);
     const source = await validateSource(tenantId, normalized.source_type, normalized.source_id);
-
-    return withTransaction(async (client) => {
-      const inserted = await client.query(
-        `
-        INSERT INTO grc_observations (
-          tenant_id, observation_key, observation_hash, observation_type, domain, title, description,
-          status, severity, source_type, source_id, source_reference, observed_at, effective_from,
-          effective_to, owner_user_id, responsible_user_id, created_by, metadata, correlation_id
-        )
-        VALUES (
-          $1::uuid,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::uuid,$12::jsonb,$13::timestamptz,$14::timestamptz,
-          $15::timestamptz,$16::uuid,$17::uuid,$18::uuid,$19::jsonb,$20
-        )
-        ON CONFLICT (tenant_id, observation_key) DO NOTHING
-        RETURNING *
-        `,
-        [
-          tenantId,
-          normalized.observation_key,
-          normalized.observation_hash,
-          normalized.observation_type,
-          normalized.domain,
-          normalized.title,
-          normalized.description,
-          normalized.status,
-          normalized.severity,
-          normalized.source_type,
-          normalized.source_id,
-          json({ ...normalized.source_reference, ...source }),
-          normalized.observed_at,
-          normalized.effective_from,
-          normalized.effective_to,
-          normalized.owner_user_id,
-          normalized.responsible_user_id,
-          userId,
-          json(normalized.metadata),
-          normalized.correlation_id,
-        ]
-      );
-
-      if (inserted.rowCount === 0) {
-        const existing = await client.query(
-          `
-          SELECT *
-          FROM grc_observations
-          WHERE tenant_id = $1::uuid
-            AND observation_key = $2
-          LIMIT 1
-          `,
-          [tenantId, normalized.observation_key]
-        );
-        return { ...existing.rows[0], idempotent_replay: true };
-      }
-
-      const observation = inserted.rows[0];
-      await audit(client, {
-        tenantId,
-        userId,
-        action: 'grc.observation.created',
-        tableName: 'grc_observations',
-        recordId: observation.id,
-        newData: observation,
-        metadata: { correlation_id: correlationId, source },
-      });
-      observe('observation_created', { tenantId, correlationId, entityType: normalized.domain, entityId: observation.id });
-      return observation;
-    });
+    const sourceIdentity = normalized.idempotency_id || {
+      source_type: normalized.source_type,
+      source_id: normalized.source_id,
+      observation_type: normalized.observation_type,
+      domain: normalized.domain,
+      title: normalized.title,
+      observed_at: normalized.observed_at,
+    };
+    const row = await semantic.createManualObservation(semanticScope(tenantId, userId), {
+      observation_type: normalized.observation_type,
+      entity_type: normalized.entity_type,
+      entity_id: normalized.entity_id || normalized.source_id,
+      status_value: normalized.status,
+      severity_value: normalized.severity,
+      text_value: normalized.title,
+      observed_at: normalized.observed_at,
+      period_start: normalized.period_start,
+      period_end: normalized.period_end,
+      owner_user_id: normalized.owner_user_id,
+      correlation_id: normalized.correlation_id,
+      source_table: source.source_table,
+      source_record_id: normalized.source_id,
+      source_identity: sourceIdentity,
+      metadata: {
+        ...normalized.metadata,
+        grc_facade: {
+          domain: normalized.domain,
+          title: normalized.title,
+          description: normalized.description,
+          status: normalized.status,
+          severity: normalized.severity,
+          source_type: normalized.source_type,
+          source_id: normalized.source_id,
+          source_reference: { ...normalized.source_reference, ...source },
+          model_version: OBSERVATION_MODEL_VERSION,
+          source_identity_fingerprint: sha256(sourceIdentity),
+        },
+      },
+    }, correlationId);
+    const projected = projectObservation(row);
+    observe('observation_created', { tenantId, correlationId, entityType: projected.domain, entityId: projected.id });
+    return projected;
   }
 
   async function updateObservation({ tenantId, userId, observationId, body, correlationId }) {
     const current = await getObservation(tenantId, observationId);
-    const severity = body.severity === undefined ? current.severity : asText(body.severity, 80);
-    if (!OBSERVATION_SEVERITIES.has(severity)) {
-      throw publicError(GrcError, 400, 'OBSERVATION_SEVERITY_INVALID', 'severity inválida.');
-    }
-
-    return withTransaction(async (client) => {
-      const result = await client.query(
-        `
-        UPDATE grc_observations
-        SET title = COALESCE($1, title),
-            description = $2,
-            severity = $3,
-            owner_user_id = $4::uuid,
-            responsible_user_id = $5::uuid,
-            metadata = $6::jsonb,
-            updated_at = now()
-        WHERE tenant_id = $7::uuid
-          AND id = $8::uuid
-        RETURNING *
-        `,
-        [
-          asText(body.title, 300),
-          body.description === undefined ? current.description : asText(body.description, 4000),
+    const severity = body.severity === undefined && body.severity_value === undefined ? current.severity : asText(body.severity_value ?? body.severity, 80);
+    if (!OBSERVATION_SEVERITIES.has(severity)) throw publicError(GrcError, 400, 'OBSERVATION_SEVERITY_INVALID', 'severity inválida.');
+    const nextTitle = body.title === undefined && body.text_value === undefined ? current.title : asText(body.text_value ?? body.title, 300);
+    const nextDescription = body.description === undefined ? current.description : asText(body.description, 4000);
+    const row = await semantic.supersedeObservation(semanticScope(tenantId, userId), observationId, {
+      severity_value: severity,
+      text_value: nextTitle,
+      owner_user_id: body.owner_user_id === undefined ? current.owner_user_id : optionalUuid(body.owner_user_id, 'owner_user_id', GrcError),
+      correlation_id: correlationId,
+      metadata: {
+        grc_facade: {
+          ...(current.metadata?.grc_facade || {}),
+          title: nextTitle,
+          description: nextDescription,
           severity,
-          body.owner_user_id === undefined ? current.owner_user_id : optionalUuid(body.owner_user_id, 'owner_user_id', GrcError),
-          body.responsible_user_id === undefined ? current.responsible_user_id : optionalUuid(body.responsible_user_id, 'responsible_user_id', GrcError),
-          json({ ...(current.metadata || {}), ...asObject(body.metadata, {}) }),
-          tenantId,
-          observationId,
-        ]
-      );
-      const updated = result.rows[0];
-      await audit(client, {
-        tenantId,
-        userId,
-        action: 'grc.observation.updated',
-        tableName: 'grc_observations',
-        recordId: observationId,
-        oldData: current,
-        newData: updated,
-        metadata: { correlation_id: correlationId },
-      });
-      return updated;
+          model_version: OBSERVATION_MODEL_VERSION,
+        },
+      },
+    }, correlationId);
+    await audit(pool, {
+      tenantId,
+      userId,
+      action: 'grc.observation.superseded',
+      tableName: 'grc_observations',
+      recordId: row.id,
+      oldData: { id: current.id },
+      newData: { id: row.id },
+      metadata: { correlation_id: correlationId },
     });
+    return projectObservation(row);
   }
 
   async function transitionObservation({ tenantId, userId, observationId, body, correlationId }) {
     const current = await getObservation(tenantId, observationId);
-    const nextStatus = asText(body.status, 80);
-    if (!OBSERVATION_STATUSES.has(nextStatus)) {
-      throw publicError(GrcError, 400, 'OBSERVATION_STATUS_INVALID', 'status inválido.');
-    }
+    const nextStatus = asText(body.status_value ?? body.status, 80);
+    if (!OBSERVATION_STATUSES.has(nextStatus)) throw publicError(GrcError, 400, 'OBSERVATION_STATUS_INVALID', 'status inválido.');
     if (nextStatus !== current.status && !STATUS_TRANSITIONS[current.status]?.has(nextStatus)) {
       throw publicError(GrcError, 409, 'OBSERVATION_TRANSITION_INVALID', 'Transición de estado no permitida.');
     }
-
-    return withTransaction(async (client) => {
-      const result = await client.query(
-        `
-        UPDATE grc_observations
-        SET status = $1,
-            metadata = metadata || $2::jsonb,
-            updated_at = now()
-        WHERE tenant_id = $3::uuid
-          AND id = $4::uuid
-        RETURNING *
-        `,
-        [
-          nextStatus,
-          json({
-            last_transition: {
-              from: current.status,
-              to: nextStatus,
-              reason: asText(body.reason, 1000),
-              at: new Date().toISOString(),
-            },
-          }),
-          tenantId,
-          observationId,
-        ]
-      );
-      const updated = result.rows[0];
-      await audit(client, {
-        tenantId,
-        userId,
-        action: 'grc.observation.transitioned',
-        tableName: 'grc_observations',
-        recordId: observationId,
-        oldData: { status: current.status },
-        newData: { status: nextStatus },
-        metadata: { correlation_id: correlationId, reason: asText(body.reason, 1000) },
-      });
-      observe('observation_transitioned', { tenantId, correlationId, entityType: updated.domain, entityId: observationId });
-      return updated;
-    });
+    const row = await semantic.supersedeObservation(semanticScope(tenantId, userId), observationId, {
+      status_value: nextStatus,
+      correlation_id: correlationId,
+      metadata: {
+        grc_facade: {
+          ...(current.metadata?.grc_facade || {}),
+          status: nextStatus,
+          last_transition: {
+            from: current.status,
+            to: nextStatus,
+            reason: asText(body.reason, 1000),
+            at: new Date().toISOString(),
+          },
+          model_version: OBSERVATION_MODEL_VERSION,
+        },
+      },
+    }, correlationId);
+    const projected = projectObservation(row);
+    observe('observation_transitioned', { tenantId, correlationId, entityType: projected.domain, entityId: projected.id });
+    return projected;
   }
 
   async function linkObservation({ tenantId, userId, observationId, body, correlationId }) {
     await getObservation(tenantId, observationId);
-    const targetType = asText(body.target_type, 80);
-    const targetId = asText(body.target_id, 80);
-    const relationType = asText(body.relation_type, 80) || 'relates_to';
-    const source = asText(body.source, 80) || 'manual';
-
-    if (!SOURCE_TYPES.has(targetType) || targetType === 'manual') {
-      throw publicError(GrcError, 400, 'OBSERVATION_LINK_TARGET_TYPE_INVALID', 'target_type inválido.');
-    }
-    if (!RELATION_TYPES.has(relationType)) {
-      throw publicError(GrcError, 400, 'OBSERVATION_LINK_RELATION_INVALID', 'relation_type inválido.');
-    }
-    if (!LINK_SOURCES.has(source)) {
-      throw publicError(GrcError, 400, 'OBSERVATION_LINK_SOURCE_INVALID', 'source inválido.');
-    }
+    const targetType = asText(body.target_type ?? body.related_entity_type, 80);
+    const targetId = asText(body.target_id ?? body.related_entity_id, 80);
+    const requestedRelation = asText(body.relation_type, 80) || 'relates_to';
+    if (!SOURCE_TYPES.has(targetType) || targetType === 'manual') throw publicError(GrcError, 400, 'OBSERVATION_LINK_TARGET_TYPE_INVALID', 'target_type inválido.');
+    if (!API_RELATION_TYPES.has(requestedRelation)) throw publicError(GrcError, 400, 'OBSERVATION_LINK_RELATION_INVALID', 'relation_type inválido.');
     const target = await validateSource(tenantId, targetType, targetId);
-
-    return withTransaction(async (client) => {
-      const result = await client.query(
-        `
-        INSERT INTO grc_observation_links (
-          tenant_id, observation_id, target_type, target_id, relation_type, source, metadata, created_by
-        )
-        VALUES ($1::uuid,$2::uuid,$3,$4::uuid,$5,$6,$7::jsonb,$8::uuid)
-        ON CONFLICT DO NOTHING
-        RETURNING *
-        `,
-        [
-          tenantId,
-          observationId,
-          targetType,
-          targetId,
-          relationType,
-          source,
-          json({ ...asObject(body.metadata, {}), target }),
-          userId,
-        ]
-      );
-      if (result.rowCount === 0) {
-        throw publicError(GrcError, 409, 'OBSERVATION_LINK_ALREADY_EXISTS', 'La relación ya existe.');
-      }
-      const link = result.rows[0];
-      await audit(client, {
-        tenantId,
-        userId,
-        action: 'grc.observation.linked',
-        tableName: 'grc_observation_links',
-        recordId: link.id,
-        newData: link,
-        metadata: { correlation_id: correlationId, observation_id: observationId },
-      });
-      return link;
+    const relation = await semantic.createObservationRelation(semanticScope(tenantId, userId), observationId, {
+      related_entity_type: targetType,
+      related_entity_id: targetId,
+      relation_type: RELATION_TO_CANONICAL[requestedRelation],
+      confidence: Number(body.confidence ?? 1),
+      metadata: {
+        ...asObject(body.metadata, {}),
+        requested_relation_type: requestedRelation,
+        target,
+        api_name: 'links',
+      },
+    }, correlationId);
+    await audit(pool, {
+      tenantId,
+      userId,
+      action: 'grc.observation.relation_created',
+      tableName: 'grc_observation_relations',
+      recordId: relation.id,
+      newData: relation,
+      metadata: { correlation_id: correlationId, observation_id: observationId },
     });
+    return {
+      ...relation,
+      target_type: relation.related_entity_type,
+      target_id: relation.related_entity_id,
+      requested_relation_type: requestedRelation,
+    };
   }
 
   return {

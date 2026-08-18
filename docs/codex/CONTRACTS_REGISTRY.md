@@ -14,7 +14,7 @@
 | Measurement | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó cálculos oficiales persistidos sin null-to-zero ni fuentes incompatibles calculadas. |
 | Snapshot | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó snapshots para 16/16 calculated runs. |
 | Lineage | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó lineage para cálculos con dataset poblado. |
-| Observation contract | CURRENT/6.8-01 | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_links`; tenant-scoped, RBAC-backed, auditable e idempotente. |
+| Observation contract | CURRENT/6.8-01-HF1 | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_relations`; owner/runtime `semanticLayer.service.js`; fachada GRC sin persistencia paralela. |
 | Gap contract | PLANNED | CODEX A | 6.8-03. |
 | Graph Edge contract | PLANNED | CODEX A | 6.9-02. |
 | Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
@@ -30,21 +30,22 @@
 
 Regla: si un work package cambia un contrato, actualizar este archivo en el mismo commit.
 
-## 6.8-01 GRC Observation Model
+## 6.8-01-HF1 Canonical GRC Observation Model
 
-Status: DONE_LOCAL on branch `feat/f6-8-01-grc-observation-model`.
+Status: DONE_LOCAL on branch `fix/f6-8-01-hf1-observation-architecture-reconciliation`.
 
 | Contract Area | Canonical Decision |
 |---|---|
-| Entity | `grc_observations` is the transversal GRC Observation system of record; existing `findings`, readiness findings, action plans, risks, controls, evidences and incidents remain domain-specific sources/consumers. |
-| Model version | `grc-observation-model-v1`. |
-| Tenant scope | Every observation and link carries `tenant_id`; source and link targets are validated by tenant before write. |
-| Identity/idempotency | Technical `id`, human `observation_code`, semantic `observation_key`, deterministic `observation_hash`, unique `(tenant_id, observation_key)`. |
+| Entity | `grc_observations` is the transversal GRC Observation system of record; existing `findings`, readiness findings, action plans, risks, controls, evidences, incidents and `grc_metric_observations` remain domain-specific sources/consumers/producers. |
+| Canonical owner/runtime | `backend/src/services/semantic/semanticLayer.service.js`. |
+| GRC API role | `backend/src/services/grc/grcObservation.service.js` is a facade that validates API/RBAC/source tenant scope and delegates canonical persistence. |
+| Tenant scope | Every observation and relation carries `tenant_id`; sources and relation targets are validated by tenant before write. |
+| Identity/idempotency | Canonical identity is `source_identity_hash` under `(tenant_id, contract_version_id)` with `is_current`; no GRC runtime dependency on parallel key/hash/code columns. |
 | Type/domain | Governed standard sets with `custom` type support for extension; no client-specific enum or tenant-specific branch. |
-| Status lifecycle | Canonical statuses: `open`, `under_review`, `accepted`, `in_treatment`, `resolved`, `closed`, `cancelled`; transitions enforced in service layer. |
-| Severity | Canonical severities: `informational`, `low`, `medium`, `high`, `critical`; no risk/priority/impact inference by magnitude. |
-| Provenance | Structured `source_type`, `source_id`, `source_reference`; manual observations use `source_type=manual` without source id. |
-| Relations | `grc_observation_links` provides minimal relation foundation for GRC targets without implementing the full F6.9 graph. |
+| Status lifecycle | API `PUT` and transitions create controlled supersession: previous row becomes `is_current=false` with `superseded_by_id`, new row carries `supersedes_observation_id`. |
+| Severity/status | Use canonical `status_value` and `severity_value`; no duplicate `status`/`severity` columns in the canonical table. |
+| Provenance | Preserve `contract_id`, `contract_version_id`, `source_table`, `source_record_id`, `source_identity_hash`, `source_snapshot_id`, `correlation_id`, `metadata` and `data_lineage_edges`. Manual API observations use the global semantic contract `grc.manual_observations` and `data_snapshots` provenance. |
+| Relations | `grc_observation_relations` is the only canonical relation table. HTTP `/links` may keep its API name but persists to canonical relations. |
 | RBAC | Permissions `observation.read`, `observation.manage`, `observation.transition`, `observation.link` integrated into the existing GRC permission group. |
 | Auditability | Creation, updates, transitions and links emit existing `audit_event_log` entries; no second audit log. |
 | Source/formula governance | No Math Governance source contract payload changed; no formula payload changed; `SOURCE_CONTRACTS_VERSIONED=[]`, `FORMULAS_VERSIONED=[]`. |

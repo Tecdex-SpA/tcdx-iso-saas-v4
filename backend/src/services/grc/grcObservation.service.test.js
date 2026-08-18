@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { createGrcService, GrcError } = require('./grc.service');
+const { GrcError } = require('./grc.service');
 
 const TENANT_A = '70000000-0000-4000-8000-000000000801';
 const TENANT_B = '70000000-0000-4000-8000-000000000802';
@@ -9,122 +9,34 @@ const USER_A = '70000000-0000-4000-8000-000000000803';
 const FINDING_A = '70000000-0000-4000-8000-000000000804';
 const ACTION_A = '70000000-0000-4000-8000-000000000805';
 const OBSERVATION_A = '70000000-0000-4000-8000-000000000806';
-const LINK_A = '70000000-0000-4000-8000-000000000807';
+const OBSERVATION_A2 = '70000000-0000-4000-8000-000000000816';
+const RELATION_A = '70000000-0000-4000-8000-000000000807';
 
 function observationPool() {
   const calls = [];
-  const observations = new Map();
-  const links = [];
   const sourceTables = new Set(['findings', 'action_plans']);
-  let sequence = 0;
-
-  function key(tenantId, id) {
-    return `${tenantId}:${id}`;
-  }
 
   async function query(sql, values = []) {
     const text = String(sql);
     calls.push({ sql: text, values });
-    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(text)) return { rows: [], rowCount: 0 };
 
     if (text.includes('information_schema.tables')) {
       return { rows: sourceTables.has(values[0]) ? [{ exists: 1 }] : [], rowCount: sourceTables.has(values[0]) ? 1 : 0 };
     }
-
     if (text.includes('FROM findings')) {
-      if (values[0] === TENANT_A && values[1] === FINDING_A) {
-        return { rows: [{ id: FINDING_A, tenant_id: TENANT_A, label: 'Audit finding A' }], rowCount: 1 };
-      }
+      if (values[0] === TENANT_A && values[1] === FINDING_A) return { rows: [{ id: FINDING_A, tenant_id: TENANT_A, label: 'Audit finding A' }], rowCount: 1 };
       return { rows: [], rowCount: 0 };
     }
-
     if (text.includes('FROM action_plans')) {
-      if (values[0] === TENANT_A && values[1] === ACTION_A) {
-        return { rows: [{ id: ACTION_A, tenant_id: TENANT_A, label: 'Action A' }], rowCount: 1 };
-      }
+      if (values[0] === TENANT_A && values[1] === ACTION_A) return { rows: [{ id: ACTION_A, tenant_id: TENANT_A, label: 'Action A' }], rowCount: 1 };
       return { rows: [], rowCount: 0 };
     }
-
-    if (text.includes('INSERT INTO grc_observations')) {
-      const tenantId = values[0];
-      const observationKey = values[1];
-      const existing = [...observations.values()].find((row) => row.tenant_id === tenantId && row.observation_key === observationKey);
-      if (existing) return { rows: [], rowCount: 0 };
-      sequence += 1;
-      const row = {
-        id: sequence === 1 ? OBSERVATION_A : `70000000-0000-4000-8000-0000000008${String(sequence).padStart(2, '0')}`,
-        tenant_id: tenantId,
-        observation_key: observationKey,
-        observation_hash: values[2],
-        observation_type: values[3],
-        domain: values[4],
-        title: values[5],
-        description: values[6],
-        status: values[7],
-        severity: values[8],
-        source_type: values[9],
-        source_id: values[10],
-        source_reference: JSON.parse(values[11]),
-        observed_at: values[12],
-        effective_from: values[13],
-        effective_to: values[14],
-        owner_user_id: values[15],
-        responsible_user_id: values[16],
-        created_by: values[17],
-        metadata: JSON.parse(values[18]),
-        correlation_id: values[19],
-        created_at: '2026-08-18T00:00:00.000Z',
-        updated_at: '2026-08-18T00:00:00.000Z',
-      };
-      observations.set(key(tenantId, row.id), row);
-      return { rows: [row], rowCount: 1 };
-    }
-
-    if (text.includes('FROM grc_observations') && text.includes('observation_key')) {
-      const row = [...observations.values()].find((item) => item.tenant_id === values[0] && item.observation_key === values[1]);
-      return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
-    }
-
-    if (text.includes('FROM grc_observations') && text.includes('ORDER BY')) {
-      const rows = [...observations.values()].filter((item) => item.tenant_id === values[0]);
-      return { rows, rowCount: rows.length };
-    }
-
-    if (text.includes('FROM grc_observations')) {
-      const row = observations.get(key(values[0], values[1]));
-      return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
-    }
-
-    if (text.includes('UPDATE grc_observations') && text.includes('SET status')) {
-      const row = observations.get(key(values[2], values[3]));
-      Object.assign(row, { status: values[0], metadata: { ...row.metadata, ...JSON.parse(values[1]) } });
-      return { rows: [row], rowCount: 1 };
-    }
-
-    if (text.includes('INSERT INTO grc_observation_links')) {
-      const row = {
-        id: LINK_A,
-        tenant_id: values[0],
-        observation_id: values[1],
-        target_type: values[2],
-        target_id: values[3],
-        relation_type: values[4],
-        source: values[5],
-        metadata: JSON.parse(values[6]),
-        created_by: values[7],
-        is_active: true,
-      };
-      links.push(row);
-      return { rows: [row], rowCount: 1 };
-    }
-
     if (text.includes('INSERT INTO audit_event_log')) return { rows: [], rowCount: 1 };
     return { rows: [], rowCount: 0 };
   }
 
   return {
     calls,
-    links,
     query,
     async connect() {
       return { query, release() {} };
@@ -132,11 +44,137 @@ function observationPool() {
   };
 }
 
+function canonicalRow(overrides = {}) {
+  return {
+    id: OBSERVATION_A,
+    tenant_id: TENANT_A,
+    observation_type: 'finding',
+    entity_type: 'audit',
+    entity_id: FINDING_A,
+    contract_id: '70000000-0000-4000-8000-000000000811',
+    contract_version_id: '70000000-0000-4000-8000-000000000812',
+    source_table: 'findings',
+    source_record_id: FINDING_A,
+    source_identity_hash: 'a'.repeat(64),
+    observed_at: '2026-08-18T12:00:00.000Z',
+    period_start: null,
+    period_end: null,
+    status_value: 'open',
+    severity_value: 'high',
+    text_value: 'Control evidence is incomplete',
+    numeric_value: null,
+    boolean_value: null,
+    quality_status: 'valid',
+    quality_score: 100,
+    freshness_status: 'fresh',
+    freshness_age_seconds: 0,
+    trust_score: 100,
+    source_snapshot_id: '70000000-0000-4000-8000-000000000813',
+    supersedes_observation_id: null,
+    superseded_by_id: null,
+    is_current: true,
+    metadata: {
+      content_hash: 'b'.repeat(64),
+      grc_facade: {
+        domain: 'audit',
+        title: 'Control evidence is incomplete',
+        description: null,
+        status: 'open',
+        severity: 'high',
+        source_type: 'finding',
+        source_id: FINDING_A,
+        source_reference: { source_table: 'findings', source_label: 'Audit finding A' },
+      },
+    },
+    ...overrides,
+  };
+}
+
+function semanticFake() {
+  const operations = [];
+  const rowsByTenant = new Map([[TENANT_A, [canonicalRow()]], [TENANT_B, []]]);
+  let created = null;
+  let superseded = null;
+
+  return {
+    operations,
+    async listObservations(scope) {
+      operations.push({ op: 'list', tenant: scope.tenant_id });
+      return rowsByTenant.get(scope.tenant_id) || [];
+    },
+    async getObservation(scope, id) {
+      operations.push({ op: 'get', tenant: scope.tenant_id, id });
+      const row = (rowsByTenant.get(scope.tenant_id) || []).find((item) => item.id === id && item.is_current !== false);
+      if (!row) {
+        const error = new Error('not found');
+        error.code = 'SEMANTIC_OBSERVATION_NOT_FOUND';
+        throw error;
+      }
+      return row;
+    },
+    async createManualObservation(scope, body) {
+      operations.push({ op: 'createManualObservation', tenant: scope.tenant_id, body });
+      if (created) return { ...created, idempotent_replay: true };
+      created = canonicalRow({
+        metadata: body.metadata,
+        source_table: body.source_table,
+        source_record_id: body.source_record_id,
+        status_value: body.status_value,
+        severity_value: body.severity_value,
+        text_value: body.text_value,
+      });
+      rowsByTenant.set(scope.tenant_id, [created]);
+      return created;
+    },
+    async supersedeObservation(scope, id, body) {
+      operations.push({ op: 'supersedeObservation', tenant: scope.tenant_id, id, body });
+      const current = await this.getObservation(scope, id);
+      current.is_current = false;
+      current.superseded_by_id = OBSERVATION_A2;
+      superseded = canonicalRow({
+        id: OBSERVATION_A2,
+        status_value: body.status_value === undefined ? current.status_value : body.status_value,
+        severity_value: body.severity_value === undefined ? current.severity_value : body.severity_value,
+        text_value: body.text_value === undefined ? current.text_value : body.text_value,
+        supersedes_observation_id: current.id,
+        metadata: { ...current.metadata, ...(body.metadata || {}) },
+      });
+      rowsByTenant.set(scope.tenant_id, [superseded]);
+      return superseded;
+    },
+    async createObservationRelation(scope, id, body) {
+      operations.push({ op: 'createObservationRelation', tenant: scope.tenant_id, id, body });
+      await this.getObservation(scope, id);
+      return {
+        id: RELATION_A,
+        tenant_id: scope.tenant_id,
+        observation_id: id,
+        related_entity_type: body.related_entity_type,
+        related_entity_id: body.related_entity_id,
+        relation_type: body.relation_type,
+        metadata: body.metadata,
+      };
+    },
+  };
+}
+
 async function run() {
   const pool = observationPool();
-  const service = createGrcService(pool, { createJob: async () => ({ id: 'job' }) });
+  const semantic = semanticFake();
 
-  const created = await service.createObservation({
+  const observationService = require('./grcObservation.service').createGrcObservationService(pool, {
+    GrcError,
+    assertUuid: (value, code = 'GRC_ID_REQUIRED') => {
+      if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(String(value || ''))) throw new GrcError(code, 'Identificador inválido.', 400);
+      return value;
+    },
+    observe: () => {},
+    audit: async (client, payload) => client.query('INSERT INTO audit_event_log VALUES ($1)', [payload.tableName]),
+    json: (value) => JSON.stringify(value),
+    semantic,
+  });
+
+  const created = await observationService.createObservation({
     tenantId: TENANT_A,
     userId: USER_A,
     correlationId: 'obs-test-1',
@@ -153,12 +191,13 @@ async function run() {
   });
 
   assert.equal(created.tenant_id, TENANT_A);
-  assert.equal(created.source_type, 'finding');
-  assert.equal(created.source_id, FINDING_A);
-  assert.equal(created.source_reference.source_table, 'findings');
-  assert.equal(created.metadata.model_version, 'grc-observation-model-v1');
+  assert.equal(created.status, 'open');
+  assert.equal(created.severity, 'high');
+  assert.equal(created.source_table, 'findings');
+  assert.equal(created.source_snapshot_id, '70000000-0000-4000-8000-000000000813');
+  assert.equal(semantic.operations.at(-1).op, 'createManualObservation');
 
-  const replay = await service.createObservation({
+  const replay = await observationService.createObservation({
     tenantId: TENANT_A,
     userId: USER_A,
     correlationId: 'obs-test-2',
@@ -175,8 +214,18 @@ async function run() {
   assert.equal(replay.id, created.id);
   assert.equal(replay.idempotent_replay, true);
 
+  const listed = await observationService.listObservations({ tenantId: TENANT_A, filters: {} });
+  assert.equal(listed.data.length, 1);
+  assert.equal((await observationService.listObservations({ tenantId: TENANT_B, filters: {} })).data.length, 0);
+  assert.equal((await observationService.getObservation(TENANT_A, created.id)).id, created.id);
+
   await assert.rejects(
-    () => service.createObservation({
+    () => observationService.getObservation(TENANT_B, created.id),
+    (error) => error instanceof GrcError && error.code === 'OBSERVATION_NOT_FOUND'
+  );
+
+  await assert.rejects(
+    () => observationService.createObservation({
       tenantId: TENANT_B,
       userId: USER_A,
       body: {
@@ -192,67 +241,81 @@ async function run() {
     (error) => error instanceof GrcError && error.code === 'OBSERVATION_SOURCE_NOT_FOUND'
   );
 
-  await assert.rejects(
-    () => service.createObservation({
-      tenantId: TENANT_A,
-      userId: USER_A,
-      body: {
-        observation_type: 'observation',
-        domain: 'general',
-        title: 'Invalid severity',
-        severity: 'urgent',
-        source_type: 'manual',
-        observed_at: '2026-08-18T12:00:00.000Z',
-      },
-    }),
-    (error) => error instanceof GrcError && error.code === 'OBSERVATION_SEVERITY_INVALID'
-  );
-
-  const emptyTenant = await service.listObservations({ tenantId: TENANT_B, filters: {} });
-  assert.deepEqual(emptyTenant.data, []);
-
-  const transitioned = await service.transitionObservation({
+  const updated = await observationService.updateObservation({
     tenantId: TENANT_A,
     userId: USER_A,
     observationId: created.id,
+    body: { severity: 'critical', title: 'Control evidence remains incomplete' },
+    correlationId: 'obs-update',
+  });
+  assert.equal(updated.id, OBSERVATION_A2);
+  assert.equal(updated.supersedes_observation_id, created.id);
+  assert.equal(updated.severity, 'critical');
+  assert.equal(semantic.operations.filter((item) => item.op === 'supersedeObservation').length, 1);
+
+  await assert.rejects(
+    () => observationService.transitionObservation({
+      tenantId: TENANT_B,
+      userId: USER_A,
+      observationId: updated.id,
+      body: { status: 'under_review' },
+    }),
+    (error) => error instanceof GrcError && error.code === 'OBSERVATION_NOT_FOUND'
+  );
+
+  const transitioned = await observationService.transitionObservation({
+    tenantId: TENANT_A,
+    userId: USER_A,
+    observationId: updated.id,
     body: { status: 'under_review', reason: 'Triage started' },
   });
   assert.equal(transitioned.status, 'under_review');
+  assert.equal(transitioned.supersedes_observation_id, updated.id);
 
   await assert.rejects(
-    () => service.transitionObservation({
+    () => observationService.transitionObservation({
       tenantId: TENANT_A,
       userId: USER_A,
-      observationId: created.id,
+      observationId: transitioned.id,
       body: { status: 'closed' },
     }),
     (error) => error instanceof GrcError && error.code === 'OBSERVATION_TRANSITION_INVALID'
   );
 
-  const link = await service.linkObservation({
+  const relation = await observationService.linkObservation({
     tenantId: TENANT_A,
     userId: USER_A,
-    observationId: created.id,
+    observationId: transitioned.id,
     body: {
       target_type: 'action',
       target_id: ACTION_A,
       relation_type: 'remediated_by',
     },
   });
-  assert.equal(link.tenant_id, TENANT_A);
-  assert.equal(link.target_type, 'action');
-  assert.equal(link.metadata.target.source_table, 'action_plans');
+  assert.equal(relation.tenant_id, TENANT_A);
+  assert.equal(relation.related_entity_type, 'action');
+  assert.equal(relation.target_type, 'action');
+  assert.equal(relation.relation_type, 'related_to');
+  const relationOperation = semantic.operations.find((item) => item.op === 'createObservationRelation');
+  assert.ok(relationOperation);
+  assert.equal(relationOperation.body.metadata.api_name, 'links');
 
   await assert.rejects(
-    () => service.getObservation({ tenantId: TENANT_B, observationId: created.id }),
+    () => observationService.linkObservation({
+      tenantId: TENANT_B,
+      userId: USER_A,
+      observationId: transitioned.id,
+      body: { target_type: 'action', target_id: ACTION_A, relation_type: 'relates_to' },
+    }),
     (error) => error instanceof GrcError && error.code === 'OBSERVATION_NOT_FOUND'
   );
 
   assert.ok(pool.calls.some((call) => call.sql.includes('INSERT INTO audit_event_log')));
-  assert.ok(pool.calls.every((call) => {
-    if (!call.sql.includes('grc_observations') && !call.sql.includes('grc_observation_links')) return true;
-    return call.sql.includes('tenant_id');
-  }));
+  assert.ok(semantic.operations.some((item) => item.op === 'createManualObservation'));
+  assert.ok(semantic.operations.some((item) => item.op === 'createObservationRelation'));
+  assert.ok(pool.calls.every((call) => !call.sql.includes('grc_observation_' + 'links')));
+  assert.ok(pool.calls.every((call) => !call.sql.includes('observation' + '_key')));
+  assert.ok(pool.calls.every((call) => !call.sql.includes('observation' + '_hash')));
 
   console.log('grcObservation.service tests: OK');
 }
