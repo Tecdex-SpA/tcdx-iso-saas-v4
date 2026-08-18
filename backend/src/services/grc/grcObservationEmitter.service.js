@@ -66,6 +66,33 @@ function text(value, fallback = null) {
   return normalized ? normalized : fallback;
 }
 
+function canonicalTimestamp(value, field, { required = false, preserveString = false } = {}) {
+  if (value === undefined || value === null || value === '') {
+    if (required) {
+      throw new ObservationEmitterError('OBSERVATION_EMITTER_TIMESTAMP_REQUIRED', `${field} requerido.`, 422, { field });
+    }
+    return null;
+  }
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      throw new ObservationEmitterError('OBSERVATION_EMITTER_TIMESTAMP_INVALID', `${field} inválido.`, 422, { field });
+    }
+    return value.toISOString();
+  }
+  const normalized = String(value).trim();
+  if (!normalized) {
+    if (required) {
+      throw new ObservationEmitterError('OBSERVATION_EMITTER_TIMESTAMP_REQUIRED', `${field} requerido.`, 422, { field });
+    }
+    return null;
+  }
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ObservationEmitterError('OBSERVATION_EMITTER_TIMESTAMP_INVALID', `${field} inválido.`, 422, { field });
+  }
+  return preserveString ? normalized : parsed.toISOString();
+}
+
 function uuid(value, field) {
   const normalized = text(value);
   if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(String(normalized || ''))) {
@@ -90,15 +117,15 @@ function json(value, fallback = {}) {
 }
 
 function observedAtFor(result = {}) {
-  return text(result.observed_at || result.completed_at || result.period?.as_of || result.period?.end || result.period?.period_end, null);
+  return canonicalTimestamp(result.observed_at || result.completed_at || result.period?.as_of || result.period?.end || result.period?.period_end, 'observed_at', { preserveString: true });
 }
 
 function periodStartFor(result = {}) {
-  return text(result.period_start || result.period?.start || result.period?.period_start, null);
+  return canonicalTimestamp(result.period_start || result.period?.start || result.period?.period_start, 'period_start', { preserveString: true });
 }
 
 function periodEndFor(result = {}) {
-  return text(result.period_end || result.period?.end || result.period?.period_end, null);
+  return canonicalTimestamp(result.period_end || result.period?.end || result.period?.period_end, 'period_end', { preserveString: true });
 }
 
 function dataTrustState(result = {}) {
@@ -228,9 +255,9 @@ function observationBodyFromEvent(event) {
   return {
     observation_type: RULE_OFFICIAL_CALCULATION_DATA_TRUST.observation_type,
     entity_type: RULE_OFFICIAL_CALCULATION_DATA_TRUST.entity_type,
-    observed_at: event.observed_at,
-    period_start: event.period_start,
-    period_end: event.period_end,
+    observed_at: canonicalTimestamp(event.observed_at, 'observed_at', { required: true }),
+    period_start: canonicalTimestamp(event.period_start, 'period_start'),
+    period_end: canonicalTimestamp(event.period_end, 'period_end'),
     status_value: 'open',
     severity_value: MATERIAL_DATA_TRUST_STATES[trustState] || 'medium',
     numeric_value: payload.value,

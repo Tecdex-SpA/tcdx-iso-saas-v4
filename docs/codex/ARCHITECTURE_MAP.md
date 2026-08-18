@@ -34,6 +34,7 @@ Backend Node/Express
         |      + GRC Observation API facade over Semantic Layer
         |      + Governed Observation outbox (`grc_observation_emission_outbox`)
         |      + Observation emitter policy/consumer (`grcObservationEmitter.service.js`)
+        |      + Outbox -> Semantic Layer timestamp boundary normalized to ISO-8601 UTC
         |      + tenant-scoped source validation, RBAC and audit log integration
         |
         +--> Semantic Layer
@@ -102,4 +103,5 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - 6.8-01-HF1: CLOSED; canonical Observation reconciliation valid.
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME; forward bootstrap for `grc.manual_observations@v1` validated after user deploy.
 - 6.8-02: DONE_LOCAL; governed Observation emitter/outbox implemented, runtime validation pending after user deploy.
-- Next work package candidate: 6.8-03 after 6.8-02 runtime validation or explicit user decision.
+- 6.8-02-HF1: DONE_LOCAL; timestamp serialization hotfix implemented, runtime validation pending after user deploy/retry.
+- Next work package candidate: 6.8-03 after 6.8-02-HF1 runtime validation or explicit user decision.
