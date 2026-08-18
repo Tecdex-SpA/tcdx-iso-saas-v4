@@ -10,6 +10,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/;
 const JOB_TYPES = new Set(['semantic_source.ingest','semantic_source.validate','semantic_source.snapshot','semantic_source.freshness','semantic_source.reconcile']);
 const PLATFORM_ROLES = new Set(['superadmin','super_admin','platform_admin','admin_global','global_admin','owner']);
+const MANUAL_OBSERVATION_CONTRACT_CODE = 'grc.manual_observations';
 
 class SemanticError extends Error {
   constructor(code, message, status = 400, details = null) {
@@ -75,6 +76,11 @@ function sanitizeError(error) {
     .replace(/token\s*=\s*\S+/gi, 'token=[redacted]')
     .replace(/\s+/g, ' ')
     .slice(0, 300);
+}
+
+function uuidFromHash(hash) {
+  const source = String(hash || stableHash(hash)).replace(/[^a-f0-9]/gi, '').padEnd(32, '0').slice(0, 32);
+  return `${source.slice(0, 8)}-${source.slice(8, 12)}-4${source.slice(13, 16)}-${((parseInt(source.slice(16, 17), 16) & 0x3) | 0x8).toString(16)}${source.slice(17, 20)}-${source.slice(20, 32)}`;
 }
 
 async function audit(client, scope, eventType, entityType, entityId, requestId, metadata = {}) {
@@ -541,6 +547,210 @@ async function createSourceSnapshot(client, scope, current, preview, requestId) 
   return result.rows[0];
 }
 
+async function manualObservationContract(client, scope) {
+  const result = await client.query(`SELECT contract.id AS contract_id,version.id AS version_id
+    FROM data_source_contracts contract
+    JOIN data_source_contract_versions version ON version.id=contract.current_version_id
+    WHERE contract.tenant_id IS NULL
+      AND contract.source_code=$1
+      AND contract.status='published'
+      AND version.status='published'
+    LIMIT 1`, [MANUAL_OBSERVATION_CONTRACT_CODE]);
+  if (!result.rowCount) {
+    throw new SemanticError('SEMANTIC_MANUAL_OBSERVATION_CONTRACT_MISSING', 'Contrato semántico de observación manual no publicado.', 500);
+  }
+  return result.rows[0];
+}
+
+async function createManualObservationSnapshot(client, scope, payload, identityHash, contentHash, requestId) {
+  const snapshotEntityId = uuidFromHash(identityHash);
+  const sourceHash = stableHash({ identity_hash: identityHash, content_hash: contentHash, model: MANUAL_OBSERVATION_CONTRACT_CODE });
+  const params = [
+    tenantId(scope), snapshotEntityId, JSON.stringify(payload), sourceHash, actorId(scope), requestId || null,
+    JSON.stringify({ semantic_contract_code: MANUAL_OBSERVATION_CONTRACT_CODE, identity_hash: identityHash, content_hash: contentHash }),
+  ];
+  const inserted = await client.query(`INSERT INTO data_snapshots
+    (tenant_id,snapshot_type,entity_type,entity_id,period_key,snapshot_payload,source_hash,created_by,correlation_id,metadata)
+    VALUES ($1::uuid,'semantic_source','grc_manual_observation',$2::uuid,NULL,$3::jsonb,$4,$5::uuid,$6,$7::jsonb)
+    ON CONFLICT (tenant_id,snapshot_type,entity_type,entity_id,COALESCE(period_key,''),source_hash) DO NOTHING
+    RETURNING *`, params);
+  if (inserted.rowCount) return inserted.rows[0];
+  const existing = await client.query(`SELECT * FROM data_snapshots
+    WHERE tenant_id=$1::uuid
+      AND snapshot_type='semantic_source'
+      AND entity_type='grc_manual_observation'
+      AND entity_id=$2::uuid
+      AND COALESCE(period_key,'')=''
+      AND source_hash=$3
+    LIMIT 1`, [tenantId(scope), snapshotEntityId, sourceHash]);
+  return existing.rows[0];
+}
+
+function canonicalObservationValue(input = {}) {
+  if (input.numeric_value !== undefined && input.numeric_value !== null) return { numeric: Number(input.numeric_value), text: null, boolean: null };
+  if (input.boolean_value !== undefined && input.boolean_value !== null) return { numeric: null, text: null, boolean: input.boolean_value === true || input.boolean_value === 'true', };
+  const textValue = text(input.text_value ?? input.title ?? input.description, null);
+  return { numeric: null, text: textValue, boolean: null };
+}
+
+function canonicalObservationPayload(body = {}, defaults = {}) {
+  const observedAt = text(body.observed_at || defaults.observed_at || new Date().toISOString());
+  const payload = {
+    observation_type: text(body.observation_type, defaults.observation_type || 'observation'),
+    entity_type: text(body.entity_type, defaults.entity_type || body.domain || body.source_type || 'grc_observation'),
+    entity_id: body.entity_id || defaults.entity_id || null,
+    observed_at: observedAt,
+    period_start: body.period_start || body.effective_from || null,
+    period_end: body.period_end || body.effective_to || null,
+    status_value: text(body.status_value ?? body.status, defaults.status_value || 'open'),
+    severity_value: text(body.severity_value ?? body.severity, defaults.severity_value || null),
+    unit: text(body.unit, defaults.unit || null),
+    quality_status: text(body.quality_status, defaults.quality_status || 'valid'),
+    quality_score: body.quality_score === undefined ? (defaults.quality_score ?? 100) : Number(body.quality_score),
+    freshness_status: text(body.freshness_status, defaults.freshness_status || 'fresh'),
+    freshness_age_seconds: body.freshness_age_seconds === undefined ? (defaults.freshness_age_seconds ?? 0) : Number(body.freshness_age_seconds),
+    trust_score: body.trust_score === undefined ? (defaults.trust_score ?? 100) : Number(body.trust_score),
+    owner_user_id: body.owner_user_id || defaults.owner_user_id || null,
+    evidence_id: body.evidence_id || defaults.evidence_id || null,
+    correlation_id: text(body.correlation_id || defaults.correlation_id || crypto.randomUUID()),
+    metadata: body.metadata || {},
+  };
+  return payload;
+}
+
+async function createManualObservation(scope, body = {}, requestId = null) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await manualObservationContract(client, scope);
+    const payload = canonicalObservationPayload({ ...body, correlation_id: body.correlation_id || requestId });
+    const value = canonicalObservationValue(body);
+    const sourceTable = text(body.source_table, 'data_snapshots');
+    const sourceRecordId = text(body.source_record_id || body.source_id, null);
+    const sourceIdentity = body.source_identity || body.idempotency_id || {
+      source_type: body.source_type || 'manual',
+      source_table: sourceTable,
+      source_record_id: sourceRecordId,
+      observation_type: payload.observation_type,
+      entity_type: payload.entity_type,
+      entity_id: payload.entity_id,
+      observed_at: payload.observed_at,
+      text_value: value.text,
+      numeric_value: value.numeric,
+      boolean_value: value.boolean,
+    };
+    const identityHash = stableHash({ tenant_id: tenantId(scope), version_id: current.version_id, source_identity: sourceIdentity });
+    const contentHash = stableHash({ payload, value });
+    const snapshot = await createManualObservationSnapshot(client, scope, { ...payload, value, source_identity: sourceIdentity }, identityHash, contentHash, requestId);
+    const canonicalSourceTable = sourceRecordId ? identifier(sourceTable, 'source_table') : 'data_snapshots';
+    const canonicalSourceRecordId = sourceRecordId || snapshot.id;
+    const previous = await client.query(`SELECT * FROM grc_observations
+      WHERE tenant_id=$1::uuid AND contract_version_id=$2::uuid AND source_identity_hash=$3 AND is_current=true
+      FOR UPDATE`, [tenantId(scope), current.version_id, identityHash]);
+    if (previous.rows[0]?.metadata?.content_hash === contentHash) {
+      await client.query('COMMIT');
+      return { ...previous.rows[0], idempotent_replay: true };
+    }
+    const newId = crypto.randomUUID();
+    if (previous.rowCount) {
+      await client.query('UPDATE grc_observations SET is_current=false,superseded_by_id=$2::uuid WHERE id=$1::uuid', [previous.rows[0].id, newId]);
+    }
+    const result = await client.query(`INSERT INTO grc_observations
+      (id,tenant_id,observation_type,entity_type,entity_id,contract_id,contract_version_id,source_table,source_record_id,source_identity_hash,observed_at,period_start,period_end,status_value,severity_value,numeric_value,text_value,boolean_value,unit,quality_status,quality_score,freshness_status,freshness_age_seconds,trust_score,owner_user_id,evidence_id,correlation_id,source_snapshot_id,supersedes_observation_id,is_current,created_by,metadata)
+      VALUES ($1::uuid,$2::uuid,$3,$4,$5::uuid,$6::uuid,$7::uuid,$8,$9,$10,$11::timestamptz,$12::timestamptz,$13::timestamptz,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25::uuid,$26::uuid,$27,$28::uuid,$29::uuid,true,$30::uuid,$31::jsonb)
+      RETURNING *`, [
+      newId, tenantId(scope), payload.observation_type, payload.entity_type, payload.entity_id, current.contract_id, current.version_id,
+      canonicalSourceTable, canonicalSourceRecordId, identityHash, payload.observed_at, payload.period_start, payload.period_end,
+      payload.status_value, payload.severity_value, value.numeric, value.text, value.boolean, payload.unit,
+      payload.quality_status, payload.quality_score, payload.freshness_status, payload.freshness_age_seconds, payload.trust_score,
+      payload.owner_user_id, payload.evidence_id, payload.correlation_id, snapshot.id, previous.rows[0]?.id || null, actorId(scope),
+      JSON.stringify({ ...payload.metadata, content_hash: contentHash, source_identity: sourceIdentity, manual_observation_contract: MANUAL_OBSERVATION_CONTRACT_CODE }),
+    ]);
+    await client.query(`INSERT INTO data_lineage_edges
+      (tenant_id,from_type,from_id,to_type,to_id,relation_type,transformation,created_by,correlation_id,metadata)
+      VALUES ($1::uuid,'data_snapshot',$2::uuid,'grc_observation',$3::uuid,'derived_from','grc_manual_observation_api',$4::uuid,$5,$6::jsonb)
+      ON CONFLICT DO NOTHING`, [tenantId(scope), snapshot.id, result.rows[0].id, actorId(scope), requestId, JSON.stringify({ contract_version_id: current.version_id })]);
+    await audit(client, scope, 'semantic.observation.manual_created', 'grc_observation', result.rows[0].id, requestId, { supersedes_observation_id: previous.rows[0]?.id || null });
+    await client.query('COMMIT');
+    return result.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function supersedeObservation(scope, observationId, body = {}, requestId = null) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT * FROM grc_observations WHERE id=$1::uuid AND tenant_id=$2::uuid AND is_current=true FOR UPDATE', [uuid(observationId, 'observation_id'), tenantId(scope)]);
+    if (!current.rowCount) throw new SemanticError('SEMANTIC_OBSERVATION_NOT_FOUND', 'Observación no encontrada.', 404);
+    const previous = current.rows[0];
+    const next = {
+      observation_type: text(body.observation_type, previous.observation_type),
+      entity_type: text(body.entity_type, previous.entity_type),
+      entity_id: body.entity_id === undefined ? previous.entity_id : body.entity_id,
+      observed_at: body.observed_at || previous.observed_at,
+      period_start: body.period_start === undefined ? previous.period_start : body.period_start,
+      period_end: body.period_end === undefined ? previous.period_end : body.period_end,
+      status_value: body.status_value === undefined ? previous.status_value : text(body.status_value, null),
+      severity_value: body.severity_value === undefined ? previous.severity_value : text(body.severity_value, null),
+      unit: body.unit === undefined ? previous.unit : text(body.unit, null),
+      quality_status: body.quality_status === undefined ? previous.quality_status : text(body.quality_status, previous.quality_status),
+      quality_score: body.quality_score === undefined ? previous.quality_score : Number(body.quality_score),
+      freshness_status: body.freshness_status === undefined ? previous.freshness_status : text(body.freshness_status, previous.freshness_status),
+      freshness_age_seconds: body.freshness_age_seconds === undefined ? previous.freshness_age_seconds : Number(body.freshness_age_seconds),
+      trust_score: body.trust_score === undefined ? previous.trust_score : Number(body.trust_score),
+      owner_user_id: body.owner_user_id === undefined ? previous.owner_user_id : body.owner_user_id,
+      evidence_id: body.evidence_id === undefined ? previous.evidence_id : body.evidence_id,
+      correlation_id: text(body.correlation_id || requestId, previous.correlation_id),
+      numeric_value: body.numeric_value === undefined ? previous.numeric_value : body.numeric_value,
+      text_value: body.text_value === undefined ? previous.text_value : body.text_value,
+      boolean_value: body.boolean_value === undefined ? previous.boolean_value : body.boolean_value,
+      metadata: { ...(previous.metadata || {}), ...(body.metadata || {}) },
+    };
+    const contentHash = stableHash({
+      observation_type: next.observation_type, entity_type: next.entity_type, entity_id: next.entity_id,
+      observed_at: next.observed_at, period_start: next.period_start, period_end: next.period_end,
+      status_value: next.status_value, severity_value: next.severity_value, unit: next.unit,
+      numeric_value: next.numeric_value, text_value: next.text_value, boolean_value: next.boolean_value,
+      metadata: next.metadata,
+    });
+    if (previous.metadata?.content_hash === contentHash) {
+      await client.query('COMMIT');
+      return { ...previous, idempotent_replay: true };
+    }
+    const snapshot = await createManualObservationSnapshot(client, scope, { supersedes_observation_id: previous.id, next }, previous.source_identity_hash, contentHash, requestId);
+    const newId = crypto.randomUUID();
+    await client.query('UPDATE grc_observations SET is_current=false,superseded_by_id=$2::uuid WHERE id=$1::uuid', [previous.id, newId]);
+    const result = await client.query(`INSERT INTO grc_observations
+      (id,tenant_id,observation_type,entity_type,entity_id,contract_id,contract_version_id,source_table,source_record_id,source_identity_hash,observed_at,period_start,period_end,status_value,severity_value,numeric_value,text_value,boolean_value,unit,quality_status,quality_score,freshness_status,freshness_age_seconds,trust_score,owner_user_id,evidence_id,correlation_id,source_snapshot_id,supersedes_observation_id,is_current,created_by,metadata)
+      VALUES ($1::uuid,$2::uuid,$3,$4,$5::uuid,$6::uuid,$7::uuid,$8,$9,$10,$11::timestamptz,$12::timestamptz,$13::timestamptz,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25::uuid,$26::uuid,$27,$28::uuid,$29::uuid,true,$30::uuid,$31::jsonb)
+      RETURNING *`, [
+      newId, tenantId(scope), next.observation_type, next.entity_type, next.entity_id, previous.contract_id, previous.contract_version_id,
+      previous.source_table, previous.source_record_id, previous.source_identity_hash, next.observed_at, next.period_start, next.period_end,
+      next.status_value, next.severity_value, next.numeric_value, next.text_value, next.boolean_value, next.unit,
+      next.quality_status, next.quality_score, next.freshness_status, next.freshness_age_seconds, next.trust_score,
+      next.owner_user_id, next.evidence_id, next.correlation_id, snapshot.id, previous.id, actorId(scope),
+      JSON.stringify({ ...next.metadata, content_hash: contentHash }),
+    ]);
+    await client.query(`INSERT INTO data_lineage_edges
+      (tenant_id,from_type,from_id,to_type,to_id,relation_type,transformation,created_by,correlation_id,metadata)
+      VALUES ($1::uuid,'grc_observation',$2::uuid,'grc_observation',$3::uuid,'derived_from','controlled_supersession',$4::uuid,$5,$6::jsonb)
+      ON CONFLICT DO NOTHING`, [tenantId(scope), previous.id, result.rows[0].id, actorId(scope), requestId, JSON.stringify({ source_snapshot_id: snapshot.id })]);
+    await audit(client, scope, 'semantic.observation.superseded', 'grc_observation', result.rows[0].id, requestId, { supersedes_observation_id: previous.id });
+    await client.query('COMMIT');
+    return result.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function snapshotVersion(scope, versionId, body = {}, requestId = null) {
   const current = await version(pool, scope, versionId);
   if (current.status !== 'published') throw new SemanticError('SEMANTIC_VERSION_NOT_PUBLISHED', 'Solo se generan snapshots de versiones publicadas.', 409);
@@ -768,7 +978,7 @@ module.exports = {
   SemanticError, sanitizeError, validateAllowedJoins,
   listContracts, reconcileLegacyContracts, createContract, updateContract, getContract, createVersion, getVersion, updateVersion, transitionVersion,
   listMappings, upsertMapping, updateMapping, validateMapping, validateVersionConfiguration, previewVersion, versionAssessment, snapshotVersion, ingestVersion,
-  listObservations, getObservation, observationLineage, observationAssessment, createObservationRelation,
+  listObservations, getObservation, observationLineage, observationAssessment, createObservationRelation, createManualObservation, supersedeObservation,
   listSufficiencyRules, getSufficiencyRule, createSufficiencyRule, transitionSufficiencyRule, publishSufficiencyRule,
   runJob, executeJob, listJobs,
 };
