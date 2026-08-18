@@ -24,6 +24,7 @@ Backend Node/Express
         |      + official indicator matrix v1 derived from formula registry/source contracts
         |      + formula registry/execution
         |      + official calculation orchestrator as single source of truth
+        |      + governed Observation emission producer for material Data Trust signals
         |      + snapshots/lineage
         |      + decision interpretation
         |      + Package3 compatibility projection only; no parallel official truth
@@ -31,6 +32,8 @@ Backend Node/Express
         |
         +--> GRC services/rules/workflows/approvals/observability
         |      + GRC Observation API facade over Semantic Layer
+        |      + Governed Observation outbox (`grc_observation_emission_outbox`)
+        |      + Observation emitter policy/consumer (`grcObservationEmitter.service.js`)
         |      + tenant-scoped source validation, RBAC and audit log integration
         |
         +--> Semantic Layer
@@ -76,6 +79,7 @@ operational data
 → source contract/normalization
 → eligibility/sufficiency/Data Trust
 → official calculation
+→ governed Observation outbox / idempotent consumer
 → measurement/snapshot/lineage
 → Observation
 → Gap
@@ -97,4 +101,5 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - Next phase: FASE_6_AMPLIADA.
 - 6.8-01-HF1: CLOSED; canonical Observation reconciliation valid.
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME; forward bootstrap for `grc.manual_observations@v1` validated after user deploy.
-- Next work package: F6.8 / 6.8-02 READY.
+- 6.8-02: DONE_LOCAL; governed Observation emitter/outbox implemented, runtime validation pending after user deploy.
+- Next work package candidate: 6.8-03 after 6.8-02 runtime validation or explicit user decision.

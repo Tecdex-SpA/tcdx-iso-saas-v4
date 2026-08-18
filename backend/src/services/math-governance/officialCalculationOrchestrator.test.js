@@ -7,6 +7,7 @@ const phase5Package3 = require('./phase5Package3.service');
 
 async function run() {
   const persisted = [];
+  const observationEmissions = [];
   const calculated = await recalculateOfficialAnalytics(
     { tenant_id: '70000000-0000-0000-0000-000000000701', user: { id: '70000000-0000-0000-0000-000000000711' } },
     { formula_codes: ['F5_5_INHERENT_RISK'], period: { start: '2026-01-01', end: '2026-12-31', timezone: 'tenant-configured' } },
@@ -47,6 +48,15 @@ async function run() {
         return { ...result, calculation_run_id: '70000000-0000-0000-0000-000000000799' };
       },
       persistSourceSnapshot: async () => '70000000-0000-0000-0000-000000000798',
+      observationEmitter: {
+        async emitOfficialCalculationResult(scope, result, correlationId, sourceSnapshotId) {
+          observationEmissions.push({ scope, result, correlationId, sourceSnapshotId });
+          return {
+            event: { id: '70000000-0000-0000-0000-000000000788', status: 'completed', observation_id: '70000000-0000-0000-0000-000000000789' },
+            observation: { id: '70000000-0000-0000-0000-000000000789' },
+          };
+        },
+      },
     }
   );
 
@@ -58,6 +68,11 @@ async function run() {
   assert.equal(persisted[0].lineage.length, 3);
   assert.deepEqual(persisted[0].components.scores, [20, 10, 15]);
   assert.equal(persisted[0].details.aggregation_method, 'arithmetic_mean');
+  assert.equal(observationEmissions.length, 1);
+  assert.equal(observationEmissions[0].scope.tenant_id, '70000000-0000-0000-0000-000000000701');
+  assert.equal(observationEmissions[0].result.calculation_run_id, '70000000-0000-0000-0000-000000000799');
+  assert.equal(observationEmissions[0].sourceSnapshotId, '70000000-0000-0000-0000-000000000798');
+  assert.equal(calculated.results[0].observation_emission.observation_id, '70000000-0000-0000-0000-000000000789');
 
   const overrideCalls = [];
   const overrideResult = await recalculateOfficialAnalytics(
@@ -168,7 +183,7 @@ async function run() {
   assert.equal(unmeasuredPersisted[0].data_trust.state, 'INSUFFICIENT_DATA');
   assert.deepEqual(unmeasuredSnapshots[0].counts, { received: 4, eligible: 4, usable: 0, excluded: 4 });
 
-  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 32 }));
+  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 37 }));
 }
 
 run().catch((error) => {

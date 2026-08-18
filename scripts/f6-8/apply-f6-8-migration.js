@@ -8,8 +8,18 @@ const path = require('path');
 const root = path.resolve(__dirname, '../..');
 const { Client } = require(path.join(root, 'backend/node_modules/pg'));
 
-const MIGRATION_ID = '20260818_f6_8_01_hf2_manual_observation_contract_bootstrap';
-const MIGRATION_FILE = path.join(root, 'database/migrations/20260818_f6_8_01_hf2_manual_observation_contract_bootstrap.sql');
+const MIGRATIONS = Object.freeze([
+  {
+    id: '20260818_f6_8_01_hf2_manual_observation_contract_bootstrap',
+    file: path.join(root, 'database/migrations/20260818_f6_8_01_hf2_manual_observation_contract_bootstrap.sql'),
+    postconditions: postconditionsManualObservationContract,
+  },
+  {
+    id: '20260818_f6_8_02_governed_observation_emitter_outbox',
+    file: path.join(root, 'database/migrations/20260818_f6_8_02_governed_observation_emitter_outbox.sql'),
+    postconditions: postconditionsObservationEmitterOutbox,
+  },
+]);
 const LOCK_NAMESPACE = 844332;
 const LOCK_KEY = 2026081806;
 
@@ -21,10 +31,10 @@ function sanitize(error) {
     .slice(0, 1000);
 }
 
-function readMigration() {
-  if (!fs.existsSync(MIGRATION_FILE)) throw new Error(`F6.8 migration file missing: ${path.relative(root, MIGRATION_FILE)}`);
-  const sql = fs.readFileSync(MIGRATION_FILE, 'utf8');
-  return { sql, checksum: crypto.createHash('sha256').update(sql).digest('hex') };
+function readMigration(migration) {
+  if (!fs.existsSync(migration.file)) throw new Error(`F6.8 migration file missing: ${path.relative(root, migration.file)}`);
+  const sql = fs.readFileSync(migration.file, 'utf8');
+  return { ...migration, sql, checksum: crypto.createHash('sha256').update(sql).digest('hex') };
 }
 
 function databaseUrl() {
@@ -77,20 +87,20 @@ async function preflight(client) {
   if (failed.length) throw new Error(`F6.8 preflight failed: ${failed.map(([key]) => key).join(', ')}`);
 }
 
-async function alreadyApplied(client, checksum) {
-  const result = await client.query('SELECT checksum,status FROM schema_migrations WHERE migration_id=$1', [MIGRATION_ID]);
+async function alreadyApplied(client, migration) {
+  const result = await client.query('SELECT checksum,status FROM schema_migrations WHERE migration_id=$1', [migration.id]);
   if (!result.rowCount) return false;
   const row = result.rows[0];
-  if (row.status === 'applied' && row.checksum === checksum) return true;
+  if (row.status === 'applied' && row.checksum === migration.checksum) return true;
   if (row.status === 'applied') {
-    const error = new Error('F6.8 migration checksum differs from applied ledger entry');
+    const error = new Error(`F6.8 migration checksum differs from applied ledger entry: ${migration.id}`);
     error.preserveLedger = true;
     throw error;
   }
   return false;
 }
 
-async function postconditions(client) {
+async function postconditionsManualObservationContract(client) {
   const result = await client.query(`SELECT
     (SELECT COUNT(*)::int
        FROM data_source_contracts
@@ -128,10 +138,41 @@ async function postconditions(client) {
   return row;
 }
 
+async function postconditionsObservationEmitterOutbox(client) {
+  const result = await client.query(`SELECT
+    to_regclass('public.grc_observation_emission_outbox') IS NOT NULL AS outbox_ready,
+    to_regclass('public.grc_observations') IS NOT NULL AS observations_ready,
+    to_regclass('public.grc_observation_relations') IS NOT NULL AS relations_ready,
+    to_regclass('public.grc_observation_links') IS NULL AS no_parallel_links,
+    EXISTS (
+      SELECT 1 FROM pg_trigger
+      WHERE tgname='trg_semantic_observation_history' AND tgenabled='O'
+    ) AS observation_history_immutable,
+    EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname='public'
+        AND tablename='grc_observation_emission_outbox'
+        AND indexname='grc_observation_emission_outbox_tenant_id_idempotency_key_key'
+    ) AS idempotency_unique,
+    EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname='public'
+        AND tablename='grc_observation_emission_outbox'
+        AND indexname='idx_grc_observation_emission_pending'
+    ) AS pending_index`);
+  const row = result.rows[0] || {};
+  if (row.outbox_ready !== true || row.observations_ready !== true || row.relations_ready !== true ||
+      row.no_parallel_links !== true || row.observation_history_immutable !== true ||
+      row.idempotency_unique !== true || row.pending_index !== true) {
+    throw new Error(`F6.8 observation emitter outbox postcondition failed: ${JSON.stringify(row)}`);
+  }
+  return row;
+}
+
 async function run(mode) {
-  const migration = readMigration();
+  const migrations = MIGRATIONS.map(readMigration);
   if (mode === 'checksum') {
-    process.stdout.write(`${MIGRATION_ID} checksum=${migration.checksum}\n`);
+    for (const migration of migrations) process.stdout.write(`${migration.id} checksum=${migration.checksum}\n`);
     return;
   }
   const client = new Client({ connectionString: databaseUrl() });
@@ -144,36 +185,51 @@ async function run(mode) {
     locked = true;
     await ensureLedger(client);
     await preflight(client);
-    const done = await alreadyApplied(client, migration.checksum);
+    const states = [];
+    for (const migration of migrations) states.push({ migration, done: await alreadyApplied(client, migration) });
     if (mode === 'preflight') {
-      process.stdout.write(`F6.8 migration preflight OK: pending=${done ? 'none' : MIGRATION_ID}\n`);
+      const pending = states.filter((state) => !state.done).map((state) => state.migration.id);
+      process.stdout.write(`F6.8 migration preflight OK: pending=${pending.length ? pending.join(',') : 'none'}\n`);
       return;
     }
     if (mode !== 'apply') throw new Error('Use --checksum, --preflight or --apply');
-    await client.query('BEGIN');
-    if (!done) {
-      await client.query(`INSERT INTO schema_migrations (migration_id,checksum,applied_by,status,details)
-        VALUES ($1,$2,current_user,'running',$3::jsonb)
-        ON CONFLICT (migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,applied_by=current_user,status='running',details=EXCLUDED.details`,
-      [MIGRATION_ID, migration.checksum, JSON.stringify({ file: path.relative(root, MIGRATION_FILE) })]);
-      await client.query(unwrapTransaction(migration.sql));
+    for (const { migration, done } of states) {
+      await client.query('BEGIN');
+      if (!done) {
+        await client.query(`INSERT INTO schema_migrations (migration_id,checksum,applied_by,status,details)
+          VALUES ($1,$2,current_user,'running',$3::jsonb)
+          ON CONFLICT (migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,applied_by=current_user,status='running',details=EXCLUDED.details`,
+        [migration.id, migration.checksum, JSON.stringify({ file: path.relative(root, migration.file) })]);
+        await client.query(unwrapTransaction(migration.sql));
+      }
+      const details = await migration.postconditions(client);
+      await client.query(`INSERT INTO schema_migrations (migration_id,checksum,applied_at,applied_by,duration_ms,status,details)
+        VALUES ($1,$2,now(),current_user,$3,'applied',$4::jsonb)
+        ON CONFLICT (migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,applied_at=now(),applied_by=current_user,duration_ms=EXCLUDED.duration_ms,status='applied',details=EXCLUDED.details`,
+      [migration.id, migration.checksum, Date.now() - started, JSON.stringify(details)]);
+      await client.query('COMMIT');
+      process.stdout.write(`F6.8 migration applied: ${done ? 'already_applied' : migration.id}\n`);
     }
-    const details = await postconditions(client);
-    await client.query(`INSERT INTO schema_migrations (migration_id,checksum,applied_at,applied_by,duration_ms,status,details)
-      VALUES ($1,$2,now(),current_user,$3,'applied',$4::jsonb)
-      ON CONFLICT (migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,applied_at=now(),applied_by=current_user,duration_ms=EXCLUDED.duration_ms,status='applied',details=EXCLUDED.details`,
-    [MIGRATION_ID, migration.checksum, Date.now() - started, JSON.stringify(details)]);
-    await client.query('COMMIT');
-    process.stdout.write(`F6.8 migration applied: ${done ? 'already_applied' : MIGRATION_ID}\n`);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => null);
-    const ledgerState = await client.query('SELECT status FROM schema_migrations WHERE migration_id=$1', [MIGRATION_ID]).catch(() => ({ rows: [] }));
+    let failedMigration = migrations.find((migration) => String(error.message || '').includes(migration.id)) || null;
+    if (!failedMigration) {
+      for (const migration of migrations) {
+        const state = await client.query('SELECT status FROM schema_migrations WHERE migration_id=$1', [migration.id]).catch(() => ({ rows: [] }));
+        if (state.rows[0]?.status === 'running') {
+          failedMigration = migration;
+          break;
+        }
+      }
+    }
+    failedMigration = failedMigration || migrations[migrations.length - 1];
+    const ledgerState = await client.query('SELECT status FROM schema_migrations WHERE migration_id=$1', [failedMigration.id]).catch(() => ({ rows: [] }));
     const preserveAppliedLedger = ledgerState.rows[0]?.status === 'applied';
     if (!error.preserveLedger && !preserveAppliedLedger) {
       await client.query(`INSERT INTO schema_migrations (migration_id,checksum,applied_by,duration_ms,status,details)
         VALUES ($1,$2,current_user,$3,'failed',$4::jsonb)
         ON CONFLICT (migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,applied_by=current_user,duration_ms=EXCLUDED.duration_ms,status='failed',details=EXCLUDED.details`,
-      [MIGRATION_ID, migration.checksum, Date.now() - started, JSON.stringify({ error: sanitize(error) })]).catch(() => null);
+      [failedMigration.id, failedMigration.checksum, Date.now() - started, JSON.stringify({ error: sanitize(error) })]).catch(() => null);
     }
     throw error;
   } finally {

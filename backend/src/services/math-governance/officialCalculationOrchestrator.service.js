@@ -8,6 +8,7 @@ const { getSourceCodeForFormula } = require('./sourceContracts.service');
 const { buildDecision, numeric } = require('./decisionInterpretation.service');
 const { assessDataTrust } = require('./dataTrust.service');
 const phase5Service = require('../phase5/phase5.service');
+const { defaultService: defaultObservationEmitter } = require('../grc/grcObservationEmitter.service');
 
 const SOURCE_DATASET_SNAPSHOT_TYPE = 'source_dataset';
 const FUNCTIONAL_FAILURE_CODES = Object.freeze({
@@ -375,6 +376,9 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
   const registry = dependencies.registry || new OfficialFormulaRegistry();
   const persist = dependencies.persistOfficialCalculation || phase5Service.persistOfficialCalculation;
   const persistSnapshot = dependencies.persistSourceSnapshot || persistSourceSnapshot;
+  const observationEmitter = Object.prototype.hasOwnProperty.call(dependencies, 'observationEmitter')
+    ? dependencies.observationEmitter
+    : (Object.keys(dependencies).length ? null : defaultObservationEmitter);
   const results = [];
   const calculatedByCode = new Map();
 
@@ -456,8 +460,53 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
       if (persistedValue === null) throw new OfficialCalculationOrchestratorError('CALCULATED_RESULT_WITHOUT_VALUE', 'El cálculo no puede marcarse como calculado sin valor numérico.', 500);
       const snapshotId = await persistSnapshot(client, tenantId, source, persisted);
       if (!snapshotId) throw new OfficialCalculationOrchestratorError('SOURCE_SNAPSHOT_NOT_PERSISTED', 'El cálculo no puede publicarse sin snapshot de fuente.', 500);
+      let observationEmission = null;
+      if (observationEmitter && typeof observationEmitter.emitOfficialCalculationResult === 'function') {
+        try {
+          observationEmission = await observationEmitter.emitOfficialCalculationResult(
+            { tenant_id: tenantId, user: { id: actorIdFrom(scope) } },
+            {
+              ...officialResult,
+              status: 'calculated',
+              calculation_run_id: persisted.calculation_run_id || null,
+              snapshot_id: snapshotId,
+              observed_at: officialResult.observed_at || period.as_of || period.end || period.period_end || null,
+            },
+            requestId,
+            snapshotId
+          );
+        } catch (error) {
+          if (dependencies.failOnObservationEmission === true) throw error;
+          observationEmission = {
+            status: 'failed',
+            code: error.code || 'OBSERVATION_EMISSION_FAILED',
+            message: String(error.message || error).slice(0, 300),
+          };
+        }
+      }
       calculatedByCode.set(formula.formula_code, persistedValue);
-      results.push({ formula_code: formula.formula_code, display_name: formula.display_name, domain: formula.category, status: 'calculated', ...sourceContext, value: persistedValue, unit: persisted.unit, calculation_run_id: persisted.calculation_run_id || null, snapshot_id: snapshotId, warnings: persisted.warnings || [], data_trust: source.data_trust || null, decision });
+      results.push({
+        formula_code: formula.formula_code,
+        display_name: formula.display_name,
+        domain: formula.category,
+        status: 'calculated',
+        ...sourceContext,
+        value: persistedValue,
+        unit: persisted.unit,
+        calculation_run_id: persisted.calculation_run_id || null,
+        snapshot_id: snapshotId,
+        warnings: observationEmission?.status === 'failed'
+          ? [...(persisted.warnings || []), `observation_emission_failed:${observationEmission.code}`]
+          : (persisted.warnings || []),
+        data_trust: source.data_trust || null,
+        decision,
+        observation_emission: observationEmission ? {
+          status: observationEmission.status || observationEmission.event?.status,
+          event_id: observationEmission.event?.id || null,
+          observation_id: observationEmission.observation?.id || observationEmission.event?.observation_id || null,
+          reused: observationEmission.reused === true,
+        } : null,
+      });
     } catch (error) {
       const classified = classifyError(error);
       const dataTrust = sourceContext.data_trust || assessDataTrust({ sourceStatus: classified.status, formula, counts: sourceContext.source_counts || {}, exclusions: [{ code: classified.code }], provenance: { formula_code: formula.formula_code, source_code: sourceContext.source_code || null, contract_resolved: false } });

@@ -15,6 +15,7 @@
 | Snapshot | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó snapshots para 16/16 calculated runs. |
 | Lineage | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó lineage para cálculos con dataset poblado. |
 | Observation contract | CURRENT/6.8-01-HF2-RUNTIME | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_relations`; owner/runtime `semanticLayer.service.js`; fachada GRC sin persistencia paralela; contrato global `grc.manual_observations@v1` validado runtime post-deploy. |
+| Observation emitter/outbox | CURRENT/6.8-02 | CODEX A | `grc_observation_emission_outbox` registra eventos de emisión tenant-scoped; reglas en `grcObservationEmitter.service.js`; consumer delega a Semantic Layer; productor inicial `officialCalculationOrchestrator`. |
 | Gap contract | PLANNED | CODEX A | 6.8-03. |
 | Graph Edge contract | PLANNED | CODEX A | 6.9-02. |
 | Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
@@ -69,6 +70,24 @@ Status: PASS_RUNTIME on production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f
 | Required fields | `observation_type`, `entity_type`, `observed_at`, `status_value`, `severity_value`. |
 | Optional fields | `period_start`, `period_end`, `numeric_value`, `text_value`, `boolean_value`, `unit`, `owner_user_id`, `evidence_id`, `metadata`. |
 | Versioning | `SEMANTIC_CONTRACTS_VERSIONED=["grc.manual_observations@v1"]`; Math Governance source contracts and formulas unchanged. |
+
+## 6.8-02 Governed Observation Emitter / Outbox
+
+Status: DONE_LOCAL on branch `feat/f6-8-02-governed-observation-emitter`; runtime validation pending by repository policy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Outbox table | `grc_observation_emission_outbox` |
+| Scope | Tenant-scoped; `tenant_id` is mandatory on every event. |
+| Owner | CODEX A / GRC service layer for event policy and worker; Semantic Layer remains owner of canonical Observation persistence. |
+| Consumer | `backend/src/services/grc/grcObservationEmitter.service.js` calls `semanticLayer.createManualObservation`; no direct producer insert into `grc_observations`. |
+| Producer v1 | `backend/src/services/math-governance/officialCalculationOrchestrator.service.js` after official calculation run + source snapshot persistence. |
+| Rule registry v1 | `official_calculation.data_trust_attention@1`. |
+| Eligibility | `status=calculated`, explicit `observed_at`, same-tenant calculation run/snapshot, Data Trust state in `TRUSTED_WITH_WARNINGS` or `LOW_CONFIDENCE`. |
+| Non-eligibility | `source_unavailable`, `source_incompatible`, `SOURCE_SCHEMA_INCOMPATIBLE`, `SOURCE_DATA_INSUFFICIENT`, `FORMULA_DEPENDENCY_PENDING`, `FORMULA_VARIABLE_REQUIRED`, `FORMULA_ZERO_WEIGHTS`, `not_calculable`, `unmeasured`, `failed`, trusted/no material signal. |
+| Idempotency | Outbox idempotency key includes producer run/snapshot; canonical Observation identity excludes run/snapshot and is based on tenant + producer type + rule + formula + period + source contract, enabling supersession across later runs for the same governed signal. |
+| Provenance | Event payload preserves calculation run, source snapshot, source contract/code, formula version, Data Trust, source status, machine reason, correlation id, physical sources, counts and warnings. |
+| Versioning | `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `FORMULAS_VERSIONED=[]`. |
 
 ## PUI-01 Source Ownership Inventory
 
