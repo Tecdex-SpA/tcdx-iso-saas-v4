@@ -15,8 +15,8 @@
 | Snapshot | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó snapshots para 16/16 calculated runs. |
 | Lineage | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó lineage para cálculos con dataset poblado. |
 | Observation contract | CURRENT/6.8-01-HF2-RUNTIME | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_relations`; owner/runtime `semanticLayer.service.js`; fachada GRC sin persistencia paralela; contrato global `grc.manual_observations@v1` validado runtime post-deploy. |
-| Observation emitter/outbox | CURRENT/6.8-02-HF1 | CODEX A | `grc_observation_emission_outbox` registra eventos de emisión tenant-scoped; reglas en `grcObservationEmitter.service.js`; consumer delega a Semantic Layer con timestamps normalizados a ISO-8601 UTC; productor inicial `officialCalculationOrchestrator`. |
-| Gap contract | PLANNED | CODEX A | 6.8-03. |
+| Observation emitter/outbox | CURRENT/6.8-02-HF1-RUNTIME | CODEX A | `grc_observation_emission_outbox` registra eventos de emisión tenant-scoped; reglas en `grcObservationEmitter.service.js`; consumer delega a Semantic Layer con timestamps normalizados a ISO-8601 UTC; productor inicial `officialCalculationOrchestrator`; runtime cerrado por `6.8-02-HF1-RUNTIME-CLOSURE`. |
+| Gap contract | CURRENT/6.8-03 | CODEX A | `grc_gaps` + `grc_gap_rules` + `grc_gap_status_history` + `grc_gap_hypotheses`; deterministic Gap sobre Observations canónicas; AI hypotheses separadas. |
 | Graph Edge contract | PLANNED | CODEX A | 6.9-02. |
 | Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
 | IntelligenceContext | PARTIAL | CODEX B | Backend + AI Engine deben reconciliar ownership. |
@@ -73,7 +73,7 @@ Status: PASS_RUNTIME on production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f
 
 ## 6.8-02 Governed Observation Emitter / Outbox
 
-Status: DONE_LOCAL on branch `feat/f6-8-02-governed-observation-emitter`; runtime validation pending by repository policy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.8-02-HF1-RUNTIME-CLOSURE.md`.
 
 HF1 correction: DONE_LOCAL on branch `fix/f6-8-02-hf1-observation-timestamp-serialization`. Runtime showed eligible outbox events failed because `timestamptz` rows returned as JavaScript `Date` crossed into Semantic Layer and were serialized as `Date.toString()`. The emitter boundary now normalizes `observed_at`, `period_start` and `period_end` to ISO-8601 UTC before `semanticLayer.createManualObservation`, preserving null optional periods and never fabricating missing `observed_at`.
 
@@ -91,6 +91,24 @@ HF1 correction: DONE_LOCAL on branch `fix/f6-8-02-hf1-observation-timestamp-seri
 | Provenance | Event payload preserves calculation run, source snapshot, source contract/code, formula version, Data Trust, source status, machine reason, correlation id, physical sources, counts and warnings. |
 | Timestamp boundary | Outbox `timestamptz` may be returned by the Node PostgreSQL driver as `Date`; the service boundary to Semantic Layer uses ISO-8601 UTC strings. |
 | Versioning | `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `FORMULAS_VERSIONED=[]`. |
+
+## 6.8-03 GRC Gap Model
+
+Status: DONE_LOCAL on branch `feat/f6-8-03-grc-gap-model`; runtime validation pending by repository policy after user merge/deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Gap table | `grc_gaps` |
+| Rule registry | `grc_gap_rules`; published deterministic rule definition/checksum fields are immutable and require a new `rule_version` for semantic changes. |
+| Lifecycle history | `grc_gap_status_history` records evaluation-created, evaluation-confirmed, reopened and manual transition events. |
+| AI boundary | `grc_gap_hypotheses` stores non-deterministic/AI hypotheses separately and never creates deterministic Gap truth. |
+| Initial rule | `observation.data_trust_attention_gap@1`, global, published, deterministic over `official_calculation.data_trust_attention` Observations. |
+| Eligibility | Current canonical Observation, matching rule input type, valid quality, material Data Trust state (`TRUSTED_WITH_WARNINGS`/`LOW_CONFIDENCE`) and material severity (`low`/`medium`/`high`/`critical`). |
+| Non-eligibility | Bad data/source/dependency states remain ignored for material business Gap generation: `INSUFFICIENT_DATA`, `UNTRUSTED`, `SOURCE_SCHEMA_INCOMPATIBLE`, `SOURCE_DATA_INSUFFICIENT`, `FORMULA_DEPENDENCY_PENDING`, `FORMULA_VARIABLE_REQUIRED`, `FORMULA_ZERO_WEIGHTS`, `source_unavailable`, `source_incompatible`, `not_calculable`, `unmeasured`, trusted/no material signal. |
+| Identity/idempotency | `gap_key` is deterministic SHA-256 over tenant, rule code/version, gap type, source observation identity hash and affected entity; unique by `(tenant_id,gap_key)`. |
+| Relation | Observation -> Gap uses canonical `grc_observation_relations` with `related_entity_type='grc_gap'` and `relation_type='supports'`; no `grc_observation_links`. |
+| RBAC | `gap.read`, `gap.manage`, `gap.transition`, `gap.evaluate` integrated into the existing permission system and GRC route authorization. |
+| Versioning | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`. |
 
 ## PUI-01 Source Ownership Inventory
 

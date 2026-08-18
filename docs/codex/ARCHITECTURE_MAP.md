@@ -102,6 +102,7 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - Next phase: FASE_6_AMPLIADA.
 - 6.8-01-HF1: CLOSED; canonical Observation reconciliation valid.
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME; forward bootstrap for `grc.manual_observations@v1` validated after user deploy.
-- 6.8-02: DONE_LOCAL; governed Observation emitter/outbox implemented, runtime validation pending after user deploy.
-- 6.8-02-HF1: DONE_LOCAL; timestamp serialization hotfix implemented, runtime validation pending after user deploy/retry.
-- Next work package candidate: 6.8-03 after 6.8-02-HF1 runtime validation or explicit user decision.
+- 6.8-02: CLOSED / PASS_RUNTIME; governed Observation emitter/outbox validated after HF1 runtime replay.
+- 6.8-02-HF1: CLOSED / PASS_RUNTIME; timestamp serialization hotfix validated after user deploy/retry.
+- 6.8-03: DONE_LOCAL; canonical deterministic Gap model implemented over Observations, with rule registry, lifecycle history, AI hypothesis separation and Observation -> Gap canonical relation. Runtime validation pending after user merge/deploy.
+- Next work package candidate: 6.9-01 only after `F6_8_03_RUNTIME=PASS`.
