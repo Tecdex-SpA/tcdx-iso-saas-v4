@@ -29,9 +29,9 @@ Fuente: Plan Maestro canónico. No tomar un work package `IN_PROGRESS` por otra 
 | UI-08 | CODEX C | tecdex3-codex | BLOCKED | UI-01 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/UI-08.md | See Plan Maestro | Estados UX universales |
 | UI-09 | CODEX C | tecdex3-codex | BLOCKED | UI-01 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/UI-09.md | See Plan Maestro | Responsive y accesibilidad final |
 | UI-10 | CODEX C | tecdex3-codex | BLOCKED | UI-01 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/UI-10.md | See Plan Maestro | QA visual automatizable |
-| 6.8-01 | CODEX A | codex | READY | PRE_UI_DATA_TRUTH_GATE | - | FINAL_COMMIT_REPORTED_IN_CODEX_RESPONSE | - | docs/codex/handoffs/6.8-01.md | See Plan Maestro | GRC Observation Model |
-| 6.8-02 | CODEX A | codex | BLOCKED | 6.8-01 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/6.8-02.md | See Plan Maestro | Transactional Outbox para intelligence events |
-| 6.8-03 | CODEX A | codex | BLOCKED | 6.8-01 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/6.8-03.md | See Plan Maestro | GRC Gap Model |
+| 6.8-01 | CODEX A | codex | DONE_LOCAL | PRE_UI_DATA_TRUTH_GATE | feat/f6-8-01-grc-observation-model | 314c1dd2ebeac54a50f861c7d4336fd8df40094d | FINAL_COMMIT_REPORTED_IN_CODEX_RESPONSE | docs/codex/handoffs/6.8-01.md | GRC_OBSERVATION_MODEL=PASS; SELLABLE_MULTI_TENANT=PASS; FOCAL_TEST=PASS; REGRESSION_TESTS=PASS | Usuario ejecuta push/PR/CI/deploy/manual validation si corresponde |
+| 6.8-02 | CODEX A | codex | READY | 6.8-01 | - | FINAL_COMMIT_REPORTED_IN_CODEX_RESPONSE | - | docs/codex/handoffs/6.8-02.md | See Plan Maestro | Transactional Outbox para intelligence events |
+| 6.8-03 | CODEX A | codex | READY | 6.8-01 | - | FINAL_COMMIT_REPORTED_IN_CODEX_RESPONSE | - | docs/codex/handoffs/6.8-03.md | See Plan Maestro | GRC Gap Model |
 | 6.9-01 | CODEX A | codex | BLOCKED | PRE_UI_DATA_TRUTH_GATE | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/6.9-01.md | See Plan Maestro | Inventario de relaciones GRC existentes |
 | 6.9-02 | CODEX A | codex | BLOCKED | 6.9-01 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/6.9-02.md | See Plan Maestro | Impact Graph 2.0 |
 | 6.9-03 | CODEX B | tecdex2-codex | BLOCKED | 6.9-02 | - | 3341f69c328fd1f9999fbbf2d57e2b3c5b783361 | - | docs/codex/handoffs/6.9-03.md | See Plan Maestro | Priority Engine 2.0 |

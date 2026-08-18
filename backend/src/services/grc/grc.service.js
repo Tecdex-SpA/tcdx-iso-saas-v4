@@ -5,6 +5,7 @@ const { buildGrcExport, FORMATS } = require('./grcExport.service');
 const { escalationStages, occurrenceKey, retryBackoffSeconds, schedulerWindow } = require('./grcSchedulerRules');
 const { observe, snapshot: observabilitySnapshot } = require('./grcObservability');
 const { createGrcBootstrapService } = require('./grcBootstrap.service');
+const { createGrcObservationService } = require('./grcObservation.service');
 
 const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 
@@ -35,6 +36,7 @@ function clampLimit(value) {
 
 function createGrcService(pool, asyncJobs) {
   const bootstrapService = createGrcBootstrapService(pool, { GrcError, observe });
+  let observationService = null;
 
   async function withTransaction(work) {
     const client = await pool.connect();
@@ -100,7 +102,7 @@ function createGrcService(pool, asyncJobs) {
         `SELECT p.permission_key, user_has_permission($1::uuid, p.permission_key) AS allowed
          FROM permissions p
          WHERE p.is_active = TRUE
-           AND p.permission_group IN ('workflow', 'evidence', 'readiness', 'framework', 'audit')
+           AND p.permission_group IN ('workflow', 'evidence', 'readiness', 'framework', 'audit', 'observation')
          ORDER BY p.permission_key`,
         [userId]
       )).rows.reduce((map, item) => ({ ...map, [item.permission_key]: item.allowed === true }), {});
@@ -1814,6 +1816,44 @@ function createGrcService(pool, asyncJobs) {
     return instance;
   }
 
+  function observations() {
+    if (!observationService) {
+      observationService = createGrcObservationService(pool, {
+        GrcError,
+        assertUuid,
+        observe,
+        withTransaction,
+        audit,
+        json,
+      });
+    }
+    return observationService;
+  }
+
+  async function listObservations({ tenantId, filters }) {
+    return observations().listObservations({ tenantId, filters });
+  }
+
+  async function getObservation({ tenantId, observationId }) {
+    return observations().getObservation(tenantId, observationId);
+  }
+
+  async function createObservation({ tenantId, userId, body, correlationId }) {
+    return observations().createObservation({ tenantId, userId, body, correlationId });
+  }
+
+  async function updateObservation({ tenantId, userId, observationId, body, correlationId }) {
+    return observations().updateObservation({ tenantId, userId, observationId, body, correlationId });
+  }
+
+  async function transitionObservation({ tenantId, userId, observationId, body, correlationId }) {
+    return observations().transitionObservation({ tenantId, userId, observationId, body, correlationId });
+  }
+
+  async function linkObservation({ tenantId, userId, observationId, body, correlationId }) {
+    return observations().linkObservation({ tenantId, userId, observationId, body, correlationId });
+  }
+
   return {
     GrcError,
     assertModuleEnabled,
@@ -1833,6 +1873,7 @@ function createGrcService(pool, asyncJobs) {
     createEvidenceRequest,
     createEvidenceVersion,
     createMapping,
+    createObservation,
     createWorkflowDefinition,
     createWorkpaper,
     closeAudit,
@@ -1848,11 +1889,13 @@ function createGrcService(pool, asyncJobs) {
     getExport,
     getEvidenceRequest,
     getMeta,
+    getObservation,
     getReadiness,
     getSummary,
     getWorkflowInstance,
     getWorkflowDefinition,
     getRuntimeAdapter,
+    listObservations,
     listEvidenceRequests,
     listEscalationPolicies,
     listFrameworkRequirements,
@@ -1861,6 +1904,7 @@ function createGrcService(pool, asyncJobs) {
     listWorkpaperReviews,
     listWorkflowDefinitions,
     linkAuditEvidence,
+    linkObservation,
     publishWorkflow,
     linkEvidence,
     reviewWorkpaper,
@@ -1874,6 +1918,8 @@ function createGrcService(pool, asyncJobs) {
     startRuntimeWorkflow,
     startWorkflow,
     submitEvidence,
+    transitionObservation,
+    updateObservation,
     validateWorkflow,
     observabilitySnapshot,
   };

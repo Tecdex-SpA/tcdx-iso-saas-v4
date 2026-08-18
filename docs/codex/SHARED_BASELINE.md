@@ -22,6 +22,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - PUI-07-HF5 cierra localmente compatibilidad física de `F5_5_SEVERITY_INDEX`: `grc_readiness_snapshots` produce `generated_at`, `period_start` y `period_end`, no `source_as_of`; `audit_findings_actions` v9 y el adapter de Severity no requieren ni fabrican `source_as_of`.
 - PUI-08 cierra localmente la matriz integral oficial: 53 fórmulas oficiales gobernadas se derivan de `FORMULAS`, `FORMULA_SOURCE_MAP`, source contracts, consumers, dependencias, snapshots/lineage y escenarios empty/partial/sufficient/two-tenant mediante `officialIndicatorMatrix.service.js`.
 - PUI-09 cierra la fase PUI con evidencia runtime productiva post-PUI-08 sobre commit `2a526d6329f7abae0119a782f99cd64aeed01892`: matriz 53/53, 20 source contracts, 9 consumers, 16 calculated runs con 16 snapshots, 0 missing snapshots, 0 calculated con `source_unavailable`/`source_incompatible`, 0 null-to-zero en `not_calculable`, lineage presente para datasets poblados, Data Trust v1 presente y `F5_5_SEVERITY_INDEX` calculado desde `audit_findings_actions`/`grc_readiness_findings` con `TRUSTED`.
+- 6.8-01 establece el GRC Observation Model canónico en GRC core: `grc_observations` + `grc_observation_links`, model version `grc-observation-model-v1`, tenant-scoped, RBAC-backed, auditable vía `audit_event_log`, idempotente por `observation_key`/`observation_hash`, con provenance estructurada (`source_type`/`source_id`/`source_reference`) y sin reemplazar `findings`, action plans, riesgos, controles ni Math Governance.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Intelligence Engine backend existe: rules, confidence, explainability, guardrails, prompt builder, actions, orchestrator y deterministic fallback.
@@ -55,6 +56,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - Regulatory Intelligence genérica con RegulationVersion/LegalObligation/Applicability.
 - Regulatory Packs completos Ley 21.719 / Ley 21.663.
 - Operational Memory transversal.
+- Transactional Outbox para emitir observaciones desde cálculos/persistencia oficial sin acoplarse a la transacción principal.
 - AI Evaluation Suite transversal.
 
 ## TO-BE
@@ -86,3 +88,4 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - No redescubrir en PUI-08 el cierre HF4/HF5: `F5_5_SEVERITY_INDEX` no usa `incident_operational_events`/`grc_incidents` como fuente canónica; source overrides no canónicos se ignoran con warning; el adapter canónico usa `grc_readiness_findings` + `grc_readiness_snapshots` y no debe consultar `grc_readiness_snapshots.source_as_of`.
 - No redescubrir en PUI-09 el inventario PUI-08: `OFFICIAL_FORMULA_COUNT=53`, la matriz machine-readable vive en `backend/src/services/math-governance/officialIndicatorMatrix.service.js`, y consumers no pueden crear verdad paralela.
 - No redescubrir en F6.8 el cierre PUI-09: PRE-UI Data Truth Gate está PASS; siguiente fase parte desde Observation/GRC model sobre la verdad oficial cerrada.
+- No redescubrir en 6.8-02 el modelo base de Observation: `findings` sigue siendo dominio especifico/legacy valido, no el modelo transversal; `grc_observations` es la entidad canónica y cualquier emision automatica futura debe validar tenant/source y respetar idempotency estructurada.

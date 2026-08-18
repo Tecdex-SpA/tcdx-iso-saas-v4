@@ -26,7 +26,8 @@ Fuente: GitHub branch `main` consultada durante PUI-09.
 - PRE_UI_DATA_TRUTH_GATE: PASS.
 - PRE-UI: CLOSED.
 - UI enterprise: INITIAL / trabajo temprano.
-- Fase 6 ampliada 6.8–6.14: READY desde `F6.8` / `6.8-01`; no iniciada por Codex en PUI-09.
+- Fase 6 ampliada 6.8–6.14: IN_PROGRESS desde `F6.8`.
+- 6.8-01: DONE_LOCAL (GRC Observation Model canónico establecido en `grc_observations` + `grc_observation_links`; validación focal/regresión directa PASS; push/merge/deploy pendiente por diseño).
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -97,8 +98,9 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Iniciar Fase 6 ampliada desde `F6.8` / `6.8-01` en una nueva sesión y con su prompt específico.
-2. No reabrir PUI-01..PUI-09 salvo evidencia objetiva nueva.
+1. Usuario ejecuta push/PR/CI/deploy/manual validation de `feat/f6-8-01-grc-observation-model` si corresponde.
+2. Continuar con `6.8-02` (Transactional Outbox para intelligence events) en una nueva sesión; no iniciar desde este cierre.
+3. No reabrir PUI-01..PUI-09 ni `6.8-01` salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -118,3 +120,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-07-HF5.md`
 - `docs/codex/handoffs/PUI-08.md`
 - `docs/codex/handoffs/PUI-09.md`
+- `docs/codex/handoffs/6.8-01.md`

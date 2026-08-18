@@ -30,6 +30,9 @@ Backend Node/Express
         |      + PUI phase runtime closure: PRE_UI_DATA_TRUTH_GATE=PASS
         |
         +--> GRC services/rules/workflows/approvals/observability
+        |      + canonical GRC Observation Model (`grc_observations`)
+        |      + observation relation foundation (`grc_observation_links`)
+        |      + tenant-scoped source validation, RBAC and audit log integration
         |
         +--> Knowledge Base v2
         |      + structured search/matching/coverage/guardrails
@@ -87,4 +90,5 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - PUI phase: CLOSED by PUI-09.
 - PRE_UI_DATA_TRUTH_GATE: PASS.
 - Next phase: FASE_6_AMPLIADA.
-- Next work package: F6.8 / 6.8-01.
+- 6.8-01: DONE_LOCAL.
+- Next work package: F6.8 / 6.8-02.
