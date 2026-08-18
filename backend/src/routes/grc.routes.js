@@ -120,6 +120,14 @@ router.post('/audits/workpapers', route(async (req) => authorized(req, 'audit.wo
 router.post('/audits/workpapers/:id/reviews', route(async (req) => authorized(req, 'audit.review', (context) => service.reviewWorkpaper({ ...context, workpaperId: req.params.id, body: req.body }))));
 router.get('/audits/workpapers/:id/reviews', route(async (req) => authorized(req, 'audit.review', ({ tenantId }) => service.listWorkpaperReviews(tenantId, req.params.id))));
 router.get('/audits/:id/close-readiness', route(async (req) => authorized(req, 'audit.review', ({ tenantId }) => service.getAuditCloseReadiness(tenantId, req.params.id))));
+
+router.get('/observations', route(async (req) => authorized(req, 'observation.read', ({ tenantId }) => service.listObservations({ tenantId, filters: req.query || {} }))));
+router.get('/observations/:id', route(async (req) => authorized(req, 'observation.read', ({ tenantId }) => service.getObservation({ tenantId, observationId: req.params.id }))));
+router.post('/observations', route(async (req) => authorized(req, 'observation.manage', (context) => service.createObservation({ ...context, body: req.body || {} }))));
+router.put('/observations/:id', route(async (req) => authorized(req, 'observation.manage', (context) => service.updateObservation({ ...context, observationId: req.params.id, body: req.body || {} }))));
+router.post('/observations/:id/transitions', route(async (req) => authorized(req, 'observation.transition', (context) => service.transitionObservation({ ...context, observationId: req.params.id, body: req.body || {} }))));
+router.post('/observations/:id/links', route(async (req) => authorized(req, 'observation.link', (context) => service.linkObservation({ ...context, observationId: req.params.id, body: req.body || {} }))));
+
 router.post('/automation/jobs', route(async (req) => authorized(req, 'workflow.manage', (context) => service.enqueueAutomation({ ...context, body: req.body, requestId: req.requestId || null }))));
 router.post('/scheduler/run', route(async (req) => authorized(req, 'grc.scheduler.run', (context) => service.runScheduler({ ...context, body: req.body }))));
 router.get('/escalations/policies', route(async (req) => authorized(req, 'workflow.read', ({ tenantId }) => service.listEscalationPolicies(tenantId))));

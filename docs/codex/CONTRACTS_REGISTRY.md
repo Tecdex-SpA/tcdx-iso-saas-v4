@@ -14,7 +14,7 @@
 | Measurement | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó cálculos oficiales persistidos sin null-to-zero ni fuentes incompatibles calculadas. |
 | Snapshot | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó snapshots para 16/16 calculated runs. |
 | Lineage | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó lineage para cálculos con dataset poblado. |
-| Observation contract | PLANNED | CODEX A | 6.8-01. |
+| Observation contract | CURRENT/6.8-01 | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_links`; tenant-scoped, RBAC-backed, auditable e idempotente. |
 | Gap contract | PLANNED | CODEX A | 6.8-03. |
 | Graph Edge contract | PLANNED | CODEX A | 6.9-02. |
 | Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
@@ -29,6 +29,25 @@
 | Capability/RBAC | CURRENT/PROTECTED | A+C | Reutilizar sistema existente; backend autoriza. |
 
 Regla: si un work package cambia un contrato, actualizar este archivo en el mismo commit.
+
+## 6.8-01 GRC Observation Model
+
+Status: DONE_LOCAL on branch `feat/f6-8-01-grc-observation-model`.
+
+| Contract Area | Canonical Decision |
+|---|---|
+| Entity | `grc_observations` is the transversal GRC Observation system of record; existing `findings`, readiness findings, action plans, risks, controls, evidences and incidents remain domain-specific sources/consumers. |
+| Model version | `grc-observation-model-v1`. |
+| Tenant scope | Every observation and link carries `tenant_id`; source and link targets are validated by tenant before write. |
+| Identity/idempotency | Technical `id`, human `observation_code`, semantic `observation_key`, deterministic `observation_hash`, unique `(tenant_id, observation_key)`. |
+| Type/domain | Governed standard sets with `custom` type support for extension; no client-specific enum or tenant-specific branch. |
+| Status lifecycle | Canonical statuses: `open`, `under_review`, `accepted`, `in_treatment`, `resolved`, `closed`, `cancelled`; transitions enforced in service layer. |
+| Severity | Canonical severities: `informational`, `low`, `medium`, `high`, `critical`; no risk/priority/impact inference by magnitude. |
+| Provenance | Structured `source_type`, `source_id`, `source_reference`; manual observations use `source_type=manual` without source id. |
+| Relations | `grc_observation_links` provides minimal relation foundation for GRC targets without implementing the full F6.9 graph. |
+| RBAC | Permissions `observation.read`, `observation.manage`, `observation.transition`, `observation.link` integrated into the existing GRC permission group. |
+| Auditability | Creation, updates, transitions and links emit existing `audit_event_log` entries; no second audit log. |
+| Source/formula governance | No Math Governance source contract payload changed; no formula payload changed; `SOURCE_CONTRACTS_VERSIONED=[]`, `FORMULAS_VERSIONED=[]`. |
 
 ## PUI-01 Source Ownership Inventory
 
