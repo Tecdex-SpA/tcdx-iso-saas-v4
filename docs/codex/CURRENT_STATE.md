@@ -27,9 +27,9 @@ Fuente: GitHub branch `main` consultada durante PUI-09.
 - PRE-UI: CLOSED.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: IN_PROGRESS desde `F6.8`.
-- 6.8-01-HF1: DONE_LOCAL (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía). Nota HF2: la arquitectura HF1 sigue válida, pero el bootstrap runtime forward de `grc.manual_observations` quedó incompleto.
-- 6.8-01-HF2: DONE_LOCAL (forward migration `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap.sql` y runner F6.8 registran el contrato semántico global `grc.manual_observations@v1` en `schema_migrations`; requiere merge/deploy y validación PostgreSQL para PASS_RUNTIME).
-- 6.8-01: PENDING_USER_DEPLOY_VALIDATION tras HF2; 6.8-02 BLOCKED_UNTIL_RUNTIME_PASS.
+- 6.8-01-HF1: CLOSED (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
+- 6.8-01-HF2: CLOSED / PASS_RUNTIME (deploy validado por el usuario en production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; `schema_migrations` registra `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicado, `grc.manual_observations@v1` existe published, `current_version_id` correcto, sin duplicados globales/versiones ni contratos tenant-specific).
+- 6.8-01: CLOSED; `F6_8_01_RUNTIME=PASS`; 6.8-02 READY.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -100,10 +100,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario ejecuta merge/deploy manual de `fix/f6-8-01-hf2-manual-observation-contract-bootstrap`.
-2. Usuario valida en PostgreSQL que existe exactamente un contrato global `grc.manual_observations`, v1 `published`, `current_version_id` correcto y sin duplicados.
-3. Continuar con `6.8-02` sólo después de PASS_RUNTIME de HF2.
-4. No reabrir PUI-01..PUI-09 ni la arquitectura HF1 salvo evidencia objetiva nueva.
+1. Iniciar `6.8-02` (Governed Observation Emitter / Outbox) desde `main` con prerequisito `F6_8_01_RUNTIME=PASS`.
+2. No reabrir PUI-01..PUI-09, HF1/HF2 ni la arquitectura canónica Observation salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 

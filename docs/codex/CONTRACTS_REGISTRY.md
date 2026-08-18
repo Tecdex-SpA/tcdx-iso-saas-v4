@@ -14,7 +14,7 @@
 | Measurement | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó cálculos oficiales persistidos sin null-to-zero ni fuentes incompatibles calculadas. |
 | Snapshot | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó snapshots para 16/16 calculated runs. |
 | Lineage | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó lineage para cálculos con dataset poblado. |
-| Observation contract | CURRENT/6.8-01-HF2 | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_relations`; owner/runtime `semanticLayer.service.js`; fachada GRC sin persistencia paralela; contrato global `grc.manual_observations@v1` bootstrap forward pendiente de validación runtime post-deploy. |
+| Observation contract | CURRENT/6.8-01-HF2-RUNTIME | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_relations`; owner/runtime `semanticLayer.service.js`; fachada GRC sin persistencia paralela; contrato global `grc.manual_observations@v1` validado runtime post-deploy. |
 | Gap contract | PLANNED | CODEX A | 6.8-03. |
 | Graph Edge contract | PLANNED | CODEX A | 6.9-02. |
 | Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
@@ -54,7 +54,7 @@ HF2 correction: HF1 architectural reconciliation remains valid, but the runtime 
 
 ## 6.8-01-HF2 Manual Observation Semantic Contract
 
-Status: DONE_LOCAL on branch `fix/f6-8-01-hf2-manual-observation-contract-bootstrap`; runtime PASS pending user deploy validation.
+Status: PASS_RUNTIME on production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; documented by `docs/codex/handoffs/6.8-01-HF2-RUNTIME-CLOSURE.md`.
 
 | Field | Canonical Definition |
 |---|---|
