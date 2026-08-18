@@ -16,8 +16,9 @@
 | Lineage | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó lineage para cálculos con dataset poblado. |
 | Observation contract | CURRENT/6.8-01-HF2-RUNTIME | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_relations`; owner/runtime `semanticLayer.service.js`; fachada GRC sin persistencia paralela; contrato global `grc.manual_observations@v1` validado runtime post-deploy. |
 | Observation emitter/outbox | CURRENT/6.8-02-HF1-RUNTIME | CODEX A | `grc_observation_emission_outbox` registra eventos de emisión tenant-scoped; reglas en `grcObservationEmitter.service.js`; consumer delega a Semantic Layer con timestamps normalizados a ISO-8601 UTC; productor inicial `officialCalculationOrchestrator`; runtime cerrado por `6.8-02-HF1-RUNTIME-CLOSURE`. |
-| Gap contract | CURRENT/6.8-03 | CODEX A | `grc_gaps` + `grc_gap_rules` + `grc_gap_status_history` + `grc_gap_hypotheses`; deterministic Gap sobre Observations canónicas; AI hypotheses separadas. |
-| Graph Edge contract | PLANNED | CODEX A | 6.9-02. |
+| Gap contract | CURRENT/6.8-03-RUNTIME | CODEX A | `grc_gaps` + `grc_gap_rules` + `grc_gap_status_history` + `grc_gap_hypotheses`; deterministic Gap sobre Observations canónicas; AI hypotheses separadas; runtime cerrado. |
+| Relationship inventory / graph input contract | CURRENT/6.9-01 | CODEX A | `docs/architecture/grc_relationship_inventory.md`; Impact Graph debe proyectar/adaptar truth existente, no duplicar relaciones. |
+| Graph Edge contract | PLANNED/6.9-02 | CODEX A | 6.9-02; si requiere persistencia, debe justificarse contra el inventario 6.9-01. |
 | Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
 | IntelligenceContext | PARTIAL | CODEX B | Backend + AI Engine deben reconciliar ownership. |
 | Knowledge Document | PLANNED/PARTIAL | CODEX B | KB v2 existe; modelo documental universal pendiente. |
@@ -94,7 +95,7 @@ HF1 correction: DONE_LOCAL on branch `fix/f6-8-02-hf1-observation-timestamp-seri
 
 ## 6.8-03 GRC Gap Model
 
-Status: DONE_LOCAL on branch `feat/f6-8-03-grc-gap-model`; runtime validation pending by repository policy after user merge/deploy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.8-03-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
@@ -109,6 +110,21 @@ Status: DONE_LOCAL on branch `feat/f6-8-03-grc-gap-model`; runtime validation pe
 | Relation | Observation -> Gap uses canonical `grc_observation_relations` with `related_entity_type='grc_gap'` and `relation_type='supports'`; no `grc_observation_links`. |
 | RBAC | `gap.read`, `gap.manage`, `gap.transition`, `gap.evaluate` integrated into the existing permission system and GRC route authorization. |
 | Versioning | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`. |
+
+## 6.9-01 GRC Relationship Inventory / Impact Graph Foundation
+
+Status: DONE_LOCAL on branch `feat/f6-9-01-grc-relationship-inventory`.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Primary artifact | `docs/architecture/grc_relationship_inventory.md` |
+| Inventory scope | 38 relationship families: 32 persisted, 6 derived, 8 canonical, 25 domain-specific, 3 compatibility/adapter families, 0 duplicate candidates. |
+| Graph foundation | 6.9-02 must prefer projection/adapters over existing source-of-truth tables before adding graph persistence. |
+| Canonical Observation relation input | `grc_observation_relations`; `grc_observation_links` remains deprecated/must not return. |
+| Canonical Gap input | `grc_gaps`, `grc_gap_rules`, `grc_gap_status_history`, `grc_gap_hypotheses` with deterministic truth and AI hypothesis separation. |
+| Domain-specific relations | Evidence, audit, supplier, privacy, incident, process/dependency, metric and risk-matrix relations remain authoritative in their domain tables. |
+| Graph edge persistence | Not created in 6.9-01. Any 6.9-02 edge abstraction must document source, owner, tenant scope and whether it is derived. |
+| Formula/source contract changes | None. `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`. |
 
 ## PUI-01 Source Ownership Inventory
 

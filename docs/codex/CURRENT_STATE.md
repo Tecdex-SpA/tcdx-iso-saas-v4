@@ -2,7 +2,7 @@
 
 Actualizado: 2026-08-18
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
-Remote/base `main` verificado para 6.8-03: `f59a38021337157a3f73f9423de387357155586e`
+Remote/base `main` verificado para 6.9-01: `93a76a76e992cc669052de9b33ec54e8803d2bcf`
 Fuente: repositorio local `main` + handoffs runtime cerrados.
 
 ## Estado del programa
@@ -32,7 +32,8 @@ Fuente: repositorio local `main` + handoffs runtime cerrados.
 - 6.8-01: CLOSED; `F6_8_01_RUNTIME=PASS`; 6.8-02 READY.
 - 6.8-02: CLOSED / PASS_RUNTIME (Governed Observation Emitter / Outbox validado por cierre runtime `docs/codex/handoffs/6.8-02-HF1-RUNTIME-CLOSURE.md`; los eventos elegibles retry pasaron a `completed`, persistieron Observation canónica y no generaron duplicados).
 - 6.8-02-HF1: CLOSED / PASS_RUNTIME (hotfix de serialización temporal validado post-deploy; `F6_8_02_RUNTIME=PASS`; 6.8-03 quedó READY).
-- 6.8-03: DONE_LOCAL (GRC Gap Model canónico implementado sobre Observations canónicas: `grc_gaps`, `grc_gap_rules`, `grc_gap_status_history`, `grc_gap_hypotheses`; reglas determinísticas versionadas, AI hypotheses separadas, lifecycle/RBAC/API GRC y relación Observation -> Gap vía `grc_observation_relations`; validación runtime post-merge/deploy pendiente por política).
+- 6.8-03: CLOSED / PASS_RUNTIME (GRC Gap Model canónico validado post-deploy por `docs/codex/handoffs/6.8-03-RUNTIME-CLOSURE.md`; `F6_8_03_RUNTIME=PASS`, `F6_8_03=CLOSED`, Observation -> Gap runtime confirmado vía `grc_observation_relations`).
+- 6.9-01: DONE_LOCAL (inventario canónico de relaciones GRC creado en `docs/architecture/grc_relationship_inventory.md`; 38 familias de relación inventariadas, 32 persistidas, 6 derivadas, 8 canónicas, 25 domain-specific, 0 duplicate candidates; decisión foundation para 6.9-02 = proyección/adapters sobre truth existente, sin tabla graph nueva).
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -103,9 +104,9 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario realiza merge/deploy de `6.8-03` y ejecuta validación runtime PostgreSQL/API según `docs/codex/handoffs/6.8-03.md`.
-2. Mantener `6.9-01` bloqueado hasta `F6_8_03_RUNTIME=PASS`, porque Impact Graph debe consumir Gaps canónicos ya aplicados en runtime.
-3. No reabrir PUI-01..PUI-09, F6.8-01/F6.8-02 ni la arquitectura canónica Observation salvo evidencia objetiva nueva.
+1. Usuario revisa y mergea `6.9-01` si acepta el inventario documental.
+2. Iniciar `6.9-02 — Impact Graph 2.0` desde `docs/architecture/grc_relationship_inventory.md`; usar proyección/adapters sobre tablas propietarias existentes y no crear una segunda verdad de relaciones sin justificación nueva.
+3. No reabrir PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03 ni la arquitectura canónica Observation/Gap salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -132,3 +133,6 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.8-02-HF1.md`
 - `docs/codex/handoffs/6.8-02-HF1-RUNTIME-CLOSURE.md`
 - `docs/codex/handoffs/6.8-03.md`
+- `docs/codex/handoffs/6.8-03-RUNTIME-CLOSURE.md`
+- `docs/codex/handoffs/6.9-01.md`
+- `docs/architecture/grc_relationship_inventory.md`
