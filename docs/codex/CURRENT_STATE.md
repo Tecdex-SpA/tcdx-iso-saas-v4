@@ -30,6 +30,7 @@ Fuente: GitHub branch `main` consultada durante PUI-09.
 - 6.8-01-HF1: CLOSED (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME (deploy validado por el usuario en production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; `schema_migrations` registra `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicado, `grc.manual_observations@v1` existe published, `current_version_id` correcto, sin duplicados globales/versiones ni contratos tenant-specific).
 - 6.8-01: CLOSED; `F6_8_01_RUNTIME=PASS`; 6.8-02 READY.
+- 6.8-02: DONE_LOCAL (Governed Observation Emitter / Outbox implementado sobre `grc_observation_emission_outbox`; productor inicial `officialCalculationOrchestrator` emite sólo señales materiales de Data Trust desde cálculos `calculated` con `observed_at` explícito; consumo idempotente delega a `semanticLayer.createManualObservation`; runtime/deploy pendiente por política del repositorio).
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -100,8 +101,9 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Iniciar `6.8-02` (Governed Observation Emitter / Outbox) desde `main` con prerequisito `F6_8_01_RUNTIME=PASS`.
-2. No reabrir PUI-01..PUI-09, HF1/HF2 ni la arquitectura canónica Observation salvo evidencia objetiva nueva.
+1. Usuario realiza merge/deploy/manual runtime validation de `6.8-02` y aplica `20260818_f6_8_02_governed_observation_emitter_outbox` mediante el runner F6.8.
+2. Preparar `6.8-03` sólo después de validar runtime del outbox/emitter o bajo una nueva decisión explícita.
+3. No reabrir PUI-01..PUI-09, HF1/HF2 ni la arquitectura canónica Observation salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -124,3 +126,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.8-01.md`
 - `docs/codex/handoffs/6.8-01-HF1.md`
 - `docs/codex/handoffs/6.8-01-HF2.md`
+- `docs/codex/handoffs/6.8-02.md`

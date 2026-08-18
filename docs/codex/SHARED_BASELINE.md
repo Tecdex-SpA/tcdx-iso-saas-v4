@@ -24,6 +24,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - PUI-09 cierra la fase PUI con evidencia runtime productiva post-PUI-08 sobre commit `2a526d6329f7abae0119a782f99cd64aeed01892`: matriz 53/53, 20 source contracts, 9 consumers, 16 calculated runs con 16 snapshots, 0 missing snapshots, 0 calculated con `source_unavailable`/`source_incompatible`, 0 null-to-zero en `not_calculable`, lineage presente para datasets poblados, Data Trust v1 presente y `F5_5_SEVERITY_INDEX` calculado desde `audit_findings_actions`/`grc_readiness_findings` con `TRUSTED`.
 - 6.8-01-HF1 reconcilia Observation con el Semantic Layer preexistente: `grc_observations` es el system of record canónico, `grc_observation_relations` es el modelo canónico de relaciones, `backend/src/services/semantic/semanticLayer.service.js` es owner/runtime de persistencia, y `backend/src/services/grc/grcObservation.service.js` es sólo fachada GRC. `grc_metric_observations` permanece productor/modelo de dominio de métricas, no sistema transversal de Observation.
 - 6.8-01-HF2 runtime closure confirmado por evidencia PostgreSQL post-deploy del usuario sobre production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`: forward migration `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicada, `grc.manual_observations@v1` global/published existe, `current_version_id` apunta a v1, sin duplicados ni contratos tenant-specific, `trg_semantic_observation_history` activo. `F6_8_01_RUNTIME=PASS` y `6.8-02=READY`.
+- 6.8-02 cierra localmente el Governed Observation Emitter / Outbox: `grc_observation_emission_outbox` es la cola tenant-scoped de emisión automática; el productor inicial es `officialCalculationOrchestrator`; el consumer delega persistencia exclusivamente a `semanticLayer.createManualObservation`; la regla inicial `official_calculation.data_trust_attention@1` sólo emite cálculos `calculated` con señal material Data Trust (`TRUSTED_WITH_WARNINGS`/`LOW_CONFIDENCE`) y `observed_at` explícito. Runtime/deploy sigue siendo validación manual posterior.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Intelligence Engine backend existe: rules, confidence, explainability, guardrails, prompt builder, actions, orchestrator y deterministic fallback.
@@ -57,7 +58,6 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - Regulatory Intelligence genérica con RegulationVersion/LegalObligation/Applicability.
 - Regulatory Packs completos Ley 21.719 / Ley 21.663.
 - Operational Memory transversal.
-- Transactional Outbox para emitir observaciones desde cálculos/persistencia oficial sin acoplarse a la transacción principal.
 - AI Evaluation Suite transversal.
 
 ## TO-BE
@@ -91,3 +91,4 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - No redescubrir en F6.8 el cierre PUI-09: PRE-UI Data Truth Gate está PASS; siguiente fase parte desde Observation/GRC model sobre la verdad oficial cerrada.
 - No redescubrir en 6.8-02 el modelo base de Observation tras HF1: `findings` sigue siendo dominio especifico/legacy valido, no el modelo transversal; `grc_observations` y `grc_observation_relations` son canónicos vía Semantic Layer; cualquier emision automatica futura debe validar tenant/source, snapshots/provenance y supersession controlado.
 - No redescubrir en 6.8-02 el bootstrap de observaciones manuales tras HF2 runtime closure: `grc.manual_observations` existe como contrato global `tenant_id=NULL`, v1 `published`, con `current_version_id` apuntando a v1; esto habilita productores/outbox.
+- No redescubrir en 6.8-03 el mecanismo inicial de emisión Observation: el outbox F6.8 usa PostgreSQL, no Kafka; la emisión automática no escribe directo a `grc_observations`; los eventos no elegibles quedan `ignored` y no producen observaciones negativas desde no-data/insufficient/source-incompatible/dependency-pending.
