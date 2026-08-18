@@ -27,8 +27,9 @@ Fuente: GitHub branch `main` consultada durante PUI-09.
 - PRE-UI: CLOSED.
 - UI enterprise: INITIAL / trabajo temprano.
 - Fase 6 ampliada 6.8–6.14: IN_PROGRESS desde `F6.8`.
-- 6.8-01-HF1: DONE_LOCAL (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
-- 6.8-01: CLOSED local tras HF1; 6.8-02 READY.
+- 6.8-01-HF1: DONE_LOCAL (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía). Nota HF2: la arquitectura HF1 sigue válida, pero el bootstrap runtime forward de `grc.manual_observations` quedó incompleto.
+- 6.8-01-HF2: DONE_LOCAL (forward migration `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap.sql` y runner F6.8 registran el contrato semántico global `grc.manual_observations@v1` en `schema_migrations`; requiere merge/deploy y validación PostgreSQL para PASS_RUNTIME).
+- 6.8-01: PENDING_USER_DEPLOY_VALIDATION tras HF2; 6.8-02 BLOCKED_UNTIL_RUNTIME_PASS.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -99,9 +100,10 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario ejecuta push/PR/CI/deploy/manual validation de `fix/f6-8-01-hf1-observation-architecture-reconciliation`.
-2. Continuar con `6.8-02` (Transactional Outbox para intelligence events) después de merge/deploy/validación runtime de HF1.
-3. No reabrir PUI-01..PUI-09 ni `6.8-01-HF1` salvo evidencia objetiva nueva.
+1. Usuario ejecuta merge/deploy manual de `fix/f6-8-01-hf2-manual-observation-contract-bootstrap`.
+2. Usuario valida en PostgreSQL que existe exactamente un contrato global `grc.manual_observations`, v1 `published`, `current_version_id` correcto y sin duplicados.
+3. Continuar con `6.8-02` sólo después de PASS_RUNTIME de HF2.
+4. No reabrir PUI-01..PUI-09 ni la arquitectura HF1 salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -123,3 +125,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-09.md`
 - `docs/codex/handoffs/6.8-01.md`
 - `docs/codex/handoffs/6.8-01-HF1.md`
+- `docs/codex/handoffs/6.8-01-HF2.md`

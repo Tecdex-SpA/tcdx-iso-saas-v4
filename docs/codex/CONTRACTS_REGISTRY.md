@@ -14,7 +14,7 @@
 | Measurement | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó cálculos oficiales persistidos sin null-to-zero ni fuentes incompatibles calculadas. |
 | Snapshot | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó snapshots para 16/16 calculated runs. |
 | Lineage | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó lineage para cálculos con dataset poblado. |
-| Observation contract | CURRENT/6.8-01-HF1 | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_relations`; owner/runtime `semanticLayer.service.js`; fachada GRC sin persistencia paralela. |
+| Observation contract | CURRENT/6.8-01-HF2 | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_relations`; owner/runtime `semanticLayer.service.js`; fachada GRC sin persistencia paralela; contrato global `grc.manual_observations@v1` bootstrap forward pendiente de validación runtime post-deploy. |
 | Gap contract | PLANNED | CODEX A | 6.8-03. |
 | Graph Edge contract | PLANNED | CODEX A | 6.9-02. |
 | Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
@@ -34,6 +34,8 @@ Regla: si un work package cambia un contrato, actualizar este archivo en el mism
 
 Status: DONE_LOCAL on branch `fix/f6-8-01-hf1-observation-architecture-reconciliation`.
 
+HF2 correction: HF1 architectural reconciliation remains valid, but the runtime bootstrap for `grc.manual_observations` was incomplete because it lived in the historical 6.8-01 migration. F6.8-01-HF2 adds the required forward migration and runner registration.
+
 | Contract Area | Canonical Decision |
 |---|---|
 | Entity | `grc_observations` is the transversal GRC Observation system of record; existing `findings`, readiness findings, action plans, risks, controls, evidences, incidents and `grc_metric_observations` remain domain-specific sources/consumers/producers. |
@@ -49,6 +51,24 @@ Status: DONE_LOCAL on branch `fix/f6-8-01-hf1-observation-architecture-reconcili
 | RBAC | Permissions `observation.read`, `observation.manage`, `observation.transition`, `observation.link` integrated into the existing GRC permission group. |
 | Auditability | Creation, updates, transitions and links emit existing `audit_event_log` entries; no second audit log. |
 | Source/formula governance | No Math Governance source contract payload changed; no formula payload changed; `SOURCE_CONTRACTS_VERSIONED=[]`, `FORMULAS_VERSIONED=[]`. |
+
+## 6.8-01-HF2 Manual Observation Semantic Contract
+
+Status: DONE_LOCAL on branch `fix/f6-8-01-hf2-manual-observation-contract-bootstrap`; runtime PASS pending user deploy validation.
+
+| Field | Canonical Definition |
+|---|---|
+| `source_code` | `grc.manual_observations` |
+| `display_name` | `GRC manual observations API` |
+| `entity_type` | `grc_manual_observation` |
+| `adapter_key` | `grc_manual_observation_api` |
+| Scope | Global only: `tenant_id=NULL`; tenant-specific rows with the same source code are incompatible. |
+| Owner/purpose | `owner=semantic_layer`, purpose `canonical provenance for manual GRC observation facade`. |
+| Version | `version_number=1`, `status=published`, `current_version_id` points to v1. |
+| Physical source | `data_snapshots` with role `manual_observation_payload`. |
+| Required fields | `observation_type`, `entity_type`, `observed_at`, `status_value`, `severity_value`. |
+| Optional fields | `period_start`, `period_end`, `numeric_value`, `text_value`, `boolean_value`, `unit`, `owner_user_id`, `evidence_id`, `metadata`. |
+| Versioning | `SEMANTIC_CONTRACTS_VERSIONED=["grc.manual_observations@v1"]`; Math Governance source contracts and formulas unchanged. |
 
 ## PUI-01 Source Ownership Inventory
 
