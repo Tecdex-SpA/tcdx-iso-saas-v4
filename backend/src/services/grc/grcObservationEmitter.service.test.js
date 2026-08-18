@@ -13,6 +13,7 @@ const RUN_A3 = '70000000-0000-4000-8000-000000000914';
 const RUN_A4 = '70000000-0000-4000-8000-000000000915';
 const RUN_A5 = '70000000-0000-4000-8000-000000000916';
 const RUN_A6 = '70000000-0000-4000-8000-000000000917';
+const RUN_A7 = '70000000-0000-4000-8000-000000000918';
 const SNAP_A1 = '70000000-0000-4000-8000-000000000921';
 const SNAP_A2 = '70000000-0000-4000-8000-000000000922';
 const SNAP_B1 = '70000000-0000-4000-8000-000000000923';
@@ -20,9 +21,26 @@ const SNAP_A3 = '70000000-0000-4000-8000-000000000924';
 const SNAP_A4 = '70000000-0000-4000-8000-000000000925';
 const SNAP_A5 = '70000000-0000-4000-8000-000000000926';
 const SNAP_A6 = '70000000-0000-4000-8000-000000000927';
+const SNAP_A7 = '70000000-0000-4000-8000-000000000928';
 
 function clone(value) {
-  return JSON.parse(JSON.stringify(value));
+  if (value instanceof Date) return new Date(value.getTime());
+  if (Array.isArray(value)) return value.map(clone);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).reduce((acc, key) => {
+      acc[key] = clone(value[key]);
+      return acc;
+    }, {});
+  }
+  return value;
+}
+
+function pgOutboxRow(row) {
+  const copied = clone(row);
+  for (const field of ['observed_at', 'period_start', 'period_end']) {
+    if (copied[field]) copied[field] = copied[field] instanceof Date ? new Date(copied[field].getTime()) : new Date(copied[field]);
+  }
+  return copied;
 }
 
 function eventId(index) {
@@ -43,6 +61,7 @@ function fakePool() {
     [RUN_A4, { tenant_id: TENANT_A, snapshots: new Set([SNAP_A4]) }],
     [RUN_A5, { tenant_id: TENANT_A, snapshots: new Set([SNAP_A5]) }],
     [RUN_A6, { tenant_id: TENANT_A, snapshots: new Set([SNAP_A6]) }],
+    [RUN_A7, { tenant_id: TENANT_A, snapshots: new Set([SNAP_A7]) }],
   ]);
   const calls = [];
 
@@ -83,17 +102,17 @@ function fakePool() {
         observation_id: null,
       };
       outbox.push(row);
-      return { rows: [clone(row)], rowCount: 1 };
+      return { rows: [pgOutboxRow(row)], rowCount: 1 };
     }
 
     if (text.includes('SELECT * FROM grc_observation_emission_outbox WHERE tenant_id=$1::uuid AND idempotency_key=$2')) {
       const row = outbox.find((item) => item.tenant_id === values[0] && item.idempotency_key === values[1]);
-      return { rows: row ? [clone(row)] : [], rowCount: row ? 1 : 0 };
+      return { rows: row ? [pgOutboxRow(row)] : [], rowCount: row ? 1 : 0 };
     }
 
     if (text.includes('SELECT * FROM grc_observation_emission_outbox') && text.includes('FOR UPDATE')) {
       const row = outbox.find((item) => item.id === values[0] && item.tenant_id === values[1]);
-      return { rows: row ? [clone(row)] : [], rowCount: row ? 1 : 0 };
+      return { rows: row ? [pgOutboxRow(row)] : [], rowCount: row ? 1 : 0 };
     }
 
     if (text.includes('FROM calculation_runs cr')) {
@@ -108,7 +127,7 @@ function fakePool() {
       row.status = 'processing';
       row.attempts = values[2];
       row.last_error = null;
-      return { rows: [clone(row)], rowCount: 1 };
+      return { rows: [pgOutboxRow(row)], rowCount: 1 };
     }
 
     if (text.includes("SET status='completed'")) {
@@ -116,14 +135,14 @@ function fakePool() {
       row.status = 'completed';
       row.observation_id = values[2];
       row.result = JSON.parse(values[3]);
-      return { rows: [clone(row)], rowCount: 1 };
+      return { rows: [pgOutboxRow(row)], rowCount: 1 };
     }
 
     if (text.includes('SET status=$3')) {
       const row = outbox.find((item) => item.id === values[0] && item.tenant_id === values[1]);
       row.status = values[2];
       row.last_error = JSON.parse(values[3]);
-      return { rows: [clone(row)], rowCount: 1 };
+      return { rows: [pgOutboxRow(row)], rowCount: 1 };
     }
 
     if (text.includes("status IN ('pending','failed')")) {
@@ -148,6 +167,10 @@ function fakeSemantic() {
   const observations = [];
   const calls = [];
   async function createManualObservation(scope, body) {
+    assert.equal(typeof body.observed_at, 'string');
+    assert.ok(!body.observed_at.includes('GMT'), 'observed_at must cross the Semantic Layer boundary as ISO-8601, not Date.toString()');
+    if (body.period_start !== null) assert.equal(typeof body.period_start, 'string');
+    if (body.period_end !== null) assert.equal(typeof body.period_end, 'string');
     calls.push({ scope, body });
     const identity = JSON.stringify(body.source_identity);
     const existing = observations.find((item) => item.tenant_id === scope.tenant_id && item.identity === identity && item.is_current);
@@ -224,6 +247,71 @@ async function run() {
   assert.equal(created.observation.source_table, 'calculation_runs');
   assert.equal(created.observation.metadata.source_snapshot_id, SNAP_A1);
   assert.equal(semantic.observations.length, 1);
+  assert.equal(semantic.calls[0].body.observed_at, '2026-12-31T00:00:00.000Z');
+  assert.equal(semantic.calls[0].body.period_start, '2026-01-01T00:00:00.000Z');
+  assert.equal(semantic.calls[0].body.period_end, '2026-12-31T00:00:00.000Z');
+
+  const datePool = fakePool();
+  const dateSemantic = fakeSemantic();
+  const dateService = createObservationEmitterService(datePool, { semantic: dateSemantic });
+  const dateCreated = await dateService.emitOfficialCalculationResult(
+    { tenant_id: TENANT_A, user: { id: USER_A } },
+    calculatedResult({
+      formula_code: 'F5_5_TIMESTAMP_SERIALIZATION',
+      calculation_run_id: RUN_A7,
+      snapshot_id: SNAP_A7,
+      observed_at: new Date('2026-08-18T16:51:19.728Z'),
+      period: {
+        start: new Date('2026-08-01T00:00:00.000Z'),
+        end: new Date('2026-08-18T16:51:19.728Z'),
+        timezone: 'UTC',
+      },
+      data_trust: { model_version: 'data-trust-model-v1', state: 'LOW_CONFIDENCE', reasons: ['high_exclusion_ratio'] },
+    }),
+    'date-corr',
+    SNAP_A7
+  );
+  assert.equal(dateCreated.event.status, 'completed');
+  assert.equal(datePool.outbox[0].observed_at, '2026-08-18T16:51:19.728Z');
+  assert.ok(dateSemantic.calls[0].body.observed_at instanceof Date === false);
+  assert.equal(dateSemantic.calls[0].body.observed_at, '2026-08-18T16:51:19.728Z');
+  assert.equal(dateSemantic.calls[0].body.period_start, '2026-08-01T00:00:00.000Z');
+  assert.equal(dateSemantic.calls[0].body.period_end, '2026-08-18T16:51:19.728Z');
+
+  const nullPeriodPool = fakePool();
+  const nullPeriodSemantic = fakeSemantic();
+  const nullPeriodService = createObservationEmitterService(nullPeriodPool, { semantic: nullPeriodSemantic });
+  const nullPeriodCreated = await nullPeriodService.emitOfficialCalculationResult(
+    { tenant_id: TENANT_A, user: { id: USER_A } },
+    calculatedResult({
+      formula_code: 'F5_5_NULL_PERIOD_TIMESTAMP',
+      calculation_run_id: RUN_A7,
+      snapshot_id: SNAP_A7,
+      observed_at: '2026-08-18T16:51:19.728Z',
+      period: {},
+    }),
+    'null-period',
+    SNAP_A7
+  );
+  assert.equal(nullPeriodCreated.event.status, 'completed');
+  assert.equal(nullPeriodSemantic.calls[0].body.observed_at, '2026-08-18T16:51:19.728Z');
+  assert.equal(nullPeriodSemantic.calls[0].body.period_start, null);
+  assert.equal(nullPeriodSemantic.calls[0].body.period_end, null);
+
+  const missingObservedAt = await nullPeriodService.enqueueOfficialCalculationResult(
+    { tenant_id: TENANT_A, user: { id: USER_A } },
+    calculatedResult({
+      formula_code: 'F5_5_MISSING_OBSERVED_AT',
+      calculation_run_id: RUN_A1,
+      snapshot_id: SNAP_A1,
+      observed_at: null,
+      period: {},
+    }),
+    'missing-observed-at',
+    SNAP_A1
+  );
+  assert.equal(missingObservedAt.event.status, 'ignored');
+  assert.equal(missingObservedAt.event.result.ignored_reason, 'observed_at_missing');
 
   const replay = await service.emitOfficialCalculationResult(
     { tenant_id: TENANT_A, user: { id: USER_A } },
@@ -296,6 +384,12 @@ async function run() {
   assert.equal(retry.event.status, 'failed');
   assert.equal(retry.event.attempts, 1);
   assert.equal(retryPool.outbox.length, 1);
+  const recoveredSemantic = fakeSemantic();
+  const recoveredService = createObservationEmitterService(retryPool, { semantic: recoveredSemantic });
+  const recovered = await recoveredService.processNextPending({ tenant_id: TENANT_A, user: { id: USER_A } });
+  assert.equal(recovered.event.status, 'completed');
+  assert.equal(recovered.event.observation_id, recovered.observation.id);
+  assert.equal(recoveredSemantic.calls[0].body.observed_at, '2026-12-31T00:00:00.000Z');
 
   assert.equal(await service.processNextPending({ tenant_id: TENANT_B, user: { id: USER_A } }), null);
   assert.ok(pool.calls.every((call) => !call.sql.includes('grc_observation_' + 'links')));

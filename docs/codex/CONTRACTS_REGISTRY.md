@@ -15,7 +15,7 @@
 | Snapshot | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó snapshots para 16/16 calculated runs. |
 | Lineage | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó lineage para cálculos con dataset poblado. |
 | Observation contract | CURRENT/6.8-01-HF2-RUNTIME | CODEX A | Modelo canónico en `grc_observations` + `grc_observation_relations`; owner/runtime `semanticLayer.service.js`; fachada GRC sin persistencia paralela; contrato global `grc.manual_observations@v1` validado runtime post-deploy. |
-| Observation emitter/outbox | CURRENT/6.8-02 | CODEX A | `grc_observation_emission_outbox` registra eventos de emisión tenant-scoped; reglas en `grcObservationEmitter.service.js`; consumer delega a Semantic Layer; productor inicial `officialCalculationOrchestrator`. |
+| Observation emitter/outbox | CURRENT/6.8-02-HF1 | CODEX A | `grc_observation_emission_outbox` registra eventos de emisión tenant-scoped; reglas en `grcObservationEmitter.service.js`; consumer delega a Semantic Layer con timestamps normalizados a ISO-8601 UTC; productor inicial `officialCalculationOrchestrator`. |
 | Gap contract | PLANNED | CODEX A | 6.8-03. |
 | Graph Edge contract | PLANNED | CODEX A | 6.9-02. |
 | Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
@@ -75,6 +75,8 @@ Status: PASS_RUNTIME on production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f
 
 Status: DONE_LOCAL on branch `feat/f6-8-02-governed-observation-emitter`; runtime validation pending by repository policy.
 
+HF1 correction: DONE_LOCAL on branch `fix/f6-8-02-hf1-observation-timestamp-serialization`. Runtime showed eligible outbox events failed because `timestamptz` rows returned as JavaScript `Date` crossed into Semantic Layer and were serialized as `Date.toString()`. The emitter boundary now normalizes `observed_at`, `period_start` and `period_end` to ISO-8601 UTC before `semanticLayer.createManualObservation`, preserving null optional periods and never fabricating missing `observed_at`.
+
 | Contract Area | Canonical Definition |
 |---|---|
 | Outbox table | `grc_observation_emission_outbox` |
@@ -87,6 +89,7 @@ Status: DONE_LOCAL on branch `feat/f6-8-02-governed-observation-emitter`; runtim
 | Non-eligibility | `source_unavailable`, `source_incompatible`, `SOURCE_SCHEMA_INCOMPATIBLE`, `SOURCE_DATA_INSUFFICIENT`, `FORMULA_DEPENDENCY_PENDING`, `FORMULA_VARIABLE_REQUIRED`, `FORMULA_ZERO_WEIGHTS`, `not_calculable`, `unmeasured`, `failed`, trusted/no material signal. |
 | Idempotency | Outbox idempotency key includes producer run/snapshot; canonical Observation identity excludes run/snapshot and is based on tenant + producer type + rule + formula + period + source contract, enabling supersession across later runs for the same governed signal. |
 | Provenance | Event payload preserves calculation run, source snapshot, source contract/code, formula version, Data Trust, source status, machine reason, correlation id, physical sources, counts and warnings. |
+| Timestamp boundary | Outbox `timestamptz` may be returned by the Node PostgreSQL driver as `Date`; the service boundary to Semantic Layer uses ISO-8601 UTC strings. |
 | Versioning | `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `FORMULAS_VERSIONED=[]`. |
 
 ## PUI-01 Source Ownership Inventory
