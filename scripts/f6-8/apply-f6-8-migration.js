@@ -19,6 +19,11 @@ const MIGRATIONS = Object.freeze([
     file: path.join(root, 'database/migrations/20260818_f6_8_02_governed_observation_emitter_outbox.sql'),
     postconditions: postconditionsObservationEmitterOutbox,
   },
+  {
+    id: '20260818_f6_8_03_grc_gap_model',
+    file: path.join(root, 'database/migrations/20260818_f6_8_03_grc_gap_model.sql'),
+    postconditions: postconditionsGrcGapModel,
+  },
 ]);
 const LOCK_NAMESPACE = 844332;
 const LOCK_KEY = 2026081806;
@@ -165,6 +170,46 @@ async function postconditionsObservationEmitterOutbox(client) {
       row.no_parallel_links !== true || row.observation_history_immutable !== true ||
       row.idempotency_unique !== true || row.pending_index !== true) {
     throw new Error(`F6.8 observation emitter outbox postcondition failed: ${JSON.stringify(row)}`);
+  }
+  return row;
+}
+
+async function postconditionsGrcGapModel(client) {
+  const result = await client.query(`SELECT
+    to_regclass('public.grc_gaps') IS NOT NULL AS gaps_ready,
+    to_regclass('public.grc_gap_rules') IS NOT NULL AS rules_ready,
+    to_regclass('public.grc_gap_status_history') IS NOT NULL AS history_ready,
+    to_regclass('public.grc_gap_hypotheses') IS NOT NULL AS hypotheses_ready,
+    to_regclass('public.grc_observation_relations') IS NOT NULL AS canonical_relations_ready,
+    to_regclass('public.grc_observation_links') IS NULL AS no_parallel_links,
+    EXISTS (
+      SELECT 1 FROM grc_gap_rules
+      WHERE tenant_id IS NULL
+        AND rule_code='observation.data_trust_attention_gap'
+        AND rule_version=1
+        AND status='published'
+        AND enabled=TRUE
+        AND rule_type='deterministic'
+        AND metadata->>'ai_created'='false'
+    ) AS default_rule_ready,
+    EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname='public'
+        AND tablename='grc_gaps'
+        AND indexname='idx_grc_gaps_tenant_gap_key'
+    ) AS idempotency_unique,
+    EXISTS (
+      SELECT 1
+      FROM permissions
+      WHERE permission_key IN ('gap.read','gap.manage','gap.transition','gap.evaluate')
+      HAVING COUNT(DISTINCT permission_key)=4
+    ) AS permissions_ready`);
+  const row = result.rows[0] || {};
+  if (row.gaps_ready !== true || row.rules_ready !== true || row.history_ready !== true ||
+      row.hypotheses_ready !== true || row.canonical_relations_ready !== true ||
+      row.no_parallel_links !== true || row.default_rule_ready !== true ||
+      row.idempotency_unique !== true || row.permissions_ready !== true) {
+    throw new Error(`F6.8 GRC gap model postcondition failed: ${JSON.stringify(row)}`);
   }
   return row;
 }

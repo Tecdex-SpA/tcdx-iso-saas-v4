@@ -173,6 +173,21 @@ assert.equal(riskMatrixAuditorWrite.nextCalled, false, 'auditor cannot update IS
 assert.equal(riskMatrixAuditorWrite.res.statusCode, 403);
 assert.equal(riskMatrixAuditorWrite.res.payload.code, 'RBAC_DENIED');
 
+for (const path of ['/api/grc/gaps', `/api/grc/gaps/${batchId}`]) {
+  const read = authorize({ method: 'GET', path, role: 'viewer' });
+  assert.equal(read.nextCalled, true, `viewer can read GRC gaps route ${path}`);
+}
+
+const gapEvaluate = authorize({ method: 'POST', path: '/api/grc/gaps/evaluate', role: 'auditor' });
+assert.equal(gapEvaluate.nextCalled, true, 'auditor can evaluate deterministic GRC gap rules');
+
+const gapTransition = authorize({ method: 'POST', path: `/api/grc/gaps/${batchId}/transitions`, role: 'auditor' });
+assert.equal(gapTransition.nextCalled, true, 'auditor can transition GRC gaps through GRC route');
+
+const gapViewerWriteDenied = authorize({ method: 'POST', path: '/api/grc/gaps/evaluate', role: 'viewer' });
+assert.equal(gapViewerWriteDenied.nextCalled, false, 'viewer cannot evaluate GRC gaps');
+assert.equal(gapViewerWriteDenied.res.statusCode, 403);
+
 const definitions = listImportDefinitions();
 assert.equal(definitions.length, 33);
 assert.equal(

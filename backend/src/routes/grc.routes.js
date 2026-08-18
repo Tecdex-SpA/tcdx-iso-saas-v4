@@ -121,6 +121,11 @@ router.post('/audits/workpapers/:id/reviews', route(async (req) => authorized(re
 router.get('/audits/workpapers/:id/reviews', route(async (req) => authorized(req, 'audit.review', ({ tenantId }) => service.listWorkpaperReviews(tenantId, req.params.id))));
 router.get('/audits/:id/close-readiness', route(async (req) => authorized(req, 'audit.review', ({ tenantId }) => service.getAuditCloseReadiness(tenantId, req.params.id))));
 
+router.get('/gaps', route(async (req) => authorized(req, 'gap.read', ({ tenantId }) => service.listGaps({ tenantId, filters: req.query || {} }))));
+router.post('/gaps/evaluate', route(async (req) => authorized(req, 'gap.evaluate', (context) => service.evaluateGapFromObservation({ ...context, body: req.body || {} }))));
+router.get('/gaps/:id', route(async (req) => authorized(req, 'gap.read', ({ tenantId }) => service.getGap({ tenantId, gapId: req.params.id }))));
+router.post('/gaps/:id/transitions', route(async (req) => authorized(req, 'gap.transition', (context) => service.transitionGap({ ...context, gapId: req.params.id, body: req.body || {} }))));
+
 router.get('/observations', route(async (req) => authorized(req, 'observation.read', ({ tenantId }) => service.listObservations({ tenantId, filters: req.query || {} }))));
 router.get('/observations/:id', route(async (req) => authorized(req, 'observation.read', ({ tenantId }) => service.getObservation({ tenantId, observationId: req.params.id }))));
 router.post('/observations', route(async (req) => authorized(req, 'observation.manage', (context) => service.createObservation({ ...context, body: req.body || {} }))));

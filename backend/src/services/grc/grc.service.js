@@ -6,6 +6,7 @@ const { escalationStages, occurrenceKey, retryBackoffSeconds, schedulerWindow } 
 const { observe, snapshot: observabilitySnapshot } = require('./grcObservability');
 const { createGrcBootstrapService } = require('./grcBootstrap.service');
 const { createGrcObservationService } = require('./grcObservation.service');
+const { createGrcGapService } = require('./grcGap.service');
 
 const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 
@@ -37,6 +38,7 @@ function clampLimit(value) {
 function createGrcService(pool, asyncJobs) {
   const bootstrapService = createGrcBootstrapService(pool, { GrcError, observe });
   let observationService = null;
+  let gapService = null;
 
   async function withTransaction(work) {
     const client = await pool.connect();
@@ -102,7 +104,7 @@ function createGrcService(pool, asyncJobs) {
         `SELECT p.permission_key, user_has_permission($1::uuid, p.permission_key) AS allowed
          FROM permissions p
          WHERE p.is_active = TRUE
-           AND p.permission_group IN ('workflow', 'evidence', 'readiness', 'framework', 'audit', 'observation')
+           AND p.permission_group IN ('workflow', 'evidence', 'readiness', 'framework', 'audit', 'observation', 'gap')
          ORDER BY p.permission_key`,
         [userId]
       )).rows.reduce((map, item) => ({ ...map, [item.permission_key]: item.allowed === true }), {});
@@ -1830,6 +1832,19 @@ function createGrcService(pool, asyncJobs) {
     return observationService;
   }
 
+  function gaps() {
+    if (!gapService) {
+      gapService = createGrcGapService(pool, {
+        GrcError,
+        assertUuid,
+        observe,
+        audit,
+        json,
+      });
+    }
+    return gapService;
+  }
+
   async function listObservations({ tenantId, filters }) {
     return observations().listObservations({ tenantId, filters });
   }
@@ -1852,6 +1867,29 @@ function createGrcService(pool, asyncJobs) {
 
   async function linkObservation({ tenantId, userId, observationId, body, correlationId }) {
     return observations().linkObservation({ tenantId, userId, observationId, body, correlationId });
+  }
+
+  async function listGaps({ tenantId, filters }) {
+    return gaps().listGaps({ tenantId, filters });
+  }
+
+  async function getGap({ tenantId, gapId }) {
+    return gaps().getGap(tenantId, gapId);
+  }
+
+  async function evaluateGapFromObservation({ tenantId, userId, body, correlationId }) {
+    return gaps().evaluateObservation({
+      tenantId,
+      userId,
+      observationId: body.observation_id,
+      ruleCode: body.rule_code,
+      ruleVersion: body.rule_version,
+      correlationId: body.correlation_id || correlationId,
+    });
+  }
+
+  async function transitionGap({ tenantId, userId, gapId, body, correlationId }) {
+    return gaps().transitionGap({ tenantId, userId, gapId, body, correlationId });
   }
 
   return {
@@ -1882,12 +1920,14 @@ function createGrcService(pool, asyncJobs) {
     executeTransition,
     generateReadinessSnapshot,
     generateExport,
+    evaluateGapFromObservation,
     getAuditWorkspace,
     getAuditOperations,
     getBootstrapStatus: bootstrapService.status,
     getAuditCloseReadiness,
     getExport,
     getEvidenceRequest,
+    getGap,
     getMeta,
     getObservation,
     getReadiness,
@@ -1895,6 +1935,7 @@ function createGrcService(pool, asyncJobs) {
     getWorkflowInstance,
     getWorkflowDefinition,
     getRuntimeAdapter,
+    listGaps,
     listObservations,
     listEvidenceRequests,
     listEscalationPolicies,
@@ -1918,6 +1959,7 @@ function createGrcService(pool, asyncJobs) {
     startRuntimeWorkflow,
     startWorkflow,
     submitEvidence,
+    transitionGap,
     transitionObservation,
     updateObservation,
     validateWorkflow,
