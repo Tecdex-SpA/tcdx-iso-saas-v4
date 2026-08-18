@@ -35,6 +35,8 @@ Backend Node/Express
         |      + Governed Observation outbox (`grc_observation_emission_outbox`)
         |      + Observation emitter policy/consumer (`grcObservationEmitter.service.js`)
         |      + Outbox -> Semantic Layer timestamp boundary normalized to ISO-8601 UTC
+        |      + Canonical deterministic Gap model (`grc_gaps`, `grc_gap_rules`, `grc_gap_status_history`, `grc_gap_hypotheses`)
+        |      + GRC relationship inventory foundation for Impact Graph (`docs/architecture/grc_relationship_inventory.md`)
         |      + tenant-scoped source validation, RBAC and audit log integration
         |
         +--> Semantic Layer
@@ -104,5 +106,6 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME; forward bootstrap for `grc.manual_observations@v1` validated after user deploy.
 - 6.8-02: CLOSED / PASS_RUNTIME; governed Observation emitter/outbox validated after HF1 runtime replay.
 - 6.8-02-HF1: CLOSED / PASS_RUNTIME; timestamp serialization hotfix validated after user deploy/retry.
-- 6.8-03: DONE_LOCAL; canonical deterministic Gap model implemented over Observations, with rule registry, lifecycle history, AI hypothesis separation and Observation -> Gap canonical relation. Runtime validation pending after user merge/deploy.
-- Next work package candidate: 6.9-01 only after `F6_8_03_RUNTIME=PASS`.
+- 6.8-03: CLOSED / PASS_RUNTIME; canonical deterministic Gap model validated after user deploy with Observation -> Gap relation in `grc_observation_relations`.
+- 6.9-01: DONE_LOCAL; relationship inventory created at `docs/architecture/grc_relationship_inventory.md`, no graph storage/traversal implemented, duplicate relation model remains 0.
+- Next work package candidate: 6.9-02 Impact Graph 2.0 using adapters/projection over the 6.9-01 inventory.
