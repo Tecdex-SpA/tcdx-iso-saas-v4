@@ -2,8 +2,8 @@
 
 | Contrato | Estado | Owner | Nota |
 |---|---|---|---|
-| Source contracts | PARTIAL | CODEX A | Existen; PRE-UI fortalece semántica, escala, unidad, temporalidad y elegibilidad. |
-| Metric/data semantics | PARTIAL | CODEX A | Debe quedar canónico al cerrar PRE-UI. |
+| Source contracts | CURRENT/PUI-09 | CODEX A | PUI cerró ownership, escala/unidad, conteos, temporalidad, status, fallback, Data Trust y matriz oficial. |
+| Metric/data semantics | CURRENT/PUI-09 | CODEX A | PRE-UI Data Truth Gate cerrado; 53 fórmulas oficiales cubiertas y validadas en runtime. |
 | Count semantics | CURRENT/PUI-03 | CODEX A | PUI-03 cerró received/eligible/usable/excluded/exclusionIssueCount/population_size para source resolver y dataset validation focales. |
 | Temporal semantics | CURRENT/PUI-04 | CODEX A | `temporal_semantics` contractual agregado a los 20 source contracts; validación focal/deploy confirmada externamente sobre `7a9df18`. |
 | Status semantics | CURRENT/PUI-05 | CODEX A | `status_semantics` contractual agregado a los 20 source contracts; normalización versionada por dominio y unknown visible en Math Governance. |
@@ -11,9 +11,9 @@
 | Scale/unit semantics | CURRENT/PUI-02 | CODEX A | PUI-02 cerró escala/unidad para CONTROL-EFFECT, RISK-INHERENT, MATURITY y normalización explícita auditada; otros dominios quedan para su paquete específico sólo con evidencia. |
 | Data Trust | CURRENT/PUI-07 | CODEX A | Modelo determinístico `data-trust-model-v1` expuesto por resolver, snapshots y cálculo oficial; PUI-08 cierra reproducibilidad integral. |
 | Official calculation pipeline | CURRENT/PUI-07-HF1 | CODEX A | `officialCalculationOrchestrator` es la única fuente de verdad para fórmulas oficiales; Package3 queda como compatibilidad sin cálculo/persistencia paralela. |
-| Measurement | CURRENT/PARTIAL | CODEX A | Official calculation existe; Data Truth aún no cerrado. |
-| Snapshot | CURRENT/PARTIAL | CODEX A | Foundation existente. |
-| Lineage | CURRENT/PARTIAL | CODEX A | Foundation existente. |
+| Measurement | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó cálculos oficiales persistidos sin null-to-zero ni fuentes incompatibles calculadas. |
+| Snapshot | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó snapshots para 16/16 calculated runs. |
+| Lineage | CURRENT/PUI-09 | CODEX A | Runtime PUI-09 confirmó lineage para cálculos con dataset poblado. |
 | Observation contract | PLANNED | CODEX A | 6.8-01. |
 | Gap contract | PLANNED | CODEX A | 6.8-03. |
 | Graph Edge contract | PLANNED | CODEX A | 6.9-02. |
@@ -258,6 +258,37 @@ Canonical decision:
 | Dependency graph | Dependencies are explicit for readiness, residual risk and GRC health; cycles are forbidden. |
 
 PUI-08 does not change source contract payload, formula payload, formula expression, weights, units or precision.
+
+SOURCE_CONTRACTS_VERSIONED: `[]`
+
+FORMULAS_VERSIONED: `[]`
+
+UNNECESSARY_VERSION_BUMPS: `0`
+
+## PUI-09 Runtime Phase Closure
+
+Status: DONE under `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL` on branch `docs/pui-09-runtime-phase-closure`.
+
+Runtime evidence accepted:
+
+| Evidence | Result |
+|---|---|
+| Production commit | `2a526d6329f7abae0119a782f99cd64aeed01892` |
+| Official formula matrix | `PUI_08_OFFICIAL_INDICATOR_MATRIX_OK`; 53 formulas, 20 source contracts, 9 consumers |
+| Formula/source/orchestrator regressions | `PHASE5_5_FORMULA_TESTS_OK`, `PHASE5_5_SOURCE_RESOLVER_TESTS_OK`, `OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK`, `PHASE5_5_PACKAGE5_TESTS_OK`, `indicatorCore tests passed` |
+| Source compatibility | 0 calculated runs with `source_unavailable` or `source_incompatible` |
+| Snapshot coverage | 16 calculated runs, 16 snapshots, 0 missing snapshots |
+| Lineage coverage | 0 empty lineage for populated calculation snapshots |
+| Null/zero contract | 0 `not_calculable` outputs persisted as zero; 0 `not_calculable` outputs persisted as `completed` |
+| Data Trust | `data-trust-model-v1` present in runtime snapshots/results |
+| Severity Index | `F5_5_SEVERITY_INDEX` calculated with `source_code=audit_findings_actions`, physical source `grc_readiness_findings`, `trust_status=trusted`, value `42.5` |
+| Multi-tenant | Runtime evidence shows different historical `F5_5_INHERENT_RISK` values across tenants, preserving tenant isolation |
+
+PUI-09 does not change source contract payload, formula payload, formula expression, weights, units or precision.
+
+PUI_PHASE: `CLOSED`
+
+PRE_UI_DATA_TRUTH_GATE: `PASS`
 
 SOURCE_CONTRACTS_VERSIONED: `[]`
 

@@ -21,6 +21,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - PUI-07-HF4 cierra localmente source ownership de `F5_5_SEVERITY_INDEX`: el source canónico sigue siendo `audit_findings_actions`; overrides no canónicos a `incident_operational_events`/`grc_incidents` no pueden desplazarlo y quedan visibles como warning/provenance.
 - PUI-07-HF5 cierra localmente compatibilidad física de `F5_5_SEVERITY_INDEX`: `grc_readiness_snapshots` produce `generated_at`, `period_start` y `period_end`, no `source_as_of`; `audit_findings_actions` v9 y el adapter de Severity no requieren ni fabrican `source_as_of`.
 - PUI-08 cierra localmente la matriz integral oficial: 53 fórmulas oficiales gobernadas se derivan de `FORMULAS`, `FORMULA_SOURCE_MAP`, source contracts, consumers, dependencias, snapshots/lineage y escenarios empty/partial/sufficient/two-tenant mediante `officialIndicatorMatrix.service.js`.
+- PUI-09 cierra la fase PUI con evidencia runtime productiva post-PUI-08 sobre commit `2a526d6329f7abae0119a782f99cd64aeed01892`: matriz 53/53, 20 source contracts, 9 consumers, 16 calculated runs con 16 snapshots, 0 missing snapshots, 0 calculated con `source_unavailable`/`source_incompatible`, 0 null-to-zero en `not_calculable`, lineage presente para datasets poblados, Data Trust v1 presente y `F5_5_SEVERITY_INDEX` calculado desde `audit_findings_actions`/`grc_readiness_findings` con `TRUSTED`.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Intelligence Engine backend existe: rules, confidence, explainability, guardrails, prompt builder, actions, orchestrator y deterministic fallback.
@@ -32,8 +33,8 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 ## PARTIAL
 
-- Source contracts/resolver: PUI-01..PUI-07-HF5 cerraron ownership, escala/unidad, count semantics, temporal semantics, status semantics, fallback governance, Data Trust, pipeline oficial único, drift residual/source override focal y compatibilidad física de Severity snapshot para Math Governance.
-- Data Trust/provenance/snapshots: PUI-08 deja matriz local completa y validable para reproducibilidad/snapshots/lineage; PUI-09 debe ejecutar el runtime post-deploy integral.
+- Source contracts/resolver: PUI-01..PUI-09 cerraron ownership, escala/unidad, count semantics, temporal semantics, status semantics, fallback governance, Data Trust, pipeline oficial único, drift residual/source override focal, compatibilidad física de Severity snapshot, matriz integral oficial y cierre runtime/documental de PUI.
+- Data Trust/provenance/snapshots: PUI-09 confirmó runtime post-deploy integral para la fase PUI; futuras fases deben extender sin reabrir este baseline.
 - Decision Interpretation / Next Best Actions: foundation determinística; falta causalidad transversal completa.
 - Tenant document handling: hay capacidades especializadas, no RAG privado universal confirmado.
 - External lookup: foundation web/trusted sources; falta registry regulatorio autoritativo, versionado y semantic diff.
@@ -42,10 +43,10 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 ## CONFIRMED PROBLEM
 
-- PRE-UI sigue abierto.
+- PRE-UI / PUI phase está cerrado: `PUI_PHASE=CLOSED` y `PRE_UI_DATA_TRUTH_GATE=PASS`.
 - PR #91 está abierto y no debe tratarse como mergeado.
 - CONTROL-EFFECT, RISK-INHERENT y MATURITY formaban parte del bloque de reconciliación PRE-UI; PUI-01 cerró ownership de fuente, PUI-02 cerró escala/unidad, PUI-03 cerró counts, PUI-04 cerró temporalidad y PUI-05 cerró status semantics focales.
-- No declarar Data Truth Gate mientras no se complete PUI-01..PUI-09 y validación manual correspondiente.
+- Data Truth Gate PRE-UI declarado PASS por PUI-09; no reabrir sin evidencia objetiva nueva.
 
 ## NOT CONFIRMED / MISSING AS COMPLETE CAPABILITY
 
@@ -84,3 +85,4 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - No redescubrir en PUI-08 los cierres HF3: `status_unmapped` no equivale a `status_not_eligible`; no inventar timestamps; `audit_findings_actions` v8, `maturity_assessments` v7 y `grc_health_components` v6 son los contratos focales actualizados por drift residual.
 - No redescubrir en PUI-08 el cierre HF4/HF5: `F5_5_SEVERITY_INDEX` no usa `incident_operational_events`/`grc_incidents` como fuente canónica; source overrides no canónicos se ignoran con warning; el adapter canónico usa `grc_readiness_findings` + `grc_readiness_snapshots` y no debe consultar `grc_readiness_snapshots.source_as_of`.
 - No redescubrir en PUI-09 el inventario PUI-08: `OFFICIAL_FORMULA_COUNT=53`, la matriz machine-readable vive en `backend/src/services/math-governance/officialIndicatorMatrix.service.js`, y consumers no pueden crear verdad paralela.
+- No redescubrir en F6.8 el cierre PUI-09: PRE-UI Data Truth Gate está PASS; siguiente fase parte desde Observation/GRC model sobre la verdad oficial cerrada.

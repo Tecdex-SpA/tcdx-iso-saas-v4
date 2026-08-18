@@ -27,6 +27,7 @@ Backend Node/Express
         |      + snapshots/lineage
         |      + decision interpretation
         |      + Package3 compatibility projection only; no parallel official truth
+        |      + PUI phase runtime closure: PRE_UI_DATA_TRUTH_GATE=PASS
         |
         +--> GRC services/rules/workflows/approvals/observability
         |
@@ -80,3 +81,10 @@ operational data
 ```
 
 Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin convertirse en sistema de registro.
+
+## Phase Transition
+
+- PUI phase: CLOSED by PUI-09.
+- PRE_UI_DATA_TRUTH_GATE: PASS.
+- Next phase: FASE_6_AMPLIADA.
+- Next work package: F6.8 / 6.8-01.

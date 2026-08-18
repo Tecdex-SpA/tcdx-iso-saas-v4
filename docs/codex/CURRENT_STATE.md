@@ -1,9 +1,9 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
-Actualizado: 2026-08-17
+Actualizado: 2026-08-18
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
-Remote `main` verificado: `3341f69c328fd1f9999fbbf2d57e2b3c5b783361`
-Fuente: GitHub branch `main` consultada durante CONT-00.
+Remote `main` verificado: `2a526d6329f7abae0119a782f99cd64aeed01892`
+Fuente: GitHub branch `main` consultada durante PUI-09.
 
 ## Estado del programa
 
@@ -20,11 +20,13 @@ Fuente: GitHub branch `main` consultada durante CONT-00.
 - PUI-07-HF3: DONE_LOCAL (cierre contractual residual para `F5_5_MATURITY` y `grc_health_components` validado en runtime externo; `F5_5_SEVERITY_INDEX` requirió HF4 por source override no canónico).
 - PUI-07-HF4: DONE_LOCAL (source ownership de `F5_5_SEVERITY_INDEX` cerrado localmente: overrides no canónicos a `incident_operational_events/grc_incidents` se ignoran con warning auditable y se resuelve `audit_findings_actions`; validación runtime/productiva pendiente por diseño).
 - PUI-07-HF5: PASS runtime externo confirmado por el responsable del proyecto; `F5_5_SEVERITY_INDEX` calcula desde `audit_findings_actions` con physical source `grc_readiness_findings + grc_readiness_snapshots` y sin falso `SOURCE_SCHEMA_INCOMPATIBLE`.
-- PUI-08: DONE_LOCAL (matriz integral oficial computable cerrada localmente: 53 fórmulas oficiales cubiertas desde `FORMULAS`, `FORMULA_SOURCE_MAP`, source contracts, consumers, dependencias, snapshots/lineage y escenarios empty/partial/sufficient/two-tenant; validación runtime queda para PUI-09 por diseño).
-- PUI-09: READY.
-- PRE-UI: DONE_LOCAL; runtime post-deploy integral pendiente en PUI-09.
+- PUI-08: DONE (matriz integral oficial computable integrada en `main` y validada en producción sobre commit `2a526d6329f7abae0119a782f99cd64aeed01892`: 53 fórmulas, 20 source contracts, 9 consumers).
+- PUI-09: DONE (cierre documental/runtime de fase PUI; evidencia productiva post-PUI-08 aceptada: snapshots, lineage, Data Trust, Severity Index y aislamiento multi-tenant sin regresión).
+- PUI_PHASE: CLOSED.
+- PRE_UI_DATA_TRUTH_GATE: PASS.
+- PRE-UI: CLOSED.
 - UI enterprise: INITIAL / trabajo temprano.
-- Fase 6 ampliada 6.8–6.14: BLOCKED por `PRE_UI_DATA_TRUTH_GATE` donde corresponda.
+- Fase 6 ampliada 6.8–6.14: READY desde `F6.8` / `6.8-01`; no iniciada por Codex en PUI-09.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -95,8 +97,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa PUI-08 y ejecuta push/PR/CI/deploy según procedimiento manual.
-2. Ejecutar PUI-09: validación runtime post-deploy de matriz oficial, snapshots, lineage, consumers y aislamiento multi-tenant.
+1. Iniciar Fase 6 ampliada desde `F6.8` / `6.8-01` en una nueva sesión y con su prompt específico.
+2. No reabrir PUI-01..PUI-09 salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -115,3 +117,4 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/PUI-07-HF4.md`
 - `docs/codex/handoffs/PUI-07-HF5.md`
 - `docs/codex/handoffs/PUI-08.md`
+- `docs/codex/handoffs/PUI-09.md`
