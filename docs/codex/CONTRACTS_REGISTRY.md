@@ -18,7 +18,7 @@
 | Observation emitter/outbox | CURRENT/6.8-02-HF1-RUNTIME | CODEX A | `grc_observation_emission_outbox` registra eventos de emisión tenant-scoped; reglas en `grcObservationEmitter.service.js`; consumer delega a Semantic Layer con timestamps normalizados a ISO-8601 UTC; productor inicial `officialCalculationOrchestrator`; runtime cerrado por `6.8-02-HF1-RUNTIME-CLOSURE`. |
 | Gap contract | CURRENT/6.8-03-RUNTIME | CODEX A | `grc_gaps` + `grc_gap_rules` + `grc_gap_status_history` + `grc_gap_hypotheses`; deterministic Gap sobre Observations canónicas; AI hypotheses separadas; runtime cerrado. |
 | Relationship inventory / graph input contract | CURRENT/6.9-01 | CODEX A | `docs/architecture/grc_relationship_inventory.md`; Impact Graph debe proyectar/adaptar truth existente, no duplicar relaciones. |
-| Graph Edge contract | PLANNED/6.9-02 | CODEX A | 6.9-02; si requiere persistencia, debe justificarse contra el inventario 6.9-01. |
+| Graph Projection / Edge contract | CURRENT/6.9-02 | CODEX A | `impact-graph-2-foundation-v1` en `backend/src/services/grc/impactGraph.service.js`; proyección/adapters sobre truth existente, sin persistencia graph ni segundo source of truth. |
 | Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
 | IntelligenceContext | PARTIAL | CODEX B | Backend + AI Engine deben reconciliar ownership. |
 | Knowledge Document | PLANNED/PARTIAL | CODEX B | KB v2 existe; modelo documental universal pendiente. |
@@ -125,6 +125,26 @@ Status: DONE_LOCAL on branch `feat/f6-9-01-grc-relationship-inventory`.
 | Domain-specific relations | Evidence, audit, supplier, privacy, incident, process/dependency, metric and risk-matrix relations remain authoritative in their domain tables. |
 | Graph edge persistence | Not created in 6.9-01. Any 6.9-02 edge abstraction must document source, owner, tenant scope and whether it is derived. |
 | Formula/source contract changes | None. `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`. |
+
+## 6.9-02 Impact Graph 2.0 Foundation
+
+Status: DONE_LOCAL on branch `feat/f6-9-02-impact-graph-foundation`.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Model version | `impact-graph-2-foundation-v1` |
+| Owner/runtime | `backend/src/services/grc/impactGraph.service.js` through existing GRC facade. |
+| Storage decision | No graph storage was created; no migration was added; domain tables remain source of truth. |
+| Node identity | Deterministic SHA-256 over model version, `tenant_id`, normalized `entity_type` and `entity_id`. |
+| Edge identity | Deterministic SHA-256 over model version, tenant, normalized endpoints, relationship type, source model/record, derivation rule and persisted/derived flag. |
+| Projection | `GraphProjection` returns seed, nodes, edges, limits, depth and technical `projected_at`; `projected_at` is not part of identity. |
+| Provenance | Each edge preserves source domain/model, source record, source tenant, relationship type, owner, persisted/derived and derivation inputs when applicable. |
+| Adapters v1 | `grc_requirement_control_mappings`, `grc_evidence_links`, `grc_phase2_relations`, `grc_operational_dependencies`, `tenant_process_entity_links`, `grc_observation_relations`, `grc_gaps` derivation metadata. |
+| Observation/Gap | Observation -> Gap persisted edge consumes `grc_observation_relations`; `grc_gaps` exposes derived provenance only. |
+| Runtime surface | GET `/api/grc/impact-graph/nodes/:entityType/:id/relationships`; GET `/api/grc/impact-graph/neighborhood/:entityType/:id`. |
+| RBAC | Existing GRC route protection plus service permission `workflow.read`; no new permission/migration. |
+| Limits | `depth<=3`, `max_nodes<=100`, `max_edges<=200`. |
+| Versioning | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
 
 ## PUI-01 Source Ownership Inventory
 

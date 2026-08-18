@@ -178,6 +178,17 @@ for (const path of ['/api/grc/gaps', `/api/grc/gaps/${batchId}`]) {
   assert.equal(read.nextCalled, true, `viewer can read GRC gaps route ${path}`);
 }
 
+for (const path of [
+  `/api/grc/impact-graph/nodes/control/${batchId}/relationships`,
+  `/api/grc/impact-graph/neighborhood/observation/${batchId}`,
+]) {
+  const read = authorize({ method: 'GET', path, role: 'viewer' });
+  assert.equal(read.nextCalled, true, `viewer can read Impact Graph route ${path}`);
+  const write = authorize({ method: 'POST', path, role: 'viewer' });
+  assert.equal(write.nextCalled, false, `viewer cannot write Impact Graph route ${path}`);
+  assert.equal(write.res.statusCode, 403);
+}
+
 const gapEvaluate = authorize({ method: 'POST', path: '/api/grc/gaps/evaluate', role: 'auditor' });
 assert.equal(gapEvaluate.nextCalled, true, 'auditor can evaluate deterministic GRC gap rules');
 

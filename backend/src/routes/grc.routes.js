@@ -126,6 +126,19 @@ router.post('/gaps/evaluate', route(async (req) => authorized(req, 'gap.evaluate
 router.get('/gaps/:id', route(async (req) => authorized(req, 'gap.read', ({ tenantId }) => service.getGap({ tenantId, gapId: req.params.id }))));
 router.post('/gaps/:id/transitions', route(async (req) => authorized(req, 'gap.transition', (context) => service.transitionGap({ ...context, gapId: req.params.id, body: req.body || {} }))));
 
+router.get('/impact-graph/nodes/:entityType/:id/relationships', route(async (req) => authorized(req, 'workflow.read', (context) => service.getImpactGraphRelationships({
+  ...context,
+  entityType: req.params.entityType,
+  entityId: req.params.id,
+  filters: req.query || {},
+}))));
+router.get('/impact-graph/neighborhood/:entityType/:id', route(async (req) => authorized(req, 'workflow.read', (context) => service.getImpactGraphNeighborhood({
+  ...context,
+  entityType: req.params.entityType,
+  entityId: req.params.id,
+  filters: req.query || {},
+}))));
+
 router.get('/observations', route(async (req) => authorized(req, 'observation.read', ({ tenantId }) => service.listObservations({ tenantId, filters: req.query || {} }))));
 router.get('/observations/:id', route(async (req) => authorized(req, 'observation.read', ({ tenantId }) => service.getObservation({ tenantId, observationId: req.params.id }))));
 router.post('/observations', route(async (req) => authorized(req, 'observation.manage', (context) => service.createObservation({ ...context, body: req.body || {} }))));
