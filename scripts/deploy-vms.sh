@@ -230,6 +230,7 @@ MIGRATION_RUNNERS=(
   "Fase 5-C3|scripts/phase5-c3/apply-phase5-c3-migration.js"
   "Fase 6.8|scripts/f6-8/apply-f6-8-migration.js"
   "Fase 6.10|scripts/f6-10/apply-f6-10-migration.js"
+  "Fase 6.11|scripts/f6-11/apply-f6-11-migration.js"
 )
 
 run_registered_migrations() {
