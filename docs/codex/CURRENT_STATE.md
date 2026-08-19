@@ -2,8 +2,8 @@
 
 Actualizado: 2026-08-19
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
-Remote/base `main` verificado para 6.10-05: `7a29ac18dbd90f47964b50850e81359e1bd29b32`
-Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre local 6.10-05.
+Remote/base `main` verificado para F6.11-A: `1f6c1beec31f994ffd7ba9a61d1a939e98926a24`
+Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre local F6.11-A.
 
 ## Estado del programa
 
@@ -40,7 +40,8 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - 6.10-02: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.10-02-RUNTIME-CLOSURE.md` confirmó production/main `8031965baa8563bbff62049a35bf2c73873b27cd`: `knowledge_document_ingestions`, `knowledge_document_chunks`, `knowledge_document_ingestion_audit`, constraints/idempotencia, KB v2 preservada, sin `knowledge_base_v3`, sin pgvector/embeddings y `F6_10_02_RUNTIME=PASS`.
 - 6.10-03: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.10-03-RUNTIME-CLOSURE.md` confirmó production/main `a71cd9cbe11ab840d6f85e291a5f0224a8834b7a`: pgvector `0.6.0`, `knowledge_chunk_embeddings`, constraints/indexes, tenant-filter-first vector search foundation, canonical chunk model preserved, no `knowledge_base_v3`, no second chunk truth y `F6_10_03_RUNTIME=PASS`.
 - 6.10-04: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.10-04-RUNTIME-CLOSURE.md` confirmó production/main `98531cce7a1308fa0c3727c962f0fa6559b5d018`: `hybrid-retrieval-contract-v1` reutiliza `knowledge_document_chunks` + `knowledge_chunk_embeddings`, ranking determinístico versionado, tenant filter first, lifecycle filtering, provenance para RAG, sin KB v3, sin segundo retrieval engine y `F6_10_04_RUNTIME=PASS`.
-- 6.10-05: DONE_LOCAL. `rag-grounded-answer-contract-v1` implementado como proyección runtime sobre Hybrid Retrieval: construye contexto evidence-only, genera JSON estructurado via AI Engine reutilizando `call_llm_json`, valida citations determinísticamente contra candidatos recuperados, abstiene por evidencia insuficiente, preserva source authority/provenance y expone `POST /api/knowledge-base/rag/answer`. Runtime pendiente de deploy/validación por el usuario.
+- 6.10-05: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.10-05-RUNTIME-CLOSURE.md` confirmó production/main `d098441ec4deff867820f989d8595cfb3206571b`: `rag-grounded-answer-contract-v1` sobre Hybrid Retrieval, citations verificables, abstención segura, tenant isolation, sin KB paralela ni autoridad operacional del LLM. `F6_10_05_RUNTIME=PASS`.
+- F6.11-A: DONE_LOCAL. Campaña consolidada 6.11-01/02/03 implementa registry autoritativo (`authoritative-source-registry-v1`), ingestion regulatoria versionada (`regulatory-ingestion-contract-v1`) y modelo canónico `Regulation`/`RegulationVersion`/`LegalObligation` sobre KB v2. Reutiliza `knowledge_documents`, extiende `knowledge_document_chunks` con `scope` para chunks regulatorios, no crea KB v3, no crea `regulatory_chunks`, no implementa semantic diff/packs 6.11-04..06, y deja `F6_11_A_RUNTIME=PENDING_USER_DEPLOY_VALIDATION`.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -102,7 +103,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - CODEX B / `tecdex2-codex`: AI / Knowledge / RAG / Regulatory.
 - CODEX C / `tecdex3-codex`: Frontend / UX / Product E2E.
 
-Reasignación operativa vigente: por disponibilidad de cuenta, `6.10-01`, `6.10-02`, `6.10-03`, `6.10-04` y `6.10-05` se ejecutan desde `tecdex3-codex` bajo alcance CODEX B. Esta reasignación no transfiere ownership funcional del dominio ni habilita repo-wide scan.
+Reasignación operativa vigente: por disponibilidad de cuenta, `6.10-01`, `6.10-02`, `6.10-03`, `6.10-04`, `6.10-05` y `F6.11-A` se ejecutan desde `tecdex3-codex` bajo alcance CODEX B. Esta reasignación no transfiere ownership funcional del dominio ni habilita repo-wide scan.
 
 ## Política de validación
 
@@ -113,9 +114,9 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario ejecuta push/PR/CI/deploy de `feat/f6-10-05-rag-grounded-citations`.
-2. Usuario valida runtime 6.10-05 y registra handoff de cierre antes de habilitar work packages dependientes de RAG grounded answers/citations.
-3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03 y 6.10-01 salvo evidencia objetiva nueva.
+1. Usuario ejecuta push/merge/deploy de `feat/f6-11-a-regulatory-foundation`.
+2. Usuario valida runtime F6.11-A con `scripts/f6-11/apply-f6-11-migration.js --preflight/--apply` mediante `./scripts/deploy-vms.sh` y registra closure.
+3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03 y 6.10-01..6.10-05 salvo evidencia objetiva nueva; 6.11-04 queda bloqueado hasta `F6_11_A_RUNTIME=PASS`.
 
 ## Handoff relevante
 
@@ -157,4 +158,6 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.10-04.md`
 - `docs/codex/handoffs/6.10-04-RUNTIME-CLOSURE.md`
 - `docs/codex/handoffs/6.10-05.md`
+- `docs/codex/handoffs/6.10-05-RUNTIME-CLOSURE.md`
+- `docs/codex/handoffs/6.11-A.md`
 - `docs/architecture/grc_relationship_inventory.md`

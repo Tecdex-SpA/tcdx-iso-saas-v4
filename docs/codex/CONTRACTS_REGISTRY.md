@@ -25,11 +25,13 @@
 | Knowledge Ingestion | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge-ingestion-pipeline-v1`; pipeline tenant-scoped con secure upload, extracción, chunks, audit, idempotencia y KB v2 linkage; runtime closure PASS. |
 | Knowledge Chunk | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge_document_chunks`; manifest determinístico y chunk content canónico para documentos tenant; 6.10-03 lo referencia sin copiar `chunk_text`. |
 | Knowledge Embedding | CURRENT/6.10-03-RUNTIME | CODEX B | `knowledge-embedding-contract-v1`; `knowledge_chunk_embeddings` persiste embeddings pgvector versionados por provider/model/model_version/dimensions/input_checksum con `tenant_id` explícito y FK a `knowledge_document_chunks`; runtime closure PASS. |
-| Hybrid Retrieval | CURRENT/6.10-04-LOCAL | CODEX B | `hybrid-retrieval-contract-v1`; combina lexical sobre `knowledge_document_chunks` y vector sobre `knowledge_chunk_embeddings` con ranking determinístico versionado, tenant filter first y provenance para 6.10-05. |
-| RAG Citation | PLANNED | CODEX B | 6.10-05. |
-| Regulation | PLANNED | CODEX B | 6.11. |
-| RegulationVersion | PLANNED | CODEX B | 6.11. |
-| LegalObligation | PLANNED | CODEX B | 6.11. |
+| Hybrid Retrieval | CURRENT/6.10-04-RUNTIME | CODEX B | `hybrid-retrieval-contract-v1`; combina lexical sobre `knowledge_document_chunks` y vector sobre `knowledge_chunk_embeddings` con ranking determinístico versionado, tenant filter first y provenance para RAG; runtime closure PASS. |
+| RAG Citation | CURRENT/6.10-05-RUNTIME | CODEX B | `rag-grounded-answer-contract-v1`; citations verificables sólo desde candidatos Hybrid Retrieval, validación determinística y abstención segura; runtime closure PASS. |
+| Authoritative Source Registry | CURRENT/F6.11-A-LOCAL | CODEX B | `authoritative-source-registry-v1`; `regulatory_authoritative_sources` gobierna fuentes oficiales por scope/jurisdicción/autoridad sin convertir web general o LLM en verdad legal. |
+| Regulatory Ingestion | CURRENT/F6.11-A-LOCAL | CODEX B | `regulatory-ingestion-contract-v1`; artefactos regulatorios inmutables/versionados enlazados a `knowledge_documents` y chunks canónicos. |
+| Regulation | CURRENT/F6.11-A-LOCAL | CODEX B | `regulation-model-v1`; identidad regulatoria/legal estable en `regulations`. |
+| RegulationVersion | CURRENT/F6.11-A-LOCAL | CODEX B | `regulation-version-model-v1`; publicación/version normativa inmutable en `regulation_versions`. |
+| LegalObligation | CURRENT/F6.11-A-LOCAL | CODEX B | `legal-obligation-model-v1`; obligaciones legales explícitas/gobernadas en `legal_obligations`, sin publicación autoritativa por LLM. |
 | Regulatory Mapping | PLANNED | CODEX B | 6.11. |
 | Capability/RBAC | CURRENT/PROTECTED | A+C | Reutilizar sistema existente; backend autoriza. |
 
@@ -256,7 +258,7 @@ Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-04-RUNTIME-CLOSURE.md
 
 ## 6.10-05 RAG Grounded Answer + Citations
 
-Status: DONE_LOCAL on branch `feat/f6-10-05-rag-grounded-citations`; runtime validation pending user deploy.
+Status: PASS_RUNTIME on production/main `d098441ec4deff867820f989d8595cfb3206571b`; documented by `docs/codex/handoffs/6.10-05-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
@@ -271,6 +273,25 @@ Status: DONE_LOCAL on branch `feat/f6-10-05-rag-grounded-citations`; runtime val
 | API | `POST /api/knowledge-base/rag/answer`; RBAC uses existing tenant read roles through explicit `knowledge.rag.answer` rule. |
 | Persistence | Runtime projection only; no response table, cache truth, second KB, second retrieval engine or chunk copy. |
 | Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
+
+## F6.11-A Regulatory Foundation
+
+Status: DONE_LOCAL on branch `feat/f6-11-a-regulatory-foundation`; runtime validation pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Consolidated packages | 6.11-01 Authoritative Source Registry, 6.11-02 Versioned Regulatory Ingestion, 6.11-03 Regulation / Legal Obligation model. |
+| Source registry | `authoritative-source-registry-v1` in `regulatory_authoritative_sources`; scopes `GLOBAL`, `JURISDICTIONAL`, `TENANT_PRIVATE`; tenant-private requires `tenant_id`; global/jurisdictional require `tenant_id=NULL`. |
+| Authority governance | `authority_classification` distinguishes `AUTHORITATIVE`, `APPROVED_REFERENCE`, `INFORMATIONAL`; only `AUTHORITATIVE` + `active` can produce canonical regulatory truth. General web and LLM output are not legal source of truth. |
+| Regulatory ingestion | `regulatory-ingestion-contract-v1` in `regulatory_ingestions`; every run links source, `knowledge_document_id`, version identifier, checksums, acquisition metadata, parser/extraction method and provenance. |
+| Knowledge reuse | Regulatory documents are `knowledge_documents(scope='REGULATORY', tenant_id=NULL, source_authority='authoritative')`; no `regulatory_documents_v2`, no KB v3. |
+| Chunk reuse | `knowledge_document_chunks` remains canonical chunk text truth and is extended with `scope`; regulatory chunks use `scope='REGULATORY'` and `tenant_id=NULL`; no `regulatory_chunks`. |
+| Regulation | `regulation-model-v1` in `regulations`; stable legal/regulatory identity by scope/tenant-normalized `regulation_key`, jurisdiction, source and official identifier/title/type. |
+| RegulationVersion | `regulation-version-model-v1` in `regulation_versions`; immutable publication/version row with content checksum, document/ingestion linkage and supersession lineage. |
+| LegalObligation | `legal-obligation-model-v1` in `legal_obligations`; explicit governed obligations tied to regulation/version and optional source chunk/checksum. LLM suggestions cannot publish legal truth. |
+| Tenant isolation | Public regulatory sources/regulations are global/jurisdictional; `TENANT_PRIVATE` source/regulation rows are tenant-scoped. Tenant identity is service context, not body authority. |
+| Future boundary | 6.11-04 semantic diff, 6.11-05/06 packs and obligation extraction workflows must extend these tables and F6.10 retrieval/RAG, not create parallel document/chunk/embedding/retrieval models. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`. |
 
 ## PUI-01 Source Ownership Inventory
 

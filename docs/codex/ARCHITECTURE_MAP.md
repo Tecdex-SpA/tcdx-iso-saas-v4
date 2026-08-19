@@ -126,4 +126,5 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - 6.10-04: CLOSED / PASS_RUNTIME; Hybrid Retrieval implemented as `hybrid-retrieval-contract-v1` over lexical `knowledge_document_chunks` and vector `knowledge_chunk_embeddings`, with deterministic rank normalization, tenant filter first, lifecycle filtering and provenance for future citations; no RAG answer/citations/reranker.
 - 6.10-05: CLOSED / PASS_RUNTIME; grounded RAG answer `rag-grounded-answer-contract-v1` validated in runtime over Hybrid Retrieval candidates only, with evidence-only context builder, deterministic citation validation, safe abstention, tenant isolation and no RAG persistence/source of truth. Closure: `docs/codex/handoffs/6.10-05-RUNTIME-CLOSURE.md`.
 - F6.10: CLOSED through 6.10-05.
-- Next authorized accelerated campaign: `F6.11-A = 6.11-01 + 6.11-02 + 6.11-03` (authoritative source registry -> versioned regulatory ingestion -> canonical Regulation/RegulationVersion/LegalObligation model).
+- F6.11-A: DONE_LOCAL; regulatory foundation adds `regulatory_authoritative_sources`, `regulatory_ingestions`, `regulations`, `regulation_versions` and `legal_obligations`, reusing `knowledge_documents` and `knowledge_document_chunks(scope='REGULATORY')` instead of creating a second KB/chunk/embedding/retrieval model.
+- 6.11-04: BLOCKED_UNTIL_F6_11_A_RUNTIME_PASS.
