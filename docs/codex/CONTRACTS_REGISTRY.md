@@ -21,7 +21,7 @@
 | Graph Projection / Edge contract | CURRENT/6.9-02 | CODEX A | `impact-graph-2-foundation-v1` en `backend/src/services/grc/impactGraph.service.js`; proyección/adapters sobre truth existente, sin persistencia graph ni segundo source of truth. |
 | Priority contract | CURRENT/6.9-03 | CODEX C executing package | `priority-engine-2-v1`; proyección determinística sobre `grc_gaps` + Impact Graph 2.0, sin storage paralelo de prioridad. |
 | IntelligenceContext | PARTIAL | CODEX B | Backend + AI Engine deben reconciliar ownership. |
-| Knowledge Document | PLANNED/PARTIAL | CODEX B | KB v2 existe; modelo documental universal pendiente. |
+| Knowledge Document | CURRENT/6.10-01-LOCAL | CODEX B | `knowledge-document-model-v1`; `knowledge_documents` extiende KB v2 con scope, tenant, versioning, lifecycle, checksums y provenance; runtime migration pendiente de deploy usuario. |
 | Knowledge Chunk | PLANNED | CODEX B | 6.10. |
 | RAG Citation | PLANNED | CODEX B | 6.10-05. |
 | Regulation | PLANNED | CODEX B | 6.11. |
@@ -165,6 +165,31 @@ Status: DONE_LOCAL on branch `feat/f6-9-03-priority-engine-2`.
 | RBAC | Existing `workflow.read`; no new permission/migration. |
 | AI boundary | AI never creates score/order; `ai_priority_truth=false`. |
 | Versioning | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
+
+## 6.10-01 Knowledge Document Model
+
+Status: DONE_LOCAL on branch `feat/f6-10-01-knowledge-document-model`; runtime migration pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Model version | `knowledge-document-model-v1` |
+| Owner/runtime | CODEX B / Knowledge Base v2, service boundary `backend/src/services/knowledge-base/knowledgeDocument.service.js`. |
+| Storage decision | Additive parent/source model `knowledge_documents`; no `knowledge_base_v3`, no replacement of `knowledge_items`, no duplicate KB. |
+| KB v2 compatibility | `knowledge_items`, `knowledge_rules`, `knowledge_evidence_expectations`, `knowledge_audit_questions`, `knowledge_recommended_actions`, `knowledge_common_gaps`, `knowledge_rule_hints`, `knowledge.service.js`, `knowledge.repository.js` and `knowledge.search.js` remain compatible. |
+| Source link | `knowledge_sources.knowledge_document_id` optionally links existing KB v2 sources to a canonical document; existing source rows remain valid with NULL document link. |
+| Scope | `GLOBAL`, `REGULATORY`, `TENANT`. `TENANT` requires `tenant_id`; `GLOBAL` and `REGULATORY` require `tenant_id=NULL`; `REGULATORY` requires `source_authority=authoritative`. |
+| Tenant visibility | Service queries return global/regulatory plus same-tenant private documents only; empty tenant/private scope returns valid empty collection. |
+| Versioning | Unique `(scope, COALESCE(tenant_id, zero uuid), document_key, version)`; `supersedes_document_id` preserves audit trail; new versions do not overwrite published/previous rows. |
+| Lifecycle | DB/service status set: `draft`, `indexing`, `active`, `deprecated`, `rejected`, `error`; service transitions v1: draft -> indexing/active/rejected/error, indexing -> active/rejected/error, active -> deprecated/error, error -> draft. |
+| Temporal validity | `effective_from`/`effective_to` are explicit; `updated_at` is not document versioning. |
+| Checksums | `original_file_checksum`, `extracted_text_checksum` and `content_checksum` are SHA-256 hex; content checksum is required and may be deterministically computed by service when omitted. |
+| Original content | `original_file_reference` points to existing storage/file owner; this table does not store binary content. |
+| Extracted text | `extracted_text_reference` and `extracted_text_checksum` prepare 6.10-02/6.10-03 without implementing chunking/embeddings. |
+| Source authority | `tcdx_internal`, `authoritative`, `tenant_private`, `imported`, `derived`; web/general content is not legal authority by default. |
+| Operational attachment boundary | `OPERATIONAL_ATTACHMENT_AUTO_PROMOTION=0`; uploads/evidence/audit/incident/vendor attachments require future explicit ingestion/promotion workflow before becoming published knowledge. |
+| AI boundary | LLM does not determine authoritative `scope`, `tenant_id`, `version`, `status` or checksum truth. |
+| Future readiness | Supports 6.10-02 tenant ingestion, 6.10-03 pgvector/embeddings, 6.10-04 hybrid retrieval and 6.10-05 citations without implementing them in 6.10-01. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
 
 ## PUI-01 Source Ownership Inventory
 

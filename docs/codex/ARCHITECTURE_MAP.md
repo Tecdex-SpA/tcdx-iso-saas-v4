@@ -48,6 +48,9 @@ Backend Node/Express
         |      + source contracts, snapshots, lineage, append-only supersession
         |
         +--> Knowledge Base v2
+        |      + canonical document model (`knowledge_documents`, `knowledge-document-model-v1`)
+        |      + additive source link (`knowledge_sources.knowledge_document_id`)
+        |      + GLOBAL/REGULATORY/TENANT scope, versioning, lifecycle and provenance
         |      + structured search/matching/coverage/guardrails
         |
         +--> Intelligence services
@@ -111,5 +114,6 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - 6.8-03: CLOSED / PASS_RUNTIME; canonical deterministic Gap model validated after user deploy with Observation -> Gap relation in `grc_observation_relations`.
 - 6.9-01: DONE_LOCAL; relationship inventory created at `docs/architecture/grc_relationship_inventory.md`, no graph storage/traversal implemented, duplicate relation model remains 0.
 - 6.9-02: CLOSED / PASS_RUNTIME; Impact Graph 2.0 foundation implemented as tenant-scoped projection/adapters over 6.9-01 inventory, with no graph storage/migration.
-- 6.9-03: DONE_LOCAL; Priority Engine 2.0 implemented as `priority-engine-2-v1` projection over `grc_gaps` + Impact Graph with no priority storage/migration; runtime validation pending user deploy.
-- Next work package readiness depends on 6.9-03 runtime validation/acceptance.
+- 6.9-03: CLOSED / PASS_RUNTIME; Priority Engine 2.0 implemented as `priority-engine-2-v1` projection over `grc_gaps` + Impact Graph with no priority storage/migration.
+- 6.10-01: DONE_LOCAL; Knowledge Document model implemented as `knowledge-document-model-v1` over KB v2 with forward migration, no second KB and no pgvector/embeddings/retrieval/RAG implementation.
+- Next work package readiness depends on 6.10-01 runtime validation/acceptance.
