@@ -181,11 +181,13 @@ for (const path of ['/api/grc/gaps', `/api/grc/gaps/${batchId}`]) {
 for (const path of [
   `/api/grc/impact-graph/nodes/control/${batchId}/relationships`,
   `/api/grc/impact-graph/neighborhood/observation/${batchId}`,
+  '/api/grc/priorities',
+  `/api/grc/priorities/grc_gap/${batchId}`,
 ]) {
   const read = authorize({ method: 'GET', path, role: 'viewer' });
-  assert.equal(read.nextCalled, true, `viewer can read Impact Graph route ${path}`);
+  assert.equal(read.nextCalled, true, `viewer can read GRC graph/priority route ${path}`);
   const write = authorize({ method: 'POST', path, role: 'viewer' });
-  assert.equal(write.nextCalled, false, `viewer cannot write Impact Graph route ${path}`);
+  assert.equal(write.nextCalled, false, `viewer cannot write GRC graph/priority route ${path}`);
   assert.equal(write.res.statusCode, 403);
 }
 
