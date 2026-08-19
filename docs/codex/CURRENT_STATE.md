@@ -1,9 +1,9 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
-Actualizado: 2026-08-18
+Actualizado: 2026-08-19
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
-Remote/base `main` verificado para 6.9-01: `93a76a76e992cc669052de9b33ec54e8803d2bcf`
-Fuente: repositorio local `main` + handoffs runtime cerrados.
+Remote/base `main` verificado para cierre runtime 6.9-02: `ddd97e02fe7b0c536ab3c3345c2d8d4453febb55`
+Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto.
 
 ## Estado del programa
 
@@ -33,8 +33,9 @@ Fuente: repositorio local `main` + handoffs runtime cerrados.
 - 6.8-02: CLOSED / PASS_RUNTIME (Governed Observation Emitter / Outbox validado por cierre runtime `docs/codex/handoffs/6.8-02-HF1-RUNTIME-CLOSURE.md`; los eventos elegibles retry pasaron a `completed`, persistieron Observation canónica y no generaron duplicados).
 - 6.8-02-HF1: CLOSED / PASS_RUNTIME (hotfix de serialización temporal validado post-deploy; `F6_8_02_RUNTIME=PASS`; 6.8-03 quedó READY).
 - 6.8-03: CLOSED / PASS_RUNTIME (GRC Gap Model canónico validado post-deploy por `docs/codex/handoffs/6.8-03-RUNTIME-CLOSURE.md`; `F6_8_03_RUNTIME=PASS`, `F6_8_03=CLOSED`, Observation -> Gap runtime confirmado vía `grc_observation_relations`).
-- 6.9-01: DONE_LOCAL (inventario canónico de relaciones GRC creado en `docs/architecture/grc_relationship_inventory.md`; 38 familias de relación inventariadas, 32 persistidas, 6 derivadas, 8 canónicas, 25 domain-specific, 0 duplicate candidates; decisión foundation para 6.9-02 = proyección/adapters sobre truth existente, sin tabla graph nueva).
-- 6.9-02: DONE_LOCAL (Impact Graph 2.0 foundation implementada como proyección/adapters en `backend/src/services/grc/impactGraph.service.js`; rutas GET mínimas bajo `/api/grc/impact-graph/*`; sin migraciones, sin tabla graph, sin segundo source of truth; runtime validation pendiente por diseño del usuario).
+- 6.9-01: CLOSED / integrado en `main` mediante `f19709d8deb3dd808e362ebaf6dd7ef4adfe21a3`; inventario canónico de relaciones GRC en `docs/architecture/grc_relationship_inventory.md`: 38 familias, 32 persistidas, 6 derivadas, 8 canónicas, 25 domain-specific y 0 duplicate candidates.
+- 6.9-02: CLOSED / PASS_RUNTIME. Impact Graph 2.0 foundation está mergeada en `main@ddd97e02fe7b0c536ab3c3345c2d8d4453febb55` como proyección/adapters en `backend/src/services/grc/impactGraph.service.js`; runtime confirmó modelo `impact-graph-2-foundation-v1`, provenance persisted+derived Observation -> Gap, determinismo, límites, aislamiento cross-tenant, 0 graph storage paralelo y 0 segundo source of truth. Cierre: `docs/codex/handoffs/6.9-02-RUNTIME-CLOSURE.md`.
+- 6.9-03: READY. Siguiente objetivo: Priority Engine 2.0 determinístico, versionado y explicable; debe consumir la foundation 6.9-02 sin duplicar graph truth y mantener next-best-actions existente como compatibility/fallback adapter.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -105,9 +106,9 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa y mergea `6.9-01` si acepta el inventario documental.
-2. Usuario revisa, pushea, abre PR y valida `6.9-02 — Impact Graph 2.0 Foundation`.
-3. Mantener 6.9-03 bloqueado hasta merge/aceptación de 6.9-02; no reabrir PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03 ni la arquitectura canónica Observation/Gap salvo evidencia objetiva nueva.
+1. Mergear este cierre documental de `6.9-02` en `main`.
+2. Iniciar `6.9-03 — Priority Engine 2.0` desde `main` actualizado, aplicando continuidad obligatoria y `FOCUSED_MINIMAL`.
+3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01 y 6.9-02 salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -137,4 +138,5 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.8-03-RUNTIME-CLOSURE.md`
 - `docs/codex/handoffs/6.9-01.md`
 - `docs/codex/handoffs/6.9-02.md`
+- `docs/codex/handoffs/6.9-02-RUNTIME-CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`
