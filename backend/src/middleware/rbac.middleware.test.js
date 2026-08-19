@@ -204,6 +204,9 @@ assert.equal(gapViewerWriteDenied.res.statusCode, 403);
 const knowledgeIngestionRead = authorize({ method: 'GET', path: '/api/knowledge-base/ingestions', role: 'viewer' });
 assert.equal(knowledgeIngestionRead.nextCalled, true, 'viewer can read tenant knowledge ingestion metadata');
 
+const knowledgeRetrievalRead = authorize({ method: 'POST', path: '/api/knowledge-base/retrieval/search', role: 'viewer' });
+assert.equal(knowledgeRetrievalRead.nextCalled, true, 'viewer can run read-only hybrid knowledge retrieval');
+
 const knowledgeIngestionAdminWrite = authorize({ method: 'POST', path: '/api/knowledge-base/ingestions', role: 'tenant_admin' });
 assert.equal(knowledgeIngestionAdminWrite.nextCalled, true, 'tenant_admin can ingest tenant knowledge documents');
 
