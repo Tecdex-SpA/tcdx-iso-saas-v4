@@ -22,8 +22,9 @@
 | Priority contract | CURRENT/6.9-03 | CODEX C executing package | `priority-engine-2-v1`; proyección determinística sobre `grc_gaps` + Impact Graph 2.0, sin storage paralelo de prioridad. |
 | IntelligenceContext | PARTIAL | CODEX B | Backend + AI Engine deben reconciliar ownership. |
 | Knowledge Document | CURRENT/6.10-01-RUNTIME | CODEX B | `knowledge-document-model-v1`; `knowledge_documents` extiende KB v2 con scope, tenant, versioning, lifecycle, checksums y provenance; runtime closure PASS. |
-| Knowledge Ingestion | CURRENT/6.10-02-LOCAL | CODEX B | `knowledge-ingestion-pipeline-v1`; pipeline tenant-scoped con secure upload, extracción, chunks, audit, idempotencia y KB v2 linkage; runtime migration pendiente de deploy usuario. |
-| Knowledge Chunk | CURRENT/6.10-02-LOCAL | CODEX B | `knowledge_document_chunks`; manifest determinístico sin embeddings/vector columns, preparado para 6.10-03. |
+| Knowledge Ingestion | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge-ingestion-pipeline-v1`; pipeline tenant-scoped con secure upload, extracción, chunks, audit, idempotencia y KB v2 linkage; runtime closure PASS. |
+| Knowledge Chunk | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge_document_chunks`; manifest determinístico y chunk content canónico para documentos tenant; 6.10-03 lo referencia sin copiar `chunk_text`. |
+| Knowledge Embedding | CURRENT/6.10-03-LOCAL | CODEX B | `knowledge-embedding-contract-v1`; `knowledge_chunk_embeddings` persiste embeddings pgvector versionados por provider/model/model_version/dimensions/input_checksum con `tenant_id` explícito y FK a `knowledge_document_chunks`. |
 | RAG Citation | PLANNED | CODEX B | 6.10-05. |
 | Regulation | PLANNED | CODEX B | 6.11. |
 | RegulationVersion | PLANNED | CODEX B | 6.11. |
@@ -194,7 +195,7 @@ Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-01-RUNTIME-CLOSURE.md
 
 ## 6.10-02 Tenant Document Ingestion
 
-Status: DONE_LOCAL on branch `feat/f6-10-02-tenant-document-ingestion`; runtime migration pending user deploy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-02-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
@@ -214,6 +215,24 @@ Status: DONE_LOCAL on branch `feat/f6-10-02-tenant-document-ingestion`; runtime 
 | KB v2 linkage | Active ingestions create/update `knowledge_sources` row with `knowledge_document_id`; `knowledge_items` remain untouched. |
 | Audit | `knowledge_document_ingestion_audit` records tenant, actor, document, checksums, method, status, request/correlation id, error code and metadata without full text/secrets. |
 | Vector/RAG boundary | `PGVECTOR_IMPLEMENTED=0`, `EMBEDDINGS_IMPLEMENTED=0`, `HYBRID_RETRIEVAL_IMPLEMENTED=0`, `RAG_ANSWER_CONTRACT_IMPLEMENTED=0`. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
+
+## 6.10-03 pgvector Embedding Foundation
+
+Status: DONE_LOCAL on branch `feat/f6-10-03-pgvector-embeddings`; runtime validation pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Contract version | `knowledge-embedding-contract-v1` |
+| Owner/runtime | CODEX B / Knowledge Base v2, service boundary `backend/src/services/knowledge-base/knowledgeEmbedding.service.js`. |
+| Storage decision | `knowledge_chunk_embeddings` is embedding-side storage keyed to `knowledge_document_chunks.id`; it does not store/copy `chunk_text` and does not replace canonical chunk ownership. |
+| pgvector | Forward migration `20260819_f6_10_03_pgvector_embeddings` governs `CREATE EXTENSION IF NOT EXISTS vector` and embedding storage postconditions. |
+| Provider strategy | Provider/model/model_version/dimensions are explicit configuration or service input; no model/dimension is product-hardcoded. OpenAI adapter is available only when configured; tests inject a provider fixture. |
+| Versioning/reindex | Reindex required when chunk `text_checksum`, provider, model, model_version, dimensions or contract version changes; superseded rows are marked `stale`. |
+| Status | `pending`, `ready`, `failed`, `stale`, `skipped`; failed provider attempts persist failure state without fabricating vectors. |
+| Tenant isolation | Every embedding row has `tenant_id`; composite FK `(tenant_id, chunk_id)` binds embeddings to same-tenant canonical chunks; search SQL filters tenant before vector ranking. |
+| Search primitive | `searchTenantVectorCandidates` returns tenant-scoped chunk IDs/scores/metadata only; no hybrid lexical/graph/authority/reranking/RAG answer. |
+| Compatibility | `knowledge_documents`, `knowledge_document_ingestions`, `knowledge_document_chunks`, `knowledge_document_ingestion_audit`, `knowledge_sources` and KB v2 child tables remain compatible. |
 | Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
 
 ## PUI-01 Source Ownership Inventory

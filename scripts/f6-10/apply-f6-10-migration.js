@@ -19,6 +19,11 @@ const MIGRATIONS = Object.freeze([
     file: path.join(root, 'database/migrations/20260819_f6_10_02_tenant_document_ingestion.sql'),
     postconditions: postconditionsTenantDocumentIngestion,
   },
+  {
+    id: '20260819_f6_10_03_pgvector_embeddings',
+    file: path.join(root, 'database/migrations/20260819_f6_10_03_pgvector_embeddings.sql'),
+    postconditions: postconditionsPgvectorEmbeddings,
+  },
 ]);
 const LOCK_NAMESPACE = 844332;
 const LOCK_KEY = 2026081910;
@@ -67,6 +72,7 @@ async function preflight(client) {
   const result = await client.query(`SELECT
     current_user AS migration_user,
     EXISTS (SELECT 1 FROM pg_available_extensions WHERE name='pgcrypto') AS pgcrypto_available,
+    EXISTS (SELECT 1 FROM pg_available_extensions WHERE name='vector') AS pgvector_available,
     to_regclass('public.knowledge_sources') IS NOT NULL AS knowledge_sources_ready,
     to_regclass('public.knowledge_items') IS NOT NULL AS knowledge_items_ready,
     to_regclass('public.knowledge_rules') IS NOT NULL AS knowledge_rules_ready,
@@ -155,6 +161,69 @@ async function postconditionsTenantDocumentIngestion(client) {
   const row = result.rows[0] || {};
   if (Object.values(row).some((value) => value !== true)) {
     throw new Error(`F6.10 tenant document ingestion postcondition failed: ${JSON.stringify(row)}`);
+  }
+  return row;
+}
+
+async function postconditionsPgvectorEmbeddings(client) {
+  const result = await client.query(`SELECT
+    EXISTS (
+      SELECT 1 FROM pg_extension
+      WHERE extname='vector'
+    ) AS pgvector_ready,
+    to_regclass('public.knowledge_chunk_embeddings') IS NOT NULL AS embedding_storage_ready,
+    to_regclass('public.knowledge_document_chunks') IS NOT NULL AS canonical_chunks_preserved,
+    to_regclass('public.knowledge_base_v3') IS NULL AS no_second_kb,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public'
+        AND table_name='knowledge_chunk_embeddings'
+        AND column_name='embedding'
+        AND udt_name='vector'
+    ) AS embedding_vector_ready,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public'
+        AND table_name='knowledge_chunk_embeddings'
+        AND column_name IN (
+          'embedding_contract_version',
+          'provider',
+          'model',
+          'model_version',
+          'dimensions',
+          'input_checksum',
+          'embedding_checksum',
+          'status'
+        )
+      GROUP BY table_name
+      HAVING COUNT(*)=8
+    ) AS embedding_version_metadata_ready,
+    EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname='public'
+        AND tablename='knowledge_chunk_embeddings'
+        AND indexname='idx_knowledge_chunk_embeddings_tenant_status'
+    ) AS tenant_filter_support_ready,
+    EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname='public'
+        AND tablename='knowledge_chunk_embeddings'
+        AND indexname='ux_knowledge_chunk_embeddings_identity'
+    ) AS embedding_identity_ready,
+    NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public'
+        AND table_name='knowledge_chunk_embeddings'
+        AND column_name='chunk_text'
+    ) AS no_second_chunk_text_truth,
+    NOT EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema='public'
+        AND table_name IN ('knowledge_base_v3','knowledge_document_vectors','knowledge_vector_chunks')
+    ) AS no_parallel_kb_or_chunk_model`);
+  const row = result.rows[0] || {};
+  if (Object.values(row).some((value) => value !== true)) {
+    throw new Error(`F6.10 pgvector embeddings postcondition failed: ${JSON.stringify(row)}`);
   }
   return row;
 }
