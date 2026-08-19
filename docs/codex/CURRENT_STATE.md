@@ -12,7 +12,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PUI-02: DONE (escala/unidad y normalización canónica cerradas localmente para el alcance focal; validación manual/CI pendiente por diseño).
 - PUI-03: DONE (semantica canonica de conteos y poblaciones cerrada localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-04: DONE (validación manual externa confirmada sobre `main/deploy` commit `7a9df185f06be031757d0d79f25aa59b27a53bbf`; focal test y deploy OK reportados por responsable del proyecto).
-- PUI-05: DONE (normalización canónica/versionada de estados por dominio cerrada localmente para el alcance focal; validación manual/CI pendiente por diseño).
+- PUI-05: DONE (normalización canónica/versionada de estados por dominio en el alcance focal; validación manual/CI pendiente por diseño).
 - PUI-06: DONE (fallback legacy gobernado implementado y cierre manual/deploy confirmado en `docs/codex/handoffs/PUI-06.md`).
 - PUI-07: DONE (Data Trust determinístico/versionado cerrado localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-07-HF1: DONE local (pipeline oficial consolidado sobre `officialCalculationOrchestrator -> sourceResolver -> PUI-01..PUI-07`; validación manual/CI/deploy pendiente por diseño).
@@ -46,7 +46,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PR #91 head: `e913d67deb9499e4a6a371d99278f1832763138d`.
 - PR #91 aborda CONTROL-EFFECT, RISK-INHERENT y MATURITY.
 - No se declara CI completo PASS para PR #91 desde este bootstrap.
-- PUI-01 se ejecutó sobre branch `fix/pui-01-source-contract-ownership` desde base local `033236f11a1405308176a226efc15cb`.
+- PUI-01 se ejecutó sobre branch `fix/pui-01-source-contract-ownership` desde base local `033236f11a140530316c02ad81676a226efc15cb`.
 - PUI-01 confirmó que `sourceResolver.test.js` pasa localmente en el checkout actual y cerró la ambigüedad documental de CONTROL-EFFECT: el `score` agregado no se expande a dimensiones D/I/O/E.
 - PUI-01 confirmó source ownership para `control_assurance_evidence`, `risk_register_controls` y `maturity_assessments` en `docs/codex/CONTRACTS_REGISTRY.md`.
 - PUI-02 se ejecutó sobre branch `fix/pui-02-scale-unit-contract` desde base local `57e8264cfbc94a7895cf21252b85665deea731d0`.
