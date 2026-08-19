@@ -9,6 +9,9 @@ const {
   createKnowledgeHybridRetrievalService,
 } = require('../services/knowledge-base/knowledgeHybridRetrieval.service');
 const {
+  createKnowledgeRagService,
+} = require('../services/knowledge-base/knowledgeRag.service');
+const {
   createMemoryUpload,
   safeUploadError,
 } = require('../utils/secureUpload');
@@ -16,6 +19,7 @@ const {
 const router = express.Router();
 const ingestion = createKnowledgeIngestionService();
 const retrieval = createKnowledgeHybridRetrievalService();
+const rag = createKnowledgeRagService();
 const tenantKnowledgeUpload = createMemoryUpload({
   allowedTypes: {
     '.pdf': ['application/pdf'],
@@ -132,6 +136,25 @@ router.post('/retrieval/search', async (req, res) => {
       limits: result.limits,
       filters: result.filters,
       ranking: result.ranking,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.post('/rag/answer', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const result = await rag.answer({
+      user: req.user,
+      question: body.question || body.query || body.q || '',
+      filters: body.filters || {},
+      retrievalOptions: body.retrieval || body.retrieval_options || {},
+      requestId: req.requestId || body.request_id || null,
+    });
+    return res.json({
+      ok: true,
+      ...result,
     });
   } catch (error) {
     return handleError(res, error);

@@ -238,7 +238,7 @@ Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-03-RUNTIME-CLOSURE.md
 
 ## 6.10-04 Hybrid Retrieval
 
-Status: DONE_LOCAL on branch `feat/f6-10-04-hybrid-retrieval`; runtime validation pending user deploy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-04-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
@@ -252,6 +252,24 @@ Status: DONE_LOCAL on branch `feat/f6-10-04-hybrid-retrieval`; runtime validatio
 | Lifecycle | Default official retrieval returns `knowledge_documents.status='active'`; rejected/error/deprecated are excluded. |
 | API | `POST /api/knowledge-base/retrieval/search`; RBAC uses existing tenant read roles through explicit `knowledge.retrieval.read` rule. |
 | Boundary | Returns candidates/provenance only; no LLM answer, citation contract, reranker, external vector DB or new storage. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
+
+## 6.10-05 RAG Grounded Answer + Citations
+
+Status: DONE_LOCAL on branch `feat/f6-10-05-rag-grounded-citations`; runtime validation pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Contract version | `rag-grounded-answer-contract-v1` |
+| Owner/runtime | CODEX B / Knowledge Base v2, service boundary `backend/src/services/knowledge-base/knowledgeRag.service.js`. |
+| Candidate source | Reuses `knowledgeHybridRetrieval.service.js` / `hybrid-retrieval-contract-v1` as the only retrieval candidate source. |
+| Context builder | Materializes `knowledge_document_chunks.chunk_text` only for Hybrid Retrieval candidate IDs in a tenant-scoped batch, then builds bounded evidence-only context. |
+| LLM provider | Reuses backend `AiEngineClient` and AI Engine `call_llm_json` through `/api/ai/knowledge/rag-answer`; provider/model/version remain runtime configuration/provenance, not product-hardcoded truth. |
+| Citations | Citation IDs are generated before LLM call and can only reference retrieved candidate chunks/documents with tenant, version, checksum, source authority and retrieval provenance. |
+| Grounding validation | Backend deterministically rejects fabricated citation IDs, grounded answers without citations and invalid structured output; empty/insufficient evidence abstains. |
+| Tenant isolation | Tenant comes from authenticated context; filters cannot override tenant; foreign candidate/evidence rows are discarded before context and citation assembly. |
+| API | `POST /api/knowledge-base/rag/answer`; RBAC uses existing tenant read roles through explicit `knowledge.rag.answer` rule. |
+| Persistence | Runtime projection only; no response table, cache truth, second KB, second retrieval engine or chunk copy. |
 | Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
 
 ## PUI-01 Source Ownership Inventory

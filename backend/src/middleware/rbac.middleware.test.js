@@ -207,6 +207,9 @@ assert.equal(knowledgeIngestionRead.nextCalled, true, 'viewer can read tenant kn
 const knowledgeRetrievalRead = authorize({ method: 'POST', path: '/api/knowledge-base/retrieval/search', role: 'viewer' });
 assert.equal(knowledgeRetrievalRead.nextCalled, true, 'viewer can run read-only hybrid knowledge retrieval');
 
+const knowledgeRagRead = authorize({ method: 'POST', path: '/api/knowledge-base/rag/answer', role: 'viewer' });
+assert.equal(knowledgeRagRead.nextCalled, true, 'viewer can request read-only grounded RAG answer');
+
 const knowledgeIngestionAdminWrite = authorize({ method: 'POST', path: '/api/knowledge-base/ingestions', role: 'tenant_admin' });
 assert.equal(knowledgeIngestionAdminWrite.nextCalled, true, 'tenant_admin can ingest tenant knowledge documents');
 
