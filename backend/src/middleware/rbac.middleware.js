@@ -257,6 +257,12 @@ const API_RULES = [
     roles: TENANT_READ_ROLES,
   },
   {
+    method: 'POST',
+    pattern: /^\/api\/knowledge-base\/rag\/answer$/,
+    permission: 'knowledge.rag.answer',
+    roles: TENANT_READ_ROLES,
+  },
+  {
     prefix: '/api/knowledge-base',
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,
