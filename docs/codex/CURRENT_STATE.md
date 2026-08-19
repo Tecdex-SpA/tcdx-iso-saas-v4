@@ -2,7 +2,7 @@
 
 Actualizado: 2026-08-19
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
-Remote/base `main` verificado para cierre runtime 6.9-02: `ddd97e02fe7b0c536ab3c3345c2d8d4453febb55`
+Remote/base `main` verificado para cierre runtime 6.9-03: `cb8b0d853521971b0d4d0f2768c9e3b8c967102a`
 Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto.
 
 ## Estado del programa
@@ -12,7 +12,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PUI-02: DONE (escala/unidad y normalización canónica cerradas localmente para el alcance focal; validación manual/CI pendiente por diseño).
 - PUI-03: DONE (semantica canonica de conteos y poblaciones cerrada localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-04: DONE (validación manual externa confirmada sobre `main/deploy` commit `7a9df185f06be031757d0d79f25aa59b27a53bbf`; focal test y deploy OK reportados por responsable del proyecto).
-- PUI-05: DONE (normalización canónica/versionada de estados por dominio cerrada localmente para Math Governance focal; validación manual/CI pendiente por diseño).
+- PUI-05: DONE (normalización canónica/versionada de estados por dominio en el alcance focal; validación manual/CI pendiente por diseño).
 - PUI-06: DONE (fallback legacy gobernado implementado y cierre manual/deploy confirmado en `docs/codex/handoffs/PUI-06.md`).
 - PUI-07: DONE (Data Trust determinístico/versionado cerrado localmente para Math Governance focal; validación manual/CI pendiente por diseño).
 - PUI-07-HF1: DONE local (pipeline oficial consolidado sobre `officialCalculationOrchestrator -> sourceResolver -> PUI-01..PUI-07`; validación manual/CI/deploy pendiente por diseño).
@@ -35,7 +35,8 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - 6.8-03: CLOSED / PASS_RUNTIME (GRC Gap Model canónico validado post-deploy por `docs/codex/handoffs/6.8-03-RUNTIME-CLOSURE.md`; `F6_8_03_RUNTIME=PASS`, `F6_8_03=CLOSED`, Observation -> Gap runtime confirmado vía `grc_observation_relations`).
 - 6.9-01: CLOSED / integrado en `main` mediante `f19709d8deb3dd808e362ebaf6dd7ef4adfe21a3`; inventario canónico de relaciones GRC en `docs/architecture/grc_relationship_inventory.md`: 38 familias, 32 persistidas, 6 derivadas, 8 canónicas, 25 domain-specific y 0 duplicate candidates.
 - 6.9-02: CLOSED / PASS_RUNTIME. Impact Graph 2.0 foundation está mergeada en `main@ddd97e02fe7b0c536ab3c3345c2d8d4453febb55` como proyección/adapters en `backend/src/services/grc/impactGraph.service.js`; runtime confirmó modelo `impact-graph-2-foundation-v1`, provenance persisted+derived Observation -> Gap, determinismo, límites, aislamiento cross-tenant, 0 graph storage paralelo y 0 segundo source of truth. Cierre: `docs/codex/handoffs/6.9-02-RUNTIME-CLOSURE.md`.
-- 6.9-03: DONE_LOCAL. Priority Engine 2.0 implementado como proyección determinística `priority-engine-2-v1` sobre `grc_gaps` + Impact Graph 2.0, sin migraciones ni storage de prioridad; expone GET `/api/grc/priorities` y GET `/api/grc/priorities/:entityType/:id` para sujetos `grc_gap` v1 con factores explicables, provenance, RBAC `workflow.read`, tenant scope y límites de graph traversal. `F6_9_03_RUNTIME=PENDING_USER_DEPLOY_VALIDATION`.
+- 6.9-03: CLOSED / PASS_RUNTIME. Priority Engine 2.0 está mergeado en `main@cb8b0d853521971b0d4d0f2768c9e3b8c967102a` como proyección determinística `priority-engine-2-v1` sobre `grc_gaps` + Impact Graph 2.0; runtime post-deploy confirmó pruebas focales GRC/RBAC, rutas `GET /api/grc/priorities` y `GET /api/grc/priorities/:entityType/:id`, 0 tablas priority/priority_engine, ausencia de `grc_observation_links` y conservación de `grc_gaps`, `grc_observation_relations` y `grc_observations`. `F6_9_03_RUNTIME=PASS`, `LLM_SCORE_AUTHORITY=0`, `NEW_PRIORITY_SOURCE_OF_TRUTH=0`. Cierre: `docs/codex/handoffs/6.9-03-RUNTIME-CLOSURE.md`.
+- 6.10-01: READY. Siguiente objetivo: Modelo de documentos de conocimiento sobre Knowledge Base v2 existente, con tenant scope, versionado y sin segunda KB. Ejecución autorizada en `tecdex3-codex` bajo alcance CODEX B por reasignación operativa de cuenta; no cambia ownership funcional del dominio.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -97,6 +98,8 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - CODEX B / `tecdex2-codex`: AI / Knowledge / RAG / Regulatory.
 - CODEX C / `tecdex3-codex`: Frontend / UX / Product E2E.
 
+Reasignación operativa vigente: por disponibilidad de cuenta, `6.10-01` se ejecutará desde `tecdex3-codex` bajo alcance CODEX B. Esta reasignación no transfiere ownership funcional del dominio ni habilita repo-wide scan.
+
 ## Política de validación
 
 `CODEX_VALIDATION_MODE = FOCUSED_MINIMAL`
@@ -106,9 +109,9 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa diff/commit local de `6.9-03`, ejecuta push/PR/CI/merge/deploy si acepta.
-2. Validar runtime post-deploy de `6.9-03` con tenant poblado, tenant ajeno y tenant vacío antes de declarar PASS runtime.
-3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01 y 6.9-02 salvo evidencia objetiva nueva.
+1. Mergear `docs/f6-9-03-runtime-closure` en `main`.
+2. Iniciar `6.10-01 — Modelo de documentos de conocimiento` desde `main` actualizado con `tecdex3-codex`, respetando alcance CODEX B, continuidad obligatoria y `FOCUSED_MINIMAL`.
+3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03 y 6.9-01..6.9-03 salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -140,4 +143,5 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.9-02.md`
 - `docs/codex/handoffs/6.9-02-RUNTIME-CLOSURE.md`
 - `docs/codex/handoffs/6.9-03.md`
+- `docs/codex/handoffs/6.9-03-RUNTIME-CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`
