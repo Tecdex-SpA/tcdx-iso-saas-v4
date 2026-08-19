@@ -190,10 +190,9 @@ function projectDocument(row = {}) {
   };
 }
 
-function createKnowledgeDocumentService(db = pool) {
-  async function insertDocument(client, input) {
-    const result = await client.query(
-      `INSERT INTO knowledge_documents (
+async function insertKnowledgeDocumentRow(client, input) {
+  const result = await client.query(
+    `INSERT INTO knowledge_documents (
          document_key,scope,tenant_id,classification,document_type,title,version,status,
          effective_from,effective_to,supersedes_document_id,source_authority,source_uri_or_reference,
          original_file_reference,original_file_checksum,extracted_text_reference,extracted_text_checksum,
@@ -203,23 +202,24 @@ function createKnowledgeDocumentService(db = pool) {
          $14,$15,$16,$17,$18,$19::jsonb
        )
        RETURNING *`,
-      [
-        input.document_key, input.scope, input.tenant_id, input.classification, input.document_type,
-        input.title, input.version, input.status, input.effective_from, input.effective_to,
-        input.supersedes_document_id, input.source_authority, input.source_uri_or_reference,
-        input.original_file_reference, input.original_file_checksum, input.extracted_text_reference,
-        input.extracted_text_checksum, input.content_checksum, JSON.stringify(input.metadata),
-      ]
-    );
-    return projectDocument(result.rows[0]);
-  }
+    [
+      input.document_key, input.scope, input.tenant_id, input.classification, input.document_type,
+      input.title, input.version, input.status, input.effective_from, input.effective_to,
+      input.supersedes_document_id, input.source_authority, input.source_uri_or_reference,
+      input.original_file_reference, input.original_file_checksum, input.extracted_text_reference,
+      input.extracted_text_checksum, input.content_checksum, JSON.stringify(input.metadata),
+    ]
+  );
+  return projectDocument(result.rows[0]);
+}
 
+function createKnowledgeDocumentService(db = pool) {
   async function createDocument(body = {}) {
     const input = normalizeDocumentInput(body);
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      const row = await insertDocument(client, input);
+      const row = await insertKnowledgeDocumentRow(client, input);
       await client.query('COMMIT');
       return row;
     } catch (error) {
@@ -287,7 +287,7 @@ function createKnowledgeDocumentService(db = pool) {
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      const row = await insertDocument(client, input);
+      const row = await insertKnowledgeDocumentRow(client, input);
       await client.query('COMMIT');
       return row;
     } catch (error) {
@@ -348,5 +348,6 @@ module.exports = {
   VALID_TRANSITIONS,
   KnowledgeDocumentError,
   normalizeDocumentInput,
+  insertKnowledgeDocumentRow,
   createKnowledgeDocumentService,
 };

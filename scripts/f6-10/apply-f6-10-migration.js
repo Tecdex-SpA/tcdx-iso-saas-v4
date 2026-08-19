@@ -14,6 +14,11 @@ const MIGRATIONS = Object.freeze([
     file: path.join(root, 'database/migrations/20260819_f6_10_01_knowledge_document_model.sql'),
     postconditions: postconditionsKnowledgeDocumentModel,
   },
+  {
+    id: '20260819_f6_10_02_tenant_document_ingestion',
+    file: path.join(root, 'database/migrations/20260819_f6_10_02_tenant_document_ingestion.sql'),
+    postconditions: postconditionsTenantDocumentIngestion,
+  },
 ]);
 const LOCK_NAMESPACE = 844332;
 const LOCK_KEY = 2026081910;
@@ -115,6 +120,41 @@ async function postconditionsKnowledgeDocumentModel(client) {
   const row = result.rows[0] || {};
   if (Object.values(row).some((value) => value !== true)) {
     throw new Error(`F6.10 knowledge document model postcondition failed: ${JSON.stringify(row)}`);
+  }
+  return row;
+}
+
+async function postconditionsTenantDocumentIngestion(client) {
+  const result = await client.query(`SELECT
+    to_regclass('public.knowledge_documents') IS NOT NULL AS knowledge_documents_ready,
+    to_regclass('public.knowledge_sources') IS NOT NULL AS knowledge_sources_ready,
+    to_regclass('public.knowledge_document_ingestions') IS NOT NULL AS ingestions_ready,
+    to_regclass('public.knowledge_document_chunks') IS NOT NULL AS chunks_ready,
+    to_regclass('public.knowledge_document_ingestion_audit') IS NOT NULL AS audit_ready,
+    to_regclass('public.knowledge_base_v3') IS NULL AS no_second_kb,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname='knowledge_document_ingestions_scope_check'
+    ) AS ingestion_scope_constraint_ready,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname='knowledge_document_ingestions_sensitive_check'
+    ) AS sensitive_constraint_ready,
+    EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname='public'
+        AND tablename='knowledge_document_ingestions'
+        AND indexname='ux_knowledge_document_ingestions_idempotency'
+    ) AS idempotency_index_ready,
+    NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public'
+        AND table_name IN ('knowledge_document_ingestions','knowledge_document_chunks','knowledge_document_ingestion_audit')
+        AND column_name IN ('embedding','embedding_vector','content_vector')
+    ) AS no_vector_columns`);
+  const row = result.rows[0] || {};
+  if (Object.values(row).some((value) => value !== true)) {
+    throw new Error(`F6.10 tenant document ingestion postcondition failed: ${JSON.stringify(row)}`);
   }
   return row;
 }

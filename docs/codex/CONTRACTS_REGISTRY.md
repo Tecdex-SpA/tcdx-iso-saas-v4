@@ -21,8 +21,9 @@
 | Graph Projection / Edge contract | CURRENT/6.9-02 | CODEX A | `impact-graph-2-foundation-v1` en `backend/src/services/grc/impactGraph.service.js`; proyección/adapters sobre truth existente, sin persistencia graph ni segundo source of truth. |
 | Priority contract | CURRENT/6.9-03 | CODEX C executing package | `priority-engine-2-v1`; proyección determinística sobre `grc_gaps` + Impact Graph 2.0, sin storage paralelo de prioridad. |
 | IntelligenceContext | PARTIAL | CODEX B | Backend + AI Engine deben reconciliar ownership. |
-| Knowledge Document | CURRENT/6.10-01-LOCAL | CODEX B | `knowledge-document-model-v1`; `knowledge_documents` extiende KB v2 con scope, tenant, versioning, lifecycle, checksums y provenance; runtime migration pendiente de deploy usuario. |
-| Knowledge Chunk | PLANNED | CODEX B | 6.10. |
+| Knowledge Document | CURRENT/6.10-01-RUNTIME | CODEX B | `knowledge-document-model-v1`; `knowledge_documents` extiende KB v2 con scope, tenant, versioning, lifecycle, checksums y provenance; runtime closure PASS. |
+| Knowledge Ingestion | CURRENT/6.10-02-LOCAL | CODEX B | `knowledge-ingestion-pipeline-v1`; pipeline tenant-scoped con secure upload, extracción, chunks, audit, idempotencia y KB v2 linkage; runtime migration pendiente de deploy usuario. |
+| Knowledge Chunk | CURRENT/6.10-02-LOCAL | CODEX B | `knowledge_document_chunks`; manifest determinístico sin embeddings/vector columns, preparado para 6.10-03. |
 | RAG Citation | PLANNED | CODEX B | 6.10-05. |
 | Regulation | PLANNED | CODEX B | 6.11. |
 | RegulationVersion | PLANNED | CODEX B | 6.11. |
@@ -168,7 +169,7 @@ Status: DONE_LOCAL on branch `feat/f6-9-03-priority-engine-2`.
 
 ## 6.10-01 Knowledge Document Model
 
-Status: DONE_LOCAL on branch `feat/f6-10-01-knowledge-document-model`; runtime migration pending user deploy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-01-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
@@ -189,6 +190,30 @@ Status: DONE_LOCAL on branch `feat/f6-10-01-knowledge-document-model`; runtime m
 | Operational attachment boundary | `OPERATIONAL_ATTACHMENT_AUTO_PROMOTION=0`; uploads/evidence/audit/incident/vendor attachments require future explicit ingestion/promotion workflow before becoming published knowledge. |
 | AI boundary | LLM does not determine authoritative `scope`, `tenant_id`, `version`, `status` or checksum truth. |
 | Future readiness | Supports 6.10-02 tenant ingestion, 6.10-03 pgvector/embeddings, 6.10-04 hybrid retrieval and 6.10-05 citations without implementing them in 6.10-01. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
+
+## 6.10-02 Tenant Document Ingestion
+
+Status: DONE_LOCAL on branch `feat/f6-10-02-tenant-document-ingestion`; runtime migration pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Contract version | `knowledge-ingestion-pipeline-v1` |
+| Owner/runtime | CODEX B / Knowledge Base v2, service boundary `backend/src/services/knowledge-base/knowledgeIngestion.service.js`. |
+| API | `GET /api/knowledge-base/ingestions`, `GET /api/knowledge-base/ingestions/:id`, `POST /api/knowledge-base/ingestions`. |
+| RBAC | Existing `/api/knowledge-base` RBAC prefix; read roles can view ingestion metadata, write restricted to existing tenant admin roles. |
+| Secure upload | Reuses `backend/src/utils/secureUpload.js` memory upload; one file, bounded fields, bounded size, MIME+extension validation and service-level signature validation. |
+| Supported types | PDF, TXT/Markdown and DOCX. OCR is not executed. Legacy `.doc` is not supported for tenant ingestion v1. |
+| Extraction | Reuses `documentContentExtraction.service.js` local storage extraction; no content fabrication when text is absent. |
+| Malware scan | No universal scanner exists; persisted as `malware_scan_status=not_available`. |
+| Sensitive handling | Rule-based minimum classification: `none`, `sensitive`, `secret_detected`; secrets reject activation and are not chunked. |
+| Storage/provenance | Original and extracted text use local references/checksums; binary content is not stored in DB. |
+| Document lifecycle | Inserts `knowledge_documents` as TENANT documents; successful flow records draft/indexing/active path and final `active`; no-text becomes `error`; secret content becomes `rejected`. |
+| Idempotency | Unique `(tenant_id,idempotency_key)` in `knowledge_document_ingestions`; default key derives from tenant, document key, version and original checksum. |
+| Chunks | `knowledge_document_chunks` stores deterministic heading/paragraph chunks with tenant, document, version, ordinal, offsets, page/section/heading when available and text checksum. No vector columns. |
+| KB v2 linkage | Active ingestions create/update `knowledge_sources` row with `knowledge_document_id`; `knowledge_items` remain untouched. |
+| Audit | `knowledge_document_ingestion_audit` records tenant, actor, document, checksums, method, status, request/correlation id, error code and metadata without full text/secrets. |
+| Vector/RAG boundary | `PGVECTOR_IMPLEMENTED=0`, `EMBEDDINGS_IMPLEMENTED=0`, `HYBRID_RETRIEVAL_IMPLEMENTED=0`, `RAG_ANSWER_CONTRACT_IMPLEMENTED=0`. |
 | Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
 
 ## PUI-01 Source Ownership Inventory
