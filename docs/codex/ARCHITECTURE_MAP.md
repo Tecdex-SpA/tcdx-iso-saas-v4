@@ -54,6 +54,7 @@ Backend Node/Express
         |      + tenant ingestion pipeline (`knowledge-ingestion-pipeline-v1`)
         |      + ingestion runs/audit/chunk manifest (`knowledge_document_ingestions`, `knowledge_document_ingestion_audit`, `knowledge_document_chunks`)
         |      + pgvector embedding foundation (`knowledge_chunk_embeddings`, `knowledge-embedding-contract-v1`)
+        |      + hybrid retrieval candidates (`hybrid-retrieval-contract-v1`)
         |      + structured search/matching/coverage/guardrails
         |
         +--> Intelligence services
@@ -120,5 +121,6 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - 6.9-03: CLOSED / PASS_RUNTIME; Priority Engine 2.0 implemented as `priority-engine-2-v1` projection over `grc_gaps` + Impact Graph with no priority storage/migration.
 - 6.10-01: CLOSED / PASS_RUNTIME; Knowledge Document model implemented as `knowledge-document-model-v1` over KB v2 with forward migration, no second KB and no pgvector/embeddings/retrieval/RAG implementation.
 - 6.10-02: CLOSED / PASS_RUNTIME; Tenant document ingestion implemented as `knowledge-ingestion-pipeline-v1` with secure upload, extraction, sensitive classification, deterministic chunk manifest, KB v2 linkage and audit; no pgvector/embeddings/retrieval/RAG implementation.
-- 6.10-03: DONE_LOCAL; pgvector embedding foundation implemented as `knowledge-embedding-contract-v1` with embedding-side table `knowledge_chunk_embeddings` referencing canonical `knowledge_document_chunks`, provider/model/version/dimensions metadata, failure/stale states and tenant-filter-first vector search primitive; no Hybrid Retrieval/RAG answer/citations/reranker.
-- Next work package readiness depends on 6.10-03 runtime validation/acceptance.
+- 6.10-03: CLOSED / PASS_RUNTIME; pgvector embedding foundation implemented as `knowledge-embedding-contract-v1` with embedding-side table `knowledge_chunk_embeddings` referencing canonical `knowledge_document_chunks`, provider/model/version/dimensions metadata, failure/stale states and tenant-filter-first vector search primitive; no Hybrid Retrieval/RAG answer/citations/reranker.
+- 6.10-04: DONE_LOCAL; Hybrid Retrieval implemented as `hybrid-retrieval-contract-v1` over lexical `knowledge_document_chunks` and vector `knowledge_chunk_embeddings`, with deterministic rank normalization, tenant filter first, lifecycle filtering and provenance for future citations; no RAG answer/citations/reranker.
+- Next work package readiness depends on 6.10-04 runtime validation/acceptance.

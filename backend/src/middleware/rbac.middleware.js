@@ -251,6 +251,12 @@ const API_RULES = [
     write: [],
   },
   {
+    method: 'POST',
+    pattern: /^\/api\/knowledge-base\/retrieval\/search$/,
+    permission: 'knowledge.retrieval.read',
+    roles: TENANT_READ_ROLES,
+  },
+  {
     prefix: '/api/knowledge-base',
     read: TENANT_READ_ROLES,
     write: TENANT_ADMIN_ROLES,

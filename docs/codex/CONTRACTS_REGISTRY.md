@@ -24,7 +24,8 @@
 | Knowledge Document | CURRENT/6.10-01-RUNTIME | CODEX B | `knowledge-document-model-v1`; `knowledge_documents` extiende KB v2 con scope, tenant, versioning, lifecycle, checksums y provenance; runtime closure PASS. |
 | Knowledge Ingestion | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge-ingestion-pipeline-v1`; pipeline tenant-scoped con secure upload, extracción, chunks, audit, idempotencia y KB v2 linkage; runtime closure PASS. |
 | Knowledge Chunk | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge_document_chunks`; manifest determinístico y chunk content canónico para documentos tenant; 6.10-03 lo referencia sin copiar `chunk_text`. |
-| Knowledge Embedding | CURRENT/6.10-03-LOCAL | CODEX B | `knowledge-embedding-contract-v1`; `knowledge_chunk_embeddings` persiste embeddings pgvector versionados por provider/model/model_version/dimensions/input_checksum con `tenant_id` explícito y FK a `knowledge_document_chunks`. |
+| Knowledge Embedding | CURRENT/6.10-03-RUNTIME | CODEX B | `knowledge-embedding-contract-v1`; `knowledge_chunk_embeddings` persiste embeddings pgvector versionados por provider/model/model_version/dimensions/input_checksum con `tenant_id` explícito y FK a `knowledge_document_chunks`; runtime closure PASS. |
+| Hybrid Retrieval | CURRENT/6.10-04-LOCAL | CODEX B | `hybrid-retrieval-contract-v1`; combina lexical sobre `knowledge_document_chunks` y vector sobre `knowledge_chunk_embeddings` con ranking determinístico versionado, tenant filter first y provenance para 6.10-05. |
 | RAG Citation | PLANNED | CODEX B | 6.10-05. |
 | Regulation | PLANNED | CODEX B | 6.11. |
 | RegulationVersion | PLANNED | CODEX B | 6.11. |
@@ -219,7 +220,7 @@ Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-02-RUNTIME-CLOSURE.md
 
 ## 6.10-03 pgvector Embedding Foundation
 
-Status: DONE_LOCAL on branch `feat/f6-10-03-pgvector-embeddings`; runtime validation pending user deploy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-03-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
@@ -234,6 +235,24 @@ Status: DONE_LOCAL on branch `feat/f6-10-03-pgvector-embeddings`; runtime valida
 | Search primitive | `searchTenantVectorCandidates` returns tenant-scoped chunk IDs/scores/metadata only; no hybrid lexical/graph/authority/reranking/RAG answer. |
 | Compatibility | `knowledge_documents`, `knowledge_document_ingestions`, `knowledge_document_chunks`, `knowledge_document_ingestion_audit`, `knowledge_sources` and KB v2 child tables remain compatible. |
 | Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
+
+## 6.10-04 Hybrid Retrieval
+
+Status: DONE_LOCAL on branch `feat/f6-10-04-hybrid-retrieval`; runtime validation pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Contract version | `hybrid-retrieval-contract-v1` |
+| Ranking version | `hybrid-rank-weighted-rank-normalization-v1` |
+| Owner/runtime | CODEX B / Knowledge Base v2, service boundary `backend/src/services/knowledge-base/knowledgeHybridRetrieval.service.js`. |
+| Lexical retrieval | Tenant-scoped SQL over `knowledge_document_chunks.chunk_text`; no copied lexical index/table and no external search engine. |
+| Vector retrieval | Reuses `knowledge_chunk_embeddings` and F6.10-03 embedding config/vector validation; only `ready` embeddings with matching provider/model/model_version/dimensions/contract participate. |
+| Ranking | Explicit weighted combination of normalized method ranks; default weights vector `0.55`, lexical `0.45`, normalized if overridden. |
+| Tenant isolation | Tenant filters are applied in SQL for lexical and vector channels before candidate ranking. |
+| Lifecycle | Default official retrieval returns `knowledge_documents.status='active'`; rejected/error/deprecated are excluded. |
+| API | `POST /api/knowledge-base/retrieval/search`; RBAC uses existing tenant read roles through explicit `knowledge.retrieval.read` rule. |
+| Boundary | Returns candidates/provenance only; no LLM answer, citation contract, reranker, external vector DB or new storage. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
 
 ## PUI-01 Source Ownership Inventory
 

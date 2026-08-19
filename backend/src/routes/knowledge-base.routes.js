@@ -6,12 +6,16 @@ const {
   createKnowledgeIngestionService,
 } = require('../services/knowledge-base/knowledgeIngestion.service');
 const {
+  createKnowledgeHybridRetrievalService,
+} = require('../services/knowledge-base/knowledgeHybridRetrieval.service');
+const {
   createMemoryUpload,
   safeUploadError,
 } = require('../utils/secureUpload');
 
 const router = express.Router();
 const ingestion = createKnowledgeIngestionService();
+const retrieval = createKnowledgeHybridRetrievalService();
 const tenantKnowledgeUpload = createMemoryUpload({
   allowedTypes: {
     '.pdf': ['application/pdf'],
@@ -101,6 +105,34 @@ router.get('/ingestions/:id', async (req, res) => {
   try {
     const row = await ingestion.getIngestion({ user: req.user, ingestionId: req.params.id });
     return sendData(res, row, { contract_version: ingestion.contractVersion });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+router.post('/retrieval/search', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const result = await retrieval.search({
+      user: req.user,
+      query: body.query || body.q || '',
+      queryEmbedding: body.query_embedding || body.queryEmbedding || null,
+      filters: body.filters || {},
+      embedding: body.embedding || {},
+      ranking: body.ranking || {},
+      limit: body.limit,
+      lexicalLimit: body.lexical_candidate_limit,
+      vectorLimit: body.vector_candidate_limit,
+    });
+    return sendData(res, result.candidates, {
+      contract_version: retrieval.contractVersion,
+      ranking_version: retrieval.rankingVersion,
+      tenant_id: result.tenant_id,
+      counts: result.counts,
+      limits: result.limits,
+      filters: result.filters,
+      ranking: result.ranking,
+    });
   } catch (error) {
     return handleError(res, error);
   }
