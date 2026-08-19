@@ -35,7 +35,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - 6.8-03: CLOSED / PASS_RUNTIME (GRC Gap Model canónico validado post-deploy por `docs/codex/handoffs/6.8-03-RUNTIME-CLOSURE.md`; `F6_8_03_RUNTIME=PASS`, `F6_8_03=CLOSED`, Observation -> Gap runtime confirmado vía `grc_observation_relations`).
 - 6.9-01: CLOSED / integrado en `main` mediante `f19709d8deb3dd808e362ebaf6dd7ef4adfe21a3`; inventario canónico de relaciones GRC en `docs/architecture/grc_relationship_inventory.md`: 38 familias, 32 persistidas, 6 derivadas, 8 canónicas, 25 domain-specific y 0 duplicate candidates.
 - 6.9-02: CLOSED / PASS_RUNTIME. Impact Graph 2.0 foundation está mergeada en `main@ddd97e02fe7b0c536ab3c3345c2d8d4453febb55` como proyección/adapters en `backend/src/services/grc/impactGraph.service.js`; runtime confirmó modelo `impact-graph-2-foundation-v1`, provenance persisted+derived Observation -> Gap, determinismo, límites, aislamiento cross-tenant, 0 graph storage paralelo y 0 segundo source of truth. Cierre: `docs/codex/handoffs/6.9-02-RUNTIME-CLOSURE.md`.
-- 6.9-03: READY. Siguiente objetivo: Priority Engine 2.0 determinístico, versionado y explicable; debe consumir la foundation 6.9-02 sin duplicar graph truth y mantener next-best-actions existente como compatibility/fallback adapter.
+- 6.9-03: DONE_LOCAL. Priority Engine 2.0 implementado como proyección determinística `priority-engine-2-v1` sobre `grc_gaps` + Impact Graph 2.0, sin migraciones ni storage de prioridad; expone GET `/api/grc/priorities` y GET `/api/grc/priorities/:entityType/:id` para sujetos `grc_gap` v1 con factores explicables, provenance, RBAC `workflow.read`, tenant scope y límites de graph traversal. `F6_9_03_RUNTIME=PENDING_USER_DEPLOY_VALIDATION`.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -106,8 +106,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Mergear este cierre documental de `6.9-02` en `main`.
-2. Iniciar `6.9-03 — Priority Engine 2.0` desde `main` actualizado, aplicando continuidad obligatoria y `FOCUSED_MINIMAL`.
+1. Usuario revisa diff/commit local de `6.9-03`, ejecuta push/PR/CI/merge/deploy si acepta.
+2. Validar runtime post-deploy de `6.9-03` con tenant poblado, tenant ajeno y tenant vacío antes de declarar PASS runtime.
 3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01 y 6.9-02 salvo evidencia objetiva nueva.
 
 ## Handoff relevante
@@ -139,4 +139,5 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.9-01.md`
 - `docs/codex/handoffs/6.9-02.md`
 - `docs/codex/handoffs/6.9-02-RUNTIME-CLOSURE.md`
+- `docs/codex/handoffs/6.9-03.md`
 - `docs/architecture/grc_relationship_inventory.md`

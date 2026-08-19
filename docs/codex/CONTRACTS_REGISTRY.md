@@ -19,7 +19,7 @@
 | Gap contract | CURRENT/6.8-03-RUNTIME | CODEX A | `grc_gaps` + `grc_gap_rules` + `grc_gap_status_history` + `grc_gap_hypotheses`; deterministic Gap sobre Observations canónicas; AI hypotheses separadas; runtime cerrado. |
 | Relationship inventory / graph input contract | CURRENT/6.9-01 | CODEX A | `docs/architecture/grc_relationship_inventory.md`; Impact Graph debe proyectar/adaptar truth existente, no duplicar relaciones. |
 | Graph Projection / Edge contract | CURRENT/6.9-02 | CODEX A | `impact-graph-2-foundation-v1` en `backend/src/services/grc/impactGraph.service.js`; proyección/adapters sobre truth existente, sin persistencia graph ni segundo source of truth. |
-| Priority contract | PLANNED | CODEX B | 6.9-03; score determinístico/versionado. |
+| Priority contract | CURRENT/6.9-03 | CODEX C executing package | `priority-engine-2-v1`; proyección determinística sobre `grc_gaps` + Impact Graph 2.0, sin storage paralelo de prioridad. |
 | IntelligenceContext | PARTIAL | CODEX B | Backend + AI Engine deben reconciliar ownership. |
 | Knowledge Document | PLANNED/PARTIAL | CODEX B | KB v2 existe; modelo documental universal pendiente. |
 | Knowledge Chunk | PLANNED | CODEX B | 6.10. |
@@ -144,6 +144,26 @@ Status: DONE_LOCAL on branch `feat/f6-9-02-impact-graph-foundation`.
 | Runtime surface | GET `/api/grc/impact-graph/nodes/:entityType/:id/relationships`; GET `/api/grc/impact-graph/neighborhood/:entityType/:id`. |
 | RBAC | Existing GRC route protection plus service permission `workflow.read`; no new permission/migration. |
 | Limits | `depth<=3`, `max_nodes<=100`, `max_edges<=200`. |
+| Versioning | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
+
+## 6.9-03 Priority Engine 2.0
+
+Status: DONE_LOCAL on branch `feat/f6-9-03-priority-engine-2`.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Model version | `priority-engine-2-v1` |
+| Owner/runtime | `backend/src/services/grc/priorityEngine.service.js` through existing GRC facade. |
+| Storage decision | No priority table/storage was created; no migration was added. Results are reproducible projections over existing truth. |
+| Subject v1 | `grc_gap` only; non-Gap entity priority remains future expansion through Intelligence/Cross-GRC orchestration. |
+| Inputs | `grc_gaps` for deterministic Gap truth and `impactGraph.service.js` (`impact-graph-2-foundation-v1`) for bounded relationship/provenance context. |
+| Factors | `gap_severity` max 35, `gap_lifecycle_status` max 20, `data_trust_state` max 15, `impact_graph_breadth` max 20, `canonical_gap_provenance` max 10. |
+| Score | Sum of factor contributions clamped to 0..100; bands: `urgent >=75`, `high >=50`, `medium >=25`, else `low`. |
+| Tie-breaking | `priority_score desc`, severity weight desc, status weight desc, subject type asc, subject id asc. |
+| Explainability | Every result returns `factors[]` with value, contribution, rule and source, plus provenance and graph limits. |
+| API | GET `/api/grc/priorities`; GET `/api/grc/priorities/:entityType/:id`. |
+| RBAC | Existing `workflow.read`; no new permission/migration. |
+| AI boundary | AI never creates score/order; `ai_priority_truth=false`. |
 | Versioning | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
 
 ## PUI-01 Source Ownership Inventory

@@ -8,6 +8,7 @@ const { createGrcBootstrapService } = require('./grcBootstrap.service');
 const { createGrcObservationService } = require('./grcObservation.service');
 const { createGrcGapService } = require('./grcGap.service');
 const { createImpactGraphService } = require('./impactGraph.service');
+const { createPriorityEngineService } = require('./priorityEngine.service');
 
 const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 
@@ -41,6 +42,7 @@ function createGrcService(pool, asyncJobs) {
   let observationService = null;
   let gapService = null;
   let impactGraphService = null;
+  let priorityEngineService = null;
 
   async function withTransaction(work) {
     const client = await pool.connect();
@@ -1857,6 +1859,17 @@ function createGrcService(pool, asyncJobs) {
     return impactGraphService;
   }
 
+  function priorityEngine() {
+    if (!priorityEngineService) {
+      priorityEngineService = createPriorityEngineService(pool, {
+        GrcError,
+        assertUuid,
+        impactGraph: impactGraph(),
+      });
+    }
+    return priorityEngineService;
+  }
+
   async function listObservations({ tenantId, filters }) {
     return observations().listObservations({ tenantId, filters });
   }
@@ -1902,6 +1915,14 @@ function createGrcService(pool, asyncJobs) {
 
   async function transitionGap({ tenantId, userId, gapId, body, correlationId }) {
     return gaps().transitionGap({ tenantId, userId, gapId, body, correlationId });
+  }
+
+  async function listPriorities({ tenantId, filters }) {
+    return priorityEngine().listPriorities({ tenantId, filters });
+  }
+
+  async function getPriority({ tenantId, entityType, entityId, filters }) {
+    return priorityEngine().getPriority({ tenantId, entityType, entityId, filters });
   }
 
   async function getImpactGraphRelationships({ tenantId, entityType, entityId, filters }) {
@@ -1965,6 +1986,7 @@ function createGrcService(pool, asyncJobs) {
     getImpactGraphRelationships,
     getMeta,
     getObservation,
+    getPriority,
     getReadiness,
     getSummary,
     getWorkflowInstance,
@@ -1972,6 +1994,7 @@ function createGrcService(pool, asyncJobs) {
     getRuntimeAdapter,
     listGaps,
     listObservations,
+    listPriorities,
     listEvidenceRequests,
     listEscalationPolicies,
     listFrameworkRequirements,
