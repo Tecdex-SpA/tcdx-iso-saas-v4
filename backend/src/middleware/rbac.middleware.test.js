@@ -201,6 +201,20 @@ const gapViewerWriteDenied = authorize({ method: 'POST', path: '/api/grc/gaps/ev
 assert.equal(gapViewerWriteDenied.nextCalled, false, 'viewer cannot evaluate GRC gaps');
 assert.equal(gapViewerWriteDenied.res.statusCode, 403);
 
+const knowledgeIngestionRead = authorize({ method: 'GET', path: '/api/knowledge-base/ingestions', role: 'viewer' });
+assert.equal(knowledgeIngestionRead.nextCalled, true, 'viewer can read tenant knowledge ingestion metadata');
+
+const knowledgeIngestionAdminWrite = authorize({ method: 'POST', path: '/api/knowledge-base/ingestions', role: 'tenant_admin' });
+assert.equal(knowledgeIngestionAdminWrite.nextCalled, true, 'tenant_admin can ingest tenant knowledge documents');
+
+const knowledgeIngestionAuditorWrite = authorize({ method: 'POST', path: '/api/knowledge-base/ingestions', role: 'auditor' });
+assert.equal(knowledgeIngestionAuditorWrite.nextCalled, false, 'auditor cannot ingest tenant knowledge documents');
+assert.equal(knowledgeIngestionAuditorWrite.res.statusCode, 403);
+
+const knowledgeIngestionViewerWrite = authorize({ method: 'POST', path: '/api/knowledge-base/ingestions', role: 'viewer' });
+assert.equal(knowledgeIngestionViewerWrite.nextCalled, false, 'viewer cannot ingest tenant knowledge documents');
+assert.equal(knowledgeIngestionViewerWrite.res.statusCode, 403);
+
 const definitions = listImportDefinitions();
 assert.equal(definitions.length, 33);
 assert.equal(

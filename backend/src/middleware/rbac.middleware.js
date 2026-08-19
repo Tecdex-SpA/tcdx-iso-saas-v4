@@ -253,7 +253,7 @@ const API_RULES = [
   {
     prefix: '/api/knowledge-base',
     read: TENANT_READ_ROLES,
-    write: [],
+    write: TENANT_ADMIN_ROLES,
   },
   {
     prefix: '/api/intelligence',
