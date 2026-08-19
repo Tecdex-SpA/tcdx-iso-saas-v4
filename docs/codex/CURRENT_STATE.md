@@ -2,8 +2,8 @@
 
 Actualizado: 2026-08-19
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
-Remote/base `main` verificado para cierre runtime 6.9-03: `cb8b0d853521971b0d4d0f2768c9e3b8c967102a`
-Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto.
+Remote/base `main` verificado para 6.10-01: `0f7c19d97bcf0700156db923217f8b2e5bcab5e8`
+Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre local 6.10-01.
 
 ## Estado del programa
 
@@ -36,7 +36,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - 6.9-01: CLOSED / integrado en `main` mediante `f19709d8deb3dd808e362ebaf6dd7ef4adfe21a3`; inventario canónico de relaciones GRC en `docs/architecture/grc_relationship_inventory.md`: 38 familias, 32 persistidas, 6 derivadas, 8 canónicas, 25 domain-specific y 0 duplicate candidates.
 - 6.9-02: CLOSED / PASS_RUNTIME. Impact Graph 2.0 foundation está mergeada en `main@ddd97e02fe7b0c536ab3c3345c2d8d4453febb55` como proyección/adapters en `backend/src/services/grc/impactGraph.service.js`; runtime confirmó modelo `impact-graph-2-foundation-v1`, provenance persisted+derived Observation -> Gap, determinismo, límites, aislamiento cross-tenant, 0 graph storage paralelo y 0 segundo source of truth. Cierre: `docs/codex/handoffs/6.9-02-RUNTIME-CLOSURE.md`.
 - 6.9-03: CLOSED / PASS_RUNTIME. Priority Engine 2.0 está mergeado en `main@cb8b0d853521971b0d4d0f2768c9e3b8c967102a` como proyección determinística `priority-engine-2-v1` sobre `grc_gaps` + Impact Graph 2.0; runtime post-deploy confirmó pruebas focales GRC/RBAC, rutas `GET /api/grc/priorities` y `GET /api/grc/priorities/:entityType/:id`, 0 tablas priority/priority_engine, ausencia de `grc_observation_links` y conservación de `grc_gaps`, `grc_observation_relations` y `grc_observations`. `F6_9_03_RUNTIME=PASS`, `LLM_SCORE_AUTHORITY=0`, `NEW_PRIORITY_SOURCE_OF_TRUTH=0`. Cierre: `docs/codex/handoffs/6.9-03-RUNTIME-CLOSURE.md`.
-- 6.10-01: READY. Siguiente objetivo: Modelo de documentos de conocimiento sobre Knowledge Base v2 existente, con tenant scope, versionado y sin segunda KB. Ejecución autorizada en `tecdex3-codex` bajo alcance CODEX B por reasignación operativa de cuenta; no cambia ownership funcional del dominio.
+- 6.10-01: DONE_LOCAL. Modelo canónico `knowledge-document-model-v1` implementado sobre Knowledge Base v2 mediante `knowledge_documents` + enlace aditivo `knowledge_sources.knowledge_document_id`; soporta scopes `GLOBAL`/`REGULATORY`/`TENANT`, versionado/supersession, lifecycle, vigencia, checksums, provenance de archivo/texto extraído y aislamiento tenant en service boundary/DB constraints. No crea segunda KB, no toca `knowledge_items` ni child tables, no crea pgvector/embeddings/retrieval/RAG. Runtime pendiente de deploy/migración por el usuario.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -109,8 +109,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Mergear `docs/f6-9-03-runtime-closure` en `main`.
-2. Iniciar `6.10-01 — Modelo de documentos de conocimiento` desde `main` actualizado con `tecdex3-codex`, respetando alcance CODEX B, continuidad obligatoria y `FOCUSED_MINIMAL`.
+1. Usuario ejecuta push/PR/CI/deploy de `feat/f6-10-01-knowledge-document-model` y aplica el runner `scripts/f6-10/apply-f6-10-migration.js` vía flujo registrado.
+2. Usuario valida runtime 6.10-01 y registra handoff de cierre antes de habilitar 6.10-02 ingestion tenant.
 3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03 y 6.9-01..6.9-03 salvo evidencia objetiva nueva.
 
 ## Handoff relevante
@@ -144,4 +144,5 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.9-02-RUNTIME-CLOSURE.md`
 - `docs/codex/handoffs/6.9-03.md`
 - `docs/codex/handoffs/6.9-03-RUNTIME-CLOSURE.md`
+- `docs/codex/handoffs/6.10-01.md`
 - `docs/architecture/grc_relationship_inventory.md`
