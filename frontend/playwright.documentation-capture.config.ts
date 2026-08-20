@@ -16,7 +16,7 @@ export default defineConfig({
   ],
   use: {
     baseURL: process.env.DOC_WEB_BASE_URL,
-    viewport: { width: 1440, height: 1100 },
+    viewport: { width: 1440, height: 1024 },
     locale: 'es-CL',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
