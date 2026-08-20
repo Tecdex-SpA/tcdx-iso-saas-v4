@@ -1,0 +1,48 @@
+name: Documentation dashboard health
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/documentation-dashboard-health.yml'
+      - 'frontend/tests/e2e/documentation-dashboard-health.spec.ts'
+      - 'frontend/playwright.documentation-capture.config.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: documentation
+    env:
+      DOC_WEB_BASE_URL: https://tcdx-iso.tecdex.net
+      DOC_API_BASE_URL: ${{ secrets.DOC_API_BASE_URL }}
+      DOC_DEMO_PASSWORD: ${{ secrets.DOC_DEMO_PASSWORD }}
+      DOC_CAPTURE_DIR: artifacts/documentation/screenshots
+      DOC_RESULTS_FILE: ../artifacts/documentation/dashboard-health-results.json
+      DOC_REPORT_DIR: ../artifacts/documentation/dashboard-health-report
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Capture Dashboard KPI and ISO Health
+        working-directory: frontend
+        run: npx playwright test tests/e2e/documentation-dashboard-health.spec.ts --config=playwright.documentation-capture.config.ts
+      - if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: tcdx-documentation-dashboard-health-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            artifacts/documentation/
+            frontend/test-results/
