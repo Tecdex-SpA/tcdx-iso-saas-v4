@@ -8,6 +8,8 @@ on:
       - '.github/workflows/documentation-capture.yml'
       - 'frontend/playwright.documentation-capture.config.ts'
       - 'frontend/tests/e2e/documentation-capture.spec.ts'
+      - 'frontend/tests/e2e/documentation-readiness.spec.ts'
+      - 'frontend/tests/e2e/documentation-transactional.spec.ts'
       - 'docs/user-manual/**'
   workflow_dispatch:
     inputs:
@@ -40,6 +42,7 @@ jobs:
       DOC_API_BASE_URL: ${{ secrets.DOC_API_BASE_URL }}
       DOC_DEMO_PASSWORD: ${{ secrets.DOC_DEMO_PASSWORD }}
       DOC_SCENARIO: ${{ github.event.inputs.scenario || 'all' }}
+      DOC_ENABLE_WRITES: 'true'
       DOC_CAPTURE_DIR: artifacts/documentation/screenshots
       DOC_MANIFEST_FILE: artifacts/documentation/manifest.json
       DOC_VALIDATION_FILE: artifacts/documentation/validation.json
@@ -67,6 +70,11 @@ jobs:
             echo "::error::Documentation capture is restricted to the approved TCDX production URL"
             exit 1
           fi
+          if [[ "$DOC_ENABLE_WRITES" != "true" ]]; then
+            echo "::error::Transactional baseline must be explicitly enabled for this validation run"
+            exit 1
+          fi
+          echo "Write scope is enforced by documentation-transactional.spec.ts: exact demo admin accounts and DOC-* codes only."
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
