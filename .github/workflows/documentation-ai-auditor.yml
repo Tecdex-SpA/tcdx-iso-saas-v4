@@ -1,0 +1,47 @@
+name: Documentation AI Auditor
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/documentation-ai-auditor.yml'
+      - 'frontend/tests/e2e/documentation-ai-auditor.spec.ts'
+      - 'frontend/playwright.documentation-capture.config.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  ai-auditor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: documentation
+    env:
+      DOC_WEB_BASE_URL: https://tcdx-iso.tecdex.net
+      DOC_DEMO_PASSWORD: ${{ secrets.DOC_DEMO_PASSWORD }}
+      DOC_CAPTURE_DIR: artifacts/documentation/screenshots
+      DOC_RESULTS_FILE: ../artifacts/documentation/ai-auditor-results.json
+      DOC_REPORT_DIR: ../artifacts/documentation/ai-auditor-report
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run Senior AI Auditor capture
+        working-directory: frontend
+        run: npx playwright test tests/e2e/documentation-ai-auditor.spec.ts --config=playwright.documentation-capture.config.ts
+      - if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: tcdx-documentation-ai-auditor-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            artifacts/documentation/
+            frontend/test-results/
