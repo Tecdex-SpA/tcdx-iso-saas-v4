@@ -18,6 +18,7 @@ jobs:
     environment: documentation
     env:
       DOC_WEB_BASE_URL: https://tcdx-iso.tecdex.net
+      DOC_API_BASE_URL: ${{ secrets.DOC_API_BASE_URL }}
       DOC_DEMO_PASSWORD: ${{ secrets.DOC_DEMO_PASSWORD }}
       DOC_CAPTURE_DIR: artifacts/documentation/screenshots
       DOC_RESULTS_FILE: ../artifacts/documentation/ai-auditor-results.json
