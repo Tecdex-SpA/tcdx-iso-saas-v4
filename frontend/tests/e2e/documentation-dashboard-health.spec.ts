@@ -31,14 +31,16 @@ async function auth(page: Page, email: string) {
 async function capture(page: Page, key: string, name: string) {
   const dir = path.join(out, key, 'dashboard-health');
   fs.mkdirSync(dir, { recursive: true });
-  await page.screenshot({ path: path.join(dir, `${name}.png`), fullPage: true });
+  await page.screenshot({ path: path.join(dir, `${name}.png`), fullPage: false });
 }
 
-async function openStable(page: Page, route: string) {
+async function openEntitled(page: Page, route: string) {
   await page.goto(route, { waitUntil: 'domcontentloaded' });
   await expect(page).not.toHaveURL(/\/login/);
   await page.waitForLoadState('networkidle').catch(() => {});
   await page.waitForTimeout(1500);
+  const denied = page.getByText(/capacidad no est[aá] habilitada|m[oó]dulo no habilitado|no tiene permiso/i);
+  await expect(denied).toHaveCount(0);
 }
 
 test.beforeAll(() => {
@@ -48,25 +50,19 @@ test.beforeAll(() => {
 });
 
 for (const s of scenarios) {
-  test(`${s.key} dashboard KPI and ISO health derived views`, async ({ page }) => {
+  test(`${s.key} dashboard and ISO health entitled views only`, async ({ page }) => {
     await auth(page, s.email);
 
-    await openStable(page, '/dashboard?view=executive');
+    await openEntitled(page, '/dashboard?view=executive');
     await capture(page, s.key, '01-dashboard-ejecutivo');
 
-    await openStable(page, '/dashboard?view=kpi');
+    await openEntitled(page, '/dashboard?view=kpi');
     await capture(page, s.key, '02-dashboard-kpi');
 
-    await openStable(page, '/dashboard?view=iso');
+    await openEntitled(page, '/dashboard?view=iso');
     await capture(page, s.key, '03-dashboard-salud-iso');
 
-    await openStable(page, '/indicadores');
-    await capture(page, s.key, '04-indicadores');
-
-    await openStable(page, '/administrar-kpis');
-    await capture(page, s.key, '05-administrar-kpis');
-
-    await openStable(page, '/iso-health');
-    await capture(page, s.key, '06-iso-health');
+    await openEntitled(page, '/iso-health');
+    await capture(page, s.key, '04-iso-health');
   });
 }
