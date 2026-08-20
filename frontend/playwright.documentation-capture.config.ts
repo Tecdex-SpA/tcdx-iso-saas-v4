@@ -16,12 +16,19 @@ export default defineConfig({
   ],
   use: {
     baseURL: process.env.DOC_WEB_BASE_URL,
-    viewport: { width: 1440, height: 1024 },
     locale: 'es-CL',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     ignoreHTTPSErrors: false,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{
+    name: 'chromium',
+    use: {
+      ...devices['Desktop Chrome'],
+      viewport: { width: 1920, height: 1080 },
+      screen: { width: 1920, height: 1080 },
+      deviceScaleFactor: 1,
+    },
+  }],
 });
