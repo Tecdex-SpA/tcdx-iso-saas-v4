@@ -49,16 +49,29 @@ async function json(api: APIRequestContext, method: 'GET' | 'POST' | 'PUT', url:
   return body;
 }
 
-function catalogRows(body: any): any[] {
+function collectionRows(body: any): any[] {
   if (Array.isArray(body)) return body;
-  for (const key of ['data', 'controls', 'items', 'rows']) if (Array.isArray(body?.[key])) return body[key];
+  const keys = [
+    'effective_controls',
+    'generic_controls',
+    'personalized_controls',
+    'evidences',
+    'data',
+    'controls',
+    'items',
+    'rows',
+  ];
+  for (const key of keys) if (Array.isArray(body?.[key])) return body[key];
+  if (body?.data && typeof body.data === 'object') {
+    for (const key of keys) if (Array.isArray(body.data?.[key])) return body.data[key];
+  }
   return [];
 }
 
 async function getOperationalControl(api: APIRequestContext, token: string, tenantId: string, iso: string) {
   let catalog = await json(api, 'GET', `/api/controls/catalog/${tenantId}/${iso}`, token);
-  let rows = catalogRows(catalog);
-  expect(rows.length, `catalog ${iso}`).toBeGreaterThan(0);
+  let rows = collectionRows(catalog);
+  expect(rows.length, `catalog ${iso}: ${JSON.stringify(Object.keys(catalog || {}))}`).toBeGreaterThan(0);
 
   let row = rows.find((item: any) => item.tenant_control_id) || rows.find((item: any) => item.id || item.control_id);
   expect(row).toBeTruthy();
@@ -66,9 +79,13 @@ async function getOperationalControl(api: APIRequestContext, token: string, tena
   if (!row.tenant_control_id) {
     const catalogControlId = String(row.id || row.control_id || row.catalog_control_id || '');
     expect(catalogControlId).toBeTruthy();
-    await json(api, 'POST', `/api/controls/catalog/${catalogControlId}/enable`, token, { tenant_id: tenantId, iso });
+    await json(api, 'POST', `/api/controls/catalog/${catalogControlId}/enable`, token, {
+      tenant_id: tenantId,
+      operation_id: catalog.operation?.id || undefined,
+      iso,
+    });
     catalog = await json(api, 'GET', `/api/controls/catalog/${tenantId}/${iso}`, token);
-    rows = catalogRows(catalog);
+    rows = collectionRows(catalog);
     row = rows.find((item: any) => String(item.id || item.control_id || item.catalog_control_id || '') === catalogControlId && item.tenant_control_id)
       || rows.find((item: any) => item.tenant_control_id);
   }
@@ -79,7 +96,7 @@ async function getOperationalControl(api: APIRequestContext, token: string, tena
 
 async function ensureEvidence(api: APIRequestContext, token: string, tenantId: string, scenario: Scenario, control: any) {
   const existingBody = await json(api, 'GET', `/api/evidences/${tenantId}?iso=${scenario.iso}`, token);
-  const existingRows = catalogRows(existingBody);
+  const existingRows = collectionRows(existingBody);
   let evidence = existingRows.find((item: any) => String(item.description || '').includes(scenario.evidenceCode));
   if (evidence) return evidence;
 
@@ -160,7 +177,7 @@ for (const scenario of scenarios) {
 
       await json(api, 'PUT', `/api/evidences/approve/${evidence.id}`, token, { status: 'aprobada' });
       const verified = await json(api, 'GET', `/api/evidences/${tenantId}?iso=${scenario.iso}`, token);
-      const verifiedRows = catalogRows(verified);
+      const verifiedRows = collectionRows(verified);
       const approved = verifiedRows.find((item: any) => String(item.id) === String(evidence.id));
       expect(String(approved?.status || '').toLowerCase()).toBe('aprobada');
 
