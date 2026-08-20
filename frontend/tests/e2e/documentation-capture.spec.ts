@@ -12,6 +12,17 @@ type Scenario = {
   accounts: Record<Role, string>;
 };
 
+type LoginResult = {
+  token: string;
+  body: any;
+};
+
+type Identity = {
+  tenantId: string;
+  role: string;
+  source: 'login_response' | 'jwt';
+};
+
 type ManifestEntry = {
   id: string;
   scenario: ScenarioKey;
@@ -132,13 +143,67 @@ function sanitizeRoute(route: string) {
   return query ? `${base}-${query.replace(/[^a-z0-9]+/gi, '-')}` : base;
 }
 
-async function login(api: APIRequestContext, email: string) {
+function decodeJwtPayload(token: string): Record<string, any> {
+  const parts = token.split('.');
+  if (parts.length < 2) return {};
+  try {
+    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padding = '='.repeat((4 - (normalized.length % 4)) % 4);
+    return JSON.parse(Buffer.from(normalized + padding, 'base64').toString('utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function pickIdentity(candidate: any): { tenantId: string; role: string } | null {
+  if (!candidate || typeof candidate !== 'object') return null;
+  const tenantId =
+    candidate.tenant_id ||
+    candidate.tenantId ||
+    candidate.company_id ||
+    candidate.companyId ||
+    candidate.tenant?.id ||
+    candidate.company?.id ||
+    '';
+  const role = candidate.role || candidate.user_role || candidate.userRole || candidate.profile || '';
+  if (!tenantId || !role) return null;
+  return { tenantId: String(tenantId), role: String(role).toLowerCase() };
+}
+
+function resolveIdentity(loginBody: any, token: string): Identity {
+  const loginCandidates = [
+    loginBody,
+    loginBody?.user,
+    loginBody?.data,
+    loginBody?.data?.user,
+    loginBody?.profile,
+  ];
+  for (const candidate of loginCandidates) {
+    const identity = pickIdentity(candidate);
+    if (identity) return { ...identity, source: 'login_response' };
+  }
+
+  const claims = decodeJwtPayload(token);
+  const jwtCandidates = [claims, claims?.user, claims?.data];
+  for (const candidate of jwtCandidates) {
+    const identity = pickIdentity(candidate);
+    if (identity) return { ...identity, source: 'jwt' };
+  }
+
+  const safeLoginKeys = loginBody && typeof loginBody === 'object' ? Object.keys(loginBody) : [];
+  const safeClaimKeys = Object.keys(claims);
+  throw new Error(
+    `Unable to resolve tenant/role from authenticated session. login keys=${safeLoginKeys.join(',')} jwt keys=${safeClaimKeys.join(',')}`,
+  );
+}
+
+async function login(api: APIRequestContext, email: string): Promise<LoginResult> {
   const response = await api.post('/api/auth/login', { data: { email, password } });
   const body = await response.json().catch(() => ({}));
   expect(response.status(), `Login failed for ${email}: ${JSON.stringify(body)}`).toBe(200);
   const token = body.token || body.accessToken || body.data?.token || body.data?.accessToken || '';
   expect(token, `Token missing for ${email}`).toBeTruthy();
-  return token as string;
+  return { token: String(token), body };
 }
 
 async function installSession(page: Page, token: string) {
@@ -146,17 +211,6 @@ async function installSession(page: Page, token: string) {
     localStorage.setItem('token', value);
     localStorage.setItem('authToken', value);
   }, token);
-}
-
-async function getMe(api: APIRequestContext, token: string) {
-  const response = await api.get('/api/me', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const body = await response.json().catch(() => ({}));
-  expect(response.status(), `GET /api/me: ${JSON.stringify(body)}`).toBe(200);
-  const tenantId = body.tenant_id || body.tenantId || body.tenant || body.company_id || body.companyId;
-  expect(tenantId, `Tenant missing from /api/me: ${JSON.stringify(body)}`).toBeTruthy();
-  return { body, tenantId: String(tenantId) };
 }
 
 async function getOperationalScope(api: APIRequestContext, token: string, tenantId: string) {
@@ -256,12 +310,11 @@ for (const scenario of selectedScenarios) {
       test(`${scenario.key} ${role} validates tenant, ISO scope and captures allowed views`, async ({ page }) => {
         const api = await createRequest.newContext({ baseURL: apiBase });
         try {
-          const token = await login(api, scenario.accounts[role]);
-          const { body: me, tenantId } = await getMe(api, token);
-          const actualRole = String(me.role || me.user_role || me.userRole || '').toLowerCase();
-          expect(actualRole, `${scenario.key} ${role} role mismatch`).toBe(role);
+          const auth = await login(api, scenario.accounts[role]);
+          const identity = resolveIdentity(auth.body, auth.token);
+          expect(identity.role, `${scenario.key} ${role} role mismatch`).toBe(role);
 
-          const scope = await getOperationalScope(api, token, tenantId);
+          const scope = await getOperationalScope(api, auth.token, identity.tenantId);
           const actualStandards = activeStandardCodes(scope);
           expect(actualStandards, `${scenario.key} operational standards`).toEqual(
             [...scenario.expectedStandards].sort(),
@@ -270,22 +323,23 @@ for (const scenario of selectedScenarios) {
           validation.push({
             scenario: scenario.key,
             tenantLabel: scenario.tenantLabel,
-            tenantId,
+            tenantId: identity.tenantId,
             role,
             email: scenario.accounts[role],
+            identitySource: identity.source,
             operationalStandards: actualStandards,
             status: 'PASS',
             checkedAt: new Date().toISOString(),
           });
 
-          await installSession(page, token);
+          await installSession(page, auth.token);
           const routes = [...routesByRole[role]];
           if ((scenario.key === 'iso27001' || scenario.key === 'integrated') && (role === 'admin' || role === 'auditor')) {
             routes.splice(routes.indexOf('/evidencias'), 0, '/soa');
           }
 
           for (const route of routes) {
-            await captureRoute(page, scenario, role, tenantId, route);
+            await captureRoute(page, scenario, role, identity.tenantId, route);
           }
         } finally {
           await api.dispose();
