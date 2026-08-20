@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - '.github/workflows/documentation-transactional-once.yml'
+      - 'frontend/tests/e2e/documentation-transactional-fix.spec.ts'
+      - 'frontend/playwright.documentation-capture.config.ts'
 
 permissions:
   contents: read
@@ -60,7 +62,7 @@ jobs:
 
       - name: Create DOC baseline and capture transactional forms
         working-directory: frontend
-        run: npx playwright test tests/e2e/documentation-transactional.spec.ts --config=playwright.documentation-capture.config.ts
+        run: npx playwright test tests/e2e/documentation-transactional-fix.spec.ts --config=playwright.documentation-capture.config.ts
 
       - name: Upload transactional evidence
         if: ${{ always() }}
