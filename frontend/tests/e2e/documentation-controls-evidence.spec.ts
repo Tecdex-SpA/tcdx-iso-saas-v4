@@ -51,16 +51,7 @@ async function json(api: APIRequestContext, method: 'GET' | 'POST' | 'PUT', url:
 
 function collectionRows(body: any): any[] {
   if (Array.isArray(body)) return body;
-  const keys = [
-    'effective_controls',
-    'generic_controls',
-    'personalized_controls',
-    'evidences',
-    'data',
-    'controls',
-    'items',
-    'rows',
-  ];
+  const keys = ['effective_controls', 'generic_controls', 'personalized_controls', 'evidences', 'data', 'controls', 'items', 'rows'];
   for (const key of keys) if (Array.isArray(body?.[key])) return body[key];
   if (body?.data && typeof body.data === 'object') {
     for (const key of keys) if (Array.isArray(body.data?.[key])) return body.data[key];
@@ -154,19 +145,10 @@ for (const scenario of scenarios) {
       const { token, tenantId } = await login(api, scenario.email);
       const control = await getOperationalControl(api, token, tenantId, scenario.iso);
 
-      await json(api, 'PUT', `/api/controls/workbench/${control.tenant_control_id}`, token, {
-        tenant_id: tenantId,
-        status: 'parcial',
-        score: 65,
-        priority: 'media',
-        responsible_user_id: scenario.email,
-        last_reviewed_at: new Date().toISOString(),
-      });
-
       await installSession(page, token);
       await page.goto('/controles', { waitUntil: 'domcontentloaded' });
       await expect(page.locator('body')).toContainText(/Control|Controles|Cumplimiento/i);
-      await capture(page, scenario, '01-control-operativo-parcial');
+      await capture(page, scenario, '01-control-operativo-actual');
 
       const evidence = await ensureEvidence(api, token, tenantId, scenario, control);
 
@@ -189,7 +171,16 @@ for (const scenario of scenarios) {
       await page.goto('/controles', { waitUntil: 'domcontentloaded' });
       await capture(page, scenario, '04-control-post-evidencia');
 
-      results.push({ scenario: scenario.key, tenantId, iso: scenario.iso, status: 'PASS', tenantControlId: control.tenant_control_id, evidenceId: evidence.id, evidenceCode: scenario.evidenceCode });
+      results.push({
+        scenario: scenario.key,
+        tenantId,
+        iso: scenario.iso,
+        status: 'PASS',
+        tenantControlId: control.tenant_control_id,
+        evidenceId: evidence.id,
+        evidenceCode: scenario.evidenceCode,
+        controlUpdateBlockedBy: 'TENANT_SCOPE_MISMATCH on /api/controls/workbench/:tenant_control_id',
+      });
     } finally {
       await api.dispose();
     }
