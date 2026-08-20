@@ -109,7 +109,7 @@ const routesByRole: Record<Role, string[]> = {
     '/ciclo-vida',
     '/administrar-kpis',
     '/ia-compliance',
-    '/reportes',
+    '/exportes',
   ],
   operativo: ['/dashboard', '/evidencias', '/planes-accion', '/hallazgos'],
   auditor: [
@@ -125,7 +125,7 @@ const routesByRole: Record<Role, string[]> = {
     '/ciclo-vida',
     '/iso-health',
     '/ia-compliance',
-    '/reportes',
+    '/exportes',
   ],
   viewer: ['/dashboard', '/iso-health', '/health'],
 };
