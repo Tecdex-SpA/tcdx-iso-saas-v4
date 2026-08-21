@@ -25,18 +25,17 @@ async function login(page: Page, email: string) {
 }
 
 async function openStable(page: Page, route: string, marker: RegExp) {
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    await page.goto(route, { waitUntil: 'domcontentloaded' });
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await expect(page).not.toHaveURL(/\/login/);
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1400);
     const denied = page.getByText(/capacidad no est[aá] habilitada|m[oó]dulo no habilitado|no tiene permiso/i);
     const transient = page.getByText(/error de conexi[oó]n|base de datos.*no disponible|ECONN|ETIMEDOUT/i);
     const ready = page.getByText(marker).first();
     if ((await denied.count()) === 0 && (await transient.count()) === 0 && await ready.isVisible().catch(() => false)) return;
-    await page.waitForTimeout(1800 * attempt);
+    await page.waitForTimeout(1200 * attempt);
   }
-  await expect(page.getByText(marker).first()).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText(marker).first()).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/capacidad no est[aá] habilitada|m[oó]dulo no habilitado|no tiene permiso|error de conexi[oó]n|base de datos.*no disponible|ECONN|ETIMEDOUT/i)).toHaveCount(0);
 }
 
