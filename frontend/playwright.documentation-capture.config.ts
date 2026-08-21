@@ -11,7 +11,7 @@ const EFFECTIVE_HEIGHT = Math.round(PHYSICAL_HEIGHT / DOC_ZOOM);
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: /documentation-(capture|readiness|transactional|transactional-fix|controls-evidence|findings-actions|nonconformities-remediation|audits|ai-auditor|ai-compliance|dashboard-health|soa|demo-enrichment)\.spec\.ts/,
+  testMatch: /documentation-(capture|readiness|transactional|transactional-fix|controls-evidence|findings-actions|nonconformities-remediation|audits|ai-auditor|ai-compliance|dashboard-health|soa|demo-enrichment|v6-core)\.spec\.ts/,
   timeout: 180_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
