@@ -1,9 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Documentation captures are rendered at an effective 67% browser zoom.
-// A 1920x1080 physical browser at 67% exposes roughly 2866x1612 CSS pixels.
-// Using that effective viewport preserves layout fidelity and produces broader,
-// higher-quality screenshots for the manuals without distorting the UI via CSS zoom.
+// Documentation captures emulate a 1920x1080 Chromium window at 67% browser zoom.
+// The effective CSS viewport is therefore ~2866x1612. deviceScaleFactor=2 keeps the
+// same responsive layout while producing ~5732x3224 PNGs for crisp PDF embedding.
 const DOC_ZOOM = 0.67;
 const PHYSICAL_WIDTH = 1920;
 const PHYSICAL_HEIGHT = 1080;
@@ -13,7 +12,7 @@ const EFFECTIVE_HEIGHT = Math.round(PHYSICAL_HEIGHT / DOC_ZOOM);
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: /documentation-(capture|readiness|transactional|transactional-fix|controls-evidence|findings-actions|nonconformities-remediation|audits|ai-auditor|ai-compliance|dashboard-health|soa|demo-enrichment)\.spec\.ts/,
-  timeout: 120_000,
+  timeout: 180_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
   forbidOnly: true,
@@ -38,7 +37,7 @@ export default defineConfig({
       ...devices['Desktop Chrome'],
       viewport: { width: EFFECTIVE_WIDTH, height: EFFECTIVE_HEIGHT },
       screen: { width: EFFECTIVE_WIDTH, height: EFFECTIVE_HEIGHT },
-      deviceScaleFactor: 1,
+      deviceScaleFactor: 2,
     },
   }],
 });
