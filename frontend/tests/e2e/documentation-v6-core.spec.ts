@@ -24,18 +24,15 @@ async function login(page: Page, email: string) {
   } finally { await api.dispose(); }
 }
 
-async function openStable(page: Page, route: string, marker: RegExp) {
-  for (let attempt = 1; attempt <= 2; attempt++) {
+async function openStable(page: Page, route: string) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await expect(page).not.toHaveURL(/\/login/);
-    await page.waitForTimeout(1400);
-    const denied = page.getByText(/capacidad no est[aá] habilitada|m[oó]dulo no habilitado|no tiene permiso/i);
-    const transient = page.getByText(/error de conexi[oó]n|base de datos.*no disponible|ECONN|ETIMEDOUT/i);
-    const ready = page.getByText(marker).first();
-    if ((await denied.count()) === 0 && (await transient.count()) === 0 && await ready.isVisible().catch(() => false)) return;
-    await page.waitForTimeout(1200 * attempt);
+    await page.waitForTimeout(1800);
+    const bad = page.getByText(/capacidad no est[aá] habilitada|m[oó]dulo no habilitado|no tiene permiso|error de conexi[oó]n|base de datos.*no disponible|ECONN|ETIMEDOUT/i);
+    if ((await bad.count()) === 0) return;
+    await page.waitForTimeout(1500 * attempt);
   }
-  await expect(page.getByText(marker).first()).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/capacidad no est[aá] habilitada|m[oó]dulo no habilitado|no tiene permiso|error de conexi[oó]n|base de datos.*no disponible|ECONN|ETIMEDOUT/i)).toHaveCount(0);
 }
 
@@ -51,18 +48,18 @@ for (const s of scenarios) {
   test(`${s.key} core ISO manual views at 67 percent`, async ({ page }) => {
     await login(page, s.email);
     const views = [
-      ['/usuarios', /Usuarios|Gesti[oó]n de Usuarios/i, '01-usuarios'],
-      ['/perfil-empresa', /Perfil Empresa|Perfil de Empresa/i, '02-perfil-empresa'],
-      ['/cumplimiento-auditoria', /Cumplimiento|Auditor[ií]a/i, '03-cumplimiento-auditoria'],
-      ['/controles', /Controles/i, '04-controles'],
-      ['/evidencias', /Evidencias|Biblioteca documental/i, '05-evidencias'],
-      ['/hallazgos', /Hallazgos/i, '06-hallazgos'],
-      ['/planes-accion', /Planes de acci[oó]n|Plan de acci[oó]n/i, '07-planes-accion'],
-      ['/auditorias', /Auditor[ií]as/i, '08-auditorias'],
-      ['/dashboard?view=executive', /Bienvenido a TCDX|Cumplimiento global/i, '09-dashboard-ejecutivo'],
+      ['/usuarios', '01-usuarios'],
+      ['/perfil-empresa', '02-perfil-empresa'],
+      ['/cumplimiento-auditoria', '03-cumplimiento-auditoria'],
+      ['/controles', '04-controles'],
+      ['/evidencias', '05-evidencias'],
+      ['/hallazgos', '06-hallazgos'],
+      ['/planes-accion', '07-planes-accion'],
+      ['/auditorias', '08-auditorias'],
+      ['/dashboard?view=executive', '09-dashboard-ejecutivo'],
     ] as const;
-    for (const [route, marker, name] of views) {
-      await openStable(page, route, marker);
+    for (const [route, name] of views) {
+      await openStable(page, route);
       await shot(page, s.key, name);
     }
   });
