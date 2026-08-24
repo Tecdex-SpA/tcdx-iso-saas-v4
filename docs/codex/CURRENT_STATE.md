@@ -2,8 +2,8 @@
 
 Actualizado: 2026-08-24
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
-Remote/base `main` verificado para F6.11-B: `16339c613c3260ae42105210ebe318a480d89f17`
-Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre local F6.11-B.
+Remote/base `main` verificado para F6.12-A: `99dd2772c599c5cbdd579594d7520aadc7b0cbb9`
+Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B.
 
 ## Estado del programa
 
@@ -42,7 +42,8 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - 6.10-04: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.10-04-RUNTIME-CLOSURE.md` confirmó production/main `98531cce7a1308fa0c3727c962f0fa6559b5d018`: `hybrid-retrieval-contract-v1` reutiliza `knowledge_document_chunks` + `knowledge_chunk_embeddings`, ranking determinístico versionado, tenant filter first, lifecycle filtering, provenance para RAG, sin KB v3, sin segundo retrieval engine y `F6_10_04_RUNTIME=PASS`.
 - 6.10-05: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.10-05-RUNTIME-CLOSURE.md` confirmó production/main `d098441ec4deff867820f989d8595cfb3206571b`: `rag-grounded-answer-contract-v1` sobre Hybrid Retrieval, citations verificables, abstención segura, tenant isolation, sin KB paralela ni autoridad operacional del LLM. `F6_10_05_RUNTIME=PASS`.
 - F6.11-A: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.11-A-RUNTIME-CLOSURE.md` confirmó production/main `d69f28a2f69b83c7aa12737dc82788d9def68141`, migración `20260819_f6_11_a_regulatory_foundation` aplicada, modelos regulatorios canónicos presentes, KB v2 preservada, sin storage regulatorio paralelo y `F6_11_B=READY`.
-- F6.11-B: DONE_LOCAL. Campaña consolidada 6.11-04/05/06 implementa `regulatory-semantic-diff-contract-v1`, `regulatory-pack-model-v1`, `regulatory-pack-activation-contract-v1` y `regulatory-pack-applicability-contract-v1` mediante migración forward-only `20260824_f6_11_b_semantic_diff_regulatory_packs` y servicio `regulatoryDiffPacks.service.js`. Los packs `CL-LAW-21719` y `CL-LAW-21663` quedan soportados como composición gobernada/data-driven sobre fuentes/versiones/obligaciones canónicas existentes; no se fabricaron obligaciones ni texto legal, no se creó KB/chunks/embeddings/retrieval/RAG paralelo y `F6_11_B_RUNTIME=PENDING_USER_DEPLOY_VALIDATION`.
+- F6.11-B: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.11-B-RUNTIME-CLOSURE.md` confirmó production/main `99dd2772c599c5cbdd579594d7520aadc7b0cbb9`, implementation commit `719b7046870142f22b4ecda232c6cfbbf41e9016`, migración `20260824_f6_11_b_semantic_diff_regulatory_packs` aplicada con checksum `ec090bbd7a95be92d4cd6e01f66e3a09d75083828654695a4a0b7425979e9705`, tests focales PASS, tablas runtime de semantic diff/packs/applicability/audit presentes, sin KB/chunks/regulatory model paralelo y `F6_12_A=READY`.
+- F6.12-A: DONE_LOCAL. Campaña consolidada 6.12-01/02/03/04 agrega `canonical-intelligence-context-v1`, `pattern-trend-engine-v1`, `anomaly-engine-v1` y `cross-grc-intelligence-orchestrator-v1` en `backend/src/services/intelligence/crossGrcIntelligence.service.js`; extiende el prompt builder existente para consumir contexto canónico compacto y ajusta `ai-engine/app/services/context_builder.py` para no consultar contexto sin tenant autorizado. No agrega migración, ruta, store paralelo, scoring paralelo, segundo orchestrator transversal ni LLM como verdad operacional. `F6_12_A_RUNTIME=PENDING_USER_DEPLOY_VALIDATION`.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -115,9 +116,9 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa commit F6.11-B y ejecuta push/merge/deploy manual si lo aprueba.
-2. Usuario valida runtime F6.11-B con `scripts/f6-11/apply-f6-11-migration.js --preflight/--apply` y queries del handoff `docs/codex/handoffs/6.11-B.md`.
-3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05 y F6.11-A salvo evidencia objetiva nueva; no reabrir KB/RAG/regulatory foundation para F6.11-B runtime.
+1. Usuario revisa commit F6.12-A y ejecuta push/PR/CI/merge/deploy manual si lo aprueba.
+2. Usuario valida runtime F6.12-A con los comandos del handoff `docs/codex/handoffs/6.12-A.md`.
+3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05 y F6.11-A/B salvo evidencia objetiva nueva; no reabrir KB/RAG/regulatory foundation/semantic diff/regulatory packs para F6.12.
 
 ## Handoff relevante
 
@@ -163,4 +164,6 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.11-A.md`
 - `docs/codex/handoffs/6.11-A-RUNTIME-CLOSURE.md`
 - `docs/codex/handoffs/6.11-B.md`
+- `docs/codex/handoffs/6.11-B-RUNTIME-CLOSURE.md`
+- `docs/codex/handoffs/6.12-A.md`
 - `docs/architecture/grc_relationship_inventory.md`

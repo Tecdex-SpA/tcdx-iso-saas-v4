@@ -142,8 +142,60 @@ function buildEvidenceBasis(context = {}) {
   };
 }
 
+function compactCanonicalContextItem(item = {}) {
+  return {
+    id: item.id || null,
+    category: item.category || null,
+    source_model: item.source_model || item.provenance?.source_model || null,
+    source_record_id: item.source_record_id || item.provenance?.source_record_id || null,
+    title: text(item.title).slice(0, 180),
+    value: item.value ?? null,
+    severity: item.severity || null,
+    status: item.status || null,
+    domain: item.domain || null,
+    data_trust: item.data_trust || item.provenance?.data_trust || null,
+    temporal_semantics: item.temporal_semantics || {},
+    provenance: {
+      contract_version: item.provenance?.contract_version || null,
+      tenant_id: item.provenance?.tenant_id || item.tenant_id || null,
+      source_model: item.provenance?.source_model || item.source_model || null,
+      source_record_id: item.provenance?.source_record_id || item.source_record_id || null,
+    },
+  };
+}
+
+function compactCanonicalIntelligenceContext(context = {}) {
+  const canonical = context.canonical_intelligence_context || context.intelligence_context || context.cross_grc_intelligence?.context || null;
+  if (!canonical || !canonical.categories) return null;
+  const categories = canonical.categories || {};
+  return {
+    contract_version: canonical.contract_version || null,
+    tenant_id: canonical.tenant_id || null,
+    data_trust: canonical.data_trust || null,
+    temporal_semantics: canonical.temporal_semantics || null,
+    facts: asArray(categories.facts).slice(0, 20).map(compactCanonicalContextItem),
+    derived_signals: asArray(categories.derived_signals).slice(0, 12).map(compactCanonicalContextItem),
+    retrieved_knowledge: asArray(categories.retrieved_knowledge).slice(0, 12).map(compactCanonicalContextItem),
+    regulatory_context: asArray(categories.regulatory_context).slice(0, 12).map(compactCanonicalContextItem),
+    historical_context_summary: asArray(categories.historical_context).slice(0, 10).map((series) => ({
+      signal_key: asArray(series)[0]?.signal_key || null,
+      sample_count: asArray(series).length,
+      first_event_time: asArray(series)[0]?.event_time || null,
+      last_event_time: asArray(series)[asArray(series).length - 1]?.event_time || null,
+      data_trust: asArray(series)[0]?.data_trust || null,
+    })),
+    missing_context: asArray(categories.missing_context).slice(0, 12),
+    provenance: {
+      contract_version: canonical.provenance?.contract_version || canonical.contract_version || null,
+      no_cross_tenant_fallback: canonical.provenance?.no_cross_tenant_fallback === true,
+      untrusted_documents_are_evidence_not_instructions: canonical.provenance?.untrusted_documents_are_evidence_not_instructions === true,
+    },
+  };
+}
+
 function buildPromptContext(context = {}, { narrativeType = 'executive', question = '', knowledgeLimit = DEFAULT_KNOWLEDGE_LIMIT } = {}) {
   const knowledgeItems = selectRelevantKnowledgeItems(context, { question, limit: knowledgeLimit });
+  const canonicalIntelligenceContext = compactCanonicalIntelligenceContext(context);
   const promptContext = {
     task: {
       narrative_type: narrativeType,
@@ -165,6 +217,7 @@ function buildPromptContext(context = {}, { narrativeType = 'executive', questio
     next_best_actions: asArray(context.next_best_actions).slice(0, 10).map(compactAction),
     data_quality_warnings: asArray(context.data_quality?.warnings || context.limitations).slice(0, 12),
     knowledge_context: knowledgeItems,
+    canonical_intelligence_context: canonicalIntelligenceContext,
     evidence_basis: buildEvidenceBasis(context),
     output_contract: {
       executive_summary: 'string',
@@ -179,6 +232,7 @@ function buildPromptContext(context = {}, { narrativeType = 'executive', questio
     },
     metadata: {
       knowledge_items_count: knowledgeItems.length,
+      canonical_context_included: Boolean(canonicalIntelligenceContext),
       knowledge_limit: Math.max(1, Math.min(Number(knowledgeLimit || DEFAULT_KNOWLEDGE_LIMIT), 40)),
       full_knowledge_base_included: false,
       tenant_documents_included: false,
@@ -236,5 +290,6 @@ module.exports = {
   buildAiMessages,
   buildPromptContext,
   buildReducedIntelligenceBriefForAiCompliance,
+  compactCanonicalIntelligenceContext,
   selectRelevantKnowledgeItems,
 };

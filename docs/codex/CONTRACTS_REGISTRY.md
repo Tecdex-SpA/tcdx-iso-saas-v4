@@ -20,7 +20,10 @@
 | Relationship inventory / graph input contract | CURRENT/6.9-01 | CODEX A | `docs/architecture/grc_relationship_inventory.md`; Impact Graph debe proyectar/adaptar truth existente, no duplicar relaciones. |
 | Graph Projection / Edge contract | CURRENT/6.9-02 | CODEX A | `impact-graph-2-foundation-v1` en `backend/src/services/grc/impactGraph.service.js`; proyección/adapters sobre truth existente, sin persistencia graph ni segundo source of truth. |
 | Priority contract | CURRENT/6.9-03 | CODEX C executing package | `priority-engine-2-v1`; proyección determinística sobre `grc_gaps` + Impact Graph 2.0, sin storage paralelo de prioridad. |
-| IntelligenceContext | PARTIAL | CODEX B | Backend + AI Engine deben reconciliar ownership. |
+| IntelligenceContext | CURRENT/F6.12-A-LOCAL | CODEX B | `canonical-intelligence-context-v1`; backend arma contexto tenant-scoped por categorias/provenance y AI Engine no consulta sin tenant autorizado. |
+| Pattern/Trend Engine | CURRENT/F6.12-A-LOCAL | CODEX B | `pattern-trend-engine-v1`; senales deterministicas sobre series historicas tenant-scoped con minimum-period guard y `insufficient_data`. |
+| Anomaly Engine | CURRENT/F6.12-A-LOCAL | CODEX B | `anomaly-engine-v1`; robust z-score/MAD versionado con baseline explicito, score/band y guard contra sparse false positives. |
+| Cross-GRC Intelligence Orchestrator | CURRENT/F6.12-A-LOCAL | CODEX B | `cross-grc-intelligence-orchestrator-v1`; orquesta context/patterns/trends/anomalies/Priority/Impact/RAG/regulatory sin store paralelo ni LLM truth. |
 | Knowledge Document | CURRENT/6.10-01-RUNTIME | CODEX B | `knowledge-document-model-v1`; `knowledge_documents` extiende KB v2 con scope, tenant, versioning, lifecycle, checksums y provenance; runtime closure PASS. |
 | Knowledge Ingestion | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge-ingestion-pipeline-v1`; pipeline tenant-scoped con secure upload, extracción, chunks, audit, idempotencia y KB v2 linkage; runtime closure PASS. |
 | Knowledge Chunk | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge_document_chunks`; manifest determinístico y chunk content canónico para documentos tenant; 6.10-03 lo referencia sin copiar `chunk_text`. |
@@ -32,10 +35,10 @@
 | Regulation | CURRENT/F6.11-A-RUNTIME | CODEX B | `regulation-model-v1`; identidad regulatoria/legal estable en `regulations`. |
 | RegulationVersion | CURRENT/F6.11-A-RUNTIME | CODEX B | `regulation-version-model-v1`; publicación/version normativa inmutable en `regulation_versions`. |
 | LegalObligation | CURRENT/F6.11-A-RUNTIME | CODEX B | `legal-obligation-model-v1`; obligaciones legales explícitas/gobernadas en `legal_obligations`, sin publicación autoritativa por LLM. |
-| Regulatory Semantic Diff | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-semantic-diff-contract-v1`; diff determinístico/revisable entre versiones de la misma regulación, con cambios estructurados y provenance. |
-| Regulatory Pack | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-pack-model-v1`; composición versionada de fuentes, regulaciones, versiones, obligaciones y diffs canónicos, sin copiar texto normativo. |
-| Regulatory Pack Activation | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-pack-activation-contract-v1`; activación/configuración tenant-scoped que no muta la definición global del pack. |
-| Regulatory Applicability | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-pack-applicability-contract-v1`; evaluación/recomendación tenant-scoped con confirmación humana para aplicabilidad sensible; IA no es autoridad legal. |
+| Regulatory Semantic Diff | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-semantic-diff-contract-v1`; diff determinístico/revisable entre versiones de la misma regulación, con cambios estructurados y provenance; runtime closure PASS. |
+| Regulatory Pack | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-pack-model-v1`; composición versionada de fuentes, regulaciones, versiones, obligaciones y diffs canónicos, sin copiar texto normativo; runtime closure PASS. |
+| Regulatory Pack Activation | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-pack-activation-contract-v1`; activación/configuración tenant-scoped que no muta la definición global del pack; runtime closure PASS. |
+| Regulatory Applicability | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-pack-applicability-contract-v1`; evaluación/recomendación tenant-scoped con confirmación humana para aplicabilidad sensible; IA no es autoridad legal; runtime closure PASS. |
 | Regulatory Mapping | PLANNED | CODEX B | Mapeos profundos a controles/evidencias/riesgos existentes requieren equivalencia real y revisión humana; F6.11-B sólo conserva `mapping_targets` gobernados en items de pack. |
 | Capability/RBAC | CURRENT/PROTECTED | A+C | Reutilizar sistema existente; backend autoriza. |
 
@@ -299,7 +302,7 @@ Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.11-A-RUNTIME-CLOSURE.md`
 
 ## F6.11-B Semantic Diff And Regulatory Packs
 
-Status: DONE_LOCAL on branch `feat/f6-11-b-semantic-diff-regulatory-packs`; runtime validation pending user deploy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.11-B-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
@@ -320,6 +323,31 @@ Status: DONE_LOCAL on branch `feat/f6-11-b-semantic-diff-regulatory-packs`; runt
 | API/RBAC | No new HTTP route in F6.11-B; service methods are internal. Existing RBAC remains protected and unchanged. Future routes must add explicit read/manage/review/activate permissions. |
 | Knowledge/RAG reuse | Uses `knowledge_documents`, `knowledge_document_chunks`, `knowledge_chunk_embeddings`, Hybrid Retrieval and grounded RAG as existing owners; no KB v3, no `regulatory_chunks`, no regulatory embeddings/retrieval engine. |
 | Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
+
+## F6.12-A Context Builders, Pattern/Trend, Anomaly And Cross-GRC Intelligence
+
+Status: DONE_LOCAL on branch `feat/f6-12-a-cross-grc-intelligence`; runtime validation pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Context contract | `canonical-intelligence-context-v1` in `backend/src/services/intelligence/crossGrcIntelligence.service.js`. |
+| Categories | Separates `facts`, `derived_signals`, `retrieved_knowledge`, `regulatory_context`, `historical_context`, `missing_context` and `insufficient_context` with provenance. |
+| Tenant scope | Tenant is mandatory for backend context building; rows carrying another tenant are discarded and empty tenant returns insufficient context without fallback. |
+| AI Engine adapter | `ai-engine/app/services/context_builder.py` now returns `tenant_scope_required` without querying context when tenant is absent; standard fallback is explicit opt-in via `allow_standard_fallback`. |
+| Prompt builder | `intelligence.prompt-builder.js` accepts compact canonical context and still applies guardrails: no full KB, no long licensed text, no secrets. |
+| Pattern/Trend | `pattern-trend-engine-v1` uses `linear-delta-v1` and `threshold-crossing-v1` over bounded historical series; min periods are required before declaring a trend/pattern. |
+| Anomaly | `anomaly-engine-v1` uses `robust-z-score-mad-v1` over explicit baseline window; sparse/zero-variance baselines return `insufficient_data`, not fake anomalies. |
+| Orchestrator | `cross-grc-intelligence-orchestrator-v1` builds context once, runs applicable deterministic engines and invokes adapters for Priority Engine 2, Impact Graph, grounded RAG and regulatory context when provided. |
+| Priority boundary | Priority context is delegated to `priorityEngine.service.js` / `priority-engine-2-v1`; no local priority scoring or priority storage. |
+| Impact Graph boundary | Relationship context is delegated to `impactGraph.service.js` / `impact-graph-2-foundation-v1`; no graph storage or traversal engine copy. |
+| Knowledge/RAG boundary | Grounded explanations are delegated to `knowledgeRag.service.js` / `rag-grounded-answer-contract-v1`; no second retrieval engine or RAG truth table. |
+| Regulatory boundary | Regulatory items are references/context from F6.11-A/B owners or injected provider; no legal text copy or regulatory model fork. |
+| Data Trust | Missing/no-data remains `insufficient_data`; trust is derived from source states and never from metric value or LLM explanation. |
+| Temporal semantics | Separates event/observation/period/regulatory effective/analysis/technical evaluation time; `now()` only sets technical evaluation time. |
+| Persistence | Runtime projection only; no migration, no table, no ledger and no cache truth added. |
+| API/RBAC | No new HTTP route; existing `/api/intelligence` RBAC remains read-only. |
+| AI boundary | `AI_PATTERN_TRUTH_AUTHORITY=0`, `LLM_ANOMALY_TRUTH_AUTHORITY=0`, `AI_CROSS_GRC_TRUTH_AUTHORITY=0`, `LLM_DIRECT_SQL=0`. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
 
 ## PUI-01 Source Ownership Inventory
 

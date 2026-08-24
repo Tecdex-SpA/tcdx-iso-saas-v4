@@ -2,6 +2,40 @@ from typing import Any, Dict, List, Optional
 
 from app.services.ai_core_db import fetch_all, fetch_one
 
+CANONICAL_INTELLIGENCE_CONTEXT_CONTRACT_VERSION = "canonical-intelligence-context-v1"
+
+
+def _empty_tenant_scoped_context(
+    tenant_id: Optional[str],
+    entity_type: Optional[str],
+    entity_id: Optional[str],
+    standard_code: Optional[str],
+    reason: str,
+) -> Dict[str, Any]:
+    return {
+        "contract_version": CANONICAL_INTELLIGENCE_CONTEXT_CONTRACT_VERSION,
+        "tenant_id": tenant_id,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "standard_code": standard_code,
+        "scope_status": "insufficient_data",
+        "tenant_scope_authorized": bool(tenant_id),
+        "tenant_health": [],
+        "critical_controls": [],
+        "attention_controls": [],
+        "recent_findings": [],
+        "recent_kpis": [],
+        "selected_control": [],
+        "warnings": [reason],
+        "provenance": {
+            "contract_version": CANONICAL_INTELLIGENCE_CONTEXT_CONTRACT_VERSION,
+            "tenant_id": tenant_id,
+            "backend_authorized_scope_required": True,
+            "no_cross_tenant_fallback": True,
+            "missing_is_not_zero": True,
+        },
+    }
+
 
 def get_ai_core_summary() -> Dict[str, Any]:
     """
@@ -350,18 +384,28 @@ def build_context_pack(
     entity_type: Optional[str] = None,
     entity_id: Optional[str] = None,
     standard_code: Optional[str] = None,
+    allow_standard_fallback: bool = False,
 ) -> Dict[str, Any]:
     """
     Paquete de contexto general para que la IA deje de responder genérico.
-    Si el filtro por norma no devuelve datos, hace fallback al tenant completo.
+    El scope tenant debe venir autorizado por backend. Sin tenant no consulta vistas.
     """
+    if not tenant_id:
+        return _empty_tenant_scoped_context(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            standard_code=standard_code,
+            reason="tenant_scope_required",
+        )
+
     tenant_health = get_tenant_health_context(
         tenant_id=tenant_id,
         standard_code=standard_code,
         limit=20,
     )
 
-    if tenant_id and standard_code and not tenant_health:
+    if allow_standard_fallback and tenant_id and standard_code and not tenant_health:
         tenant_health = get_tenant_health_context(
             tenant_id=tenant_id,
             standard_code=None,
@@ -375,7 +419,7 @@ def build_context_pack(
         limit=10,
     )
 
-    if tenant_id and standard_code and not critical_controls:
+    if allow_standard_fallback and tenant_id and standard_code and not critical_controls:
         critical_controls = get_control_context(
             tenant_id=tenant_id,
             standard_code=None,
@@ -390,7 +434,7 @@ def build_context_pack(
         limit=10,
     )
 
-    if tenant_id and standard_code and not attention_controls:
+    if allow_standard_fallback and tenant_id and standard_code and not attention_controls:
         attention_controls = get_control_context(
             tenant_id=tenant_id,
             standard_code=None,
@@ -404,7 +448,7 @@ def build_context_pack(
         limit=10,
     )
 
-    if tenant_id and standard_code and not recent_kpis:
+    if allow_standard_fallback and tenant_id and standard_code and not recent_kpis:
         recent_kpis = get_kpi_context(
             tenant_id=tenant_id,
             standard_code=None,
@@ -412,10 +456,13 @@ def build_context_pack(
         )
 
     context: Dict[str, Any] = {
+        "contract_version": CANONICAL_INTELLIGENCE_CONTEXT_CONTRACT_VERSION,
         "tenant_id": tenant_id,
         "entity_type": entity_type,
         "entity_id": entity_id,
         "standard_code": standard_code,
+        "scope_status": "tenant_scoped",
+        "tenant_scope_authorized": True,
         "tenant_health": tenant_health,
         "critical_controls": critical_controls,
         "attention_controls": attention_controls,
@@ -425,6 +472,15 @@ def build_context_pack(
             limit=10,
         ),
         "recent_kpis": recent_kpis,
+        "warnings": [],
+        "provenance": {
+            "contract_version": CANONICAL_INTELLIGENCE_CONTEXT_CONTRACT_VERSION,
+            "tenant_id": tenant_id,
+            "backend_authorized_scope_required": True,
+            "standard_fallback_allowed": allow_standard_fallback,
+            "no_cross_tenant_fallback": True,
+            "missing_is_not_zero": True,
+        },
     }
 
     if entity_type == "control" and entity_id:
@@ -445,4 +501,3 @@ def build_context_pack(
         context["selected_control"] = selected_control
 
     return context
-

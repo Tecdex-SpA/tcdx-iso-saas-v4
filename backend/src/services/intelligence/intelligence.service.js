@@ -20,6 +20,7 @@ const { calculateEvidenceStrength } = require('./intelligence.evidence-strength'
 const { explainCoreMetrics } = require('./intelligence.explainability');
 const { runRules } = require('./intelligence.rules');
 const { generateNarratives } = require('./intelligence.ai-orchestrator');
+const crossGrcIntelligence = require('./crossGrcIntelligence.service');
 const scoring = require('./intelligence.scoring');
 
 const INTELLIGENCE_CACHE_TTL_MS = Math.max(60000, Number(process.env.INTELLIGENCE_BRIEF_CACHE_TTL_MS || 5 * 60 * 1000));
@@ -473,6 +474,7 @@ module.exports = {
   buildDataQualityProfile,
   buildFallbackNarrative,
   buildTenantIntelligenceBrief,
+  crossGrcIntelligence,
   enrichDatasetWithKnowledge,
   getTenantIntelligenceDataset,
   normalizeTenantDataset,
