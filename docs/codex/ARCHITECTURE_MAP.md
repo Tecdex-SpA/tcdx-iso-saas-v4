@@ -64,6 +64,11 @@ Backend Node/Express
         +--> Intelligence services
                + rules/confidence/explainability/actions
                + prompt builder/orchestrator
+               + canonical IntelligenceContext (`canonical-intelligence-context-v1`)
+               + Pattern/Trend runtime projection (`pattern-trend-engine-v1`)
+               + Anomaly runtime projection (`anomaly-engine-v1`)
+               + Cross-GRC Intelligence Orchestrator (`cross-grc-intelligence-orchestrator-v1`)
+               + adapters to Priority Engine 2, Impact Graph, grounded RAG and Regulatory Packs
                + deterministic fallback/audit traces
                     |
                     v
@@ -131,3 +136,4 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - F6.10: CLOSED through 6.10-05.
 - F6.11-A: CLOSED / PASS_RUNTIME; regulatory foundation adds `regulatory_authoritative_sources`, `regulatory_ingestions`, `regulations`, `regulation_versions` and `legal_obligations`, reusing `knowledge_documents` and `knowledge_document_chunks(scope='REGULATORY')` instead of creating a second KB/chunk/embedding/retrieval model.
 - F6.11-B: CLOSED / PASS_RUNTIME; Semantic Diff and Regulatory Packs add governed tables for deterministic diffs, obligation lineage, pack version composition, tenant activation and applicability evaluation. Runtime closure confirmed production/main `99dd2772c599c5cbdd579594d7520aadc7b0cbb9`, applied migration `20260824_f6_11_b_semantic_diff_regulatory_packs`, focal tests PASS and no KB/chunk/embedding/retrieval/RAG duplication.
+- F6.12-A: DONE_LOCAL; Context Builders, Pattern/Trend, Anomaly and Cross-GRC Intelligence implemented as runtime projections under existing Intelligence services with no migration, no new route/RBAC, no parallel Observation/Gap/Graph/Priority/KB/RAG truth and no LLM operational truth.

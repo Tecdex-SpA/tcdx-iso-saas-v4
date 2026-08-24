@@ -19,6 +19,7 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 | Runtime/post-deploy | Manual por el usuario | entorno autorizado | MANUAL |
 | F6.11-A regulatory foundation focal | `node backend/src/services/knowledge-base/regulatoryFoundation.service.test.js` | repo root | VERIFIED/F6.11-B |
 | F6.11-B semantic diff/regulatory packs focal | `node backend/src/services/knowledge-base/regulatoryDiffPacks.service.test.js` | repo root | VERIFIED/F6.11-B |
+| F6.12-A cross-GRC intelligence focal | `node backend/src/services/intelligence/crossGrcIntelligence.service.test.js` | repo root | VERIFIED/F6.12-A |
 | F6.11 migration checksum | `node scripts/f6-11/apply-f6-11-migration.js --checksum` | repo root | VERIFIED/F6.11-B |
 | F6.11 post-deploy preflight/apply | `MIGRATION_DATABASE_URL="$DATABASE_URL" node scripts/f6-11/apply-f6-11-migration.js --preflight` then `--apply` then `--preflight` | deployed backend host | MANUAL |
 
