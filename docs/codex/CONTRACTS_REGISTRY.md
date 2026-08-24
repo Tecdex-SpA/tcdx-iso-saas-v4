@@ -32,10 +32,10 @@
 | Regulation | CURRENT/F6.11-A-RUNTIME | CODEX B | `regulation-model-v1`; identidad regulatoria/legal estable en `regulations`. |
 | RegulationVersion | CURRENT/F6.11-A-RUNTIME | CODEX B | `regulation-version-model-v1`; publicación/version normativa inmutable en `regulation_versions`. |
 | LegalObligation | CURRENT/F6.11-A-RUNTIME | CODEX B | `legal-obligation-model-v1`; obligaciones legales explícitas/gobernadas en `legal_obligations`, sin publicación autoritativa por LLM. |
-| Regulatory Semantic Diff | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-semantic-diff-contract-v1`; diff determinístico/revisable entre versiones de la misma regulación, con cambios estructurados y provenance. |
-| Regulatory Pack | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-pack-model-v1`; composición versionada de fuentes, regulaciones, versiones, obligaciones y diffs canónicos, sin copiar texto normativo. |
-| Regulatory Pack Activation | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-pack-activation-contract-v1`; activación/configuración tenant-scoped que no muta la definición global del pack. |
-| Regulatory Applicability | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-pack-applicability-contract-v1`; evaluación/recomendación tenant-scoped con confirmación humana para aplicabilidad sensible; IA no es autoridad legal. |
+| Regulatory Semantic Diff | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-semantic-diff-contract-v1`; diff determinístico/revisable entre versiones de la misma regulación, con cambios estructurados y provenance; runtime closure PASS. |
+| Regulatory Pack | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-pack-model-v1`; composición versionada de fuentes, regulaciones, versiones, obligaciones y diffs canónicos, sin copiar texto normativo; runtime closure PASS. |
+| Regulatory Pack Activation | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-pack-activation-contract-v1`; activación/configuración tenant-scoped que no muta la definición global del pack; runtime closure PASS. |
+| Regulatory Applicability | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-pack-applicability-contract-v1`; evaluación/recomendación tenant-scoped con confirmación humana para aplicabilidad sensible; IA no es autoridad legal; runtime closure PASS. |
 | Regulatory Mapping | PLANNED | CODEX B | Mapeos profundos a controles/evidencias/riesgos existentes requieren equivalencia real y revisión humana; F6.11-B sólo conserva `mapping_targets` gobernados en items de pack. |
 | Capability/RBAC | CURRENT/PROTECTED | A+C | Reutilizar sistema existente; backend autoriza. |
 
@@ -299,7 +299,7 @@ Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.11-A-RUNTIME-CLOSURE.md`
 
 ## F6.11-B Semantic Diff And Regulatory Packs
 
-Status: DONE_LOCAL on branch `feat/f6-11-b-semantic-diff-regulatory-packs`; runtime validation pending user deploy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.11-B-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
