@@ -131,6 +131,69 @@
     "description": "Operational ISO governance by role, contracted modules, and active scope.",
     "aiAuditor": "AI Auditor"
   },
+  "navigation": {
+    "breadcrumb": "Breadcrumb",
+    "mobileDrawer": "Mobile navigation menu",
+    "sections": {
+      "platformAdmin": "SaaS Administration",
+      "dealerChannel": "Dealer Channel",
+      "enterpriseDomains": "Navigation",
+      "domainViews": "Accesses"
+    },
+    "domains": {
+      "home": "Home",
+      "compliance": "Compliance",
+      "riskControl": "Risk and Control",
+      "auditImprovement": "Audit and Improvement",
+      "operationsResilience": "Operations and Resilience",
+      "dataEvidence": "Data and Evidence",
+      "intelligence": "Intelligence",
+      "reports": "Reports",
+      "administration": "Administration"
+    },
+    "destinations": {
+      "executiveCenter": "Executive Center",
+      "grcPortfolio": "GRC Portfolio",
+      "isoOverview": "ISO Overview",
+      "diagnosis": "Assessment",
+      "isoHealth": "ISO Health",
+      "soa": "SoA",
+      "lifecycle": "Lifecycle",
+      "riskRegister": "Risk Register",
+      "riskMatrix": "Risk Matrix",
+      "controls": "Controls",
+      "assets": "Assets",
+      "quantitativeRisk": "Quantitative Risk",
+      "actionPlans": "Action Plans",
+      "audits": "Audits",
+      "findings": "Findings",
+      "nonconformities": "Nonconformities",
+      "recommendations": "Recommendations",
+      "grcOperations": "GRC Operations",
+      "continuity": "Continuity",
+      "incidents": "Incidents",
+      "suppliers": "Suppliers",
+      "privacy": "Privacy",
+      "evidence": "Evidence",
+      "data": "Data",
+      "dataQuality": "Quality",
+      "lineage": "Lineage",
+      "imports": "Imports",
+      "metrics": "Metrics",
+      "indicators": "Indicators",
+      "grcAnalysis": "GRC Analysis",
+      "surveys": "Surveys",
+      "aiCompliance": "AI Compliance",
+      "exports": "Exports",
+      "bi": "BI",
+      "reportStudio": "Report Studio",
+      "reportGenerations": "Generations",
+      "settings": "Settings",
+      "users": "Users",
+      "companyProfile": "Company Profile",
+      "connectors": "Connectors"
+    }
+  },
   "header": {
     "openMenu": "Open menu",
     "tenantActive": "Active tenant",
@@ -175,6 +238,7 @@
     "subtitle": "Operational view of compliance and ISO management.",
     "executiveView": "Operational View",
     "kpiView": "KPI View",
+    "systemHealthView": "System Health",
     "loadingData": "Loading data...",
     "initialControlsTitle": "Initialized controls pending assessment",
     "initialControlsSubtitle": "This company does not yet have active or assessed controls available in the dashboard.",
@@ -237,6 +301,65 @@
     "iaAuditorCriticalRisks": "{{count}} risks remain at a critical level.",
     "iaAuditorUpcomingActions": "There are {{count}} upcoming actions or evidence items.",
     "iaAuditorReviewSuggestions": "Review suggestions"
+  },
+  "grcDecisionCenter": {
+    "defaultTitle": "GRC Decision Center",
+    "summaryTitle": "Executive GRC Summary",
+    "cta": "View GRC analysis",
+    "evidenceBased": "Evidence-based decision",
+    "summaryDescription": "Executive reading of decisions, priorities, and official indicators. Detailed analysis lives in GRC.",
+    "fullDescription": "Consolidates official snapshots, interpretation, trend, impact, and proposed actions. An unmeasured state is never presented as zero.",
+    "loading": "Loading decisions...",
+    "loadError": "The decision center could not be loaded.",
+    "summaryCards": {
+      "critical": "Critical",
+      "attention": "Attention",
+      "controlled": "Controlled",
+      "unmeasured": "Unmeasured",
+      "measured": "Measured"
+    },
+    "values": {
+      "noData": "No data",
+      "noValidMeasurement": "No valid measurement",
+      "validResult": "Result available",
+      "unmeasured": "Unmeasured",
+      "noComparablePeriod": "No comparable period"
+    },
+    "defaults": {
+      "unnamedIndicator": "Unnamed indicator",
+      "noOfficialSnapshot": "No calculated and published official snapshot exists.",
+      "officialSnapshot": "The result comes from the published official snapshot.",
+      "reviewImpact": "Review the indicator alongside its risks, controls, evidence, and related plans.",
+      "completeSourceData": "Complete or correct source data before making decisions.",
+      "reviewEvidence": "Review the evidence and record a governed proposal when appropriate.",
+      "unassigned": "Unassigned",
+      "notPublished": "not published"
+    },
+    "priorities": {
+      "title": "Main priorities",
+      "managementTitle": "Management priorities",
+      "noneAvailable": "No official indicators are available to calculate priorities.",
+      "noneCritical": "No critical or attention priorities exist with the current data.",
+      "previewHelp": "Showing up to 3 by criticality; the full list is in GRC.",
+      "focusHelp": "Showing up to 6 priorities by criticality; the full catalog remains visible in the grid below.",
+      "additional": "+{{count}} additional in GRC.",
+      "additionalPriorities": "+{{count}} additional priorities available in the full grid."
+    },
+    "actions": {
+      "viewDecision": "View decision",
+      "openIndicator": "Open indicator",
+      "close": "Close",
+      "openProposal": "Open indicator and proposal"
+    },
+    "fields": {
+      "trend": "Trend",
+      "cause": "Cause",
+      "impact": "Impact",
+      "recommendation": "Recommendation",
+      "traceability": "Traceability",
+      "snapshot": "Snapshot"
+    },
+    "dialogTitle": "GRC Decision"
   },
   "exports": {
     "title": "Premium Executive Reports",

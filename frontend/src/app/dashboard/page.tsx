@@ -1487,7 +1487,7 @@ function DashboardPageContent() {
                         : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
                     ].join(' ')}
                   >
-                    Salud del sistema
+                    {t('dashboard.systemHealthView')}
                   </button>
                 </div>
 
@@ -2059,9 +2059,9 @@ function DashboardPageContent() {
           <GrcDecisionCenter
             compact
             variant="summary"
-            title="Resumen ejecutivo GRC"
+            title={t('grcDecisionCenter.summaryTitle')}
             ctaHref="/grc"
-            ctaLabel="Ver análisis GRC"
+            ctaLabel={t('grcDecisionCenter.cta')}
           />
         </div>
         <div className="mx-auto mt-6 max-w-[1720px]">

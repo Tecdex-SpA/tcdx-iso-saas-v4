@@ -25,7 +25,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PUI_PHASE: CLOSED.
 - PRE_UI_DATA_TRUTH_GATE: PASS.
 - PRE-UI: CLOSED.
-- UI enterprise: UI-02 Etapa 1 Visual Foundation tecnica DONE_LOCAL en este checkout; Etapa 1.2 cierre visual/i18n DONE_LOCAL sin iniciar Etapa 2; alcance limitado a frontend visual/copy/i18n focal, sin backend/API/BD/RBAC/rutas/contratos; lint, build, test focal responsive, git diff --check y screenshots locales PASS; Etapa 2 pendiente de aprobacion del usuario.
+- UI enterprise: UI-02 Etapa 2 App Shell y navegacion enterprise DONE_LOCAL en branch `codex/ui02-stage1-foundation` sobre base local `b41b4601ad3efb2c95963ac85dbf3173367e1747`; auditoria de cierre separo configuracion visual a `frontend/src/config/enterpriseNavigation.ts` para no mezclarla con el contrato de autorizacion. Etapa 1/1.2 permanecen cerradas localmente. Alcance limitado a frontend shell/navegacion/i18n/test de contrato/continuidad, sin backend/API/BD/RBAC/rutas/contratos/Math Governance/Data Trust; 9 dominios principales, rutas App Router preservadas 97->97, lint/build/tests focales/git diff --check/screenshots locales PASS; Etapa 3 pendiente de aprobacion del usuario.
 - Fase 6 ampliada 6.8-6.14: LOCAL_CLOSED_PENDING_RUNTIME_VALIDATION.
 - 6.8-01-HF1: CLOSED (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME (deploy validado por el usuario en production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; `schema_migrations` registra `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicado, `grc.manual_observations@v1` existe published, `current_version_id` correcto, sin duplicados globales/versiones ni contratos tenant-specific).
@@ -118,8 +118,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa diff y screenshots de `UI-02` Etapa 1/1.2 en `artifacts/ui02-stage1-visual/`, `artifacts/ui02-stage1-1-visual/` y `artifacts/ui02-stage1-2-closeout/`.
-2. Usuario aprueba o rechaza avanzar a `UI-02` Etapa 2; Codex debe detenerse hasta esa aprobacion.
+1. Usuario revisa diff y screenshots de `UI-02` Etapa 2.2 en `artifacts/ui02-stage2-2-localization-closeout/`.
+2. Usuario aprueba o rechaza el cierre de localizacion/evidencia visual valida de App Shell antes de avanzar a `UI-02` Etapa 3; Codex debe detenerse hasta esa aprobacion.
 3. Usuario mantiene push/PR/CI/merge/deploy manual si corresponde.
 4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A y F6.14-A salvo evidencia objetiva nueva.
 

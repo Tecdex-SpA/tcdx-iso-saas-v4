@@ -1,0 +1,128 @@
+{
+  "generatedAt": "2026-08-24T22:10:50.444Z",
+  "baseUrl": "http://localhost:3001",
+  "routeCountBefore": 97,
+  "routeCountAfter": 97,
+  "authContext": {
+    "role": "admin",
+    "tenant": "synthetic visual-validation tenant id in localStorage only"
+  },
+  "permissionsContext": {
+    "modules": [
+      "health",
+      "risks",
+      "evidences",
+      "grc_phase2_integrated",
+      "grc_phase3_operations",
+      "data_governance",
+      "metrics_bi",
+      "surveys_assessments",
+      "ai",
+      "report_studio"
+    ],
+    "capabilities": [
+      "reports.premium",
+      "data.governance",
+      "metrics.catalog",
+      "bi.executive_dashboards",
+      "reporting.studio"
+    ],
+    "permission_map": {
+      "health.view": true
+    }
+  },
+  "captures": [
+    {
+      "file": "dashboard-1440-sidebar-expanded.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/dashboard",
+      "menuState": "sidebar-expanded",
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; missing metrics remain null/no data.",
+      "visibleDomainLabels": [
+        "Inicio",
+        "Cumplimiento",
+        "Riesgo y Control",
+        "Auditoría y Mejora",
+        "Operación y Resiliencia",
+        "Datos y Evidencia",
+        "Inteligencia",
+        "Reportes",
+        "Administración"
+      ],
+      "navCount": 1
+    },
+    {
+      "file": "dashboard-1280-sidebar-collapsed.png",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "route": "/dashboard",
+      "menuState": "sidebar-collapsed",
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; missing metrics remain null/no data.",
+      "visibleDomainLabels": [
+        "Inicio"
+      ],
+      "navCount": 1
+    },
+    {
+      "file": "dashboard-mobile-390-drawer-closed.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/dashboard",
+      "menuState": "drawer-closed",
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; missing metrics remain null/no data.",
+      "visibleDomainLabels": [],
+      "navCount": 1
+    },
+    {
+      "file": "dashboard-mobile-390-drawer-open.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/dashboard",
+      "menuState": "drawer-open",
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; missing metrics remain null/no data.",
+      "visibleDomainLabels": [
+        "Inicio",
+        "Cumplimiento",
+        "Riesgo y Control",
+        "Auditoría y Mejora",
+        "Operación y Resiliencia",
+        "Datos y Evidencia",
+        "Inteligencia",
+        "Reportes",
+        "Administración"
+      ],
+      "navCount": 2
+    },
+    {
+      "file": "riesgos-1440-sidebar-expanded.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/riesgos",
+      "menuState": "sidebar-expanded",
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; missing metrics remain null/no data.",
+      "visibleDomainLabels": [
+        "Inicio",
+        "Cumplimiento",
+        "Riesgo y Control",
+        "Auditoría y Mejora",
+        "Operación y Resiliencia",
+        "Datos y Evidencia",
+        "Inteligencia",
+        "Reportes",
+        "Administración"
+      ],
+      "navCount": 1
+    }
+  ]
+}

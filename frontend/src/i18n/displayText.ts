@@ -467,7 +467,8 @@ function applyPatterns(original: string) {
   output = output.replace(/Evidencia/gi, 'Evidence');
   output = output.replace(/Plan de acción/gi, 'Action plan');
   output = output.replace(/Plan de accion/gi, 'Action plan');
-  output = output.replace(/Matriz de riesgo/gi, 'Risk matrix');
+  output = output.replace(/Matriz de riesgos/gi, 'Risk Matrix');
+  output = output.replace(/Matriz de riesgo/gi, 'Risk Matrix');
   output = output.replace(/Auditoría/gi, 'Audit');
   output = output.replace(/Auditoria/gi, 'Audit');
   output = output.replace(/Diagnóstico/gi, 'Diagnostic');

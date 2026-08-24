@@ -1,0 +1,181 @@
+{
+  "generatedAt": "2026-08-24T22:38:53.171Z",
+  "baseUrl": "http://localhost:3001",
+  "routeCountBefore": 97,
+  "routeCountAfter": 97,
+  "authContext": {
+    "role": "admin",
+    "tenant": "synthetic visual-validation tenant id in localStorage only"
+  },
+  "permissionsContext": {
+    "moduleKeys": [
+      "health",
+      "risks",
+      "audits",
+      "evidences",
+      "grc_phase2_integrated",
+      "grc_phase3_operations",
+      "data_governance",
+      "metrics_bi",
+      "surveys_assessments",
+      "assurance_loss",
+      "ai",
+      "report_studio"
+    ],
+    "capabilities": [
+      "reports.premium",
+      "data.governance",
+      "metrics.catalog",
+      "bi.executive_dashboards",
+      "reporting.studio",
+      "health.view"
+    ],
+    "permission_map": {
+      "health.view": true
+    }
+  },
+  "checks": {
+    "dashboardBreadcrumbOk": true,
+    "noDuplicateHome": true,
+    "riskBreadcrumbOk": true,
+    "noIndividualRiskTruncation": true,
+    "noInternalTerminology": true,
+    "ariaCurrentOk": true,
+    "mobileDrawerAccessibilityOk": true,
+    "connectorPlacementWarning": "area_owner may see Administración only because /conectores remains there; retained to avoid IA ambiguity, duplicate destination, or permission contract changes."
+  },
+  "captures": [
+    {
+      "file": "dashboard-1440-sidebar-expanded.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/dashboard",
+      "menuState": "sidebar-expanded",
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; missing/no-data values remain null/no data for visual validation.",
+      "breadcrumbText": "Home/Executive Center",
+      "currentSegments": 1,
+      "tenantTitle": "TECDEX Validación Visual · Enterprise",
+      "visibleInternalTerms": 0,
+      "collapsedAccessibleLinks": 11,
+      "visibleDomainLabels": [
+        "Home",
+        "Executive Center",
+        "GRC Portfolio",
+        "Compliance",
+        "Risk and Control",
+        "Audit and Improvement",
+        "Operations and Resilience",
+        "Data and Evidence",
+        "Intelligence",
+        "Reports",
+        "Administration"
+      ],
+      "accessibility": {}
+    },
+    {
+      "file": "dashboard-1280-sidebar-collapsed.png",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "route": "/dashboard",
+      "menuState": "sidebar-collapsed",
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; missing/no-data values remain null/no data for visual validation.",
+      "breadcrumbText": "Home/Executive Center",
+      "currentSegments": 1,
+      "tenantTitle": "TECDEX Validación Visual · Enterprise",
+      "visibleInternalTerms": 0,
+      "collapsedAccessibleLinks": 9,
+      "visibleDomainLabels": [
+        "Home",
+        "Compliance",
+        "Risk and Control",
+        "Audit and Improvement",
+        "Operations and Resilience",
+        "Data and Evidence",
+        "Intelligence",
+        "Reports",
+        "Administration"
+      ],
+      "accessibility": {}
+    },
+    {
+      "file": "riesgos-1440-sidebar-expanded.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/riesgos",
+      "menuState": "sidebar-expanded",
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; missing/no-data values remain null/no data for visual validation.",
+      "breadcrumbText": "Home/…/Risk Register",
+      "currentSegments": 1,
+      "tenantTitle": "TECDEX Validación Visual · Enterprise",
+      "visibleInternalTerms": 0,
+      "collapsedAccessibleLinks": 14,
+      "visibleDomainLabels": [
+        "Home",
+        "Compliance",
+        "Risk and Control",
+        "Risk Register",
+        "Risk Matrix",
+        "Controls",
+        "Assets",
+        "Quantitative",
+        "Audit and Improvement",
+        "Operations and Resilience",
+        "Data and Evidence",
+        "Intelligence",
+        "Reports",
+        "Administration"
+      ],
+      "accessibility": {}
+    },
+    {
+      "file": "dashboard-mobile-390-drawer-open.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/dashboard",
+      "menuState": "drawer-open",
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; missing/no-data values remain null/no data for visual validation.",
+      "breadcrumbText": "Home/Executive Center",
+      "currentSegments": 1,
+      "tenantTitle": "TECDEX Validación Visual · Enterprise",
+      "visibleInternalTerms": 0,
+      "collapsedAccessibleLinks": 22,
+      "visibleDomainLabels": [
+        "Home",
+        "Executive Center",
+        "GRC Portfolio",
+        "Compliance",
+        "Risk and Control",
+        "Audit and Improvement",
+        "Operations and Resilience",
+        "Data and Evidence",
+        "Intelligence",
+        "Reports",
+        "Administration",
+        "Home",
+        "Executive Center",
+        "GRC Portfolio",
+        "Compliance",
+        "Risk and Control",
+        "Audit and Improvement",
+        "Operations and Resilience"
+      ],
+      "accessibility": {
+        "bodyScrollLockedWhenDrawerOpen": true,
+        "focusInsideDrawerAfterOpen": true,
+        "tabTrapStayedInsideDrawer": true,
+        "escapeClosesDrawer": true,
+        "focusReturnsToMenuButtonAfterEscape": true,
+        "overlayClosesDrawer": true,
+        "focusReturnsToMenuButtonAfterOverlay": true
+      }
+    }
+  ]
+}

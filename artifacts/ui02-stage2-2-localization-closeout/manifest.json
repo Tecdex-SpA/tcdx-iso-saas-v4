@@ -1,0 +1,172 @@
+{
+  "generatedAt": "2026-08-24T22:55:00.603Z",
+  "baseUrl": "http://localhost:3001",
+  "locale": "es",
+  "routeCountBefore": 97,
+  "routeCountAfter": 97,
+  "tenantContext": {
+    "tenantId": "9de324a6-b818-4546-84a0-70e70ed374a0",
+    "tenantName": "TECDEX Validación Visual",
+    "role": "admin",
+    "source": "runtime-generated UUID in Playwright localStorage/JWT for visual validation only"
+  },
+  "permissionsContext": {
+    "moduleKeys": [
+      "health",
+      "risks",
+      "audits",
+      "evidences",
+      "grc_phase2_integrated",
+      "grc_phase3_operations",
+      "data_governance",
+      "metrics_bi",
+      "surveys_assessments",
+      "assurance_loss",
+      "ai",
+      "report_studio"
+    ],
+    "capabilities": [
+      "reports.premium",
+      "data.governance",
+      "metrics.catalog",
+      "bi.executive_dashboards",
+      "reporting.studio",
+      "health.view"
+    ],
+    "permission_map": {
+      "health.view": true
+    }
+  },
+  "assertions": {
+    "noInvalidTenantText": true,
+    "noAuthErrors": true,
+    "noKnownMixedLocaleLabels": true,
+    "noRiskMatrixs": true,
+    "noDuplicatedBreadcrumbHome": true,
+    "dashboardSpanishLabels": true,
+    "riesgosSpanishLabels": true,
+    "mobileDrawerAccessibility": true
+  },
+  "captures": [
+    {
+      "file": "dashboard-1440-sidebar-expanded-es.png",
+      "locale": "es",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/dashboard",
+      "menuState": "sidebar-expanded",
+      "tenantContext": {
+        "source": "visual harness runtime UUID from JWT and activeTenantId",
+        "tenantId": "9de324a6-b818-4546-84a0-70e70ed374a0",
+        "tenantName": "TECDEX Validación Visual",
+        "validUuid": true
+      },
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; official metrics catalog returns an empty array, not zero-filled metrics.",
+      "breadcrumbText": "Inicio/Centro ejecutivo",
+      "assertions": {
+        "forbiddenVisiblePatternsAbsent": true,
+        "spanishLocaleLabelsOnly": true,
+        "noDuplicateBreadcrumb": true,
+        "currentSegments": 1,
+        "tenantTitle": "TECDEX Validación Visual · Enterprise",
+        "visibleInternalTerms": 0,
+        "collapsedAccessibleLinks": 11,
+        "accessibility": {}
+      }
+    },
+    {
+      "file": "dashboard-1280-sidebar-collapsed-es.png",
+      "locale": "es",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "route": "/dashboard",
+      "menuState": "sidebar-collapsed",
+      "tenantContext": {
+        "source": "visual harness runtime UUID from JWT and activeTenantId",
+        "tenantId": "9de324a6-b818-4546-84a0-70e70ed374a0",
+        "tenantName": "TECDEX Validación Visual",
+        "validUuid": true
+      },
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; official metrics catalog returns an empty array, not zero-filled metrics.",
+      "breadcrumbText": "Inicio/Centro ejecutivo",
+      "assertions": {
+        "forbiddenVisiblePatternsAbsent": true,
+        "spanishLocaleLabelsOnly": true,
+        "noDuplicateBreadcrumb": true,
+        "currentSegments": 1,
+        "tenantTitle": "TECDEX Validación Visual · Enterprise",
+        "visibleInternalTerms": 0,
+        "collapsedAccessibleLinks": 9,
+        "accessibility": {}
+      }
+    },
+    {
+      "file": "riesgos-1440-sidebar-expanded-es.png",
+      "locale": "es",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/riesgos",
+      "menuState": "sidebar-expanded",
+      "tenantContext": {
+        "source": "visual harness runtime UUID from JWT and activeTenantId",
+        "tenantId": "9de324a6-b818-4546-84a0-70e70ed374a0",
+        "tenantName": "TECDEX Validación Visual",
+        "validUuid": true
+      },
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; official metrics catalog returns an empty array, not zero-filled metrics.",
+      "breadcrumbText": "Inicio/…/Registro de riesgos",
+      "assertions": {
+        "forbiddenVisiblePatternsAbsent": true,
+        "spanishLocaleLabelsOnly": true,
+        "noDuplicateBreadcrumb": true,
+        "currentSegments": 1,
+        "tenantTitle": "TECDEX Validación Visual · Enterprise",
+        "visibleInternalTerms": 0,
+        "collapsedAccessibleLinks": 14,
+        "accessibility": {}
+      }
+    },
+    {
+      "file": "dashboard-mobile-390-drawer-open-es.png",
+      "locale": "es",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/dashboard",
+      "menuState": "drawer-open",
+      "tenantContext": {
+        "source": "visual harness runtime UUID from JWT and activeTenantId",
+        "tenantId": "9de324a6-b818-4546-84a0-70e70ed374a0",
+        "tenantName": "TECDEX Validación Visual",
+        "validUuid": true
+      },
+      "dataConditions": "API mocks with enabled modules/capabilities and empty operational datasets; official metrics catalog returns an empty array, not zero-filled metrics.",
+      "breadcrumbText": "Inicio/Centro ejecutivo",
+      "assertions": {
+        "forbiddenVisiblePatternsAbsent": true,
+        "spanishLocaleLabelsOnly": true,
+        "noDuplicateBreadcrumb": true,
+        "currentSegments": 1,
+        "tenantTitle": "TECDEX Validación Visual · Enterprise",
+        "visibleInternalTerms": 0,
+        "collapsedAccessibleLinks": 22,
+        "accessibility": {
+          "bodyScrollLockedWhenDrawerOpen": true,
+          "focusInsideDrawerAfterOpen": true,
+          "tabTrapStayedInsideDrawer": true,
+          "escapeClosesDrawer": true,
+          "focusReturnsToMenuButtonAfterEscape": true,
+          "overlayClosesDrawer": true,
+          "focusReturnsToMenuButtonAfterOverlay": true
+        }
+      }
+    }
+  ]
+}

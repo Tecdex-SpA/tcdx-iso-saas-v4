@@ -11,7 +11,7 @@
     "lint": "eslint",
     "test": "node scripts/check-phase1-ui-contract.mjs && node scripts/check-metrics-operational-contract.mjs && node ../scripts/phase3/check-phase3-contracts.js",
     "test:phase6-ui-responsive": "node scripts/check-phase6-ui-responsive-contract.mjs",
-    "test:phase6-sidebar-rbac": "node scripts/check-phase6-sidebar-navigation-rbac-contract.mjs",
+    "test:phase6-sidebar-rbac": "node scripts/check-phase6-sidebar-navigation-rbac-contract.mjs && node scripts/check-ui02-stage2-2-localization-contract.mjs",
     "test:phase6-kpi-product-reconciliation": "node scripts/check-phase6-kpi-product-reconciliation-contract.mjs",
     "test:phase6-functional-flows": "node scripts/check-phase6-functional-flows-contract.mjs",
     "test:phase6-commercial-multitenant": "node scripts/check-phase6-commercial-multitenant-contract.mjs",
