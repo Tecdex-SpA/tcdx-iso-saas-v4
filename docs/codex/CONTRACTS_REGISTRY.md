@@ -20,10 +20,13 @@
 | Relationship inventory / graph input contract | CURRENT/6.9-01 | CODEX A | `docs/architecture/grc_relationship_inventory.md`; Impact Graph debe proyectar/adaptar truth existente, no duplicar relaciones. |
 | Graph Projection / Edge contract | CURRENT/6.9-02 | CODEX A | `impact-graph-2-foundation-v1` en `backend/src/services/grc/impactGraph.service.js`; proyección/adapters sobre truth existente, sin persistencia graph ni segundo source of truth. |
 | Priority contract | CURRENT/6.9-03 | CODEX C executing package | `priority-engine-2-v1`; proyección determinística sobre `grc_gaps` + Impact Graph 2.0, sin storage paralelo de prioridad. |
-| IntelligenceContext | CURRENT/F6.12-A-LOCAL | CODEX B | `canonical-intelligence-context-v1`; backend arma contexto tenant-scoped por categorias/provenance y AI Engine no consulta sin tenant autorizado. |
-| Pattern/Trend Engine | CURRENT/F6.12-A-LOCAL | CODEX B | `pattern-trend-engine-v1`; senales deterministicas sobre series historicas tenant-scoped con minimum-period guard y `insufficient_data`. |
-| Anomaly Engine | CURRENT/F6.12-A-LOCAL | CODEX B | `anomaly-engine-v1`; robust z-score/MAD versionado con baseline explicito, score/band y guard contra sparse false positives. |
-| Cross-GRC Intelligence Orchestrator | CURRENT/F6.12-A-LOCAL | CODEX B | `cross-grc-intelligence-orchestrator-v1`; orquesta context/patterns/trends/anomalies/Priority/Impact/RAG/regulatory sin store paralelo ni LLM truth. |
+| IntelligenceContext | CURRENT/F6.12-A-RUNTIME | CODEX B | `canonical-intelligence-context-v1`; backend arma contexto tenant-scoped por categorias/provenance y AI Engine no consulta sin tenant autorizado. |
+| Pattern/Trend Engine | CURRENT/F6.12-A-RUNTIME | CODEX B | `pattern-trend-engine-v1`; senales deterministicas sobre series historicas tenant-scoped con minimum-period guard y `insufficient_data`. |
+| Anomaly Engine | CURRENT/F6.12-A-RUNTIME | CODEX B | `anomaly-engine-v1`; robust z-score/MAD versionado con baseline explicito, score/band y guard contra sparse false positives. |
+| Cross-GRC Intelligence Orchestrator | CURRENT/F6.12-A-RUNTIME | CODEX B | `cross-grc-intelligence-orchestrator-v1`; orquesta context/patterns/trends/anomalies/Priority/Impact/RAG/regulatory sin store paralelo ni LLM truth. |
+| Recommendation Decision Ledger | CURRENT/F6.13-A-LOCAL | CODEX B | `recommendation-decision-ledger-v1`; decisiones humanas tenant-scoped append-only/idempotentes sobre recomendaciones/contexto/prioridad, sin decision authority de IA. |
+| Effectiveness Feedback Loop | CURRENT/F6.13-A-LOCAL | CODEX A | `effectiveness-feedback-loop-v1`; compara before/action/after/expected/observed con ventana, metodologia y Data Trust; closed no equivale a effective. |
+| Operational Memory | CURRENT/F6.13-A-LOCAL | CODEX B | `operational-memory-v1`; casos tenant-scoped con facts/decisions/outcomes/evaluations/confirmed lessons/AI hypotheses separados, sin segunda KB/retrieval. |
 | Knowledge Document | CURRENT/6.10-01-RUNTIME | CODEX B | `knowledge-document-model-v1`; `knowledge_documents` extiende KB v2 con scope, tenant, versioning, lifecycle, checksums y provenance; runtime closure PASS. |
 | Knowledge Ingestion | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge-ingestion-pipeline-v1`; pipeline tenant-scoped con secure upload, extracción, chunks, audit, idempotencia y KB v2 linkage; runtime closure PASS. |
 | Knowledge Chunk | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge_document_chunks`; manifest determinístico y chunk content canónico para documentos tenant; 6.10-03 lo referencia sin copiar `chunk_text`. |
@@ -263,6 +266,24 @@ Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-04-RUNTIME-CLOSURE.md
 | Boundary | Returns candidates/provenance only; no LLM answer, citation contract, reranker, external vector DB or new storage. |
 | Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
 
+## F6.13-A Recommendation Decision Ledger, Effectiveness Feedback And Operational Memory
+
+Status: DONE_LOCAL on branch `feat/f6-13-a-operational-learning`; runtime validation pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Decision Ledger | `recommendation-decision-ledger-v1` in `recommendation_decision_ledger`; append-only/idempotent tenant-scoped decisions over recommendations, Cross-GRC context and Priority context. |
+| Decision identity | Stable `decision_key` excludes technical timestamps and is based on tenant, canonical recommendation identity, recommendation version, subject, intelligence context key/version and priority context key/version. |
+| Human decision boundary | Decisions require actor, reason, decision time and correlation/idempotency; AI cannot write final decisions or create official actions. |
+| Effectiveness | `effectiveness-feedback-loop-v1` in `recommendation_effectiveness_evaluations`; before/after comparison with expected/observed outcome, methodology, window, Data Trust and provenance. |
+| Effectiveness semantics | `closed_equals_effective_assumption=false`; no evidence or missing metrics produce `insufficient_data`/`inconclusive`, not `ineffective`. |
+| Operational Memory | `operational-memory-v1` in `operational_memory_cases` + `operational_memory_case_links`; tenant-scoped cases reference canonical objects and separate facts, decisions, outcomes, evaluations, confirmed lessons and AI hypotheses. |
+| Memory governance | `confirmed` memory requires human actor, `confirmed_at` and `confirmation_reason`; `ai_hypothesis` cannot be confirmed directly. |
+| Retrieval boundary | Structured tenant-scoped query only; future semantic retrieval must use KB/Hybrid/RAG adapter, not a second KB or retrieval engine. |
+| Audit | Service writes state changes to existing `audit_event_log` with tenant, actor, object, contract version and correlation id. |
+| API/RBAC | No new HTTP route in F6.13-A; future routes must distinguish read, decide, evaluate and confirm/publish memory. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
+
 ## 6.10-05 RAG Grounded Answer + Citations
 
 Status: PASS_RUNTIME on production/main `d098441ec4deff867820f989d8595cfb3206571b`; documented by `docs/codex/handoffs/6.10-05-RUNTIME-CLOSURE.md`.
@@ -326,7 +347,7 @@ Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.11-B-RUNTIME-CLOSURE.md`
 
 ## F6.12-A Context Builders, Pattern/Trend, Anomaly And Cross-GRC Intelligence
 
-Status: DONE_LOCAL on branch `feat/f6-12-a-cross-grc-intelligence`; runtime validation pending user deploy.
+Status: CLOSED / PASS_RUNTIME on production/main `6aed2555524e1ab146ab9c25af4015401abfd7be`; documented by `docs/codex/handoffs/6.12-A-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
