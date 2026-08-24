@@ -56,6 +56,9 @@ Backend Node/Express
         |      + pgvector embedding foundation (`knowledge_chunk_embeddings`, `knowledge-embedding-contract-v1`)
         |      + hybrid retrieval candidates (`hybrid-retrieval-contract-v1`)
         |      + grounded RAG runtime projection (`rag-grounded-answer-contract-v1`)
+        |      + regulatory foundation (`regulatory_authoritative_sources`, `regulatory_ingestions`, `regulations`, `regulation_versions`, `legal_obligations`)
+        |      + regulatory semantic diff (`regulatory-semantic-diff-contract-v1`) over canonical versions/chunks/obligations
+        |      + regulatory packs (`regulatory-pack-model-v1`) with tenant activation/applicability as configuration/evaluation, not legal truth
         |      + structured search/matching/coverage/guardrails
         |
         +--> Intelligence services
@@ -126,5 +129,5 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - 6.10-04: CLOSED / PASS_RUNTIME; Hybrid Retrieval implemented as `hybrid-retrieval-contract-v1` over lexical `knowledge_document_chunks` and vector `knowledge_chunk_embeddings`, with deterministic rank normalization, tenant filter first, lifecycle filtering and provenance for future citations; no RAG answer/citations/reranker.
 - 6.10-05: CLOSED / PASS_RUNTIME; grounded RAG answer `rag-grounded-answer-contract-v1` validated in runtime over Hybrid Retrieval candidates only, with evidence-only context builder, deterministic citation validation, safe abstention, tenant isolation and no RAG persistence/source of truth. Closure: `docs/codex/handoffs/6.10-05-RUNTIME-CLOSURE.md`.
 - F6.10: CLOSED through 6.10-05.
-- F6.11-A: DONE_LOCAL; regulatory foundation adds `regulatory_authoritative_sources`, `regulatory_ingestions`, `regulations`, `regulation_versions` and `legal_obligations`, reusing `knowledge_documents` and `knowledge_document_chunks(scope='REGULATORY')` instead of creating a second KB/chunk/embedding/retrieval model.
-- 6.11-04: BLOCKED_UNTIL_F6_11_A_RUNTIME_PASS.
+- F6.11-A: CLOSED / PASS_RUNTIME; regulatory foundation adds `regulatory_authoritative_sources`, `regulatory_ingestions`, `regulations`, `regulation_versions` and `legal_obligations`, reusing `knowledge_documents` and `knowledge_document_chunks(scope='REGULATORY')` instead of creating a second KB/chunk/embedding/retrieval model.
+- F6.11-B: DONE_LOCAL; Semantic Diff and Regulatory Packs add governed tables for deterministic diffs, obligation lineage, pack version composition, tenant activation and applicability evaluation. Runtime validation pending user deploy; no route/RBAC change, no KB/chunk/embedding/retrieval/RAG duplication.

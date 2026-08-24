@@ -27,12 +27,16 @@
 | Knowledge Embedding | CURRENT/6.10-03-RUNTIME | CODEX B | `knowledge-embedding-contract-v1`; `knowledge_chunk_embeddings` persiste embeddings pgvector versionados por provider/model/model_version/dimensions/input_checksum con `tenant_id` explícito y FK a `knowledge_document_chunks`; runtime closure PASS. |
 | Hybrid Retrieval | CURRENT/6.10-04-RUNTIME | CODEX B | `hybrid-retrieval-contract-v1`; combina lexical sobre `knowledge_document_chunks` y vector sobre `knowledge_chunk_embeddings` con ranking determinístico versionado, tenant filter first y provenance para RAG; runtime closure PASS. |
 | RAG Citation | CURRENT/6.10-05-RUNTIME | CODEX B | `rag-grounded-answer-contract-v1`; citations verificables sólo desde candidatos Hybrid Retrieval, validación determinística y abstención segura; runtime closure PASS. |
-| Authoritative Source Registry | CURRENT/F6.11-A-LOCAL | CODEX B | `authoritative-source-registry-v1`; `regulatory_authoritative_sources` gobierna fuentes oficiales por scope/jurisdicción/autoridad sin convertir web general o LLM en verdad legal. |
-| Regulatory Ingestion | CURRENT/F6.11-A-LOCAL | CODEX B | `regulatory-ingestion-contract-v1`; artefactos regulatorios inmutables/versionados enlazados a `knowledge_documents` y chunks canónicos. |
-| Regulation | CURRENT/F6.11-A-LOCAL | CODEX B | `regulation-model-v1`; identidad regulatoria/legal estable en `regulations`. |
-| RegulationVersion | CURRENT/F6.11-A-LOCAL | CODEX B | `regulation-version-model-v1`; publicación/version normativa inmutable en `regulation_versions`. |
-| LegalObligation | CURRENT/F6.11-A-LOCAL | CODEX B | `legal-obligation-model-v1`; obligaciones legales explícitas/gobernadas en `legal_obligations`, sin publicación autoritativa por LLM. |
-| Regulatory Mapping | PLANNED | CODEX B | 6.11. |
+| Authoritative Source Registry | CURRENT/F6.11-A-RUNTIME | CODEX B | `authoritative-source-registry-v1`; `regulatory_authoritative_sources` gobierna fuentes oficiales por scope/jurisdicción/autoridad sin convertir web general o LLM en verdad legal. |
+| Regulatory Ingestion | CURRENT/F6.11-A-RUNTIME | CODEX B | `regulatory-ingestion-contract-v1`; artefactos regulatorios inmutables/versionados enlazados a `knowledge_documents` y chunks canónicos. |
+| Regulation | CURRENT/F6.11-A-RUNTIME | CODEX B | `regulation-model-v1`; identidad regulatoria/legal estable en `regulations`. |
+| RegulationVersion | CURRENT/F6.11-A-RUNTIME | CODEX B | `regulation-version-model-v1`; publicación/version normativa inmutable en `regulation_versions`. |
+| LegalObligation | CURRENT/F6.11-A-RUNTIME | CODEX B | `legal-obligation-model-v1`; obligaciones legales explícitas/gobernadas en `legal_obligations`, sin publicación autoritativa por LLM. |
+| Regulatory Semantic Diff | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-semantic-diff-contract-v1`; diff determinístico/revisable entre versiones de la misma regulación, con cambios estructurados y provenance. |
+| Regulatory Pack | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-pack-model-v1`; composición versionada de fuentes, regulaciones, versiones, obligaciones y diffs canónicos, sin copiar texto normativo. |
+| Regulatory Pack Activation | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-pack-activation-contract-v1`; activación/configuración tenant-scoped que no muta la definición global del pack. |
+| Regulatory Applicability | CURRENT/F6.11-B-LOCAL | CODEX B | `regulatory-pack-applicability-contract-v1`; evaluación/recomendación tenant-scoped con confirmación humana para aplicabilidad sensible; IA no es autoridad legal. |
+| Regulatory Mapping | PLANNED | CODEX B | Mapeos profundos a controles/evidencias/riesgos existentes requieren equivalencia real y revisión humana; F6.11-B sólo conserva `mapping_targets` gobernados en items de pack. |
 | Capability/RBAC | CURRENT/PROTECTED | A+C | Reutilizar sistema existente; backend autoriza. |
 
 Regla: si un work package cambia un contrato, actualizar este archivo en el mismo commit.
@@ -276,7 +280,7 @@ Status: PASS_RUNTIME on production/main `d098441ec4deff867820f989d8595cfb3206571
 
 ## F6.11-A Regulatory Foundation
 
-Status: DONE_LOCAL on branch `feat/f6-11-a-regulatory-foundation`; runtime validation pending user deploy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.11-A-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
@@ -290,8 +294,32 @@ Status: DONE_LOCAL on branch `feat/f6-11-a-regulatory-foundation`; runtime valid
 | RegulationVersion | `regulation-version-model-v1` in `regulation_versions`; immutable publication/version row with content checksum, document/ingestion linkage and supersession lineage. |
 | LegalObligation | `legal-obligation-model-v1` in `legal_obligations`; explicit governed obligations tied to regulation/version and optional source chunk/checksum. LLM suggestions cannot publish legal truth. |
 | Tenant isolation | Public regulatory sources/regulations are global/jurisdictional; `TENANT_PRIVATE` source/regulation rows are tenant-scoped. Tenant identity is service context, not body authority. |
-| Future boundary | 6.11-04 semantic diff, 6.11-05/06 packs and obligation extraction workflows must extend these tables and F6.10 retrieval/RAG, not create parallel document/chunk/embedding/retrieval models. |
+| Future boundary | Semantic diff and packs extend these tables and F6.10 retrieval/RAG, not create parallel document/chunk/embedding/retrieval models. |
 | Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`. |
+
+## F6.11-B Semantic Diff And Regulatory Packs
+
+Status: DONE_LOCAL on branch `feat/f6-11-b-semantic-diff-regulatory-packs`; runtime validation pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| Consolidated packages | 6.11-04 Semantic Diff, 6.11-05 Regulatory Pack CL-LAW-21719 model support, 6.11-06 Regulatory Pack CL-LAW-21663 model support. |
+| Service owner | `backend/src/services/knowledge-base/regulatoryDiffPacks.service.js` under CODEX B / Knowledge-Regulatory boundary. |
+| Semantic Diff | `regulatory-semantic-diff-contract-v1` in `regulatory_semantic_diffs`; compares two different `regulation_versions` from the same `regulation_id`, using canonical document/chunk/obligation references. |
+| Diff method | `section-anchor-token-jaccard-v1`; deterministic section anchor/checksum matching plus bounded token similarity; technical timestamps are excluded from semantic identity. |
+| Diff changes | `regulatory_semantic_diff_changes` stores `added`, `removed`, `modified`, `moved`, `unchanged` and `unaffected` changes for `text_section`, `legal_obligation`, `version_temporality` and `reference_scope` where supported by data. |
+| Obligation lineage | `regulatory_obligation_change_lineage` relates previous/new `legal_obligations` as `added`, `modified`, `removed`, `deprecated`, `unchanged` or `unaffected`; historical obligations are not overwritten or deleted. |
+| AI boundary | `ai_interpretation_status` can only be non-authoritative draft/review metadata; `AI_SEMANTIC_DIFF_TRUTH_AUTHORITY=0`, `AI_LEGAL_OBLIGATION_PUBLISH_AUTHORITY=0`, `LLM_DIRECT_SQL=0`. |
+| Pack identity | `regulatory-pack-model-v1` in `regulatory_packs`; stable by `(scope, tenant-normalized id, pack_key)`, with `GLOBAL`, `JURISDICTIONAL` and `TENANT_PRIVATE` scope. |
+| Pack versioning | `regulatory_pack_versions` stores `version_identifier`, lifecycle, effective dates, supersession and `composition_checksum`; checksums reference canonical object ids and metadata, not copied legal text. |
+| Pack composition | `regulatory_pack_items` references canonical `regulatory_authoritative_sources`, `regulations`, `regulation_versions`, `legal_obligations` or `regulatory_semantic_diffs`; `mapping_targets` are governed hints requiring real equivalence/review. |
+| Tenant activation | `regulatory-pack-activation-contract-v1` in `regulatory_pack_tenant_activations`; tenant id comes from authenticated context and activation/configuration does not mutate global pack definition. |
+| Applicability | `regulatory-pack-applicability-contract-v1` in `regulatory_pack_applicability_evaluations` and `regulatory_pack_applicability_results`; produces draft recommendation/confidence/provenance and requires human confirmation for sensitive applicability. |
+| Audit | `regulatory_governance_audit` captures actor, tenant when applicable, object, contract version, source/regulation/version ids, correlation id and metadata without full document text or secrets. |
+| Ley 21.719 / Ley 21.663 boundary | `CL-LAW-21719` and `CL-LAW-21663` are supported as data-driven pack keys over canonical records. F6.11-B does not fabricate law text or obligations; runtime must use authoritative ingested `regulations`/`regulation_versions`/`legal_obligations`. |
+| API/RBAC | No new HTTP route in F6.11-B; service methods are internal. Existing RBAC remains protected and unchanged. Future routes must add explicit read/manage/review/activate permissions. |
+| Knowledge/RAG reuse | Uses `knowledge_documents`, `knowledge_document_chunks`, `knowledge_chunk_embeddings`, Hybrid Retrieval and grounded RAG as existing owners; no KB v3, no `regulatory_chunks`, no regulatory embeddings/retrieval engine. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
 
 ## PUI-01 Source Ownership Inventory
 

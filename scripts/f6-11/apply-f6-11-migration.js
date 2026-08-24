@@ -14,6 +14,11 @@ const MIGRATIONS = Object.freeze([
     file: path.join(root, 'database/migrations/20260819_f6_11_a_regulatory_foundation.sql'),
     postconditions: postconditionsRegulatoryFoundation,
   },
+  {
+    id: '20260824_f6_11_b_semantic_diff_regulatory_packs',
+    file: path.join(root, 'database/migrations/20260824_f6_11_b_semantic_diff_regulatory_packs.sql'),
+    postconditions: postconditionsSemanticDiffRegulatoryPacks,
+  },
 ]);
 const LOCK_NAMESPACE = 844332;
 const LOCK_KEY = 2026081911;
@@ -131,6 +136,57 @@ async function postconditionsRegulatoryFoundation(client) {
   const row = result.rows[0] || {};
   if (Object.values(row).some((value) => value !== true)) {
     throw new Error(`F6.11-A regulatory foundation postcondition failed: ${JSON.stringify(row)}`);
+  }
+  return row;
+}
+
+async function postconditionsSemanticDiffRegulatoryPacks(client) {
+  const result = await client.query(`SELECT
+    to_regclass('public.regulatory_semantic_diffs') IS NOT NULL AS semantic_diffs_ready,
+    to_regclass('public.regulatory_semantic_diff_changes') IS NOT NULL AS semantic_diff_changes_ready,
+    to_regclass('public.regulatory_obligation_change_lineage') IS NOT NULL AS obligation_change_lineage_ready,
+    to_regclass('public.regulatory_packs') IS NOT NULL AS regulatory_packs_ready,
+    to_regclass('public.regulatory_pack_versions') IS NOT NULL AS regulatory_pack_versions_ready,
+    to_regclass('public.regulatory_pack_items') IS NOT NULL AS regulatory_pack_items_ready,
+    to_regclass('public.regulatory_pack_tenant_activations') IS NOT NULL AS pack_tenant_activations_ready,
+    to_regclass('public.regulatory_pack_applicability_evaluations') IS NOT NULL AS pack_applicability_ready,
+    to_regclass('public.regulatory_governance_audit') IS NOT NULL AS regulatory_governance_audit_ready,
+    EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname='public'
+        AND tablename='regulatory_semantic_diffs'
+        AND indexname='regulatory_semantic_diffs_semantic_diff_key_key'
+    ) AS semantic_diff_identity_ready,
+    EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname='public'
+        AND tablename='regulatory_packs'
+        AND indexname='ux_regulatory_packs_scope_key'
+    ) AS regulatory_pack_identity_ready,
+    EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname='public'
+        AND tablename='regulatory_pack_tenant_activations'
+        AND indexname='ux_regulatory_pack_tenant_activation'
+    ) AS pack_activation_identity_ready,
+    NOT EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema='public'
+        AND table_name IN (
+          'knowledge_base_v3',
+          'regulatory_kb_v2',
+          'regulatory_chunks',
+          'regulatory_embeddings',
+          'regulatory_vector_store',
+          'regulatory_retrieval',
+          'regulations_v2',
+          'regulation_versions_v2',
+          'legal_obligations_v2'
+        )
+    ) AS no_parallel_regulatory_storage`);
+  const row = result.rows[0] || {};
+  if (Object.values(row).some((value) => value !== true)) {
+    throw new Error(`F6.11-B semantic diff/regulatory packs postcondition failed: ${JSON.stringify(row)}`);
   }
   return row;
 }
