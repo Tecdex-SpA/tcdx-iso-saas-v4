@@ -38,7 +38,8 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - F6.11-A está cerrado en runtime por `docs/codex/handoffs/6.11-A-RUNTIME-CLOSURE.md`: `regulatory_authoritative_sources` es el registry gobernado de fuentes, `regulatory_ingestions` conserva artefactos regulatorios versionados e inmutables enlazados a `knowledge_documents`, `regulations` representa identidad legal estable, `regulation_versions` representa publicaciones/versiones inmutables y `legal_obligations` representa obligaciones gobernadas explícitas. No hay `knowledge_base_v3`, `regulatory_chunks`, segundo embedding model ni autoridad legal del LLM. `F6_11_A_RUNTIME=PASS`.
 - F6.11-B está cerrado en runtime por `docs/codex/handoffs/6.11-B-RUNTIME-CLOSURE.md`: `regulatory_semantic_diffs`, `regulatory_semantic_diff_changes` y `regulatory_obligation_change_lineage` modelan diff determinístico/revisable entre `regulation_versions`; `regulatory_packs`, `regulatory_pack_versions`, `regulatory_pack_items`, `regulatory_pack_tenant_activations`, `regulatory_pack_applicability_evaluations` y `regulatory_pack_applicability_results` componen verdad regulatoria existente sin copiar texto legal ni crear KB/chunks/embeddings/retrieval/RAG paralelo. Runtime sobre `main@99dd2772c599c5cbdd579594d7520aadc7b0cbb9` confirmó migración aplicada, postconditions, tests focales y `PARALLEL_REGULATORY_MODEL=0`. `F6_11_B_RUNTIME=PASS`.
 - F6.12-A está cerrado en runtime por `docs/codex/handoffs/6.12-A-RUNTIME-CLOSURE.md`: `canonical-intelligence-context-v1`, `pattern-trend-engine-v1`, `anomaly-engine-v1` y `cross-grc-intelligence-orchestrator-v1` operan como proyeccion runtime derivada en `backend/src/services/intelligence/crossGrcIntelligence.service.js`. Runtime sobre `main@6aed2555524e1ab146ab9c25af4015401abfd7be` confirmó tests focales, adapter Python compilado, sin `CREATE TABLE` nuevo para intelligence/pattern/anomaly/context, sin storage paralelo ni autoridad operacional por LLM. `F6_12_A_RUNTIME=PASS`.
-- F6.13-A cierra localmente el ciclo recommendation->decision->effectiveness->memory con `recommendation-decision-ledger-v1`, `effectiveness-feedback-loop-v1` y `operational-memory-v1` en `backend/src/services/intelligence/operationalLearning.service.js`. La persistencia es tenant-scoped, append-only/idempotente para decisiones/evaluaciones, usa `audit_event_log`, referencia `iso_operational_suggestions`/`iso_recommended_action_conversions`, y no crea Priority/Observation/Gap/KB/Retrieval/AI truth paralelo. Runtime queda pendiente por deploy del usuario.
+- F6.13-A esta cerrado en runtime por `docs/codex/handoffs/6.13-A-RUNTIME-CLOSURE.md`: `recommendation-decision-ledger-v1`, `effectiveness-feedback-loop-v1` y `operational-memory-v1` en `backend/src/services/intelligence/operationalLearning.service.js` persisten historia tenant-scoped append-only/idempotente para decisiones/evaluaciones/memoria; usan `audit_event_log`, referencian `iso_operational_suggestions`/`iso_recommended_action_conversions`, no crean Priority/Observation/Gap/KB/Retrieval/AI truth paralelo y `F6_13_A_RUNTIME=PASS`.
+- F6.14-A cierra localmente AI Governance, AI Evaluation Suite y el cierre integral de Fase 6 ampliada: `ai-governance-contract-v1`, `ai-capability-registry-v1`, `ai-policy-boundaries-v1`, `ai-retention-redaction-policy-v1`, `ai-evaluation-suite-v1`, `ai-eval-golden-cases-f6-14-v1` y `ai-eval-thresholds-f6-14-v1` viven en `backend/src/services/intelligence/*`; no hay DDL, segundo AI orchestrator ni AI truth store. Runtime queda pendiente por validacion manual del usuario.
 - Fórmulas/pesos oficiales: no modificar durante PRE-UI salvo defecto matemático probado y decisión aprobada.
 - Knowledge Base v2 existe: extender, no sustituir.
 - Knowledge Document v1 existe localmente: usar `knowledge_documents` para `GLOBAL`, `REGULATORY` y `TENANT`; tenant privado exige `tenant_id`, global/regulatory exigen `tenant_id=NULL`, regulatory exige `source_authority=authoritative`; versionado por `(scope, tenant_id normalizado, document_key, version)` y supersession explícito.
@@ -60,9 +61,8 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 - Decision Interpretation / Next Best Actions: foundation determinística; falta causalidad transversal completa.
 - Tenant document handling: hay capacidades especializadas, no RAG privado universal confirmado.
 - External lookup: foundation web/trusted sources; no equivale a fuente legal autoritativa. Registry regulatorio, ingestion, modelo Regulation/Version/Obligation, semantic diff y pack framework ya están cerrados en runtime sobre fuentes gobernadas.
-- AI Governance: guardrails/traces/fallback existen; falta lifecycle humano/evals completos.
-- Operational Memory: datos históricos existen, no ciclo formal recommendation→decision→action→effectiveness→memory confirmado.
-- Operational Memory F6.13-A: ciclo formal cerrado localmente; runtime pendiente.
+- AI Governance F6.14-A: registry/policy/versioning/eval suite cerrados localmente; runtime pendiente por validacion manual.
+- Operational Memory F6.13-A: ciclo formal cerrado en runtime.
 
 ## CONFIRMED PROBLEM
 
@@ -75,8 +75,7 @@ Este archivo contiene hechos reutilizables. No redescubrir mientras no exista ev
 
 - Impact Graph advanced analytics/centrality/consumer rollout beyond 6.9-02 foundation.
 - Carga runtime de contenido/obligaciones reales de Ley 21.719 / Ley 21.663 si aún no existen como `regulations`/`regulation_versions`/`legal_obligations` autoritativas; no fabricarlas desde documentación secundaria.
-- Operational Memory transversal.
-- AI Evaluation Suite transversal.
+- AI Governance / Evaluation Suite F6.14-A runtime pendiente por validacion manual.
 
 ## TO-BE
 

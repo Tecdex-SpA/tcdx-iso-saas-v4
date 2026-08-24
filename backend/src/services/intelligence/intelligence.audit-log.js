@@ -12,6 +12,7 @@ async function recordIntelligenceAiTrace({
   fallback = false,
   errorCode = null,
   confidence = null,
+  governance = null,
 } = {}) {
   if (!tenantId) return null;
   try {
@@ -50,12 +51,29 @@ async function recordIntelligenceAiTrace({
           model,
           prompt_context_size: promptContextSize,
           knowledge_items_count: knowledgeItemsCount,
+          governance: governance ? {
+            contract_version: governance.contract_version,
+            capability_id: governance.capability_id,
+            policy_version: governance.policy_version,
+            prompt_version: governance.prompt_version,
+            context_builder_version: governance.context_builder_version,
+            output_schema_version: governance.output_schema_version,
+            prompt_context_summary: governance.prompt_context_summary,
+          } : null,
         }),
         JSON.stringify({
           latency_ms: latencyMs,
           fallback,
           error_code: errorCode,
           confidence,
+          governance: governance ? {
+            status: governance.status,
+            fallback_used: governance.fallback_used,
+            source_count: governance.provenance?.source_count || 0,
+            citation_count: governance.provenance?.citation_count || 0,
+            authority_boundaries: governance.policy?.authority_boundaries || {},
+            retention_redaction_policy_version: governance.retention_redaction_policy_version,
+          } : null,
         }),
         errorCode ? 'fallback' : 'ok',
         errorCode,

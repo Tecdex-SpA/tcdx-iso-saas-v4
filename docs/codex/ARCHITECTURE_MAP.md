@@ -69,6 +69,9 @@ Backend Node/Express
                + Anomaly runtime projection (`anomaly-engine-v1`)
                + Cross-GRC Intelligence Orchestrator (`cross-grc-intelligence-orchestrator-v1`)
                + adapters to Priority Engine 2, Impact Graph, grounded RAG and Regulatory Packs
+               + Operational Learning (`recommendation-decision-ledger-v1`, `effectiveness-feedback-loop-v1`, `operational-memory-v1`)
+               + AI Governance (`ai-governance-contract-v1`, `ai-capability-registry-v1`, `ai-policy-boundaries-v1`)
+               + AI Evaluation Suite (`ai-evaluation-suite-v1`)
                + deterministic fallback/audit traces
                     |
                     v
@@ -137,4 +140,5 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - F6.11-A: CLOSED / PASS_RUNTIME; regulatory foundation adds `regulatory_authoritative_sources`, `regulatory_ingestions`, `regulations`, `regulation_versions` and `legal_obligations`, reusing `knowledge_documents` and `knowledge_document_chunks(scope='REGULATORY')` instead of creating a second KB/chunk/embedding/retrieval model.
 - F6.11-B: CLOSED / PASS_RUNTIME; Semantic Diff and Regulatory Packs add governed tables for deterministic diffs, obligation lineage, pack version composition, tenant activation and applicability evaluation. Runtime closure confirmed production/main `99dd2772c599c5cbdd579594d7520aadc7b0cbb9`, applied migration `20260824_f6_11_b_semantic_diff_regulatory_packs`, focal tests PASS and no KB/chunk/embedding/retrieval/RAG duplication.
 - F6.12-A: CLOSED / PASS_RUNTIME; Context Builders, Pattern/Trend, Anomaly and Cross-GRC Intelligence validated in runtime on production/main `6aed2555524e1ab146ab9c25af4015401abfd7be` as runtime projections under existing Intelligence services with no migration, no new route/RBAC, no parallel Observation/Gap/Graph/Priority/KB/RAG truth and no LLM operational truth.
-- F6.13-A: DONE_LOCAL; Operational Learning adds a governed tenant-scoped ledger/effectiveness/memory layer in `backend/src/services/intelligence/operationalLearning.service.js` with forward migration `20260824_f6_13_a_operational_learning`. It references recommendations/actions/context/priority/knowledge/regulatory objects by contract and reuses `audit_event_log`; no parallel Priority/Observation/Gap/KB/Retrieval/AI truth.
+- F6.13-A: CLOSED / PASS_RUNTIME; Operational Learning adds a governed tenant-scoped ledger/effectiveness/memory layer in `backend/src/services/intelligence/operationalLearning.service.js` with forward migration `20260824_f6_13_a_operational_learning`. Runtime closure confirmed migration, tests, deploy runner and no parallel Priority/Observation/Gap/KB/Retrieval/AI truth.
+- F6.14-A: DONE_LOCAL; AI Governance and AI Evaluation Suite formalize governed capability registry, provider/model/prompt/context/schema/policy/authority/failure semantics and synthetic regression evaluation in `backend/src/services/intelligence/aiGovernance.service.js` and `backend/src/services/intelligence/aiEvaluationSuite.service.js`. No DDL, no second AI orchestrator, no AI truth store and no frontend/UI work. Runtime validation pending user deploy.
