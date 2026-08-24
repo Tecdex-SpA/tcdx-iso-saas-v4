@@ -17,6 +17,10 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 | Multi-tenant | Usar suite/fixture definida por work package | según dominio | NOT CONFIRMED IN CONT-00 |
 | AI tests/evals | Consultar `ai-engine` scripts cuando corresponda | `ai-engine/` | NOT CONFIRMED IN CONT-00 |
 | Runtime/post-deploy | Manual por el usuario | entorno autorizado | MANUAL |
+| F6.11-A regulatory foundation focal | `node backend/src/services/knowledge-base/regulatoryFoundation.service.test.js` | repo root | VERIFIED/F6.11-B |
+| F6.11-B semantic diff/regulatory packs focal | `node backend/src/services/knowledge-base/regulatoryDiffPacks.service.test.js` | repo root | VERIFIED/F6.11-B |
+| F6.11 migration checksum | `node scripts/f6-11/apply-f6-11-migration.js --checksum` | repo root | VERIFIED/F6.11-B |
+| F6.11 post-deploy preflight/apply | `MIGRATION_DATABASE_URL="$DATABASE_URL" node scripts/f6-11/apply-f6-11-migration.js --preflight` then `--apply` then `--preflight` | deployed backend host | MANUAL |
 
 Regla de ahorro:
 - máximo 1 test focal rápido por prompt cuando aporte valor;
