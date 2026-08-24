@@ -18,9 +18,9 @@ export default function EnterpriseEmptyState({
 }: EnterpriseEmptyStateProps) {
   return (
     <div className={cx('enterprise-empty-state', className)}>
-      {icon && <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">{icon}</div>}
-      <h3 className="text-base font-black text-slate-950">{title}</h3>
-      {description && <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">{description}</p>}
+      {icon && <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-[var(--tcdx-radius-tecdex-md)] bg-[#EAF3FC] text-[#1B75D0]">{icon}</div>}
+      <h3 className="text-[15px] font-bold text-[var(--tcdx-color-text-ink)]">{title}</h3>
+      {description && <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );

@@ -3,6 +3,10 @@
 import { useEffect } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 
+const PROTECTED_SPANISH_UI_TEXT = new Set([
+  'Cumplimiento y Auditoría',
+]);
+
 const EXACT_TEXT: Record<string, string> = {
   // TCDX-I18N-NC-DETAIL-ONLY-EXACT-START
   'Detalle de no conformidad': 'Nonconformity detail',
@@ -92,8 +96,6 @@ const EXACT_TEXT: Record<string, string> = {
   'Ver detalle': 'View details',
   'Trazabilidad de acción correctiva': 'Corrective action traceability',
   'Plan activo': 'Active plan',
-  'Evidencias': 'Evidence',
-  'EVIDENCIAS': 'EVIDENCE',
   'Aprobadas': 'Approved',
   'APROBADAS': 'APPROVED',
   'Avance': 'Progress',
@@ -105,7 +107,6 @@ const EXACT_TEXT: Record<string, string> = {
   'Categoría:': 'Category:',
   'Cláusula:': 'Clause:',
   'Prioridad:': 'Priority:',
-  'Evidencias:': 'Evidence:',
   'Aprobadas:': 'Approved:',
   'Avance:': 'Progress:',
   // TCDX-I18N-NC-EXACT-END
@@ -154,14 +155,6 @@ const EXACT_TEXT: Record<string, string> = {
   'Prioridad': 'Priority',
   'Acciones': 'Actions',
   'Acción': 'Action',
-  'Plan de acción': 'Action plan',
-  'Planes de acción': 'Action plans',
-  'Crear plan de acción': 'Create action plan',
-  'Generar plan de acción': 'Generate action plan',
-  'Ver plan de acción': 'View action plan',
-  'Ir al plan de acción': 'Go to action plan',
-  'Plan generado': 'Plan generated',
-  'Sin plan de acción': 'No action plan',
   'Generar con IA': 'Generate with AI',
   'Redactar con IA': 'Draft with AI',
   'Guardar borrador IA': 'Save AI draft',
@@ -281,7 +274,6 @@ const PHRASES: Array<[RegExp, string]> = [
   [/Plan activo/gi, 'Active plan'],
   [/Borrador IA/gi, 'AI draft'],
   [/Prioridad:\s*/gi, 'Priority: '],
-  [/Evidencias:\s*/gi, 'Evidence: '],
   [/Aprobadas:\s*/gi, 'Approved: '],
   [/Avance:\s*/gi, 'Progress: '],
   [/abierto/gi, 'open'],
@@ -313,6 +305,9 @@ const PHRASES: Array<[RegExp, string]> = [
 function translateText(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return value;
+  if (PROTECTED_SPANISH_UI_TEXT.has(trimmed)) {
+    return value;
+  }
 
   if (EXACT_TEXT[trimmed]) {
     return value.replace(trimmed, EXACT_TEXT[trimmed]);

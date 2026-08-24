@@ -25,7 +25,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PUI_PHASE: CLOSED.
 - PRE_UI_DATA_TRUTH_GATE: PASS.
 - PRE-UI: CLOSED.
-- UI enterprise: INITIAL / trabajo temprano.
+- UI enterprise: UI-02 Etapa 1 Visual Foundation tecnica DONE_LOCAL en este checkout; Etapa 1.2 cierre visual/i18n DONE_LOCAL sin iniciar Etapa 2; alcance limitado a frontend visual/copy/i18n focal, sin backend/API/BD/RBAC/rutas/contratos; lint, build, test focal responsive, git diff --check y screenshots locales PASS; Etapa 2 pendiente de aprobacion del usuario.
 - Fase 6 ampliada 6.8-6.14: LOCAL_CLOSED_PENDING_RUNTIME_VALIDATION.
 - 6.8-01-HF1: CLOSED (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME (deploy validado por el usuario en production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; `schema_migrations` registra `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicado, `grc.manual_observations@v1` existe published, `current_version_id` correcto, sin duplicados globales/versiones ni contratos tenant-specific).
@@ -118,9 +118,9 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa commit F6.14-A y ejecuta push/PR/CI/merge/deploy manual si lo aprueba.
-2. Usuario valida runtime F6.14-A con los comandos del handoff `docs/codex/handoffs/6.14-A.md`.
-3. Tras runtime PASS, actualizar continuidad a `F6_14_A_RUNTIME=PASS`, `PHASE6_EXPANDED=CLOSED`, `PHASE6_EXPANDED_RUNTIME=PASS` y habilitar `UI-01`.
+1. Usuario revisa diff y screenshots de `UI-02` Etapa 1/1.2 en `artifacts/ui02-stage1-visual/`, `artifacts/ui02-stage1-1-visual/` y `artifacts/ui02-stage1-2-closeout/`.
+2. Usuario aprueba o rechaza avanzar a `UI-02` Etapa 2; Codex debe detenerse hasta esa aprobacion.
+3. Usuario mantiene push/PR/CI/merge/deploy manual si corresponde.
 4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A y F6.14-A salvo evidencia objetiva nueva.
 
 ## Handoff relevante

@@ -1,0 +1,95 @@
+{
+  "capturedAt": "2026-08-24T20:24:54.197Z",
+  "baseURL": "http://localhost:3001",
+  "locale": "es",
+  "results": [
+    {
+      "name": "dashboard-1440",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "path": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-2-closeout/dashboard-1440.png",
+      "metrics": {
+        "title": "TCDX Compliance | ISO SaaS",
+        "hasMixedAuditCopy": false,
+        "hasSpanishAuditCopy": true,
+        "hasRiskMatrixs": false,
+        "sinDatosValues": [
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          },
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          },
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          },
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          },
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          }
+        ],
+        "sampleText": "GENERAL\nDashboard\nCumplimiento y Auditoría\nEvidencias\nRiesgos\nPlanes de acción\nGRC INTEGRADO\nGRC integrado\nOperación GRC\nSISTEMA\nConfiguración\n\nSISTEMA\n\nv2.4.1\n\nTenant activo\nTENANT ACTIVO\n⌘K\nU\nBienvenido a TCDX\n\nVista general de cumplimiento y gestión ISO.\n\nVista Operacional\nVista KPI\nSalud del sistema\nHoy, 04:24 p. m.\nActualizar\nControles inicializados pendientes de evaluación\n\nEsta empresa aún no tiene controles cargados o vigentes en el dashboard.\n\nPróximo paso: evaluar controles, cargar evidencias y registrar avances para que el dashboard refleje cumplimiento real.\n\nDECISIÓN BASADA EN EVIDENCIA\n\nResumen ejecutivo GRC\n\nLectura ejecutiva de decisiones, prioridades e indicadores oficiales. El análisis detallado vive en GRC.\n\nVer análisis GRC\nCríticos\nSin datos\nAtención\nSin datos\nControlados\nSin datos\nSin medición\nSin datos\nMedidos\nSin datos\nPrioridades principales\n\nNo hay indicadores oficiales disponibles para calcular prioridades.",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "scrollHeight": 1000,
+        "mainStateTop": 0,
+        "executiveTop": 422
+      }
+    },
+    {
+      "name": "dashboard-mobile-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "path": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-2-closeout/dashboard-mobile-390.png",
+      "metrics": {
+        "title": "TCDX Compliance | ISO SaaS",
+        "hasMixedAuditCopy": false,
+        "hasSpanishAuditCopy": false,
+        "hasRiskMatrixs": false,
+        "sinDatosValues": [
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          },
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          },
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          },
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          },
+          {
+            "text": "Sin datos",
+            "color": "oklch(0.372 0.044 257.287)"
+          }
+        ],
+        "sampleText": "U\nBienvenido a TCDX\n\nVista general de cumplimiento y gestión ISO.\n\nVista Operacional\nVista KPI\nSalud del sistema\nHoy, 04:24 p. m.\nActualizar\nControles inicializados pendientes de evaluación\n\nEsta empresa aún no tiene controles cargados o vigentes en el dashboard.\n\nPróximo paso: evaluar controles, cargar evidencias y registrar avances para que el dashboard refleje cumplimiento real.\n\nDECISIÓN BASADA EN EVIDENCIA\n\nResumen ejecutivo GRC\n\nLectura ejecutiva de decisiones, prioridades e indicadores oficiales. El análisis detallado vive en GRC.\n\nVer análisis GRC\nCríticos\nSin datos\nAtención\nSin datos\nControlados\nSin datos\nSin medición\nSin datos\nMedidos\nSin datos\nPrioridades principales\n\nNo hay indicadores oficiales disponibles para calcular prioridades.",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollHeight": 844,
+        "mainStateTop": 0,
+        "executiveTop": 672
+      }
+    }
+  ]
+}

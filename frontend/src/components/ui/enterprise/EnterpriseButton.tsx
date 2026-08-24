@@ -17,7 +17,7 @@ const variantClasses: Record<ButtonVariant, string> = {
   primary: 'enterprise-button-primary',
   secondary: 'enterprise-button-secondary',
   danger: 'enterprise-button-danger',
-  ghost: 'inline-flex min-h-10 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 focus-visible:ring-4 focus-visible:ring-blue-100',
+  ghost: 'inline-flex min-h-9 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-bold text-[var(--tcdx-color-text-primary)] transition hover:bg-[var(--tcdx-color-surface-muted)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
 };
 
 export default function EnterpriseButton(props: EnterpriseButtonProps) {

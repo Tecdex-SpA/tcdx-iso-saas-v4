@@ -12,6 +12,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
 import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
+import GrcDecisionCenter from '@/components/math-governance/GrcDecisionCenter';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import {
@@ -1260,6 +1261,16 @@ function DashboardPageContent() {
     effectiveTotalActiveControls > 0 ? effectiveCompliesControls : cumple;
   const executiveTotalControls =
     effectiveTotalActiveControls > 0 ? effectiveTotalActiveControls : totalControls;
+  const hasExecutiveControlBasis = executiveTotalControls > 0;
+  const executiveComplianceDisplay = hasExecutiveControlBasis
+    ? `${executiveComplianceValue}%`
+    : 'Sin medición';
+  const executiveHealthyControlsDisplay = hasExecutiveControlBasis
+    ? `${executiveHealthyControls} / ${executiveTotalControls}`
+    : 'Sin datos';
+  const executiveControlChange = hasExecutiveControlBasis
+    ? t('dashboard.ofTotal', { value: executiveComplianceValue })
+    : 'Sin controles evaluados';
 
   const auditTimelineItems = useMemo(() => {
     const recent = Array.isArray(auditSummary?.recent_audits)
@@ -1438,63 +1449,63 @@ function DashboardPageContent() {
             title={t('dashboard.title')}
             subtitle={t('dashboard.subtitle')}
             actions={
-              <>
-              <div className="enterprise-toolbar inline-flex flex-wrap p-1">
-                <button
-                  type="button"
-                  onClick={() => handleViewChange('executive')}
-                  className={[
-                    'rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
-                    activeView === 'executive'
-                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
-                      : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
-                  ].join(' ')}
-                >
-                  {t('dashboard.executiveView')}
-                </button>
+              <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
+                <div className="enterprise-toolbar grid w-full grid-cols-1 gap-1 p-1 sm:w-auto sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange('executive')}
+                    className={[
+                      'flex min-h-10 w-full items-center justify-center whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-3 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
+                      activeView === 'executive'
+                        ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                        : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
+                    ].join(' ')}
+                  >
+                    {t('dashboard.executiveView')}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange('kpi')}
+                    className={[
+                      'flex min-h-10 w-full items-center justify-center whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-3 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
+                      activeView === 'kpi'
+                        ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                        : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
+                    ].join(' ')}
+                  >
+                    {t('dashboard.kpiView')}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange('iso')}
+                    className={[
+                      'flex min-h-10 w-full items-center justify-center whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-3 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
+                      activeView === 'iso'
+                        ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                        : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
+                    ].join(' ')}
+                  >
+                    Salud del sistema
+                  </button>
+                </div>
+
+                <div className="enterprise-button-secondary flex-1 justify-center border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)] sm:flex-none">
+                  <TcdxIcon name="calendar" className="h-4 w-4 text-[var(--tcdx-color-primary)]" />
+                  {latestSyncText}
+                </div>
 
                 <button
                   type="button"
-                  onClick={() => handleViewChange('kpi')}
-                  className={[
-                    'rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
-                    activeView === 'kpi'
-                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
-                      : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
-                  ].join(' ')}
+                  onClick={handleRefreshDashboard}
+                  disabled={refreshingExecutive}
+                  className="enterprise-button-secondary flex-1 justify-center border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)] disabled:opacity-60 sm:flex-none"
                 >
-                  {t('dashboard.kpiView')}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleViewChange('iso')}
-                  className={[
-                    'rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
-                    activeView === 'iso'
-                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
-                      : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
-                  ].join(' ')}
-                >
-                  Salud del sistema
+                  <TcdxIcon name="refresh" className="h-4 w-4" />
+                  {refreshingExecutive ? t('common.refreshing') : t('common.refresh')}
                 </button>
               </div>
-
-              <div className="enterprise-button-secondary border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)]">
-                <TcdxIcon name="calendar" className="h-4 w-4 text-[var(--tcdx-color-primary)]" />
-                {latestSyncText}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleRefreshDashboard}
-                disabled={refreshingExecutive}
-                className="enterprise-button-secondary border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)] disabled:opacity-60"
-              >
-                <TcdxIcon name="refresh" className="h-4 w-4" />
-                {refreshingExecutive ? t('common.refreshing') : t('common.refresh')}
-              </button>
-              </>
             }
           />
 
@@ -1533,21 +1544,21 @@ function DashboardPageContent() {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
                     <TopCard
                       title={t('dashboard.globalCompliance')}
-                      value={`${executiveComplianceValue}%`}
+                      value={executiveComplianceDisplay}
                       subtitle={t('dashboard.globalComplianceSubtitle')}
                       accent="indigo"
                       change={`ISO ${mapEffectiveHealthLabel(effectiveGlobalStatus)}`}
                       changeHint="Lectura efectiva en alcance"
                       icon={<TcdxIcon name="shield" className="h-6 w-6" />}
-                      ringValue={executiveComplianceValue}
+                      ringValue={hasExecutiveControlBasis ? executiveComplianceValue : undefined}
                     />
 
                     <TopCard
                       title={t('dashboard.healthyControls')}
-                      value={`${executiveHealthyControls} / ${executiveTotalControls || 0}`}
+                      value={executiveHealthyControlsDisplay}
                       subtitle={t('dashboard.healthyControlsSubtitle')}
                       accent="indigo"
-                      change={t('dashboard.ofTotal', { value: executiveComplianceValue })}
+                      change={executiveControlChange}
                       changeHint="Controles activos en alcance"
                       icon={<TcdxIcon name="activity" className="h-6 w-6" />}
                     />
@@ -2043,6 +2054,15 @@ function DashboardPageContent() {
               expanded
             />
           )}
+        </div>
+        <div className="mx-auto w-full max-w-[1720px]">
+          <GrcDecisionCenter
+            compact
+            variant="summary"
+            title="Resumen ejecutivo GRC"
+            ctaHref="/grc"
+            ctaLabel="Ver análisis GRC"
+          />
         </div>
         <div className="mx-auto mt-6 max-w-[1720px]">
           <GrcPhase1Panel mode="dashboard" />

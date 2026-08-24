@@ -15,6 +15,16 @@ const SKIP_TAGS = new Set([
 ]);
 
 const ATTRIBUTES_TO_TRANSLATE = ['placeholder', 'title', 'aria-label'];
+const PROTECTED_UI_COPY = new Set([
+  'cumplimiento y auditoría',
+]);
+
+function normalizeProtectedCopy(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
 
 function shouldSkipElement(element: Element | null) {
   if (!element) return true;
@@ -34,6 +44,10 @@ function translateVisibleText(value: string | null | undefined) {
   const compact = original.trim();
 
   if (!compact) return original;
+  const normalizedCopy = normalizeProtectedCopy(compact);
+  if (PROTECTED_UI_COPY.has(normalizedCopy)) {
+    return original;
+  }
 
   const translated = translateDisplayText(compact, 'en', 'db-display-residual');
 
