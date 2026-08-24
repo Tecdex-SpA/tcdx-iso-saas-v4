@@ -7,6 +7,9 @@ const {
 const { buildAiMessages, buildPromptContext } = require('./intelligence.prompt-builder');
 const { buildNarrativeSet } = require('./intelligence.narrative');
 const { recordIntelligenceAiTrace } = require('./intelligence.audit-log');
+const {
+  buildGovernedAiAnalysisRecord,
+} = require('./aiGovernance.service');
 
 const DEFAULT_INTELLIGENCE_AI_TIMEOUT_MS = 12000;
 
@@ -21,6 +24,33 @@ function getUserId(user) {
 
 function promptSize(value) {
   return Buffer.byteLength(JSON.stringify(value || {}), 'utf8');
+}
+
+function governanceForTrace({
+  context,
+  promptContext,
+  requestId,
+  user,
+  modelMetadata = {},
+  status,
+  fallback = false,
+  errorCode = null,
+  latencyMs = null,
+}) {
+  return buildGovernedAiAnalysisRecord({
+    capabilityId: 'intelligence_narrative',
+    tenantId: context.tenant_id || context.tenant?.tenant_id || promptContext?.tenant_summary?.tenant_id,
+    requestId,
+    userId: getUserId(user),
+    promptContext: promptContext || {},
+    sourceSet: promptContext?.evidence_basis?.source_trace || [],
+    citations: promptContext?.knowledge_context || [],
+    modelMetadata,
+    status,
+    fallback,
+    errorCode,
+    latencyMs,
+  });
 }
 
 function resolveIntelligenceAiTimeoutMs(value = null) {
@@ -63,18 +93,30 @@ async function generateStructuredNarrative(context = {}, {
     if (aiDisabled()) {
       fallbackReason = 'AI_DISABLED';
       const fallback = fallbackToDeterministicNarrative(promptContext, fallbackReason);
+      const latencyMs = Date.now() - started;
+      const governance = governanceForTrace({
+        context,
+        promptContext,
+        requestId,
+        user,
+        status: 'fallback',
+        fallback: true,
+        errorCode: fallbackReason,
+        latencyMs,
+      });
       await recordIntelligenceAiTrace({
         tenantId: context.tenant_id || context.tenant?.tenant_id || promptContext.tenant_summary?.tenant_id,
         userId: getUserId(user),
         requestId,
         aiUsed: false,
         model,
-        latencyMs: Date.now() - started,
+        latencyMs,
         promptContextSize: promptSize(promptContext),
         knowledgeItemsCount: promptContext.metadata.knowledge_items_count,
         fallback: true,
         errorCode: fallbackReason,
         confidence: fallback.confidence,
+        governance,
       });
       return fallback;
     }
@@ -86,34 +128,60 @@ async function generateStructuredNarrative(context = {}, {
       validateStructuredAiOutput(raw),
       promptContext
     );
+    const latencyMs = Date.now() - started;
+    const governance = governanceForTrace({
+      context,
+      promptContext,
+      requestId,
+      user,
+      modelMetadata: raw?.engine || raw?.metadata || raw || {},
+      status: structured.degraded_reason ? 'grounding_failed' : 'success',
+      errorCode: structured.degraded_reason || null,
+      latencyMs,
+    });
     await recordIntelligenceAiTrace({
       tenantId: context.tenant_id || context.tenant?.tenant_id || promptContext.tenant_summary?.tenant_id,
       userId: getUserId(user),
       requestId,
       aiUsed,
       model,
-      latencyMs: Date.now() - started,
+      latencyMs,
       promptContextSize: promptSize(promptContext),
       knowledgeItemsCount: promptContext.metadata.knowledge_items_count,
       fallback: false,
+      errorCode: structured.degraded_reason || null,
       confidence: structured.confidence,
+      governance,
     });
     return structured;
   } catch (error) {
     fallbackReason = error?.code || error?.name || 'AI_ORCHESTRATOR_ERROR';
     const fallback = fallbackToDeterministicNarrative(promptContext || context, fallbackReason);
+    const latencyMs = Date.now() - started;
+    const governance = governanceForTrace({
+      context,
+      promptContext,
+      requestId,
+      user,
+      modelMetadata: model ? { model } : {},
+      status: 'fallback',
+      fallback: true,
+      errorCode: fallbackReason,
+      latencyMs,
+    });
     await recordIntelligenceAiTrace({
       tenantId: context.tenant_id || context.tenant?.tenant_id || promptContext?.tenant_summary?.tenant_id,
       userId: getUserId(user),
       requestId,
       aiUsed,
       model,
-      latencyMs: Date.now() - started,
+      latencyMs,
       promptContextSize: promptSize(promptContext),
       knowledgeItemsCount: promptContext?.metadata?.knowledge_items_count || 0,
       fallback: true,
       errorCode: fallbackReason,
       confidence: fallback.confidence,
+      governance,
     });
     return fallback;
   }

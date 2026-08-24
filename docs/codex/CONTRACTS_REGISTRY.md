@@ -24,9 +24,12 @@
 | Pattern/Trend Engine | CURRENT/F6.12-A-RUNTIME | CODEX B | `pattern-trend-engine-v1`; senales deterministicas sobre series historicas tenant-scoped con minimum-period guard y `insufficient_data`. |
 | Anomaly Engine | CURRENT/F6.12-A-RUNTIME | CODEX B | `anomaly-engine-v1`; robust z-score/MAD versionado con baseline explicito, score/band y guard contra sparse false positives. |
 | Cross-GRC Intelligence Orchestrator | CURRENT/F6.12-A-RUNTIME | CODEX B | `cross-grc-intelligence-orchestrator-v1`; orquesta context/patterns/trends/anomalies/Priority/Impact/RAG/regulatory sin store paralelo ni LLM truth. |
-| Recommendation Decision Ledger | CURRENT/F6.13-A-LOCAL | CODEX B | `recommendation-decision-ledger-v1`; decisiones humanas tenant-scoped append-only/idempotentes sobre recomendaciones/contexto/prioridad, sin decision authority de IA. |
-| Effectiveness Feedback Loop | CURRENT/F6.13-A-LOCAL | CODEX A | `effectiveness-feedback-loop-v1`; compara before/action/after/expected/observed con ventana, metodologia y Data Trust; closed no equivale a effective. |
-| Operational Memory | CURRENT/F6.13-A-LOCAL | CODEX B | `operational-memory-v1`; casos tenant-scoped con facts/decisions/outcomes/evaluations/confirmed lessons/AI hypotheses separados, sin segunda KB/retrieval. |
+| Recommendation Decision Ledger | CURRENT/F6.13-A-RUNTIME | CODEX B | `recommendation-decision-ledger-v1`; decisiones humanas tenant-scoped append-only/idempotentes sobre recomendaciones/contexto/prioridad, sin decision authority de IA. Runtime closure PASS. |
+| Effectiveness Feedback Loop | CURRENT/F6.13-A-RUNTIME | CODEX A | `effectiveness-feedback-loop-v1`; compara before/action/after/expected/observed con ventana, metodologia y Data Trust; closed no equivale a effective. Runtime closure PASS. |
+| Operational Memory | CURRENT/F6.13-A-RUNTIME | CODEX B | `operational-memory-v1`; casos tenant-scoped con facts/decisions/outcomes/evaluations/confirmed lessons/AI hypotheses separados, sin segunda KB/retrieval. Runtime closure PASS. |
+| AI Governance | CURRENT/F6.14-A-LOCAL | CODEX B | `ai-governance-contract-v1`; registry/policy/versioning para provider/model/prompt/context/schema/grounding/authority/tenant/privacy/failure por capacidad AI real, sin segundo AI orchestrator ni AI truth store. |
+| AI Capability Registry | CURRENT/F6.14-A-LOCAL | CODEX B | `ai-capability-registry-v1`; inventario gobernado de `intelligence_narrative`, `knowledge_rag_answer`, `cross_grc_intelligence` y `operational_learning`. |
+| AI Evaluation Suite | CURRENT/F6.14-A-LOCAL | CODEX B | `ai-evaluation-suite-v1`; fixtures sinteticos/no privados, expectations gobernadas y regression gate versionado para estructura, citas, factualidad, insuficiencia, prompt injection, tenant isolation y fallback. |
 | Knowledge Document | CURRENT/6.10-01-RUNTIME | CODEX B | `knowledge-document-model-v1`; `knowledge_documents` extiende KB v2 con scope, tenant, versioning, lifecycle, checksums y provenance; runtime closure PASS. |
 | Knowledge Ingestion | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge-ingestion-pipeline-v1`; pipeline tenant-scoped con secure upload, extracción, chunks, audit, idempotencia y KB v2 linkage; runtime closure PASS. |
 | Knowledge Chunk | CURRENT/6.10-02-RUNTIME | CODEX B | `knowledge_document_chunks`; manifest determinístico y chunk content canónico para documentos tenant; 6.10-03 lo referencia sin copiar `chunk_text`. |
@@ -268,7 +271,7 @@ Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.10-04-RUNTIME-CLOSURE.md
 
 ## F6.13-A Recommendation Decision Ledger, Effectiveness Feedback And Operational Memory
 
-Status: DONE_LOCAL on branch `feat/f6-13-a-operational-learning`; runtime validation pending user deploy.
+Status: CLOSED / PASS_RUNTIME by `docs/codex/handoffs/6.13-A-RUNTIME-CLOSURE.md`.
 
 | Contract Area | Canonical Definition |
 |---|---|
@@ -283,6 +286,26 @@ Status: DONE_LOCAL on branch `feat/f6-13-a-operational-learning`; runtime valida
 | Audit | Service writes state changes to existing `audit_event_log` with tenant, actor, object, contract version and correlation id. |
 | API/RBAC | No new HTTP route in F6.13-A; future routes must distinguish read, decide, evaluate and confirm/publish memory. |
 | Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=YES_FORWARD_ONLY`. |
+
+## F6.14-A AI Governance, AI Evaluation Suite And Phase 6 Closeout
+
+Status: DONE_LOCAL on branch `feat/f6-14-a-ai-governance-final-closeout`; runtime validation pending user deploy.
+
+| Contract Area | Canonical Definition |
+|---|---|
+| AI Governance | `ai-governance-contract-v1` in `backend/src/services/intelligence/aiGovernance.service.js`; formalizes capability identity, provider/model strategy, prompt/context/schema/policy versions, grounding, tenant/privacy, failure semantics and authority boundary. |
+| Capability registry | `ai-capability-registry-v1`; covers real AI surfaces `intelligence_narrative`, `knowledge_rag_answer`, `cross_grc_intelligence` and `operational_learning` without duplicating the AI orchestrator. |
+| Policy boundaries | `ai-policy-boundaries-v1`; LLM direct SQL, operational truth, compliance final authority, risk acceptance, Gap closure, legal publication, decision authority and memory publication are all forbidden. |
+| Retention/redaction | `ai-retention-redaction-policy-v1`; traces retain metadata, checksums and references, not full prompts, full context, complete documents or secrets. |
+| Trace/audit | Existing `ai_prompt_logs` receives governed metadata through `intelligence.audit-log.js`; no new table or AI governance store. |
+| Grounding/citations | Knowledge/RAG capability references `rag-grounded-answer-contract-v1`; retrieved content is evidence only and cannot become instruction or authority. |
+| Failure statuses | `success`, `fallback`, `insufficient_evidence`, `provider_unavailable`, `timeout`, `invalid_output`, `policy_blocked`, `grounding_failed`, `dependency_unavailable`. |
+| AI Evaluation Suite | `ai-evaluation-suite-v1` in `backend/src/services/intelligence/aiEvaluationSuite.service.js`; evaluates synthetic/non-private golden cases by facts/structure, not exact narrative wording. |
+| Eval dataset/thresholds | `ai-eval-golden-cases-f6-14-v1` and `ai-eval-thresholds-f6-14-v1`; no private tenant data and no magic unversioned thresholds. |
+| Regression comparison | Baseline vs candidate compares aggregate gate pass/fail and failures by case; longer or more persuasive prose is not treated as improvement. |
+| API/RBAC | No new HTTP route or permission in F6.14-A; future surfaces must separate read/evaluate/policy-manage and preserve backend RBAC. |
+| Persistence | No DDL. No second AI orchestrator, KB, retrieval engine, RAG engine, priority store, observation/gap/regulatory/memory truth or AI governance truth store. |
+| Formula/source contracts | `FORMULAS_VERSIONED=[]`; `MATH_GOVERNANCE_SOURCE_CONTRACTS_VERSIONED=[]`; `SEMANTIC_CONTRACTS_VERSIONED=[]`; `MIGRATIONS_CHANGED=NO`. |
 
 ## 6.10-05 RAG Grounded Answer + Citations
 

@@ -2,8 +2,8 @@
 
 Actualizado: 2026-08-24
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
-Remote/base `main` verificado para F6.13-A: `6aed2555524e1ab146ab9c25af4015401abfd7be`
-Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A.
+Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
+Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A.
 
 ## Estado del programa
 
@@ -26,7 +26,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PRE_UI_DATA_TRUTH_GATE: PASS.
 - PRE-UI: CLOSED.
 - UI enterprise: INITIAL / trabajo temprano.
-- Fase 6 ampliada 6.8–6.14: IN_PROGRESS desde `F6.8`.
+- Fase 6 ampliada 6.8-6.14: LOCAL_CLOSED_PENDING_RUNTIME_VALIDATION.
 - 6.8-01-HF1: CLOSED (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME (deploy validado por el usuario en production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; `schema_migrations` registra `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicado, `grc.manual_observations@v1` existe published, `current_version_id` correcto, sin duplicados globales/versiones ni contratos tenant-specific).
 - 6.8-01: CLOSED; `F6_8_01_RUNTIME=PASS`; 6.8-02 READY.
@@ -44,7 +44,8 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - F6.11-A: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.11-A-RUNTIME-CLOSURE.md` confirmó production/main `d69f28a2f69b83c7aa12737dc82788d9def68141`, migración `20260819_f6_11_a_regulatory_foundation` aplicada, modelos regulatorios canónicos presentes, KB v2 preservada, sin storage regulatorio paralelo y `F6_11_B=READY`.
 - F6.11-B: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.11-B-RUNTIME-CLOSURE.md` confirmó production/main `99dd2772c599c5cbdd579594d7520aadc7b0cbb9`, implementation commit `719b7046870142f22b4ecda232c6cfbbf41e9016`, migración `20260824_f6_11_b_semantic_diff_regulatory_packs` aplicada con checksum `ec090bbd7a95be92d4cd6e01f66e3a09d75083828654695a4a0b7425979e9705`, tests focales PASS, tablas runtime de semantic diff/packs/applicability/audit presentes, sin KB/chunks/regulatory model paralelo y `F6_12_A=READY`.
 - F6.12-A: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.12-A-RUNTIME-CLOSURE.md` confirmó production/main `6aed2555524e1ab146ab9c25af4015401abfd7be`, implementation commit `28ad84d8ba4fd9c342dbb8c70e4366295bdd9462`, tests focales PASS, adapter Python compilado, no `CREATE TABLE` nuevo para intelligence/pattern/anomaly/context, sin storage paralelo y `F6_13_A=READY`.
-- F6.13-A: DONE_LOCAL. Campaña consolidada 6.13-01/02/03 agrega `recommendation-decision-ledger-v1`, `effectiveness-feedback-loop-v1` y `operational-memory-v1` en `backend/src/services/intelligence/operationalLearning.service.js`, con migración forward-only `20260824_f6_13_a_operational_learning` y runner `scripts/f6-13/apply-f6-13-migration.js`. Reutiliza `iso_operational_suggestions`, `iso_recommended_action_conversions`, `audit_event_log`, Cross-GRC Intelligence, Priority Engine 2 y KB/RAG por referencia/contrato; no crea Priority/Observation/Gap/KB/Retrieval/AI truth paralelo. `F6_13_A_RUNTIME=PENDING_USER_DEPLOY_VALIDATION`.
+- F6.13-A: CLOSED / PASS_RUNTIME. Runtime closure `docs/codex/handoffs/6.13-A-RUNTIME-CLOSURE.md` confirmó production/main `f2828bb45c290d88adbdbe89628e661ec4866a0b`, implementation commit `46b4525c02fc2e8f9ff5f7a5b42a6f2641f7b52f`, migración `20260824_f6_13_a_operational_learning` aplicada con checksum `da9844178ead79afe22cbecd1239a4d42f2f4ef6fd310d429fa571228ad27a79`, tests focales PASS, deploy oficial corregido con runner F6.13, sin storage paralelo y `F6_14_A=READY`.
+- F6.14-A: DONE_LOCAL. Campaña consolidada 6.14-01/02/03 agrega `ai-governance-contract-v1`, `ai-capability-registry-v1`, `ai-policy-boundaries-v1`, `ai-retention-redaction-policy-v1`, `ai-evaluation-suite-v1`, `ai-eval-golden-cases-f6-14-v1` y `ai-eval-thresholds-f6-14-v1`. Extiende trazas AI existentes sin DDL, sin segundo AI orchestrator, sin KB/RAG/retrieval/priority/observation/gap/regulatory/memory truth paralelo. `F6_14_A_RUNTIME=PENDING_USER_DEPLOY_VALIDATION`; `PHASE6_EXPANDED_RUNTIME=PENDING_USER_DEPLOY_VALIDATION`.
 - Fase 7: NOT_STARTED.
 
 ## Baseline reciente confirmado
@@ -117,9 +118,10 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa commit F6.13-A y ejecuta push/PR/CI/merge/deploy manual si lo aprueba.
-2. Usuario valida runtime F6.13-A con los comandos del handoff `docs/codex/handoffs/6.13-A.md`.
-3. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A y F6.13-A salvo evidencia objetiva nueva.
+1. Usuario revisa commit F6.14-A y ejecuta push/PR/CI/merge/deploy manual si lo aprueba.
+2. Usuario valida runtime F6.14-A con los comandos del handoff `docs/codex/handoffs/6.14-A.md`.
+3. Tras runtime PASS, actualizar continuidad a `F6_14_A_RUNTIME=PASS`, `PHASE6_EXPANDED=CLOSED`, `PHASE6_EXPANDED_RUNTIME=PASS` y habilitar `UI-01`.
+4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A y F6.14-A salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -169,4 +171,7 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.12-A.md`
 - `docs/codex/handoffs/6.12-A-RUNTIME-CLOSURE.md`
 - `docs/codex/handoffs/6.13-A.md`
+- `docs/codex/handoffs/6.13-A-RUNTIME-CLOSURE.md`
+- `docs/codex/handoffs/6.14-A.md`
+- `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`
